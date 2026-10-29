@@ -33,7 +33,7 @@ result_agrees(PyThreadState *tstate, int failed)
 /* Report a call's result that disagrees with the error indicator: a
    SystemError replaces the result, and the return is -1.  Out of line and
    opaque: it is the error path, and its frame is scanned. */
-static Py_NO_INLINE int
+Py_GC_PRECISE static Py_NO_INLINE int
 check_function_result(PyThreadState *tstate, PyObject *callable,
                       int failed, const char *where)
 {
@@ -198,7 +198,7 @@ _PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
 }
 
 
-PyValue
+Py_GC_PRECISE PyValue
 _PyObject_VectorcallDictValueTstate(PyThreadState *tstate, PyValue callable,
                                     const PyValue *args, size_t nargsf,
                                     PyObject *kwargs)
@@ -222,26 +222,45 @@ _PyObject_VectorcallDictValueTstate(PyThreadState *tstate, PyValue callable,
         return _PyObject_MakeTpCall(tstate, callable, args, nargs, kwargs);
     }
 
-    PyValue res;
+    /* The span anchors callable, which the result check reads, and kwargs;
+       with keywords, then the names and the unpacked arguments
+       (_PyStack_UnpackDict()).  The positional array is the caller's. */
+    // The prefix (2), the names and the free slot, then the arguments.
+    PyValue small[2 + 2 + _PY_FASTCALL_SMALL_STACK];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, small);
+    _PyValueSpan_Append(&span, callable);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    PyValue *heap = NULL;
+    PyValue res = PyValue_NULL;
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
         res = func(callable, args, nargsf, NULL);
     }
     else {
-        PyObject *kwnames;
-        const PyValue *newargs = _PyStack_UnpackDict(tstate, args, nargs,
-                                                     kwargs, &kwnames);
-        if (newargs == NULL) {
-            return PyValue_NULL;
+        const PyValue *end = _PyStack_UnpackDictBuffer(
+            tstate, &span, Py_ARRAY_LENGTH(small), nargs, kwargs, &heap);
+        if (end == NULL) {
+            goto done;
         }
+        PyObject *kwnames = _PyStack_KwNames(tstate, kwargs);
+        if (kwnames == NULL) {
+            goto done;
+        }
+        _PyValueSpan_AppendObject(&span, kwnames);
+        const PyValue *newargs = _PyStack_UnpackDict(args, nargs, kwargs,
+                                                     &span, end);
         res = func(callable, newargs,
                    nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
-        _PyStack_UnpackDict_Free(newargs, nargs, kwnames);
     }
-    return _Py_CheckFunctionResultValue(
+    res = _Py_CheckFunctionResultValue(
         tstate, PyValue_ObjectBorrow(callable), res, NULL);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    PyMem_Free(heap);
+    return res;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyObject_VectorcallDictTstate(PyThreadState *tstate, PyObject *callable,
                                PyObject *const *args, size_t nargsf,
                                PyObject *kwargs)
@@ -261,7 +280,7 @@ _PyObject_VectorcallDictTstate(PyThreadState *tstate, PyObject *callable,
 }
 
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyObject_VectorcallDict(PyObject *callable, PyObject *const *args,
                        size_t nargsf, PyObject *kwargs)
 {
@@ -269,12 +288,16 @@ PyObject_VectorcallDict(PyObject *callable, PyObject *const *args,
     return _PyObject_VectorcallDictTstate(tstate, callable, args, nargsf, kwargs);
 }
 
-/* Out of line and opaque: it is the error path, and its frame is scanned.
-   PyObject_GetOptionalAttr() returns through an object pointer, which a
-   precise frame could not hold (10a-2.md, rule 6). */
-static Py_NO_INLINE void
+/* Out of line: it is the error path.  Precise: the span holds callable,
+   which the messages read after the lookups (the parameter rule), the
+   module's name and the lookup's object out-parameter. */
+Py_GC_PRECISE static Py_NO_INLINE void
 object_is_not_callable(PyThreadState *tstate, PyObject *callable)
 {
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, callable);
     if (Py_IS_TYPE(callable, &PyModule_Type)) {
         // >>> import pprint
         // >>> pprint(thing)
@@ -286,8 +309,10 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
             _PyErr_Clear(tstate);
             goto basic_type_error;
         }
-        PyObject *attr;
-        int res = PyObject_GetOptionalAttr(callable, name, &attr);
+        _PyValueSpan_AppendObject(&span, name);
+        PyObject **attrp = _PyValueSpan_ObjectSlot(&span);
+        int res = PyObject_GetOptionalAttr(callable, name, attrp);
+        PyObject *attr = *attrp;
         if (res < 0) {
             _PyErr_Clear(tstate);
         }
@@ -298,7 +323,7 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
                           Py_TYPE(callable)->tp_name, name, name);
             Py_DECREF(attr);
             Py_DECREF(name);
-            return;
+            goto done;
         }
         Py_XDECREF(attr);
         Py_DECREF(name);
@@ -306,11 +331,13 @@ object_is_not_callable(PyThreadState *tstate, PyObject *callable)
 basic_type_error:
     _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",
                   Py_TYPE(callable)->tp_name);
+done:
+    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 /* An inline int or float is never callable: the error names its type
    without a box. */
-static void
+Py_GC_PRECISE static void
 inline_is_not_callable(PyThreadState *tstate, PyValue callable)
 {
     _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",
@@ -394,47 +421,54 @@ PyVectorcall_Function(PyObject *callable)
 }
 
 
-/* The keyword form of _PyVectorcall_Call().  Opaque until
-   _PyStack_UnpackDict() returns its names in a span rather than through
-   an object pointer (10a-2.md, "Waits for 1b"). */
-static Py_NO_INLINE PyValue
-vectorcall_call_dict(PyThreadState *tstate, vectorcallfunc func,
-                     PyObject *callable, PyObject *tuple, PyObject *kwargs)
-{
-    Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
-    const PyValue *items = _PyTuple_ITEMS(tuple);
-    PyValue callable_v = PyValue_FromObject(callable);
-    PyObject *kwnames;
-    const PyValue *args = _PyStack_UnpackDict(tstate, items, nargs,
-                                              kwargs, &kwnames);
-    if (args == NULL) {
-        return PyValue_NULL;
-    }
-    PyValue result = func(callable_v, args,
-                          nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
-    _PyStack_UnpackDict_Free(args, nargs, kwnames);
-
-    return _Py_CheckFunctionResultValue(tstate, callable, result, NULL);
-}
-
 Py_GC_PRECISE static PyValue
 _PyVectorcall_Call(PyThreadState *tstate, vectorcallfunc func,
                    PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
     assert(func != NULL);
-
-    if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
-        return vectorcall_call_dict(tstate, func, callable, tuple, kwargs);
+    Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        /* The tuple owns the argument array, so this frame's span anchors
+           it for the call (10a-2.md, rule 3). */
+        PyValue slots[1];
+        _PyValueRoot span;
+        _PyThreadState_PushValueSpan(tstate, &span, slots);
+        _PyValueSpan_AppendObject(&span, tuple);
+        PyValue res = func(PyValue_FromObject(callable),
+                           _PyTuple_ITEMS(tuple), nargs, NULL);
+        _PyThreadState_PopValueRoot(tstate, &span);
+        return res;
     }
-    /* The tuple owns the argument array, so this frame's span anchors it
-       for the call (10a-2.md, rule 3). */
-    PyValue slots[1];
+    /* The keyword form.  The span anchors callable, which the result check
+       reads, the tuple, which owns the positional array, and kwargs, then
+       the names and the unpacked arguments (_PyStack_UnpackDict()). */
+    // The prefix (3), the names and the free slot, then the arguments.
+    PyValue small[3 + 2 + _PY_FASTCALL_SMALL_STACK];
     _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyThreadState_PushValueSpan(tstate, &span, small);
+    _PyValueSpan_AppendObject(&span, callable);
     _PyValueSpan_AppendObject(&span, tuple);
-    PyValue res = func(PyValue_FromObject(callable), _PyTuple_ITEMS(tuple),
-                       PyTuple_GET_SIZE(tuple), NULL);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    PyValue *heap = NULL;
+    PyValue res = PyValue_NULL;
+    const PyValue *end = _PyStack_UnpackDictBuffer(
+        tstate, &span, Py_ARRAY_LENGTH(small), nargs, kwargs, &heap);
+    if (end == NULL) {
+        goto done;
+    }
+    PyObject *kwnames = _PyStack_KwNames(tstate, kwargs);
+    if (kwnames == NULL) {
+        goto done;
+    }
+    _PyValueSpan_AppendObject(&span, kwnames);
+    const PyValue *args = _PyStack_UnpackDict(
+        _PyTuple_ITEMS(tuple), nargs, kwargs, &span, end);
+    res = func(PyValue_FromObject(callable), args,
+               nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+    res = _Py_CheckFunctionResultValue(tstate, callable, res, NULL);
+done:
     _PyThreadState_PopValueRoot(tstate, &span);
+    PyMem_Free(heap);
     return res;
 }
 
@@ -1294,80 +1328,98 @@ _PyStack_AsDict(const PyValue *values, PyObject *kwnames)
 }
 
 
-/* Convert (args, nargs, kwargs: dict) into a (stack, nargs, kwnames: tuple)
-   (Include/internal/pycore_call.h). */
-const PyValue *
-_PyStack_UnpackDict(PyThreadState *tstate,
-                    const PyValue *args, Py_ssize_t nargs,
-                    PyObject *kwargs, PyObject **p_kwnames)
+/* The keyword names of an unpacked call (Include/internal/pycore_call.h).
+   Precise: the span anchors kwargs across the tuple's allocation, and the
+   tuple across the injection site. */
+Py_GC_PRECISE PyObject *
+_PyStack_KwNames(PyThreadState *tstate, PyObject *kwargs)
 {
-    assert(nargs >= 0);
-    assert(kwargs != NULL);
-    assert(PyDict_Check(kwargs));
-
-    Py_ssize_t nkwargs = PyDict_GET_SIZE(kwargs);
-    /* Check for overflow in the PyMem_Malloc() call below. The subtraction
-     * in this check cannot overflow: both maxnargs and nkwargs are
-     * non-negative signed integers, so their difference fits in the type. */
-    Py_ssize_t maxnargs = PY_SSIZE_T_MAX / sizeof(args[0]) - 1;
-    if (nargs > maxnargs - nkwargs) {
-        _PyErr_NoMemory(tstate);
-        return NULL;
-    }
-
-    /* Add 1 to support PY_VECTORCALL_ARGUMENTS_OFFSET */
-    PyValue *stack = PyMem_Malloc((1 + nargs + nkwargs) * sizeof(args[0]));
-    if (stack == NULL) {
-        _PyErr_NoMemory(tstate);
-        return NULL;
-    }
-
-    PyObject *kwnames = PyTuple_New(nkwargs);
-    if (kwnames == NULL) {
-        PyMem_Free(stack);
-        return NULL;
-    }
-
-    stack++;  /* For PY_VECTORCALL_ARGUMENTS_OFFSET */
-
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        stack[i] = args[i];
-    }
-
-    /* The values stay in kwargs, which the caller holds, while the call
-     * runs.  This loop doesn't support lookup function mutating the
-     * dictionary to change its size. It's a deliberate choice for speed,
-     * this function is called in the performance critical hot code. */
-    PyValue *kwstack = stack + nargs;
-    Py_ssize_t pos = 0, i = 0;
+    assert(kwargs != NULL && PyDict_Check(kwargs));
+    Py_ssize_t pos = 0;
     PyValue key, value;
-    int keys_are_strings = 1;
     while (_PyDict_NextValue(kwargs, &pos, &key, &value, NULL)) {
-        keys_are_strings &= PyType_HasFeature(PyValue_Type(key),
-                                              Py_TPFLAGS_UNICODE_SUBCLASS);
-        PyTuple_SET_VALUE(kwnames, i, key);
-        kwstack[i] = value;
-        i++;
+        if (!PyType_HasFeature(PyValue_Type(key),
+                               Py_TPFLAGS_UNICODE_SUBCLASS)) {
+            _PyErr_SetString(tstate, PyExc_TypeError,
+                             "keywords must be strings");
+            return NULL;
+        }
     }
-
-    /* Checked once at the end rather than inside the loop above, which
-     * simplifies the failing case. */
-    if (!keys_are_strings) {
-        _PyErr_SetString(tstate, PyExc_TypeError,
-                         "keywords must be strings");
-        _PyStack_UnpackDict_Free(stack, nargs, kwnames);
-        return NULL;
+    Py_ssize_t nkwargs = PyDict_GET_SIZE(kwargs);
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, kwargs);
+    PyObject *kwnames = PyTuple_New(nkwargs);
+    if (kwnames != NULL) {
+        _PyValueSpan_AppendObject(&span, kwnames);
+        _PyGC_INJECT(tstate, _PyGC_SITE_UNPACK_DICT);
+        /* No Python code ran: an inline collection defers it. */
+        assert(PyDict_GET_SIZE(kwargs) == nkwargs);
+        pos = 0;
+        Py_ssize_t i = 0;
+        while (_PyDict_NextValue(kwargs, &pos, &key, &value, NULL)) {
+            PyTuple_SET_VALUE(kwnames, i, key);
+            i++;
+        }
     }
-
-    *p_kwnames = kwnames;
-    return stack;
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return kwnames;
 }
 
-void
-_PyStack_UnpackDict_Free(const PyValue *stack, Py_ssize_t nargs,
-                         PyObject *kwnames)
+/* Size an unpacked call's buffer (Include/internal/pycore_call.h).  The
+   prefix's objects are anchored in the span across the allocation and the
+   move. */
+Py_GC_PRECISE const PyValue *
+_PyStack_UnpackDictBuffer(PyThreadState *tstate, _PyValueRoot *span,
+                          Py_ssize_t nsmall, Py_ssize_t nargs,
+                          PyObject *kwargs, PyValue **heap)
 {
-    PyMem_Free((PyValue *)stack - 1);
+    Py_ssize_t size = _PyStack_UnpackDictSlots(span->n, nargs,
+                                               PyDict_GET_SIZE(kwargs));
+    if (size < 0) {
+        _PyErr_NoMemory(tstate);
+        return NULL;
+    }
+    if (size <= nsmall) {
+        return span->base + size;
+    }
+    PyValue *buf = PyMem_Malloc(size * sizeof(PyValue));
+    if (buf == NULL) {
+        _PyErr_NoMemory(tstate);
+        return NULL;
+    }
+    memcpy(buf, span->base, span->n * sizeof(PyValue));
+    _PyValueSpan_Rebase(span, buf);
+    *heap = buf;
+    return buf + size;
+}
+
+/* Fill an unpacked call's arguments into the caller's span
+   (Include/internal/pycore_call.h).  This loop doesn't support a lookup
+   function mutating the dictionary to change its size.  It's a deliberate
+   choice for speed: this function is called in the performance critical
+   hot code. */
+const PyValue *
+_PyStack_UnpackDict(const PyValue *args, Py_ssize_t nargs, PyObject *kwargs,
+                    _PyValueRoot *span, const PyValue *end)
+{
+    assert(nargs >= 0);
+    assert(kwargs != NULL && PyDict_Check(kwargs));
+    assert(span->base + span->n + 1 + nargs + PyDict_GET_SIZE(kwargs)
+           <= end);
+    (void)end;
+    _PyValueSpan_Append(span, PyValue_NULL);  /* PY_VECTORCALL_ARGUMENTS_OFFSET */
+    const PyValue *stack = span->base + span->n;
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        _PyValueSpan_Append(span, args[i]);
+    }
+    Py_ssize_t pos = 0;
+    PyValue key, value;
+    while (_PyDict_NextValue(kwargs, &pos, &key, &value, NULL)) {
+        _PyValueSpan_Append(span, value);
+    }
+    return stack;
 }
 
 // Export for the stable ABI

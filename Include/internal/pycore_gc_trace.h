@@ -357,6 +357,20 @@ extern void _PyGC_Quarantine(void *ptr);
 PyAPI_FUNC(PyObject *) _PyGC_TestHoldInCoreMem(PyObject *callable,
                                                int give_back);
 
+/* Deterministic post-B carrier attribution fixture; no real marks change. */
+PyAPI_FUNC(PyObject *) _PyGC_TestCarrierOrigins(int shape, int reverse);
+
+/* For the borrowing tests (10a-2.md section 4): borrow list[0], or with
+ * _PyGC_BORROW_WEAK the target of the weak reference container; call
+ * callback, which drops every other reference to it; collect; and return
+ * the borrowed object's type name.  The function is precise and holds the
+ * borrow in its span; with _PyGC_BORROW_BARE a frame registered precise
+ * holds it with no span, which kill catches at the use. */
+#define _PyGC_BORROW_WEAK 1
+#define _PyGC_BORROW_BARE 2
+PyAPI_FUNC(PyObject *) _PyGC_TestBorrowAcross(PyObject *container,
+                                              PyObject *callback, int kind);
+
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);

@@ -4,11 +4,14 @@
  * detach with a value only in a register. */
 
 #include "parts.h"
+#include "pycore_call.h"          // _PyStack_UnpackDictSlots()
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveRootsOfHidden()
 #include "pycore_gc_walk.h"
 #include "pycore_lock.h"          // PyEvent
+#include "pycore_parking_lot.h"   // _PyParkingLot_Park()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #if defined(_PyGC_WALK) && defined(__x86_64__)
@@ -513,6 +516,45 @@ gc_verify_missed_root(PyObject *self, PyObject *args)
     return missed_root(kind, make, collect, keep);
 }
 
+/* An __exit__, as a staticmethod (exc_type, exc, tb), that clears the
+   exception's traceback, collects and then uses its tb argument.  Its frame
+   is registered precise while it runs and keeps no copy of tb, so only the
+   span of _PyEval_CallExitWithException, whose array args is, keeps the
+   traceback through the collection: without that span, kill traps at the
+   use.  Returns False, so that the exception propagates. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_exit_clears_traceback(PyObject *self, PyObject *const *args,
+                         Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "takes 3 arguments");
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&gc_exit_clears_traceback, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    if (PyException_SetTraceback(args[1], Py_None) < 0) {
+        goto done;
+    }
+    PyGC_Collect();
+    if (!PyTraceBack_Check(args[2])) {
+        PyErr_SetString(PyExc_AssertionError, "tb is not a traceback");
+        goto done;
+    }
+    result = Py_NewRef(Py_False);
+done:
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
 
 /* The span a slot binding boxes into (6d rung 2, test 5): a frame
    registered precise boxes an uncached inline int, holds the box only in
@@ -633,6 +675,70 @@ gc_span_box(PyObject *self, PyObject *args)
     return span_box(raw, value, collect);
 }
 
+/* PyObject_VectorcallMethod(name, [obj, *items], with
+   PY_VECTORCALL_ARGUMENTS_OFFSET) from a frame registered precise.  holder
+   is [obj, *items]; it is cleared before the call, so the argument array is
+   the only holder of each.  The array is this frame's span, as its creator
+   anchors it (10a-2.md rule 3).  A bound method found on obj prepends its
+   self into the slot that holds obj, so while it runs the span holds the
+   self and what keeps obj is the prepend's own span (rule 4).  Returns
+   (the result, or the exception raised, and the name of the type of what
+   the slot holds after the call, which must be obj again). */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+vectorcall_method_precise(PyObject *name, PyObject *holder)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&vectorcall_method_precise, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue stack[16];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, stack);
+    Py_ssize_t n = PyList_GET_SIZE(holder);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        // The items are objects: the tests pass instances
+        _PyValueSpan_AppendObject(&span, PyList_GET_ITEM(holder, i));
+    }
+    PyObject *res = NULL, *exc = NULL;
+    const char *slot_type = NULL;
+    if (PyList_SetSlice(holder, 0, n, NULL) == 0) {
+        res = PyObject_VectorcallMethod(
+            name, (PyObject *const *)stack,
+            n | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+        exc = res == NULL ? PyErr_GetRaisedException() : NULL;
+        // Kill traps here if the slot's object was not kept
+        slot_type = Py_TYPE((PyObject *)stack[0].bits)->tp_name;
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    // Scanned again from here: res and exc are held while the tuple is made
+    _PyGC_UnregisterCodeRange(d.func_start);
+    if (slot_type == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(Os)", res != NULL ? res : exc, slot_type);
+}
+
+static PyObject *
+gc_vectorcall_method(PyObject *self, PyObject *args)
+{
+    PyObject *name, *holder;
+    if (!PyArg_ParseTuple(args, "UO!", &name, &PyList_Type, &holder)) {
+        return NULL;
+    }
+    if (PyList_GET_SIZE(holder) < 1 || PyList_GET_SIZE(holder) > 16) {
+        PyErr_SetString(PyExc_ValueError, "holder has 1 to 16 items");
+        return NULL;
+    }
+    return vectorcall_method_precise(name, holder);
+}
+
 static PyObject *
 gc_walk_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -650,17 +756,311 @@ gc_walk_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+/* A real Park owns no object-bearing word.  Its opaque caller's writable
+   output slot must still be scanned, both while parked and after unpark has
+   published a payload but the consumer has not reattached. */
+static PyEvent park_ready;
+static PyThreadState *park_holder;
+static uintptr_t *park_slot;
+static uint8_t park_waiting;
+
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_walk_park_hold(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    uintptr_t slot = SENTINEL(0xf0);
+    uint8_t expected = 0;
+    park_holder = _PyThreadState_GET();
+    park_slot = &slot;
+    // No intervening detach: the observer cannot regain the GIL until
+    // Park has captured this caller's persistent stack and detached.
+    _PyEvent_Notify(&park_ready);
+    int result = _PyParkingLot_Park(&park_waiting, &expected, sizeof(expected),
+                                    -1, &slot, 1);
+    park_slot = NULL;
+    park_holder = NULL;
+    if (result != Py_PARK_OK) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture did not park");
+        return NULL;
+    }
+    return PyLong_FromUnsignedLongLong(slot);
+}
+
+struct park_walk {
+    uintptr_t park_start, park_end, caller_start, caller_end;
+    uintptr_t *slot;
+    uintptr_t expected;
+    int park_class, caller_class, slot_seen, value_ok, fell_back;
+};
+
+static void
+park_walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
+{
+    struct park_walk *walk = arg;
+    if (walk->park_start <= pc && pc < walk->park_end) {
+        walk->park_class = cls;
+    }
+    if (walk->caller_start <= pc && pc < walk->caller_end) {
+        walk->caller_class = cls;
+    }
+}
+
+static void _Py_NO_SANITIZE_ADDRESS
+park_walk_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+    struct park_walk *walk = arg;
+    uintptr_t slot = (uintptr_t)walk->slot;
+    if (start <= slot && slot + sizeof(*walk->slot) <= end) {
+        walk->slot_seen = 1;
+        walk->value_ok = *walk->slot == walk->expected;
+    }
+}
+
+static void
+park_walk_at(struct park_walk *walk, const _PyGCContext *ctx)
+{
+    _PyGCWalk w = {
+        .scan = park_walk_scan,
+        .frame = park_walk_frame,
+        .arg = walk,
+        .top = ((_PyThreadStateImpl *)park_holder)->c_stack_top,
+    };
+    walk->fell_back = _PyGC_WalkStack(&w, ctx);
+}
+
+static void
+park_publish(void *arg, void *park_arg, int has_more_waiters)
+{
+    if (park_arg != NULL) {
+        *(uintptr_t *)park_arg = SENTINEL(0xf1);
+    }
+}
+
+static PyObject *
+gc_walk_park_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+gc_walk_park_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (park_holder != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture is still active");
+        return NULL;
+    }
+    park_ready = (PyEvent){0};
+    park_waiting = 0;
+    Py_RETURN_NONE;
+}
+
+static PyValue
+gc_walk_park_observe(PyObject *self, PyValue arg)
+{
+    if (!_PyValue_IsFalse(arg) && !_PyValue_IsTrue(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected an omit-caller flag");
+        return PyValue_NULL;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    PyEvent_Wait(&park_ready);
+    Py_END_ALLOW_THREADS
+
+    PyObject *result = NULL;
+    int registered = 0;
+    _PyGCFrameDesc park, caller;
+    if (park_holder == NULL || park_slot == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture is not parked");
+        goto done;
+    }
+    _PyGCDetachRecord *record =
+        &((_PyThreadStateImpl *)park_holder)->gc_trace.detach;
+    _PyGCContext captured = record->cap;
+    if (!record->valid || !record->pinned
+        || _PyGC_DecodeDescriptor((uintptr_t)&_PyParkingLot_Park, &park) < 0
+        || _PyGC_DecodeDescriptor((uintptr_t)&gc_walk_park_hold, &caller) < 0
+        || !(park.func_start <= captured.pc && captured.pc < park.func_end))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no pinned Park capture");
+        goto done;
+    }
+    if (_PyValue_IsTrue(arg)) {
+        // Negative control: omit this otherwise opaque caller's slot.
+        if (_PyGC_RegisterCodeRange(caller.func_start, caller.func_end,
+                                    _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                    NULL) < 0)
+        {
+            PyErr_SetString(PyExc_RuntimeError, "the code range table is full");
+            goto done;
+        }
+        registered = 1;
+    }
+    struct park_walk before = {
+        .park_start = park.func_start, .park_end = park.func_end,
+        .caller_start = caller.func_start, .caller_end = caller.func_end,
+        .slot = park_slot, .expected = SENTINEL(0xf0),
+        .park_class = -1, .caller_class = -1,
+    };
+    park_walk_at(&before, &captured);
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    struct park_walk after = {
+        .park_start = park.func_start, .park_end = park.func_end,
+        .caller_start = caller.func_start, .caller_end = caller.func_end,
+        .slot = park_slot, .expected = SENTINEL(0xf1),
+        .park_class = -1, .caller_class = -1,
+    };
+    // Retaining the GIL prevents attachment; it does not prove that the
+    // consumer has already returned from its semaphore wait.
+    park_walk_at(&after, &captured);
+    int same_capture = record->valid && record->pinned
+        && memcmp(&record->cap, &captured, sizeof(captured)) == 0;
+    result = Py_BuildValue("((iiiii)(iiiii)i)",
+                          before.park_class, before.caller_class,
+                          before.slot_seen, before.value_ok, before.fell_back,
+                          after.park_class, after.caller_class,
+                          after.slot_seen, after.value_ok, after.fell_back,
+                          same_capture);
+done:
+    if (registered) {
+        _PyGC_UnregisterCodeRange(caller.func_start);
+    }
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    return PyValue_FromResult(result);
+}
+
+/* 10a rung 2b item 3 (10a-2b.md section 1): an unpacked call's arguments
+   in its caller's span.  gc_unpack_consumer(d, collect, k=obj), called
+   with kwargs d through gc_unpack_call(), registers its frame precise,
+   clears d, collects and reads obj's type: only the caller's span, which
+   the keyword values were unpacked into, holds obj then.  Under
+   PYTHON_GCVERIFY=kill a missing anchor aborts at the read.  Returns (the
+   type's name, its frame was classed precise, the walk fell back,
+   test-range fallbacks). */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_unpack_consumer(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
+                   PyObject *kwnames)
+{
+    if (nargs != 2 || !PyDict_Check(args[0]) || kwnames == NULL
+        || PyTuple_GET_SIZE(kwnames) != 1)
+    {
+        PyErr_SetString(PyExc_TypeError, "takes (dict, collect, k=obj)");
+        return NULL;
+    }
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&gc_unpack_consumer, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *result = NULL;
+    struct span_walk f = {.start = d.func_start, .end = d.func_end, .cls = -1};
+    span_walk_here(&f);
+    PyDict_Clear(args[0]);
+    PyObject *r = PyObject_CallNoArgs(args[1]);
+    if (r == NULL) {
+        goto done;
+    }
+    // The use: a dead value aborts here under kill, with its record.
+    const char *name = Py_TYPE(args[2])->tp_name;
+    result = Py_BuildValue("(sOOL)", name,
+                           f.cls == _PyGC_FRAME_PRECISE ? Py_True : Py_False,
+                           f.fell_back ? Py_True : Py_False,
+                           (long long)f.test_fallbacks);
+done:
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return result;
+}
+
+/* f(*args, **kwargs) from C: PyObject_Call(), whose keyword form is
+   _PyVectorcall_Call()'s, or, with dict_form, PyObject_VectorcallDict().
+   args' items are objects. */
+static PyObject *
+gc_unpack_call(PyObject *self, PyObject *a)
+{
+    PyObject *f, *args, *kwargs;
+    int dict_form;
+    if (!PyArg_ParseTuple(a, "OO!O!p", &f, &PyTuple_Type, &args,
+                          &PyDict_Type, &kwargs, &dict_form)) {
+        return NULL;
+    }
+    Py_ssize_t n = PyTuple_GET_SIZE(args);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyValue_IsInline(PyTuple_GET_VALUE(args, i))) {
+            PyErr_SetString(PyExc_ValueError, "args' items are objects");
+            return NULL;
+        }
+    }
+    if (!dict_form) {
+        return PyObject_Call(f, args, kwargs);
+    }
+    return PyObject_VectorcallDict(
+        f, (PyObject *const *)_PyTuple_ITEMS(args), n, kwargs);
+}
+
+/* A callee that allocates nothing, so that a test that fails allocations
+   counts only the unpacked call's own: the buffer and the names. */
+static PyObject *
+gc_unpack_sink(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
+               PyObject *kwnames)
+{
+    Py_RETURN_NONE;
+}
+
+/* _PyStack_UnpackDictSlots(prefix, nargs, nkwargs): the buffer's size, or
+   -1 on overflow. */
+static PyObject *
+gc_unpack_dict_slots(PyObject *self, PyObject *a)
+{
+    Py_ssize_t prefix, nargs, nkwargs;
+    if (!PyArg_ParseTuple(a, "nnn", &prefix, &nargs, &nkwargs)) {
+        return NULL;
+    }
+    return PyLong_FromSsize_t(
+        _PyStack_UnpackDictSlots(prefix, nargs, nkwargs));
+}
+
+/* The number of value roots this thread has pushed, so that a test can
+   check that an error path pops what it pushed. */
+static PyObject *
+gc_value_roots_depth(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    Py_ssize_t n = 0;
+    for (_PyValueRoot *r = ts->gc_trace.value_roots; r != NULL; r = r->next) {
+        n++;
+    }
+    return PyLong_FromSsize_t(n);
+}
+
 static PyMethodDef test_methods[] = {
     {"gc_walk_owners", _PyCFunction_CAST(gc_walk_owners), METH_O},
     {"gc_walk_fallback", gc_walk_fallback, METH_NOARGS},
     {"gc_walk_hold_detached", _PyCFunction_CAST(gc_walk_hold_detached), METH_O},
     {"gc_verify_missed_root", gc_verify_missed_root, METH_VARARGS},
+    {"gc_exit_clears_traceback", _PyCFunction_CAST(gc_exit_clears_traceback),
+     METH_FASTCALL},
     {"gc_span_box", gc_span_box, METH_VARARGS},
     {"gc_span_box_walk", gc_span_box_walk, METH_NOARGS},
+    {"gc_vectorcall_method", gc_vectorcall_method, METH_VARARGS},
+    {"gc_unpack_consumer", _PyCFunction_CAST(gc_unpack_consumer),
+     METH_FASTCALL | METH_KEYWORDS},
+    {"gc_unpack_call", gc_unpack_call, METH_VARARGS},
+    {"gc_unpack_sink", _PyCFunction_CAST(gc_unpack_sink),
+     METH_FASTCALL | METH_KEYWORDS},
+    {"gc_unpack_dict_slots", gc_unpack_dict_slots, METH_VARARGS},
+    {"gc_value_roots_depth", gc_value_roots_depth, METH_NOARGS},
     {"gc_walk_detached_roots", gc_walk_detached_roots, METH_NOARGS},
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},
     {"gc_walk_reset", gc_walk_reset, METH_NOARGS},
+    {"gc_walk_park_reset", gc_walk_park_reset, METH_NOARGS},
+    {"gc_walk_park_hold", gc_walk_park_hold, METH_NOARGS},
+    {"gc_walk_park_observe", _PyCFunction_CAST(gc_walk_park_observe), METH_O},
+    {"gc_walk_park_release", gc_walk_park_release, METH_NOARGS},
     {NULL},
 };
 

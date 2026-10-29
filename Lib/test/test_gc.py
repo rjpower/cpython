@@ -36,6 +36,19 @@ try:
 except ImportError:
     _testinternalcapi = None
 
+
+def _gc_mode_checked(code, mode):
+    """Assert the collector's parsed mode in the child running the hazard."""
+    name, _, extra = mode.partition(":")
+    mode_number = {"retain": 1, "kill": 2}[name]
+    extra_bits = sum({"pymem": 1, "structs": 2}[part]
+                     for part in set(extra.split(",")) if part)
+    expected = mode_number, extra_bits
+    return ("import _testinternalcapi\n"
+            f"assert _testinternalcapi.gc_verify_mode() == {expected!r}, "
+            "_testinternalcapi.gc_verify_mode()\n" + code)
+
+
 ### Support code
 ###############################################################################
 
@@ -1200,9 +1213,8 @@ class GCTogglingTests(unittest.TestCase):
 class TracingCollectorTests(unittest.TestCase):
     """The behaviour that the tracing collector adds."""
 
-    # The conservative scan of C stacks can keep one attempt's garbage alive;
-    # the tests that need garbage freed try again with new objects.
-    ATTEMPTS = 5
+    # The tests that need garbage freed try once (note 11 section 8.2).
+    ATTEMPTS = 1
 
     def setUp(self):
         gc.collect()
@@ -1384,7 +1396,36 @@ class TracingCollectorTests(unittest.TestCase):
             del items
             gc.collect()
             return ref() is None
-        for func in dead_super, dead_local, dead_item:
+        # The call layer's cases (10a-2.md section 4): the dead object was
+        # held only by the call path's frames, now popped.
+        refs = []
+        class Callable:
+            def __call__(self, x):
+                refs.append(weakref.ref(x))
+        def dead_tp_call():
+            Callable()(A())
+            gc.collect()
+            return refs.pop()() is None
+        import contextvars
+        def store(x):
+            refs.append(weakref.ref(x))
+        def dead_context_run():
+            contextvars.copy_context().run(store, A())
+            gc.collect()
+            return refs.pop()() is None
+        def receiver():
+            while True:
+                x = yield
+                refs.append(weakref.ref(x))
+                del x
+        def dead_generator_send():
+            g = receiver()
+            next(g)
+            g.send(A())
+            gc.collect()
+            return refs.pop()() is None
+        for func in (dead_super, dead_local, dead_item, dead_tp_call,
+                     dead_context_run, dead_generator_send):
             with self.subTest(func=func.__name__):
                 freed = []
                 sorted(range(20), key=lambda i: freed.append(func()) or i)
@@ -1395,30 +1436,35 @@ class TracingCollectorTests(unittest.TestCase):
         # An allocation that collects inline, under stress at every
         # allocation, does not scan the eval loop's C frame either: the
         # receiver that LOAD_SUPER_ATTR left in the frame's scratch array
-        # is freed by the collection that BUILD_LIST's allocation makes.
+        # is freed by the collection that the build's allocation makes.
+        # The allocator entry points that the builds call are precise,
+        # so no stale copy in their frames keeps it (10a-2b.md 2b).
         code = textwrap.dedent("""
-            import weakref, _testinternalcapi
+            import sys, weakref, _testinternalcapi
             class A:
                 def f(self):
                     return 1
             class B(A):
                 def f(self):
                     return super().f()
-            def dead_then_alloc():
+            def dead_then_alloc(n):
                 b = B()
                 b.self = b
                 b.f()
                 ref = weakref.ref(b)
                 del b
-                x = [None]
+                BUILD
                 return ref() is None
             _testinternalcapi.gc_set_stress(1)
-            freed = [dead_then_alloc() for _ in range(20)]
+            freed = [dead_then_alloc(None) for _ in range(20)]
             _testinternalcapi.gc_set_stress(0)
             print(freed.count(True))
         """)
-        rc, out, err = assert_python_ok("-c", code)
-        self.assertEqual(out.strip(), b"20")
+        for build in ("x = [n]", "x = (n, n)", "x = {n}", "x = {n: n}"):
+            with self.subTest(build=build):
+                rc, out, err = assert_python_ok(
+                    "-c", code.replace("BUILD", build))
+                self.assertEqual(out.strip(), b"20")
 
     def test_sweep_frees_exported_memoryview(self):
         # A struct iterator holds an export of its memoryview, and the sweep
@@ -1664,6 +1710,15 @@ class TracingCollectorTests(unittest.TestCase):
                 self.assertFalse(cleared)
                 self.assertEqual(crossed, cross)
 
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_child_mode_assertion(self):
+        code = _gc_mode_checked("pass", "kill")
+        rc, out, err = assert_python_failure(
+            "-I", "-c", code, PYTHON_GCVERIFY="kill")
+        self.assertEqual(out, b"")
+        self.assertIn(b"AssertionError: (0, 0)", err)
+
     HOLD_IN_CORE_MEM = textwrap.dedent("""
         import gc, sys, _testinternalcapi
         obj = _testinternalcapi.gc_hold_in_core_mem(
@@ -1686,8 +1741,8 @@ class TracingCollectorTests(unittest.TestCase):
                                       ("retain", True, 0)):
             with self.subTest(mode=mode, give_back=give_back):
                 rc, out, err = assert_python_ok(
-                    "-c", self.HOLD_IN_CORE_MEM, str(int(give_back)),
-                    PYTHON_GCVERIFY=mode)
+                    "-c", _gc_mode_checked(self.HOLD_IN_CORE_MEM, mode),
+                    str(int(give_back)), PYTHON_GCVERIFY=mode)
                 name, nq = out.decode().split()
                 self.assertEqual(name, "list" if give_back else "NoneType")
                 if want:
@@ -1696,6 +1751,37 @@ class TracingCollectorTests(unittest.TestCase):
                          if "candidate list at" in line
                          and "of a core frame" in line]
                 self.assertEqual(len(found), want, err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_carrier_origins(self):
+        # Explicit seed order avoids dependence on register allocation. A
+        # second list outside the B set must not become a candidate.
+        for shape in range(5):
+            for reverse in (False, True):
+                with self.subTest(shape=shape, reverse=reverse):
+                    result = _testinternalcapi.gc_verify_carrier_origins(
+                        shape, reverse)
+                    origins = result["origins"]
+                    if shape == 4:
+                        self.assertEqual(result["candidates"], 2)
+                        self.assertTrue(result["sorted"])
+                        self.assertTrue(result["flags_unchanged"])
+                        continue
+                    count = 11 if shape == 2 else 3 if shape == 3 else 2
+                    self.assertEqual(len(origins), min(count, 8))
+                    self.assertEqual(len(set(origins)), len(origins))
+                    self.assertEqual(result["more"], max(count - 8, 0))
+                    self.assertEqual(result["candidates"], 1)
+                    self.assertTrue(result["flags_unchanged"])
+                    self.assertTrue(all(rec[3] == 123 for rec in origins))
+                    if shape != 2:
+                        expected = ({(0x1000, 0x2000, 1, 123),
+                                     (0x1000, 0x2000, 2, 123),
+                                     (0x1000, 0x3000, 2, 123)}
+                                    if shape == 3 else
+                                    {(0x1000, 0x2000, 1, 123),
+                                     (0x1008, 0x2000, 2, 123)})
+                        self.assertEqual(set(origins), expected)
 
     STACK_HITS = textwrap.dedent("""
         import gc, _testinternalcapi
@@ -1747,18 +1833,21 @@ class TracingCollectorTests(unittest.TestCase):
         # from core frames.
         code = self.HOLD_IN_CORE_MEM
         if not support.Py_DEBUG:
-            rc, out, err = assert_python_failure("-c", code, "0",
-                                                 PYTHON_GCVERIFY="kill")
+            rc, out, err = assert_python_failure(
+                "-c", _gc_mode_checked(code, "kill"), "0",
+                PYTHON_GCVERIFY="kill")
             self.assertIn(b"PYTHON_GCVERIFY=kill needs a debug build", err)
             return
-        rc, out, err = assert_python_ok("-c", code, "0",
-                                        PYTHON_GCVERIFY="kill:pymem")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(code, "kill:pymem"), "0",
+            PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out.split()[0], b"NoneType")
-        rc, out, err = assert_python_ok("-c", code, "1",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(code, "kill"), "1", PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split()[0], b"list")
-        rc, out, err = assert_python_failure("-X", "faulthandler", "-c", code,
-                                             "1", PYTHON_GCVERIFY="kill:pymem")
+        rc, out, err = assert_python_failure(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill:pymem"),
+            "1", PYTHON_GCVERIFY="kill:pymem")
         self.assertEqual(out, b"")
         if support.check_sanitizer(address=True):
             # ASan stops the read of the poisoned header before the trap
@@ -1766,8 +1855,12 @@ class TracingCollectorTests(unittest.TestCase):
             self.assertIn(b"in _Py_TYPE_impl", err)
         else:
             self.assertIn(b"gc verify kill: Py_TYPE of the list at ", err)
-            self.assertIn(b"reached only through a PyMem block that the "
-                          b"word at ", err)
+            # The first origin depends on layout. Require the PyMem/core
+            # origin in this killed-list record, including when supplemental.
+            self.assertRegex(
+                err, rb"(?m)^gc verify kill: Py_TYPE of the list at [^\n]*"
+                rb"(?:reached only through |, and through )a PyMem block that "
+                rb"the word at 0x[0-9a-f]+ of a core frame at [^\n]+ points to[^\n]*$")
 
     MISSED_ROOT = textwrap.dedent("""
         import gc, sys, _testinternalcapi
@@ -1798,8 +1891,10 @@ class TracingCollectorTests(unittest.TestCase):
         dead = hex(0xDDDDDDDDDDDDDDDD).encode()
         def run(kind, mode, ok=True):
             check = assert_python_ok if ok else assert_python_failure
-            return check("-X", "faulthandler", "-c", self.MISSED_ROOT, kind,
-                         PYTHON_GCVERIFY=mode)
+            return check(
+                "-X", "faulthandler", "-c",
+                _gc_mode_checked(self.MISSED_ROOT, mode), kind,
+                PYTHON_GCVERIFY=mode)
         # Under ASan the held blocks are poisoned too, so each use stops at
         # its first read: the header in _Py_TYPE_impl, or the cached item
         # in missed_root().
@@ -1872,9 +1967,165 @@ class TracingCollectorTests(unittest.TestCase):
         # frees the page also looks that word up in B, so the release must
         # come before the collection builds its page lists; released after,
         # B read the freed page and mimalloc's assertion fired.
-        rc, out, err = assert_python_ok("-c", self.MISSED_ROOT, "release",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(self.MISSED_ROOT, "kill"), "release",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split()[0], b"release")
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_exit_traceback_in_span(self):
+        # _PyEval_CallExitWithException's argument array is its frame's
+        # span (10a-2.md rule 3).  A C __exit__ clears the exception's
+        # traceback, which leaves the array the traceback's only holder,
+        # and uses it after a collection: under kill, a span left out traps.
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            class CM:
+                def __enter__(self):
+                    return self
+                __exit__ = staticmethod(
+                    _testinternalcapi.gc_exit_clears_traceback)
+            try:
+                with CM():
+                    raise ValueError("raised")
+            except ValueError as e:
+                print(e, flush=True)
+        """)
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill"),
+            PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.split(), [b"raised"])
+
+    BORROW = textwrap.dedent("""
+        import sys, weakref, _testinternalcapi
+        class A:
+            pass
+        kind = int(sys.argv[1])
+        keep = [A()]
+        if kind & 1:
+            # a weak reference to an object that keep alone holds
+            container = weakref.ref(keep[0])
+        else:
+            container = [keep[0]]
+        def drop():
+            keep.clear()
+            if not kind & 1:
+                container.clear()
+        def collections():
+            return _testinternalcapi.gc_root_stats()["total"]["collections"]
+        before = collections()
+        name = _testinternalcapi.gc_borrow_across(container, drop, kind)
+        print(name, collections() > before, flush=True)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_borrow_across_collection(self):
+        # 10a-2.md section 4 (note 11 8.4): a precise core function borrows
+        # list[0], or a weak reference's target read from wr_object, drops
+        # every other reference, collects, and uses it: its span keeps the
+        # object.  The counterpart without the span, a frame registered
+        # precise, has the object killed, and the use traps.
+        asan = support.check_sanitizer(address=True)
+        for weak in (0, 1):
+            with self.subTest(weak=weak):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.BORROW, "kill"), str(weak),
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.split(), [b"A", b"True"])
+                rc, out, err = assert_python_failure(
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.BORROW, "kill"), str(weak | 2),
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out, b"")
+                if asan:
+                    self.assertIn(b"AddressSanitizer: use-after-poison", err)
+                else:
+                    self.assertIn(b"use of a killed object", err)
+
+    VECTORCALL_METHOD = textwrap.dedent("""
+        import gc, sys, types, _testinternalcapi
+        class Obj:
+            pass
+        class Self1:
+            pass
+        class Self2:
+            pass
+        class Item:
+            pass
+        case = sys.argv[1]
+        def f(*args):
+            gc.collect()
+            if case == "raise":
+                raise ValueError(len(args))
+            return [type(a).__name__ for a in args]
+        holder = [Obj()] + [Item() for _ in range(6 if case == "heap" else 1)]
+        if case == "flat":
+            holder[0].meth = types.MethodType(f, Self1())
+        else:
+            # The outer prepend borrows the slot that holds the receiver;
+            # the inner one, called without the offset, copies.
+            holder[0].meth = types.MethodType(
+                types.MethodType(f, Self1()), Self2())
+        _testinternalcapi.gc_set_stress(1)
+        res, slot = _testinternalcapi.gc_vectorcall_method("meth", holder)
+        _testinternalcapi.gc_set_stress(0)
+        print(slot, res if isinstance(res, list) else type(res).__name__)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_prepend_spans(self):
+        # 10a-2.md section 4, spans and slots.  PyObject_VectorcallMethod
+        # with the offset, from a frame registered precise that alone holds
+        # the arguments, to a bound method that prepends its self into the
+        # receiver's slot, collecting at every allocation and in the
+        # callee: the receiver, held then by the prepend's span alone,
+        # survives and is back in its slot, on success and on an exception;
+        # nested, the inner prepend's copy holds the items, also past the
+        # small buffer.
+        cases = {
+            "flat": "['Self1', 'Item']",
+            "nested": "['Self1', 'Self2', 'Item']",
+            "heap": "['Self1', 'Self2'" + ", 'Item'" * 6 + "]",
+            "raise": "ValueError",
+        }
+        for case, want in cases.items():
+            with self.subTest(case=case):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.VECTORCALL_METHOD, "kill"), case,
+                    PYTHON_GCVERIFY="kill")
+                slot, res = out.decode().strip().split(" ", 1)
+                self.assertEqual(slot, "Obj")
+                self.assertEqual(res, want)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_partial_merged_keywords(self):
+        # functools.partial with keywords of its own and of the call, which
+        # it merges, under kill, collecting at every allocation and in the
+        # callee: what only the merged arguments hold survives.
+        code = textwrap.dedent("""
+            import functools, gc, _testinternalcapi
+            class A:
+                pass
+            def f(*args, **kwargs):
+                gc.collect()
+                return sorted(type(v).__name__
+                              for v in args + tuple(kwargs.values()))
+            p = functools.partial(f, A(), k1=A())
+            _testinternalcapi.gc_set_stress(1)
+            res = p(A(), k2=A())
+            _testinternalcapi.gc_set_stress(0)
+            print(res)
+        """)
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c", _gc_mode_checked(code, "kill"),
+            PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.strip(), b"['A', 'A', 'A', 'A']")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_injection_sites(self):
@@ -1945,8 +2196,304 @@ class TracingCollectorTests(unittest.TestCase):
             fired(SETTER_BOX, lambda: setattr(o, "field", v))
             gc.collect()
             self.assertEqual(o.field, v)
+        # 10a rung 2b: a class pattern's __match_args__, which only
+        # _PyEval_MatchClass()'s span holds.
+        MATCH_ARGS = 11
+        class Point:
+            __match_args__ = ("x", "y")
+            def __init__(self):
+                self.x, self.y = 1, 2
+        def match(p):
+            match p:
+                case Point(a, b):
+                    return a, b
+        self.assertEqual(fired(MATCH_ARGS, lambda: match(Point())), (1, 2))
+        # 10a rung 2b item 3: an unpacked call's names, made by
+        # _PyStack_KwNames(), through each of its three callers: a Python
+        # function's frame push (CALL_FUNCTION_EX), PyObject_Call() of a
+        # vectorcall callable, and the dict form under a classmethod
+        # descriptor's call.  The positional arguments are made at run
+        # time, so that only the call's tuple holds them.
+        UNPACK_DICT = 12
+        def names(*a, **k):
+            return [type(x).__name__ for x in a], sorted(k)
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: names(*[Point()], **{"k": 1})),
+            (["Point"], ["k"]))
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: dict(*[[("p", Point())]], **{"k": 1})
+                  ["p"].x), 1)
+        from_bytes = int.__dict__["from_bytes"]
+        self.assertEqual(
+            fired(UNPACK_DICT, lambda: from_bytes(
+                int, bytes([1, int("2")]), **{"byteorder": "big"})), 258)
+        # 10a rung 2b item 5: a slot function's method lookup; the index
+        # past int32 that slot_sq_item() makes is held by its span alone.
+        SLOT_LOOKUP = 13
+        class Seq:
+            def __getitem__(self, i):
+                return i - 2**40
+        self.assertEqual(fired(SLOT_LOOKUP, lambda: Seq()[2**40 + 3]), 3)
         with self.assertRaises(ValueError):
             collect_at(99)
+
+    MATCH_ARGS = textwrap.dedent("""
+        import sys, _testinternalcapi
+        MATCH_ARGS = 11
+        collect_at = _testinternalcapi.gc_collect_at
+        case = sys.argv[1]
+        class Meta(type):
+            @property
+            def __match_args__(cls):
+                if case == "raising":
+                    raise ValueError("no __match_args__")
+                # Made at run time, so that only the span holds the tuple
+                # and its strings.
+                return tuple("".join(["x", s]) for s in ("1", "2"))
+        class P(metaclass=Meta):
+            def __init__(self):
+                self.x1, self.x2 = [1], [2]
+        def match():
+            if case == "missing":
+                match int("7"):
+                    case int(v):
+                        return v
+            match P():
+                case P(a, b):
+                    return a, b
+        before = collect_at(MATCH_ARGS)
+        try:
+            print(match())
+        except ValueError as e:
+            print(e)
+        finally:
+            print(collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_match_args_in_span(self):
+        # A class pattern's __match_args__ comes back through an object
+        # slot of _PyEval_MatchClass()'s span, and a collection right after
+        # the lookup, under kill, finds it only there.  The lookup's three
+        # outcomes: found, missing (int matches itself) and raising.
+        cases = {"found": "([1], [2])", "missing": "7",
+                 "raising": "no __match_args__"}
+        for case, want in cases.items():
+            with self.subTest(case=case):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.MATCH_ARGS, "kill"), case,
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.decode().split("\n")[:2], [want, "1"])
+
+    SLOT_INDEX = textwrap.dedent("""
+        import _testinternalcapi, _testlimitedcapi
+        SLOT_LOOKUP = 13
+        collect_at = _testinternalcapi.gc_collect_at
+        BIG = 2**40
+        class S:
+            def __getitem__(self, i):
+                return i - BIG
+            def __setitem__(self, i, v):
+                self.set = (i - BIG, v)
+            def __delitem__(self, i):
+                self.deleted = i - BIG
+        s = S()
+        # The C calls pass a Py_ssize_t: the slot function makes the int,
+        # past int32, that only its span holds across the lookup.
+        calls = [
+            lambda: _testlimitedcapi.sequence_getitem(s, BIG + 1),
+            lambda: _testlimitedcapi.sequence_setitem(s, BIG + 2, [2]) or s.set,
+            lambda: _testlimitedcapi.sequence_delitem(s, BIG + 3) or s.deleted,
+        ]
+        for call in calls:
+            before = collect_at(SLOT_LOOKUP)
+            print(call(), collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_slot_index_in_span(self):
+        # 10a rung 2b item 5: sq_item and sq_ass_item of a Python class,
+        # called from C with an index past int32, under kill, with a
+        # collection right after the method's lookup.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.SLOT_INDEX, "kill"), PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.decode().splitlines(),
+                         ["1 1", "(2, [2]) 1", "3 1"])
+
+    FINALIZE_RAISES = textwrap.dedent("""
+        import gc, sys
+        class D:
+            def __del__(self):
+                gc.collect()
+                raise KeyError("in __del__")
+        sys.unraisablehook = lambda u: print(type(u.exc_value).__name__,
+                                             u.exc_value)
+        d = D()
+        d.cycle = d
+        del d
+        gc.collect()
+        print("done")
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    def test_finalize_collects_and_raises(self):
+        # 10a rung 2b item 5: slot_tp_finalize's span holds __del__ and the
+        # saved exception while __del__ collects, under kill, and raises;
+        # the raise is reported as unraisable.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.FINALIZE_RAISES, "kill"),
+            PYTHON_GCVERIFY="kill")
+        self.assertEqual(out.decode().splitlines(),
+                         ["KeyError 'in __del__'", "done"])
+
+    RECEIVER_BOX = textwrap.dedent("""
+        import _testinternalcapi
+        RECEIVER_BOX = 9
+        collect_at = _testinternalcapi.gc_collect_at
+        # Made at run time, so that no constant holds a box.
+        x = 2.5 * (100000 + int("1"))
+        n = 100000 + int("1")
+        calls = [
+            lambda: x.hex(),                          # METH_NOARGS
+            lambda: x.__format__(".1f"),              # METH_O
+            lambda: x.__round__(1),                   # METH_FASTCALL
+            lambda: n.to_bytes(4, byteorder="little"),  # FASTCALL_KEYWORDS
+            lambda: float.hex(x),                     # the descriptor itself
+        ]
+        for call in calls:
+            before = collect_at(RECEIVER_BOX)
+            print(repr(call()), collect_at(0) - before)
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_receiver_box_in_span(self):
+        # 10a rung 2b: a method of float or int called on an inline
+        # receiver gets a box that only the object slot of its
+        # method_vectorcall_*() span holds; a collection right after the
+        # box, under kill, finds it only there, and the method then reads
+        # it.  One call per calling convention that the receivers have.
+        rc, out, err = assert_python_ok(
+            "-X", "faulthandler", "-c",
+            _gc_mode_checked(self.RECEIVER_BOX, "kill"),
+            PYTHON_GCVERIFY="kill")
+        x = 2.5 * 100001
+        want = [f"{x.hex()!r} 1", f"{format(x, '.1f')!r} 1",
+                f"{round(x, 1)!r} 1",
+                f"{(100001).to_bytes(4, 'little')!r} 1", f"{x.hex()!r} 1"]
+        self.assertEqual(out.decode().splitlines(), want)
+
+    UNPACK_HAZARD = textwrap.dedent("""
+        import gc, sys, _testinternalcapi as t
+        class A:
+            pass
+        def make():
+            # The keyword value is held by the dict alone.
+            return {"k": A()}
+        d = make()
+        print(*t.gc_unpack_call(t.gc_unpack_consumer, (d, gc.collect), d,
+                                sys.argv[1] == "dict"))
+    """)
+
+    @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_consumer"),
+                         "requires the stack walk")
+    def test_unpack_dict_hazard(self):
+        # 10a rung 2b item 3: the consumer, a frame registered precise,
+        # clears the dict that its keyword value came from and collects;
+        # the value then lives only in its caller's span, the unpacked
+        # call's buffer, and survives kill.  Through PyObject_Call()
+        # (_PyVectorcall_Call()) and PyObject_VectorcallDict().
+        for form in ("call", "dict"):
+            with self.subTest(form=form):
+                rc, out, err = assert_python_ok(
+                    "-X", "faulthandler", "-c",
+                    _gc_mode_checked(self.UNPACK_HAZARD, "kill"), form,
+                    PYTHON_GCVERIFY="kill")
+                self.assertEqual(out.split(), [b"A", b"True", b"False", b"0"])
+
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_call"),
+                         "requires the stack walk")
+    def test_unpack_dict_sizes(self):
+        # Each caller of _PyStack_UnpackDict() with its local buffer filled
+        # exactly (five arguments and keywords past its own anchors), one
+        # past it (a PyMem buffer), and an empty dict; and the size's
+        # overflow check.
+        call = _testinternalcapi.gc_unpack_call
+        def f(*a, **k):
+            return a, k
+        callers = {
+            "frame push": lambda a, k: f(*a, **k),
+            "PyObject_Call": lambda a, k: call(f, a, k, False),
+            "PyObject_VectorcallDict": lambda a, k: call(f, a, k, True),
+        }
+        shapes = [(2, 3), (0, 5), (3, 3), (0, 6), (6, 0), (1, 1)]
+        for name, caller in callers.items():
+            for nargs, nkw in shapes:
+                with self.subTest(caller=name, nargs=nargs, nkw=nkw):
+                    a = tuple([i] for i in range(nargs))
+                    k = {f"k{i}": [i] for i in range(nkw)}
+                    self.assertEqual(caller(a, k), (a, k))
+        slots = _testinternalcapi.gc_unpack_dict_slots
+        self.assertEqual(slots(3, 2, 3), 10)
+        self.assertEqual(slots(0, sys.maxsize, 1), -1)
+        self.assertEqual(slots(2, 0, sys.maxsize // 8 - 3), -1)
+
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_call"),
+                         "requires the stack walk")
+    def test_unpack_dict_errors(self):
+        # A key that is not a str, through each caller, and the names'
+        # allocation failing: TypeError or MemoryError, and the thread's
+        # value roots as they were.
+        call = _testinternalcapi.gc_unpack_call
+        depth = _testinternalcapi.gc_value_roots_depth
+        def f(*a, **k):
+            return a, k
+        bad = {1: 2}
+        callers = {
+            "PyObject_Call": lambda: call(f, ([1],), bad, False),
+            "PyObject_VectorcallDict": lambda: call(f, ([1],), bad, True),
+            "classmethod descriptor": lambda: int.__dict__["from_bytes"](
+                int, b"\x01", **bad),
+        }
+        for name, caller in callers.items():
+            with self.subTest(caller=name):
+                before = depth()
+                with self.assertRaisesRegex(TypeError, "must be strings"):
+                    caller()
+                self.assertEqual(depth(), before)
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipUnless(hasattr(_testinternalcapi, "gc_unpack_sink"),
+                         "requires the stack walk")
+    def test_unpack_dict_nomemory(self):
+        # The unpacked call's allocations fail one at a time, with a callee
+        # that allocates nothing: past the local buffer, the first is the
+        # PyMem buffer that the span moves to and the second the names; in
+        # it, the names only.  Each failure raises MemoryError and pops what
+        # it pushed; the next count succeeds.
+        nomem = _testcapi.call_with_nomemory
+        call = _testinternalcapi.gc_unpack_call
+        sink = _testinternalcapi.gc_unpack_sink
+        depth = _testinternalcapi.gc_value_roots_depth
+        for nargs, allocations in ((1, 1), (4, 2)):
+            a = tuple([i] for i in range(nargs))
+            k = {f"k{i}": [i] for i in range(nargs)}
+            for dict_form in (False, True):
+                with self.subTest(nargs=nargs, dict_form=dict_form):
+                    for start in range(allocations):
+                        before = depth()
+                        with self.assertRaises(MemoryError):
+                            nomem(start, start + 1, call, sink, a, k,
+                                  dict_form)
+                        self.assertEqual(depth(), before)
+                    self.assertIsNone(nomem(allocations, allocations + 1,
+                                            call, sink, a, k, dict_form))
 
     # 6d rung 4: the setter's box across collections, under stress and,
     # on debug builds, kill.
@@ -1970,7 +2517,10 @@ class TracingCollectorTests(unittest.TestCase):
         env = {"PYTHON_GCSTRESS": "100"}
         if support.Py_DEBUG:
             env["PYTHON_GCVERIFY"] = "kill"
-        rc, out, err = assert_python_ok("-c", self.SETTER_BOX, **env)
+        code = self.SETTER_BOX
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     SPAN_BOX = textwrap.dedent("""
@@ -1992,11 +2542,13 @@ class TracingCollectorTests(unittest.TestCase):
         # kill; the control, the canonical (inline) value, holds no box, so
         # the box dies and its use aborts with its record.  The fixture walks the stack at
         # its collection point: its frame is precise, with no fallback.
-        rc, out, err = assert_python_ok("-c", self.SPAN_BOX, "raw",
-                                        PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_ok(
+            "-c", _gc_mode_checked(self.SPAN_BOX, "kill"), "raw",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0", b"True"])
-        rc, out, err = assert_python_failure("-c", self.SPAN_BOX, "canonical",
-                                             PYTHON_GCVERIFY="kill")
+        rc, out, err = assert_python_failure(
+            "-c", _gc_mode_checked(self.SPAN_BOX, "kill"), "canonical",
+            PYTHON_GCVERIFY="kill")
         self.assertEqual(out.split(), [b"True", b"False", b"0"])
         if support.check_sanitizer(address=True):
             # ASan stops the read of the poisoned header before the trap
@@ -2086,7 +2638,10 @@ class TracingCollectorTests(unittest.TestCase):
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_allocation_safepoints(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
-        rc, out, err = assert_python_ok("-c", self.ALLOCATION_SAFEPOINTS, **env)
+        code = self.ALLOCATION_SAFEPOINTS
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     # 6d rung 3, note 12 section 9: a tp_call result, the prepended argument
@@ -2215,8 +2770,75 @@ class TracingCollectorTests(unittest.TestCase):
                 env = {"PYTHON_GCSTRESS": "100"}
                 if support.Py_DEBUG:
                     env["PYTHON_GCVERIFY"] = "kill"
+                    code = _gc_mode_checked(code, "kill")
                 rc, out, err = assert_python_ok("-c", code, **env)
                 self.assertEqual(out.strip(), b"ok")
+
+    @requires_subprocess()
+    @unittest.skipUnless(os.name == "posix", "requires POSIX named semaphores")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_multiprocessing_cleanup_before_tracker(self):
+        import multiprocessing
+        if "forkserver" not in multiprocessing.get_all_start_methods():
+            self.skipTest("requires forkserver")
+        mode, extras = _testinternalcapi.gc_verify_mode()
+        stress = _testinternalcapi.gc_get_stress()
+        verify = ("", "retain", "kill")[mode]
+        if extras:
+            verify += ":" + ",".join(
+                name for bit, name in ((1, "pymem"), (2, "structs"))
+                if extras & bit)
+        prelude = ("import _testinternalcapi\n"
+                   f"assert _testinternalcapi.gc_verify_mode() == {(mode, extras)!r}\n"
+                   f"assert _testinternalcapi.gc_get_stress() == {stress}\n")
+        code = textwrap.dedent("""
+            import gc, multiprocessing, os, sys
+            from multiprocessing import forkserver, resource_tracker, synchronize, util
+            tempdir = util.get_temp_dir()
+            forkserver._forkserver.ensure_running()
+            assert forkserver._forkserver._forkserver_pid is not None
+            assert os.path.isdir(tempdir)
+
+            # Keep the server alive until cleanup, including its directory.
+            directory_finalizer = next(
+                f for f in util._finalizer_registry.values()
+                if f._callback is util._remove_temp_dir)
+            remove_directory = directory_finalizer._callback
+            def checked_remove_directory(*args):
+                assert forkserver._forkserver._forkserver_pid is None
+                remove_directory(*args)
+            directory_finalizer._callback = checked_remove_directory
+
+            holder = [multiprocessing.get_context(sys.argv[1]).RLock()]
+            name = holder[0]._semlock.name
+            finalizer = next(
+                f for f in util._finalizer_registry.values()
+                if f._callback is synchronize.SemLock._cleanup and f._args == (name,))
+            # _TestFinalize saves/clears this registry. A weakref callback
+            # while it is empty cannot run the semaphore's finalizer.
+            saved = util._finalizer_registry.copy()
+            util._finalizer_registry.clear()
+            holder.clear()
+            gc.collect()
+            assert finalizer._weakref() is None
+            util._finalizer_registry.update(saved)
+            assert finalizer.still_active()
+
+            util._cleanup_tests()
+            assert resource_tracker._resource_tracker._exitcode == 0, (
+                resource_tracker._resource_tracker._exitcode)
+            assert forkserver._forkserver._forkserver_pid is None
+            assert not os.path.exists(tempdir)
+            print("ok")
+        """)
+        for context in ("forkserver", "spawn"):
+            with self.subTest(context=context):
+                _, out, err = assert_python_ok(
+                    "-c", prelude + code, context,
+                    PYTHON_GCVERIFY=verify, PYTHON_GCSTRESS=str(stress))
+                self.assertEqual(out.strip(), b"ok")
+                self.assertNotIn(b"resource_tracker: There appear", err)
+                self.assertNotIn(b"FileNotFoundError", err)
 
     # 6d rung 3: CALL_FUNCTION_EX holds a monitored C call's result in a
     # root across the C_RETURN callback, which can collect.
@@ -2268,7 +2890,10 @@ class TracingCollectorTests(unittest.TestCase):
 
     def test_monitored_starred_call(self):
         env = {"PYTHON_GCVERIFY": "kill"} if support.Py_DEBUG else {}
-        rc, out, err = assert_python_ok("-c", self.MONITORED_STARRED_CALL,
+        code = self.MONITORED_STARRED_CALL
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code,
                                         **env)
         self.assertEqual(out.strip(), b"ok")
 
@@ -2277,7 +2902,10 @@ class TracingCollectorTests(unittest.TestCase):
         env = {"PYTHON_GCSTRESS": "50"}
         if support.Py_DEBUG:
             env["PYTHON_GCVERIFY"] = "kill"
-        rc, out, err = assert_python_ok("-c", self.RETURN_ORDER, **env)
+        code = self.RETURN_ORDER
+        if support.Py_DEBUG:
+            code = _gc_mode_checked(code, "kill")
+        rc, out, err = assert_python_ok("-c", code, **env)
         self.assertEqual(out.strip(), b"ok")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
@@ -2337,8 +2965,8 @@ class TracingCollectorTests(unittest.TestCase):
                                              PYTHON_GCSTRESS="often")
         self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
 
-    @unittest.skip("step 7: a shared-heap subinterpreter runs the main "
-                   "interpreter's weakref callbacks (note 08 section 3)")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_stress_shared_heap_callbacks(self):
         """A legacy subinterpreter shares the main interpreter's heap and is
         collected with it, but must not run the main interpreter's weak
@@ -2347,14 +2975,16 @@ class TracingCollectorTests(unittest.TestCase):
             PYTHON_GCSTRESS=1000 ./python -c 'import _testcapi;
                 _testcapi.run_in_subinterp("x = 1")'
 
-        crashes in the subinterpreter's start-up.
+        Previously this crashed in the subinterpreter's start-up. The
+        queue must route callbacks to their owning interpreter instead.
         """
         code = textwrap.dedent("""
             import _testcapi
             for i in range(5):
                 _testcapi.run_in_subinterp("x = 1")
+            assert _testinternalcapi.gc_get_stress() == 1000
         """)
-        assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+        _queue_child(code, PYTHON_GCSTRESS="1000")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_settrace_runs_queued_callbacks_first(self):
@@ -2577,6 +3207,36 @@ class StackWalkTests(unittest.TestCase):
         self.assertTrue(fell_back)
         self.assertEqual(test_fallbacks, 1)
         self.assertTrue(found)
+
+    @threading_helper.requires_working_threading()
+    @unittest.skipIf(Py_GIL_DISABLED, "fixture retains the producer GIL")
+    def test_parking_lot_caller_slot(self):
+        # Park holds raw wait state; the opaque caller owns the writable
+        # payload slot even after unpark, before the consumer reattaches.
+        for omit_caller in (False, True):
+            with self.subTest(omit_caller=omit_caller):
+                _testinternalcapi.gc_walk_park_reset()
+                received = []
+                thread = threading.Thread(
+                    target=lambda: received.append(
+                        _testinternalcapi.gc_walk_park_hold()))
+                thread.start()
+                try:
+                    before, after, same_capture = (
+                        _testinternalcapi.gc_walk_park_observe(omit_caller))
+                finally:
+                    _testinternalcapi.gc_walk_park_release()
+                    threading_helper.join_thread(thread)
+                self.assertTrue(same_capture)
+                caller = before[1]
+                if omit_caller:
+                    self.assertEqual(caller, 1)
+                else:
+                    self.assertIn(caller, (2, 3))  # core/extension opaque
+                covered = 0 if omit_caller else 1
+                self.assertEqual(before, (1, caller, covered, covered, 0))
+                self.assertEqual(after, (1, caller, covered, covered, 0))
+                self.assertEqual(received, [0x5a5a5a5a000000f1])
 
     @threading_helper.requires_working_threading()
     def test_detached_register(self):

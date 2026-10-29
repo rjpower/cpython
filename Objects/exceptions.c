@@ -17,6 +17,7 @@
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #include "osdefs.h"               // SEP
 #include "clinic/exceptions.c.h"
@@ -2416,7 +2417,7 @@ OSError_written_get(PyObject *op, void *context)
     return PyValue_FromLongLong(self->written);
 }
 
-static int
+Py_GC_PRECISE static int
 OSError_written_set(PyObject *op, PyValue arg, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
@@ -2428,12 +2429,21 @@ OSError_written_set(PyObject *op, PyValue arg, void *context)
         self->written = -1;
         return 0;
     }
+    // The span holds the exception, whose field is set after the call.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)self);
+    int res = -1;
     Py_ssize_t n;
     n = PyNumber_AsSsize_tValue(arg, PyExc_ValueError);
-    if (n == -1 && PyErr_Occurred())
-        return -1;
-    self->written = n;
-    return 0;
+    if (n != -1 || !PyErr_Occurred()) {
+        self->written = n;
+        res = 0;
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static PyMemberDef OSError_members[] = {

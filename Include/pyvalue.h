@@ -148,7 +148,7 @@ PyAPI_FUNC(PyValue) _PyValue_BoxDouble(double value);
 
 /* The value d: inline unless it is NaN, which is boxed.  PyValue_NULL with
    an exception set if boxing fails. */
-static inline PyValue
+Py_GC_PRECISE static inline PyValue
 PyValue_FromDouble(double d)
 {
     if (!isnan(d)) {
@@ -170,7 +170,7 @@ PyAPI_FUNC(PyValue) _PyValue_BoxUInt64(uint64_t value);
 
 /* The value i: an inline int if it fits in int32, otherwise a new int
    object.  PyValue_NULL with an exception set if allocating fails. */
-static inline PyValue
+Py_GC_PRECISE static inline PyValue
 PyValue_FromLongLong(long long i)
 {
     if (INT32_MIN <= i && i <= INT32_MAX) {
@@ -280,7 +280,7 @@ PyAPI_FUNC(PyObject *) _PyValue_BoxOrAbort(PyValue v, const char *accessor);
 /* The object that v holds: a new box if v holds an inline value, or NULL
    with an exception set if boxing fails.  PyValue_Object(PyValue_NULL) is
    NULL. */
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 PyValue_Object(PyValue v)
 {
     if (PyValue_IsInline(v)) {
@@ -291,7 +291,7 @@ PyValue_Object(PyValue v)
 
 /* PyValue_Object() for accessor, which has no error channel: it never
    returns NULL for a value that is not PyValue_NULL, and aborts instead. */
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 _PyValue_ObjectOrAbort(PyValue v, const char *accessor)
 {
     if (PyValue_IsInline(v)) {

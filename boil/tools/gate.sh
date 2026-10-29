@@ -7,7 +7,9 @@
 #      such as -m PATTERN may follow them)
 #   2  full suite (release build)
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
-#      Tools/boil/traverse_audit.py --check
+#      Tools/boil/traverse_audit.py --check; a rung that marks functions also
+#      runs level 0 on build/default, build/asan and build/tailcall, whose
+#      builds run the inline audit's outlined-callee check (note 11 section 2)
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
 # Levels 2/3 accept only the optional regrtest pair --python WORKER_COMMAND,
 # for an instrumented worker launcher; neither accepts a narrowed test set.

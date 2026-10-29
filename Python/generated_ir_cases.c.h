@@ -4850,7 +4850,6 @@
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             PyValue func_st;
-            PyValue func;
             PyValue callargs;
             PyValue null;
             PyValue callargs_st;
@@ -4874,7 +4873,6 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                func = func_st;
                 PyObject *callargs_object;
                 _PyValueRoot callargs_root;
                 if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
@@ -4893,7 +4891,7 @@
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
                         callargs_root.object = callargs_object;
                     }
-                    int err = _Py_Check_ArgsIterable(tstate, PyValue_ObjectBorrow(func), callargs_o);
+                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
                     }
@@ -4919,7 +4917,6 @@
                 kwargs_st = window[3];
                 callargs_st = callargs;
                 null = window[1];
-                func_st = func;
                 PyObject *callargs_st_object;
                 _PyValueRoot callargs_st_root;
                 if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
@@ -5015,7 +5012,6 @@
             INSTRUCTION_STATS(CALL_EX_PY);
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue func;
             PyValue callargs;
             PyValue func_st;
             PyValue callargs_st;
@@ -5033,30 +5029,10 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                func = window[0];
-                PyObject *func_object;
-                _PyValueRoot func_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    func_object = _PyValue_BoxInline(func);
-                    if (func_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_EX_PY, _PY_BOX_CALL);
-                }
-                else {
-                    func_object = PyValue_ObjectBorrow(func);
-                }
                 PyObject *callargs_object;
                 _PyValueRoot callargs_root;
                 if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     callargs_object = _PyValue_BoxInline(callargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (callargs_object == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -5067,27 +5043,16 @@
                 }
                 PyObject *callargs_o = callargs_object;
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
                         callargs_root.object = callargs_object;
                     }
-                    int err = _Py_Check_ArgsIterable(tstate, func_object, callargs_o);
+                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
                     }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
@@ -5097,9 +5062,6 @@
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -5108,7 +5070,7 @@
             }
             // _CHECK_IS_PY_CALLABLE_EX
             {
-                func_st = func;
+                func_st = window[0];
                 if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -5261,29 +5223,10 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                PyObject *func_object;
-                _PyValueRoot func_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    func_object = _PyValue_BoxInline(func);
-                    if (func_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    func_object = PyValue_ObjectBorrow(func);
-                }
                 PyObject *callargs_object;
                 _PyValueRoot callargs_root;
                 if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     callargs_object = _PyValue_BoxInline(callargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (callargs_object == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -5294,27 +5237,16 @@
                 }
                 PyObject *callargs_o = callargs_object;
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
                         callargs_root.object = callargs_object;
                     }
-                    int err = _Py_Check_ArgsIterable(tstate, func_object, callargs_o);
+                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
                     }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
@@ -5323,9 +5255,6 @@
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
                     }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
@@ -10210,7 +10139,6 @@
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_CALL_FUNCTION_EX;
-            PyValue func;
             PyValue callargs;
             PyValue func_st;
             PyValue null;
@@ -10220,30 +10148,10 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                func = window[0];
-                PyObject *func_object;
-                _PyValueRoot func_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    func_object = _PyValue_BoxInline(func);
-                    if (func_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    func_object = PyValue_ObjectBorrow(func);
-                }
                 PyObject *callargs_object;
                 _PyValueRoot callargs_root;
                 if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     callargs_object = _PyValue_BoxInline(callargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (callargs_object == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -10254,27 +10162,16 @@
                 }
                 PyObject *callargs_o = callargs_object;
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
                         callargs_root.object = callargs_object;
                     }
-                    int err = _Py_Check_ArgsIterable(tstate, func_object, callargs_o);
+                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
                     }
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PushValueRoot(tstate, &callargs_root);
@@ -10283,9 +10180,6 @@
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
                     if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
                         _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
                     }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
@@ -10298,7 +10192,7 @@
                 kwargs_st = window[3];
                 callargs_st = callargs;
                 null = window[1];
-                func_st = func;
+                func_st = window[0];
                 PyObject *func_st_object;
                 _PyValueRoot func_st_root;
                 if (Py_UNLIKELY(PyValue_IsInline(func_st))) {

@@ -381,6 +381,22 @@ _PyValueSpan_AppendObject(_PyValueRoot *root, PyObject *o)
     _PyValueSpan_Append(root, _PyValue_FromBits((uintptr_t)o));
 }
 
+/* Append a raw NULL slot to the span and return its address as an object
+   out-parameter: what a callee stores there is the object's own pointer, a
+   raw anchor, as _PyValueSpan_AppendObject() stores one.  The C mode
+   accepts the address as an out-parameter into the span, and an object
+   loaded from it as anchored while the span is pushed and no other call is
+   given the address; it accepts no other cast of a span slot to
+   PyObject **. */
+static inline PyObject **
+_PyValueSpan_ObjectSlot(_PyValueRoot *root)
+{
+    PyValue *slot = &root->base[root->n];
+    *slot = PyValue_NULL;
+    root->n++;
+    return (PyObject **)slot;
+}
+
 /* The span's buffer moved to base, which holds the values appended so far,
    as PyMem_Realloc() leaves them.  Call it before any other collecting
    call. */
@@ -408,7 +424,7 @@ _PyThreadState_PopValueRoot(PyThreadState *tstate, _PyValueRoot *root)
    inline value is boxed in place, and root holds the box (its object field)
    from then on, so root's value must not be used as a PyValue afterwards.
    NULL if root holds NULL, or with an exception set if boxing fails. */
-static inline PyObject *
+Py_GC_PRECISE static inline PyObject *
 _PyValueRoot_Object(_PyValueRoot *root)
 {
     if (PyValue_IsInline(root->value)) {

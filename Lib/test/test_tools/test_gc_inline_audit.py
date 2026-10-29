@@ -147,10 +147,59 @@ class InlineAuditTests(unittest.TestCase):
         self.assertIn("precise 'bad' inlines 'opaque'", errors[0])
 
     def test_marked_headers_are_sources(self):
-        # A static inline function marked in an internal header is precise
-        # where it is inlined, so the audit reads the header's markers.
+        # A static inline function marked in a header is precise where it
+        # is inlined, so the audit reads the header's markers: the internal
+        # headers, the public ones and the core's private ones.
         sources = gc_inline_audit.marked_sources()
-        self.assertIn("pycore_gc_walk.h", [p.name for p in sources])
+        names = [p.name for p in sources]
+        for header in ("pycore_gc_walk.h", "pyvalue.h", "ceval_macros.h"):
+            self.assertIn(header, names)
+
+    OUTLINED = """
+        static __attribute__((noinline)) int
+        outlined(int x) { collect(); return x; }
+        Py_GC_PRECISE static __attribute__((noinline)) int
+        outlined_marked(int x) { collect(); return x; }
+        static __attribute__((noinline)) int
+        outlined_pure(int x) { return x + 3; }
+        static __attribute__((noinline)) int
+        borrow_across_bare(int x) { collect(); return x; }
+    """
+
+    def build_image(self, name, src):
+        c = os.path.join(self.tmp, name + ".c")
+        with open(c, "w") as f:
+            f.write(PRELUDE + textwrap.dedent(src))
+        image = os.path.join(self.tmp, name + ".so")
+        subprocess.run([*CC, "-g", "-O0", "-fPIC", "-shared", c, "-o", image],
+                       check=True)
+        return image, c
+
+    @unittest.skipUnless(shutil.which("objdump"), "requires objdump")
+    def test_outlined_static_callee_fails(self):
+        # A static callee that this build leaves outlined has a frame of its
+        # own, which the walk scans: it must be precise, or listed with the
+        # reason its frame may be opaque.
+        image, c = self.build_image("outlined", self.OUTLINED + """
+            Py_GC_PRECISE int caller(int x) { return outlined(x); }
+        """)
+        errors = self.audit(image, c)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("static 'outlined', which precise 'caller' calls, is "
+                      "outlined and collecting", errors[0])
+
+    @unittest.skipUnless(shutil.which("objdump"), "requires objdump")
+    def test_outlined_marked_pure_or_listed_callee_passes(self):
+        image, c = self.build_image("outlined_ok", self.OUTLINED + """
+            Py_GC_PRECISE int caller(int x)
+            {
+                return outlined_marked(x) + outlined_pure(x)
+                       + borrow_across_bare(x);
+            }
+            int unmarked_caller(int x) { return outlined(x); }
+        """)
+        self.assertIn("borrow_across_bare", gc_inline_audit.OUTLINED_OPAQUE)
+        self.assertEqual(self.audit(image, c), [])
 
     def test_cli_exit_status(self):
         obj, c = self.build("cli", GOOD + BAD, "-g", "-O2")

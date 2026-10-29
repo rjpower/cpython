@@ -409,7 +409,7 @@ do { \
 } while (0);
 
 
-static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
+Py_GC_PRECISE static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
     return (tstate->py_recursion_remaining-- <= 0) &&
         _Py_CheckRecursiveCallPy(tstate);
 }
@@ -430,23 +430,10 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 /* PyValue macros */
 
-/* How much scratch space to give PyValue to PyObject* conversion. */
-#define MAX_VALUE_SCRATCH 10
-
-#define VALUES_TO_OBJECTS(ARGS, ARG_COUNT, NAME) \
-    /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1]; \
-    PyObject **NAME = _PyObjectArray_FromValues(ARGS, ARG_COUNT, NAME##_temp);
-
-#define VALUES_TO_OBJECTS_CLEANUP(NAME) \
-    /* +1 because we +1 previously */ \
-    _PyObjectArray_Free(NAME - 1, NAME##_temp);
-
-#define CONVERSION_FAILED(NAME) ((NAME) == NULL)
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
-static inline int
+Py_GC_PRECISE static inline int
 check_periodics(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
@@ -456,7 +443,7 @@ check_periodics(PyThreadState *tstate) {
     return 0;
 }
 
-static inline int
+Py_GC_PRECISE static inline int
 check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
@@ -507,7 +494,7 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
-static inline int
+Py_GC_PRECISE static inline int
 _PyValue_Truth(PyValue ref)
 {
     if (_PyValue_IsTrue(ref)) {

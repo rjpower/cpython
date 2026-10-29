@@ -1,0 +1,56 @@
+PyCFunction_Call: PyObject_Call, _PyObject_CallValue, _Py_CheckFunctionResultValue, inline_is_not_callable
+PyEval_CallFunction: _PyObject_MakeTpCall, _Py_CheckFunctionResultValue, inline_is_not_callable
+PyList_GetSlice: PyList_New
+PyMem_Calloc: gc_count_alloc
+PyMem_Malloc: gc_count_alloc
+PyMem_Realloc: gc_count_alloc
+PyObject_CallFunction: _PyObject_MakeTpCall, _Py_CheckFunctionResultValue, inline_is_not_callable
+PyObject_CallObject: _PyObject_CallValue, _Py_CheckFunctionResultValue, inline_is_not_callable
+PyObject_Calloc: gc_count_alloc
+PyObject_Realloc: gc_count_alloc
+PyTuple_FromArray: tuple_alloc
+PyTuple_GetSlice: _PyTuple_FromValues, tuple_alloc
+PyTuple_Pack: tuple_alloc
+Py_MakePendingCalls: handle_signals
+_PyEval_MakePendingCalls: handle_signals, make_pending_calls
+_PyGC_Fini: current_pid
+_PyGC_Init: current_pid, get_live
+_PyGC_LiveAddImmortal: current_pid, get_live
+_PyGC_LiveGetRootStats: current_pid
+_PyGC_LiveKeepThreads: current_pid, get_live
+_PyGC_LiveKeptThreads: current_pid, get_live
+_PyGC_LiveWalkCache: current_pid, get_live
+_PyGen_ClearFrame: gen_clear_frame
+_PyList_Concat: PyList_New
+_PyMem_Strdup: gc_count_alloc
+_PyObject_CallFunction_SizeT: _PyObject_MakeTpCall, _Py_CheckFunctionResultValue, inline_is_not_callable
+_PyTuple_BinarySlice: _PyTuple_FromValues, tuple_alloc
+_PyTuple_Concat: tuple_alloc
+_PyTuple_FromArraySteal: tuple_alloc
+_PyTuple_FromPair: tuple_alloc
+_PyTuple_FromPairSteal: tuple_alloc
+_PyTuple_Repeat: tuple_alloc
+_PyTuple_Resize: PyTuple_New, tuple_alloc
+collect: current_pid, get_live
+frozenset_copy: make_new_set_untracked
+frozenset_new: make_new_set
+frozenset_vectorcall: make_new_set
+gen_dealloc: gen_clear_frame
+list_copy: PyList_New
+list_repeat: PyList_New
+list_slice_lock_held: PyList_New
+list_slice_wrap: PyList_New
+listiter_reduce: PyList_New
+listreviter_reduce: PyList_New
+set_copy: make_new_set_untracked
+set_copy_untracked_lock_held: make_new_set_untracked
+set_difference_untracked: make_new_set_untracked
+set_intersection: make_new_set_untracked
+set_new: make_new_set, make_new_set_untracked
+set_or: make_new_set_untracked
+set_symmetric_difference_impl: make_new_set_untracked
+set_symmetric_difference_update: make_new_set_untracked
+set_vectorcall: make_new_set
+tuple___getnewargs__: _PyTuple_FromValues, tuple_alloc
+tuple_subscript: tuple_alloc
+wrapper_call: wrapperdescr_raw_call

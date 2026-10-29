@@ -987,8 +987,7 @@ PLATFORM_MAIN_OBJS=	@PLATFORM_MAIN_OBJS@
 GC_PRECISE_CHECK=Tools/cases_generator/root_check_c.py
 Python/gc_precise.stamp: $(LIBRARY_OBJS) $(srcdir)/$(GC_PRECISE_CHECK)
 	@files=`cd $(srcdir) && { grep -l -r -w --include='*.c' Py_GC_PRECISE Objects Python Modules Parser; \
-		grep -l -r -w --include='*.c.h' Py_GC_PRECISE Objects Python Modules Parser; \
-		grep -l -r -w --include='*.h' Py_GC_PRECISE Include/internal; } || true`; \
+		grep -l -r -w --include='*.h' Py_GC_PRECISE Objects Python Modules Parser Include; } || true`; \
 	if test -n "$$files"; then \
 		(cd $(srcdir) && $(PYTHON_FOR_REGEN) $(GC_PRECISE_CHECK) $$files) || exit 1; \
 	fi
@@ -2220,6 +2219,7 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/in
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
 Python/ceval.o: \
+		$(srcdir)/Python/ceval.h \
 		$(srcdir)/Python/ceval_macros.h \
 		$(srcdir)/Python/condvar.h \
 		$(srcdir)/Python/generated_ir_cases.c.h \

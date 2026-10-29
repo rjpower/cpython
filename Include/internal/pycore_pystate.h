@@ -79,7 +79,7 @@ extern const PyConfig* _Py_GetMainConfig(void);
 
 
 /* Only handle signals on the main thread of the main interpreter. */
-static inline int
+Py_GC_PRECISE static inline int
 _Py_ThreadCanHandleSignals(PyInterpreterState *interp)
 {
     return (_Py_IsMainThread() && _Py_IsMainInterpreter(interp));

@@ -122,6 +122,20 @@ clone (`.isra`, `.constprop`, `.part`) of a precise function not itself in
 the section fails the step; a test builds one file without `-g` and
 expects the failure.
 
+**Outlined callees** (10a-2b.md). The same step reads the image's code: a
+static function that the precise sections call or jump to, that the C mode
+classifies as collecting, and that the build left outlined outside the
+sections has a frame of its own between the precise caller's and the
+collector's. The walk scans it, so a stale word there keeps a dead object
+alive, on exactly the builds that do not inline (debug and ASan, at
+`-Og`). Each such callee is marked `Py_GC_PRECISE`, or is listed in the
+audit's `OUTLINED_OPAQUE` with the reason its frame may stay opaque; the
+step fails on any other. `Py_GC_PRECISE` is defined in Include/pyport.h,
+so that the static inline functions of the public headers can carry it;
+outside the core it is empty. A rung that marks functions builds
+build/default, build/debug, build/asan and build/tailcall at gate 3 (gate
+0 on each), and each build runs the step.
+
 ### 2.1 root_check's C mode
 
 The handler checker (note 06 section 17.2) assumes that a `PyValue *` local
@@ -591,7 +605,12 @@ See the [coordinator roadmap](work/pre-I-performance-roadmap.md).
 - test_context: `test_hamt_gc_2` (release);
 - _test_multiprocessing: `test_finalize` (release; a padding slot in a call
   frame) and `_TestPool.test_release_task_refs` (all builds; a blocked pool
-  thread's call frame);
+  thread's call frame). The latter includes both WithProcessesTestPool
+  and WithThreadsTestPool in the fork, forkserver and spawn modules;
+  selecting only the process modules does not cover blocked consumers in
+  the thread pool. The 8ce matrices covered the process variants; the
+  first full O1 debug suite exposed all three thread variants still
+  failing through unused Park-frame padding (10a-2b.md, Park prerequisite);
 - test_set `test_container_iterator` and test_memoryview `test_gc` (debug;
   the alignment slot of `gc.collect()`'s wrapper);
 - test_descr `test_slots`'s and test_ctypes `test_issue_7959`'s allowance of
@@ -604,7 +623,27 @@ reports the root word's owner (function by `dladdr()`, class, offset),
 names the function to promote. An extension owner keeps the skip, named in
 its comment, and the row moves to 10b with that evidence.
 
-Known exclusions, which are not 10a's:
+Historical exclusions from the pre-Q1 runs follow. They record the original
+failures, not the current executed selection. Q1 and the forty passing
+shared-heap callback selections retired finding B's source skip. Current
+PROCESS rulings and `boil/tools/verify.manifest.json` supersede the whole
+test_capi.test_misc and import-class exclusions below. The executed stress
+policy uses only the retained `writer-resize`, `writers`, `writer-format`
+and `kill-pymem-metadata` exclusion rows, plus the machine remote-execution
+selector. Writer/root debt remains open; these historical broader filters
+must not be restored by deriving a new runner from this prose.
+
+Threshold-dependent test eligibility is separate from those exclusions.
+Positive `PYTHON_GCSTRESS` deliberately replaces byte-trigger scheduling.
+`ListAllTests.test_destroyed_by_gc` depends on `gc_threshold(1)` causing a
+collection while list_all runs; its body does not explicitly collect.
+The same existing-style eligibility decorator as the byte-trigger tests
+therefore skips that exact test under stress, with reason
+`PYTHON_GCSTRESS replaces the byte trigger`. Off still exercises the unchanged
+body. This adds no stress filter, scheduler change or reclamation allowance.
+The original failed full run and independently reproduced inherited HTTP
+and trashcan-progress findings remain recorded in
+[the 2b as-built record](work/10a-2b-asbuilt.md); no all-seven-PASS follows.
 
 - Under stress (`PYTHON_GCSTRESS=1000`), test_capi.test_misc as a whole.
   B class: shared-heap subinterpreter creation (finding B, question 18,
@@ -626,9 +665,74 @@ Known exclusions, which are not 10a's:
     run;
   - test_getargs `test_gh_119213`: its interpreter has its own obmalloc,
     so it is outside the class; it stays in the stress run.
+  - A second creator path, found by 10a rung 2b's extra stress run
+    (`PYTHON_GCSTRESS=50` on build/debug, reproduced on the rung 1b base):
+    test_import `SinglephaseInitTests.test_basic_multiple_interpreters_main_no_reset`,
+    whose `_interpreters.create('legacy')` shares the main allocator.
+    The C stack (boil/tools/cstack.sh): `Py_NewInterpreterFromConfig`,
+    `pycore_init_types`, `_PyStaticType_InitBuiltin`, `type_add_method`,
+    `PyStaticMethod_New`, `functools_wraps`, `PyObject_GetOptionalAttr`,
+    `meth_get__qualname__`, `PyUnicode_FromFormat`, `object_str`,
+    `PyErr_CheckSignals`, `_Py_RunGC`, `collect_pass`, `run_queue`
+    (gc_live.c), `PyObject_CallOneArg` of a queued weak reference
+    callback, which returns NULL with no exception set in the new
+    interpreter's thread state, and the debug result check aborts. Not in
+    the gate of record, whose stress set does not run test_import; extra
+    stress runs exclude the class patterns under this class (below).
+    7a's test covers the case.
+  - A third creator path, found by rung 2b's stress run of groups c and d
+    (`PYTHON_GCSTRESS=50` on build/debug) and reproduced 2 of 2 on the
+    base before 4c (938c5a5501a): test_import
+    `SubinterpImportTests.test_builtin_compat`, in its class's order (it
+    passes alone, 3 of 3). Its `_testinternalcapi` creator calls
+    `Py_NewInterpreterFromConfig`, and the C stack from `pycore_init_types`
+    down to the `run_queue` abort is the second path's, with
+    `meth_get__qualname__` reached through `functools_copy_attr`; no import
+    helper is on the stack. 10a-2b.md's record has the stack.
+  - Extra stress runs exclude `-i '*SinglephaseInitTests*' -i
+    '*SubinterpImportTests*'` under this class. Neither is in the gate of
+    record.
 
-  Also excluded under stress: test_capi.test_bytes's `*test_resize*`, the
-  writer row of 6.2, owner rung 3.
+  Also excluded under stress: the writer row of 6.2, owner rung 3, as
+  `-i '*test_resize*' -i '*WriterTest*'`. The first is test_capi.test_bytes'
+  resize case. The second was added when step 7a's stress ladder (test_capi
+  under `PYTHON_GCSTRESS=1000`, only `*test_resize*` excluded) failed 3 of
+  3 runs in the same row: test_bytes `BytesWriterTest.test_singletons` (the
+  `byteswriter_check_consistency` assertion, and a segfault) and
+  test_unicode `PyUnicodeWriterTest.test_write_char` (a segfault). 7a
+  reproduced both without its changes on 10a's build/debug at 288a274f57c:
+  test_singletons 4 of 10, test_write_char 5 of 10. 10a rung 2b's end
+  gate widened them (the coordinator, 2026-10-28) to `-i '*test_resize*'
+  -i '*Writer*' -i '*test_unicode.CAPITest.test_from_format'`. Run sequentially under
+  `PYTHON_GCSTRESS=1000`, test_capi failed in writer users that
+  `*WriterTest*` does not match: PyUnicodeWriterFormatTest's
+  `test_recover_error` (a segfault) and test_unicode's `test_from_format`
+  (an object corrupted after PyUnicode_FromFormat calls). The build
+  before rung 2b's item 6 fails the same way: test_capi.test_unicode at
+  N = 50 fails 3 of 3 on both builds. The segfault is a memory-safety
+  finding in the current tree, and it is rung 3's first item. The
+  exclusions come off when rung 3 roots the writer buffers.
+
+  Also excluded under stress: test_gc's `*test_verify_kill*`, owner rung
+  3. Its `kill:pymem` child traps when a collection lands inside
+  `makecode`. The compiler unit's `u_metadata` dicts are held only
+  through a `PyMem_Calloc` block from `_PyAssemble_MakeCodeObject`'s
+  frame, and `kill:pymem` finds such a PyMem holder by design; the live
+  collector has not failed. Whether it traps depends on where the stress
+  interval lands: 5 of 5 at c91c4bdb282 with N = 1,000, and at N = 200
+  on 10a at ba897d05a0c (10a-2b.md, 7a's hand-off). A stress line that
+  depends on the interval is not a gate. The exclusion comes off when
+  the compiler unit's metadata has a root or a span.
+- ASan runs need `ASAN_OPTIONS=detect_stack_use_after_return=0`. With
+  ASan's default, a local whose address escapes lives on ASan's
+  heap-backed fake stack, which the conservative scan does not see, so
+  its referents are killed. 6d's rung 3 ASan run showed it twice, both
+  passing with the option: test_gc `test_injection_sites` at the MKSTACK
+  site (`values_of` reading the first argument from
+  `_PyObject_CallFunctionVa`'s `small_stack` after `do_mkstack`'s
+  injected collection), and test_ctypes' `__pointer_type__` getter, whose
+  `%R` read a killed str. Rung 3 decides between scanning the fake frames
+  (section 10) and keeping the option as the recorded condition.
 - Under ASan, test_capi `test_mem.AddressSanitizerTests.test_buffer_overflow`.
   The test sets `PYTHONMALLOC=malloc` so that ASan sees the overflow. The
   fork's mem domain does not honour the variable, so mimalloc's check fires
@@ -643,11 +747,14 @@ In debug builds each collection marks twice before it frees anything:
   struct scan, and PyMem blocks that core opaque frames point to.
 
 Q, the objects in B but not A, were reached only through skipped words. A
-side table records each with the words that reached it: the one B marked
-it from, then every other skipped word whose value is the object, up to
-eight (the rest counted). Each has its address, its owner (function,
-class) and the collection number. A report names them all, since which
-word B meets first depends on the stack's layout. Two modes use Q, one
+side table records each with the words that reached it: B's first origin,
+then other skipped words that refer directly to the object or reach an
+object word through allocated PyMem carriers, up to eight (the rest
+counted). Carrier attribution follows nested PyMem pointers, with aliases
+and cycles visited once per origin; it does not replay alternative paths
+through arbitrary object tp_traverse graphs. Each origin has its word
+address, owner and collection number. A report keeps the supplemental
+origins because B's first origin depends on the stack's layout. Two modes use Q, one
 for retention and one for detection.
 
 - **`PYTHON_GCVERIFY=retain`**, a diagnostic. B decides: Q is kept
@@ -673,6 +780,12 @@ for retention and one for detection.
   return off, the scan functions unsanitized) the held blocks are poisoned
   too, so every read traps, a field or a cached interior pointer included,
   and the report's address finds its record.
+
+A process that aborts, a kill trap included, gives its C stack without
+gdb through `boil/tools/cstack.sh BUILDDIR/python ARGS`: it preloads
+`boil/tools/abortbt.c`, which prints `backtrace()` on SIGABRT after
+faulthandler's report, and resolves the interpreter's frames with
+addr2line.
 
 **Demonstration.** Before the gate counts on either mode,
 `_testinternalcapi.gc_verify_missed_root(kind)` hides an object in a
@@ -701,11 +814,26 @@ allocation through the inline path. It runs test_gc, test_weakref,
 test_generators, test_coroutines, test_asyncgen, test_descr, test_capi,
 test_sort, test_functools and test_context at N = 1,000 at each rung end,
 and the full suite at N = 100,000 once. *Injection*:
-`_testinternalcapi.gc_collect_at(site)` arms a collection at a named site
-(push before initialize, inside `initialize_locals`, return before the
-store, `take_ownership`, span rebase, inside `do_mkstack()`, between a
-weakref load and its use, detach capture), because allocation
-intervals do not ensure those transitions are hit.
+`_testinternalcapi.gc_collect_at(site)` arms a collection at a named site,
+because allocation intervals do not ensure those transitions are hit. The
+sites (`_PyGC_SITE_*`, Include/internal/pycore_tstate.h; 0 is none, and
+`_PyGC_SITE_COUNT` is 13):
+
+| Site | Name | Where |
+|---|---|---|
+| 1 | DETACH | a detach entry, before the record |
+| 2 | PUSH_FRAME | `_PyThreadState_PushFrame()`, before the frame is initialized |
+| 3 | SPAN_REBASE | `_PyValueSpan_Rebase()`, after it |
+| 4 | MKSTACK | `do_mkstack()`, after each value |
+| 5 | INIT_LOCALS | `initialize_locals()`, after `*args` and `**kwargs` are stored |
+| 6 | RETURN | `_RETURN_VALUE`, after the caller's slot takes the value, before the clear |
+| 7 | TAKE_OWNERSHIP | `take_ownership()`, before the caller's frame object is made |
+| 8 | SLOT_BOX | `box_owner_for_descr()`, after an inline owner's box is in the caller's span |
+| 9 | RECEIVER_BOX | `method_check_args()` and `wrapperdescr_call()`, after an inline receiver's box is in the caller's span |
+| 10 | SETTER_BOX | `_testinternalcapi`'s `SetterBox` setter, between its box and the store |
+| 11 | MATCH_ARGS | `_PyEval_MatchClass()`, after the `__match_args__` lookup |
+| 12 | UNPACK_DICT | `_PyStack_KwNames()`, after the names' allocation |
+| 13 | SLOT_LOOKUP | `lookup_method_ex()`, after a slot function's method lookup (10a rung 2b item 5) |
 
 ### 8.4 New tests
 
@@ -779,8 +907,8 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 | 0 | 0.5 | Baseline counters (9); c_roots committed as `boil/tools/measure/c_roots.py`; measurements at ac59664de47; the ASan build tried | `python -c pass`; counters on collector_live16 |
 | 1 | 2.5 | The C mode (2.1) and its negative tests, first; the walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; the data-stack and chain visits, the entry visitor and the return order (4.3, 4.4); the inline audit; kill and retain modes, injection and stress; then `Py_GC_PRECISE` on the eval loop, the handlers and the entry paths, each passing the C mode; allocations as safepoints; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the negative tests; the C mode on the eval loop's hand-written parts; the inline audit; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
 | 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 hazard-driven qualification |
-| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 hazard-driven qualification without the flag |
-| 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
+| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted; the raw-buffer owners (the bytes constructors' `const char *`, 10a-2b.md 2b); the stack scan follows words into ASan's fake frames (`__asan_addr_is_in_fake_stack`) and scans them, or `detect_stack_use_after_return=0` stays the recorded condition of ASan runs (8.2), decided in the rung's work doc | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 hazard-driven qualification without the flag |
+| 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated; the platform matrix, which records that a `DEBUG_PYDICT` build is outside the precise-roots contract (its `ASSERT_CONSISTENT` hashes keys, which call_effects.py takes for non-collecting) | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
 **What blocks a rung from landing**, at any time and at the hard stop: a
 trap in kill mode, a walk fallback in the suite, a C-mode

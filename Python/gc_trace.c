@@ -69,6 +69,7 @@
 #include "pycore_moduleobject.h"  // PyModuleObject
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE, _PyGC_RegisterCodeRange()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
@@ -327,10 +328,11 @@ typedef struct {
     int64_t collection;   // the live collection that listed it
 } verify_rec;
 
-/* The words kept for an object that B listed: B's first, the one it
-   marked the object from, then each other left-out word whose value is the
-   object, in the order A listed them.  Which word comes first depends on
-   the stack's layout, so a report names them all. */
+/* B's first origin, then other skipped words that refer directly to the
+   object or reach it through PyMem carrier words, up to the record cap.
+   Alternative provenance through arbitrary tp_traverse graphs is not
+   replayed. The first origin depends on stack layout, so reports keep the
+   supplemental origins too. */
 #define VERIFY_RECS 8
 
 typedef struct {
@@ -343,6 +345,11 @@ typedef struct {
     PyObject *op;
     verify_recs recs;
 } verify_entry;
+
+typedef struct {
+    uintptr_t word, value, pc;
+    int kind;
+} verify_deferred;
 
 /* What kill keeps of an object it killed, for the trap's report: the
    object's type name is copied, since the type may die with it. */
@@ -480,7 +487,7 @@ typedef struct {
     uintptr_t hit_value;
     int in_queue;         // scan_queued() is draining
     verify_rec rec;       // B's root word
-    struct { uintptr_t word, value, pc; int kind; } *deferred;
+    verify_deferred *deferred;
     size_t ndeferred;
     size_t deferred_cap;
     verify_entry *newq;
@@ -654,18 +661,29 @@ mem_block_is_free(uintptr_t block)
         || block_in_list(page, mi_page_thread_free(page), block);
 }
 
+/* The allocated mem block containing addr, using the same interior and
+   freed-block rules for marking and verifier attribution. */
+static const range_t *
+mem_block_range(trace_t *t, uintptr_t addr, uintptr_t *block)
+{
+    const range_t *r = rangelist_find(&t->mem_pages, addr);
+    if (r == NULL) {
+        return NULL;
+    }
+    *block = r->start + (addr - r->start) / r->bsize * r->bsize;
+    if (t->live && mem_block_is_free(*block)) {
+        return NULL;
+    }
+    return r;
+}
+
 /* Queue the mem heap block that contains addr for a conservative scan. */
 static void
 queue_mem_block(trace_t *t, uintptr_t addr)
 {
-    const range_t *r = rangelist_find(&t->mem_pages, addr);
+    uintptr_t block;
+    const range_t *r = mem_block_range(t, addr, &block);
     if (r == NULL) {
-        return;
-    }
-    uintptr_t block = r->start + (addr - r->start) / r->bsize * r->bsize;
-    // Only the live collector checks, which keeps the verifier's results
-    // comparable with step 4's.
-    if (t->live && mem_block_is_free(block)) {
         return;
     }
     int added = addrset_add(&t->mem_scanned, block);
@@ -2767,40 +2785,161 @@ quarantine_release(struct _gc_trace_state *ts, int64_t upto)
 }
 #endif
 
-/* After B: sort what B listed, and give each object, after the word B
-   marked it from, every other left-out word whose value is the object. */
+static int
+verify_origin_cmp(const void *a, const void *b)
+{
+    const verify_deferred *x = a, *y = b;
+    if (x->word != y->word) {
+        return x->word < y->word ? -1 : 1;
+    }
+    if (x->pc != y->pc) {
+        return x->pc < y->pc ? -1 : 1;
+    }
+    return (x->kind > y->kind) - (x->kind < y->kind);
+}
+
+/* One origin contributes at most once per candidate, including after the
+   record cap: aliases and repeated fields must not inflate "more". */
+static int
+verify_add_origin(trace_t *t, PyObject *op, const verify_rec *origin,
+                  addrset *objects)
+{
+    verify_entry key = {.op = op};
+    verify_entry *e = bsearch(&key, t->newq, t->nnewq,
+                              sizeof(verify_entry), verify_entry_cmp);
+    if (e == NULL) {
+        return 0;
+    }
+    int added = addrset_add(objects, (uintptr_t)op);
+    if (added <= 0) {
+        return added;
+    }
+    verify_recs *r = &e->recs;
+    for (int j = 0; j < r->n; j++) {
+        if (r->rec[j].word == origin->word
+            && r->rec[j].owner == origin->owner
+            && r->rec[j].kind == origin->kind)
+        {
+            return 0;
+        }
+    }
+    if (r->n == VERIFY_RECS) {
+        r->more++;
+    }
+    else {
+        r->rec[r->n] = *origin;
+        r->rec[r->n++].collection = r->rec[0].collection;
+    }
+    return 0;
+}
+
+static int
+verify_queue_carrier(trace_t *t, uintptr_t value, addrset *carriers,
+                     rangelist *pending)
+{
+    uintptr_t block;
+    const range_t *r = mem_block_range(t, value, &block);
+    if (r == NULL) {
+        return 0;
+    }
+    int added = addrset_add(carriers, block);
+    if (added <= 0) {
+        return added;
+    }
+    return rangelist_add(pending, block, block + r->bsize, 0, 0);
+}
+
+/* Follow only PyMem-to-PyMem edges, adding origins for object words that
+   B listed. No mark bits change and no tp_traverse graph is replayed. */
+static int _Py_NO_SANITIZE_ADDRESS
+verify_carrier_words(trace_t *t, rangelist *pending, addrset *carriers,
+                     addrset *objects, const verify_rec *origin)
+{
+    while (pending->n > 0) {
+        range_t r = pending->items[--pending->n];
+        for (uintptr_t *p = (uintptr_t *)r.start;
+             (uintptr_t)p + sizeof(uintptr_t) <= r.end; p++)
+        {
+            uintptr_t w = *p;
+            PyObject *op = live_lookup(t, w, 1);
+            if (op != NULL) {
+                if (verify_add_origin(t, op, origin, objects) < 0) {
+                    return -1;
+                }
+            }
+            else if (w >= t->mem_lo && w < t->mem_hi
+                     && verify_queue_carrier(t, w, carriers, pending) < 0)
+            {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* After B: supplement its first origin with direct words and PyMem
+   carriers. Marking scans each block once; attribution must instead visit
+   each (allocated block, origin) once, even if another origin scanned it
+   first. Sorting seeds groups duplicate origins; per-origin sets handle
+   interior aliases, shared nested carriers and cycles. */
 static void
 verify_other_words(trace_t *t)
 {
-    qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
-    for (size_t i = 0; i < t->ndeferred; i++) {
-        PyObject *op = live_lookup(t, t->deferred[i].value, 1);
-        if (op == NULL) {
-            continue;
-        }
-        verify_entry key = {.op = op};
-        verify_entry *e = bsearch(&key, t->newq, t->nnewq,
-                                  sizeof(verify_entry), verify_entry_cmp);
-        if (e == NULL) {
-            continue;
-        }
-        verify_recs *r = &e->recs;
-        int seen = 0;
-        for (int j = 0; j < r->n && !seen; j++) {
-            seen = r->rec[j].word == t->deferred[i].word;
-        }
-        if (seen) {
-            continue;
-        }
-        if (r->n == VERIFY_RECS) {
-            r->more++;
-            continue;
-        }
-        r->rec[r->n++] = (verify_rec){.word = t->deferred[i].word,
-                                      .owner = t->deferred[i].pc,
-                                      .kind = t->deferred[i].kind,
-                                      .collection = r->rec[0].collection};
+    if (t->nnewq == 0) {
+        return;
     }
+    qsort(t->newq, t->nnewq, sizeof(verify_entry), verify_entry_cmp);
+    if (t->ndeferred == 0) {
+        return;
+    }
+    verify_deferred *seeds = malloc(t->ndeferred * sizeof(*seeds));
+    addrset carriers = {0}, objects = {0};
+    rangelist pending = {0};
+    if (seeds == NULL || addrset_init(&carriers, 256) < 0
+        || addrset_init(&objects, 256) < 0)
+    {
+        goto oom;
+    }
+    memcpy(seeds, t->deferred, t->ndeferred * sizeof(*seeds));
+    qsort(seeds, t->ndeferred, sizeof(*seeds), verify_origin_cmp);
+    size_t i = 0;
+    while (i < t->ndeferred) {
+        verify_rec origin = {.word = seeds[i].word,
+                              .owner = seeds[i].pc,
+                              .kind = seeds[i].kind};
+        memset(carriers.keys, 0, (carriers.mask + 1) * sizeof(uintptr_t));
+        memset(objects.keys, 0, (objects.mask + 1) * sizeof(uintptr_t));
+        carriers.used = objects.used = 0;
+        size_t first = i;
+        do {
+            PyObject *op = live_lookup(t, seeds[i].value, 1);
+            if (op != NULL) {
+                if (verify_add_origin(t, op, &origin, &objects) < 0) {
+                    goto oom;
+                }
+            }
+            else if (verify_queue_carrier(t, seeds[i].value,
+                                          &carriers, &pending) < 0)
+            {
+                goto oom;
+            }
+            i++;
+        } while (i < t->ndeferred
+                 && verify_origin_cmp(&seeds[first], &seeds[i]) == 0);
+        if (verify_carrier_words(t, &pending, &carriers, &objects,
+                                 &origin) < 0)
+        {
+            goto oom;
+        }
+    }
+    goto done;
+oom:
+    t->oom = 1;
+done:
+    free(seeds);
+    addrset_fini(&carriers);
+    addrset_fini(&objects);
+    rangelist_fini(&pending);
 }
 
 /* After A: report the listed objects that A reached, mark B from what A
@@ -2866,6 +3005,9 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
         return;
     }
     verify_other_words(t);
+    if (t->oom) {
+        return;
+    }
     if (t->verify == VERIFY_KILL) {
         /* What B alone marked dies, as it would with A for the roots; the
            walk tells the sweep which, so that its frees are quarantined. */
@@ -2916,6 +3058,141 @@ verify_mark_b(trace_t *t, PyThreadState *tstate)
     t->nnewq = t->newq_cap = 0;
 }
 
+/* Exercise post-B enrichment with explicit seed order and real allocated
+   carriers, independent of compiler frame layout. The synthetic newq holds
+   target alone; ignored stands for an A object. No real marks change. */
+PyObject *
+_PyGC_TestCarrierOrigins(int shape, int reverse)
+{
+    if (shape < 0 || shape > 4) {
+        PyErr_SetString(PyExc_ValueError, "unknown carrier shape");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue roots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, roots);
+    trace_t t = {.interp = tstate->interp, .live = 1,
+                 .debug_offset = _PyMem_DebugEnabled() ? 2 * sizeof(size_t) : 0};
+    PyObject **a = NULL, **b = NULL, **freed = NULL;
+    PyObject *result = NULL;
+    PyObject *target = PyList_New(0);
+    if (target == NULL) {
+        goto done;
+    }
+    _PyValueSpan_AppendObject(&span, target);
+    PyObject *ignored = PyList_New(0);
+    if (ignored == NULL) {
+        goto done;
+    }
+    _PyValueSpan_AppendObject(&span, ignored);
+    a = PyMem_Calloc(6, sizeof(*a));
+    b = PyMem_Calloc(6, sizeof(*b));
+    freed = PyMem_Calloc(6, sizeof(*freed));
+    if (a == NULL || b == NULL || freed == NULL) {
+        PyErr_NoMemory();
+        goto done;
+    }
+    a[1] = target;
+    a[2] = target;
+    a[3] = ignored;
+    if (shape == 1) {
+        a[1] = (PyObject *)(b + 1);
+        a[2] = (PyObject *)(b + 2);
+        b[1] = target;
+        b[2] = (PyObject *)(a + 1);
+        b[3] = ignored;
+        b[4] = target;
+    }
+    freed[1] = target;
+    uintptr_t dead_carrier = (uintptr_t)freed;
+    PyMem_Free(freed);
+    freed = NULL;
+    size_t norigins = shape == 2 ? VERIFY_RECS + 3 : shape == 3 ? 3 : 2;
+    size_t copies = shape == 1 || shape == 2 ? 3 : 1;
+    t.ndeferred = norigins * copies + 1;
+    t.deferred = malloc(t.ndeferred * sizeof(*t.deferred));
+    t.newq = malloc(2 * sizeof(*t.newq));
+    if (t.deferred == NULL || t.newq == NULL) {
+        PyErr_NoMemory();
+        goto done;
+    }
+    for (size_t i = 0; i < norigins; i++) {
+        size_t id = reverse ? norigins - i - 1 : i;
+        uintptr_t word = shape == 3 ? 0x1000 : 0x1000 + id * 8;
+        uintptr_t pc = shape == 3 && id == 2 ? 0x3000 : 0x2000;
+        int kind = id == 0 ? VERIFY_FROM_PRECISE : VERIFY_FROM_CORE_MEM;
+        for (size_t j = 0; j < copies; j++) {
+            t.deferred[i * copies + j] = (verify_deferred){
+                .word = word, .value = (uintptr_t)(a + j),
+                .pc = pc, .kind = kind};
+        }
+    }
+    t.deferred[t.ndeferred - 1] = (verify_deferred){
+        .word = 0x4000, .value = dead_carrier, .pc = 0x5000,
+        .kind = VERIFY_FROM_CORE_MEM};
+    t.nnewq = 1;
+    t.newq[0] = (verify_entry){.op = target,
+        .recs = {.n = 1, .rec = {{.word = t.deferred[0].word,
+                                 .owner = t.deferred[0].pc,
+                                 .kind = t.deferred[0].kind,
+                                 .collection = 123}}}};
+    if (shape == 4) {
+        // Struct-only B candidates still need sorting without seed words.
+        t.ndeferred = 0;
+        t.nnewq = 2;
+        t.newq[1] = t.newq[0];
+        t.newq[1].op = ignored;
+        if ((uintptr_t)t.newq[0].op < (uintptr_t)t.newq[1].op) {
+            verify_entry tmp = t.newq[0];
+            t.newq[0] = t.newq[1];
+            t.newq[1] = tmp;
+        }
+    }
+    uint16_t target_flags = target->ob_flags, ignored_flags = ignored->ob_flags;
+    HEAD_LOCK(&_PyRuntime);
+    int ok = live_domain(&t, tstate->interp) == 0 && live_build_pages(&t) == 0;
+    if (ok) {
+        verify_other_words(&t);
+    }
+    HEAD_UNLOCK(&_PyRuntime);
+    if (!ok || t.oom) {
+        PyErr_NoMemory();
+        goto done;
+    }
+    int unchanged = target_flags == target->ob_flags
+                    && ignored_flags == ignored->ob_flags;
+    verify_recs *r = &t.newq[0].recs;
+    PyObject *origins = PyList_New(r->n);
+    if (origins == NULL) {
+        goto done;
+    }
+    _PyValueSpan_AppendObject(&span, origins);
+    for (int i = 0; i < r->n; i++) {
+        verify_rec *rec = &r->rec[i];
+        PyObject *item = Py_BuildValue("KKiL", (unsigned long long)rec->word,
+                                       (unsigned long long)rec->owner,
+                                       rec->kind, (long long)rec->collection);
+        if (item == NULL) {
+            goto done;
+        }
+        PyList_SET_ITEM(origins, i, item);
+    }
+    int sorted = t.nnewq == 1
+                 || (uintptr_t)t.newq[0].op < (uintptr_t)t.newq[1].op;
+    result = Py_BuildValue("{s:O,s:i,s:n,s:O,s:O}", "origins", origins,
+                           "more", r->more, "candidates", (Py_ssize_t)t.nnewq,
+                           "flags_unchanged", unchanged ? Py_True : Py_False,
+                           "sorted", sorted ? Py_True : Py_False);
+done:
+    live_fini(&t);
+    PyMem_Free(a);
+    PyMem_Free(b);
+    PyMem_Free(freed);
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return result;
+}
+
 /* Not inlined, so that the list's address is in no register or stack slot
    of the caller */
 static Py_NO_INLINE int
@@ -2959,6 +3236,69 @@ _PyGC_TestHoldInCoreMem(PyObject *callable, int give_back)
         return NULL;
     }
     return give_back ? list : Py_None;
+}
+
+/* The object that _PyGC_TestBorrowAcross() borrows: list[0], or the target
+   of a weak reference, read from wr_object as C code that borrows it does. */
+static inline PyObject *
+borrowed_item(PyObject *container, int weak)
+{
+    if (weak) {
+        return ((PyWeakReference *)container)->wr_object;
+    }
+    return PyList_GET_ITEM(container, 0);
+}
+
+/* The counterpart without the span: this frame registers itself precise
+   while it runs, so that nothing but the borrow holds the object, and the
+   C mode, which checks only marked functions, never sees it. */
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+borrow_across_bare(PyObject *container, PyObject *callback, int weak)
+{
+    _PyGCFrameDesc d;
+    if (_PyGC_DecodeDescriptor((uintptr_t)&borrow_across_bare, &d) < 0
+        || _PyGC_RegisterCodeRange(d.func_start, d.func_end,
+                                   _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                   NULL) < 0)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no stack walk");
+        return NULL;
+    }
+    PyObject *res = NULL;
+    PyObject *item = borrowed_item(container, weak);
+    PyObject *r = PyObject_CallNoArgs(callback);
+    if (r != NULL) {
+        PyGC_Collect();
+        res = PyUnicode_FromString(Py_TYPE(item)->tp_name);
+    }
+    _PyGC_UnregisterCodeRange(d.func_start);
+    return res;
+}
+
+Py_GC_PRECISE PyObject *
+_PyGC_TestBorrowAcross(PyObject *container, PyObject *callback, int kind)
+{
+    int weak = kind & _PyGC_BORROW_WEAK;
+    if (kind & _PyGC_BORROW_BARE) {
+        return borrow_across_bare(container, callback, weak);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    // The span: callback, held while list[0] may be boxed, and the borrow
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, callback);
+    PyObject *item = borrowed_item(container, weak);
+    _PyValueSpan_AppendObject(&span, item);
+    PyObject *res = NULL;
+    PyObject *r = PyObject_CallNoArgs(callback);
+    if (r != NULL) {
+        PyGC_Collect();
+        res = PyUnicode_FromString(Py_TYPE(item)->tp_name);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 int

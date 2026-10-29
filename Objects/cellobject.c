@@ -134,7 +134,7 @@ cell_clear(PyObject *self)
     return 0;
 }
 
-static PyValue
+Py_GC_PRECISE static PyValue
 cell_get_contents(PyObject *self, void *closure)
 {
     PyValue value = _PyCell_GetValue(_PyCell_CAST(self));
@@ -145,7 +145,7 @@ cell_get_contents(PyObject *self, void *closure)
     return value;
 }
 
-static int
+Py_GC_PRECISE static int
 cell_set_contents(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
     PyCell_SET_VALUE(self, value);

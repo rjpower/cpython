@@ -36,6 +36,7 @@
 #include "pycore_ceval.h"               // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"    // Py_BEGIN_CRITICAL_SECTION, Py_END_CRITICAL_SECTION
 #include "pycore_dict.h"                // _PyDict_Contains_KnownHash()
+#include "pycore_gc_walk.h"             // Py_GC_PRECISE
 #include "pycore_modsupport.h"          // _PyArg_NoKwnames()
 #include "pycore_object.h"              // _PyObject_GC_UNTRACK()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_SSIZE_RELAXED()
@@ -1108,8 +1109,11 @@ set_update_lock_held(PySetObject *so, PyObject *other)
     return set_update_iterable_lock_held(so, other);
 }
 
-// set_update for a `so` that is only visible to the current thread
-static int
+// set_update for a `so` that is only visible to the current thread.
+// Out of line and opaque: its static callees (the merges, the resize and
+// the entry adds) are not precise, so its frame is scanned in every build
+// (Tools/build/gc_inline_audit.py, OUTLINED_OPAQUE).
+static Py_NO_INLINE int
 set_update_local(PySetObject *so, PyObject *other)
 {
     if (PyAnySet_Check(other)) {
@@ -1202,15 +1206,27 @@ set_update_impl(PySetObject *so, const PyValue *others,
 
 // Build a set/frozenset left GC-untracked; the caller must _PyObject_GC_TRACK()
 // it once fully built, so a half-built set is never exposed during filling.
-static PyObject *
+// Precise, since PySet_New() and PyFrozenSet_New() may inline it: the span
+// holds the iterable and the set while the iterable is consumed.
+Py_GC_PRECISE static PyObject *
 make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
 {
     assert(PyType_Check(type));
     PySetObject *so;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    if (iterable != NULL) {
+        _PyValueSpan_AppendObject(&span, iterable);
+    }
 
     so = (PySetObject *)_PyType_AllocNoTrack(type, 0);
-    if (so == NULL)
+    if (so == NULL) {
+        _PyThreadState_PopValueRoot(tstate, &span);
         return NULL;
+    }
+    _PyValueSpan_AppendObject(&span, (PyObject *)so);
 
     so->fill = 0;
     so->used = 0;
@@ -1221,15 +1237,14 @@ make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
 
     if (iterable != NULL) {
         if (set_update_local(so, iterable)) {
-            Py_DECREF(so);
-            return NULL;
+            so = NULL;
         }
     }
-
+    _PyThreadState_PopValueRoot(tstate, &span);
     return (PyObject *)so;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 make_new_set(PyTypeObject *type, PyObject *iterable)
 {
     PyObject *so = make_new_set_untracked(type, iterable);
@@ -2875,13 +2890,13 @@ PyTypeObject PyFrozenSet_Type = {
 
 /***** C API functions *************************************************/
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PySet_New(PyObject *iterable)
 {
     return make_new_set(&PySet_Type, iterable);
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyFrozenSet_New(PyObject *iterable)
 {
     PyObject *result = make_new_set(&PyFrozenSet_Type, iterable);

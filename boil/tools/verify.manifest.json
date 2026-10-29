@@ -369,13 +369,20 @@
     },
     "shared-heap-source-skip": {
       "selector": "test.test_gc.TracingCollectorTests.test_stress_shared_heap_callbacks",
-      "status": "source-skip",
-      "reason": "Source decorator skips shared-heap callback reproduction; this is not an extra CLI filter.",
+      "status": "retired",
+      "reason": "Historical source decorator removed after queue rung1; the legacy five-creation reproduction passes 20 fresh stress selections on each current release/O1 debug build, with actual process-state assertions.",
       "owner": "10a2b after 7a1",
-      "remove_when": "7a1 is integrated, the decorator is removed and the reproduction passes under stress.",
+      "remove_when": "Satisfied locally after 7a1 integration 052d8342e562: decorator removed and reproduction passes under stress. Retained as removal history; no CLI exclusion.",
       "evidence": [
         "Lib/test/test_gc.py:test_stress_shared_heap_callbacks",
-        "boil/PROCESS.md:0.3"
+        "boil/PROCESS.md:0.3",
+        "052d8342e562b1b10d10d26d640c98580616a035",
+        "boil/design/work/10a-2b.md:Settled timing, counter attribution and source-skip retirement",
+        "Lib/test/test_gc.py SHA256 9c8258d0da5640b58e834b895a20b4c373fb6ebf3589a95820180756803807bf",
+        "build/takeover-20261029/shared-heap20-default-plan.json",
+        "build/takeover-20261029/shared-heap20-debug-plan.json",
+        "build/takeover-20261029/shared-heap20-default-results.jsonl",
+        "build/takeover-20261029/shared-heap20-debug-results.jsonl"
       ],
       "profiles": []
     }

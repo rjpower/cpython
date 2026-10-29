@@ -163,6 +163,7 @@ _PySemaphore_Wait(_PySemaphore *sema, PyTime_t timeout)
     int err;
     if (timeout >= 0) {
         struct timespec ts;
+        bool used_monotonic = false;
 
 #ifdef _Py_SEM_CLOCKWAIT_AVAILABLE
         if (_Py_SEM_CLOCKWAIT_AVAILABLE) {
@@ -173,10 +174,10 @@ _PySemaphore_Wait(_PySemaphore *sema, PyTime_t timeout)
             _PyTime_AsTimespec_clamp(deadline, &ts);
 
             err = sem_clockwait(&sema->platform_sem, CLOCK_MONOTONIC, &ts);
+            used_monotonic = true;
         }
-        else
 #endif
-        {
+        if (!used_monotonic) {
             PyTime_t now;
             // Silently ignore error: cannot report error to the caller.
             (void)PyTime_TimeRaw(&now);
@@ -320,7 +321,9 @@ atomic_memcmp(const void *addr, const void *expected, size_t addr_size)
     }
 }
 
-int
+/* The wait entry borrows caller-owned storage.  Object-bearing output slots
+   remain anchored by the caller through the pinned detach and reattachment. */
+Py_GC_PRECISE int
 _PyParkingLot_Park(const void *addr, const void *expected, size_t size,
                    PyTime_t timeout_ns, void *park_arg, int detach)
 {

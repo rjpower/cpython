@@ -114,7 +114,7 @@ extern void _PyPerfJit_WriteNamedCode(const void *code_addr,
                                       const char *filename);
 #endif
 
-static inline PyValue
+Py_GC_PRECISE static inline PyValue
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
@@ -167,7 +167,7 @@ PyAPI_FUNC(int) _Py_CheckRecursiveCall(
 PyAPI_FUNC(int) _Py_CheckRecursiveCallPy(
     PyThreadState *tstate);
 
-static inline int _Py_EnterRecursiveCallTstate(PyThreadState *tstate,
+Py_GC_PRECISE static inline int _Py_EnterRecursiveCallTstate(PyThreadState *tstate,
                                                const char *where) {
     return (_Py_ReachedRecursionLimit(tstate) && _Py_CheckRecursiveCall(tstate, where));
 }
@@ -260,16 +260,13 @@ PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterF
    FOR_ITER returns, the exit of that instruction; for a FOR_ITER, also
    points frame's return slot at the slot that END_FOR consumes. */
 PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
-PyAPI_FUNC(PyObject **) _PyObjectArray_FromValues(PyValue *input, Py_ssize_t nargs, PyObject **scratch);
-
-PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto);
 PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
 PyAPI_FUNC(PyValue) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
-_Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
+_Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *args);
 PyAPI_FUNC(PyValue) _PyEval_GetIter(PyValue iterable, PyValue *null_or_index, int yield_from);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject* ns);
 PyAPI_FUNC(PyObject *) _PyEval_CallExitWithException(

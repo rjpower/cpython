@@ -3035,8 +3035,9 @@ _PyList_AsTupleAndClear(PyListObject *self)
     Py_BEGIN_CRITICAL_SECTION(self);
     PyValue *items = self->ob_item;
     Py_ssize_t size = Py_SIZE(self);
-    Py_SET_SIZE(self, 0);
+    // The source must still visit its items while tuple allocation collects.
     ret = _PyTuple_FromValues(items, size);
+    Py_SET_SIZE(self, 0);
     Py_END_CRITICAL_SECTION();
     return ret;
 }

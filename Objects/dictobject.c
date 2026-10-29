@@ -640,7 +640,7 @@ init_keys_object(PyDictKeysObject* dk, uint8_t log2_size, int log2_bytes, int ki
     memset(&dk->dk_indices[(size_t)1 << log2_bytes], 0, entry_size * usable);
 }
 
-static PyDictKeysObject*
+Py_GC_PRECISE static PyDictKeysObject*
 new_keys_object(uint8_t log2_size, bool unicode)
 {
     Py_ssize_t usable = USABLE_FRACTION((size_t)1<<log2_size);
@@ -691,7 +691,7 @@ new_dict_impl(PyDictObject *mp, PyDictKeysObject *keys, Py_ssize_t used,
 }
 
 /* Consumes a reference to the keys object */
-static PyObject*
+Py_GC_PRECISE static PyObject*
 new_dict(PyDictKeysObject *keys, Py_ssize_t used)
 {
     PyDictObject *mp = PyObject_GC_New(PyDictObject, &PyDict_Type);
@@ -747,7 +747,7 @@ clone_combined_dict_keys(PyDictObject *orig)
     return keys;
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyDict_New(void)
 {
     /* We don't incref Py_EMPTY_KEYS here because it is immortal. */
@@ -1387,7 +1387,7 @@ dictresize(PyDictObject *mp,
     return 0;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 dict_new_presized(Py_ssize_t minused, bool unicode)
 {
     const uint8_t log2_max_presize = 17;
@@ -1427,7 +1427,17 @@ _PyDict_NewPresizedUnicode(Py_ssize_t minused)
     return dict_new_presized(minused, true);
 }
 
-PyObject *
+/* Opaque, and Py_NO_INLINE so that _PyDict_FromItems()'s precise frame does
+   not take in the insertion core (the key's hash, insertdict() and the
+   resize), which is not precise.  The caller anchors the dict, the key and
+   the value.  Removal: rung 3's conversion list, with the insertion core. */
+Py_NO_INLINE static int
+fromitems_setitem(PyDictObject *mp, PyValue key, PyValue value)
+{
+    return setitem_value_lock_held(mp, key, value);
+}
+
+Py_GC_PRECISE PyObject *
 _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
                   const PyValue *values, Py_ssize_t values_offset,
                   Py_ssize_t length)
@@ -1447,6 +1457,12 @@ _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
     if (dict == NULL) {
         return NULL;
     }
+    // The caller anchors the keys and values; the span holds the dict.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, dict);
 
     ks = keys;
     const PyValue *vs = values;
@@ -1454,14 +1470,15 @@ _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
     for (Py_ssize_t i = 0; i < length; i++) {
         PyValue key = PyValue_FromObject(*ks);
         PyValue value = *vs;
-        if (setitem_value_lock_held((PyDictObject *)dict, key, value) < 0) {
-            Py_DECREF(dict);
-            return NULL;
+        if (fromitems_setitem((PyDictObject *)dict, key, value) < 0) {
+            dict = NULL;
+            break;
         }
         ks += keys_offset;
         vs += values_offset;
     }
 
+    _PyThreadState_PopValueRoot(tstate, &span);
     return dict;
 }
 
@@ -6097,7 +6114,7 @@ ensure_nonmanaged_dict(PyObject *obj, PyObject **dictptr)
     return dict;
 }
 
-PyValue
+Py_GC_PRECISE PyValue
 PyObject_GenericGetDict(PyObject *obj, void *context)
 {
     PyTypeObject *tp = Py_TYPE(obj);
@@ -6106,13 +6123,24 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
         return PyValue_FromResult((PyObject *)_PyObject_EnterDictMode(
             obj, _Py_DICT_MODE_ON_REQUEST));
     }
+    // The span holds the object while its dict pointer, an address in it,
+    // is live.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, obj);
+    PyObject *dict = NULL;
     PyObject **dictptr = _PyObject_ComputedDictPointer(obj);
     if (dictptr == NULL) {
         PyErr_SetString(PyExc_AttributeError,
                         "This object has no __dict__");
-        return PyValue_NULL;
     }
-    return PyValue_FromResult(ensure_nonmanaged_dict(obj, dictptr));
+    else {
+        dict = ensure_nonmanaged_dict(obj, dictptr);
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return PyValue_FromResult(dict);
 }
 
 int

@@ -63,8 +63,24 @@ NON_COLLECTING = frozenset({
     "__builtin_return_address", "_PyGC_StackAddress",
     # the verifier's trap in Py_TYPE() (debug builds): it reports and aborts
     "_PyGC_TrapUse",
+    # arithmetic on the indices it is given
+    "PySlice_AdjustIndices",
+    # reads of a type's slot and of an object's layout: a data descriptor
+    # test, and the address of a dict pointer (its assertions abort)
+    "PyDescr_IsData", "_PyObject_ComputedDictPointer",
+    # the dict's assertion (Objects/dictobject.c), which only reads the
+    # dict.  Not true under DEBUG_PYDICT, where it hashes the keys and may
+    # run Python code: a DEBUG_PYDICT build is outside the precise-roots
+    # contract (note 11's platform matrix)
+    "ASSERT_CONSISTENT",
+    # an unpacked call's size, and its fill, which only stores into the
+    # caller's span (Include/internal/pycore_call.h, 10a-2b.md section 1)
+    "_PyStack_UnpackDictSlots", "_PyStack_UnpackDict",
+    # pointer comparisons with the interpreter's import functions
+    # (Python/import.c)
+    "_PyImport_IsDefaultImportFunc", "_PyImport_IsDefaultLazyImportFunc",
     # stdio cannot reach the collector, and abort() does not return
-    "fprintf", "fflush", "abort",
+    "fprintf", "fflush", "snprintf", "printf", "abort",
     # the value of an exact int that is not compact: PyLong_AsLongAndOverflow()
     # on an exact int calls no __index__ and allocates nothing
     # (Python/pyvalue.c)
@@ -142,6 +158,15 @@ NON_COLLECTING = frozenset({
     # variable arguments: reads of the va_list, which holds no object of
     # its own
     "va_start", "va_copy", "va_arg", "va_end",
+    # _Py_hashtable (Python/hashtable.c), by function: these call no
+    # callback.  _Py_hashtable_new() allocates with the mem domain's
+    # PyMem_Malloc() and stores, without calling, the hash and compare
+    # functions it is given.  The rest of the family dispatches to the
+    # table's configured callbacks (hash, compare, the key and value
+    # destructors, the allocator) or to a caller's (foreach), so it is
+    # unlisted and collects.
+    "_Py_hashtable_hash_ptr", "_Py_hashtable_compare_direct",
+    "_Py_hashtable_size", "_Py_hashtable_len", "_Py_hashtable_new",
     # statistics
     "CALL_STAT_INC", "EVAL_CALL_STAT_INC", "EVAL_CALL_STAT_INC_IF_FUNCTION",
     "OBJECT_STAT_INC", "VALUE_BOX_STAT_INC", "_Py_GatherStats_GetIter",
@@ -156,7 +181,6 @@ NON_COLLECTING_PATTERNS = (
     re.compile(r"^_?Py\w*_AS_\w+$"),
     re.compile(r"^_?Py_atomic_\w+$"),
     re.compile(r"^FT_ATOMIC_\w+$"),
-    re.compile(r"^_Py_hashtable_\w+$"),
 )
 
 ALLOCATING = frozenset({

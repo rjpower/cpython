@@ -139,7 +139,7 @@ struct _gc_live_state {
     _PyGCWalkCache walk_cache;
 };
 
-static long
+Py_GC_PRECISE static long
 current_pid(void)
 {
 #ifdef HAVE_GETPID
@@ -149,7 +149,7 @@ current_pid(void)
 #endif
 }
 
-static struct _gc_live_state *
+Py_GC_PRECISE static struct _gc_live_state *
 get_live(PyInterpreterState *interp)
 {
     if (interp->gc.queue_phase == QUEUE_CLOSED) {
@@ -553,7 +553,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
     return nfinalized;
 }
 
-static int
+Py_GC_PRECISE static int
 run_queue(PyThreadState *tstate)
 {
     return run_queue_ex(tstate, 0);
@@ -1487,7 +1487,11 @@ _PyGC_LiveWaitUnpinned(PyInterpreterState *interp)
    limit stays at 0, so that each allocation reaches the count. */
 static int stress_every = 0;
 
-static Py_ssize_t
+/* Not inlined: its frame is below the collector's entry, so the walk never
+   scans it, and it stays opaque (OUTLINED_OPAQUE in gc_inline_audit.py).
+   Inlined, its body would be part of collect_pass()'s precise frame, which
+   a collection from the queue's code walks. */
+static Py_NO_INLINE Py_ssize_t
 collect(PyThreadState *tstate, struct _gc_live_state *ls,
         _PyGC_Reason reason)
 {
@@ -1616,7 +1620,7 @@ done:
    the allocation that triggered it had selected
    (_PyObject_MallocWithType()).  Returns the number of finalizers and
    tp_dels that ran in *nfinalized. */
-static Py_NO_INLINE Py_ssize_t
+Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
              _PyGC_Reason reason, int *nfinalized)
 {
@@ -1683,7 +1687,7 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
 
 /* Can an automatic collection run now?  If not, it is tried again after
    RETRY_BYTES more. */
-static int
+Py_GC_PRECISE static int
 can_collect(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;

@@ -33,12 +33,11 @@ extern "C" {
  * calls is its own: the walk gives such registers to the frame, as it does
  * for a registered range with _PyGC_RANGE_PRESERVES_NOTHING. */
 
+// Py_GC_PRECISE itself is defined in Include/pyport.h.
 #if defined(__ELF__) && (defined(__GNUC__) || defined(__clang__))
-#  define Py_GC_PRECISE __attribute__((section("py_gc_precise")))
 #  define Py_GC_PRECISE_PRESERVE_NONE \
        __attribute__((section("py_gc_precise_pn")))
 #else
-#  define Py_GC_PRECISE
 #  define Py_GC_PRECISE_PRESERVE_NONE
 #endif
 #define Py_GC_ARGS_ANCHORED

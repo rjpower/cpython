@@ -284,7 +284,7 @@ _PyDict_SendEvent(int watcher_bits,
                   PyValue key,
                   PyValue value);
 
-static inline void
+Py_GC_PRECISE static inline void
 _PyDict_NotifyEvent(PyDict_WatchEvent event,
                     PyDictObject *mp,
                     PyValue key,

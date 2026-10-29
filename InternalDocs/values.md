@@ -58,7 +58,7 @@ float, or returning `NULL` with an exception set if allocation fails. A box live
 and is never written back to the slot it came from. The cases generator boxes instruction inputs
 into a local and roots the box across escaping calls, and guards exit on inline inputs; see
 "Inline values" in `Tools/cases_generator/interpreter_definition.md`. C code that converts value
-arrays boxes their elements (`_PyObjectArray_FromValues`, `_PyValue_BoxInto`), and C code that
+arrays boxes their elements (`_PyValue_BoxInto`), and C code that
 holds a box across an escaping call keeps it in a `_PyValueRoot` (`_PyValue_ObjectRooted`,
 `_PyValueRoot_Object`).
 

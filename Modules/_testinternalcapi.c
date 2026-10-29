@@ -4032,6 +4032,35 @@ gc_hold_in_core_mem(PyObject *self, PyObject *args)
     return _PyGC_TestHoldInCoreMem(callable, give_back);
 }
 
+static PyObject *
+gc_verify_carrier_origins(PyObject *self, PyObject *args)
+{
+    int shape, reverse;
+    if (!PyArg_ParseTuple(args, "ip", &shape, &reverse)) {
+        return NULL;
+    }
+    return _PyGC_TestCarrierOrigins(shape, reverse);
+}
+
+/* _PyGC_TestBorrowAcross(container, callback, kind). */
+static PyObject *
+gc_borrow_across(PyObject *self, PyObject *args)
+{
+    PyObject *container, *callback;
+    int kind;
+    if (!PyArg_ParseTuple(args, "OOi", &container, &callback, &kind)) {
+        return NULL;
+    }
+    if (kind & _PyGC_BORROW_WEAK ? !PyWeakref_CheckRef(container)
+                                 : !PyList_Check(container)
+                                   || PyList_GET_SIZE(container) < 1) {
+        PyErr_SetString(PyExc_TypeError,
+                        "a weak reference, or a list of one item or more");
+        return NULL;
+    }
+    return _PyGC_TestBorrowAcross(container, callback, kind);
+}
+
 /* Push a frame for func that is never linked into the chain, with [None]
    in its first slot, and report whether the frame roots reach the list,
    with the frame holding it and with the slot cleared.  With cross, frames
@@ -4737,6 +4766,8 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
     {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
+    {"gc_verify_carrier_origins", gc_verify_carrier_origins, METH_VARARGS},
+    {"gc_borrow_across", gc_borrow_across, METH_VARARGS},
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
     {"gc_get_stress", gc_get_stress, METH_NOARGS},

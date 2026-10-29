@@ -3,6 +3,7 @@
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -42,7 +43,9 @@ PyMethod_Self(PyObject *im)
 }
 
 
-static PyValue
+/* Precise: its one collecting call is the last, and the method object,
+   which holds self and the function, is the caller's to anchor. */
+Py_GC_PRECISE static PyValue
 method_vectorcall(PyValue method_v, const PyValue *args,
                   size_t nargsf, PyObject *kwnames)
 {

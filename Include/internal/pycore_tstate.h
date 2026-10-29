@@ -109,11 +109,19 @@ typedef struct _PyThreadStateImpl {
                                         frame object of the caller is made */
 #define _PyGC_SITE_SLOT_BOX     8  /* box_owner_for_descr(), after an inline
                                       owner's box is in the caller's span */
-#define _PyGC_SITE_RECEIVER_BOX 9  /* method_check_args(), after an inline
-                                      receiver's box is made */
+#define _PyGC_SITE_RECEIVER_BOX 9  /* method_check_args() and
+                                      wrapperdescr_call(), after an inline
+                                      receiver's box is in the caller's
+                                      span */
 #define _PyGC_SITE_SETTER_BOX   10 /* _testinternalcapi's SetterBox setter,
                                       between its box and the store */
-#define _PyGC_SITE_COUNT        11
+#define _PyGC_SITE_MATCH_ARGS   11 /* _PyEval_MatchClass(), after the
+                                      __match_args__ lookup */
+#define _PyGC_SITE_UNPACK_DICT  12 /* _PyStack_KwNames(), after the names'
+                                      allocation */
+#define _PyGC_SITE_SLOT_LOOKUP  13 /* lookup_method_ex(), after a slot
+                                      function's method lookup */
+#define _PyGC_SITE_COUNT        14
 
 PyAPI_FUNC(void) _PyGC_InjectCollect(PyThreadState *tstate);
 // The configured process-wide allocation interval; 0 means stress is off.

@@ -127,6 +127,11 @@ SPAN_APPEND = "_PyValueSpan_Append"
 # ... or by this one, which stores an object's own pointer, so that it
 # anchors the object (a box included).
 SPAN_APPEND_OBJECT = "_PyValueSpan_AppendObject"
+# ... or by this one, which appends a raw NULL slot and returns its address
+# as an object out-parameter (10a-2b.md section 2): the callee's store is
+# the object's own pointer.  An object loaded through the address is
+# anchored while the span is pushed and the slot is not stored into again.
+SPAN_OBJECT_SLOT = "_PyValueSpan_ObjectSlot"
 # Calls whose result is the canonical value of an object: an immediate for
 # a box, so storing it anchors the value and not the object.
 CANONICAL = {"PyValue_FromObject"}
@@ -203,6 +208,8 @@ TYPE_WORDS = {
     "vectorcallfunc", "ternaryfunc", "binaryfunc", "unaryfunc",
     "PyCFunction", "getter", "setter", "descrgetfunc", "PyThreadState",
     "PyInterpreterState", "PyTime_t",
+    # Platform typedefs also occur in inactive branches checked on Unix.
+    "DWORD",
 }
 QUALIFIERS = {"const", "volatile", "static", "register", "restrict",
               "extern", "inline", "_Py_ALIGNED_DEF", PRECISE, ARGS_ANCHORED,
@@ -1676,10 +1683,13 @@ class State:
     loads: dict[str, str] = field(default_factory=dict)  # var -> pointer it read
     # (var, line): a frame pushed into var and not yet initialized
     pushed: frozenset = frozenset()
+    # PyObject ** var -> the span whose object slot it addresses
+    objslots: dict[str, str] = field(default_factory=dict)
 
     def copy(self) -> "State":
         return State(dict(self.sources), dict(self.stored), dict(self.slots),
-                     self.spans, self.saved, dict(self.loads), self.pushed)
+                     self.spans, self.saved, dict(self.loads), self.pushed,
+                     dict(self.objslots))
 
 
 @dataclass
@@ -1722,8 +1732,9 @@ def merge(a: State | None, b: State) -> tuple[State, list[str]]:
         problems.append(f"spans {list(a.spans)} and {list(b.spans)} meet")
     spans = a.spans if len(a.spans) <= len(b.spans) else b.spans
     loads = {k: v for k, v in a.loads.items() if b.loads.get(k) == v}
+    objslots = {k: v for k, v in a.objslots.items() if b.objslots.get(k) == v}
     return State(sources, stored, slots, spans, a.saved & b.saved,
-                 loads, a.pushed | b.pushed), problems
+                 loads, a.pushed | b.pushed, objslots), problems
 
 
 class FunctionChecker:
@@ -1842,6 +1853,20 @@ class FunctionChecker:
                                 self.error(x.line, f"the address of object local "
                                            f"'{a.operand.id}' escapes to "
                                            f"'{x.name or 'a call'}'")
+                # Any other address of an object local, kept in a pointer
+                # (PyObject **p = &local), lets a callee store into the
+                # local where the check does not see it: a load through the
+                # pointer reads as fresh after the collecting call that the
+                # object was held across.
+                args = {id(a) for x in walk_expr(e) if isinstance(x, Call)
+                        for a in x.args}
+                for x in walk_expr(e):
+                    if isinstance(x, Unary) and x.op == "&" and \
+                            isinstance(x.operand, Name) and \
+                            self.is_obj(x.operand.id) and id(x) not in args:
+                        self.error(x.line, f"the address of object local "
+                                   f"'{x.operand.id}' is kept, outside a "
+                                   "call's argument")
 
     @staticmethod
     def is_callee(x: Name, e: Expr) -> bool:
@@ -2084,6 +2109,7 @@ class FunctionChecker:
                     self.copy_anchors(name, init, st)
                 elif kind in ("slots", "values"):
                     st.slots[name] = self.slot_provenance(init, st)
+                self.note_object_slot(name, init, st)
             elif kind in ("object", "array"):
                 st.sources[name] = frozenset([("const",)])
                 st.stored[name] = frozenset()
@@ -2091,6 +2117,18 @@ class FunctionChecker:
                 st.slots[name] = False
         for e in n.exprs:
             self.eval(e, st, n, live_after, [])
+
+    def note_object_slot(self, name: str, value: Expr, st: State) -> None:
+        """name = value: name addresses a span's object slot if value is
+        the accessor's result, and no slot otherwise."""
+        while isinstance(value, Cast):
+            value = value.operand
+        if isinstance(value, Call) and value.name == SPAN_OBJECT_SLOT:
+            root = self.span_arg(value, 0)
+            if root is not None:
+                st.objslots[name] = root
+                return
+        st.objslots.pop(name, None)
 
     def slot_provenance(self, e: Expr, st: State) -> bool:
         while isinstance(e, Cast):
@@ -2174,6 +2212,10 @@ class FunctionChecker:
         if s[0] == "slot":
             return (True, "") if st.slots.get(s[1], False) else (
                 False, f"'{s[1]}', which is not a frame slot pointer")
+        if s[0] == "objslot":
+            root = st.objslots.get(s[1])
+            return (True, "") if root is not None and root in st.spans else (
+                False, f"the object slot '{s[1]}', whose span is not pushed")
         if s[0] == "field":
             base, fld = s[1], s[2]
             strength = self.field_strength(base, fld)
@@ -2209,6 +2251,7 @@ class FunctionChecker:
         if isinstance(e, Const):
             return frozenset([("const",)])
         if isinstance(e, Cast):
+            self.check_object_out_cast(e, st)
             return self.eval(e.operand, st, n, live_after, held)
         if isinstance(e, Cond):
             self.eval(e.test, st, n, live_after, held)
@@ -2234,6 +2277,8 @@ class FunctionChecker:
                 base = self.base_name(e.operand)
                 if base is not None and base in st.slots:
                     return frozenset([("slot", base)])
+                if base is not None and base in st.objslots:
+                    return frozenset([("objslot", base)])
                 return frozenset([("fresh", "a load through a pointer")])
             if e.op == "&":
                 return frozenset([("const",)])
@@ -2276,6 +2321,8 @@ class FunctionChecker:
             t = t.operand
         if isinstance(t, Name):
             self.note_load(t.id, e.value, st)
+            if e.op == "=" and not self.is_obj(t.id):
+                self.note_object_slot(t.id, e.value, st)
             if self.is_obj(t.id) and e.op == "=":
                 self.assign_var(t.id, srcs, st)
                 self.copy_anchors(t.id, e.value, st)
@@ -2377,9 +2424,18 @@ class FunctionChecker:
                 for a in e.args:
                     self.eval(a, st, n, live_after, held)
                 return frozenset([("span", root)])
+        if name == SPAN_OBJECT_SLOT:
+            root = self.span_arg(e, 0)
+            if root is None or root not in st.spans:
+                self.error(e.line, f"an object slot of span '{root}', which "
+                           "is not pushed")
+            return frozenset([("const",)])
         if name in SPAN_POP or name in SPAN_POP_OBJECT:
             root = self.span_arg(e, 1 if name in SPAN_POP else SPAN_POP_OBJECT[name])
             if root is not None:
+                for p in [p for p, r in st.objslots.items() if r == root]:
+                    self.end_object_slot(p, f"span '{root}', popped", st)
+                    del st.objslots[p]
                 if not st.spans or st.spans[-1] != root:
                     if root in st.spans:
                         self.error(e.line, f"span '{root}' is popped before "
@@ -2417,6 +2473,7 @@ class FunctionChecker:
                 inner_held.append((self.callee_of(a), a.line))
         if not isinstance(e.func, Name):
             self.eval(e.func, st, n, live_after, held)
+        self.check_argument_order(e)
         if name in (SPAN_APPEND, SPAN_APPEND_OBJECT) and len(e.args) == 2:
             root = self.span_arg(e, 0)
             stored = e.args[1]
@@ -2478,6 +2535,15 @@ class FunctionChecker:
                     and not self.span_backed(b, st):
                 st.sources[b] = st.sources.get(b, frozenset()) | {
                     ("fresh", f"an element that '{name or 'a call'}' stored")}
+        # A call given an object slot may store into it again: what an
+        # object local loaded from it before is no longer anchored there.
+        if self.cls.kind(name) != "none":
+            for a in e.args:
+                b = self.base_name(a)
+                if b is not None and b in st.objslots:
+                    self.end_object_slot(
+                        b, f"object slot '{b}', which "
+                        f"'{name or 'a call'}' may store into again", st)
         kind = self.cls.kind(name)
         if kind != "none":
             self.safepoint(n, e, kind, name or "a function pointer", st,
@@ -2516,6 +2582,36 @@ class FunctionChecker:
         return frozenset([("fresh", f"the result of '{name or 'a call'}' "
                            f"(line {e.line})")])
 
+    def check_object_out_cast(self, e: Cast, st: State) -> None:
+        """A span's slot cast to an object out-parameter (PyObject **,
+        with no const between the stars) is accepted only from
+        _PyValueSpan_ObjectSlot(), which reserves the slot as a raw
+        anchor.  A cast to an array of objects to read
+        (PyObject *const *) is not an out-parameter."""
+        t = e.type
+        if not any(OBJECT_TYPE.match(x) for x in t):
+            return
+        if not any(t[i] == "*" and t[i + 1] == "*" for i in range(len(t) - 1)):
+            return
+        a = e.operand
+        while isinstance(a, Cast):
+            a = a.operand
+        if isinstance(a, Unary) and a.op == "&" and isinstance(a.operand, Index):
+            a = a.operand.base
+        elif isinstance(a, Binary) and a.op == "+":
+            a = a.left
+        if isinstance(a, Name) and any(
+                s[0] == "span" and s[1] in st.spans
+                for s in st.sources.get(a.id, ())):
+            self.error(e.line, f"a slot of span-backed '{a.id}' cast to an "
+                       f"object out-parameter: use {SPAN_OBJECT_SLOT}()")
+
+    def end_object_slot(self, p: str, why: str, st: State) -> None:
+        for k, v in list(st.sources.items()):
+            if ("objslot", p) in v:
+                st.sources[k] = frozenset(
+                    ("fresh", why) if s == ("objslot", p) else s for s in v)
+
     def passes_writable_slots(self, e: Call, st: State) -> bool:
         if self.cls.kind(e.name) == "none":
             return False
@@ -2552,6 +2648,55 @@ class FunctionChecker:
                 return a.id
         return None
 
+    def check_argument_order(self, e: Call) -> None:
+        """C leaves the order of a call's argument evaluations unspecified
+        (C11 6.5.2.2p10), and calls in different arguments may interleave:
+        in `g(h(PyList_New(1)), collect())` the list may be made, then
+        collect() run, then h().  eval() walks the arguments left to right
+        and so sees only one order.  The supported form: when one argument
+        makes an object temporary, no other argument (nor the called
+        expression) contains a collecting call.  A pair in which the
+        temporary is itself an earlier argument is the held list's, which
+        reports it already."""
+        if not self.checking:
+            return
+        parts = list(enumerate(e.args))
+        if not isinstance(e.func, Name):
+            parts.append((len(e.args), e.func))
+        collecting = {}
+        for j, a in parts:
+            c = self.first_collecting_call(a)
+            if c is not None:
+                collecting[j] = c
+        if not collecting:
+            return
+        what = e.name or "a function pointer"
+        for i, a in enumerate(e.args):
+            temps = [x for x in walk_expr(a)
+                     if isinstance(x, Call) and self.is_temporary(x)]
+            if not temps:
+                continue
+            top = self.is_temporary(a)
+            for j, c in collecting.items():
+                if j == i or (top and j > i):
+                    continue
+                t = temps[0]
+                where = (f"argument {j + 1}" if j < len(e.args)
+                         else "the called expression")
+                self.error(e.line, f"the result of '{self.callee_of(t)}' "
+                           f"(line {t.line}) in argument {i + 1} of '{what}' "
+                           f"may be held across the collecting call to "
+                           f"'{c.name or 'a function pointer'}' in {where}: "
+                           "C does not fix the order of argument evaluation")
+                break
+
+    def first_collecting_call(self, e: Expr) -> Call | None:
+        for x in walk_expr(e):
+            if isinstance(x, Call) and x.name not in RELEASES \
+                    and self.cls.kind(x.name) != "none":
+                return x
+        return None
+
     def is_temporary(self, a: Expr) -> bool:
         while isinstance(a, Cast):
             a = a.operand
@@ -2560,6 +2705,8 @@ class FunctionChecker:
         name = a.name
         if name in IDENTITY or name in BORROW_FIELD or name in CONSTANT_CALLS:
             return False
+        if name in SPAN_PUSH_OBJECT:
+            return False  # the root it pushes holds the box
         if name is None:
             return True
         r = self.returns.get(name)
@@ -2875,6 +3022,8 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
         typedefs |= header_typedefs(include_dirs)
     if function is not None and all(fn.name != function for fn in funcs):
         errors.append(Error(1, f"no function '{function}' in the file"))
+    if function is None:
+        errors += unparsed_precise(toks, {fn.name for fn in funcs})
     for fn in funcs:
         if function is not None and fn.name != function:
             continue
@@ -2900,6 +3049,34 @@ def check_source(src: str, function: str | None = None, check_all: bool = False,
                 errors.append(Error(t.line, f"'{t.text}' is {ARGS_ANCHORED} "
                                     f"but called from '{fn.name}', which is "
                                     "not precise"))
+    return errors
+
+
+def unparsed_precise(toks: list[Tok], found: set[str]) -> list[Error]:
+    """An error for each definition marked Py_GC_PRECISE that
+    find_functions() did not find, so that a marked function the parser
+    loses (braces that do not balance within each #if branch) fails rather
+    than going unchecked."""
+    errors: list[Error] = []
+    for k, t in enumerate(toks):
+        if t.text != PRECISE:
+            continue
+        j = k + 1
+        while j < len(toks) and toks[j].text not in (";", "{"):
+            if toks[j].text == "(":
+                try:
+                    j = matching(toks, j)
+                except CheckError:
+                    break
+            j += 1
+        if j >= len(toks) or toks[j].text != "{":
+            continue  # a declaration
+        parts = head_parts(toks[k:j])
+        if parts is not None and parts[0] not in found:
+            errors.append(Error(t.line, f"'{parts[0]}' is {PRECISE} but "
+                                "outside the C mode's subset: its body was "
+                                "not found (are its braces balanced within "
+                                "each #if branch?)"))
     return errors
 
 

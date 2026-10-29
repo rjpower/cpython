@@ -289,6 +289,8 @@ class ListAllTests(TestBase):
         for interp1, interp2 in zip(actual, expected):
             self.assertIs(interp1, interp2)
 
+    @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
+                     "PYTHON_GCSTRESS replaces the byte trigger")
     def test_destroyed_by_gc(self):
         # gh-155997: the interpreter is destroyed while list_all() runs.
         interp = interpreters.create()

@@ -4,6 +4,7 @@
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_list.h"          // _Py_memory_repeat()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
@@ -29,7 +30,7 @@ class tuple "PyTupleObject *" "&PyTuple_Type"
    this function must not be called with size == 0 (unless from PyTuple_New()
    which wraps this function).
 */
-static PyTupleObject *
+Py_GC_PRECISE static PyTupleObject *
 tuple_alloc(Py_ssize_t size)
 {
     if (size < 0) {
@@ -59,7 +60,7 @@ tuple_get_empty(void)
     return (PyObject *)&_Py_SINGLETON(tuple_empty);
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 PyTuple_New(Py_ssize_t size)
 {
     PyTupleObject *op;
@@ -460,7 +461,7 @@ _PyTuple_Objects(PyObject *op)
     return (PyObject *const *)_PyValue_ObjectArray(t->ob_item, Py_SIZE(t));
 }
 
-PyObject *
+Py_GC_PRECISE PyObject *
 _PyTuple_FromValues(const PyValue *src, Py_ssize_t n)
 {
     if (n == 0) {

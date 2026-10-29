@@ -275,6 +275,20 @@ extern "C" {
 #endif
 
 
+// Py_GC_PRECISE
+// A function whose frame the collector's stack walk does not scan
+// (Include/internal/pycore_gc_walk.h).  It is defined here so that the
+// static inline functions of the public headers that precise functions
+// call can be marked: a build that does not inline one gives it a frame of
+// its own, which must be precise too.  Outside the core it is empty.
+#if defined(Py_BUILD_CORE) && defined(__ELF__) \
+    && (defined(__GNUC__) || defined(__clang__))
+#  define Py_GC_PRECISE __attribute__((section("py_gc_precise")))
+#else
+#  define Py_GC_PRECISE
+#endif
+
+
 #if defined(__clang__)
 #define _Py_COMP_DIAG_PUSH _Pragma("clang diagnostic push")
 #define _Py_COMP_DIAG_IGNORE_DEPR_DECLS \

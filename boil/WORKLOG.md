@@ -4117,3 +4117,34 @@ granted, preserving that failed attempt. No counter-negative or sizeof credit
 follows until actual successful compilation and named numeric results.
 The performance owner now prepares shared-cost attribution using existing
 tools, separating setup from hot work; no new profiling campaign runs yet.
+
+### 16:24 PDT: measured shared GC cost and successor tail launch
+
+Four bounded existing-ce profiling windows complete once/native0 in37.14s,
+off/extras0/stress0, unchanged listed inputs and zero lost software samples.
+Coroutines/comprehensions/generators spend54.0/47.0/30.8% of their hot window
+inside collection; Richards has zero hot collections. Root time is a subset,
+not added to GC time. Native leaf samples corroborate traversal/collector
+work; unresolved ancestry remains explicit. This changes priority toward a
+sound nonmoving generational/remembered-set design before optional H1 tuning,
+without predicting speedup or claiming the release score improved. The owner
+starts source-only generation/barrier analysis. No additional profiling run.
+
+ROOTS c679 successor bridge8685676c binds its exact test/docs source separately
+from ce native products and preserves all original receipts. Copied loader
+guards pass; full inventory changes only the known test_api source hash.
+Root reviews binderf3942050 and unchanged child-criteria diffs and grants one
+tail WALK followed by extras only on WALK PASS. Tail is active; no full retry.
+Independent composition preflight confirms one documentation conflict and
+prospective native/build-input equivalence to writerf5. Actual merged identity
+and fresh gates remain due. Conditional ASan reuse can avoid a duplicate build
+only with exact product/config/source equality and merged runtime origins;
+its incomplete historical backend/SDK provenance stays disclosed.
+
+H3 private counter controls and post-cleanup closure pass, with actual
+sizeof895,544 versus historical665,176 (delta230,368), intended nine old-cutoff
+and two misplaced-counter assertion failures, and unchanged native products.
+Root independently verifies variant log/extension hashes and source/plan
+linkage in review1e82f399ddf. H3's six-path composition inventory and H1's
+smallest coherent passed-frame readiness are source-only; no native union,
+actual tailcall claim or runtime optimization has landed.

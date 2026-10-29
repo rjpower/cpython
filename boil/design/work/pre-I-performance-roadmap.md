@@ -200,6 +200,18 @@ statistics will improve dispatch attribution, but existing native symbols
 and collector counters need not wait for that landing. A result on one row
 does not authorize a row-specific opcode or a custom loop optimizer.
 
+The [first shared-cost attribution](pre-I-shared-cost-attribution.md) now
+completes all four once-only windows on unchanged ce release. GC consumes
+54.0% of coroutine hot time, 47.0% for comprehensions and 30.8% for generators;
+Richards has no hot collections. Native software samples corroborate collector/
+traversal work, with zero lost events but incomplete ancestry/unresolved
+symbols. This prioritizes a sound nonmoving-generations/remembered-set design
+and allocation churn over optional dispatch-convention tuning. It does not
+prove a generation implementation or predict its gain. H3 correctness and
+counting integration continues; H1 stays a bounded later experiment. A
+source-only generations design must first establish complete mutator/barrier,
+root, weakref and finalizer contracts. Known lifecycle defects remain blockers.
+
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32
 values canonical so integer guards need one inline representation; preserve

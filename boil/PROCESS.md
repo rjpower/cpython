@@ -28,7 +28,7 @@ record and is updated at every landing.
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
-| 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
+| 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
 | 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b unlanded, queue integration reconciled as cb0b6c21b97. Provenance/list-transfer repair committed82165f8a2a9. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass; first31-case/11-module feedback iteration took541.745s. Cleanup repair172b406be0c and actual-helper regression cleared bounded review; tooling merged67477efa986. Settled controls/parallel iteration precede final matrix. Final gates/review and O1 adoption remain pending. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
@@ -37,7 +37,7 @@ record and is updated at every landing.
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
 | H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Monitoring/stats/inspection, transport closure and final renumbering follow; typed float truth is separate |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
-| 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
+| 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
 | P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
@@ -91,7 +91,8 @@ Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
 tool, fix with a span and a directive); per-rung instruction deltas of 1
 to 2% on the kernels are within the register-allocation noise of the
-single eval-loop function and are recorded, not acted on, until step 8;
+single eval-loop function and are recorded at intermediate rungs. Checkpoint I
+refreshes attribution and resolves persistent interpreter deficits before tier0;
 test_ssl, `_decimal`, `_uuid` and `_sqlite3` do not build on this machine
 and gdb is absent (user action); `PYTHONMALLOC=malloc` is not honoured
 (hack register, owner 10a rung 2); test_perf_profiler's tearDown deletes every /tmp/perf-*.map it did not see at setUp, so two suites running at once on this machine can fail each other's test_pre_fork_compile (seen once at de1533e8b1a's gate 2 under load 35, passed 4 of 4 alone; a cross-run artefact of the shared /tmp, rerun rather than excluded); the rung 1 fork-child hang of 6d-1.md's hazard record has not recurred and is owned by 7a rung 2 with the fork path (evidence required on recurrence: the hung child's native and Python stacks).
@@ -115,8 +116,9 @@ Owners, as of 2026-10-28:
 | one verification manifest (modes, exclusions, reasons, owners, removal conditions) that `gate.sh` executes, and landing summaries tied to commit and build | coordinator, `boil/tools/verify.manifest` read by `gate.sh`, content from note 11 section 8.2 (10a rung 2b item 7 supplies the rows) | by 2026-10-30; moved up on 2026-10-28 because each agent re-derives its stress and ASan lists from prose and two landings today needed the lists restated |
 | compatibility accessors that allocate and abort on failure (`_PyValue_ObjectOrAbort`): migrate core callers, document the residual contract | 6e | with the remaining slot families |
 | documentation: the Phase 1 description and notes 01 to 05 deleted (2026-10-28), note 06's opening reconciled with its as-built record, the 4,095-slot limit documented, wall-time, RSS and pause measurements against upstream | coordinator at each step end; the measurements at 10a rung 4 and step 7 | ongoing |
-| 7a ahead of further collector features; `str +=` linear path with its own acceptance criterion (step 9); handle discipline before movement (10b) | as planned | as planned |
-| review 2 §5.1, confirmed and reproduced (`f` returns 2 on the fork, 1 upstream): `_PyRegPass_CopyProp` folds a local's load into a reader past a call on the same line, so a call that rebinds the local through `frame.f_locals` changes an operand already evaluated | coordinator, a bounded compiler-fix agent (`boil/compiler-copyprop`) from integration 40cfac6fe3a: a pending load does not survive an op that can run Python code; same-line tests for calls, descriptors and instrumentation; the folding counts recorded before and after | started 2026-10-28; lands before 7a rung 2, independent of both running rungs (compiler files only) |
+| 7a ahead of further collector features; handle discipline before movement (10b) | as planned | as planned |
+| linear str += with alias-safe behavior and linear-growth acceptance evidence | coordinator commissions a pre-I string/compiler design; uniqueness/escape proof is required | before I; no automatic tier1 deferral |
+| review 2 §5.1: copy propagation crossed reentrant operations and observed rebound locals | compiler correction99435658509; semantic controls and full integration checks recorded in WORKLOG | closed; no pending compiler correctness work from this finding |
 | review 2 §5.2, confirmed: `order_dead_first()` returns NULL when its table fails to allocate and `sweep()` then frees in heap order, abandoning the referent-reading order | 7a rung 2, its first commit (same file as the queue; same rule as its node table: one failure path, undo the dead, free nothing); test fails the ordering allocation and then collects | 2026-10-29 |
 | review 2 §5.4 and §5.5, confirmed checker holes: argument evaluation order assumed left to right (`FunctionChecker.eval`); `_Py_hashtable_\w+` exempted as a family though `foreach`, destruction and lookup run callbacks | 10a rung 2b before its landing branch; negative fixtures for both textual orders and for a collecting foreach callback; any precise function the rules now reject fixed in the same series | 2026-10-29 |
 | review 2 §5.7: gate 3's regen check compared status, not content; `root_stats.py check` passed on a missing file | coordinator | done 2026-10-28 (this commit); the manifest row above carries the rest |
@@ -159,7 +161,7 @@ day travelled through messages and work-doc paragraphs.
 | test_stress_shared_heap_callbacks skipped (the B class) | 7a design | 10a rung 2b item 7, after 7a rung 1 lands | the skip is removed with the manifest and the test passes under stress |
 | the SLOT macro family (`slot_mp_ass_subscript`, `slot_nb_power`, `slot_nb_bool`, `slot_nb_inplace_power`, `slot_tp_repr`, `slot_tp_hash`) the C mode cannot parse; `slot_inherited` with `update_one_slot` | 10a item 5 | 10a rung 3 | the checker parses the family or the functions are written out, and they are precise |
 | the C mode's block-local false positive (an object local declared in one branch reported as held across the sibling branch's call when results go to a frame pointer); expected failure test_block_local_beside_frame_result | 10a item 3 | 10a rung 3 | the expected failure passes |
-| comprehensions +2.19% instructions at 7a rung 1, unexplained | 7a | step 8 | attributed or absorbed by tier 0 |
+| comprehensions +2.19% instructions at 7a rung 1, unexplained | 7a | checkpoint I attribution | refreshed matched measurements explain the delta; a persistent interpreter deficit gets bounded pre-JIT work |
 | the Py_NO_INLINE boundaries of 10a item 6 (the dict insertion core under `_PyDict_FromItems`, `update_slot_after_setattr`, `object_set_class_world_stopped`, `PyType_Ready`, `_PyType_Modified_Unlocked`) | 10a rung 2b | 10a rung 3 | the callees are precise and the boundaries go |
 | a saved exception surviving a collecting `__del__` has no test (Python code cannot leave one pending; a C fixture is needed) | 10a rung 2b test reread | 10a rung 3 | the fixture lands |
 | the sweep-order fallback on allocation failure (review 2 §5.2); finalizer completion order across threads (S1); Python output between mark and sweep (S3) | review 2 | 7a rung 2 | §5.2: the single failure path and its test; S1 and S3: a probe each, and a fix or a written negative result in the record |
@@ -209,10 +211,27 @@ IR fields are 16-bit but numbering, deopt metadata, instrumentation and
 statistics still assume 256 handlers. One generated domain definition
 must replace those assumptions before adding operations. H3-2 may then
 add exact-float truth specialization under the existing branch protocol;
-POP_JUMP already includes truth conversion. Frame passing and call-window
-producer placement require measurements and H1/H2 liveness/root contracts.
+POP_JUMP already includes truth conversion. H1 frame passing requires matched
+timing/spill evidence and compiled root attribution; it need not wait for
+H2's full maps. Call-window producer placement additionally requires
+H1/H2 alias, liveness and initialized-span contracts.
 Compare/branch encoding needs its own semantic and field-width review.
 Scalar range-loop lowering remains outside this bounded assignment.
+
+The pre-JIT dispatch/performance backlog has explicit owners:
+
+| Work | Owner and prerequisite | Evidence before checkpoint I |
+|---|---|---|
+| Handler-domain closure; exact-float truth using the existing branch protocol | H3-1, then H3-2 | Generated properties, complete consumers, normal/guard-failure/exception/monitoring/root controls |
+| Frame passing, dependency-based frame loads, canonical numeric guards and compiler/build policy | H1 after ingress and walk/checker qualification | Matched release elapsed time and spill/code-generation evidence; compiled root attribution and per-word diagnostic position remain correct |
+| Inline numeric receivers, remaining slot/Clinic boxing | 6e | Canonical ingress and value-call contracts; boxing counts plus correctness and release performance |
+| Call-window producer placement and remaining starred-call entry boxing | H3 follow-up with H1/H2 root/liveness/span contracts | Alias-safe initialized windows across normal and exception paths; allocations/boxes and matched performance |
+| Range register-base spill and historical nbody/comprehension regressions | H1/H3 code-generation investigation; coordinator attribution | Refresh historical results on frozen C/stdlib sources; fix persistent interpreter deficits without assuming scalar-loop lowering |
+| Linear string concatenation | Coordinator commissions string/compiler design | Uniqueness/escape proof preserving aliases and immutable strings; linear-growth evidence. Tier1 is not the default owner |
+| Remove collector clearing stores | H2 after complete maps/helper spans | Root-state oracle and omitted-root negative controls; no removal from an assumed calling convention |
+
+These are semantic and measurement obligations, not an opcode-count target.
+An operation must solve a reusable problem under the same execution protocol.
 
 H3-1's second independent design review returned IMPLEMENT after closing
 actual-target schema provenance, pristine-word/runtime-state admissibility,

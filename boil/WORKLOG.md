@@ -2778,3 +2778,35 @@ child stderr. Earlier quiet natural-case passes do not prove clean
 successful stderr because -W hides worker output; visible-output reruns
 are in progress before any such claim. This limits the08:30 statement.
 Source/gate evidence remains with its original revision.
+
+
+### 08:36 PDT: pre-JIT handoffs reconciled; faster matrix measured
+
+A read-only dispatch/performance audit found active handoffs still assigning
+interpreter deficits to steps8/9. PROCESS, README and notes06/12/14 now
+assign frame passing/numeric guards/build policy toH1, inline receivers
+to6e, handler domain and exact-float truth toH3, call-window/starred-call
+boxing toH3 with H1/H2 alias/liveness/spans, and range-spill attribution
+beforeI. Coordinator must commission the string/compiler design with a
+valid uniqueness/escape proof. Historical measurements and rejected-rope
+rationale remain intact. Scalar-loop lowering and compare/branch encoding
+are not approved by this reassignment. Intermediate rungs record results;
+checkpointI still requires matched release performance before any JIT.
+No opcode-count target or benchmark-specific fusion is introduced.
+
+ROOTS timing-only whole-module iteration atf1f93c6f0e2 completes in109.008s:
+11 complete modules,2,041tests/69skips,12 actual-state process pairs,
+439 root records/16,467collections/0fallback/3,007unpinned. Full source
+snapshot remains unchanged. Exact scheduled/returned PID/config/seed and
+all69skip events are retained; coordinator independently confirms no
+reclamation selector is skipped. Report-only unpinned attribution and the
+final exact count/skip contract remain required; this is not full20 proof.
+
+Before repeated qualification the coordinator found the shared-heap
+callback source skip still present despite queue1 landing. ROOTS must
+close its existing item7 handoff, or document the precise failure/ruling,
+before final source freeze. No20-iteration run has begun. Visible natural
+cleanup controls now pass off/kill; three inherited asyncgen warnings in
+the whole-module log remain visible and are not filtered. H3's next design
+splits names/inspection, monitoring, statistics and remaining widths into
+separate checkpoints, with first-scope independent review now starting.

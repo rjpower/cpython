@@ -4,8 +4,9 @@ Status: design, revised 2026-10-29 after two review rounds (both
 returned revise). Round 1 is `reviews/14-handler-contract-review-1.md`;
 round 2 is `reviews/14-handler-contract-review.md`. Sections 7 and 8
 record the responses. This is a specification, not implemented evidence.
-For step H
-(PROCESS.md section 0): after 10a rung 3, before step 8. The user's
+For step H (PROCESS.md section 0): before checkpoint I and step 8.
+H1 starts when its checker/walk/build dependencies are qualified; H2's
+maps require 10a rung 3's precise readers and spans. The user's
 ruling of 2026-10-28: the interpreter need not be tuned to LuaJIT's
 level, but obvious improvements are not left on the ground; a mechanism
 stays when it is principled and orthogonal, and one-offs go. This note
@@ -46,8 +47,10 @@ the shape word, three 64-bit fields in memory and a narrowing check
 (rule 4); JUMP_BACKWARD (23) is the eval-breaker test and the jump (rule
 6). The runtime around the interpreter is a separate matter: instance
 creation (1.19), raise (1.41), `str +=` (2.42), generators and coroutines
-regressed for allocator, collector, frame and string reasons owned by
-steps 7 and 9 and the call layer. This note is about the handlers.
+regressed for allocator, collector, frame and string reasons. Generations,
+6e, the call layer and a coordinator-assigned string/compiler design own
+those interpreter costs before checkpoint I. The numbers here remain
+historical; this note specifies the handler part of that work.
 
 ## 2. The contract
 
@@ -218,14 +221,18 @@ objects. No
 threshold decides this; the invariant does. The handler space step 8
 needs is not spent on a second int form.
 
-**Rule 4: the range loop is not this step's.** FOR_ITER_RANGE's cost is
-the iterator object: a type check through the shape word, three 64-bit
-fields in memory, a narrowing check. The iterator is a hidden temporary
+**Rule 4: separate the interpreter spill from range-loop lowering.**
+FOR_ITER_RANGE's cost is the iterator object: a type check through the
+shape word, three 64-bit fields in memory, a narrowing check. The iterator
+is a hidden temporary
 that no Python code can name (the type is untracked, so
-`gc.get_objects()` does not list it either), so a counter in the window
-would be sound; it is not taken because END_FOR and POP_ITER would then
-see two forms of the loop. The loop variable becomes a typed register in
-tier 0, where 6c's hand-off already sends it.
+`gc.get_objects()` does not list it either). The original design deferred
+a counter in the window because END_FOR and POP_ITER would then see two
+forms of the loop. That representation change remains unapproved until
+a reviewed lowering preserves one loop protocol and its exception,
+monitoring and root contracts. Independently, H1/H3 investigate the
+recorded C register-base spill before checkpoint I. Removing that spill
+does not require a second loop representation or a JIT.
 
 **Rule 5: the handler unit follows the build's frame-pointer switch, and
 the gate builds omit frame pointers.** configure defaults to
@@ -259,18 +266,28 @@ pause distribution, and RSS. Compare each rung against its direct
 predecessor after 10a; keep the 6d comparison as historical context.
 Include long basic blocks and large live sets when measuring map lookup.
 Attribute regressions where evidence permits and retain uncertainty
-with an owner where it does not. The numbers do not gate the step;
-correctness does.
+with an owner where it does not. Intermediate correctness rungs need no
+unrelated tuning. Checkpoint I separately requires matched release
+elapsed-time evidence and closure of persistent interpreter deficits;
+recording a regression here does not defer its disposition to the JIT.
 
 ## 4. Order and dependencies
 
-After 10a rung 3: rule 2 reads frame slots by the map, which needs the
+H1's frame-passing comparison needs qualified checker/walk/build evidence,
+including frame attribution at an actual collection; it does not require
+H2's liveness maps. Rule 3 first proves canonical ingress, and rule 5
+qualifies the changed frame-pointer policy. H1 can proceed once those
+dependencies are clear.
+
+H2 follows 10a rung 3: rule 2 reads frame slots by the map, which needs the
 eval loop's own C frame precise and the walk attributing it, and the
 spans with initialised prefixes that rule 2 relies on for in-flight
 outputs are 10a's. Before step 8: the templates copy the handler bodies,
 and tier 0's safepoint entries associate machine addresses with rule 2's
 root states (one schema; tier 1 extends it for spills and virtual frames
-in step 9).
+in step 9). Call-window replacement and producer placement need the H1/H2
+alias/liveness and initialized-span contracts before changing when roots
+are published or overwritten.
 
 Two rungs. Rung 1: rules 1, 3 and 5, generator, assertion and build
 changes, with the micro set recorded; about one day. Rung 2: rule 2,

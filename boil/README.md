@@ -91,13 +91,20 @@ unchanged regeneration. Roots final gates remain unlanded.
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
-kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. The plan
-expects generations (7) and tier 0 (8) to recover the kernel and memory
-costs; that is a plan, not evidence. The user now requires a pre-JIT
-performance checkpoint: matched release wall-time measurements must
+kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. These historical
+instruction ratios do not establish current elapsed-time performance.
+Generations, 6e and the handler/interpreter work precede checkpoint I;
+the JIT follows it. Matched release wall-time measurements must
 establish interpreter parity or better on the kernel set, with individual
 regressions reported and resolved or explicitly dispositioned. Micro
 instruction gains alone do not establish that result.
+
+The pre-JIT backlog includes H1 frame passing, numeric guards and build
+policy; 6e inline-receiver boxing; H3 exact-float truth and call-window
+placement with root/liveness contracts; range-spill attribution; and a
+string/compiler design for linear concatenation with an alias/escape proof.
+PROCESS §0.4 assigns these explicitly. None is deferred automatically to
+the JIT, and scalar-loop lowering remains a separate unapproved design.
 
 The compiler correction and queue rung 1 are landed. Active agents finish
 10a rung 2b and H3's handler domain, with independent review at each boundary.

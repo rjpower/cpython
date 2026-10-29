@@ -8,6 +8,8 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_gc_trace.h"      // _PyGCRoot
+
 extern PyObject* _PyBytes_FormatEx(
     const char *format,
     Py_ssize_t format_len,
@@ -108,6 +110,7 @@ struct PyBytesWriter {
     Py_ssize_t size;
     int use_bytearray;
     int overallocate;
+    _PyGCRoot root;
 };
 
 // Export for '_testcapi' shared extension

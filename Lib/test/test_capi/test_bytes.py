@@ -366,6 +366,10 @@ class BaseWriterTest:
         self.assertEqual(result, expected)
         self.assertEqual(type(result), self.RESULT_TYPE)
 
+    def test_gc_registered_roots(self):
+        _testinternalcapi = import_helper.import_module('_testinternalcapi')
+        _testinternalcapi.gc_byteswriter_roots(self.RESULT_TYPE is bytearray)
+
     def test_create(self):
         # Test PyBytesWriter_Create()
         writer = self.create_writer()

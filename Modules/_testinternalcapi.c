@@ -1621,6 +1621,18 @@ get_ir(PyObject *self, PyObject *args)
     return result;
 }
 
+static PyObject *
+code_safe_addr2line(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int offset;
+    if (!PyArg_ParseTuple(args, "O!i:code_safe_addr2line",
+                          &PyCode_Type, &code, &offset)) {
+        return NULL;
+    }
+    return PyLong_FromLong(_PyCode_SafeAddr2Line(code, offset));
+}
+
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
  * relax, for code compiled from now on, and return the previous one. */
 static PyValue
@@ -4491,6 +4503,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", _PyCFunction_CAST(get_co_localskinds), METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"code_safe_addr2line", code_safe_addr2line, METH_VARARGS, NULL},
     {"set_ir_max_forward", _PyCFunction_CAST(set_ir_max_forward), METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},

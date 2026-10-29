@@ -1049,12 +1049,11 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
-    if (co->_co_monitoring && co->_co_monitoring->lines) {
-        return _Py_Instrumentation_GetLine(co, co->_co_monitoring->lines, addrq);
-    }
     if (!(addrq >= 0 && addrq < Py_SIZE(co))) {
         return -1;
     }
+    /* This can run without an attached thread state. Keep it independent
+       of lazily published monitoring storage. */
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);

@@ -797,12 +797,6 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
     int oom = stack.oom || visited.oom || order->oom;
     free(stack.items);
     free(visited.items);
-    // Reverse the postorder
-    for (size_t i = 0, j = order->n; !oom && i + 1 < j; i++, j--) {
-        PyObject *tmp = order->items[i];
-        order->items[i] = order->items[j - 1];
-        order->items[j - 1] = tmp;
-    }
     return oom ? -1 : 0;
 }
 

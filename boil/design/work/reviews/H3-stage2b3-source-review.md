@@ -58,3 +58,40 @@ Reviewed file identities (SHA-256):
 - `Lib/test/test_tools/test_summarize_stats.py`: `43436d5e87d577f6cbec1fb8d06099f312a24b0f63b6c9dcc4eca02665b3f964`
 - `boil/design/work/H3-1-stage2b3-implementation.md`: `a726e75d3b4c17ef8a507f52e788bb9f06d5e138b8ed6c90a124dbfb6ced31b3`
 - `boil/design/work/controls/H3-1-stage2b3/run_reader_controls.py`: `4254c80bc459be956f800501369eb519a38ea002c1e0a26492e774f326fd9506`
+
+## Coordinator bounded native checkpoint, 2026-10-29 16:12 PDT
+
+Native implementation d462e8338ce builds with Py_STATS; test-only successors
+repair the old lifecycle helper to read a fresh private output directory and
+sum disjoint dump intervals, since `_stats_dump` clears after dumping. Earlier
+failed attempts stay in the author's record. Passing reader/lifecycle/high-ID/
+generator checks keep their actual separate receipt identities; there is no
+invented single all-pass rerun. Native sources/products remain unchanged.
+
+The coordinator reviewed the private counter fixture and drivers independently
+of their author. They temporarily install an allocated actual PyStats only
+while running nonallocating C macro/primitive operations, restore the real
+pointer before output, and use current-capacity storage for every mutation.
+Historical typedefs supply sizeof only. The initial missing-header compilation
+failed before any probe; the minimal prerequisite correction is preserved as
+control source17fbcacea87. No crash or compiler error earns negative credit.
+
+Actual result dd540696bff2c6d630559e3522cc668e1516b4efae273bebeda39e31bec104c9
+and post-cleanup7bed4e6022bfc60e2067fc11308ebf84a2ae1a35d2ddf1cbecc358e2591d000e
+bind plan d76d4919 in the owned stats tree's
+`build/H3-1-stage2b3/counter-controls/`. Root verified the plan/result linkage,
+all three compile/probe logs and extension hashes. The current variant passes
+all numeric assertions. The old cutoff fails exactly nine named pair/lifecycle
+assertions; moving the counter below the predicted label fails exactly its two
+entry/self-pair assertions. Every variant compiles and returns numeric data at
+actual off/extras0/stress0. Copied emitter controls separately reject the old
+semantic-name expression at the intended generated target assertions.
+
+Measured sizeof(PyStats) is895,544 bytes versus665,176 for the historical
+typedef, delta230,368; the actual allocation succeeds and starts zeroed. This
+is layout/allocation evidence, not RSS or runtime overhead. Full original
+product/config/tool/alias guards also pass after gate cleanup. Primitive
+nested-C-activation models are not live Python-frame or real tailcall proof.
+The nonstats release/debug cohort and actual queue/ROOTS/H3 source composition
+remain unqualified. This clears the bounded native mechanism checkpoint and
+does not authorize landing or make a performance claim.

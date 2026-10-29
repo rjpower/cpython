@@ -4047,3 +4047,45 @@ active while writer builds run. Native size/pair/lifecycle/entry controls and
 actual union qualification remain. No new native change landed in primary.
 ROOTS still needs HTTP/trashcan disposition, bounded tail/extras, exact landing
 review and fresh merged fulls. Next hourly checkpoint about16:45 PDT.
+
+### 16:00 PDT: inherited HTTP exposure, writer proof and shared admission fix
+
+The same four existing logging cases reproduce HTTPResponse closed-fp
+unraisables on both owned primary052 and ce: ENV_CHANGED/native3,4/zero skips
+each, complete actual state and zero fallback. This establishes inherited
+exposure under the recorded source/product conditions, not mechanism equality.
+The two-line interpreter eligibility annotation now passes its one-case
+normal check and declared stress skip; no native rebuild or fullFAIL relabel.
+Existing public trashcan-thread comparisons are granted once per build with
+60s worker/90s outer budgets; primary is active. No observer/custom C probe.
+
+Writer releaseoff52/10 skips and O1-debugkill52/zero skips pass. A separate
+three-call omission build fails both new tests with the intended missing
+INTERP-class assertion. Stress1000 writer selections each pass38 cases with
+the exact10/zero debug skip sets,1,405/1,519 charged collections and zero
+fallback/unpinned. Owned ASan debug build and38 actual-kill/stress0 cases pass,
+zero skips,73 collections/zero fallback/unpinned and no unexpected sanitizer
+output. Leak detection/fake stacks remain off; no leak proof is claimed.
+The attempted releasekill configuration was rejected before initialization:
+kill requires Py_DEBUG. It remains invalid/no tests, not a new runtime defect;
+no extra O3-debug cohort or repeat was added.
+
+Earlier writer test launchers inherited task TMPDIR and therefore used private
+slot files. Their exact correctness results remain, with that admission limit;
+build admission was global. Prospective stress/ASan launches fix outer/inner
+environment placement and use actual global slots. Root also fixes the shared
+gate_run path itself so TMPDIR cannot split machine admission again. Shell
+syntax and a bounded real-FD control pass: the old script locks private scratch,
+the changed script exposes global /tmp slot2 from two distinct scratch dirs.
+No native Python target ran in that control. Frozen step tools stay unchanged
+until safe handoff; no tests were repeated solely to erase the limitation.
+
+H3 statistics native build passes. Its new high-entry test and15 reader tests
+pass. Five legacy lifecycle tests initially read empty stderr while producer
+wrote files; fresh private output-directory handling is added. The first
+helper fix incorrectly expected repeated snapshots to agree: sys._stats_dump
+clears counters. The corrected helper sums disjoint intervals; remaining dump
+test and five previously unexecuted generator/domain cases pass once. Earlier
+failed receipts and passing lifecycle scopes remain exact; native C/products
+stay atd462 while test-only source progresses. Private counter/lifecycle/
+predicted controls remain due; no primary runtime landing yet.

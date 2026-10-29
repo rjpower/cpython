@@ -733,6 +733,12 @@ quick-test. Each rung goes through all of it.
   stash`), the mimalloc and uv caches, and the machine. A test run and a
   rebuild of the same build directory never overlap: `gate.sh` holds a
   lock per build directory.
+- Machine admission uses `/tmp/boilgate-slot.N`, regardless of a command's
+  `TMPDIR`. The coordinator fixes the shared launcher to use that global path.
+  Frozen older launchers must leave outer `TMPDIR` unset and set any private
+  target scratch directory inside the gate. Do not change a running cohort's
+  launcher; take shared tooling at the next safe source handoff. Historical
+  private-slot tests retain their actual results and admission limitation.
 - Every gate command runs under `timeout` in its own process group with a
   ceiling per level (`GATE_LIMIT` overrides), and the build's python
   processes are swept after each command, so test workers die with the

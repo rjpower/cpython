@@ -33,7 +33,8 @@ case " $* " in
         i=1
         while [ "$i" -le "$slots" ]; do
             # fd 9 holds the slot for the rest of this process
-            exec 9>"${TMPDIR:-/tmp}/boilgate-slot.$i"
+            # Machine-wide admission must not follow a run's scratch directory.
+            exec 9>"/tmp/boilgate-slot.$i"
             if flock -n 9; then break 2; fi
             exec 9>&-
             i=$((i + 1))

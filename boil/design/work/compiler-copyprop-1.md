@@ -332,8 +332,8 @@ the last round, so the coordinator rules on what stays open):
 | Witness the execution forms; witness the monitoring callbacks | e7cdcac58d0: every rebinding records its frame and the handler executing there. Tests 1, 2 and 3 assert the generic and the specialised handler, and the monitoring test asserts its CALL, PY_START and LINE callbacks. |
 | Test 8's barrier was `LOAD_GLOBAL len` | The callee is a cell, so the CALL is the barrier. The control (the kill removed) fails. |
 | The measurement split is lexical | Labelled as such in the record. The aggregate counts are exact. |
-| An immediate before/after benchmark | Gate 4 runs on the head and on 5ec05e7116b's build, which produces the same code as 41c716c5947; machine time permitting. |
-| Ledger rows and documentation | For the coordinator (PROCESS.md 0.3); the documentation awaits approval. |
+| An immediate before/after benchmark | Gate 4 ran on the head and on the 41c716c5947 base build (`copyprop.json`, `copyprop-base.json`). |
+| Ledger rows and documentation | For the coordinator (PROCESS.md 0.3); the documentation was approved and is committed in fbf27434b0c. |
 
 ## As built
 

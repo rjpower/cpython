@@ -3830,6 +3830,89 @@ gc_collect_inline_then(PyObject *self, PyObject *args)
     return PyObject_CallOneArg(callable, arg);
 }
 
+/* A child-process fixture for the first receiving GIL acquisition after
+   an inline collection.  The collector cannot start until the receiver is
+   in C; it then publishes its queue and stays blocked until Python has
+   checked the receiver's one safepoint.  No Python runs in the handshake. */
+static PyEvent queue_ready_go;
+static PyEvent queue_ready_queued;
+static PyEvent queue_ready_release;
+
+#define QUEUE_READY_TIMEOUT ((PyTime_t)30 * 1000 * 1000 * 1000)
+
+static int
+queue_ready_wait(PyEvent *event)
+{
+    if (!PyEvent_WaitTimed(event, QUEUE_READY_TIMEOUT, 1)) {
+        PyErr_SetString(PyExc_TimeoutError, "queue readiness handshake timed out");
+        return -1;
+    }
+    return 0;
+}
+
+static PyObject *
+gc_queue_ready_collect(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (queue_ready_wait(&queue_ready_go) < 0) {
+        return NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    int64_t before = ts->gc_trace.injected;
+    _PyGC_InjectCollect((PyThreadState *)ts);
+    _PyEvent_Notify(&queue_ready_queued);
+    if (queue_ready_wait(&queue_ready_release) < 0) {
+        return NULL;
+    }
+    if (ts->gc_trace.injected == before) {
+        PyErr_SetString(PyExc_AssertionError, "inline collection did not run");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+gc_queue_ready_receive(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    // Drain an earlier GC request before the collector is allowed to run.
+    // Otherwise a stale event could conceal missing queue publication.
+    if (PyErr_CheckSignals() < 0) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT)) {
+        PyErr_SetString(PyExc_AssertionError, "an old GC event is still pending");
+        return NULL;
+    }
+    _PyEvent_Notify(&queue_ready_go);
+    int queued;
+    // Always detach once, including when the collector already notified us.
+    Py_BEGIN_ALLOW_THREADS
+    queued = PyEvent_WaitTimed(&queue_ready_queued, QUEUE_READY_TIMEOUT, 0);
+    Py_END_ALLOW_THREADS
+    if (!queued) {
+        PyErr_SetString(PyExc_TimeoutError, "inline collection did not finish");
+        return NULL;
+    }
+    int scheduled = _Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT);
+    PyInterpreterState *interp = tstate->interp;
+    PyObject *before = _PyGC_LiveQueueInfo(interp);
+    if (before == NULL || PyErr_CheckSignals() < 0) {
+        return NULL;
+    }
+    PyObject *after = _PyGC_LiveQueueInfo(interp);
+    if (after == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(NNi)", before, after, scheduled);
+}
+
+static PyObject *
+gc_queue_ready_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyEvent_Notify(&queue_ready_release);
+    Py_RETURN_NONE;
+}
+
 /* A reference tracer that, against its contract, allocates on each
    creation event, run over n allocations under PYTHON_GCSTRESS=1: no
    collection may start inside it (10a-1b.md item 3).  Returns (events,
@@ -4383,6 +4466,236 @@ gc_verify_with_pymem_array(PyObject *self, PyValue arg)
     return PyValue_FromResult(res);
 }
 
+/* --- step 7a: the per-interpreter callback queue (note 13) ------------ */
+
+/* gc_queue_info([interp_id]) -> dict: the queue of the given interpreter,
+   the current one by default. */
+static PyObject *
+gc_queue_info(PyObject *self, PyObject *args)
+{
+    PyObject *id = NULL;
+    if (!PyArg_ParseTuple(args, "|O", &id)) {
+        return NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (id != NULL) {
+        interp = _PyInterpreterState_LookUpIDObject(id);
+        if (interp == NULL) {
+            return NULL;
+        }
+    }
+    return _PyGC_LiveQueueInfo(interp);
+}
+
+/* gc_queue_never_open_for_test(isolated[, referent, callback]): create an
+   interpreter whose initialisation fails just before its queue would open,
+   with one call queued (note 13 test 9.5 b).  An isolated interpreter's is
+   a finalizer call on one of its objects, discarded at its close; a
+   legacy one's is a weak reference callback, callback(ref) for a weak
+   reference to referent, which runs on the main interpreter. */
+static PyObject *
+gc_queue_never_open_for_test(PyObject *self, PyObject *args)
+{
+    int isolated;
+    PyObject *referent = NULL, *callback = NULL;
+    if (!PyArg_ParseTuple(args, "p|OO", &isolated, &referent, &callback)) {
+        return NULL;
+    }
+    if (!isolated && (referent == NULL || callback == NULL)) {
+        PyErr_SetString(PyExc_TypeError, "a legacy interpreter's call needs "
+                        "a referent and a callback");
+        return NULL;
+    }
+    PyInterpreterConfig config = isolated
+        ? (PyInterpreterConfig)_PyInterpreterConfig_INIT
+        : (PyInterpreterConfig)_PyInterpreterConfig_LEGACY_INIT;
+    _PyGC_LiveFailOpenForTest(isolated ? NULL : referent,
+                              isolated ? NULL : callback);
+    PyThreadState *save = PyThreadState_Get();
+    PyThreadState *sub = NULL;
+    PyStatus status = Py_NewInterpreterFromConfig(&sub, &config);
+    if (PyThreadState_Get() != save) {
+        Py_FatalError("gc_queue_never_open_for_test: lost the thread state");
+    }
+    if (!PyStatus_Exception(status) || sub != NULL) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "the interpreter's initialisation did not fail");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* gc_collect_after_close(code) -> tuple: run code in a legacy
+   subinterpreter, close its collector as _PyGC_Fini() does, enter the
+   collector by each entry there (_PyGC_LiveCollectAfterCloseForTest()), and
+   end the interpreter.  Returns the hook's six results. */
+static PyObject *
+gc_collect_after_close(PyObject *self, PyObject *args)
+{
+    const char *code;
+    if (!PyArg_ParseTuple(args, "s", &code)) {
+        return NULL;
+    }
+    PyThreadState *save = PyThreadState_Get();
+    PyThreadState *sub = Py_NewInterpreter();
+    if (sub == NULL) {
+        PyThreadState_Swap(save);
+        PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
+        return NULL;
+    }
+    Py_ssize_t out[6] = {0};
+    int r = PyRun_SimpleString(code);
+    if (r == 0) {
+        _PyGC_LiveCollectAfterCloseForTest(sub, out);
+    }
+    Py_EndInterpreter(sub);
+    PyThreadState_Swap(save);
+    if (r < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "the code raised");
+        return NULL;
+    }
+    return Py_BuildValue("nnnnnn", out[0], out[1], out[2], out[3], out[4],
+                         out[5]);
+}
+
+/* check_signals_loop(n[, code]) -> list: run code in a legacy
+   subinterpreter, if given, and return to this interpreter, then call
+   PyErr_CheckSignals() n times without releasing the GIL; returns this
+   interpreter's queue length before the first call and after each
+   (note 13 test 9.12). */
+static PyObject *
+check_signals_loop(PyObject *self, PyObject *args)
+{
+    int n;
+    const char *code = NULL;
+    if (!PyArg_ParseTuple(args, "i|s", &n, &code)) {
+        return NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (code != NULL) {
+        PyThreadState *save = PyThreadState_Get();
+        PyThreadState *sub = Py_NewInterpreter();
+        if (sub == NULL) {
+            PyThreadState_Swap(save);
+            PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
+            return NULL;
+        }
+        int r = PyRun_SimpleString(code);
+        Py_EndInterpreter(sub);
+        PyThreadState_Swap(save);
+        if (r < 0) {
+            PyErr_SetString(PyExc_RuntimeError, "the code raised");
+            return NULL;
+        }
+    }
+    PyObject *lengths = PyList_New(0);
+    if (lengths == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i <= n; i++) {
+        if (i > 0 && PyErr_CheckSignals() < 0) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+        PyObject *info = _PyGC_LiveQueueInfo(interp);
+        if (info == NULL) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+        PyObject *len = PyDict_GetItemString(info, "length");
+        int rc = len == NULL ? -1 : PyList_Append(lengths, len);
+        Py_DECREF(info);
+        if (rc < 0) {
+            Py_DECREF(lengths);
+            return NULL;
+        }
+    }
+    return lengths;
+}
+
+/* gc_delete_barrier(on): arm the deletion barrier of note 13 test 9.16
+   (_PyGC_LiveDeleteBarrierForTest()); gc_queue_info()["barrier"] reports
+   it. */
+static PyObject *
+gc_delete_barrier(PyObject *self, PyObject *args)
+{
+    int on;
+    if (!PyArg_ParseTuple(args, "p", &on)) {
+        return NULL;
+    }
+    _PyGC_LiveDeleteBarrierForTest(on);
+    Py_RETURN_NONE;
+}
+
+/* gc_hold_on_stack(factory, func) -> func(): call factory(), hold its result
+   in a C local only, call func(), then drop it (note 13 test 9.17). */
+static Py_NO_INLINE PyObject *
+gc_hold_on_stack(PyObject *self, PyObject *args)
+{
+    PyObject *factory, *func;
+    if (!PyArg_ParseTuple(args, "OO", &factory, &func)) {
+        return NULL;
+    }
+    PyObject *volatile held = PyObject_CallNoArgs(factory);
+    if (held == NULL) {
+        return NULL;
+    }
+    PyObject *r = PyObject_CallNoArgs(func);
+    // The local is read after the call, so it stays in this frame.
+    if (Py_TYPE(held) == NULL) {
+        Py_FatalError("unreachable");
+    }
+    held = NULL;
+    return r;
+}
+
+/* stash_set(obj), stash_get() -> obj: one object in a C static, a root
+   registered by the first stash_set(), which must run on the main
+   interpreter; legacy subinterpreters share it (note 13 test 9.17). */
+static PyObject *stash_obj = NULL;
+static int stash_rooted = 0;
+
+static PyObject *
+stash_set(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    if (!PyArg_ParseTuple(args, "O", &obj)) {
+        return NULL;
+    }
+    if (!stash_rooted) {
+        if (!_Py_IsMainInterpreter(_PyInterpreterState_GET())) {
+            PyErr_SetString(PyExc_RuntimeError, "the first stash_set() "
+                            "must run on the main interpreter");
+            return NULL;
+        }
+        if (PyGC_AddRoot(&stash_obj) < 0) {
+            return NULL;
+        }
+        stash_rooted = 1;
+    }
+    stash_obj = obj;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+stash_get(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return Py_NewRef(stash_obj != NULL ? stash_obj : Py_None);
+}
+
+/* gc_queue_fail_alloc(n) -> int: the nth queue node allocation from now
+   fails; returns what was left of the previous countdown, 0 once its
+   failure has fired. */
+static PyObject *
+gc_queue_fail_alloc(PyObject *self, PyObject *args)
+{
+    int n;
+    if (!PyArg_ParseTuple(args, "i", &n)) {
+        return NULL;
+    }
+    return PyLong_FromLong(_PyGC_LiveFailAlloc(n));
+}
+
 /* Invoke only the specializer for a word in the calling Python frame.
    Tests can distinguish callbacks during this call from the subsequent generic
    operation, without depending on an adaptive counter reaching its threshold. */
@@ -4430,6 +4743,15 @@ specialize_current_instruction(PyObject *self, PyObject *args)
 static PyMethodDef module_functions[] = {
     {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},
+    {"gc_queue_info", gc_queue_info, METH_VARARGS},
+    {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
+    {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
+    {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},
+    {"check_signals_loop", check_signals_loop, METH_VARARGS},
+    {"gc_delete_barrier", gc_delete_barrier, METH_VARARGS},
+    {"gc_hold_on_stack", gc_hold_on_stack, METH_VARARGS},
+    {"stash_set", stash_set, METH_VARARGS},
+    {"stash_get", stash_get, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
@@ -4452,6 +4774,9 @@ static PyMethodDef module_functions[] = {
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
     {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
+    {"gc_queue_ready_collect", gc_queue_ready_collect, METH_NOARGS},
+    {"gc_queue_ready_receive", gc_queue_ready_receive, METH_NOARGS},
+    {"gc_queue_ready_release", gc_queue_ready_release, METH_NOARGS},
     {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},

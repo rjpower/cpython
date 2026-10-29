@@ -1,0 +1,55 @@
+{
+  "base": "f46276debf3",
+  "restored_source_sha256": "79150615e5cb059cff7b6fb8428a95dad363db2205e689d4d92237390282c0b9",
+  "controls": [
+    {
+      "control": "duplicate",
+      "test": "test_duplicate_id_rejected",
+      "exit": 2,
+      "source_sha256": "023cf875d97c70acb723d85eb7a8401606c9e3cb0aa292c7a834d063d4c7da61",
+      "patch_sha256": "487687636f1ffecf92d1dda1bca584432928a89bb9d9c798ede43f2f4ebca3b2"
+    },
+    {
+      "control": "capacity",
+      "test": "test_capacity_without_large_tables",
+      "exit": 2,
+      "source_sha256": "2d54f90a53846ea88bf355b9fc5c1801bf3546564fa19361e686dbfe778b7bec",
+      "patch_sha256": "fe87c7d55b34d7a6abf173d2767bb9e7915354751f64d4d6e8b6f4f8f22beb63"
+    },
+    {
+      "control": "consumer",
+      "test": "test_consumers_reject_another_analysis",
+      "exit": 2,
+      "source_sha256": "2b00ae54085be8c78d62ebfd876372cadd5350ae8373154f223cd0bec0d87a1c",
+      "patch_sha256": "4506698f510b32bf92c7457ca90c14be0d0ccf7fbd9ed58efb7d6d87d7037606"
+    },
+    {
+      "control": "base",
+      "test": "test_base_metadata_rejected",
+      "exit": 2,
+      "source_sha256": "bd74c3f8479a034bab772d4da73a54c3bc3f73cdacd08ca093dec354a35c5713",
+      "patch_sha256": "f7aaae63d3e7a49ed6bc566881fea3858fb6fc3d806fd5ad9b973ef51aed1372"
+    },
+    {
+      "control": "kind",
+      "test": "test_base_does_not_classify_specialization",
+      "exit": 2,
+      "source_sha256": "30a5f50265db74a93bd1ca0809d9250e86ef863db67fb8d7c1be4c532bf6bba1",
+      "patch_sha256": "0b6a0b41f672a05ba0d514e5fa0518568553922e42001a08d1974b53b64e1ca4"
+    },
+    {
+      "control": "pin",
+      "test": "test_absent_instrumented_pin",
+      "exit": 2,
+      "source_sha256": "3394b941cba2fda73043998d0b042bb79d26395598e394b9f8f34971fe381652",
+      "patch_sha256": "1a92bed07f1cf70be0138d5a430bdb7843ccf6286963ad101ff680b06c8f39bb"
+    },
+    {
+      "control": "name",
+      "test": "test_derived_name_collision_rejected",
+      "exit": 2,
+      "source_sha256": "d83c1a401320af61ccc10a285b31245224c84381fd7c67550455fe3bf30471bd",
+      "patch_sha256": "dbbf366a6d9538e410ea45a067790d1b3d6940b3e6cbbec976f5841043a2c248"
+    }
+  ]
+}

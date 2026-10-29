@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 07:30 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 07:55 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b checkpoint d65a03fc96c remains unlanded. Post-B provenance repair/fixture is applied; prior permission hold resolved. Old-helper control fails eight origin subcases. O1 exposed list elements losing their root before tuple allocation; reorder and same-line supplemental-origin assertion are under validation. Final gates/review and O1 qualification remain pending. Rung3a remaining writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
-| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 remains unlanded at5576cdbd755. Combined normal suites atd43c8b4dd32 pass51,102 each/0fallback; bounded feeder wait has old-warning/new-completion/live-warning controls. Shared actual stress getter/restoration is integrated as02bcd; remaining kill/ASan/stress gates and review are in progress. Original ASan buffer-overflow diagnostic failure remains recorded separately. Rung2a safety/order,2b owner metadata,2c retirement/adoption/fork remain design/probes; S1 completion concern confirmed, resource-case/S3 proof pending |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b remains unlanded at0b13048a633. Provenance/list-transfer repair committed82165f8a2a9 and integration reconciled. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass after merge; first31-case/11-module iteration running. Final gates/review and O1 adoption remain pending. Rung3a remaining writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
+| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 remains unlanded at5cc31bacee1. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; full debug kill at5cc passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Three subprocess checks pass371 each. Stress11/probes and review remain. Rung2a safety/order,2b owner metadata,2c retirement/adoption/fork remain design/probes; S1 completion concern confirmed, resource-case/S3 proof pending |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 design accepted after two reviews; stage1 e7cc59743e1 preserves all generated products and passed smoke/targeted gates. Independent implementation review clears code; saved control runner isolation fix required before landing. Consumer/transport closure and final renumbering follow; typed float truth is separate |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 b203defe758 cleared independent rereview and merged as6c724c29408; detached integration checks running. Stage2 fixed-number runtime/monitor/stats/inspection consumers beginning; ROOTS retains shared CAPI ownership. Transport closure and final renumbering follow; typed float truth is separate |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
 | 9 | tier 1 | open |
@@ -55,7 +55,12 @@ core-frame alias, losing that origin. Post-B enrichment is applied and
 its fixture detects the old helper. The assertion must accept a PyMem
 origin first or supplemental on the same killed-object line. Further
 qualification exposed a list-to-tuple element-root lifetime bug; its
-minimal reorder is under validation. No O1 adoption is claimed. The
+minimal reorder passes ten fresh reproductions, with an original ten of
+ten failure control. Merged-head bounded checks pass; the first full
+reclamation iteration took541.745s with all lifetime assertions passing.
+Forkserver/spawn test_finalize also report leaked semaphore/unlink cleanup
+errors; a causal trace on queue-reconciled source remains required. The
+remaining iterations wait for settled native source. No O1 adoption is claimed. The
 integration debug gate uses Og.
 
 Shared stress-state prerequisite02bcd2f6132 is integrated and validated:
@@ -69,8 +74,12 @@ through sweep, and a signaled waiter sweeps only after acquiring the lock.
 Five repetitions of the controlled checks pass; both old cleanup and
 unguarded-waiter controls fail. The new runner's mode-contract gate1 passed
 using the 99435658509 binary. Committed refs are pushed; Loom/GitHub
-authorization is explicit. The manifest validator/plan display is drafted;
-profile execution and gate integration remain outstanding.
+authorization is explicit. Registry/validator/plan display fff4e0e9b08
+is landed after independent safety-control and actual-inventory checks.
+The ASan filter names only the established failing AddressSanitizerTests
+case, retaining five passing same-named allocator tests. Profile execution
+and gate integration remain outstanding, split into a launcher checkpoint
+and orchestration/hook checkpoint in boil/tools/verification.md.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -151,6 +160,7 @@ day travelled through messages and work-doc paragraphs.
 | the checker's argument-order and hashtable-family holes (review 2 §5.4, §5.5) | review 2 | 10a rung 2b | both negative fixtures fail before the fix and pass after; the hazard list names the commits |
 | the contract "a specializer runs no Python code" (specialize_dict_hint() ran a colliding key's `__eq__` and the re-dispatched word reread a rebound local; the guard is the compiler fix's commit) enforced by the checker | compiler fix review | 10a tooling | a checker fixture with a reentrant `_Py_Specialize_*` callee fails; the specializers pass |
 | a reader's folded operand (a local read in place by the op) needs an anchor across the reader's own collecting calls once the eval loop frame is precise (`x + o` where `X.__add__` rebinds x, collects and returns NotImplemented; today the conservative C frame holds the original) | compiler fix review | 10a rung 3 | an oracle that injects a collection at a point where only the reader's precise frame holds the operand, and fails with that root omitted; the compiler fix's test 10 (`x + o`) is a semantic regression only, since `self` and the opaque C frames below hold the operand today |
+| standalone forkserver/spawn test_finalize returns SUCCESS but reports a leaked semaphore followed by SemLock._cleanup FileNotFoundError | coordinator/ROOTS feedback matrix1 logs08/10 at0b130 | ROOTS before final2b matrix | causal registry/tracker trace on queue-reconciled source, then a proved cleanup fix or evidence that the report is expected; no exclusion or clean-stderr claim |
 
 ### 0.4 Execution plan from the takeover
 
@@ -212,6 +222,12 @@ interpreter with upstream on the recorded kernels and representative
 call, allocation, generator, attribute and string workloads. Match
 compiler/build policies, state PGO/LTO/tail-call choices, separate warm
 execution from startup, and repeat elapsed-time runs in quiet windows.
+Bind each interpreter to its own frozen C and standard-library sources.
+The retained baseline binary identifies 15e96bf639d, whose only change
+from upstream 321925c92c9 is a worklog, but its configured source directory
+is the active fork worktree. Reusing that binary does not by itself prove
+an upstream standard-library environment. Establish that source binding
+before collecting checkpoint-I measurements; preserve historical records.
 Use instruction, allocation, box, memory and pause data for attribution.
 Do not drop difficult workloads to meet the target. Persistent deficits
 become bounded runtime/dispatch work before tier 0, with new measurements.
@@ -219,13 +235,49 @@ This checkpoint supersedes the older rule that every performance result
 is merely recorded; intermediate correctness landings still need no
 unrelated tuning. JIT tiers, movement and settled ports follow.
 
+Stage1 may land independently as generator/tooling work because all seven
+generated products remain byte-identical. Its affected-tool gates do not
+establish runtime domain closure. Stages2–4 and their final verification
+remain required before H3-2 introduces an operation.
+
+H3 stage2 owns IR/domain/pristine construction, then monitoring, stats and
+inspection consumers. ROOTS retains the C checker, GC sources, test_gc and
+shared _testinternalcapi.c; a C scalar-boundary fixture is an explicit
+handoff. Bounded exception to whole-file ownership: H3 may edit separate
+HandlerDomain/metadata classes in Lib/test/test_generated_cases.py while
+ROOTS's checker fixtures are frozen on its own branch. H3 must leave those
+checker fixtures and imports unchanged. Integration preserves both blocks
+and reruns the affected module. No other shared-file exception is implied.
+
+Second bounded exception, reviewed by ROOTS: H3 may add only the proposed
+pycore_ir.h include, ir_scalar_boundary primitive fixture beside the
+specialization fixture, and its method-table entry in _testinternalcapi.c.
+ROOTS retains its GC fixtures/entries. The fixture lands with H3's checked
+production helpers and boundary controls, not as a cross-step merge.
+
+For the final reclamation matrix, each of31 selected cases still runs
+alone in a fresh process per iteration. The11 complete physical modules
+may run through one regrtest -j8 driver per iteration: each worker runs a
+whole module in its normal internal order. No parallel-threads or match
+narrowing. Retain exact scheduled/returned modules, case counts/skips,
+seed, driver/worker identities, actual-state witnesses and root counters.
+Measure this harness on settled source before projecting its remaining
+cost. The serial feedback iteration is not relabeled as this harness.
+
+Planned native landing order is QUEUES1, ROOTS2b, then H3 runtime stage2.
+H3 implementation proceeds independently in its worktree; integration
+holds its native changes while ROOTS's final matrix uses settled source,
+avoiding duplicate qualification. Tooling/docs with unchanged runtime
+sources and products use the explicit affected-level rerun rule.
+
 Hourly reporting: while work is active, approximately every hour the
 coordinator updates this state table and `README.md`, appends a dated
 progress entry to `WORKLOG.md`, and gives the user a summary of heads,
 landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
-2026-10-29 06:45 PDT; the next is due about 07:45 PDT while work continues.
+2026-10-29 06:45 PDT; the second is recorded at 07:41 PDT. The next is due
+about 08:45 PDT while work continues.
 
 ## 1. The loop
 

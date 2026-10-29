@@ -184,6 +184,32 @@ extern void _Py_RunGC(PyThreadState *tstate);
    queued, without collecting (gc_live.c). */
 extern void _PyGC_LiveRunQueue(PyThreadState *tstate);
 
+/* Step 7a (note 13): the per-interpreter queue, for _testinternalcapi.
+   _PyGC_LiveQueueInfo() returns a new dict describing interp's queue;
+   _PyGC_LiveFailAlloc(n) makes the nth queue node allocation from now
+   fail, once. */
+PyAPI_FUNC(PyObject *) _PyGC_LiveQueueInfo(PyInterpreterState *interp);
+/* The interpreter can run Python code: its queue opens (end of
+   pycore_interp_init()). */
+extern PyStatus _PyGC_LiveOpenQueue(PyInterpreterState *interp);
+/* With the head lock held: wait, releasing it, until no collection pins
+   interp (PyInterpreterState_Delete()). */
+extern void _PyGC_LiveWaitUnpinned(PyInterpreterState *interp);
+/* Test hook: the deletion barrier of test 9.16 (gc_live.c). */
+PyAPI_FUNC(void) _PyGC_LiveDeleteBarrierForTest(int on);
+/* Test hook: the next interpreter's initialisation fails where its queue
+   would open, with one call queued: a weak reference callback for
+   referent if given, else a finalizer call on a fresh object. */
+PyAPI_FUNC(void) _PyGC_LiveFailOpenForTest(PyObject *referent,
+                                           PyObject *callback);
+PyAPI_FUNC(int) _PyGC_LiveFailAlloc(int n);
+/* Test hook: close tstate's interpreter as _PyGC_Fini() does, then enter
+   the collector by each of its entries.  out[]: what _PyGC_Collect() and
+   PyGC_Collect() returned, whether the inline entry collected, whether a
+   live state exists again, and the queue's length and ready flag. */
+PyAPI_FUNC(void) _PyGC_LiveCollectAfterCloseForTest(PyThreadState *tstate,
+                                                    Py_ssize_t out[6]);
+
 struct PyValue;
 
 // GC visit callback for tracked interpreter frames

@@ -252,6 +252,26 @@ struct _gc_runtime_state {
     PyObject *sweep_op;
 #endif
     struct _gc_live_state *live;
+    /* The interpreter's queue of weak reference callbacks, finalizers and
+       destroy calls, run FIFO from the head (Python/gc_live.c, note 13).
+       In this struct, not in *live, so that splicing onto it needs
+       nothing allocated. */
+    struct _PyGCLiveCall *queue_head;
+    struct _PyGCLiveCall *queue_tail;
+    /* Initialising, open or closed (gc_live.c); nothing runs from a queue
+       that is not open. */
+    int queue_phase;
+    /* The main interpreter's count, by call kind, of the calls of
+       never-opened isolated interpreters that their close discarded. */
+    Py_ssize_t queue_discarded[4];
+    /* Set while the queue is open and non-empty; the interpreter's threads
+       see it when they take the GIL. */
+    int queue_ready;
+    /* The collections between their mark and the routing of their calls
+       whose domain includes this interpreter, under the head lock; its
+       deletion waits for none (note 13 section 3.2), on *queue_unpinned. */
+    Py_ssize_t queue_pins;
+    PyEvent *queue_unpinned;
 };
 
 /* No automatic collection until _PyGC_Init() has set alloc_limit. */

@@ -1,0 +1,38 @@
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2173232æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+
+Using random seed: 3393636943
+0:00:00 load avg: 2.55 mem:   37.7 MiB Run 1 test sequentially in a single process
+0:00:00 load avg: 2.55 mem:   37.8 MiB [1/1] test_generated_cases
+test_duplicate_id_rejected (test.test_generated_cases.TestHandlerDomain.test_duplicate_id_rejected) ... FAIL
+
+======================================================================
+FAIL: test_duplicate_id_rejected (test.test_generated_cases.TestHandlerDomain.test_duplicate_id_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1394, in test_duplicate_id_rejected
+    with self.assertRaisesRegex(ValueError, "duplicate handler ID"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.005s
+
+FAILED (failures=1)
+test test_generated_cases failed
+0:00:00 load avg: 2.55 mem:   40.4 MiB [1/1/1] test_generated_cases failed (1 failure)
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 309 ms
+Total tests: run=1 (filtered) failures=1
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

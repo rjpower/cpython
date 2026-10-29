@@ -296,7 +296,6 @@ class Instruction:
     _properties: Properties | None
     is_target: bool = False
     family: Optional["Family"] = None
-    opcode: int = -1
 
     @property
     def properties(self) -> Properties:
@@ -332,7 +331,6 @@ class PseudoInstruction:
     targets: list[Instruction]
     as_sequence: bool
     flags: list[str]
-    opcode: int = -1
 
     def dump(self, indent: str) -> None:
         print(indent, self.name, "->", " or ".join([t.name for t in self.targets]))
@@ -359,9 +357,6 @@ class Analysis:
     families: dict[str, Family]
     pseudos: dict[str, PseudoInstruction]
     labels: dict[str, Label]
-    opmap: dict[str, int]
-    have_arg: int
-    min_instrumented: int
     # Instructions annotated `ir_only`: handlers of the register IR that
     # have no opcode, kept apart so that the opcode tables do not see them.
     ir_only: dict[str, Instruction]
@@ -999,92 +994,6 @@ def add_label(
     labels[label.name] = Label(label.name, label.spilled, label.block, properties)
 
 
-def assign_opcodes(
-    instructions: dict[str, Instruction],
-    families: dict[str, Family],
-    pseudos: dict[str, PseudoInstruction],
-) -> tuple[dict[str, int], int, int]:
-    """Assigns opcodes, then returns the opmap,
-    have_arg and min_instrumented values"""
-    instmap: dict[str, int] = {}
-
-    # 0 is reserved for cache entries. This helps debugging.
-    instmap["CACHE"] = 0
-
-    # 17 is reserved as it is the initial value for the specializing counter.
-    # This helps catch cases where we attempt to execute a cache.
-    instmap["RESERVED"] = 17
-
-    # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
-    instmap["RESUME"] = 128
-
-    # This is an historical oddity.
-    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
-
-    instmap["INSTRUMENTED_LINE"] = 255
-
-    instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
-
-    specialized: set[str] = set()
-    no_arg: list[str] = []
-    has_arg: list[str] = []
-
-    for family in families.values():
-        specialized.update(inst.name for inst in family.members)
-
-    for inst in instructions.values():
-        name = inst.name
-        if name in specialized:
-            continue
-        if name in instrumented:
-            continue
-        if inst.properties.oparg:
-            has_arg.append(name)
-        else:
-            no_arg.append(name)
-
-    # Specialized ops appear in their own section, and those that do not fit
-    # take the numbers below RESUME that no other instruction uses.
-    # Instrumented opcodes are at the end of the valid range
-    min_internal = instmap["RESUME"] + 1
-    min_instrumented = 256 - len(instrumented)
-
-    next_opcode = 1
-
-    def add_instruction(name: str) -> None:
-        nonlocal next_opcode
-        if name in instmap:
-            return  # Pre-defined name
-        while next_opcode in instmap.values():
-            next_opcode += 1
-        instmap[name] = next_opcode
-        next_opcode += 1
-
-    for name in sorted(no_arg):
-        add_instruction(name)
-    for name in sorted(has_arg):
-        add_instruction(name)
-    # For compatibility
-    next_opcode = min_internal
-    for name in sorted(specialized):
-        if next_opcode == min_instrumented:
-            next_opcode = 1
-        add_instruction(name)
-        assert instmap[name] < min_instrumented
-    next_opcode = min_instrumented
-    for name in instrumented:
-        add_instruction(name)
-
-    for name in instructions:
-        instructions[name].opcode = instmap[name]
-
-    for op, name in enumerate(sorted(pseudos), 256):
-        instmap[name] = op
-        pseudos[name].opcode = op
-
-    return instmap, len(no_arg), min_instrumented
-
-
 def get_instruction_size_for_uop(instructions: dict[str, Instruction], uop: Uop) -> int | None:
     """Return the size of the instruction that contains the given uop or
     `None` if the uop does not contains the `INSTRUCTION_SIZE` macro.
@@ -1172,10 +1081,8 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
         inst = instructions["BINARY_OP_INPLACE_ADD_UNICODE"]
         inst.family = families["BINARY_OP"]
         families["BINARY_OP"].members.append(inst)
-    opmap, first_arg, min_instrumented = assign_opcodes(instructions, families, pseudos)
     return Analysis(
-        instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only
+        instructions, uops, families, pseudos, labels, ir_only
     )
 
 

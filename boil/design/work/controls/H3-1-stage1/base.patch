@@ -1,0 +1,12 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -535,9 +535,6 @@
+             raise ValueError("handler ID outside domain")
+         if set(self.bases) != set(ids) or set(self.kinds) != set(ids):
+             raise ValueError("incomplete handler base/kind metadata")
+-        for name, base in self.bases.items():
+-            if base not in ids or self.bases[base] != base:
+-                raise ValueError(f"invalid handler base for {name}: {base}")
+ 
+     def require_analysis(self, analysis: Analysis) -> None:
+         if analysis is not self.analysis:

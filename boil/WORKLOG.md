@@ -2595,3 +2595,103 @@ The bounded reorder moves forward from3a into2b. The PyMem assertion is
 being corrected to require its origin on the same killed-list report line
 whether first or supplemental; old-helper failure remains required.
 No O1 adoption or ROOTS landing is claimed.
+
+## 2026-10-29 07:41 PDT: second hourly coordinator update
+
+QUEUES remains frozen at 5cc31bacee1. Full debug kill passes 51,104 tests,
+65,601 collections and zero fallback; 3,764 unpinned words are reported,
+not a suite failure. The explicit 14 ASan inputs expand to 24 test files:
+3,589 tests/90 skips pass in 6m43s with only the established exact overflow
+case excluded. The original unfiltered ASan smoke remains FAIL. Three
+debug subprocess runs pass 371 each. Stress11/probes and landing review
+remain; no queue-runtime landing is claimed.
+
+ROOTS provenance/list-transfer fix 82165f8a2a9 is committed and reconciled
+with integration as 0b13048a633. The list reorder passes ten fresh children;
+the original traps ten of ten. The corrected origin assertion accepts the
+fixed supplemental-origin report and rejects the retained old-helper
+report. Moving the zero-seed return before sorting fails both fixture
+orderings. Merged O1 bounded checks pass: smoke 1,924, affected modules 186,
+plain-kill focused 51, checker 41 files/five negative controls, compiled
+inline audit and stale100 off/kill with 705 collections each and zero
+fallback/unpinned. Actual driver/worker records agree with required
+states. The first full 31-case/11-module iteration is running; its cost and
+remaining 19 iterations precede an O1 adoption decision and final gates.
+
+H3 stage1 code cleared independent review. Its corrected saved runner
+uses copied generators/inputs, verifies copied module paths and hashes in
+actual driver/workers, has a timeout and removes its scratch tree. The
+positive seven tests and all seven deliberately broken variants meet their
+oracles; live Og debug generator tests pass 62. It explicitly handles
+regrtest's platform-reporting auxiliary call. Final commit and integration
+checks follow; stages2–4 remain open. Stage1 is independently landable
+tooling with byte-identical products, not proof of runtime domain closure.
+
+Registry/validator/plan-display stage1 landed as fff4e0e9b08 after coordinator
+review. Seven safety-control groups and actual normalized case inventory
+validation pass; 15 profiles are defined. Review narrowed the ASan filter
+to preserve five passing same-named allocator tests and distinguished the
+raw discovery log from normalized inventory. Execution is not implemented.
+ROOTS will prepare launcher contracts first, then orchestration/gate hook,
+without delaying its runtime qualification. Integration and ROOTS heads
+through fff4/0b130 are pushed; no permission hold remains.
+
+Checkpoint I must bind both C and standard-library sources to frozen
+upstream/fork revisions. Retained baseline 15e96bf639d differs from
+upstream 321925c92c9 only by a worklog, but its configured source path is
+the active fork. This binding must be established before new parity
+measurements; historical records are preserved. Next hour: finish queue
+stress/probes and review, integrate H3 stage1, obtain ROOTS matrix cost,
+and qualify the manifest launcher. Next hourly update about 08:45 PDT.
+
+### 07:45 PDT: H3 generator stage1 merged
+
+Independent rereview of b203defe758 returned LAND_STAGE1: copied sources,
+actual driver/worker path/hash checks, bounded runner, preserved negative
+controls and unchanged live snapshots close the saved-runner finding.
+The verdict is retained in reviews/H3-1-stage1-landing-round2.md. Merge
+6c724c29408 integrates stage1; all seven generated products remain
+unchanged. Detached gate0/affected gate1 on both existing integration
+builds plus regeneration/product equality are now running from
+/tmp/boilgate. No final integration pass is claimed yet.
+
+H3 stage2 begins fixed-number runtime, monitoring, stats and inspection
+consumers. ROOTS retains gc_trace/gc_live/test_gc/C-checker/shared CAPI
+ownership; H3 supplies its bounded scalar fixture as a handoff. Sampler
+transport, renumbering and new operations remain later stages. The roots
+matrix in0b130 and queue validation in5cc are untouched by this merge.
+
+### 07:55 PDT: H3 merge validated; final roots source scheduling
+
+Detached H3 integration at6c724c29408 passes release/Og debug gate0
+(1,924 each) and affected gate1 (790 each,3 skips). Regeneration/Clinic
+leave source unchanged; all seven product hashes equal the stage1 base.
+Commands/logs are build/coordinator-20261029/h3-stage1-*. The final
+regeneration was also replayed under an explicit1200s timeout. No full
+runtime-suite or wide-domain closure is claimed for this tooling stage.
+
+QUEUES5cc passes stress11:3,046 tests/65 skips in4m58s. Exactly11 worker
+PID pairs have start/end interval1000, verifier(0,0), exact selected names
+and matching frozen source/config hashes. All40 probes and subprocess
+371 three times pass. Evidence commit1f2a7ac7b88 and reconciliation5c4124ea9ff
+preserve all native sources and generated products; affected generator
+checks precede review. Historical normal/full-verification lines retain
+their original commits and scopes.
+
+ROOTS feedback iteration at0b130 takes541.745s:31 individual cases and
+11 full modules/2,018 module tests. Its lifetime assertions and85 actual
+process state pairs pass. It emitted no per-job root stats, so it cannot
+replace final matrix counter coverage. Two individual test_finalize cases
+(forkserver/spawn) return SUCCESS but emit a leaked-semaphore warning and
+SemLock cleanup FileNotFoundError. Registry clearing may lose a weakref
+callback before tracker shutdown; this remains a source-based hypothesis.
+ROOTS will trace it on queue-reconciled source before a cleanup fix.
+
+The remaining19 iterations are held for settled native source. The final
+harness may run whole modules concurrently in one -j8 driver, preserving
+each module's full internal order and separate individual cases, with all
+identity/count/mode/counter evidence. Measure it before projecting cost.
+Planned native landings: QUEUES1, ROOTS2b, H3 runtime stage2; parallel
+implementation continues. ROOTS reviewed H3's disjoint scalar C fixture;
+coordinator grants only that include/function/method-entry block, with GC
+fixtures remaining ROOTS-owned. No O1 adoption or matrix waiver is claimed.

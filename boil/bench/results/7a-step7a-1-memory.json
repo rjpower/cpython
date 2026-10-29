@@ -1,0 +1,275 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "step7a-1",
+  "path": "/home/power/code/cpython/.worktrees/boil-7a/build/default/python",
+  "version": "3.16.0a1+dev (heads/boil/7a-dirty:40a19fcc0b5, Oct 28 2026, 11:12:00) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/7a-dirty",
+   "40a19fcc0b5"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "instr": {
+   "tuples_10m": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 13611064362.25,
+    "values": [
+     13611252973.5,
+     13611123362.0,
+     13610943515.5,
+     13611005362.5
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   },
+   "instances_1m": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 3346689991.0,
+    "values": [
+     3346714135.5,
+     3346679369.0,
+     3346695675.0,
+     3346684307.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   },
+   "dicts_200k": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 458560493.75,
+    "values": [
+     458560307.0,
+     458560680.5,
+     458562005.5,
+     458497917.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   },
+   "collector_live16": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 12838498318.25,
+    "values": [
+     12838508771.0,
+     12838427728.0,
+     12839299692.5,
+     12838487865.5
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   },
+   "collector_live128": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 19313062814.0,
+    "values": [
+     19313055466.0,
+     19313070162.0,
+     19313612552.0,
+     19307121279.5
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   },
+   "collector_live512": {
+    "group": "memory",
+    "unit": "instructions:u per loop",
+    "value": 19214190422.5,
+    "values": [
+     19212369627.5,
+     19214142618.0,
+     19214238227.0,
+     19214259561.5
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 4
+   }
+  },
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 14056,
+    "values": [
+     14532,
+     13944,
+     14056
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 18856,
+    "values": [
+     29960,
+     18856,
+     18736
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "tuples_10m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 824416,
+    "values": [
+     824416,
+     824416,
+     819824
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "instances_1m": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 109288,
+    "values": [
+     109384,
+     109288,
+     109168
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "dicts_200k": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 63344,
+    "values": [
+     63344,
+     63376,
+     62928
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live16": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 57092,
+    "values": [
+     57124,
+     57068,
+     57092
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live128": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 160740,
+    "values": [
+     160740,
+     160784,
+     160588
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "collector_live512": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 606348,
+    "values": [
+     606532,
+     606348,
+     582124
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "instr": {
+   "timestamp": "2026-10-28T12:15:28-07:00",
+   "commit": {
+    "sha": "ae73621efff34faddbb08184d84dbf8580fc32f1",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 22.15380859375,
+    "samples": [
+     14.0107421875,
+     19.58837890625,
+     22.15380859375,
+     22.15380859375,
+     20.517578125,
+     21.08984375,
+     18.841796875,
+     18.841796875,
+     18.841796875,
+     18.57763671875,
+     18.57763671875,
+     18.57763671875,
+     19.09228515625,
+     18.62255859375,
+     18.84033203125
+    ]
+   }
+  },
+  "rss": {
+   "timestamp": "2026-10-28T12:15:28-07:00",
+   "commit": {
+    "sha": "ae73621efff34faddbb08184d84dbf8580fc32f1",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 22.15380859375,
+    "samples": [
+     14.0107421875,
+     19.58837890625,
+     22.15380859375,
+     22.15380859375,
+     20.517578125,
+     21.08984375,
+     18.841796875,
+     18.841796875,
+     18.841796875,
+     18.57763671875,
+     18.57763671875,
+     18.57763671875,
+     19.09228515625,
+     18.62255859375,
+     18.84033203125
+    ]
+   }
+  }
+ }
+}

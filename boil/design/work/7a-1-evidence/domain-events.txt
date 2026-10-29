@@ -1,0 +1,27 @@
+pin-domain-python-trace.log
+RUN 0
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0], 10, 11), ('start', [0], 10, 11), ('stop', [0], 10, 11)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 10, 'unpinned': 11, 'remapped': 10, 'remapped_other': 0}
+RUN 1
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0], 10, 11), ('start', [0], 10, 11), ('stop', [0], 10, 11)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 10, 'unpinned': 11, 'remapped': 10, 'remapped_other': 0}
+RUN 2
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0], 10, 11), ('start', [0], 10, 11), ('stop', [0], 10, 11)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 10, 'unpinned': 11, 'remapped': 10, 'remapped_other': 0}
+
+pin-domain-native-normal.log
+RUN 0
+QUEUE_DOMAIN later=0 named=1 size=2 modules=0 remapped=0 unpinned=0
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0], 10, 11)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 10, 'unpinned': 11, 'remapped': 10, 'remapped_other': 0}
+RUN 1
+QUEUE_DOMAIN later=0 named=1 size=2 modules=0 remapped=0 unpinned=0
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0], 10, 11)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 10, 'unpinned': 11, 'remapped': 10, 'remapped_other': 0}
+
+pin-domain-native-delayed.log
+RUN 0
+QUEUE_DOMAIN later=0 named=1 size=2 modules=0 remapped=0 unpinned=0
+QUEUE_MODULE owner=1 dead=0 kinds=97
+QUEUE_DOMAIN later=1 named=1 size=2 modules=1 remapped=10 unpinned=0
+PIN_TRACE [('start', [0, 1], 0, 0), ('stop', [0, 1], 10, 0), ('start', [0, 1], 10, 0), ('stop', [0, 1], 11, 0)] {'deleting': 1, 'pin_waited': 1, 'timed_out': 0, 'routed': 11, 'unpinned': 12, 'remapped': 11, 'remapped_other': 0}
+RUN 1
+
+legacy-active-mode.log
+(2, 0) ['before=(2,', '0),after=(2,', '0)']
+

@@ -888,6 +888,8 @@ PyInterpreterState_Delete(PyInterpreterState *interp)
     _PyInterpreterState_FinalizeAllocatedBlocks(interp);
 
     HEAD_LOCK(runtime);
+    // A collection between its mark and its routing may name interp.
+    _PyGC_LiveWaitUnpinned(interp);
     PyInterpreterState **p;
     for (p = &interpreters->head; ; p = &(*p)->next) {
         if (*p == NULL) {

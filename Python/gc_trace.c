@@ -1698,6 +1698,27 @@ live_domain(trace_t *t, PyInterpreterState *interp)
     return 0;
 }
 
+/* Step 7a (note 13 section 2): the owner of a block is the interpreter whose
+   mimalloc sub-process holds its segment; every interpreter has its own,
+   and mimalloc reclaims abandoned segments only within a sub-process. */
+PyInterpreterState *
+_PyGC_LiveOwner(const _PyGCMarkResult *res, PyObject *op)
+{
+    if (res->ndomain == 1) {
+        return res->domain[0];
+    }
+    mi_segment_t *seg = _mi_gc_segment_of((uintptr_t)op);
+    if (seg == NULL) {
+        return NULL;
+    }
+    for (int d = 0; d < res->ndomain; d++) {
+        if ((void *)seg->subproc == res->subproc[d]) {
+            return res->domain[d];
+        }
+    }
+    return NULL;
+}
+
 /* The object heap page of the domain that holds addr, through the segment
    map that mimalloc keeps for the collector (_mi_gc_segment_of()), or NULL.
    An address in a segment's metadata, in a free span or in a mem heap page
@@ -3315,8 +3336,20 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
                                - QUARANTINE_COLLECTIONS);
     }
 #endif
-    if (live_domain(&t, tstate->interp) < 0
-        || live_build_pages(&t) < 0
+    if (live_domain(&t, tstate->interp) < 0) {
+        HEAD_UNLOCK(&_PyRuntime);
+        goto done;
+    }
+    /* Step 7a: the collection routes its calls to these interpreters,
+       which therefore stay until it has (note 13 section 3.2); collect()
+       unpins them, also when the mark fails below. */
+    res->ndomain = t.ndomain;
+    for (int d = 0; d < t.ndomain; d++) {
+        res->domain[d] = t.domain[d];
+        res->subproc[d] = t.subproc[d];
+        t.domain[d]->gc.queue_pins++;
+    }
+    if (live_build_pages(&t) < 0
         || (live_other_threads(&t, tstate) && read_mappings(&t) < 0))
     {
         HEAD_UNLOCK(&_PyRuntime);

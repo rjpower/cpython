@@ -1,0 +1,160 @@
+{
+  "schema": "boil-bench/1",
+  "build": {
+    "label": "pre7a",
+    "path": "/home/power/code/cpython/.worktrees/boil-7a-base/build/default/python",
+    "version": "3.16.0a1+dev (heads/boil/6d-rung3-8-gc91c4bdb282:c91c4bdb282, Oct 28 2026, 13:25:05) [GCC 15.2.0]",
+    "git": [
+      "CPython",
+      "heads/boil/6d-rung3-8-gc91c4bdb282",
+      "c91c4bdb282"
+    ],
+    "hash_seed": 0
+  },
+  "machine": {
+    "hostname": "bento-cat",
+    "kernel": "7.0.0-29-generic",
+    "cpus": 16,
+    "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+    "memory": "65726156 kB"
+  },
+  "results": {
+    "rss": {
+      "startup": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 13972,
+        "values": [
+          17276,
+          13680,
+          13632,
+          13972,
+          13984
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "imports": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 18304,
+        "values": [
+          29220,
+          18296,
+          18336,
+          18304,
+          18236
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "tuples_10m": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 860032,
+        "values": [
+          860032,
+          859992,
+          860140,
+          859904,
+          860068
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "instances_1m": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 118692,
+        "values": [
+          118704,
+          118792,
+          118692,
+          118368,
+          118588
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "dicts_200k": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 62840,
+        "values": [
+          63248,
+          62752,
+          62840,
+          63108,
+          62812
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "collector_live16": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 56680,
+        "values": [
+          57184,
+          56656,
+          56680,
+          56644,
+          56772
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "collector_live128": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 160384,
+        "values": [
+          160368,
+          160304,
+          160384,
+          160488,
+          160552
+        ],
+        "loops": 1,
+        "runs": 5
+      },
+      "collector_live512": {
+        "group": "memory",
+        "unit": "KiB peak RSS",
+        "value": 586116,
+        "values": [
+          582332,
+          586296,
+          585780,
+          586292,
+          586116
+        ],
+        "loops": 1,
+        "runs": 5
+      }
+    }
+  },
+  "runs": {
+    "rss": {
+      "timestamp": "2026-10-28T13:40:28-07:00",
+      "commit": {
+        "sha": "ae73621efff34faddbb08184d84dbf8580fc32f1",
+        "dirty": true
+      },
+      "load_1min": {
+        "max": 5.63671875,
+        "samples": [
+          5.63671875,
+          5.63671875,
+          5.63671875,
+          5.1572265625,
+          5.1572265625,
+          5.1572265625,
+          4.97265625,
+          4.51513671875,
+          4.2587890625
+        ]
+      }
+    }
+  }
+}

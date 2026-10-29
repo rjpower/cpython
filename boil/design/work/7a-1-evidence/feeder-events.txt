@@ -1,0 +1,65 @@
+=== actual merged debug source: old; exit 1 ===
+FEEDER_TRACE class Probe mode (0, 0)
+FEEDER_STATE QueueFeederThread alive True active True limbo False attributes {'_target': 'function', '_name': 'str', '_args': 'tuple', '_kwargs': 'dict', '_daemonic': 'bool', '_context': 'Context', '_ident': 'int', '_native_id': 'int', '_os_thread_handle': '_ThreadHandle', '_started': 'Event', '_initialized': 'bool', '_stderr': 'TextIOWrapper', '_invoke_excepthook': 'function'}
+FEEDER_STACK
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1181, in _bootstrap
+    self._bootstrap_inner()
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1223, in _bootstrap_inner
+    self._delete()
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1165, in run
+    del self._target, self._args, self._kwargs
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/multiprocessing/queues.py", line 259, in _feed
+    return
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/multiprocessing/connection.py", line 187, in close
+    self._handle = None
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/multiprocessing/connection.py", line 398, in _close
+    _close(self._handle)
+FEEDER_STACK_HITS [] dropped 0
+FEEDER_REFERRER set []
+FEEDER_REFERRER set []
+FEEDER_REFERRER frame []
+FEEDER_REFERRER frame []
+FEEDER_REFERRER frame []
+FEEDER_FINALIZER (0, 1) SemLock._cleanup ['str']
+FEEDER_FINALIZER (0, 2) SemLock._cleanup ['str']
+FEEDER_FINALIZER (-5, 3) Queue._finalize_join ['ReferenceType']
+Warning -- Dangling threads: {<Thread(QueueFeederThread, started daemon 138755885196992)>}
+SCHEDULE_RESULT old close_calls ['sentinel queued'] warning True alive False close_entered False elapsed 0.46582990046590567
+AFTER_JOIN False
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-7a/boil/design/work/7a-1-evidence/feeder_completion.py", line 99, in <module>
+    assert not support.environment_altered, "teardown warned before feeder completion"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: teardown warned before feeder completion
+=== actual merged debug source: current; exit 0 ===
+SCHEDULE_RESULT current close_calls ['sentinel queued'] warning False alive False close_entered False elapsed 0.41906500328332186
+=== actual merged debug source: blocked; exit 0 ===
+FEEDER_TRACE class Probe mode (0, 0)
+FEEDER_STATE QueueFeederThread alive True active True limbo False attributes {'_target': 'function', '_name': 'str', '_args': 'tuple', '_kwargs': 'dict', '_daemonic': 'bool', '_context': 'Context', '_ident': 'int', '_native_id': 'int', '_os_thread_handle': '_ThreadHandle', '_started': 'Event', '_initialized': 'bool', '_stderr': 'TextIOWrapper', '_invoke_excepthook': 'function'}
+FEEDER_STACK
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1181, in _bootstrap
+    self._bootstrap_inner()
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1219, in _bootstrap_inner
+    self._context.run(self.run)
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 1161, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/multiprocessing/queues.py", line 257, in _feed
+    reader_close()
+  File "/home/power/code/cpython/.worktrees/boil-7a/boil/design/work/7a-1-evidence/feeder_completion.py", line 62, in blocked_reader_close
+    release.wait(10)
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 665, in wait
+    signaled = self._cond.wait(timeout)
+  File "/home/power/code/cpython/.worktrees/boil-7a/Lib/threading.py", line 370, in wait
+    gotit = waiter.acquire(True, timeout)
+FEEDER_STACK_HITS [] dropped 0
+FEEDER_REFERRER method []
+FEEDER_REFERRER dict ['133029240719040']
+FEEDER_REFERRER method []
+FEEDER_REFERRER set []
+FEEDER_REFERRER set []
+FEEDER_FINALIZER (0, 1) SemLock._cleanup ['str']
+FEEDER_FINALIZER (0, 2) SemLock._cleanup ['str']
+FEEDER_FINALIZER (-5, 3) Queue._finalize_join ['ReferenceType']
+Warning -- Dangling threads: {<Thread(QueueFeederThread, started daemon 133029240719040)>}
+SCHEDULE_RESULT blocked close_calls ['sentinel queued'] warning True alive True close_entered True elapsed 0.4911967208608985
+AFTER_JOIN False

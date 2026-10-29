@@ -28,3 +28,8 @@ Shared-file scope is only one code-plus-int safe-lookup helper and method
 entry, using the existing pycore_code include. Exact hunk approval is still
 required before editing _testinternalcapi.c. Monitoring-storage helpers,
 instruments includes and all2b.2b implementation require separate review.
+
+Coordinator/ROOTS follow-up,09:21 PDT: corrected design33cef3ae191078a1
+removes the old bounds claim. Exact proposed code_safe_addr2line helper
+and method entry reviewed and granted by both owners. Existing pycore_code
+include suffices. IMPLEMENT_2A is now authorized;2b.2b remains design only.

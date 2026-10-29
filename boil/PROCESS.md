@@ -286,6 +286,15 @@ Modules/_testinternalcapi.c to use the generated full-domain table. ROOTS
 and coordinator approved that exact hunk; no other fixture or entry is
 included in the grant.
 
+Stage2b.2a separately permits only code_safe_addr2line(code,int) beside get_ir
+and its method-table entry in _testinternalcapi.c, using the existing
+pycore_code include. ROOTS and coordinator reviewed the exact additive
+proposal and approved it on2026-10-29. No monitoring-storage helper,
+instruments include or GC fixture changes are part of this grant. The
+corrected design is SHA256
+33cef3ae191078a1f578df57f9ac9dae3fee7143f4d214b6510ca9add310bda7;
+only immutable lookup2b.2a implementation is authorized.
+
 Second bounded exception, reviewed by ROOTS: H3 may add only the proposed
 pycore_ir.h include, ir_scalar_boundary primitive fixture beside the
 specialization fixture, and its method-table entry in _testinternalcapi.c.

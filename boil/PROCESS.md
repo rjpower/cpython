@@ -44,6 +44,13 @@ record and is updated at every landing.
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target is no kernel-geomean slowdown and explained individual regressions; it is not established by the existing microbenchmark instruction gains |
 
+Shared prerequisite `2155f16f45f` is integrated and independently checked:
+actual verifier state is exposed through a test accessor. Default/debug
+smoke sets and the mode contract passed on integration. This does not
+land queue routing or root-lifetime changes. At the roots lane's next
+quiescent point it is qualifying O1 debug using the controls in section 3;
+no O1 result or adoption is claimed yet.
+
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
 tool, fix with a span and a directive); per-rung instruction deltas of 1
@@ -369,10 +376,14 @@ specialiser output, the handler set or the feedback layout bumps the pyc
 magic in the same commit; an attribute change on the handlers that leaves
 the numbering unchanged does not. The CPython suite is the correctness
 gate; there is no ports gate until the ports phase (note 10).
-Measurements are recorded, never tuned for (note 06, plan revisions of
-2026-10-27): a rung records its instruction, allocation and box counts
+Intermediate measurements are recorded without unrelated tuning (note
+06, plan revisions of 2026-10-27): a rung records instruction, allocation and box counts
 against the before records, attributes any change it did not design, and
 leaves what a later step throws away.
+Checkpoint I is the explicit exception: it must demonstrate pre-JIT
+interpreter performance, as section 0.4 specifies. Levels 2 and 3 accept
+`--python WORKER_COMMAND` for a verifier-asserting regrtest worker;
+other extra arguments are rejected to preserve full-suite coverage.
 
 ## 4. Reporting and tracing
 

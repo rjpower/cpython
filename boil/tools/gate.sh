@@ -9,6 +9,8 @@
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
 #      Tools/boil/traverse_audit.py --check
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
+# Levels 2/3 accept only the optional regrtest pair --python WORKER_COMMAND,
+# for an instrumented worker launcher; neither accepts a narrowed test set.
 # Levels 2 and 3 also sum the live collector's root counters over the suite
 # and fail on a stack-walk fallback (note 11 section 10).
 # Environment: GATE_JOBS (default 16), GATE_NO_BUILD=1 (level 0 skips make),
@@ -27,18 +29,28 @@
 main() {
 set -eu
 level=$1; build=$2; shift 2
+case $level in
+2|3)
+    if [ "$#" -ne 0 ]; then
+        if [ "$#" -ne 2 ] || [ "$1" != --python ]; then
+            echo "gate $level accepts only --python WORKER_COMMAND" >&2
+            exit 2
+        fi
+    fi ;;
+esac
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 build=$(cd "$build" && pwd)
+echo "gate $level starting on $build at $(git -C "$REPO" rev-parse --short HEAD)"
 py="$build/python"
 J=${GATE_JOBS:-16}
 case $level in 0) LIMIT=1200 ;; 1) LIMIT=2400 ;; 2) LIMIT=3600 ;; 3) LIMIT=5400 ;; *) LIMIT=7200 ;; esac
 LIMIT=${GATE_LIMIT:-$LIMIT}
 # The pyc prefix stays on TMPDIR's filesystem (test_import renames a cached
-# pyc into TMPDIR, which fails across devices); stale prefixes from runs
-# whose shell was killed before the trap ran are pruned here after two hours.
+# pyc into TMPDIR, which fails across devices). Each run removes only its
+# own prefix: pruning other runs races with their cleanup and may delete a
+# still-running gate's cache.
 gatetmp="${TMPDIR:-/tmp}/boilgate-pyc"
 mkdir -p "$gatetmp"
-find "$gatetmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
 tmp=$(mktemp -d "$gatetmp/run-XXXXXX")
 child=
 cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp"; }
@@ -86,10 +98,10 @@ case $level in
     # an -i before a -m makes every unmatched test run (filter.py match_test).
     run "$py" -m test -q --timeout 600 -j"$J" "$@" -i "$IGNORE" ;;
 2)
-    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE"
+    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE" "$@"
     roots ;;
 3)
-    run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE"
+    run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE" "$@"
     roots
     run "$py" -m test -q -u cpu test_cext
     # Status and content: a generated file already modified before the

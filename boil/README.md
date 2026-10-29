@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 05:45 PDT after auditing integration d7f3003874f and
+revised 2026-10-29 06:00 PDT after auditing integration d7f3003874f and
 the three active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -51,8 +51,9 @@ and 3):
    a full-heap mark and sweep (`gc_trace.c`, `gc_live.c`) with a
    referrer-first sweep for deallocators that read their referents;
    weak references in a side table; finalizers and destroy hooks queued
-and drained at permitted execution points. Owner-correct routing is
-   implemented on the unlanded 7a branch (note 13). Roots are precise where frames
+   and drained at permitted execution points. Owner-correct routing is
+   implemented on the unlanded 7a branch (note 13). Roots are precise
+   where frames
    are marked `Py_GC_PRECISE` and checked by the C-mode checker, and
    conservative elsewhere (an attributed DWARF stack walk, PyMem blocks,
    data segments; note 11). Verification modes: `PYTHON_GCVERIFY=retain`
@@ -76,6 +77,12 @@ landing and hourly during active work. This is the takeover audit as of
 | 6a, 6b: `PyValue` in the core and the value C API | compiler fix at bf6635fd0a4: unlanded, review says fix first (specialization-phase oracle, control provenance, measurements) | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
 | 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H design revised after two revise reviews; no implementation claimed | H1 handler/build rules, H2 root maps after 10a rung 3, H3 clean dispatch inventory; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
+
+Shared validation prerequisite landed independently as `2155f16f45f`:
+`_testinternalcapi.gc_verify_mode()` reads actual collector state.
+Integration's existing release/debug smoke sets passed 1,924 tests each,
+and its mode contract passed on both builds. The queue forwarding fix
+and roots final gates still belong to their unlanded lanes.
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
@@ -126,7 +133,7 @@ at most two rounds, implement in small gated commits on a step branch,
 landing review on a detached checkout, a `--no-ff` merge into
 integration by the coordinator, a quick-test of the merge on a fresh
 detached checkout, and a whole-project review at each step's end. One
-Opus agent per step owns a worktree and a branch; the coordinator owns
+implementation agent per step owns a worktree and a branch; the coordinator owns
 integration and PROCESS.md. Every brief carries a clock deadline per
 rung, a hard stop, a test ladder (small first), a report every 30
 minutes and an explicit scope cut.
@@ -152,9 +159,10 @@ and run the whole-project review at each step end.
   behaviours, variable-width encodings or dual representations; a fixed
   form with a measured limit (the 4,095-slot shape limit, the 12-bit
   field) is the pattern. A design that proposes a fallback is sent back.
-- Gates are correctness gates. Performance is recorded with attribution
-  at every rung and never tuned for; a regression attributed to a later
-  step is left on the table (PROCESS.md §3, note 06 section 6).
+- Intermediate gates establish correctness and record performance with
+  attribution. Checkpoint I separately requires pre-JIT interpreter
+  parity; an unresolved deficit cannot simply be deferred to the JIT
+  (PROCESS.md §§0.4 and 3).
 - Tests are the oracle: a safety test names its negative control and the
   record shows the control failing; evidence is recorded at the event,
   not at setup; the test asserts the invariant, not a symptom.

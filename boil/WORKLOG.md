@@ -2359,3 +2359,59 @@ debug configuration only after root/walk/control qualification. Existing
 debug builds use Og; no faster configuration has been qualified yet.
 Note 14 incorporates the second design review's response as a design
 specification; its required dynamic evidence is not a passed result.
+
+### 05:50 PDT: verifier worker support and shared prerequisite
+
+All three implementation lanes have started. ROOTS needs active-mode
+assertions in regrtest workers, so levels 2 and 3 now accept the single
+optional --python worker-command pair; other extra arguments fail before
+a run, preserving full-suite coverage. Shell syntax and both rejected-
+argument cases were checked. ROOTS owns the runtime worker demonstration
+and will retain its launcher source with the gate record.
+
+QUEUES is isolating an actual-state verifier getter and focused test
+before its larger fixture fixes. Once gated, the coordinator will review
+and integrate that independent prerequisite so ROOTS can merge it from
+integration; this is not a merge between step branches. No queue-runtime
+landing is implied by the getter. The documentation commit 7af7ce89618
+was pushed to the existing integration branch after recovering the user's
+explicit prior authorization to commit and push as needed.
+
+## 2026-10-29 06:00 PDT: shared verifier-state prerequisite integrated
+
+2155f16f45f is the isolated cherry-pick of QUEUES 0f8a019b846, five files
+with the read-only getter, test hook, contract test and its record. The
+coordinator read the patch and COMPILER independently reviewed it with
+no blocker: it reads parsed interpreter state, and the isolated-child
+control distinguishes that from the unchanged environment. No queue
+routing change is included. Integration remained frozen at 2155f16f45f
+while its existing builds ran gate 0 and the focused gate 1: release
+1,924 tests/50 skips in 44.9s; debug 1,924 tests/20 skips in 2m58s;
+mode test 1/1 on each, including the debug kill/extra combinations.
+Logs and exact start/head record: build/coordinator-20261029/shared-hook-*.
+Source-lane unbuilt-module syntax checks also passed. No full root-safety
+suite is claimed for this test accessor; ROOTS will use it in its final
+verification gates.
+
+ROOTS's prior checkpoint at f8baf84affb passed default/debug/tailcall
+smoke sets (1,924 each) and checker/walk targets (29 each); ASan's only
+failure remains the recorded test_buffer_overflow. It is preserving Og
+flags and qualifying O1 in its existing debug build before the final
+suites. COMPILER's guard-removal phase controls now fail exactly in the
+two dict and six MRO cases; current code passes the new phase oracle.
+Unexplained benchmark rows remain owned by checkpoint I, and the existing
+box metric's kernel/micro coverage is stated explicitly rather than
+silently expanded to memory workloads.
+
+### 06:15 PDT: gate startup cleanup ownership
+
+QUEUES observed two gate-start exits with empty logs, then normal runs
+under shell tracing. The shared-pyc find/prune was the only identified
+startup command with errors hidden under set-e, but the original failing
+command was not captured; the exact cause remains a hypothesis. Remove
+that cross-run prune: it can race with another run's cleanup and its
+age test cannot prove ownership or inactivity. Each gate's trap still
+removes its own prefix. A startup banner now names level, build and head
+before commands run. Shell syntax and diff checks pass; existing targeted
+integration gate1 will exercise the changed startup path. No test failure
+is dismissed by this tooling repair.

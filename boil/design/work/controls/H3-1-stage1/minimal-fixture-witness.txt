@@ -1,0 +1,6 @@
+test_runs_code min_instrumented 255 count 256 reserved INSTRUMENTED_LINE 255
+  INSTRUMENTED_OP_TWIN 256
+test_metadata min_instrumented 255 count 258 reserved INSTRUMENTED_LINE 255
+  INSTRUMENTED_LOAD 256
+  IR_BACON 256
+  IR_PASS 257

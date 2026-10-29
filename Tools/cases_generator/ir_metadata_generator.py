@@ -22,27 +22,18 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
-    first_ir_only_handler,
+    HandlerDomain,
+    build_handler_domain,
     NOFB_SUFFIX,
     IRFormat,
     binary_op_handlers,
     binary_ops,
     compute_formats,
-    handler_ids,
     nofb_bases,
-    num_handlers,
 )
 from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
-
-
-def shadow_of(name: str, analysis: Analysis) -> str:
-    """The instruction that the handler stands for: itself, for the handler
-    of a BINARY_OP operation BINARY_OP, and for a NOFB form its base."""
-    if name in binary_op_handlers(analysis):
-        return BINARY_OP_FAMILY
-    return name.removesuffix(NOFB_SUFFIX)
 
 
 def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
@@ -70,12 +61,14 @@ def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
 
 
 def generate_ir_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, domain: HandlerDomain,
+    outfile: TextIO
 ) -> None:
+    domain.require_analysis(analysis)
     formats = compute_formats(analysis)
-    ids = handler_ids(analysis)
-    n = num_handlers(analysis)
-    first = first_ir_only_handler(analysis)
+    ids = domain.handlers
+    n = domain.count
+    first = domain.first_ir_only
     ir_only = sorted((name for name in ids if ids[name] >= first),
                      key=lambda name: ids[name])
     write_header(__file__, filenames, outfile)
@@ -106,11 +99,11 @@ def generate_ir_metadata(
         # BINARY_OP has a format but no handler: its operations decode as it.
         indices = dict(ids)
         if BINARY_OP_FAMILY in analysis.instructions:
-            indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
+            indices[BINARY_OP_FAMILY] = domain.opmap[BINARY_OP_FAMILY]
         has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
             nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
-            init = format_initializer(formats[name], shadow_of(name, analysis),
+            init = format_initializer(formats[name], domain.shadow(name),
                                       nofb)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
@@ -143,5 +136,6 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_ir_metadata(args.input, data, outfile)
+        generate_ir_metadata(args.input, data, domain, outfile)

@@ -1,0 +1,40 @@
+{
+  "base_revision": "f46276debf3e7f99be109284ba8f4eaa8a586aaa",
+  "builds": {
+    "debug": "CC=gcc --with-pydebug; OPT=-g -Og -Wall",
+    "default": "CC=gcc; OPT=-DNDEBUG -g -O3 -Wall"
+  },
+  "controls_restored": true,
+  "interpreters": {
+    "build/debug/python": "02f5c010914fceb7b1333d9534af56f0a9884a75c65fb65b7dca411cb26ad761",
+    "build/default/python": "3066cb8a0d17d80acbb71e36e03247ad3973248ba70bf8694e1739714b7a87ef"
+  },
+  "products": {
+    "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53",
+    "Include/internal/pycore_opcode_metadata.h": "681c7e36e4ad1cd5b13cac4030648f452361f15f31ab6eb81ce5704b291f38de",
+    "Include/internal/pycore_uop_ids.h": "adef43dad1a4ba28590bd085da8d76c52e2bcf9d146f6170d9dc70e9f9d6bce5",
+    "Include/opcode_ids.h": "771037b58eb30ba432fbfb07a8d9f45a5b1d6e4a3d06b5b551efa4206bcd9a27",
+    "Lib/_opcode_metadata.py": "22e857b0cdb86946239f10769c321da25e2c8e5b37e01d0127b3f4b53d2397a8",
+    "Python/generated_ir_cases.c.h": "8068a0b14f92492d234cbaec06f53946581536f569b10abff6c4390d1f85cfc7",
+    "Python/ir_targets.h": "f9c4a09ee2ea39803265e1d038ace8eae02eb31c16a55a0d128cf559c46e8076"
+  },
+  "sources": {
+    "Lib/test/test_generated_cases.py": "f9f3305b8a33a878b39465af3d8028e32811516786e36db5e5016e2458614fa0",
+    "Tools/cases_generator/analyzer.py": "ca9f47ffce6c476c7b4319fc50d892e227e617497775e3e04d4adda3cf1c74c1",
+    "Tools/cases_generator/ir_generator.py": "79150615e5cb059cff7b6fb8428a95dad363db2205e689d4d92237390282c0b9",
+    "Tools/cases_generator/ir_metadata_generator.py": "7f5745557f1927b5d52f2a0e7a1dc393d9d27a620a0eb040b7cf59ae4c17712f",
+    "Tools/cases_generator/opcode_id_generator.py": "7ce7934de57766cc2313a99c0c3dbb2852a2a5b4aa7c63f2fa09a3b22a42c9ac",
+    "Tools/cases_generator/opcode_metadata_generator.py": "b1028b3ab04f7c9e200cbb9df6db2f495831fcd7a860d07c48a8a42c5383d5e0",
+    "Tools/cases_generator/py_metadata_generator.py": "7ab01092ea9506b6ee0f9554d6e601a3cb60395a41ab4e3fbc134e2709695bde",
+    "Tools/cases_generator/uop_id_generator.py": "35faaeb3554025d5ae8589c3d5838bdd323bd8ea19e30fb41a809dbf92c7aef0"
+  },
+  "tested_source_state": "base plus uncommitted stage1 source hashes; no later commit run claimed",
+  "unchanged_compiler_runtime_and_tests": {
+    "Lib/test/test_ir.py": "0bf5186b5f1326a5001265071b51a8b4f559bd3a0e5ef36027e78a67a84a6325",
+    "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+    "Modules/_testinternalcapi.c": "10cc46d5ed8cf6a4b49a8bea97eb8a809211976874b47b79fa3cc8283e1c5a3f",
+    "Python/bytecodes.c": "3958ee7c3bc3929fab9dd4f53d344a7d6c02640eeeaab05586a04ca18b3969af",
+    "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+    "Python/specialize.c": "fd026a0fb318323b5c68707a302e0b22042e0de0afa2b8d76e6b131bd48a4832"
+  }
+}

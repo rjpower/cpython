@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -667,7 +667,7 @@
+         bases["IR_JUMP"] = "JUMP_FORWARD"
+     for name in binary:
+         bases[name] = BINARY_OP_FAMILY
+-        kinds[name] |= HandlerKind.BINARY_OP
++        kinds[name] |= HandlerKind.BINARY_OP | HandlerKind.SPECIALIZED
+     for name in nofb:
+         variant = name + NOFB_SUFFIX
+         bases[variant] = bases[name]

@@ -2570,3 +2570,93 @@ The copy-propagation semantic handoff is closed by landed99435658509 and
 its validated probes/phase controls/counter record; its row is removed from
 PROCESS0.3. Specializer-checker and precise folded-reader proofs remain
 separate open handoffs to ROOTS.
+
+### 07:30 PDT: stress prerequisite validated; H3 stage1 review
+
+Integration02bcd2f6132 imports the independently reviewed shared stress
+getter/restoration59790b545bcc. Default/debug smoke passes1,924 tests each;
+state tests3 per build and debug kill2/stress1000 two pass. Logs and exact
+commands are in build/coordinator-20261029/stress-state-*. These focused
+coordinator runs are not lane-wide actual-worker stress attestations.
+Integration02bcd, QUEUES5576cdbd755 and H3e7cc59743e1 are pushed.
+
+H3 stage1's independent review clears the generator ownership refactor,
+all seven byte-identical generated products and retained negative-control
+evidence. It requires a saved control-runner fix: variant writes precede
+lock acquisition and restoration follows release. Historical quiescent
+runs remain valid, but the replay script must not expose broken live
+source to another gate. The author is fixing that artifact before landing.
+Stages2–4 and runtime domain closure remain separate unfinished work.
+
+ROOTS's provenance fixture is running in the synchronized permission
+context. O1 also exposed a genuine list-to-tuple lifetime bug: the source
+list is cleared before tuple allocation, losing its elements' roots.
+The bounded reorder moves forward from3a into2b. The PyMem assertion is
+being corrected to require its origin on the same killed-list report line
+whether first or supplemental; old-helper failure remains required.
+No O1 adoption or ROOTS landing is claimed.
+
+## 2026-10-29 07:41 PDT: second hourly coordinator update
+
+QUEUES remains frozen at 5cc31bacee1. Full debug kill passes 51,104 tests,
+65,601 collections and zero fallback; 3,764 unpinned words are reported,
+not a suite failure. The explicit 14 ASan inputs expand to 24 test files:
+3,589 tests/90 skips pass in 6m43s with only the established exact overflow
+case excluded. The original unfiltered ASan smoke remains FAIL. Three
+debug subprocess runs pass 371 each. Stress11/probes and landing review
+remain; no queue-runtime landing is claimed.
+
+ROOTS provenance/list-transfer fix 82165f8a2a9 is committed and reconciled
+with integration as 0b13048a633. The list reorder passes ten fresh children;
+the original traps ten of ten. The corrected origin assertion accepts the
+fixed supplemental-origin report and rejects the retained old-helper
+report. Moving the zero-seed return before sorting fails both fixture
+orderings. Merged O1 bounded checks pass: smoke 1,924, affected modules 186,
+plain-kill focused 51, checker 41 files/five negative controls, compiled
+inline audit and stale100 off/kill with 705 collections each and zero
+fallback/unpinned. Actual driver/worker records agree with required
+states. The first full 31-case/11-module iteration is running; its cost and
+remaining 19 iterations precede an O1 adoption decision and final gates.
+
+H3 stage1 code cleared independent review. Its corrected saved runner
+uses copied generators/inputs, verifies copied module paths and hashes in
+actual driver/workers, has a timeout and removes its scratch tree. The
+positive seven tests and all seven deliberately broken variants meet their
+oracles; live Og debug generator tests pass 62. It explicitly handles
+regrtest's platform-reporting auxiliary call. Final commit and integration
+checks follow; stages2–4 remain open. Stage1 is independently landable
+tooling with byte-identical products, not proof of runtime domain closure.
+
+Registry/validator/plan-display stage1 landed as fff4e0e9b08 after coordinator
+review. Seven safety-control groups and actual normalized case inventory
+validation pass; 15 profiles are defined. Review narrowed the ASan filter
+to preserve five passing same-named allocator tests and distinguished the
+raw discovery log from normalized inventory. Execution is not implemented.
+ROOTS will prepare launcher contracts first, then orchestration/gate hook,
+without delaying its runtime qualification. Integration and ROOTS heads
+through fff4/0b130 are pushed; no permission hold remains.
+
+Checkpoint I must bind both C and standard-library sources to frozen
+upstream/fork revisions. Retained baseline 15e96bf639d differs from
+upstream 321925c92c9 only by a worklog, but its configured source path is
+the active fork. This binding must be established before new parity
+measurements; historical records are preserved. Next hour: finish queue
+stress/probes and review, integrate H3 stage1, obtain ROOTS matrix cost,
+and qualify the manifest launcher. Next hourly update about 08:45 PDT.
+
+### 07:45 PDT: H3 generator stage1 merged
+
+Independent rereview of b203defe758 returned LAND_STAGE1: copied sources,
+actual driver/worker path/hash checks, bounded runner, preserved negative
+controls and unchanged live snapshots close the saved-runner finding.
+The verdict is retained in reviews/H3-1-stage1-landing-round2.md. Merge
+6c724c29408 integrates stage1; all seven generated products remain
+unchanged. Detached gate0/affected gate1 on both existing integration
+builds plus regeneration/product equality are now running from
+/tmp/boilgate. No final integration pass is claimed yet.
+
+H3 stage2 begins fixed-number runtime, monitoring, stats and inspection
+consumers. ROOTS retains gc_trace/gc_live/test_gc/C-checker/shared CAPI
+ownership; H3 supplies its bounded scalar fixture as a handoff. Sampler
+transport, renumbering and new operations remain later stages. The roots
+matrix in0b130 and queue validation in5cc are untouched by this merge.

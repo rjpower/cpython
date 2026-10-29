@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -611,7 +611,7 @@
+     # take the numbers below RESUME that no other instruction uses.
+     # Instrumented opcodes are at the end of the valid range
+     min_internal = instmap["RESUME"] + 1
+-    min_instrumented = 256 - len(set(instrumented) | pinned_instrumented.keys())
++    min_instrumented = 256 - len(instrumented)
+ 
+     next_opcode = 1
+ 

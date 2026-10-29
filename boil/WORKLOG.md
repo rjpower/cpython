@@ -2695,3 +2695,43 @@ Planned native landings: QUEUES1, ROOTS2b, H3 runtime stage2; parallel
 implementation continues. ROOTS reviewed H3's disjoint scalar C fixture;
 coordinator grants only that include/function/method-entry block, with GC
 fixtures remaining ROOTS-owned. No O1 adoption or matrix waiver is claimed.
+
+
+### 08:25 PDT: queue rung1 landed; roots cleanup cause confirmed
+
+Independent round3 review cleared6f416bc4582 for owner routing, with its
+historical normal/full-kill/ASan/stress scopes preserved. Merge052d8342e56
+passes detached release/debug smoke1,924 each, queue tests22 each and
+actual-worker-kill22. Regeneration/Clinic leave source unchanged. Evidence
+is build/coordinator-20261029/queue-rung1-*. The first coordinator kill
+launch omitted BOIL_MODE_EVIDENCE and failed before running any tests;
+that harness failure is retained separately. Corrected launch records
+actual worker(2,0). Review: work/reviews/7a-1-landing-round3.md.
+
+ROOTS merged queue integration as cb0b6c21b97 and reconciled the opaque
+queue-body classification to run_queue_ex, leaving its thin wrapper
+precise. Bounded checker/compiled/debug/kill checks pass. Causal traces
+confirm that test_finalize clears the finalizer registry, loses semaphore
+weakref cleanup, then restores a finalizer after tracker shutdown unlinks
+the semaphore. Existing finalizers will run after forkserver stop and
+before tracker stop. Actual-helper regression and old-order/forkserver
+controls precede the settled-source repeated reclamation matrix. No O1
+adoption or matrix waiver is made.
+
+H3 stage2a is frozen at624c75f6455: smoke1,924 per build, affected974 per
+build and strict actual-kill974 pass. Ten worker witnesses and38 process
+root records show808 collections/0fallback/0unpinned. Independent review
+is running; monitoring/stats/inspection remain separate work. Tooling-only
+3dff5879df8 corrects retained launchers to call worker.main(), preserving
+regrtest's cwd and exit timeout. Fresh135-test controls pass on the stated
+H3 draft source; historical records are not relabeled. Coordinator review
+is complete; isolated integration follows before ROOTS final qualification.
+
+The frozen manifest launcher cleared LAND_LAUNCHER_ONLY review. It checks
+fixed launch forms, actual process state and scheduled worker identity;
+source snapshots, full reconciliation, counters, repetition and gate hooks
+remain unimplemented. The queue2 design/probe agent was stopped by an
+automatic cybersecurity classifier; even its read-only handoff failed.
+The only supplied reason was possible cybersecurity risk. No native queue2
+fix was applied; artifacts remain preserved and stopped work is not retried
+through another executor. Other lanes continue. Next hourly report08:45 PDT.

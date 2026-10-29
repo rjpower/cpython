@@ -1,10 +1,11 @@
-# Executable verification profiles: first stage
+# Executable verification profiles
 
-`verify.manifest.json` is the proposed source of named selections,
-conditions, dependencies and exclusions. `verify.py` currently implements
-strict validation and plan display. It does not execute profiles or change
-numeric gates. The coordinator owns integration and promotion of pending
-prerequisites; this tooling draft is uncommitted.
+`verify.manifest.json` defines named selections, conditions, dependencies
+and exclusions. `verify.py` implements strict validation and plan display.
+The separately reviewed launcher executes fixed regrtest forms and records
+actual process state. Profile orchestration and numeric-gate integration
+remain unfinished. The coordinator owns integration and promotion of
+pending prerequisites.
 
 ```
 uv run --no-project --python /usr/bin/python3 -- python boil/tools/verify.py validate --inventory build/manifest-20261029/case-inventory.json
@@ -113,3 +114,83 @@ remain report-only for suites; stale100 has its separate zero oracle.
 Implement this runner only after the coordinator reviews the hook and
 qualifies launch behavior with ignored-environment, changed-state,
 missing-hook, worker-failure and missing-evidence controls.
+
+## Launcher checkpoint (stage 2a, reviewed for landing)
+
+`verify_launch.py` and `verify_worker.sh` implement the fixed driver,
+worker and `-m platform` auxiliary entry forms. This checkpoint adds no
+`run` command or numeric-gate hook. A resolved launch plan binds the
+registry/profile, build and configuration, launcher hashes, selection
+index, supplied source provenance, evidence file and stage. The launcher checks
+exact driver arguments derived from the registry; a full profile cannot
+accept an added test or filter. Build-kind and assertion checks use the
+selected interpreter's actual configuration. Every named verification
+profile requires Python assertions; -O/-OO is rejected for release builds
+too. Native compiler O1 is a separate setting.
+
+Driver and worker witnesses read both true getters before and after
+runpy. A lasting mismatch or missing getter fails; no setter repairs
+state. Module exceptions and nonzero SystemExit propagate. The known
+platform-reporting call has role `auxiliary` and contributes no test
+coverage. Unknown forms emit failure evidence. The adapter preserves
+explicitly allowed interpreter flags before entering the launcher and
+routes unsupported options to a rejection record rather than executing
+an arbitrary module or code option.
+
+The driver instruments regrtest's existing `create_worker_process`
+binding to retain the scheduled PID, exact test/filter list and serialized
+worker-config hash. Worker witnesses carry the corresponding hash and PID.
+This will let the orchestrator reject a missing or substituted worker
+witness, rather than accepting an incomplete set of start/end records.
+Evidence appends use a file lock across driver and worker processes.
+
+The eight launcher host control groups cover state changes, missing/ignored hooks,
+module errors, auxiliary classification, unknown forms, full-profile
+narrowing, changed plan identity and flag placement/code-option rejection.
+These host controls use mocked state where stated. The bounded actual
+CPython qualification below is complete. The next checkpoint must add run
+orchestration, scheduled/witness reconciliation, counter checking and the
+small numeric-gate hook before any named profile can claim execution.
+
+
+The actual launcher controls are retained under
+`build/manifest-20261029/launcher-stage2a/`. `qualification-v3.log` and
+`audit-v3.log` record real off/kill driver+worker pairs, the known platform
+auxiliary, ignored-environment rejection, unknown-module rejection,
+malformed-worker execution failure, an injected lasting stress change,
+and an injected missing getter. The negative mutations occur only in
+control children; production launchers contain no setters. The positives
+run one discovered exact case through a separate control registry and
+preserve `-Werror` and `-P` inside the actual worker. Both positive root
+records contain 57 collections across two processes, without fallback or
+unpinned results. This qualifies the launcher component, not a named full
+suite or stress profile.
+
+The selected binary is existing `build/dev-debug/python`, whose actual
+native version is 02bcd2f6132. Source identity and the scoped source hashes
+are retained in `source-context.json`; H3 stage1 changed tools/tests while
+native products stayed identical. `controls.manifest.json`, its normalized
+inventory, exact resolved plans, worker JSON/config identities and all
+stdout/stderr are retained. Earlier drafts are preserved under v1/v2;
+v1's control driver stopped on its own argv-indexing error, corrected
+before v3. All final safety controls and Ruff pass. No primary build was
+created or reconfigured.
+
+
+Review clarification: source_revision/source_sha256 are supplied provenance
+at this launcher-only checkpoint, explicitly labeled as unverified in each
+witness. Binary/Makefile hashes and actual build-kind checks do not attest
+that the binary was built from that supplied source. Run orchestration must
+validate the complete source snapshot before and after a run, enforce the
+ASan environment, reconcile every scheduled worker and check counters
+before it can report a gate. Repeated module-order profiles may launch the
+whole eleven-module set together, preserving each module in a fresh worker;
+individual-case profiles still require an explicit case index.
+
+Review controls: the repeated-module profile resolves to all eleven module
+arguments with no case filter, while a missing individual-case index fails.
+All fifteen host safety groups pass. The actual release `-O` negative
+control fails before module execution with Py_DEBUG=0 and optimize=1; its
+plan, witness and diagnostic are `release-O.{plan.json,jsonl,log}` in the
+launcher evidence directory. Earlier off/kill and auxiliary controls remain
+applicable; this review change does not repeat unrelated runtime tests.

@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 05:45 PDT after auditing integration d7f3003874f and
+revised 2026-10-29 06:00 PDT after auditing integration d7f3003874f and
 the three active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -77,6 +77,12 @@ landing and hourly during active work. This is the takeover audit as of
 | 6a, 6b: `PyValue` in the core and the value C API | compiler fix at bf6635fd0a4: unlanded, review says fix first (specialization-phase oracle, control provenance, measurements) | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
 | 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H design revised after two revise reviews; no implementation claimed | H1 handler/build rules, H2 root maps after 10a rung 3, H3 clean dispatch inventory; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
+
+Shared validation prerequisite landed independently as `2155f16f45f`:
+`_testinternalcapi.gc_verify_mode()` reads actual collector state.
+Integration's existing release/debug smoke sets passed 1,924 tests each,
+and its mode contract passed on both builds. The queue forwarding fix
+and roots final gates still belong to their unlanded lanes.
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):

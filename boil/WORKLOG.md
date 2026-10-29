@@ -2376,3 +2376,29 @@ integration; this is not a merge between step branches. No queue-runtime
 landing is implied by the getter. The documentation commit 7af7ce89618
 was pushed to the existing integration branch after recovering the user's
 explicit prior authorization to commit and push as needed.
+
+## 2026-10-29 06:00 PDT: shared verifier-state prerequisite integrated
+
+2155f16f45f is the isolated cherry-pick of QUEUES0f8a019b846, five files
+with the read-only getter, test hook, contract test and its record. The
+coordinator read the patch and COMPILER independently reviewed it with
+no blocker: it reads parsed interpreter state, and the isolated-child
+control distinguishes that from the unchanged environment. No queue
+routing change is included. Integration remained frozen at2155f16f45f
+while its existing builds ran gate0 and the focused gate1: release
+1,924 tests/50 skips in44.9s; debug1,924 tests/20 skips in2m58s;
+mode test1/1 on each, including the debug kill/extra combinations.
+Logs and exact start/head record: build/coordinator-20261029/shared-hook-*.
+Source-lane unbuilt-module syntax checks also passed. No full root-safety
+suite is claimed for this test accessor; ROOTS will use it in its final
+verification gates.
+
+ROOTS's prior checkpoint atf8baf84affb passed default/debug/tailcall
+smoke sets (1,924 each) and checker/walk targets (29 each); ASan's only
+failure remains the recorded test_buffer_overflow. It is preserving Og
+flags and qualifying O1 in its existing debug build before the final
+suites. COMPILER's guard-removal phase controls now fail exactly in the
+two dict and six MRO cases; current code passes the new phase oracle.
+Unexplained benchmark rows remain owned by checkpointI, and the existing
+box metric's kernel/micro coverage is stated explicitly rather than
+silently expanded to memory workloads.

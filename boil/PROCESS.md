@@ -44,6 +44,13 @@ record and is updated at every landing.
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target is no kernel-geomean slowdown and explained individual regressions; it is not established by the existing microbenchmark instruction gains |
 
+Shared prerequisite `2155f16f45f` is integrated and independently checked:
+actual verifier state is exposed through a test accessor. Default/debug
+smoke sets and the mode contract passed on integration. This does not
+land queue routing or root-lifetime changes. At the roots lane's next
+quiescent point it is qualifying O1 debug using the controls in section 3;
+no O1 result or adoption is claimed yet.
+
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
 tool, fix with a span and a directive); per-rung instruction deltas of 1

@@ -743,3 +743,67 @@ test_peepholer, test_grammar, test_generators, test_coroutines,
 test_generated_cases, test_ir, test_opcache, test_descr and test_class.
 Final guarded checks and the shared verification-state prerequisite
 merge are recorded in the following fixup entry.
+
+
+### Final guarded fixup checks
+
+Fixup `229abc18a1b` contains the phase tests, C fixture, corrected record
+and retained experiments. Merge `45a789ac036` then brings in integration
+`2155f16f45f`: the read-only active-mode getter, its test, shared gate
+support and documentation. No queue implementation was imported. The
+getter changes `_testinternalcapi.c`'s whole-file hash after the control
+runs; the specialization fixture itself is unchanged. The two other
+imported test changes since `1bf1f941c88` only remove stale documentation
+references (`test_shapes` and free-threaded `test_monitoring`).
+
+All following lines are at **45a789ac036**, on 2026-10-29. The final
+record/script/evidence commit changes no tested C or test-module content.
+`controls/compiler-copyprop-1/final-provenance.json` identifies every
+relevant source, actual interpreter binary and asserted-worker script by
+SHA256, with the existing GCC default `-O3` and debug `-Og` configurations.
+
+| Check | Result |
+|---|---|
+| Gate 1, all 16 targeted modules, default | passed, 1,783 tests, 13 skipped, 11.8 seconds |
+| Gate 1, all 16 targeted modules, debug | passed, 1,783 tests, 13 skipped, 46.5 seconds |
+| Focused new/compiler metadata and active-mode contract, both builds | passed, 26 selected tests each; not a full-module run |
+| Debug `PYTHON_GCVERIFY=kill`, CopyPropagationAcrossCodeTests | passed, 20 tests, 2.8 seconds, actual worker `(2, 0)` |
+| Asserted kill launcher's isolated negative control | failed before any test, actual `(0, 0)` versus expected `(2, 0)` |
+| `make regen-cases clinic`, default build lock | status and content unchanged |
+| `check_unbuilt.sh build/debug`, debug build lock | passed every supported family; existing no-header omissions explicitly reported |
+
+The kill command uses gate 1 with `--python` pointing to the debug
+interpreter plus the retained `assert-kill-worker.py`, `GATE_JOBS=1`,
+`test_peepholer -m '*CopyPropagationAcrossCodeTests*' -W`. The launcher
+reads `_testinternalcapi.gc_verify_mode()` before running the worker and
+requires `(2, 0)`. `kill-workers.jsonl` retains that event, executable,
+`ignore_environment=0` and `isolated=0`. Adding `-I` to the same worker
+command is the negative control: it retains the kill environment but
+the state assertion fails at `(0, 0)` before tests. This closes the
+forwarding-proof gap for this run; it is not a claim about test children
+outside this selected class. Logs for both outcomes are retained beside
+the launcher.
+
+The regeneration proof also byte-compares 13 production compiler,
+specializer, generator, handler and metadata files against
+`1bf1f941c88`, and normalizes only the declared comment in
+`regcfg_passes.c` to prove its executable source identical. The only
+additional core C function is integration's read-only verifier-state
+accessor, independently reviewed and tested. No full suite, full kill
+suite, ASan suite, stress suite or current-head performance timing was
+rerun by this fixup; the coordinator's merged integration ladder is the
+next boundary. Earlier full-suite lines retain their original revision,
+and outstanding 10a buffer/root proofs remain outstanding.
+
+| Landing blocker | Disposition |
+|---|---|
+| 1: receiver assertions do not prove no-Python phase | `229abc18a1b`: forced C phase fixture and eight paths; independent guard controls fail the invariant; omitted getattribute semantic path added |
+| 2: invalid guard-free provenance and vague Gate 1 record | `229abc18a1b`: invalid control withdrawn; exact patches/source identities/failing event records retained; this final entry names tested revision and results, and explains historical gate survival |
+| 3: incorrect comparisons and missing counters | `229abc18a1b`: comparisons corrected; paired 94-row allocations/boxes and every changed counter retained; remaining attribution and memory metric scope explicitly assigned to checkpoint I by coordinator ruling |
+
+The reusable Py_STATS build is rebuilt to the guarded final sources
+after the experiment; retained JSON remains labelled with its actual
+experiment source variant. No guard-removal source or before-equivalent
+compiler is left in the checkout. Task-owned scratch scripts are removed
+after this record is committed; logs, exact patches and counter artifacts
+needed to review the result stay in the tree.

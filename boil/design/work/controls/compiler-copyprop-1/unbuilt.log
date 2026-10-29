@@ -1,0 +1,20 @@
+ok   Modules/_decimal/_decimal.c
+ok   Modules/_decimal/_decimal.c -DEXTRA_FUNCTIONALITY
+ok   Modules/_ssl.c
+ok   Modules/_hashopenssl.c
+ok   Modules/_sqlite/blob.c
+ok   Modules/_sqlite/connection.c
+ok   Modules/_sqlite/cursor.c
+ok   Modules/_sqlite/microprotocols.c
+ok   Modules/_sqlite/module.c
+ok   Modules/_sqlite/prepare_protocol.c
+ok   Modules/_sqlite/row.c
+ok   Modules/_sqlite/statement.c
+ok   Modules/_sqlite/util.c
+ok   Modules/_bz2module.c
+ok   Modules/_zstd/_zstdmodule.c
+ok   Modules/_zstd/compressor.c
+ok   Modules/_zstd/decompressor.c
+ok   Modules/_zstd/zstddict.c
+ok   Modules/_uuidmodule.c
+not checked: _tkinter, _dbm, _gdbm, readline (no headers)

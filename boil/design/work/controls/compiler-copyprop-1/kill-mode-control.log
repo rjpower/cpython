@@ -1,0 +1,17 @@
+Using random seed: 4146562670
+0:00:00 load avg: 3.35 mem:   46.7 MiB Run 1 test in parallel using 1 worker process (timeout: 10 min, worker timeout: 15 min)
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/compiler-copyprop-1/assert-kill-worker.py", line 11, in <module>
+    assert actual == (2, 0), ("active verifier", actual, "expected", (2, 0))
+           ^^^^^^^^^^^^^^^^
+AssertionError: ('active verifier', (0, 0), 'expected', (2, 0))
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_peepholer
+
+Total duration: 316 ms
+Total tests: run=0 (filtered)
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

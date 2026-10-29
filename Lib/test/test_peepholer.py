@@ -1495,11 +1495,96 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
             return x.missing
         check("__getattr__", {"__getattr__": lambda self, name: "orig"},
               lambda C: C(), f_hook, types.SimpleNamespace(missing="other"))
+        check("__getattribute__",
+              {"__getattribute__": lambda self, name: "orig"},
+              lambda C: C(), f_attr, types.SimpleNamespace(a="other"))
         def f_subscript(o):
             x = o
             return x[0]
         check("__getitem__", {"__getitem__": lambda self, i: "orig"},
               lambda C: C(), f_subscript, ["other"])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_specialization_phase_runs_no_code(self):
+        # The C fixture calls a specializer directly, never its generic
+        # operation. Every comparison records the phase and native-call word
+        # at the event; a later generic lookup is a separate positive witness.
+        probe = _testinternalcapi.specialize_current_instruction
+        def load(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o.a
+        def missing(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o.missing
+        def store(o, offset):
+            phase = "specialize"
+            probe(offset, o, "stored")
+            phase = "execute"
+            o.a = "stored"
+        def subscript(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o[0]
+
+        cases = (
+            ("dict_load", "a", {}, load, "LOAD_ATTR", "dict", "orig"),
+            ("dict_store", "a", {}, store, "STORE_ATTR", "dict", None),
+            ("class_attr", "a", {"a": "orig"}, load,
+             "LOAD_ATTR", "class", "orig"),
+            ("instance_attr", "a", {"a": "orig"}, load,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getattr", "__getattr__",
+             {"__getattr__": lambda self, name: "orig"}, missing,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getattribute", "__getattribute__",
+             {"__getattribute__": lambda self, name: "orig"}, load,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getitem", "__getitem__", {"__getitem__": lambda self, i: "orig"},
+             subscript, "BINARY_OP", "instance", "orig"),
+            ("mro_store", "a", {}, store, "STORE_ATTR", "instance", None),
+        )
+        for label, target, namespace, f, opname, kind, expected in cases:
+            with self.subTest(label=label):
+                events = []
+                class Key(str):
+                    def __hash__(self):
+                        return hash(target)
+                    def __eq__(self, name):
+                        caller = sys._getframe(1)
+                        if name == target and caller.f_code is f.__code__:
+                            events.append((caller.f_locals["phase"],
+                                           caller.f_lasti))
+                        return False
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    C = type("C", (), namespace if kind == "dict" else
+                             {Key("collision"): 0, **namespace})
+                owner = C if kind == "class" else C()
+                if kind == "dict":
+                    owner.__dict__[Key("collision")] = 0
+                    owner.a = "orig"
+                offset = next(i.offset for i in dis.get_instructions(f)
+                              if i.opname == opname)
+                # Each forced attempt starts with an invalidated type cache.
+                # Separate code objects avoid feedback left by another case.
+                f = types.FunctionType(f.__code__.replace(), f.__globals__,
+                                       f.__name__, closure=f.__closure__)
+                for version in range(3):
+                    C.version = version
+                    events.clear()
+                    result = f(owner, offset)
+                    self.assertEqual([phase for phase, _ in events
+                                      if phase == "specialize"], [], events)
+                    self.assertTrue(events, (label, "generic lookup not reached"))
+                    self.assertTrue(all(word == offset for _, word in events), events)
+                    self.assertEqual(result, expected)
+                    if opname == "STORE_ATTR":
+                        self.assertEqual(owner.a, "stored")
 
     def test_folded_operand_outlives_rebinding(self):
         # The reader's own callee rebinds the folded local and collects;

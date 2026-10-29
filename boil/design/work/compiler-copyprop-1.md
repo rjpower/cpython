@@ -1,6 +1,6 @@
 # compiler-copyprop rung 1: a pending load does not survive an op that runs code
 
-Status: design, revised after review round 1, 2026-10-28. Branch
+Status: implemented; landing-review fixups recorded below, 2026-10-29. Branch
 `boil/compiler-copyprop`, from integration 41c716c5947. Owner: the
 compiler-fix agent. Inputs: review 2 §5.1 (`boil/ARCHITECTURE_REVIEW_2.md`)
 and the PROCESS.md 0.1 and 0.3 rows.
@@ -98,15 +98,13 @@ contract is enforced as follows:
   str, before the lookup, as the module and global specializers already
   do (`dk_kind != DICT_KEYS_UNICODE`). This is its own commit, approved by
   the coordinator.
-- The audit of the other specializers found that their lookups of an
-  exact-str name in a type's MRO go through the type cache. On a miss,
-  `find_name_in_mro()` compares keys, and a class namespace given to
-  `type()` or a metaclass may hold a colliding str-subclass key (CPython
-  warns and allows it). Two probes did not reach that path from a
-  specializer: an instance attribute under `__getattribute__`,
-  `__getattr__` and the attribute's own name, 300 calls each; and a class
-  attribute after evicting the type cache, 60 calls. The path is reported
-  to the coordinator and not changed here.
+- MRO lookups also require the pre-lookup `type_lookup_runs_no_code()`
+  guard. A cache miss compares class-namespace keys, including allowed
+  str subclasses whose `__eq__` runs Python. The original pressure-based
+  probes missed this path; invalidating the class version before each
+  attempt reaches it. The guard precedes every specialization lookup,
+  including statistics-only lookups. The forced-phase test below proves
+  the listed load/store/subscript paths, not every possible native path.
 - The checker that enforces the contract, by classifying the callees of
   the `_Py_Specialize_*` functions, is a PROCESS.md 0.3 row owned by 10a
   tooling, which the coordinator added.
@@ -211,7 +209,11 @@ Each semantic test records evidence at the event. Each function returns
 two things: the reader's result, computed from the operand the reader
 used, and x after the line, which shows that the rebinding happened.
 Where a callback rebinds x, the test also records that the callback ran
-in the target frame. Every test runs 100 times, past specialisation.
+in the target frame. The ordinary rebinding cases run 100 times, past
+specialisation. Trace and monitoring cases run once with their hooks
+installed to isolate event delivery; the heap-operand case runs 20 times.
+The forced-phase fixture runs three attempts per path, independently of
+adaptive counters; its separate receiver regressions run 300 calls.
 
 In `test_peepholer.py`, class `CopyPropagationAcrossCodeTests`:
 
@@ -240,7 +242,8 @@ In `test_peepholer.py`, class `CopyPropagationAcrossCodeTests`:
     rebinds x, collects and returns `NotImplemented`, and `O.__radd__`
     records the original operand's tag. It passes today through
     conservative retention, and runs under `PYTHON_GCVERIFY=kill` on the
-    debug build. It is the oracle for the 10a rung 3 row: "a reader's
+    debug build. It is a semantic regression, not the missing-root oracle
+    for the 10a rung 3 row: "a reader's
     folded operand needs an anchor across the reader's own collecting
     calls".
 11. Disassembly through `Instruction.srcs`. The folds that stay:
@@ -401,7 +404,11 @@ failed gate 2 on one test, test_ir's fold test, which 1bf1f941c88 fixes.
 The 19 copy-propagation tests also passed under `PYTHON_GCVERIFY=kill` on
 the debug build at 1bf1f941c88.
 
-Gate 1 ran before each code commit on the targeted set: test_compile,
+The historical record claimed Gate 1 before each code commit, but did
+not retain per-commit source/build identities or counts; that claim is
+not treated as reconstructed evidence. The takeover reruns the entire
+targeted set against the final tests, with source hashes and counts
+below. The historical targeted set was: test_compile,
 test_compiler_codegen, test_dis, test_sys_settrace, test_sys_setprofile,
 test_frame, test_scope, test_peepholer, test_grammar, test_generators,
 test_coroutines and test_generated_cases; test_ir from 1bf1f941c88. The specializer commits also ran
@@ -415,7 +422,12 @@ on the debug build at 9b9bacc24fe, and all passed.
 
 ### Negative controls
 
-Each control's failing output is in the session logs, condensed here.
+The following is the historical narrative, not a substitute for retained
+source provenance. Its dict-guard revision was invalid: `1f0f58d9f53` is
+a child of `ecaa09f9267` and already contains the guard. No removal patch
+was retained, so that old dict control is withdrawn. The takeover
+controls below supersede both guard controls with exact source hashes,
+patches and final-test failures.
 
 - **The pass without the kill** (a local edit, `runs_code = 0`, never
   committed). This is equal to 41c716c5947's pass, and was also run on the
@@ -426,8 +438,9 @@ Each control's failing output is in the session logs, condensed here.
 - **A kill at every op** (a local edit). The four preserved-fold tests
   fail: `3 != 0`, `1 != 0`, `2 != 0`, `3 != 0`. So does test 10's fold
   assertion.
-- **Without the dict-hint guard** (the tree at 1f0f58d9f53 before
-  ecaa09f9267, built). Test 9 fails: `{'other'}` appears among the
+- **Withdrawn dict-hint control provenance** (reported as
+  1f0f58d9f53 before ecaa09f9267, which Git disproves). The old account
+  reported that test 9 fails: `{'other'}` appears among the
   results. The store probe left 6 of 300 receivers unstored and
   overwrote `other.a`.
 - **Without the MRO guards** (the tree at ecaa09f9267, built). Test 9b
@@ -473,8 +486,10 @@ pass's own record of what it rejected.
 **Instructions (gate 4).** 
 
 `compare.py copyprop-base.json copyprop.json 6d.json`.
-6d equals the base to within 0.4% on every instruction row, so the
-deltas against 6d are the same as those against the base.
+The paired base is authoritative for these deltas. Most 6d rows are
+within 0.4% of it, but `getattr_property_float` differs by +1.0452% and
+`attr_load_poly5` by +0.7135%; comparisons against 6d are not identical
+to comparisons against the base.
 
 | group | geomean, head / base |
 |---|---|
@@ -498,29 +513,38 @@ deepcopy) is attributed to the Lib count above.
 | spectral_norm | +0.9% | 18 -> 22 | LOAD_GLOBAL +2, BINARY_OP +2 |
 | nqueens | +0.8% | 19 -> 26 | BINARY_OP +5, UNARY_NEGATIVE +2 |
 | regex_compile | +0.8% | 22 -> 25 | LOAD_GLOBAL +3; the rest is in `re` |
+| deepcopy | +0.6044% | Lib workload | unresolved; the static fold census covers `copy` but is not a causal attribution |
+| comprehensions | +0.3081% | not recorded per file | unresolved |
+| pickle | -0.3843% | not recorded per file | unresolved |
 | deepcopy_memo | +0.8% | 16 -> 17 | LOAD_ATTR +1; the rest is in `copy` |
 | xml_etree_generate | +0.4% | 71 -> 75 | LOAD_ATTR +2, LOAD_GLOBAL +2 |
 | raytrace | +0.3% | 49 -> 64 | LOAD_ATTR +7, LOAD_GLOBAL +4, BINARY_OP +4 |
 
-The others are within 0.3%. nbody's hot loop is arithmetic on locals,
+The remaining kernels are within 0.3%. nbody's hot loop is arithmetic on locals,
 `dx * dx + dy * dy + dz * dz`. BINARY_OP's family shares one format, and
 its generic member may run Python code (an `__add__`), so each operand
 pending across a BINARY_OP is now its own load.
 
 Micro: class_attr_store +2.8%. `K.v = i` now loads `i` before the
 LOAD_GLOBAL of `K` (one more word per iteration, the `x + G` lost fold).
-getattr_property +0.8% and getattr_property_float +1.0%: the words of
-`run` and of the getter are the same on both builds, and 6d differs from
-the base by +1.0% on the float twin, so this is the benchmark's run-to-run
-spread, not this change. All other micro rows are within 0.2%.
+getattr_property +0.7777% and getattr_property_float +1.0457%: the words
+of `run` and of the getter are the same on both builds. The float twin
+already differs by +1.0452% between 6d and the paired base, supporting
+pre-existing variation in that row. It does not establish the cause of
+the separate integer-property increase; that attribution remains open.
+All other micro rows are within 0.2%.
 
 RSS: the kernel geomean is 0.993. coroutines' 0.797 is a single row in
 peak RSS with its instruction count unchanged; it is not attributed. On
 memory, the head equals 6d on every row (startup +2.1%, tuples_10m +5.0%,
-instances_1m +8.7% against the base run), so the difference is in the
-base worktree's run and not this change.
+instances_1m +8.7% against the base run). That agreement suggests a
+base-run difference but does not identify its cause; those RSS deltas
+and coroutines remain unresolved.
 
-Not tuned: the deltas are the cost of the rule, recorded as lost folds.
+Not tuned. Reintroduced loads explain the rule's structural cost; the
+individual rows above are causal attributions only where evidence is
+given. Unexplained instruction and RSS changes retain an owner in the
+landing-review response below.
 
 ### Hazards found, and how each was traced
 
@@ -560,8 +584,9 @@ Not tuned: the deltas are the cost of the rule, recorded as lost folds.
 | 6 globals | other mapping protocols of globals, such as `__missing__` |
 | 7 settrace | a missing trace event other than the ones asserted (the call of `change`, the line of `attr`) |
 | 8 monitoring | events other than CALL, PY_START and LINE; the instrumented-twin clause, which no expression reaches today (test 13 covers it) |
-| 9 dict hint | specializer paths other than LOAD_ATTR and STORE_ATTR on an instance dict; it cannot show that the comparison happened in the specializer rather than the generic lookup |
-| 9b MRO | type lookups from specializer paths not listed (none known); a miss produced other than by a version change |
+| 9 dict hint | specializer paths other than LOAD_ATTR and STORE_ATTR on an instance dict; the receiver assertion alone does not distinguish phases (the forced-phase test supplies that proof) |
+| 9b MRO | class-construction, native `__setitem__` and statistics-only failure lookup paths; a miss produced other than by a version change |
+| forced specialization phase | an incorrectly selected runtime adaptive threshold; automatic redispatch; class-construction and statistics-only lookup paths; checker enforcement of other native callees |
 | 10 heap operand | a missing reader anchor, because self and opaque C frames keep the operand alive; that is the 10a row's oracle |
 | 11 disassembly | runtime operand selection; folds in other shapes |
 | 12 synthetic | a native callee misclassified in `call_effects.py`, a return or yield member, a macro that hides a call |
@@ -584,3 +609,137 @@ behaviour would assert the break itself, and this rung leaves that to the
 | `type_lookup_runs_no_code()` repeats `mro_dicts_unicode()` | coordinator or this agent, after 10a lands | typeobject.c exports the function and the copy in specialize.c goes |
 | `INSTRUMENTED_JUMP` hides an escaping call, so the instrumented jumps' `HAS_ESCAPES_FLAG` is wrong | the cases generator, at step 8 | tier 0 reads correct flags |
 | Gate tooling: a killed gate.sh can leave gate_run.sh's process group running | coordinator | gate.sh's cleanup kills the group on every signal path |
+
+
+## Landing review response, 2026-10-29 takeover
+
+The review of `bf6635fd0a4` returned **fix first**. The three findings
+are addressed together; no compiler or specializer semantic change is
+made by this fixup. Integration `7af7ce89618` was merged at `ce7a0a9856b`
+before edits. Sources remained quiescent during each build, test and
+measurement. All controls below are local source variants, never commits.
+
+### 1. A phase-specific oracle
+
+`_testinternalcapi.specialize_current_instruction(offset, owner, operand)`
+validates a word of the calling Python frame and directly invokes its
+LOAD_ATTR, STORE_ATTR or BINARY_OP specializer. It never performs the
+generic lookup. The test marks only that C call as `specialize`, then
+marks the subsequent expression `execute`. At each colliding-key
+comparison it records the phase and the caller's actual word. The
+fixture forces an attempt without relying on adaptive thresholds; a
+class-version change forces a cache miss before each of three attempts.
+The generic-phase comparison is a separate positive witness.
+
+The existing receiver-selection regressions remain. The semantic MRO
+test now also covers `__getattribute__`, the fifth path claimed by the
+old probe. The phase oracle adds dict load/store, class/instance load,
+`__getattr__`, `__getattribute__`, `__getitem__`, and MRO store. Each case
+uses its own executing code/feedback copy.
+
+### 2. Reconstructed controls and provenance
+
+Retained evidence is in `controls/compiler-copyprop-1/`:
+
+- `dict.patch` removes exactly the instance-dict key-kind guard. The
+  final phase test fails twice: dict load reports
+  `[('specialize', 8), ('execute', 11)]`; store reports
+  `[('specialize', 8), ('execute', 12)]`. Both fail the invariant
+  `['specialize'] != []`, independently of receiver-result assertions.
+- `mro.patch` bypasses only the MRO guard helper. The other six cases
+  each fail that same invariant with `[('specialize', 8)]`: class load,
+  instance load, getattr, getattribute, getitem, MRO store.
+- `dict-failure.log` and `mro-failure.log` retain the actual assertions,
+  subtest names and event words. Word 8 is the fixture CALL; the generic
+  attribute/store words are 11/12. The command is gate 1 on
+  `test_peepholer -m '*test_specialization_phase_runs_no_code' -W`,
+  `GATE_JOBS=1`, on `build/default`. Each variant is rebuilt under that
+  build's gate lock before testing. Regrtest `-q` suppresses `-v`; two
+  attempts with unsupported `--output-on-failure` and the earlier
+  summary-only failures are not the retained assertion evidence.
+- `sources.json` records full base commit, final test/fixture/generator/
+  metadata SHA256, each production-source hash, each exact patch hash,
+  and the Py_STATS configuration. Its `restore` record proves the
+  guarded files were restored after both controls and the measurement.
+  The final fixup contains those same test and fixture contents.
+
+The historical dict-control revision was invalid and is withdrawn above.
+The old per-commit Gate 1 claim cannot be recovered from its narrative;
+fresh targeted runs below replace that claim rather than invent counts.
+
+These controls do not prove constructor `__init__`, STORE_SUBSCR
+`__setitem__`, statistics-only failure lookups, every module/global
+guard, or arbitrary callees' effects. The checker enforcement remains
+10a tooling's explicit hand-off. The allocation-time buffer-release
+exception and folded-reader missing-root oracle remain 10a rung 3 work;
+the pass comment now names the release exception.
+
+### 3. Measurements and disposition of uncertainty
+
+The original instruction/RSS files remain measurements of their named
+builds, not new timings of this fixup. The table above now includes
+deepcopy +0.6044%, comprehensions +0.3081%, pickle -0.3843%, and both
+6d/base exceptions. The integer-property increase is not explained by
+the float-property variation. Coroutines RSS and the memory/base RSS
+differences remain unattributed.
+
+New allocation and box evidence:
+`results/copyprop-review-head-pystats.json` and
+`results/copyprop-review-before-equivalent-pystats.json` (under
+`boil/bench/`). Both use the same repository-managed GCC release
+`build/pystats`, configured `--enable-pystats CC=gcc`, and the unchanged
+benchmark runner, hash seed 0, its standard loop counts and differenced
+counter protocol. The before-equivalent source variant replaces exactly
+`Python/regcfg_passes.c` and `Python/specialize.c` with their
+`41c716c5947` contents. It is **not a pristine baseline checkout**:
+the final metadata flags remain present but its old pass does not read
+them; the test-only fixture and final tests remain present. The exact
+variant is `baseline.patch` plus its `sources.json` hashes. Each result
+file identifies this controlled comparison explicitly; its ordinary
+Git/version metadata alone does not identify the source variant.
+
+| Counter | Head versus before-equivalent, 94 rows |
+|---|---|
+| Total boxes | exactly equal in 92; logging_format 20 -> 20.044 per loop; logging_simple 20.037 -> 20 |
+| Allocations | exactly equal in 92; logging_format 330.001 -> 330.133 per loop; logging_simple 310.112 -> 310.001 |
+| Dispatches | 22 rows change; class_attr_store gains exactly 1 per iteration; nbody gains 1,700,040 per loop |
+
+`controls/compiler-copyprop-1/counter-comparison.json` retains every
+changed row and exact values. The dispatch increases agree with
+reintroduced loads. The small logging counter differences remain
+unattributed, without a claim that they are caused by this patch.
+
+Coordinator disposition: correctness landing may proceed with these
+bounded attribution gaps. The coordinator owns their investigation at
+**checkpoint I**, through handler/runtime work H/7, including deepcopy,
+comprehensions, pickle, the integer-property row, both logging counter
+rows, coroutines and memory RSS. They are not waived by a future JIT.
+The 94-row box metric covers 29 kernels and 65 microbenchmarks. The
+runner excludes memory from that metric; the coordinator explicitly
+keeps memory allocation/pause evidence at checkpoint I, without an
+unreviewed runner extension or a claim that it was measured here.
+
+### Gate survival and final affected checks
+
+The full-suite lines at `1bf1f941c88` remain historical lines at that
+revision. `12f407b23a9` merged integration `b57cb04c024`; subsequent
+`ce7a0a9856b` merged `7af7ce89618`. Neither changed production compiler,
+specializer, handler bodies or handler metadata relative to `1bf1f941c88`.
+The takeover changes only a test C fixture, tests, a comment and this
+record/evidence. Under PROCESS section 3's rerun rule, the coordinator
+ruled that affected targeted modules on both builds, asserted debug-kill
+regressions, regeneration and unbuilt checks are required; the merged
+integration ladder follows at landing. No old full suite is labelled a
+current-head run. This does not close 10a's outstanding root proofs or
+extend the historical full-suite verification modes.
+
+Initial affected checks at `ce7a0a9856b` plus the test/fixture/comment
+hashes in `sources.json`, before controls: gate 0 default passed 1,924
+tests (50 skipped), gate 0 debug passed 1,924 (20 skipped), and gate 1
+default passed 1,783 tests (13 skipped) over 16 targeted modules. The
+targeted set is test_compile, test_compiler_codegen, test_dis,
+test_sys_settrace, test_sys_setprofile, test_frame, test_scope,
+test_peepholer, test_grammar, test_generators, test_coroutines,
+test_generated_cases, test_ir, test_opcache, test_descr and test_class.
+Final guarded checks and the shared verification-state prerequisite
+merge are recorded in the following fixup entry.

@@ -1,0 +1,59 @@
+{
+  "dict": {
+    "mode": "dict",
+    "head": "ce7a0a9856be23992ea3bb6966ff6abe46830bb0",
+    "sha256": {
+      "Python/specialize.c": "5fd1d276e764bdc44788cea384913d9f1f6b1c46637e2a2e219fb93d7b858846",
+      "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+      "Modules/_testinternalcapi.c": "968bed25f6a940bcd581b98a55af8868e44905a2a2305a4eff6d4c23161a725c",
+      "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+      "Tools/cases_generator/ir_generator.py": "6ac456f9d18db57764afae88793893999493f113c6e4c8888ddc66ace4fffe90",
+      "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53"
+    },
+    "patch_sha256": "4e6eabbc9d3a81f4ef25f0acb33c499e65f8abd3cfbf346fd16f7b9dc6f9ef23"
+  },
+  "mro": {
+    "mode": "mro",
+    "head": "ce7a0a9856be23992ea3bb6966ff6abe46830bb0",
+    "sha256": {
+      "Python/specialize.c": "350548ae969d0249f6b7738b6113fec1ffe68d732a14eb34c9e1888a68a4d4d6",
+      "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+      "Modules/_testinternalcapi.c": "968bed25f6a940bcd581b98a55af8868e44905a2a2305a4eff6d4c23161a725c",
+      "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+      "Tools/cases_generator/ir_generator.py": "6ac456f9d18db57764afae88793893999493f113c6e4c8888ddc66ace4fffe90",
+      "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53"
+    },
+    "patch_sha256": "3fd2fa0aa3879404fe4409f752d3b3b3f9c34801e5d868e96a5aa62335c337cc"
+  },
+  "baseline": {
+    "mode": "baseline",
+    "head": "ce7a0a9856be23992ea3bb6966ff6abe46830bb0",
+    "sha256": {
+      "Python/specialize.c": "63410403c42a8fbcfe1e7feb635e61287a16c4723c52b01d950fbe678328febe",
+      "Python/regcfg_passes.c": "fbd42fed33fa0fa07bfb5036b17e593e050414246b9ffa168bc0d99914f4878d",
+      "Modules/_testinternalcapi.c": "968bed25f6a940bcd581b98a55af8868e44905a2a2305a4eff6d4c23161a725c",
+      "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+      "Tools/cases_generator/ir_generator.py": "6ac456f9d18db57764afae88793893999493f113c6e4c8888ddc66ace4fffe90",
+      "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53"
+    },
+    "patch_sha256": "bd1a7b947c46e83445cc3cce278401ad93888250ba978ba5b029dbdb9211c270"
+  },
+  "restore": {
+    "mode": "restore",
+    "head": "ce7a0a9856be23992ea3bb6966ff6abe46830bb0",
+    "sha256": {
+      "Python/specialize.c": "fd026a0fb318323b5c68707a302e0b22042e0de0afa2b8d76e6b131bd48a4832",
+      "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+      "Modules/_testinternalcapi.c": "968bed25f6a940bcd581b98a55af8868e44905a2a2305a4eff6d4c23161a725c",
+      "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+      "Tools/cases_generator/ir_generator.py": "6ac456f9d18db57764afae88793893999493f113c6e4c8888ddc66ace4fffe90",
+      "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53"
+    }
+  },
+  "configuration": [
+    "CC=\t\tgcc",
+    "OPT=\t\t-DNDEBUG -g -O3 -Wall",
+    "PY_CFLAGS=\t$(BASECFLAGS) $(OPT) $(CONFIGURE_CFLAGS) $(CFLAGS) $(EXTRA_CFLAGS)",
+    "CONFIG_ARGS=\t '--enable-pystats' 'CC=gcc'"
+  ]
+}

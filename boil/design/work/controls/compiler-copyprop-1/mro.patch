@@ -1,0 +1,10 @@
+--- a/Python/specialize.c
++++ b/Python/specialize.c
+@@ -792,6 +792,7 @@
+ static int
+ type_lookup_runs_no_code(PyTypeObject *type)
+ {
++    return 1; /* Negative control: bypass the MRO guard. */
+     PyObject *mro = type->tp_mro;
+     if (mro == NULL) {
+         return 0;

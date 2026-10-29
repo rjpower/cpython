@@ -162,7 +162,9 @@ _PyRegPass_SwapRename(_PyRegCfg *cfg)
  * (Tools/cases_generator/ir_generator.py, runs_code()).  The collector
  * runs finalizers and callbacks only at such ops, at the eval breaker or
  * in an explicit collection; a collection that an allocation starts runs
- * none.  The load may sit under constants, other locals, cells and the
+ * none, apart from the recorded Py_buffer-release defect owned by 10a
+ * rung 3 (boil/PROCESS.md section 0.3).  The load may sit under constants,
+ * other locals, cells and the
  * like.  The reader itself may run code: every field a fold can name is
  * read before any.  A load also keeps its op if the line changes before
  * its reader, so that line events, and the stack that f_lineno assignment

@@ -2810,3 +2810,46 @@ cleanup controls now pass off/kill; three inherited asyncgen warnings in
 the whole-module log remain visible and are not filtered. H3's next design
 splits names/inspection, monitoring, statistics and remaining widths into
 separate checkpoints, with first-scope independent review now starting.
+
+
+### 08:44 PDT: hourly coordinator checkpoint
+
+Landed runtime remains queue1 merge052d8342e56, with detached integration
+checks complete. Shared launcher2db451b1b65, worker setup093b9d2a1c3 and
+pre-I ownership corrections eeb96dfc543 are integrated/pushed. No new
+native change in primary is claimed. H3 stage2a624c75f6455 cleared bounded
+landing review; integration follows ROOTS2b. Its next design d387aca48a9
+cleared IMPLEMENT_2B1 and names/inspection/NOFB implementation is building.
+ROOTS/coordinator approved only the exact additional get_ir selector hunk.
+Later monitoring, raw statistics, widths, transport and renumbering remain.
+
+ROOTS sourcef1f93c6f0e2 includes cleanup172b and shared tooling. Current O1
+checks pass: source41/0, five negative controls, compiled audit, stale100
+off/kill705collections each/0fallback/0unpinned, affected216/3skips and
+focused-kill52/1skip. The restored shared-heap regression passes stress
+and kill+stress;20 separate stress selections per build are still running.
+Final repeated31-case/whole11-module qualification has not begun; the
+source skip must close before freezing its expected count/skip contract.
+
+The109.008s timing run has439 interpreter records across367physical PIDs,
+not439physical processes. Its3,007unpinned hits occupy73 nonzero rows
+across17PIDs:2,984 non-main-interpreter hits and23 main-interpreter hits,
+including the deliberate counter fixture. The scan/swap/dump functions
+match the earlier0b source. Existing detached-main-state attribution stays
+with3c; no zero-unpinned suite claim or new exception is introduced.
+Eight real-evidence replay corruptions are rejected: missing scheduled
+worker/result/end, positive narrowed count, changed config, absent counters,
+fallback and skipped protected selector. This is replay evidence; final
+contracts use current discovery and protect the restored B case as well.
+
+The manifest run/gate-hook design now explicitly separates selected build
+source (/tmp/boilgate for integration), active primary tools, actual Lib
+module origins and build receipts. Snapshot hashes alone do not prove
+compiled-binary provenance. No run/hook implementation is claimed.
+
+Next hour: finish source-skip closure and final matrix contract/controls,
+start settled release/debug qualification, reach H3's first bounded runtime
+checkpoint, and review the manifest source/build prerequisite. Debug O1
+remains qualification work, not adopted policy. Queue2 stays held by the
+automatic classifier with preserved artifacts; no stopped probe is retried.
+Next hourly documentation/user report is due about09:45 PDT.

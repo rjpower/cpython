@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 13:00 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 13:14 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -459,7 +459,8 @@ pass, with no failure/fallback or exact-contract drift. Complete markers must
 re-audit all original journals. No full profile or O1 adoption follows yet.
 At13:00 release completion63235055 independently re-audits all114 new jobs;
 with its pilot this is120transactions/20iterations,10,120tests/2,320 recorded
-skips and zero fallback. Debug71/114 new jobs pass; its completion is pending.
+skips and zero fallback. Debug71/114 new jobs pass at13:00 and96/114 at13:12;
+its completion is pending.
 
 Separate make-only support plan71340975/a6f4ba2b clears review after a named
 Makefile/pyconfig pre/post guard closes its original configuration gap. ASan
@@ -513,7 +514,19 @@ scheduling choice, not a new H1/H2 prerequisite. The baseline binding audit
 6bd23aca confirms old upstream srcdir points at the active fork; preserve old
 results and prepare a separately owned exact-upstream environment and runner
 identity. No baseline checkout/build/run or measurement is approved by that
-source-only document. No parity or speedup is claimed from these plans.
+source-only document. A subsequent owned-source grant establishes clean321925
+and5806 tracked inputs. Revised runnerd853/plan419a closes launch blockers;
+the exact configure-only grant succeeds with final2dd5/inner1107/products379f.
+Joint closure8908 clears actual-configuration reviewde24: O3/NDEBUG, frame
+pointers, zero-initialization and disabled JIT/stats/PGO/LTO/BOLT match policy.
+Make remains held for its concrete executor and final-closure/config guards.
+Upstream `CFLAGS_CEVAL` is empty; the fork deliberately adds `-fno-gcse`. Keep this
+source-specific difference explicit rather than claiming every flag matches
+or isolating object-model effects. Before checkpoint-I parity, require upstream
+same-toolchain `-fno-gcse` sensitivity or select a predeclared fully matched eval
+policy from evidence. No extra configure/build is required now for that later
+comparison; H1 parent/changed timing still requires identical eval policy.
+No parity or speedup is claimed from setup or configure.
 
 Hourly reporting: while work is active, approximately every hour the
 coordinator updates this state table and `README.md`, appends a dated

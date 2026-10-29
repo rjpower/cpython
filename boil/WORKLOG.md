@@ -3736,3 +3736,31 @@ source and all old baselines stay intact. Match fork's actual auto-var-init=zero
 as well as compiler/frame-pointer policy in the attribution cohort; no stock
 production claim follows. Source-setup workrecord and native-phase plans await
 their frozen review. Next hourly report remains13:45 PDT.
+
+### 13:14 PDT: upstream configuration bound; debug repetitions continue
+
+Debug reaches96/114 new transactions with no failures/fallback; release120/20
+remains complete. The two-marker source change still waits for both completions,
+quiescence, preserved expanded products and the exact transition executor.
+Draft review identifies inherited-lock proof, post-cleanup complete inventory
+and explicit tool/environment guards; owner is closing those bounded gaps.
+Historical test-generated loader libraries keep source/literal-command/toolchain
+provenance plus actual load/unload assertions. Their old bytes were not retained;
+no retrospective hash claim, new compiler wrapper or old-matrix rerun is needed.
+
+After independent V2 configure-plan review8fbce, root reads the exact launch
+and grants configure only. It succeeds in27.660s, with outer/gate/inner0 and
+final post-cleanup verification. Joint closure8908 binds all14 configured paths,
+source/tools, final2dd5, inner1107, logs and product379f; independent actual
+configuration reviewde24 clears it. Owned source remains clean321925; no target
+interpreter, extension, test or benchmark runs. Make awaits a separate executor
+that enforces accepted final success and joint configuration closure through
+cleanup, rather than relying only on the inner configure receipt.
+
+Common GCC/O3/NDEBUG/frame-pointer/zero-init policy matches current fork release.
+Actual source-specific eval policy differs: upstream has empty `CFLAGS_CEVAL`;
+the fork deliberately adds `-fno-gcse`. Root preserves this valid configure and
+reports the difference; it cannot isolate object-model performance. Before claiming checkpoint-I parity,
+require upstream `-fno-gcse` sensitivity or select a predeclared fully matched eval
+policy from evidence. No extra build is ordered now solely for that comparison.
+H1 parent/changed benefit retains identical eval policy. Next hourly13:45 PDT.

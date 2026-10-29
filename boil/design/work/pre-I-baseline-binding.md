@@ -10,7 +10,7 @@ it is not execution approval or a current parity result.
 
 The retained baseline's C ancestry is plausible, but its standard-library
 binding is wrong for checkpoint I. Its Makefile, config.status and generated
-sysconfig all specify `srcdir=../..`, resolving from
+`_sysconfigdata` Python file specify `srcdir=../..`, resolving from
 `build/baseline-default` into the active fork worktree. Moving that
 executable or supplying PYTHONPATH would not repair its complete build
 and extension provenance. WORKLOG's October25 entries already record
@@ -194,3 +194,24 @@ instruction ratios and micro improvements establish no current parity.
 The coordinator must approve the exact source reservation, build/runner
 hunks, correctness qualification and timing window before execution. This
 audit supplies a repair plan, not a new build or performance claim.
+
+## Owned source setup follow-up
+
+The original source-only plan is retained at primary `bd60e64095c`, SHA256
+`6bd23acaf3c1959461630d50c880201fd013ea5a99990a263f8257fa1f14c601`.
+Independent concept review clears that plan only, with no build approval.
+For precise generated-metadata wording: the `_sysconfigdata` Python
+srcdir is `../..`; `_sysconfig_vars` JSON instead records an installed-
+prefix srcdir while its **abs_srcdir still points into the active fork**.
+The current source-binding gap remains; neither value proves historical
+imports.
+
+The coordinator first authorized owned-source setup. The
+[source-setup record](pre-I-baseline-source-setup.md) records the clean
+detached exact321925 checkout,5806 source hashes, ownership and concrete
+separate configure/make-only plans and independent reviews. A later exact
+configure-only grant completed successfully with unchanged source/tools
+and a jointly frozen14-product configuration closure. Make, target
+interpreter, separate tests/probes and benchmarks have not run. Main and
+all historical baseline products/results remain unchanged. Configuration
+success does not close runtime import binding or qualify a comparison.

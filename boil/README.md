@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 13:00 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 13:14 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 13:00 PDT; evidence is from local commits and retained logs.
+2026-10-29 13:14 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -171,7 +171,7 @@ timings, not performance benchmarks. Reviewed nineteen-only plan0d84e7d2 is
 running against those immutable pilots. Release completes114 new jobs plus
 its pilot:120transactions/20iterations,10,120tests/2,320 recorded skips, zero
 fallback. Completion63235055 re-audits every original journal. Debug71/114 new
-jobs pass at13:00, with no fallback or exact-contract drift.
+jobs pass at13:00;96/114 pass at13:12, with no fallback or exact-contract drift.
 No full suite has started. Separate ASan make-only plan71340975 stops BUILD_FAIL
 at its actual linked audit: two outlined raw-mutex wrappers called by precise
 Park lack precision classifications. No smoke/test ran. Exact two-marker
@@ -242,9 +242,14 @@ confirms that the old upstream executable's configured library root is the
 active fork. Preserve its historical results; a separately owned exact-upstream
 source/build/import environment and stronger runner identity are required
 before checkpoint-I measurements. One owned exact321925 detached source tree
-is now clean and inventoried; configure-runner review found admission, tool
-closure and cleanup-receipt gaps before execution. No configure, new baseline
-build or benchmark has run.
+is now clean and inventoried. The revised configure runner closes its admission,
+tool and cleanup gaps; configure succeeds and actual configuration closure8908
+clears independent reviewde24. Make awaits its separate executor review.
+No new baseline interpreter or benchmark has run. Common compiler/O3/frame/
+zero-initialization policy matches; upstream's eval-unit flags are empty while
+the fork deliberately adds `-fno-gcse`. Report that source-specific difference;
+upstream flag sensitivity or a predeclared fully matched eval policy is required
+before claiming parity. This comparison cannot isolate object-model effects.
 
 Shared gate cleanup now holds the build lock until its sweep finishes;
 an interrupted waiter cannot sweep another run's workers. The controlled

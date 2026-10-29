@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 09:18 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 09:34 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
@@ -70,7 +70,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 09:18 PDT; evidence is from local commits and retained logs.
+2026-10-29 09:34 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -145,12 +145,14 @@ inventory validation pass. Execution and numeric-gate integration remain
 unfinished. The launcher component landed as 2db451b1b65 after independent review;
 it does not establish orchestration, complete coverage or source snapshot
 enforcement. The v2 identity/result prerequisite is being implemented before
-profile orchestration. A controlled clean rebuild on frozen052 has a coordinator-
-qualified receipt: 6,188 unchanged source inputs, 105 bound build outputs,
-smoke1,924/20skips and 1,314 collections/zero fallback. Its 226 unpinned hits
-are report-only. This proves the existing Og component build, not named/full
-profile coverage or ROOTS2b. Final launcher controls and independent review
-remain; run/gate hooks are not implemented. Shared worker-launch correction
+profile orchestration. The controlled052 rebuild passes smoke1,924/20skips,
+with 6,188 unchanged source inputs and zero fallback. The first launcher
+attempt exposed an incomplete output inventory: extension aliases were hashed
+without their target bytes. That initial receipt is superseded; strict target
+binding and a reviewed supplement precede further runtime controls. All67
+current targets match the retained metadata and predate the build's completion.
+No v2 component positive or named/full profile is claimed. Run/gate hooks remain
+unimplemented. Shared worker-launch correction
 093b9d2a1c3 preserves regrtest's temporary cwd and exit timeout by calling
 worker.main().
 

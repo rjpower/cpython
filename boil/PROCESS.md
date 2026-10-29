@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 09:18 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 09:34 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -88,12 +88,15 @@ execution cleared independent review. Orchestration and gate integration
 remain outstanding in
 boil/tools/verification.md. The v2 identity/result component is in progress:
 explicit build-source/runtime/tool roots, actual imported origins and complete
-source/output bindings. A controlled clean052 rebuild has a coordinator-
-qualified receipt, reviewed in work/reviews/verification-build-receipt.md.
-Its smoke passes1,924/20skips,1,314collections/zero fallback;226unpinned hits
-are report-only. No named/full profile coverage or current-ROOTS result is
-claimed. Final launcher controls and independent review precede component
-landing; run/gate hooks remain separate.
+source/output bindings. Controlled clean052 smoke passes1,924/20skips,
+1,314collections/zero fallback;226unpinned hits are report-only. Its initial
+receipt is superseded as incomplete: extension aliases lacked target-byte
+hashes. Actual control rejected that inventory before test execution. Strict
+alias/target binding, mutation controls and a separately reviewed supplement
+are required before further runtime controls. Independent checks confirm all67
+current targets match retained metadata and predate the build completion;
+no intervening output writes are recorded. No v2 component positive, named/full
+profile or current-ROOTS result is claimed. Run/gate hooks remain separate.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits

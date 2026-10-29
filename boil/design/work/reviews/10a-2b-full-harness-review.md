@@ -31,3 +31,13 @@ then preserve the first plan and freeze a new plan/validator hash. Full runs
 still wait for each build's complete repeated qualification. O1 full suites
 are candidate qualification, not prior global adoption. Cext, regeneration,
 traversal and optional-extension checks remain separate gate3 obligations.
+
+Follow-up09:33 PDT: revised plan SHA256
+`c9e05359d7afd3a1d98f35541b66a0065d83886155455ae7ded8cc4441b3b505`
+is cleared for the approved profiles after each build's repeated qualification.
+New validator checks present/nonempty statistics with recorded fixture-skip
+accounting, all32 protected cases/subtests/setup containers, and whole-module
+skip scope with normalized names. Twenty negative replays and the class-skip/
+name-normalization positives pass against retained evidence. Plan/helper
+hashes and both564-module rosters match. Prior plan/helpers remain preserved.
+The four running matrix helpers and native8ce source remain unchanged.

@@ -2973,3 +2973,42 @@ hook are approved by ROOTS/coordinator. A one-line private-symbol export in
 pycore_code.h is also approved for the actual test extension. Immutable2b.2a
 implementation begins; no storage2b.2b implementation is authorized. Separate
 H1 frame-passing/checker/build design617bea5 is preserved with no execution.
+
+
+### 09:34 PDT: full harness cleared; component receipt correction
+
+ROOTS full-harnessv2 plan c9e05359d7afd3a1 clears coordinator review after
+closing absent/empty PASSED statistics and protected case/subtest/setup/module
+skip gaps. All20 negative replays and accounted class-skip/normalized-name
+positives pass. Both564-module rosters and helper hashes match; first plan62988
+and original helpers remain preserved. Approved full profiles still wait for
+each build's20 repetitions. No full run or source/helper change to the running
+matrix is implied. ASan sort/functools completion separately passes359/1skip,
+actual driver+2workers kill/stress0,124collections/zero fallback/one report-only
+unpinned. ASan14+2 cover the required module union as separate runs.
+
+The v2 component's first attempt failed before native execution because the
+host harness created pycache in the strict frozen tool directory. Retained
+retry disables those host writes. Its four fresh native discoveries pass;
+the first actual off control then rejects the extension-origin inventory
+before executing the test. Original105-output receipt records symlink names
+but omits67 actual extension target contents. Coordinator's initial receipt
+review missed that binding gap; the original qualification is superseded,
+with both original receipt files unchanged. No component positive is claimed.
+
+Approved repair binds each in-build alias and its resolved target bytes,
+rejects outside targets, and adds meaningful target-mutation/link controls.
+Independent check confirms67 unchanged aliases/targets, exact hashes/inodes/
+sizes/ctime/mtime; latest mutation16:10:00.623679UTC predates original build
+completion16:10:23UTC. No intervening build/output writes are recorded. A
+new manifest and separately reviewed post-build supplement are required;
+no redundant rebuild is authorized while that evidence is assessed.
+
+Coordinator also found cext's instrumented renderer omitted -j while adding
+--python, which regrtest rejects. Approved correction explicitly uses one
+isolated module worker (-j1), the same16 cases/cpu resource/no filters, and
+canonicalizes its short scheduled name for actual-origin checks. This differs
+from ordinary sequential gate3 argv; numeric gate behavior remains unchanged.
+No frozen launcher changes occur during an active attempt, and no failure is
+relabeled as passing. H3's bounded safe-line qualification continues while
+the component's replacement receipt/tools/plan are reviewed.

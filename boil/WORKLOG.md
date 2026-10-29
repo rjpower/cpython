@@ -3250,3 +3250,40 @@ At10:48, both test slots were in active H3 jobs while ROOTS debugi18case07
 waited normally. Active jobs finish untouched; H3 then uses one lane and yields
 the other to ROOTS, preserving landing-critical progress. No source/gate policy
 or filter changes. The hourly schedule remains11:45 PDT.
+
+
+### 11:04 PDT: eligibility prerequisite and bounded H1 readiness
+
+H3's54b broad gate fails after1,262 completed tests because executing a valid
+CO_NO_MONITORING_EVENTS code object after a global monitoring-version change
+loops at RESUME. The2s pre-edit probe independently reproduces the old failure
+with its marker and stack. Preserve both failed records; this is inherited
+behavior exposed by executing the stronger regression, not a reason to weaken it.
+
+Independent review clears eligibility proposal-v3 d5d88a7b8f80: guard refresh
+inside the existing RESUME version mismatch, return early from direct refresh,
+and guard the cold monitor_handled callback. The exact ceval.h hunk is granted.
+No version acknowledgment or shared static-code write. Ordinary callback,
+flagged on-stack/request-state, generator.throw and separate no-local-data
+handled-exception controls accompany the fix. The owner applies/regenerates and
+freezes combined native13-file manifest
+ a6c07b4ce7b2932a82c2bc8bcc187f8940359fe1674951f075ee1b98773e8557
+and production patch
+ b209836201b0fbdc9356dae76ec1fbe4a2e8fc259acc702be025ccfe6503abc6.
+Combined-candidate native qualification starts; no independent prerequisite
+landing or runtime success is claimed. Earlier storage source clearance and
+measurement identities remain historical.
+
+At11:00 ROOTS debug has599/640 jobs and18 complete repetitions with no validated
+failure/fallback. The guarded matrix-to-main0-to-full chain remains armed.
+Reserve its test lane: H3 submits one transaction at a time, with no same-build
+waiter consuming the second slot before acquiring its build lock.
+
+The compiler peer clears H1-1 bounded frame-passing design readiness and records
+its exact transition/interface/compiler-root controls in the new review. It
+needs an integrated baseline and explicit H3 generator/build handoff before
+implementation; H2 maps and frame-pointer policy are separate. No H1 source or
+build is started. The peer now inventories ROOTS landing receipts and remaining
+gates read-only, avoiding duplicate native runs. Queue2 remains held by the
+prior automatic classifier; no permission question is pending. Next hourly
+report remains11:45 PDT.

@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 10:49 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:04 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 10:49 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:04 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -132,7 +132,7 @@ Its fresh full-v3 run passes native and audit:51,130tests/3,458outer skips,
 63,597collections and zero fallback. The earlier attempt remains unqualified;
 the repaired observer separates67 inner meta-test skips without a new filter.
 Release stress11 also passes3,061tests/100skips and44,828collections/zero
-fallback. At10:43, debug has16 complete repetitions and is finishing17 of20
+fallback. At11:00, debug has18 complete repetitions and599 of640 jobs
 without validated failure/fallback. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,
@@ -148,8 +148,16 @@ clear independent review, including all five decoder callers, the fork's
 test-hook ABI and allocation-safe snapshots. Implementation is under source
 review and qualification. Development line/membership/OOM controls pass;
 the no-monitoring-flags bookkeeping correction clears source review at
-manifest54b2832334af. Final qualification is in progress; earlier evidence is
-not relabeled as final qualification.
+manifest54b2832334af. Its broader gate then exposed an inherited refresh loop
+when valid flagged code executes RESUME after a monitoring-version change.
+That failed run is retained. An independently reviewed eligibility prerequisite
+guards the version-mismatch refresh, direct refresh and handled-exception
+callback paths. It does not acknowledge versions or write shared static code.
+The combined candidate is frozen at manifest a6c07b4ce7b2 for requalification;
+earlier evidence is not relabeled as final qualification. The H1 frame-passing
+design also clears
+[bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
+with source/build handoff required before implementation.
 The private API/layout decision is recorded in PROCESS section0.2.
 The pre-I [string design](design/work/pre-I-linear-string-concat.md) is ready
 for review; its [Unicode storage/ABI audit](design/work/pre-I-string-storage-audit.md)
@@ -170,8 +178,8 @@ fff4e0e9b08: 15 profiles, seven safety-control groups and actual case
 inventory validation pass. Execution and numeric-gate integration remain
 unfinished. The launcher component landed as 2db451b1b65 after independent review;
 it does not establish orchestration, complete coverage or source snapshot
-enforcement. The v2 identity/result prerequisite is being implemented before
-profile orchestration. The controlled052 rebuild passes smoke1,924/20skips,
+enforcement. The v2 identity/result prerequisite is landed; profile
+orchestration remains pending. The controlled052 rebuild passes smoke1,924/20skips,
 with 6,188 unchanged source inputs and zero fallback. Its initial105-entry
 receipt missed extension target bytes and is superseded. The strict repair
 and independently reviewed172-entry supplement bind all67 targets as well as

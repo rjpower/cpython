@@ -313,53 +313,43 @@ it costs a field per watched object and still leaves the question of
 which interpreter runs the foreign watcher when the object dies on its
 owner.
 
-### 3.5 Order across owners
+### 3.5 Completion order for dependent calls
 
-Within one owner's queue, calls run in batch order, which puts each
-finalizer before the finalizers of what its object reaches (note 06
-16.2's referrer-first order, `finalizer_order()`). Across owners the
-same must hold: a `BufferedWriter` owned by an idle subinterpreter
-wraps a `FileIO` owned by the main interpreter; both die together, with
-no cycle; if the main interpreter closes the file first, the writer's
-flush is lost. Rooting both keeps the memory, not the resource.
+A queue's FIFO invocation order does not imply completion order: several
+threads of one owner can drain it, and a finalizer can release the GIL.
+The S1 probe reproduces an inner finalizer running while its referrer's
+finalizer is blocked. The same dependency crosses owners: closing a
+`FileIO` before its unreachable `BufferedWriter` finishes flushing loses
+the buffer. Rooting both preserves memory, not the resource.
 
-**The rule.** A call R of owner O waits for every call of another
-owner that precedes it in the batch's order and whose object reaches
-R's object through dead objects; it is released when those have run,
-and only after the call before it of its own owner in the batch has
-been released, so each owner's batch order holds. Waits point
-backwards in the batch order, so they cannot form a cycle. No thread
-waits: R sits on its owner's waiting list (a root, 3.3) and the
-completion of its last predecessor, on whichever interpreter that runs,
-splices it to its owner's queue tail and sets that owner's
-`queue_ready`, which the owner's next GIL acquisition sees (section 4).
+**The rule.** A call R waits for every earlier call P in its batch whose
+object reaches R's object through dead objects, irrespective of owner.
+R is released only after all those predecessors complete. All waits point
+backwards in batch order and therefore cannot cycle. Unrelated calls need
+no wait and may run concurrently, including within one owner. A waiting
+call is a root on its owner's waiting list (3.3); completion of its last
+unfinished predecessor splices it onto that owner's queue and publishes
+`queue_ready`.
 
-**Which calls.** The predecessors are finalizers and legacy `tp_del`s,
-the calls that use their object's referents. The waiters are
-finalizers, legacy `tp_del`s and destroy hooks (a capsule destructor or
-`m_free` on the main interpreter must not run before a subinterpreter's
-finalizer that uses the capsule or module). Weak reference callbacks
-neither wait nor are waited for: they are queued first in every batch,
-as now, and their order relative to finalizers is unchanged.
+**Which calls.** Predecessors are finalizers and legacy `tp_del`s, which
+may use their objects' referents. Waiters are finalizers, legacy `tp_del`s
+and destroy hooks. Weak reference callbacks neither wait nor are waited
+for; their batch order relative to finalizers is unchanged.
 
-**Computing it.** Only a batch whose finalizers, legacy calls and
-destroy hooks have more than one owner needs it. For each owner A among
-them, in batch order of A's calls, a traversal from each A call's
-object over dead objects marks what it reaches with that call's
-position, skipping what an earlier A call already reached; so every
-dead object gets the earliest position of an A call that reaches it.
-A call R of another owner whose object carries a position before R's
-own waits for the last A call before R (A's queue runs its calls in
-order, so that covers every A predecessor). The cost is one traversal
-of the reachable dead objects per owner present, `O(K·D)`, against the
-collection's `O(D)` sweep. The positions and the traversal's stack
-live in one C `malloc` table bounded by the dead count (a stamp per dead
-object, and a stack that holds each dead object at most once per
-traversal), so the traversal allocates nothing. The table is allocated
-once per collection, before `clear_callback_weakrefs()` batches the
-first node, whenever the mark's dead set holds call-bearing objects of
-more than one owner; its failure takes 3.2's one failure path with an
-empty batch.
+**Computing it (rung 2a design obligation).** Dependency state is needed
+whenever the dead set contains at least two potentially dependent
+call-bearing objects, even of one owner. It is allocated before the first
+node is batched. Allocation failure takes 3.2's single failure path with
+an empty batch; no calls or sweep run from an incomplete dependency graph.
+
+The earlier per-owner computation and its `O(K*D)` claim assumed that one
+owner's drains completed serially. They do not. Waiting only for the last
+earlier call of an owner does not cover a still-running earlier call of
+that owner. Rung 2a must specify and review an exact dependency graph,
+its checked storage bound, deduplication and completion accounting before
+implementation. Its proof must cover several simultaneous unfinished
+predecessors of one waiter. The same graph and release rule serve both
+same-owner and cross-owner dependencies; an owner-count shortcut is invalid.
 
 **What waiting costs.** A main-interpreter call that waits for an idle
 subinterpreter's finalizer waits until that interpreter runs or closes
@@ -505,10 +495,13 @@ A shared-heap interpreter's objects can outlive it (5.3). Before its
 heap changes owner, the close retires the indices of section 3.4 on its
 surviving objects, on its own thread, with its tables:
 
-- *Freeze.* The phase becomes retiring. In it,
-  `PyUnstable_Code_SetExtra()` and the non-reserved `PyDict_Watch()` and
-  `PyType_Watch()` on an object this interpreter owns are refused like a
-  foreign object's (3.4), so no new index appears during the step.
+- *Freeze.* The interpreter's `registration_frozen` flag (GCState) is
+  set and never cleared. From then on, `PyUnstable_Code_SetExtra()` and
+  the non-reserved `PyDict_Watch()` and `PyType_Watch()` on an object
+  this interpreter owns are refused like a foreign object's (3.4), so no
+  new index appears during the step. The queue stays open: the freeze
+  changes registration only, so it is a flag of its own and not a
+  phase.
 - *Watcher bits.* One walk of the interpreter's own heaps and abandoned
   segments (the walk of `_PyGC_TraceLiveHeapObjects()`, restricted to one
   sub-process) clears every non-reserved watcher bit. No code runs
@@ -1226,9 +1219,10 @@ Seven blocking issues, all accepted; each changed the design.
 1. *Cross-owner order loses buffered output* (a wrapper in an idle
    subinterpreter over a raw file in main). Changed: a call waits for
    the earlier foreign finalizer and legacy calls that reach its object,
-   found by one incremental traversal per owner with position stamps;
-   no interpreter waits on another synchronously, and memory failure
-   falls back to a chain (3.5, decision 9, invariant 5). Test 9.14
+   the old per-owner computation recorded here is superseded by 3.5's
+   same-owner completion requirement and rung 2a's graph review. No
+   interpreter waits on another synchronously; allocation failure takes
+   the single rollback path (3.5, decision 9, invariant 5). Test 9.14
    checks the bytes written.
 2. *The copied domain can name freed interpreters before routing*
    (`PyInterpreterState_Delete()` detaches before it unlinks).

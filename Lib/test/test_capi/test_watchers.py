@@ -227,6 +227,10 @@ class TestTypeWatchers(unittest.TestCase):
 
     @contextmanager
     def watcher(self, kind=TYPES):
+        # For other GCs: the types that earlier tests watched die at a
+        # collection, not as their test returns, and would report their
+        # destruction to a watcher that reuses the ID.
+        gc_collect()
         wid = self.add_watcher(kind)
         try:
             yield wid

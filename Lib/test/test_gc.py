@@ -2965,8 +2965,8 @@ class TracingCollectorTests(unittest.TestCase):
                                              PYTHON_GCSTRESS="often")
         self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
 
-    @unittest.skip("step 7: a shared-heap subinterpreter runs the main "
-                   "interpreter's weakref callbacks (note 08 section 3)")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_stress_shared_heap_callbacks(self):
         """A legacy subinterpreter shares the main interpreter's heap and is
         collected with it, but must not run the main interpreter's weak
@@ -2975,14 +2975,16 @@ class TracingCollectorTests(unittest.TestCase):
             PYTHON_GCSTRESS=1000 ./python -c 'import _testcapi;
                 _testcapi.run_in_subinterp("x = 1")'
 
-        crashes in the subinterpreter's start-up.
+        Previously this crashed in the subinterpreter's start-up. The
+        queue must route callbacks to their owning interpreter instead.
         """
         code = textwrap.dedent("""
             import _testcapi
             for i in range(5):
                 _testcapi.run_in_subinterp("x = 1")
+            assert _testinternalcapi.gc_get_stress() == 1000
         """)
-        assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+        _queue_child(code, PYTHON_GCSTRESS="1000")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_settrace_runs_queued_callbacks_first(self):

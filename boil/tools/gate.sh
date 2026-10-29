@@ -47,6 +47,12 @@ cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp
 trap cleanup EXIT
 trap 'cleanup; exit 143' INT TERM HUP
 export PYTHONPYCACHEPREFIX="$tmp/pyc"
+# An ASan build runs with fake stacks off unless the caller says otherwise:
+# fake stacks hide escaped locals from the conservative scan (the ASan line
+# of record, note 11 section 8.2) and make deep recursion quadratic once a
+# size class fills (test_list's test_repr_deep exceeds 240 s with them on,
+# 5 s off; 7a rung 1's record has the times).
+export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_stack_use_after_return=0:detect_leaks=0}"
 # The suite's root counters, one line per process (root_stats.py), on the
 # branches that have the tool
 stats_tool="$REPO/boil/tools/measure/root_stats.py"
@@ -88,9 +94,11 @@ case $level in
     run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE"
     roots
     run "$py" -m test -q -u cpu test_cext
-    before=$(git -C "$REPO" status --porcelain)
+    # Status and content: a generated file already modified before the
+    # regen keeps the same status line when the regen changes it again.
+    before=$(git -C "$REPO" status --porcelain; git -C "$REPO" diff HEAD | sha256sum)
     run make -C "$build" -s regen-cases clinic
-    after=$(git -C "$REPO" status --porcelain)
+    after=$(git -C "$REPO" status --porcelain; git -C "$REPO" diff HEAD | sha256sum)
     [ "$before" = "$after" ] || { echo "regen changed the tree:"; git -C "$REPO" status --short; exit 1; }
     [ ! -f "$REPO/Tools/boil/traverse_audit.py" ] || python3 "$REPO/Tools/boil/traverse_audit.py" --check ;;
 4)

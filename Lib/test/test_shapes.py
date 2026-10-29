@@ -1,7 +1,7 @@
 """Shapes: the hidden classes in the object header, and the slots they
 describe.
 
-See boil/design/09-object-protocol.md and 04-shapes.md.
+See boil/design/09-object-protocol.md.
 """
 
 import collections

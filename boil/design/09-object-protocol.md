@@ -23,7 +23,7 @@ and to have them share one description of "where attribute `x` lives".
 | Job | Mechanism | Where it lives |
 |---|---|---|
 | Layout | the shape (hidden class): one word per object that says which type the object has, which attributes it has, in which slots, with which kinds | the object header (section 2) |
-| Observation | the feedback entry: the per-instruction side cache. The IR has no cache bytes in the instruction stream; the entry in the code object's feedback vector is the one cache, read by the interpreter, tier 0 and tier 1 | `_PyFbAttr`, `_PyFbCall`, `_PyFbPoly` (note 01, note 06 section 2.5) |
+| Observation | the feedback entry: the per-instruction side cache. The IR has no cache bytes in the instruction stream; the entry in the code object's feedback vector is the one cache, read by the interpreter, tier 0 and tier 1 | `_PyFbAttr`, `_PyFbCall`, `_PyFbPoly` (note 06 section 2.5) |
 | Resolution | the lookup plan: a pure function from (shape, name) to "where the attribute is and what guard makes that true" | section 4 |
 | Speculation | tier 1 reads feedback entries and plans, hoists guards, inlines monomorphic callees | note 06 section 5 |
 
@@ -465,7 +465,7 @@ a C double.
 The slot kind is a promise about the values, not a layout:
 
 - **I32**: every value stored in the slot is an inline int.
-- **F64**: every value stored is an inline float. NaN is boxed (note 02),
+- **F64**: every value stored is an inline float. NaN is boxed,
   so it does not satisfy F64; infinities and signed zero do.
 - **BOXED**: any value.
 
@@ -670,8 +670,8 @@ dictionary mode, which uses slot 0 only, so the destination type's
 capacity is never relied on for it. Clearing and traversal in dictionary
 mode touch slot 0 only.
 
-**Limits** are note 04's: 30 slots and 64 shapes per type, and the
-capacity above. A plain instance with six slots is 56 bytes (a 64-byte
+**Limits** as first designed: 30 slots and 64 shapes per type, and the
+capacity above; the as-built limit is 4,095 slots (note 06 section 20). A plain instance with six slots is 56 bytes (a 64-byte
 bin); note 08's proof for the pre-header row says so.
 
 ## 7. A method call, end to end
@@ -684,7 +684,7 @@ bin); note 08's proof for the pre-header row says so.
    compare the version, write the descriptor and `o` into two slots.
    Several shapes at one site use the four-row poly table through
    `LOAD_ATTR_SHAPE_POLY`, the one polymorphic handler per feedback kind
-   (note 04 coordinator decision 1).
+   (one polymorphic handler per feedback kind, ruled 2026-10-23).
 2. `CALL`: `CALL_PY_EXACT_ARGS` guards the function version; the callee
    frame overlaps the argument window (note 06 section 4).
 3. Tier 1: the shape compare is hoisted, the version compare becomes a
@@ -814,8 +814,6 @@ V8 maps and field representations (Clifford, "Fast properties in V8",
 2017; the `Map` and `FieldType` design); JavaScriptCore structures and
 watchpoints; SpiderMonkey shapes and `ObjectGroup`; the Self and
 Smalltalk inline cache lineage (Hölzle, Chambers, Ungar 1991, PICs).
-Note 04 for the shape tree, limits and dictionary mode; note 01 for the
-feedback vector.
 
 ## 11. Review response
 

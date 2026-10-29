@@ -1,8 +1,0 @@
-== Tests result: SUCCESS ==
-
-All 6 tests OK.
-
-Total duration: 1.3 sec
-Total tests: run=707 skipped=6
-Total test files: run=6/6
-Result: SUCCESS

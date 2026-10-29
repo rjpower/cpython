@@ -1,9 +1,13 @@
 # 06: Architecture v2: a fixed-width register IR from the compiler, one value type, a tracing GC
 
-Status: approved 2026-10-25 with two review amendments (sections 3.2 and 3.4, step 10). Supersedes the encoding in note 01,
-the ownership bits of note 02, and note 03 (deferred reference counting),
-which is dropped. Notes 04 (shapes) and 05 (tier 0) stand, with the changes in
-sections 3.5 and 5.
+Status: approved 2026-10-25 with two review amendments (sections 3.2 and 3.4, step 10).
+The plan of record and the position are in `boil/PROCESS.md` section 0,
+which revises section 6 below (7a moved before 7, 10 split into 10a and 10b,
+the ports deferred); sections 9 to 21 are the per-step decision records. Supersedes the Phase 1 notes 01 to 05
+(the first IR encoding, the tagged `_PyStackRef`, deferred reference
+counting, shapes behind a flag, the first tier 0), which are deleted;
+this note is the design, note 09 the object protocol, and step 8's
+design note will be written from section 5.
 
 ## 0. What Phase 1 got wrong, and the correction
 
@@ -254,7 +258,7 @@ with 150,000 fields under `-u cpu` and is skipped. `test_compile`'s
 |---|---|
 | `co_ir` | the words, immutable, from the pyc |
 | `co_exec` | executing copy, allocated at first call; handler column rewritten by specialisation and instrumentation |
-| `co_feedback` | the feedback vector, allocated with `co_exec`; entry kinds as in note 01 |
+| `co_feedback` | the feedback vector, allocated with `co_exec`; entry kinds in section 2.5 |
 | `co_nslots`, `co_nlocalsplus` | frame size, static |
 | `co_linetable` | as today, keyed by word index |
 | `co_exceptiontable` | ranges over word indices; handler word, slot for the exception, slot for `lasti` or none; no depth |
@@ -270,7 +274,7 @@ to re-lower. `LINE` events use the line table.
 
 ### 2.5 Feedback
 
-The feedback vector is the one from note 01 (kinds COUNTER, BRANCH, UNARY,
+The feedback vector is Phase 1's (kinds COUNTER, BRANCH, UNARY,
 BINARY, ATTR, GLOBAL, CALL; 16 to 40 bytes; up to four shapes before
 megamorphic), with two additions: an entry carries its static operand
 (section 2.1), and CALL entries record the callee's function version so that
@@ -516,8 +520,7 @@ vector: type and shape speculation with guards, inlining of monomorphic
 callees using their own feedback, unboxed int and float values in machine
 registers across instructions, linear-scan allocation, and a deoptimiser
 that writes registers back to slots. The target is V8's Maglev in size and
-ambition. Both tiers use the same small x86-64 assembler from note 05, then
-arm64.
+ambition. Both tiers use the same small x86-64 assembler, then arm64.
 
 ## 6. Plan
 
@@ -586,6 +589,30 @@ set, memory and collector group) is the record at every step, built now
 as step B. 6b's rung 4 was stopped at this ruling with the port states
 recorded.
 
+Plan revision, 2026-10-28 (note 14). A step H, the handler contract,
+is inserted after 10a rung 3 and before 8: what every generated handler
+does about position, frame, collector liveness, guards and the build,
+stated as generator rules so that tier 0's templates copy the lean form.
+The user's ruling: the interpreter need not be tuned to LuaJIT's level,
+but obvious improvements are not left on the ground.
+
+Plan revision, 2026-10-29 (takeover). PROCESS section 0.4 supersedes the
+old delivery times. Resume the compiler, 7a and 10a landings, then split
+queue lifecycle and precise-root residue into gated subrungs. H keeps
+per-word diagnostic positions and uses a separate collector state; its
+map specification and review responses are in note 14. Add H3's inventory
+of reusable interpreter operations and dispatch costs, including handler
+space, typed arithmetic/branches, frame passing and range iteration.
+An operation needs one semantic contract and generated root/monitoring
+metadata; this does not approve benchmark-specific superinstructions.
+Move a tier-0 hand-off earlier when this inventory demonstrates a clean
+interpreter implementation. Generations, remaining value interfaces and H
+lead to checkpoint I: matched release wall-time evidence that the
+interpreter reaches upstream parity or better before the JIT. The old
+rule of merely recording intermediate performance does not waive this
+checkpoint. An optimized debug feedback build may be qualified under
+PROCESS section 3; release and sanitizer evidence remain separate.
+
 Why this order. The IR work comes first because it is independent of the
 object model, is where the current design is weakest, and because every
 later step writes handlers in the generator, which should be in its final
@@ -613,7 +640,7 @@ only lasting part, root enumeration, is step 4.
    only if a benchmark shows it.
 4. **The free-threaded build ends at step 5.** A parallel marker is the
    later path to multi-core, not a concurrent reference-counting scheme.
-5. **Skip deferred reference counting (note 03) entirely.** Its root scan is
+5. **Skip deferred reference counting (the Phase 1 proposal) entirely.** Its root scan is
    step 4; the rest would be deleted at step 5.
 6. **Generational collection is step 7, not part of step 5**, so that the
    first collector has no write barrier to get wrong.
@@ -773,7 +800,7 @@ runs the boxing forms instead in a build without inline values or under
 
 **Instrumentation.** Instrumentation rewrites handlers in the executing copy
 and restores them from the code object's words. The pristine words replace
-the `real[]` array of note 01: the handler to restore is that word's, or for
+Phase 1's `real[]` array of saved instructions: the handler to restore is that word's, or for
 a NOFB site the NOFB form of the instrumented instruction. A restored word is
 generic and warms up again. INSTRUCTION events fire once per word; the
 `IR_JUMP` words described below have none.

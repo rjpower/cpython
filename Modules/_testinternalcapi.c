@@ -4226,6 +4226,165 @@ gc_live_roots_of(PyObject *self, PyValue arg)
         _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)p)));
 }
 
+static int
+byteswriter_expect_root(PyObject *obj, int expected, const char *stage)
+{
+#ifndef Py_GIL_DISABLED
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot guard;
+    _PyThreadState_PushValueRoot(tstate, &guard);
+    guard.object = obj;
+    int roots = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
+    int rc = 0;
+    if (roots < 0) {
+        PyErr_NoMemory();
+        rc = -1;
+    }
+    else if (((roots & _PyGC_TRACE_ROOT_INTERP) != 0) != expected) {
+        // Keep a separate thread root even when the tested registration fails.
+        PyErr_Format(PyExc_AssertionError, "%s: writer owner %s registered",
+                     stage, expected ? "not" : "still");
+        rc = -1;
+    }
+    _PyThreadState_PopValueRoot(tstate, &guard);
+    return rc;
+#else
+    return 0;
+#endif
+}
+
+/* The INTERP root class, rather than conservative-stack survival, must own
+   the heap buffer.  Finish results get a separate fixture root immediately. */
+static PyObject *
+gc_byteswriter_roots(PyObject *self, PyObject *args)
+{
+    int use_bytearray;
+    if (!PyArg_ParseTuple(args, "p:gc_byteswriter_roots", &use_bytearray)) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyValueRoot result_root;
+    _PyThreadState_PushValueRoot(tstate, &result_root);
+    PyBytesWriter *writer = NULL;
+    PyObject *result = NULL;
+
+    for (int small = 0; small < 2; small++) {
+        Py_ssize_t initial = small ? 16 : 512;
+        writer = use_bytearray ? _PyBytesWriter_CreateByteArray(initial)
+                               : PyBytesWriter_Create(initial);
+        if (writer == NULL) {
+            goto error;
+        }
+        memset(PyBytesWriter_GetData(writer), 'a', initial);
+        if (!small && byteswriter_expect_root(writer->obj, 1, "create") < 0) {
+            goto error;
+        }
+        if (PyBytesWriter_Resize(writer, 1024) < 0) {
+            goto error;
+        }
+        if (byteswriter_expect_root(writer->obj, 1, "grow") < 0) {
+            goto error;
+        }
+        for (Py_ssize_t i = 0; i < initial; i++) {
+            if (_PyBytesWriter_GetData(writer)[i] != 'a') {
+                PyErr_SetString(PyExc_AssertionError, "writer lost its prefix");
+                goto error;
+            }
+        }
+        memset(PyBytesWriter_GetData(writer), 'a', 1024);
+        if (PyBytesWriter_Resize(writer, PY_SSIZE_T_MAX) == 0) {
+            PyErr_SetString(PyExc_AssertionError, "oversized resize succeeded");
+            goto error;
+        }
+        if (!PyErr_ExceptionMatches(PyExc_MemoryError)
+            && !PyErr_ExceptionMatches(PyExc_OverflowError))
+        {
+            goto error;
+        }
+        PyErr_Clear();
+        if (byteswriter_expect_root(writer->obj, 1, "failed resize") < 0) {
+            goto error;
+        }
+        (void)PyGC_Collect();
+        result = PyBytesWriter_FinishWithSize(writer, 513);
+        writer = NULL;
+        result_root.object = result;
+        if (result == NULL) {
+            goto error;
+        }
+        if (byteswriter_expect_root(result, 0, "finish") < 0) {
+            goto error;
+        }
+        (void)PyGC_Collect();
+        if (!Py_IS_TYPE(result, use_bytearray ? &PyByteArray_Type : &PyBytes_Type)) {
+            PyErr_SetString(PyExc_AssertionError, "wrong writer result type");
+            goto error;
+        }
+        Py_ssize_t size = use_bytearray ? PyByteArray_GET_SIZE(result)
+                                       : PyBytes_GET_SIZE(result);
+        const char *data = use_bytearray ? PyByteArray_AS_STRING(result)
+                                        : PyBytes_AS_STRING(result);
+        if (size != 513) {
+            PyErr_SetString(PyExc_AssertionError, "wrong writer result size");
+            goto error;
+        }
+        for (Py_ssize_t i = 0; i < size; i++) {
+            if (data[i] != 'a') {
+                PyErr_SetString(PyExc_AssertionError, "writer lost its contents");
+                goto error;
+            }
+        }
+        result_root.object = NULL;
+        Py_CLEAR(result);
+    }
+
+    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(512)
+                           : PyBytesWriter_Create(512);
+    if (writer == NULL || byteswriter_expect_root(writer->obj, 1, "discard") < 0) {
+        goto error;
+    }
+    PyBytesWriter_Discard(writer);
+    writer = NULL;
+    (void)PyGC_Collect();
+
+    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(512)
+                           : PyBytesWriter_Create(512);
+    if (writer == NULL) {
+        goto error;
+    }
+    result = PyBytesWriter_FinishWithSize(writer, -1);
+    writer = NULL;
+    result_root.object = result;
+    if (result != NULL || !PyErr_ExceptionMatches(PyExc_ValueError)) {
+        PyErr_SetString(PyExc_AssertionError, "invalid finish did not fail");
+        goto error;
+    }
+    PyErr_Clear();
+    (void)PyGC_Collect();
+
+    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(PY_SSIZE_T_MAX)
+                           : PyBytesWriter_Create(PY_SSIZE_T_MAX);
+    if (writer != NULL) {
+        PyErr_SetString(PyExc_AssertionError, "oversized creation succeeded");
+        goto error;
+    }
+    if (!PyErr_ExceptionMatches(PyExc_MemoryError)
+        && !PyErr_ExceptionMatches(PyExc_OverflowError))
+    {
+        goto error;
+    }
+    PyErr_Clear();
+    (void)PyGC_Collect();
+    _PyThreadState_PopValueRoot(tstate, &result_root);
+    Py_RETURN_NONE;
+
+error:
+    PyBytesWriter_Discard(writer);
+    _PyThreadState_PopValueRoot(tstate, &result_root);
+    Py_XDECREF(result);
+    return NULL;
+}
+
 /* gc_stack_hits([addr]) -> (hits, dropped): the stack hits listed since
    the last call (PYTHON_GCSTACKHITS=1), those of the object at addr if it
    is given, and clears them.  Each hit is (object address, type name, word
@@ -4757,6 +4916,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
     {"gc_verify_mode", gc_verify_mode, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
+    {"gc_byteswriter_roots", gc_byteswriter_roots, METH_VARARGS},
     {"gc_stack_hits", gc_stack_hits, METH_VARARGS},
     {"test_value_spans", test_value_spans, METH_NOARGS},
     {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},

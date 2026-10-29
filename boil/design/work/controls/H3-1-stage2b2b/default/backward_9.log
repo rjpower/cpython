@@ -1,0 +1,14 @@
+{"phase": "state", "case": "backward_9", "optimize": 0, "__debug__": true, "verify": [0, 0], "stress": 0}
+{"phase": "ast", "case": "backward_9", "tree": "Module(body=[FunctionDef(name='f', args=arguments(), body=[Return(value=Constant(value=1, lineno=1, col_offset=0, end_lineno=1, end_col_offset=1), lineno=1, col_offset=0, end_lineno=1, end_col_offset=1)], lineno=10, col_offset=0, end_lineno=10, end_col_offset=1)])", "core_limit": [0, 0]}
+{"phase": "compiled", "case": "backward_9", "firstlineno": 10, "co_lines": [[0, 1, 10], [1, 3, 1]], "safe_lines": {"0": 10, "1": 1, "2": 1}, "words": [["RESUME", 0, 0, 0, 0], ["LOAD_SMALL_INT_INLINE", 0, 1, 0, 0], ["RETURN_VALUE", 0, 0, 0, 0]], "code_sha256": "36f66d67cfd5486d14a2ecb019ea33e99255b84a913484475bfc1bd4adea9145", "linetable_sha256": "be565bde570f27b420dfe6deb76761b861996688954f56471a9a48873b31951a", "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/Modules/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so", "capi_sha256": "350ab243edcf9f1595362519694260b45fc0a89b827b62c6bc3d233f5d611f58"}
+{"phase": "enable", "case": "backward_9"}
+{"phase": "enabled", "case": "backward_9"}
+{"phase": "executed", "case": "backward_9", "events": [257]}
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/probe_ast.py", line 135, in <module>
+    child(sys.argv[2])
+    ~~~~~^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/probe_ast.py", line 87, in child
+    assert all(line in allowed for line in events), (events, allowed)
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ([257], {1, 10})

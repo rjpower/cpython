@@ -1,0 +1,100 @@
+--- a/Modules/_testinternalcapi.c
++++ b/Modules/_testinternalcapi.c
+@@ -27,6 +27,7 @@
+ #include "pycore_import.h"        // _PyImport_ClearExtension()
+ #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
+ #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
++#include "pycore_instruments.h"  // monitoring storage and deinstrumentation
+ #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
+ #include "pycore_ir.h"              // _PyIR_MakeWord(), _PyIR_SetHandler()
+ #include "pycore_lock.h"          // PyEvent_WaitTimed()
+@@ -1631,6 +1632,79 @@
+         return NULL;
+     }
+     return PyLong_FromLong(_PyCode_SafeAddr2Line(code, offset));
++}
++
++static PyObject *
++monitoring_storage_roundtrip(PyObject *self, PyObject *args)
++{
++    int index, opcode, line;
++    if (!PyArg_ParseTuple(args, "iii:monitoring_storage_roundtrip",
++                          &index, &opcode, &line)) {
++        return NULL;
++    }
++    uint16_t originals[3] = {0};
++    const int nwords = Py_ARRAY_LENGTH(originals);
++    if (index < 0 || index >= nwords || opcode < 0 || opcode > UINT16_MAX ||
++        line < -1) {
++        PyErr_SetString(PyExc_ValueError, "invalid monitoring storage input");
++        return NULL;
++    }
++    struct {
++        _PyCoLineInstrumentationData lines;
++        int extra[Py_ARRAY_LENGTH(originals)];
++    } storage = {0};
++    uint16_t tokens[Py_ARRAY_LENGTH(originals)] = {255, 511, UINT16_MAX};
++    int lines[Py_ARRAY_LENGTH(originals)] = {-1, 0, INT_MAX};
++    tokens[index] = (uint16_t)opcode;
++    lines[index] = line;
++    storage.lines.original_opcodes = originals;
++    for (int i = 0; i < nwords; i++) {
++        _PyCode_SetOriginalOpcode(&storage.lines, i, tokens[i]);
++        _PyCode_SetMonitoringLine(&storage.lines, i, lines[i]);
++    }
++    return Py_BuildValue("((ii)(ii)(ii))",
++                         _PyCode_GetOriginalOpcode(&storage.lines, 0),
++                         _Py_Instrumentation_GetLine(&storage.lines, 0),
++                         _PyCode_GetOriginalOpcode(&storage.lines, 1),
++                         _Py_Instrumentation_GetLine(&storage.lines, 1),
++                         _PyCode_GetOriginalOpcode(&storage.lines, 2),
++                         _Py_Instrumentation_GetLine(&storage.lines, 2));
++}
++
++static PyObject *
++monitoring_deinstrument(PyObject *self, PyObject *arg)
++{
++    int opcode = PyLong_AsInt(arg);
++    if (opcode == -1 && PyErr_Occurred()) {
++        return NULL;
++    }
++    return PyLong_FromLong(_PyCode_Deinstrument(opcode));
++}
++
++static PyObject *
++monitoring_state(PyObject *self, PyObject *arg)
++{
++    if (!PyCode_Check(arg)) {
++        PyErr_SetString(PyExc_TypeError, "expected a code object");
++        return NULL;
++    }
++    PyCodeObject *code = (PyCodeObject *)arg;
++    _PyCoMonitoringData *data = code->_co_monitoring;
++    if (data == NULL) {
++        Py_RETURN_NONE;
++    }
++    return Py_BuildValue("(y#y#y#K(iiiii))",
++                         (const char *)data->local_monitors.tools,
++                         (Py_ssize_t)sizeof(data->local_monitors.tools),
++                         (const char *)data->active_monitors.tools,
++                         (Py_ssize_t)sizeof(data->active_monitors.tools),
++                         (const char *)data->tool_versions,
++                         (Py_ssize_t)sizeof(data->tool_versions),
++                         (unsigned long long)code->_co_instrumentation_version,
++                         data->tools != NULL, data->lines != NULL,
++                         data->line_tools != NULL,
++                         data->per_instruction_opcodes != NULL,
++                         data->per_instruction_tools != NULL);
+ }
+ 
+ /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
+@@ -4504,6 +4578,9 @@
+     {"get_feedback", get_feedback, METH_VARARGS, NULL},
+     {"get_ir", get_ir, METH_VARARGS, NULL},
+     {"code_safe_addr2line", code_safe_addr2line, METH_VARARGS, NULL},
++    {"monitoring_storage_roundtrip", monitoring_storage_roundtrip, METH_VARARGS, NULL},
++    {"monitoring_deinstrument", monitoring_deinstrument, METH_O, NULL},
++    {"monitoring_state", monitoring_state, METH_O, NULL},
+     {"set_ir_max_forward", _PyCFunction_CAST(set_ir_max_forward), METH_O, NULL},
+     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
+      METH_VARARGS | METH_KEYWORDS, NULL},

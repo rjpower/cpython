@@ -94,3 +94,53 @@ source inspection alone qualifies real frame transitions or tailcall runtime.
 The native request/size and these controls remain pending; +230,368 remains
 arithmetic until their matching compiled output exists. Full union, broad
 modes and performance gates remain separate.
+
+## Private controls: actual bounded outcome
+
+Control source froze at b1ce242f584. Its first positive compile failed before
+any target probe because pycore_stats.h's _PyThreadStateImpl declarations need
+actual pycore_tstate.h first. This is retained under
+build/H3-1-stage2b3/counter-controls-compile-failure-v1 and its adjacent log;
+it receives no counter/negative-control credit. Root reviewed the exact
+compiler-input repair: include that header and the existing Makefile mimalloc
+include path (two control files,3 insertions/1 deletion). It is committed as
+17fbcacea87; no interpreter rebuild or native-source change occurred.
+
+The corrected three variants each compiled and returned normally once.
+Current macro passed all numeric entry/pair/off/clear/C-local/predicted checks.
+The copied historical 256 cutoff failed exactly nine named entry/pair/local
+assertions; moving the actual generated counter after its predicted label
+failed exactly predicted.entries and predicted.self_pair. Neither negative
+uses compilation failure, malformed code or execution of synthetic handlers.
+The separate host copied inst.name emitter failed the existing per-operation
+and NOFB oracle (68 subtest failures, no errors). Actual native mode for the
+three probes was off/extras0/stress0 on the matching non-tail Py_STATS build.
+
+Actual compiled sizes are PyStats895,544 bytes and renamed historical
+PyStats665,176 bytes; OpcodeStats2,960 and historical2,592. The measured layout
+difference is230,368 bytes. One actual RawCalloc request for895,544 bytes
+succeeded and was zeroed. This measures C layouts/request success, not RSS,
+old-process allocation behavior or memory cost of extra interpreter instances.
+Production still has one stats aggregate per interpreter. The primitive
+same/nested C-local activation checks do not execute actual frame transitions;
+normal predicted control is not tailcall-runtime qualification.
+
+Evidence in this owned tree:
+
+- build/H3-1-stage2b3/build-result.json and post-cleanup.json: fresh native
+  d462e8338ce build/config/compiler/full product closure.
+- tests-result.json and tests-v2-result.json: both actual failed test attempts;
+  tests-v3-result.json and tests-v3-post-cleanup.json: only the granted remaining
+  dump and five generator/domain cases, with unchanged native/config/tools.
+- counter-controls/plan.json: corrected frozen plan d76d4919487ac0aa40e5a0e6e6f276e0af0396122490b49caf9545df282ba327.
+- counter-controls/result.json: dd540696bff2c6d630559e3522cc668e1516b4efae273bebeda39e31bec104c9;
+  raw per-variant compile/probe logs and extensions are beside it.
+- counter-controls/post-cleanup.json: 7bed4e6022bfc60e2067fc11308ebf84a2ae1a35d2ddf1cbecc358e2591d000e.
+
+Post-gate cleanup verified the same clean17fbc source, complete original
+product roster/bytes/aliases, configuration and compiler/tool bytes. Native
+sources remain exactly d462 throughout the test/control-only bridges. All
+receipts remain qualification=False: this is a coherent branch-local stats
+checkpoint, not broad-suite, union, landing, actual-frame, tailcall or
+performance qualification. Full-domain producer/reader live-data closure,
+actual-union regeneration and the bounded union gates remain review items.

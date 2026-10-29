@@ -92,3 +92,27 @@ preserves interpreter flags. BOIL_MODE_EVIDENCE selects a queue-owned
 JSONL log. This provides per-worker (2, 0) evidence for the final plain
 kill suite. The -E control must fail with actual state (0, 0) before
 running the requested worker module.
+
+The later stress audit found that gc_alloc_in_reftracer reset the test_gc
+worker's global interval to zero. Shared prerequisite 59790b545bc was
+independently integrated as 02bcd2f6132 and merged here at 5576cdbd755.
+Earlier environment-requested stress counts do not establish uniform
+actual worker coverage. The new child prelude asserts gc_get_stress()
+before the test body; the two exact-injection fixtures still disable
+automatic stress afterward, as already stated above.
+
+`control_driver.py stress_forwarding` removes only PYTHON_GCSTRESS from
+the forwarding loop. Its test deliberately removes the parent verifier
+environment override: otherwise that kwarg would itself disable -I and
+could hide missing stress forwarding. The control fails with actual child
+stress 0 instead of 1000; no setter repairs the state. The positive test
+checks inherited 1000 and an explicit-off override.
+
+`assert_stress_worker.py` and its portable shell adapter require actual
+1000 at worker entry and in finally after runpy, recording the true test
+list/filter, profile, PID, verifier extras, flags and source/config hashes.
+They preserve a failing worker's nonzero result and contain no setter.
+The -E control fails at 0; the portable positive control passes the two
+getter/reftracer tests with one matching 1000 start/end pair. Full stress
+verification will use this adapter with BOIL_STRESS_RUN and
+BOIL_STRESS_EVIDENCE selecting the run and queue-owned JSONL destination.

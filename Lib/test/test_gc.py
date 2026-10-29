@@ -2864,6 +2864,7 @@ def _queue_child(code, **env):
     expected = ({"retain": 1, "kill": 2}.get(mode, 0),
                 sum({"pymem": 1, "structs": 2}[extra]
                     for extra in set(extras.split(",")) if extra))
+    expected_stress = int(env.get("PYTHON_GCSTRESS", "") or 0)
     prelude = textwrap.dedent("""
         import gc, os, sys, weakref, _interpreters, _testinternalcapi
         def where():
@@ -2883,6 +2884,8 @@ def _queue_child(code, **env):
     """)
     prelude += (f"assert _testinternalcapi.gc_verify_mode() == {expected!r}, "
                 "_testinternalcapi.gc_verify_mode()\n")
+    prelude += (f"assert _testinternalcapi.gc_get_stress() == {expected_stress}, "
+                "_testinternalcapi.gc_get_stress()\n")
     rc, out, err = assert_python_ok("-c", prelude + textwrap.dedent(code),
                                   **env)
     return out.decode()
@@ -2907,6 +2910,17 @@ class InterpreterQueueTests(unittest.TestCase):
                     # A test-specific request takes precedence over the parent.
                     _queue_child("assert _testinternalcapi.gc_verify_mode() == (0, 0)",
                                  PYTHON_GCVERIFY="")
+
+    def test_child_stress_mode(self):
+        with unittest.mock.patch.dict(os.environ, {"PYTHON_GCSTRESS": "1000"}):
+            # Isolate stress forwarding: a verifier override would itself
+            # disable assert_python_ok's default environment isolation.
+            os.environ.pop("PYTHON_GCVERIFY", None)
+            _queue_child("assert _testinternalcapi.gc_get_stress() == 1000, "
+                         "_testinternalcapi.gc_get_stress()")
+            _queue_child("assert _testinternalcapi.gc_get_stress() == 0, "
+                         "_testinternalcapi.gc_get_stress()",
+                         PYTHON_GCSTRESS="")
 
     def test_creator_paths_under_stress(self):
         # 9.1: the B class of note 11 section 8.2.

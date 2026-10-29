@@ -4,6 +4,17 @@ import sys
 from test import test_gc
 
 control = sys.argv[1]
+if control == "stress_forwarding":
+    import inspect
+    source = inspect.getsource(test_gc._queue_child)
+    old = '("PYTHON_GCVERIFY", "PYTHON_GCSTRESS")'
+    assert source.count(old) == 1
+    source = source.replace(old, '("PYTHON_GCVERIFY",)')
+    exec(compile(source, "<missing stress forwarding>", "exec"), test_gc.__dict__)
+    test_gc.InterpreterQueueTests("test_child_stress_mode").test_child_stress_mode()
+    print("missing stress forwarding unexpectedly passed")
+    raise SystemExit(0)
+
 if control == "forwarding":
     source = subprocess.check_output(
         ["git", "show", "0f8a019b846:Lib/test/test_gc.py"], text=True)

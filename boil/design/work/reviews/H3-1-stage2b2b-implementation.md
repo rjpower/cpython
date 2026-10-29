@@ -4,6 +4,11 @@ Independent read-only source review, 2026-10-29. This is a development
 checkpoint, not landing approval. No H3 source, test, build or configuration
 was changed by this review; no native execution or tests were run.
 
+Final development verdict: **SOURCE_REVIEW_CLEAR** for refrozen manifest
+`54b2832334af6148e6852799333361e1e089ffc6fc7642dbec92503ab84084a9`.
+The one initial finding below is fixed in that reviewed delta. Runtime
+gates and landing evidence still require their separate review.
+
 Reviewed worktree: `boil-compiler-copyprop`, HEAD/baseline
 `878647973ba08be9f2c8e32e972504b507440b46` plus the frozen 12-file diff.
 Those production paths at the baseline match native prerequisite
@@ -22,9 +27,9 @@ Those production paths at the baseline match native prerequisite
   The private API/layout decision and three VARARGS grants are in primary
   PROCESS sections 0.2 and the bounded shared-file exceptions.
 
-## Finding requiring correction
+## Initial finding and reviewed correction
 
-**FIX_FIRST: preserve configured requests for no-monitoring code.**
+**Initial FIX_FIRST: preserve configured requests for no-monitoring code.**
 `Python/instrumentation.c:1725` retains the early
 `CO_NO_MONITORING_EVENTS` success return, but the local request/tool-version
 write now occurs only in preparation/commit below that return. The old
@@ -43,10 +48,28 @@ review did not execute that counterexample.
 The coordinator ruled to preserve the previous configured local
 request/tool-version behavior on successful no-monitoring paths, while
 allowing installed instrumentation to remain absent. No new compatibility
-break or constructor restriction was approved. The owner will apply that
-bounded correction and a valid `code.replace` regression only after active
-gates quiesce, then provide a new frozen source identity. This finding is
-open against the hashes above until that delta is reviewed.
+break or constructor restriction was approved. After the active gates
+quiesced, the owner applied that bounded correction and a valid
+`code.replace` regression, then froze the source again:
+
+* Incremental `build/H3-1-stage2b2b/bookkeeping-fix.patch`: SHA256
+  `c8e1c11cbecf16126d6ae4a0703b5c1591fa1a0691cbc11da45a16a93a916be1`.
+* Complete `refrozen-production.patch`: SHA256
+  `7c64784ac0481248cdf88f5d381da355d028246a008615531768c8af8a0c907d`.
+* Complete `refrozen-sources.json`: SHA256
+  `54b2832334af6148e6852799333361e1e089ffc6fc7642dbec92503ab84084a9`.
+
+The incremental change touches only `Python/instrumentation.c` and
+`Lib/test/test_monitoring.py`. All 12 final file hashes and the complete
+live diff match the new manifest; the other ten files retain their prior
+hashes. The no-monitoring success path now updates only the selected
+configured request/tool version, before returning without arrays or word
+rewrites. Internal global-refresh calls with tool_id -1 keep the original
+no-op behavior. The added regression checks requested and cleared masks,
+empty active/backing state, unchanged words and absent callbacks on a
+valid non-shim copy. It targets the actual observable regression rather
+than just reading an implementation flag. This source finding is closed;
+the regression's final execution is not claimed by this review.
 
 ## Remaining source checks
 
@@ -120,6 +143,7 @@ Retained 450-test and eight-AST positives precede the final source
 qualification and do not certify the frozen production manifest here.
 Final affected normal/Og/actual-kill evidence, allocation/peak accounting,
 negative-control restoration, generation/phase checks and exact source/
-binary provenance require their later review. The CO_NO correction must
-also be included in the next source identity. No runtime landing verdict
-is issued by this development review.
+binary provenance require their later review at the refrozen identity.
+The earlier 603-manifest smoke/affected runs do not qualify the subsequent
+bookkeeping change. No runtime landing verdict is issued by this
+development review.

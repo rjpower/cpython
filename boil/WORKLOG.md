@@ -3226,3 +3226,27 @@ automatic classifier; no user approval is pending or stopped probe retried.
 Next hour: finish debug20 and start its approved full chain; close H3's bounded
 bookkeeping finding and qualify the refrozen candidate. Keep shared full
 orchestration's outer-result handoff explicit. Next report is due about11:45 PDT.
+
+
+### 10:49 PDT: corrected storage source cleared; H1 readiness review
+
+H3 refreezes the no-monitoring-flags bookkeeping correction at source manifest
+54b2832334af6148e6852799333361e1e089ffc6fc7642dbec92503ab84084a9 and full patch
+7c64784ac0481248cdf88f5d381da355d028246a008615531768c8af8a0c907d.
+Independent peer verifies all12 file hashes and the bounded two-file delta,
+and returns SOURCE_REVIEW_CLEAR. The valid code.replace regression preserves
+configured request/tool version while leaving installation absent. This is
+source clearance, not landing approval;603 smoke/affected evidence is historical.
+Final affected/kill and isolated controls run under the new source identity,
+with versioned measurement copies preserving earlier outputs.
+
+The compiler reviewer now audits preserved H1-1 for the smallest frame-passing
+experiment, exact transitions and checker/compiler attribution prerequisites.
+No H1 code/build/test/benchmark work is authorized by that read-only assignment.
+Final H3 evidence review takes priority when available. Root maps, clearing
+stores, build/frame-pointer policy and string certificate choices stay separate.
+
+At10:48, both test slots were in active H3 jobs while ROOTS debugi18case07
+waited normally. Active jobs finish untouched; H3 then uses one lane and yields
+the other to ROOTS, preserving landing-critical progress. No source/gate policy
+or filter changes. The hourly schedule remains11:45 PDT.

@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 10:45 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 10:49 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 10:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 10:49 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -147,8 +147,9 @@ break the old line codec. Corrected design84e518cb872e and exact fixture71ec68cb
 clear independent review, including all five decoder callers, the fork's
 test-hook ABI and allocation-safe snapshots. Implementation is under source
 review and qualification. Development line/membership/OOM controls pass;
-a review-found no-monitoring-flags bookkeeping regression is being corrected
-before final refreeze. Earlier evidence is not relabeled as final qualification.
+the no-monitoring-flags bookkeeping correction clears source review at
+manifest54b2832334af. Final qualification is in progress; earlier evidence is
+not relabeled as final qualification.
 The private API/layout decision is recorded in PROCESS section0.2.
 The pre-I [string design](design/work/pre-I-linear-string-concat.md) is ready
 for review; its [Unicode storage/ABI audit](design/work/pre-I-string-storage-audit.md)

@@ -3541,3 +3541,37 @@ binds6,322source entries/271native paths per build and separate immutable helper
 The class control and restoration have not yet been credited as runtime PASS.
 Final source-qualified evidence and post-fix qualification policy remain open.
 Next hourly report stays12:45 PDT.
+
+
+### 12:13 PDT: bounded Park proof complete; fresh qualification scope ruled
+
+Summary632414b6 records71 bounded targets/71tests/0skips,142 actual driver-worker
+occurrences,184 finalization records and5,857collections/zero fallback/unpinned.
+All three original thread-pool regressions pass ten fresh off and ten actual-kill
+selections each on O1-debug. Default originals, exact-slot/omitted-caller fixture,
+detached-register and DWORD controls also pass. Runtime reportdb936 verifies
+class-only CORE override fails the same fixture, cleanup precedes unregister,
+and restored precision passes. This is bounded repair evidence, not a final
+matrix/full PASS or O1 adoption.
+
+The coordinator reads amended proposal4b87878d, preservingca275v1, and explicitly
+carries unchanged legacy31/11 evidence forward at8ce using body correspondence
+42350872, seven opaque caller contracts and the new Park controls plus required
+fresh full chain. No old receipt becomes new-head20/20; no general reuse rule.
+Each fresh default/O1-debug plan instead requires20 independent selections of
+each three thread regressions and BOTH eval probes, plus20 complete orders of
+the three thread modules and test_gc:120 transactions/build. Inventory supplement
+e14c supplies39 protected selectors;501 listed four-module cases are not runtime
+counts. Freeze/review first actual iteration per build before the remaining19.
+
+Changed generated-cases suite runs once per default/debug/debug-kill. Fresh
+strict stale100/compiled checks, ASan14+2 kill/N0 with prospective native guards,
+tail bounded support, release full/debug normal+kill, stress11 both, unchanged
+filtered release full N100000, cext16/7 exact skips and bound optional closure
+remain. Exact plans require review. Compiler peer now reviews the policy/plans;
+owner closes bounded extras and clean fixup/source bridge first. The first stale
+extra wrapper fails because its added stdout mode witnesses violate the existing
+six-line oracle; all six native stale100 probes report100/100. Preserve that
+harness failure and move witnesses to stderr before a refrozen bounded retry.
+No full profile or matrix has launched. H3/H1 native union handoff still waits;
+next hourly report remains12:45 PDT.

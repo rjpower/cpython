@@ -200,3 +200,252 @@ control fails before module execution with Py_DEBUG=0 and optimize=1; its
 plan, witness and diagnostic are `release-O.{plan.json,jsonl,log}` in the
 launcher evidence directory. Earlier off/kill and auxiliary controls remain
 applicable; this review change does not repeat unrelated runtime tests.
+
+## Verification identity and orchestration checkpoints
+
+This section records the reviewed design. The identity/result prerequisite
+is implemented; its bounded component qualification is recorded below.
+Numeric-gate orchestration remains a later checkpoint. Registry selections,
+exclusions and pending prerequisites remain unchanged. Neither checkpoint
+changes native sources or gate_run.sh. Stale probes need a separate child
+contract before their named profiles can run.
+
+### Identity and result prerequisite
+
+Version the internal launch plan to v2 and update its active callers without
+a v1 fallback. Historical v1 plans and witnesses retain their original tool
+hashes and launcher-only interpretation. The plan must distinguish:
+
+- **Build source:** the canonical configured source directory, its revision
+  and a recorded execution-input snapshot. Resolve it through the selected
+  interpreter's actual configuration and build Makefile, requiring agreement.
+  A supplied primary checkout is not a substitute: integration Makefiles
+  currently name `/tmp/boilgate`.
+- **Runtime source:** the actual uninstalled Lib/test and Lib roots used by
+  the driver/workers, with their own input snapshot. Validate the registry
+  and case inventory against this explicit root. Do not rebind verify.REPO.
+- **Tools:** a run-owned frozen copy of the registry, inventory and executable
+  verification tools, with paths and hashes. Freeze gate.sh, unchanged
+  gate_run.sh, root_stats.py and the launcher/adapter/validator/orchestrator
+  together. Hash every consumed tool; do not mix live and frozen siblings.
+- **Build receipt:** an explicit recorded build command and its successful
+  outcome, frozen source inputs before/after, compiler/configuration identity,
+  and resulting Python, library and all built extension hashes. Configuration includes
+  Makefile, pyconfig.h and the loaded sysconfig data. Extensions include the
+  actual _testinternalcapi and test-support modules. The receipt must bind
+  the build output to the source snapshot, including generated inputs.
+
+A source snapshot, a current git HEAD, sys.version, Makefile equality or
+`make -q` alone cannot establish that receipt. The initial implementation
+consumes a coordinator-qualified receipt; it does not rebuild or reconfigure
+an occupied build to manufacture one. Receipt creation/qualification is an
+explicit prerequisite. Every real v2 launch, including component controls,
+requires the same receipt/source/output checks; component-only describes
+coverage, not weaker identity validation. Existing unqualified v1 binaries
+and witnesses remain historical. No launcher component can produce a named
+profile PASS or claim to test the current native tree. A prerequisite that
+requires a native landing must be supported by the receipt's source identity,
+not just by the registry declaring it available.
+
+Version the source-snapshot scope. Start with all tracked files, excluding
+only `boil/{README,PROCESS,WORKLOG}.md`, `boil/tools/verification.md` and
+Markdown files under `boil/design/`; these concurrent documentation edits
+do not invalidate a native run. Include executable files under boil, not the
+whole boil directory as a documentation exclusion. Add explicitly admitted
+generated/untracked execution inputs, including ignored generated headers;
+record paths, symlink targets, file modes and content hashes. Reject unknown
+untracked executable inputs in the source roots. Build/evidence outputs are
+separate from source inputs. Preserve before/after manifests and differences;
+compare the declared build/runtime inputs, not the active primary's status.
+Compare execution inputs independently of HEAD; record both the receipt's
+revision and the observed revision, so a commit of excluded documentation
+can proceed while a changed executable input still fails identity checks.
+The existing rule against changing executable source during a gate remains.
+
+The coordinator granted the bounded launcher extension for these v2 fields
+and actual origins separately from the future runner. Check actual
+resolved origins and hashes for test, test.support, regrtest infrastructure,
+sysconfig data and _testinternalcapi in each driver/worker. Check the scheduled
+test module's actual object before run_unittest runs it; an import-time skip
+records its resolved source and result instead. Do not import the test early
+to discover its origin, nor infer the loaded Lib from an installation path.
+Keep the worker.main runpy entry. Require the fresh run pycache prefix in the
+verified driver/workers, so stale source-tree bytecode cannot bypass source
+binding. Custom children remain outside this uniform witness contract.
+
+Port the already exercised scheduler/TestResult.from_json PID/config/seed
+binding and unittest addSkip ID/reason capture from ROOTS's build-owned
+`build/takeover-20261029/{matrix_v2_assert_state,module_contract}.py`.
+Do not import an untracked build helper into production tools. Its retained
+module-contract controls reject corrupted real-evidence replays; that is
+useful input, not new execution or shared-runner qualification. Adapt its
+module-specific expected counts and skip policy to each qualified source/build
+selection instead of retaining ROOTS's fixed eleven-module assumptions.
+
+Add selection/summary capture through the existing regrtest reporter hooks,
+forwarding the original reporter unchanged, and a plan-derived `--junit-xml`
+path. Record the resolved run selection and each returned TestResult state/stats.
+Retain raw XML for concrete successful test IDs and outcomes as well as the
+actual skip records; do not parse a green console summary as execution proof.
+The hooks must preserve module errors, nonzero exits and the existing reporter.
+
+### Gate orchestration checkpoint
+
+`verify.py run PROFILE --build BUILD --source-root SOURCE --receipt RECEIPT
+--evidence DIR [--inventory INVENTORY]` delegates to verify_run.py. The source
+argument must match the resolved build source, and evidence must be a new
+run-owned directory. There are no extra test/filter/worker-command operands.
+Validate all prerequisites, hashes, inventory and build conditions before a
+test starts. Resolve the complete profile into hash-bound invocation plans:
+one main invocation for module/full selections; one per concrete case for
+individual selections; repeat the complete selection exactly repeat times.
+The eleven-module order profile uses all eleven modules in one driver per
+repetition, with each module in its fresh worker. Do not multiply that profile
+into eleven filtered cases or call the historical 880 subset equivalent.
+
+Use one canonical driver-argv constructor. The named gate hook receives its
+resolved argv as ordinary process arguments and does not append GATE_IGNORE
+or any other filter. This avoids the current mismatch: driver_arguments puts
+`--python` after exclusions, whereas ordinary gate1 appends its ignore after
+the caller's arguments. The launcher still requires exact profile argv.
+Named runs reject conflicting ambient mode/stress/filter/worker overrides;
+set requested startup environment only in run children, never through a
+getter-repairing setter. ASan runs require exactly the approved effective
+options, reject conflicting or duplicate settings, and witness that environment
+in actual driver/workers. Python -O/-OO remain rejected; native O1 is separate.
+
+Keep the ordinary numeric interface unchanged when no named plan is present.
+With a named plan, check the requested numeric level/build against the plan
+before execution. gate_run.sh still sees literal `-m test` in each command,
+and retains slot-before-build-lock ordering, timeout groups and cleanup.
+Take final preflight and postflight identity checks inside the existing build
+lock, around the actual launcher, so a plan formed while waiting cannot attest
+an intervening rebuild. Shared identity helpers belong in verify.py: the driver
+checks complete input snapshots once before and after execution; workers check
+their tool/build identity and actual infrastructure/test-module bindings. Avoid
+rehashing the complete source tree in every worker. Do not take the same build
+lock in the outer runner.
+
+Named gate2 remains one full suite. Named gate3 remains one debug full suite,
+then test_cext, regeneration and traversal audit. Create a distinct hash-bound
+cext plan with stage=cext, its own witness/result/counter paths and the same
+profile/build/source identity. Never mutate the main plan in place or weaken
+the launcher's exact argv check. Run regeneration in the declared build and
+compare the declared build-source snapshot before/after; run the audit from
+that source tree. Snapshot checking and command outcomes must both pass.
+
+Reconcile each invocation only after its processes have exited. Require one
+driver start/end, every scheduled worker's matching PID/config/test/filter
+start/end, and a result for every resolved selection. Bind returned results to
+the scheduled PID, serialized config and random seed. Reject missing, duplicate,
+substituted, wrong-stage and unexpected worker records. A known platform
+auxiliary has paired state witnesses but supplies no test coverage. For an
+individual case require its exact concrete ID to execute once without skipping;
+for a repeated module profile require every required reclamation ID to execute
+in its full module on every repetition. Record all other skips by ID/reason;
+source skips never become extra CLI filters. Full-suite counts are measured,
+not pinned to a historical total, and the complete resolved module list must
+be accounted for even when platform/resource skips occur.
+
+Use fresh counter files per invocation/stage. Require parseable main-interpreter
+records for the verified driver/workers and retain test-created child records.
+Keep root_stats' missing-file, empty/no-collection and fallback failures; keep
+ordinary suite unpinned totals report-only. Record counts and skips together
+with repetition completion. Stale profiles stay unavailable until a separately
+reviewed adapter proves all five actual 100-attempt first-collection oracles
+and its stricter zero conditions in the executing children. Do not substitute
+the existing 20-attempt unittest or a generic root-counter aggregate.
+
+Preserve stdout/stderr, original command status, witnesses, counters, XML,
+plans and snapshot differences on failure. Audit failure also returns nonzero;
+it cannot turn an original failure into success. Write the aggregate PASS only
+after every required invocation and postflight check succeeds. Pending ROOTS
+and full-stress-policy prerequisites remain blocking, including for a partial
+run that happened to execute some selections successfully.
+
+### First qualification and negative controls
+
+First qualify the v2 resolver/auditor and additive launcher changes with host
+fixtures and an explicit component-control registry. Use an existing quiescent
+binary, accurately labeled, for bounded real off/kill driver-worker runs, a
+two-module order and two-repeat case run, and the distinct cext-stage contract.
+Do not report these controls as a full gate or the reclamation20 qualification.
+ASan environment rejection can qualify on host fixtures first; a matching ASan
+binary is required for an actual ASan positive. Named full-suite promotion
+waits for a qualified receipt and complete gate2/3 execution.
+
+Controls must fail for wrong build/runtime roots, a substituted actual module,
+an older or mismatched build receipt/extension, source or tool drift, a changed
+plan, ambient ASan/mode conflict, exclusion-order mismatch, a reused main plan
+for cext, and gate-level mismatch. Reconciliation controls remove/substitute
+one scheduled worker or result, mark a required case skipped/zero, omit one
+repetition, remove an end witness, inject a failure and delete/empty/corrupt the
+counter file or add fallback. Confirm ordinary gates retain their argv, named
+gates reject narrowing, and timeout/worker-failure evidence survives. Real
+runtime controls retain the existing ignored-environment, missing-getter and
+lasting-state failures. No native mutation is needed for these controls.
+
+### Identity/result component implementation
+
+The launcher accepts only v2 plans. Shared helpers bind source/runtime roots,
+complete execution-input snapshots, build outputs, frozen tools and a
+coordinator-qualified receipt. Actual infrastructure and scheduled test-module
+origins are checked before execution, with fresh plan-bound bytecode caches.
+Build output inventories include both extension symlink identities and the
+resolved in-build target bytes; external targets are rejected.
+
+The targeted result checker binds scheduled and returned PID/configuration/
+seed records, module origins, exact qualified counts, concrete XML outcomes,
+skip IDs/reasons and process counters. Protected tests also reject skipped
+parameterized or message-bearing subtests. This checker has no full-suite
+selection/count/skip policy and cannot produce a named profile PASS.
+
+The cext component stage uses `-q -u cpu -j1 test_cext` with the frozen worker
+command. This adds one isolated module worker to the ordinary sequential
+cext invocation so scheduling and result witnesses apply. Its short scheduled
+name `test_cext` is bound explicitly to canonical origin `test.test_cext`.
+It has no case filter or remote-exec exclusion. Ordinary numeric gates are
+unchanged; no run command, gate hook or prerequisite promotion is implemented.
+
+Host qualification covers 36 registry/launcher/identity/result controls.
+Retained before-fix controls expose acceptance of changed extension bytes
+behind an unchanged symlink, external build targets, protected subtest skips,
+and the cext renderer's missing multiprocessing option.
+
+Component evidence is retained under
+`build/manifest-20261029/identity-stage2b/`. The configured debug build uses
+native revision `052d8342e56` and `/tmp/boilgate` as its source, with its existing
+`-Og` configuration and ten unavailable optional modules. The
+[receipt review](../design/work/reviews/verification-build-receipt.md)
+records its clean rebuild, smoke and separate target-byte supplement. Original
+105-entry receipts remain unchanged and superseded: they recorded extension
+links without their target bytes. The replacement receipt binds 172 outputs.
+Initial harness/incomplete-origin failures and all superseded plans/tools
+are retained alongside the final proposal; they supply no positive coverage.
+
+The frozen `qualification-plan-final.json` batch completed with outer status
+zero. Off, kill and each of two separate repetitions executed the exact
+value-span case in an actual driver/worker pair. The full context/weakref
+module invocation reported 203 tests and five approved source skips; all 198
+remaining IDs succeeded. The cext invocation reported 16 tests and seven
+approved source skips; all nine remaining IDs succeeded. The platform auxiliary
+also passed its kill-mode state checks. Each driver cohort reconciled actual
+PID/configuration/seed/origin/XML/count/skip records and collection counters,
+with zero fallback. Final complete source/output identity checks passed.
+
+Seven isolated native negatives rejected ignored environment, a missing getter,
+a lasting stress change, malformed configuration inside actual worker.main,
+a substituted test package before its initialization, a missing receipt and
+a wrong runtime root. Eleven corruptions of the successful actual evidence
+rejected missing worker/result/end/origin records, narrowed positive counts,
+wrong configuration/seed/stage, missing counters, fallback and an allowlisted
+protected subtest skip despite successful base XML. Commands, raw logs,
+witnesses, counters, XML, audits and exact source skip policy remain in
+`actual-v2-final/` and the surrounding evidence directory.
+
+This qualifies only the identity/result component on the recorded build.
+ASan environment controls use host fixtures; there is no actual ASan positive.
+The cext fixture's custom children are outside the uniform regrtest worker
+witness contract. Full suites, twenty repetitions, stale-child adapters,
+production selection/count/skip policy, orchestration and gate integration
+remain later work. No named profile is promoted by this batch.

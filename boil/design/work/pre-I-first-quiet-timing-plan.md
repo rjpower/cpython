@@ -194,3 +194,45 @@ commit and byte checks. Host-only copied-repository controls accept a clean
 source and reject added or modified Python source. The initial frozen package
 remains at `quiet-timing-reviewed-v1/`, provenance 85ee627e; this correction
 does not qualify a fork or authorize any target execution.
+
+## Early candidate binding after the stress failure
+
+The coordinator permits a bounded quiet diagnostic before a source repair
+only if failed-full termination, focused causal probes and actual machine
+quiescence leave a useful window. A ready GC fix or IR source handoff takes
+priority. Noisy/incomplete timing must not delay them; retain the frozen
+parent products/plan rather than waiting indefinitely.
+
+`build/checkpoint-i-baseline-binding/quiet-ce2ac-binding-v1/BINDING.md`
+records the source-only packet: ce2ac release Python eafcda7a, all 6,322
+source-bridge entries, the original expanded 286 product/alias map and 727
+complete current build-directory products. Both native maps match capture
+before/after. Static readelf closure declares nine exact external ELF inputs;
+it is not observed-load evidence. Release-full receipt 7b57d7ec remains PASS
+only for its actual normal-suite scope. The unresolved stress failures and
+unlanded status are carried in diagnostic metadata; terminal failure closure
+is still an owner/coordinator prerequisite for a quiet window, not a partial
+log relabeled final. No old qualification receipt is changed.
+
+The source-reviewed collector/runner bytes remain unchanged. The fork now
+has its own source/config/native/ELF bindings and historical full-normal
+runtime/CAPI journals; those journals are not actual-driver origins. The
+single shared-tail witness and all timing are unperformed. Upstream's 9e
+closure and accepted products are unchanged. The packet leaves
+`quiet_reservation` null and cannot launch. Independent actual-binding review,
+the final quiet reservation/plan hash and exact root grant remain due.
+Result labels must continue to say early source-policy diagnostic: no
+correctness, landing, parity or ~2x qualification follows, and the existing
+fork -fno-gcse/SDK provenance limits remain.
+
+The terminal stress failure is now receipt 64448666: FAIL/native exit 2,
+50,722 native-reported tests, interpreter assertion, 20-minute GC
+test_trashcan_threads timeout and HTTP ENV_CHANGED. The killed GC worker
+has no end record, so actual-state pairing fails and there is no qualified
+root aggregate. The updated packet binds this exact receipt, all three raw
+streams and a read-only post-cleanup identity capture: source remains clean,
+all 6,322 listed source bytes and all 727 products match. This is identity
+evidence after failure, not correctness or a claimed aggregate. The earlier
+cbbdaef1 binding packet is preserved separately. Quiet reservation remains
+null; focused four-case interpreter probes take priority. No target, timing,
+native build or original profile retry is granted by this update.

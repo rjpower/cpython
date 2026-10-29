@@ -1,10 +1,12 @@
 # ROOTS2b: final stress100k triage
 
 Coordinator checkpoint, 2026-10-29. Source `ce2ac8991ee`, frozen full plan
-`7d40ccb2`. The final full is still finishing; its returned failure/ENV_CHANGED
-block landing. Preserve original logs, helpers, options, source and native
-products through terminal cleanup. Do not retry, add filters or relabel old
-receipts. This record is source/evidence analysis, not an execution grant.
+`7d40ccb2`. The final full is terminal FAIL: receipt `64448666`, native exit2,
+host exit1, 50,722 reported tests and3,418 skips. It has an interpreter
+assertion, a test_gc timeout and HTTP ENV_CHANGED. No qualified aggregate root
+counter result exists because the timed-out worker has no terminal witness.
+Source/native guards remain unchanged after cleanup. Preserve original logs,
+helpers, options and products; do not retry or relabel old receipts.
 
 The other six profiles pass: release/debug/debug-kill fulls51,132 each;
 release/debug stress11 sets3,062 each; ASan16-kill3,976. All have zero
@@ -37,6 +39,23 @@ do not insert a collection merely to make the assertion pass or skip the test.
 A causal old-fail/new-pass control and invariant-specific negative should
 determine affected requalification, with no automatic20 campaign.
 
+The existing contract matters: note11 describes stress as collecting every
+Nth inline allocation, and test_gc already marks two byte-threshold tests
+ineligible under stress because it replaces that trigger. Enabled/threshold0
+still gate collection. This is evidence for a deliberate diagnostic override,
+not permission to skip this interpreter test or change production scheduling.
+
+At15:14 PDT root grants the independently reviewed V2 diagnostic plan
+`d478fceb` / runner `51df97f7`: original-stress, original-off, window-stress,
+window-off, exactly once each as separate guarded commands. Original regrtest
+FAIL stays native2; copied unittest FAIL stays native1; none is a qualification
+PASS. Normal-mode failures or unexpected state/error/skip stop the sequence.
+The copied window observes successful root phases charged to the current
+interpreter, not target finalizer completion. Its getters/imports perturb
+allocation timing. The bound worker seed is991443983 with explicit
+--no-randomize; new hashseed0 does not replay the full's unknown randomized
+hash seed or process history. No scheduler change or exclusion is chosen.
+
 ## HTTP response: separate lifecycle hypotheses
 
 `test_httpservers` worker3667375 returns ENV_CHANGED:103 tests/no failures/
@@ -55,11 +74,22 @@ rerun is not proof. Do not assume a common cause with interpreter scheduling.
 If evidence points at the already-held Queue2 completion work, preserve that
 handoff and hold; do not retry its probes or implementation via another agent.
 
+## GC timeout: distinguish queue progress from deadlock
+
+The20-minute test_gc worker timeout is in test_trashcan_threads. Main and two
+producer threads appear in finalizer paths that release the GIL. Producers
+stop only after main returns from the with-body and requests cleanup;
+run_queue_ex currently drains until empty. Continued producer work could keep
+main draining before it requests shutdown. This is a liveness hypothesis,
+not a demonstrated native deadlock or established shared HTTP cause. The
+worker's missing end/returned/suite witnesses correctly invalidate the full
+aggregate. The held Queue2 probes and implementation remain held.
+
 ## Immediate sequence
 
-1. Let the original profile finish and retain/audit its exact failure closure.
-2. Review focused original-selector and diagnostic plans; no native/source
-   mutation during the current run. Root owns execution and contract rulings.
+1. Preserve the terminal failure closure and six valid earlier profiles.
+2. Execute/review the four granted interpreter diagnostics; keep native/source
+   frozen and make the stress-contract ruling from actual results.
 3. Fix demonstrated causes with bounded changes; rerun relevant levels based
    on the actual delta. Keep six earlier successes at their true source IDs.
 4. Resume tail/extras only under an explicitly reviewed successor plan after

@@ -341,3 +341,83 @@ case-local existing hooks rather than a new queue executor or generic held
 Queue2 probe. No native diagnostic, code change, exclusion or retry was run or
 authorized by this review. The earlier source-preflight finding remains a
 bounded source check; it never asserted completion of runtime qualification.
+
+## Terminal stress100k failure; source and evidence preserved
+
+The terminal receipt is
+`64448666783338eaa394a2055d3f2d3c6b89094ee5e464368d67050576513190`:
+native exit 2, qualification FAIL, 1,394.577 seconds. Its three raw artifact
+hashes match. The transcript reports 50,722 tests, one assertion failure and
+3,418 skips, with test_interpreters FAILED, test_httpservers ENV_CHANGED and
+test_gc timed out after 1,200 seconds. Those transcript totals are not a
+validated complete-roster or root aggregate. Driver3645774 has an end witness;
+test_gc worker3666394 has scheduled/start witnesses and no end, returned or
+suite-result witness. The validator's `unpaired actual state` failure correctly
+rejects that missing terminal worker evidence. It is not an adapter false FAIL.
+
+The timeout trace names test_gc.test_trashcan_threads. Main is in C.__del__430
+at the test's time.sleep459; one producer is in __del__423/make_nested439 and
+the other in sleeper_gen409/__del__430/make_nested439. The test's producers
+continue until its exit list is changed by start_threads' cleanup, after the
+main with-body returns. run_queue_ex drains until queue_head is empty, while
+these finalizers release the GIL. This permits a liveness-cycle hypothesis:
+main may keep draining producer work before it can request producer shutdown.
+The trace does not prove that hypothesis, queue ownership, completion ordering
+or a native lock deadlock. A separately approved case-local progress/entry/exit
+chronology could distinguish it; no held Queue2 probe or new executor is
+authorized by this observation. HTTP lifetime/order and the interpreter's
+threshold scheduling remain separate unresolved cases.
+
+At this read-only terminal check, all 6,322 current source-bridge hashes,
+all three expanded 286-path native maps and their resolved-target/link
+identities match; Git is clean at ce2ac. The full runner rechecks its current
+source/native guards before validating raw results. No source drift explains
+away these failures. Landing, tail Walk and closure prerequisites remain held.
+No diagnostic, retry, source/native edit or interpreter command was executed
+by this reviewer.
+
+## Interpreter diagnostic plan review: failure-code FIX_FIRST
+
+Frozen diagnostic plan `7e553ce2` / runner `2b896958` / probe `8aed9d39` /
+manifest `15f77430` is **FIX_FIRST**, before any target command. The four-job
+scope, terminal-failure prerequisite, exact copied body, seed/hash distinction,
+counter limits and existing source/native guards are bounded appropriately.
+The original regrtest and copied unittest paths have different failure codes:
+`Lib/test/libregrtest/results.py` defines EXITCODE_BAD_TEST=2 and the unchanged
+driver propagates it; the copied probe explicitly exits 1 on assertion failure.
+The runner's unconditional acceptance of only 0/1 would label an intended
+original-stress assertion failure INVALID_OR_UNEXPECTED. Its prose also calls
+that original failure native1. Require exact per-path outcome/code consistency
+(original PASSED0/FAILED2, copy PASSED0/FAILED1), retaining both native failures
+as failures with qualification=False. A host-only mapping control can check
+the two valid failure codes and reject cross-path or unexpected codes. No
+runtime retry, production change or expanded diagnostic is required. No probe
+was executed by this reviewer.
+
+## Interpreter diagnostic successor: four-job plan clear
+
+Verdict: **FOUR_PROBE_PLAN_CLEAR**, subject to the coordinator's execution
+grant, for plan `d478fceb3171f856f058b842582ee6dc009847d3bbe4627257e5bfec2050bf7a`,
+runner `51df97f74d45054e1d91abfc2e899bc9b1b2a6055d8ca64963eb0796d904852c`,
+unchanged probe `8aed9d39b3c750cba85da2bb3ebf35ecad76ad8232f40ad0fb8dcc6ff20381a3`,
+manifest `cb2310978ebd8522c9b5169cc7b73f7cb936c40dd2530a974d66b12f3b14be8e`
+and host controls `0ef6a60b101896717a4e58f5e9fbde537d9ae6f2b6d02fa9350eca39a5e1ae42`.
+All ten indexed hashes match. The complete unexecuted predecessor is preserved
+under frozen-v1. The narrow diff checks exact per-path outcome/exit codes;
+four valid combinations and six wrong-kind/unexpected-code negatives are
+recorded. The command now uses --no-randomize: actual cmdline.py574–577 first
+enables randomization for --randseed, then applies that explicit override.
+
+Only original-stress, original-off, window-stress and window-off, in that
+order as separate commands, are cleared. Each remains a fresh diagnostic
+under normal admission/build and full-serialization locks, exact terminal
+failure/source/native/tool guards and no-overwrite receipts. Original failure
+is native2, copied failure native1; both remain failures with qualification=False.
+N0 failure or an unexpected error/skip/witness/state stops evidence acceptance.
+The two counter snapshots measure successful root phases charged to the
+current interpreter only; they do not prove target graph/finalizer completion.
+The copied observer changes allocation/import timing. Seed991443983 is bound,
+but new hashseed0 differs from the full's recorded randomized-hash flag and
+does not replay its process history. No HTTP/trashcan repair, full rerun,
+Queue2 probe, exclusion or production change follows from this plan. No
+target, host control or diagnostic was executed by this reviewer.

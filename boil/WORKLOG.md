@@ -3937,3 +3937,28 @@ Fresh merged gates remain mandatory after eventual LAND; a source-only reuse
 plan keeps small helpers in existing detached checkout and large outputs in
 project storage. O1 remains a candidate, not silently adopted. Next hourly
 update about15:45 PDT, or earlier for a material finding.
+
+### 15:14 PDT: terminal stress failure and bounded interpreter diagnosis
+
+Final stress100k receipt64448666 is FAIL/native2/host1,50,722 reported tests
+and3,418 skips. It retains interpreter assertion and HTTP unraisables plus a
+20-minute test_gc.test_trashcan_threads timeout. Missing end/returned/suite
+witnesses for that worker correctly prevent a qualified root aggregate.
+Source/native/tool guards remain unchanged; six preceding profiles keep their
+valid scope. No retry, new exclusion, tail Walk or extras launch follows.
+
+Four diagnostic commands d478fceb/runner51df97f7 clear independent review
+569ec607 after a prelaunch failure-code bug was fixed: original regrtest
+assertion failure is native2, copied unittest failure native1. Root grants
+original-stress, original-off, window-stress and window-off once each, with
+normal admission/locks/timeouts and stop on unexpected outcome or normal-mode
+failure. No production edit, extra collection or stress setter. Snapshot and
+hash/process-history limitations stay explicit. Existing stress contract
+replaces byte thresholds; two existing GC tests already account for that,
+but no new skip or scheduling repair is chosen before actual diagnostics.
+
+The trashcan trace supports a distinct queue-progress hypothesis; HTTP cause
+is unresolved and old held Queue2 work remains held. Optional early release
+timing binding6da22295 preserves the failed full and normal-release PASS as
+separate facts. Its reservation is unset and it has no execution grant.
+Focused diagnostics and ready fixes take priority. Next hourly15:45 PDT.

@@ -89,11 +89,15 @@ or root-policy fallback is introduced.
 Current-source full release, full debug normal and full debug kill now pass
 51,132 tests each with zero fallback. Both11-module stress sets pass3,062;
 ASan16 kill passes3,976 under the exact existing allocator filter/options.
-The final filtered release full at interval100,000 has returned an interpreter
-test failure and HTTP unraisables; it remains frozen through terminal cleanup.
+The final filtered release full at interval100,000 is terminal FAIL: an
+interpreter assertion, a20-minute trashcan-thread timeout and HTTP unraisables.
+The timed-out worker prevents a qualified aggregate root-counter result.
 The [triage](10a-2b-stress100k-triage.md) separates threshold scheduling from
 actual collection/retention and HTTP lifecycle causes. No new exclusion or
-retry is introduced. Finish diagnosis and any focused fix, then choose fresh
+retry is introduced. Four reviewed once-only interpreter diagnostics now
+separate stress-trigger semantics from collection/retention; existing stress
+mode replaces byte thresholds, but no new exclusion is authorized. Finish
+diagnosis and any focused fix, then choose fresh
 qualification from the actual changed contract rather than repeating20.
 Tail StackWalk, cext, unchanged regeneration/traversal and declared optional
 header checks remain; none ran after the current failure.

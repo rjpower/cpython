@@ -867,3 +867,66 @@ Complete native maps and source/tool/shared inputs are checked before/after
 and after both gate sweeps, with final failure/success receipts. This does not
 claim immunity to unrelated host interference or supply missing fork evidence.
 No native command or host control was executed by this reviewer.
+
+## Round 15: early unlanded ce2ac binding only
+
+Verdict: **BINDING_ONLY_SOURCE_CLEAR**, not an execution grant. The packet in
+`build/checkpoint-i-baseline-binding/quiet-ce2ac-binding-v1` binds frozen
+unlanded ROOTS `ce2ac8991eebb1bbb10698ff2d07a79bd4cba452`; it does not repair
+or disposition the actual stress100k interpreter failure and HTTP unraisables.
+
+| Artifact | SHA256 |
+|---|---|
+| `plan.json` | `1503a952b9502a899a9cb158e688ab223f9a40ef58c605c6e38ad6e4a8ebb815` |
+| unchanged `phase_runner.py` | `89a1c73fe8f224dcfb49e09013220f3ec68160a897f68f89aaa8fe389e7c8d86` |
+| unchanged `paired.py` | `bc4ee13e9b4ecc4fd7f43191ff355a1326bf9ac4821ced1824003e67c2e51cc8` |
+| `launch-template.json` | `07a91e1641d724e2c68a8b6f353e29fe810a5b279a764613138620870d6d47fb` |
+| `provenance.json` | `cbbdaef157b90dcdb6d9e508a99f2d50af35d3249a7fdff22366ef615d0b45a5` |
+
+The reviewer checked all 158 indexed artifact hashes, all 727 current fork
+product bytes, 6,320 regular source files and two source-link identities,
+nine admitted external ELF byte identities, and the original expanded map's
+286 resolved-target/link identities. ROOTS remains clean at ce2ac. The bound
+release-normal result `7b57d7ec` and its three raw streams match their hashes:
+564 modules, 51,132 tests, 3,458 skips and zero fallback are that receipt's
+historical scope. Its reported 2,880 unpinned words remain visible. The metadata
+explicitly distinguishes those runtime/CAPI journals from actual-driver
+workload-origin evidence. Upstream's accepted binding remains unchanged.
+
+The host capture's preserved descriptor-versus-SHA preflight failure is a
+metadata error before any target execution. The corrected capture checks the
+descriptor's SHA and explicit aliases; it does not describe a target retry.
+Static DT_NEEDED/interpreter closure admits exact external files, not observed
+loads. The fork's unresolved failures, unlanded state, eval-unit flag mismatch
+and incomplete consumed-SDK identity remain explicit limitations. Any future
+numbers would be an early source-policy diagnostic, without correctness,
+LAND, parity, object-model-only attribution or target-attainment credit.
+
+`quiet_reservation` remains null. The unchanged runner rejects it before
+targets; this template cannot run as frozen. The coordinator must first
+inspect terminal stress evidence and probe quiescence, reserve a quiet window,
+and review the resulting exact launch. A ready GC repair takes priority. No
+target command, witness, benchmark or host control was executed by this
+reviewer.
+
+## Round 16: terminal-failure binding, reservation still held
+
+Verdict: **BINDING_ONLY_SOURCE_CLEAR** for successor plan
+`6da2229505f171814b93e3f8fb8cbe42ce3add9e8a2e982cb629ab0d7a1e0a73`,
+launch template `95ad26e2fab31392ecd1089e0d7646926d2d2a8dc74d079dfbe11567e698d2e8`,
+provenance `be19d5c2c57e944d6f75a24fee10877bd2469284cac638ca015fa7f90a15e354`.
+The preceding packet remains in `quiet-ce2ac-binding-reviewed-v1`.
+
+All 161 indexed hashes match. Post-terminal product capture canonical-equals
+the same frozen 727-path map. The terminal record `f5336434` binds actual
+stress100k FAIL receipt `64448666` and its three raw streams; these are also
+guarded by the unchanged runner through plan.inputs. The metadata records
+native2, the 50,722 transcript-reported tests, interpreter assertion, twenty
+minute trashcan timeout and HTTP ENV_CHANGED. It explicitly rejects a
+qualified root aggregate because the killed GC worker lacks an end witness.
+This is preserved failure evidence, not newly qualified coverage.
+
+The runner and pair collector are unchanged. Null quiet reservation still
+prevents targets; focused failure diagnostics take priority. Exact eventual
+quiet admission and launch require a separate coordinator ruling. No native
+command, target, host control, witness or timing was executed by this reviewer.

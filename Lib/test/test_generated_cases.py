@@ -407,6 +407,26 @@ class TestIRCases(unittest.TestCase):
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 
+    def test_derived_handler_semantic_opcode(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        out = io.StringIO()
+        ir_generator.generate_ir_cases(
+            analysis, domain, ir_generator.compute_formats(analysis), out, False)
+        derived = {name: inst for name, inst in
+                   ir_generator.handler_instructions(analysis, domain).items()
+                   if name != inst.name and inst.properties.uses_opcode}
+        self.assertTrue(derived)
+        for name, inst in derived.items():
+            with self.subTest(handler=name):
+                body = self.handler(out.getvalue(), name)
+                lines = [line.strip() for line in body.splitlines()]
+                # Tail-call dispatch starts with its raw ID. Shared bodies
+                # need the instruction ID for semantic opcode comparisons.
+                self.assertIn(f"int opcode = {name};", lines)
+                self.assertIn(f"opcode = {inst.name};", lines)
+                self.assertNotIn(f"opcode = {name};", lines)
+
     def test_register_style(self):
         # Inputs that are only used as objects are read through their
         # fields.  They stay in their slots until the handler leaves, so the
@@ -1247,8 +1267,6 @@ class TestIRCases(unittest.TestCase):
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
             ".nofb = 0 },",
-            '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
-            '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
 
@@ -1347,6 +1365,45 @@ class TestHandlerDomain(unittest.TestCase):
             inst(NOP, (--)) { }
             inst(POP, (value --)) { DEAD(value); }
         """))
+
+    def test_full_domain_name_table(self):
+        analysis = analyzer.analyze_forest(parse_src("""
+            inst(NOP, (--)) { }
+            ir_only inst(IR_BACON, (--)) { }
+        """))
+        domain = ir_generator.build_handler_domain(analysis)
+        self.assertEqual(domain.handlers["IR_BACON"], 256)
+        out = io.StringIO()
+        opcode_metadata_generator.generate_name_table(
+            analysis, domain, CWriter(out, 0, False))
+        self.assertIn('[256] = "IR_BACON",', out.getvalue())
+        self.assertIn('_PyOpcode_OpName[IR_NUM_HANDLERS]', out.getvalue())
+        self.assertNotIn('"INSTRUMENTED_LINE"', out.getvalue())
+
+    def test_python_handler_metadata(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        out = io.StringIO()
+        py_metadata_generator.generate_handler_metadata(domain, CWriter(out, 0, False))
+        data = {}
+        exec(out.getvalue(), data)
+        ids = {**domain.opmap, **domain.handlers}
+        self.assertEqual(len(data["_handler_flags"]), domain.count)
+        self.assertEqual(len(data["_handler_bases"]), domain.count)
+        self.assertEqual(len(data["_handler_operations"]), domain.count)
+        for name, handler in ids.items():
+            with self.subTest(handler=name):
+                self.assertEqual(data["_handler_flags"][handler], domain.kinds[name])
+                self.assertEqual(data["_handler_bases"][handler], ids[domain.bases[name]])
+                self.assertEqual(data["_handler_operations"][handler], domain.operations.get(name))
+        self.assertEqual(domain.operations["BINARY_OP_ADD"], 0)
+        self.assertEqual(set(domain.operations.values()), set(range(len(ir_generator.binary_ops()))))
+        with self.assertRaises(TypeError):
+            domain.operations["BINARY_OP_ADD"] = 1
+        with self.assertRaisesRegex(ValueError, "operation metadata"):
+            replace(domain, operations={})
+        with self.assertRaisesRegex(ValueError, "operation metadata"):
+            replace(domain, operations=dict(domain.operations, BINARY_OP_ADD=-1))
 
     def test_capacity_without_large_tables(self):
         for count in (1, 255, 256, 512, 65535, 65536):

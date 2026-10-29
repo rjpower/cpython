@@ -524,6 +524,7 @@ class HandlerDomain:
     bases: Mapping[str, str]
     kinds: Mapping[str, HandlerKind]
     required_state: Mapping[str, HandlerState]
+    operations: Mapping[str, int]
     have_arg: int
     min_instrumented: int
     first_ir_only: int
@@ -531,7 +532,8 @@ class HandlerDomain:
 
     def __post_init__(self) -> None:
         check_handler_count(self.count)
-        for field in ("opmap", "handlers", "bases", "kinds", "required_state"):
+        for field in ("opmap", "handlers", "bases", "kinds", "required_state",
+                      "operations"):
             object.__setattr__(self, field,
                                MappingProxyType(dict(getattr(self, field))))
         ids = dict(self.opmap)
@@ -546,6 +548,15 @@ class HandlerDomain:
         if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)
                 or set(self.required_state) != set(ids)):
             raise ValueError("incomplete handler base/kind metadata")
+        expected_operations = {name for name, kind in self.kinds.items()
+                               if kind & HandlerKind.BINARY_OP}
+        if set(self.operations) != expected_operations:
+            raise ValueError("incomplete handler operation metadata")
+        operation_count = len(binary_ops())
+        if (len(set(self.operations.values())) != len(self.operations)
+                or any(not 0 <= op < operation_count
+                       for op in self.operations.values())):
+            raise ValueError("invalid handler operation metadata")
         for name, base in self.bases.items():
             if base not in ids or self.bases[base] != base:
                 raise ValueError(f"invalid handler base for {name}: {base}")
@@ -702,7 +713,9 @@ def build_handler_domain(analysis: Analysis) -> HandlerDomain:
             raise ValueError(f"pristine handler requires runtime state: {name}")
         if kinds[name] & HandlerKind.DISPATCH and not required_state[name]:
             kinds[name] |= HandlerKind.PRISTINE
+    operations = {name: op for op, name in enumerate(binary)}
     return HandlerDomain(analysis, opmap, handlers, bases, kinds, required_state,
+                         operations,
                          have_arg, min_instrumented, first, first + len(derived))
 
 
@@ -1788,7 +1801,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {name};\n")
+        # A derived handler shares the instruction body, including its
+        # semantic opcode tests. Dispatch still uses the raw handler ID.
+        out.emit(f"opcode = {inst.name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")

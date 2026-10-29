@@ -342,6 +342,9 @@ Inventory to close before final renumbering:
   target values and hard-coded pseudo-256 indexing. Widths/field counts stay
   narrow when they are not IDs. Use explicit generated pseudo indexing and
   integer uop references that cannot lose aliases above INT16_MAX.
+- ir.c: per-NB numeric classification/subtraction at87-90 and166-167 is
+  deferred here with the remaining C operation consumers; 2b.1 only moves
+  the Python operation decoder and explicit NOFB selection.
 - specialize.c: ID locals around 1913/2620/2966 and truth rows/signature
   around 2951/3017. Widen IDs; oparg/slot bitsets stay their semantic types.
 - assemble.c: fb_kind/has_fb_entry[256] at 587/595. Index domain-sized

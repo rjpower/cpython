@@ -15,7 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import HandlerDomain, build_handler_domain
+from ir_generator import HandlerDomain, HandlerKind, build_handler_domain
 from typing import TextIO
 
 
@@ -83,6 +83,25 @@ def generate_ir_opmap(analysis: Analysis, domain: HandlerDomain,
     out.emit(")\n\n")
 
 
+def generate_handler_metadata(domain: HandlerDomain, out: CWriter) -> None:
+    ids = {**domain.opmap, **domain.handlers}
+    flags = [0] * domain.count
+    bases = list(range(domain.count))
+    operations = [None] * domain.count
+    for name, handler in ids.items():
+        flags[handler] = int(domain.kinds[name])
+        bases[handler] = ids[domain.bases[name]]
+        operations[handler] = domain.operations.get(name)
+    for kind in HandlerKind:
+        out.emit(f"_HANDLER_{kind.name} = {kind.value}\n")
+    for name, values in (("flags", flags), ("bases", bases),
+                         ("operations", operations)):
+        out.emit(f"_handler_{name} = (\n")
+        for value in values:
+            out.emit(f"    {value!r},\n")
+        out.emit(")\n\n")
+
+
 def generate_py_metadata(
     filenames: list[str], analysis: Analysis, domain: HandlerDomain,
     outfile: TextIO
@@ -94,6 +113,7 @@ def generate_py_metadata(
     generate_specialized_opmap(analysis, domain, out)
     generate_opmap(analysis, domain, out)
     generate_ir_opmap(analysis, domain, out)
+    generate_handler_metadata(domain, out)
     out.emit(f"HAVE_ARGUMENT = {domain.have_arg}\n")
     out.emit(f"MIN_INSTRUMENTED_OPCODE = {domain.min_instrumented}\n")
 

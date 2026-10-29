@@ -11557,7 +11557,7 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
+            opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             PyValue global_super_st;
             PyValue class_st;
             PyValue self_st;
@@ -14789,7 +14789,7 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = LOAD_SUPER_ATTR_NOFB;
+            opcode = LOAD_SUPER_ATTR;
             PyValue global_super_st;
             PyValue class_st;
             PyValue self_st;

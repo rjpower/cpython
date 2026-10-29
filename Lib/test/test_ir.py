@@ -2,6 +2,7 @@
 assembler (Python/assemble.c) emits."""
 
 import dis
+import gc
 import io
 import sys
 import types
@@ -413,6 +414,77 @@ class AssemblerTest(unittest.TestCase):
         with self.assertRaisesRegex(
                 SyntaxError, "too many local variables and temporaries"):
             make(IR_MAX_SLOTS - stacksize + 1)
+
+    def test_inline_constant_display(self):
+        def f():
+            a = 1000
+            b = 2.5
+            c = 7
+            return a, b, c
+        bases = {"LOAD_CONST_INLINE_INT": "LOAD_CONST",
+                 "LOAD_CONST_INLINE_FLOAT": "LOAD_CONST",
+                 "LOAD_SMALL_INT_INLINE": "LOAD_SMALL_INT"}
+        raw = {item.handler for item in dis.get_instructions(f)}
+        self.assertLessEqual(bases.keys(), raw)
+        for item in dis.get_instructions(f):
+            if item.handler in bases:
+                self.assertEqual(item.opname, bases[item.handler])
+        self.assertEqual(f(), (1000, 2.5, 7))
+        for item in dis.get_instructions(f, adaptive=True):
+            if item.handler in bases:
+                self.assertEqual(item.opname, item.handler)
+
+    def test_instrumented_nofb_restores_pristine_word(self):
+        class A:
+            value = 7
+        class B(A):
+            def f(self):
+                return super().value
+
+        f = B.f
+        item = next(i for i in dis.get_instructions(f)
+                    if i.opname == "LOAD_SUPER_ATTR")
+        pristine = get_ir(f.__code__)[item.offset]
+        _, a, b, _, _ = pristine
+        word = ("LOAD_SUPER_ATTR_NOFB", a, b,
+                item.arg & IR_FIELD_MAX, item.arg >> 12)
+        raw = f.__code__.co_code
+        f.__code__ = f.__code__.replace(co_code=(
+            raw[:item.offset * 8]
+            + encode_words((dis._all_opmap[word[0]], *word[1:]))
+            + raw[(item.offset + 1) * 8:]))
+        original_bytes = f.__code__.co_code
+        self.assertEqual(f(B()), 7)
+        self.assertEqual(get_ir(f.__code__, True)[item.offset], word)
+
+        mon = sys.monitoring
+        tool = mon.PROFILER_ID
+        mon.use_tool_id(tool, "nofb restoration")
+        self.addCleanup(mon.free_tool_id, tool)
+        self.addCleanup(mon.set_local_events, tool, f.__code__, 0)
+        events = []
+        def callback(event):
+            def collect(code, offset, callable, arg0):
+                if code is f.__code__ and offset == item.offset:
+                    events.append((event, get_ir(code, True)[offset]))
+                    gc.collect()
+            return collect
+        for event in (mon.events.CALL, mon.events.C_RETURN, mon.events.C_RAISE):
+            self.addCleanup(mon.register_callback, tool, event, None)
+            mon.register_callback(tool, event, callback(event))
+        mon.set_local_events(tool, f.__code__, mon.events.CALL)
+        expected = ("INSTRUMENTED_LOAD_SUPER_ATTR_NOFB", *word[1:])
+        self.assertEqual(get_ir(f.__code__, True)[item.offset], expected)
+        self.assertEqual(f(B()), 7)
+        self.assertIn((mon.events.CALL, expected), events)
+        self.assertIn((mon.events.C_RETURN, expected), events)
+        with self.assertRaises(TypeError):
+            f(object())
+        self.assertIn((mon.events.C_RAISE, expected), events)
+        mon.set_local_events(tool, f.__code__, 0)
+        self.assertEqual(get_ir(f.__code__, True)[item.offset], word)
+        self.assertEqual(f.__code__.co_code, original_bytes)
+        self.assertEqual(f(B()), 7)
 
     def test_shared_feedback_entry(self):
         # The sites past the IR_FIELD_MAX-th share entry 0: they never

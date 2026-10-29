@@ -134,9 +134,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 {
     _PyIRWord word = *next_instr;
     uint32_t a = IR_A(word), b = IR_B(word), c = IR_C(word), d = IR_D(word);
-    const char *name = opcode < IR_FIRST_ONLY_HANDLER
-        ? _PyOpcode_OpName[opcode]
-        : _PyIR_OnlyNames[opcode - IR_FIRST_ONLY_HANDLER];
+    const char *name = _PyOpcode_OpName[opcode];
     assert(name != NULL);
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         printf("0: %s\n    ir %s %u %u %u %u\n", name, name, a, b, c, d);

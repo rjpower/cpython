@@ -1608,9 +1608,7 @@ get_ir(PyObject *self, PyObject *args)
     for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
-        const char *name = handler < IR_FIRST_ONLY_HANDLER
-            ? _PyOpcode_OpName[handler]
-            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        const char *name = _PyOpcode_OpName[handler];
         PyObject *item = Py_BuildValue(
             "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {

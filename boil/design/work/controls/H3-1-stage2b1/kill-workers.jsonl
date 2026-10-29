@@ -1,0 +1,9 @@
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_ir"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_code"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_monitoring"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_compile"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test__opcode"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_peepholer"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_marshal"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_dis"]}
+{"mode": [2, 0], "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python", "ignore_environment": 0, "isolated": 0, "entrypoint": "worker.main", "tests": ["test_generated_cases"]}

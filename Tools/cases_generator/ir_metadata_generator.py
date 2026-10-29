@@ -9,7 +9,6 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 - metadata, dispatch, pristine and installation-state properties;
 - _PyIR_Formats, the format of every handler, indexed by handler, as
   ir_generator.compute_formats() computes it for the handlers it generates;
-- _PyIR_OnlyNames, the names of the IR-only handlers.
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere. Handler indices without an instruction have a zeroed
@@ -129,15 +128,6 @@ def generate_ir_metadata(
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
-
-        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[{len(ir_only)}];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
-        for name in ir_only:
-            out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
-        out.emit("};\n")
-        out.emit("#endif\n")
-
 
 arg_parser = argparse.ArgumentParser(
     description="Generate the metadata of the register IR.",

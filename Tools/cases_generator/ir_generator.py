@@ -498,6 +498,7 @@ class HandlerKind(IntFlag):
     METADATA = 64
     DISPATCH = 128
     PRISTINE = 256
+    ADAPTIVE = 512
 
 
 class HandlerState(IntFlag):
@@ -577,6 +578,11 @@ class HandlerDomain:
             if kind & HandlerKind.PRISTINE and (
                     not kind & HandlerKind.DISPATCH or self.required_state[name]):
                 raise ValueError(f"invalid pristine handler: {name}")
+            if kind & HandlerKind.ADAPTIVE and (
+                    not kind & HandlerKind.DISPATCH or kind & (
+                        HandlerKind.SPECIALIZED | HandlerKind.INSTRUMENTED
+                        | HandlerKind.NOFB)):
+                raise ValueError(f"invalid adaptive handler: {name}")
 
     def require_analysis(self, analysis: Analysis) -> None:
         if analysis is not self.analysis:
@@ -727,6 +733,17 @@ def build_handler_domain(analysis: Analysis) -> HandlerDomain:
     instrumented: dict[str, str] = {}
     deinstrumented: dict[str, str] = {}
     formats = compute_formats(analysis)
+    for name in handlers:
+        inst = insts.get(name)
+        if name in binary:
+            inst = insts[BINARY_OP_FAMILY]
+        if (inst is not None
+                and not kinds[name] & (HandlerKind.SPECIALIZED
+                                      | HandlerKind.INSTRUMENTED | HandlerKind.NOFB)
+                and formats[name].fb != LOC_NONE and uses_feedback(inst)
+                and any("specializing" in part.annotations for part in inst.parts
+                        if isinstance(part, Uop))):
+            kinds[name] |= HandlerKind.ADAPTIVE
     for name in analysis.instructions:
         if not kinds[name] & HandlerKind.INSTRUMENTED:
             continue
@@ -1802,7 +1819,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({inst.name});\n")
+    out.emit(f"INSTRUCTION_STATS({name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
         out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")

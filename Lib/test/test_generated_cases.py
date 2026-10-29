@@ -427,6 +427,21 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(f"opcode = {inst.name};", lines)
                 self.assertNotIn(f"opcode = {name};", lines)
 
+    def test_counted_handler_entry_names(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        for tailcall in (False, True):
+            out = io.StringIO()
+            ir_generator.generate_ir_cases(
+                analysis, domain, ir_generator.compute_formats(analysis), out, tailcall)
+            for name, inst in ir_generator.handler_instructions(analysis, domain).items():
+                with self.subTest(tailcall=tailcall, handler=name):
+                    body = self.handler(out.getvalue(), name)
+                    counter = f"INSTRUCTION_STATS({name});"
+                    self.assertEqual(body.count(counter), 1)
+                    if inst.is_target and name == inst.name:
+                        self.assertLess(body.index(counter), body.index(f"IR_PREDICTED({name});"))
+
     def test_register_style(self):
         # Inputs that are only used as objects are read through their
         # fields.  They stay in their slots until the handler leaves, so the
@@ -1342,7 +1357,7 @@ class TestIRCases(unittest.TestCase):
         generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
         generic = generic[:generic.index("DISPATCH();")]
         self.assertIn("int oparg = NB_SUBTRACT;", generic)
-        self.assertIn("INSTRUCTION_STATS(BINARY_OP);", generic)
+        self.assertIn("INSTRUCTION_STATS(BINARY_OP_SUBTRACT);", generic)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
         self.assertIn("IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));", handler)
@@ -1365,6 +1380,38 @@ class TestHandlerDomain(unittest.TestCase):
             inst(NOP, (--)) { }
             inst(POP, (value --)) { DEAD(value); }
         """))
+
+    def test_adaptive_own_feedback(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        adaptive = ir_generator.HandlerKind.ADAPTIVE
+        for name in ("LOAD_ATTR", "GET_ITER", "TO_BOOL", "POP_JUMP_IF_FALSE",
+                     "CALL_FUNCTION_EX", "BINARY_OP_ADD", "BINARY_OP_SUBSCR"):
+            with self.subTest(adaptive=name):
+                self.assertTrue(domain.kinds[name] & adaptive,
+                                f"missing own-feedback adaptive property: {name}")
+        for name in ("BINARY_OP", "BINARY_SLICE", "STORE_SLICE", "IR_JUMP",
+                     "CACHE", "JUMP_BACKWARD", "LOAD_ATTR_NOFB",
+                     "BINARY_OP_ADD_INT", "INSTRUMENTED_LOAD_SUPER_ATTR"):
+            with self.subTest(nonadaptive=name):
+                self.assertFalse(domain.kinds[name] & adaptive)
+        self.assertEqual(domain.bases["BINARY_OP_ADD"], "BINARY_OP")
+
+    def test_adaptive_metadata_export(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        output = io.StringIO()
+        py_metadata_generator.generate_handler_metadata(domain, CWriter(output, 0, False))
+        data = {}
+        exec(output.getvalue(), data)
+        self.assertEqual(data["_HANDLER_ADAPTIVE"], 512)
+        for name in ("GET_ITER", "BINARY_OP_ADD", "LOAD_ATTR_NOFB"):
+            identity = {**domain.opmap, **domain.handlers}[name]
+            self.assertEqual(data["_handler_flags"][identity], domain.kinds[name])
+        kinds = dict(domain.kinds)
+        kinds["LOAD_ATTR_NOFB"] |= ir_generator.HandlerKind.ADAPTIVE
+        with self.assertRaisesRegex(ValueError, "invalid adaptive handler"):
+            replace(domain, kinds=kinds)
 
     def test_monitoring_relations(self):
         analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])

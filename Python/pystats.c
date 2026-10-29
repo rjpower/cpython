@@ -1,6 +1,7 @@
 #include "Python.h"
 
-#include "pycore_opcode_metadata.h" // _PyOpcode_Caches
+#include "pycore_opcode_metadata.h" // _PyOpcode_OpName, _PyOpcode_Deopt
+#include "pycore_ir.h"              // _PyIR_HandlerFlags
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pylifecycle.h"     // _PyOS_URandomNonblock()
 #include "pycore_tstate.h"
@@ -142,25 +143,26 @@ _Py_GetSpecializationStats(void) {
 static void
 print_spec_stats(FILE *out, OpcodeStats *stats)
 {
-    /* Mark some opcodes as specializable for stats,
-     * even though we don't specialize them yet. */
-    fprintf(out, "opcode[BINARY_SLICE].specializable : 1\n");
-    fprintf(out, "opcode[STORE_SLICE].specializable : 1\n");
-    fprintf(out, "opcode[GET_ITER].specializable : 1\n");
-    for (int i = 0; i < 256; i++) {
-        if (_PyOpcode_Caches[i]) {
-            /* Ignore jumps as they cannot be specialized */
-            switch (i) {
-                case POP_JUMP_IF_FALSE:
-                case POP_JUMP_IF_TRUE:
-                case POP_JUMP_IF_NONE:
-                case POP_JUMP_IF_NOT_NONE:
-                case JUMP_BACKWARD:
-                    break;
-                default:
-                    fprintf(out, "opcode[%s].specializable : 1\n", _PyOpcode_OpName[i]);
-            }
+    int entries = 0;
+    for (int i = 0; i < IR_NUM_HANDLERS; i++) {
+        entries += (_PyIR_HandlerFlags[i] & _PyIR_H_METADATA) != 0;
+    }
+    fprintf(out, "Handler entry coverage version : 2\n");
+#if _Py_TAIL_CALL_INTERP
+    fprintf(out, "Handler entry dispatch mode : 1\n");
+#else
+    fprintf(out, "Handler entry dispatch mode : 0\n");
+#endif
+    fprintf(out, "Handler domain count : %d\n", IR_NUM_HANDLERS);
+    fprintf(out, "Handler metadata entries : %d\n", entries);
+    for (int i = 0; i < IR_NUM_HANDLERS; i++) {
+        if (!(_PyIR_HandlerFlags[i] & _PyIR_H_METADATA)) {
+            continue;
         }
+        assert(_PyOpcode_OpName[i] != NULL);
+        fprintf(out, "opcode[%s].handler_id : %d\n", _PyOpcode_OpName[i], i);
+        fprintf(out, "opcode[%s].base_id : %d\n", _PyOpcode_OpName[i], _PyOpcode_Deopt[i]);
+        fprintf(out, "opcode[%s].handler_flags : %d\n", _PyOpcode_OpName[i], _PyIR_HandlerFlags[i]);
         PRINT_STAT(i, specialization.success);
         PRINT_STAT(i, specialization.failure);
         PRINT_STAT(i, specialization.hit);
@@ -176,8 +178,9 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
                     PRIu64 "\n", _PyOpcode_OpName[i], j, val);
             }
         }
-        for (int j = 0; j < 256; j++) {
+        for (int j = 0; j < IR_NUM_HANDLERS; j++) {
             if (stats[i].pair_count[j]) {
+                assert(_PyIR_HandlerFlags[j] & _PyIR_H_DISPATCH);
                 fprintf(out, "opcode[%s].pair_count[%s] : %" PRIu64 "\n",
                         _PyOpcode_OpName[i], _PyOpcode_OpName[j], stats[i].pair_count[j]);
             }

@@ -1,4 +1,7 @@
+import json
+from pathlib import Path
 import sys
+import tempfile
 import textwrap
 import unittest
 from test.support import script_helper
@@ -92,6 +95,69 @@ class TestPyStats(unittest.TestCase):
     option).
     """
 
+    def test_raw_ir_handler_entries(self):
+        # Use legitimate compiled per-operation, shared-feedback and relaxed
+        # loop targets, and witness the executing copy before counting them.
+        code = textwrap.dedent("""
+            import json, sys
+            import _opcode_metadata as metadata
+            import _testinternalcapi as capi
+
+            def add(a, b):
+                return a + b
+
+            namespace = {}
+            previous = capi.set_ir_max_forward(0)
+            try:
+                exec('def jump(it):\\n    for value in it:\\n        pass\\n    return 3\\n', namespace)
+            finally:
+                capi.set_ir_max_forward(previous)
+            jump = namespace['jump']
+            # IR_FIELD_MAX sites have private feedback; later sites use NOFB.
+            exec('def attrs(obj):\\n' + '    value = obj.attr\\n' * (4095 + 2)
+                 + '    return value\\n', namespace)
+            attrs = namespace['attrs']
+            class Owner:
+                attr = 5
+            owner = Owner()
+            assert add(4, 5) == 9
+            assert jump(()) == 3
+            assert attrs(owner) == 5
+            targets = ((add, 'BINARY_OP_ADD'), (jump, 'IR_JUMP'),
+                       (attrs, 'LOAD_ATTR_NOFB'))
+            witnessed = {}
+            for function, name in targets:
+                assert name in [word[0] for word in capi.get_ir(function.__code__, True)]
+                witnessed[name] = metadata._ir_opmap[name]
+            sys._stats_on()
+            sys._stats_clear()
+            assert add(4, 5) == 9
+            assert jump(()) == 3
+            assert attrs(owner) == 5
+            sys._stats_off()
+            sys._stats_dump()
+            sys._stats_clear()
+            print(json.dumps(witnessed))
+        """)
+        with tempfile.TemporaryDirectory() as directory:
+            _, stdout, _ = script_helper.assert_python_ok(
+                '-c', code, PYTHON_STATS_DIR=directory)
+            files = list(Path(directory).glob('*.txt'))
+            self.assertEqual(len(files), 1)
+            counters = {}
+            for line in files[0].read_text().splitlines():
+                key, value = line.rsplit(':', 1)
+                self.assertNotIn(key.strip(), counters)
+                counters[key.strip()] = int(value)
+        self.assertEqual(counters['Handler entry coverage version'], 2)
+        self.assertIn(counters['Handler entry dispatch mode'], (0, 1))
+        for name, identity in json.loads(stdout).items():
+            with self.subTest(target=name):
+                self.assertEqual(counters[f'opcode[{name}].handler_id'], identity)
+                self.assertGreater(counters[f'opcode[{name}].execution_count'], 0)
+                self.assertTrue(any(key.endswith(f'].pair_count[{name}]')
+                                    and value > 0 for key, value in counters.items()))
+
     def test_stats_toggle_on(self):
         """Check the toggle on functionality.
         """
@@ -157,7 +223,7 @@ class TestPyStats(unittest.TestCase):
         self.assertEqual(stat_count, '1')
 
     def test_thread_exit_merge(self):
-        """Check that per-thread stats (when free-threading enabled) are merged.
+        """Stats remain in the interpreter aggregate after a thread exits.
         """
         code = """
         def func_test(thread_id):

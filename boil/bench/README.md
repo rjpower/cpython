@@ -79,7 +79,14 @@ build runs the same objects; `memory/collector.py` documents the choice.
 | `instr` | `perf stat -e instructions:u` at `loops` and `3 * loops`, differenced, median of 4 pairs after a warm-up; per iteration less the skeleton for micro | all |
 | `time` | one process: a warm-up call, then the median of 5 `perf_counter_ns` timings of `run(loops)`; ns per loop, seconds per GB for the collector | kernels, memory |
 | `rss` | peak RSS in KiB from GNU `/usr/bin/time -f %M`, median of 3 processes | kernels, memory |
-| `boxes` | on an `--enable-pystats` build: inline int, float and array boxes per loop differenced at `loops` and `3 * loops`, with boxes by class and by instruction and the dispatches | kernels, micro |
+| `boxes` | on an `--enable-pystats` build: inline int, float and array boxes per loop differenced at `loops` and `3 * loops`, with boxes by class and by instruction and `counted_handler_entries` | kernels, micro |
+
+`counted_handler_entries` counts generated target entries, including IR-only,
+per-operation and NOFB targets. Normal predicted-label jumps bypass the entry
+counter; tailcall predicted calls count another entry. It does not count every
+logical operation or executed word. Results retain handler coverage version,
+dispatch mode and domain counts; both samples must agree before differencing.
+Historical results keep their original keys and coverage identity.
 
 Every measurement runs in a fresh `python -S -X pycache_prefix=DIR`
 process, one fresh prefix per invocation. The child's environment drops

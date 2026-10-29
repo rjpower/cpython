@@ -596,6 +596,23 @@ stated as generator rules so that tier 0's templates copy the lean form.
 The user's ruling: the interpreter need not be tuned to LuaJIT's level,
 but obvious improvements are not left on the ground.
 
+Plan revision, 2026-10-29 (takeover). PROCESS section 0.4 supersedes the
+old delivery times. Resume the compiler, 7a and 10a landings, then split
+queue lifecycle and precise-root residue into gated subrungs. H keeps
+per-word diagnostic positions and uses a separate collector state; its
+map specification and review responses are in note 14. Add H3's inventory
+of reusable interpreter operations and dispatch costs, including handler
+space, typed arithmetic/branches, frame passing and range iteration.
+An operation needs one semantic contract and generated root/monitoring
+metadata; this does not approve benchmark-specific superinstructions.
+Move a tier-0 hand-off earlier when this inventory demonstrates a clean
+interpreter implementation. Generations, remaining value interfaces and H
+lead to checkpoint I: matched release wall-time evidence that the
+interpreter reaches upstream parity or better before the JIT. The old
+rule of merely recording intermediate performance does not waive this
+checkpoint. An optimized debug feedback build may be qualified under
+PROCESS section 3; release and sanitizer evidence remain separate.
+
 Why this order. The IR work comes first because it is independent of the
 object model, is where the current design is weakest, and because every
 later step writes handlers in the generator, which should be in its final

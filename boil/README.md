@@ -12,7 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-28 at integration head 88152aee44d.
+revised 2026-10-29 05:45 PDT after auditing integration d7f3003874f and
+the three active step worktrees. This update separates implemented work
+from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
 ## 1. The design in one page
 
@@ -49,8 +51,8 @@ and 3):
    a full-heap mark and sweep (`gc_trace.c`, `gc_live.c`) with a
    referrer-first sweep for deallocators that read their referents;
    weak references in a side table; finalizers and destroy hooks queued
-   and drained at permitted execution points on the interpreter that
-   owns the object (note 13, step 7a). Roots are precise where frames
+and drained at permitted execution points. Owner-correct routing is
+   implemented on the unlanded 7a branch (note 13). Roots are precise where frames
    are marked `Py_GC_PRECISE` and checked by the C-mode checker, and
    conservative elsewhere (an attributed DWARF stack walk, PyMem blocks,
    data segments; note 11). Verification modes: `PYTHON_GCVERIFY=retain`
@@ -64,21 +66,35 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 ## 2. Where the work stands
 
 PROCESS.md section 0 is the position of record and is updated at every
-landing; this is the summary as of 2026-10-28 16:00 PDT.
+landing and hourly during active work. This is the takeover audit as of
+2026-10-29 05:45 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
-| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 (per-interpreter queues): landing review passed after fixes, full ladder clean, landing head due 2026-10-29 09:00 PDT | 7a rung 2: order across owners, metadata by owner, retirement and adoption, the fork child; takes review 2's sweep-order fix and two finalizer-order probes |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b (precise roots: the call layer, slot functions, dict entry points, the skips removed): end gates running; then two checker soundness fixes, landing review | 10a rungs 3 and 4: PyMem spans, writer buffers, buffer release, the platform matrix |
-| 6a, 6b: `PyValue` in the core and the value C API | compiler fix: copy propagation folds a local past an op that can run Python code (review 2 §5.1, reproduced); landing branch due 2026-10-29 14:00 PDT | 6e: remaining slot families, inline numeric receivers, the identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: slots on values (complete 2026-10-28) | | H: the handler contract (note 14), after 10a rung 3 and before 8; 7 generations; 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 at a0338fd7634: unlanded, second review says fix first (child verification mode, delivery oracles, lifecycle hazards, required checks) | 7a rung 2: safety/completion order, metadata, retirement/adoption/fork; design and probes only |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at b471a1bb9bc: implemented, checker/watcher fixes committed, landing record and final checks incomplete; no landing review yet | 10a 3a writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 6a, 6b: `PyValue` in the core and the value C API | compiler fix at bf6635fd0a4: unlanded, review says fix first (specialization-phase oracle, control provenance, measurements) | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H design revised after two revise reviews; no implementation claimed | H1 handler/build rules, H2 root maps after 10a rung 3, H3 clean dispatch inventory; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
 kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. The plan
 expects generations (7) and tier 0 (8) to recover the kernel and memory
-costs; that is a plan, not evidence.
+costs; that is a plan, not evidence. The user now requires a pre-JIT
+performance checkpoint: matched release wall-time measurements must
+establish interpreter parity or better on the kernel set, with individual
+regressions reported and resolved or explicitly dispositioned. Micro
+instruction gains alone do not establish that result.
+
+The immediate assignment is three independent agent lanes: close the
+compiler landing, close the queue landing, and finish 10a rung 2b's
+evidence and landing. The coordinator owns integration, shared gate
+policy, dispatch/performance scope and hourly documentation/status.
+PROCESS §0.4 gives the dependencies and checkpoint rules. An `-O1`
+debug build is permitted for faster feedback only after qualifying its
+root/walk controls; it does not replace release measurements or sanitizer
+coverage. Existing debug builds currently use `-Og`.
 
 ## 3. The documents, and what each is authoritative for
 
@@ -193,5 +209,8 @@ on integration and `git ls-remote` for every `boil/*` branch; read the
 last WORKLOG entry; list the agents' worktrees and their heads; read
 PROCESS.md §0's standing concerns and §0.3's open rows. Then message each
 running agent for a report (PROCESS.md §4 says what it contains), and
-set the Loom status. Nothing on integration is uncommitted; everything a
-rung knows is in its work doc.
+set the Loom status. Check actual dirty files and branch ancestry rather
+than assuming a clean tree or a completed review. At this takeover note
+14 had a draft response and three review files were untracked; other
+worktrees retain their own dirty design notes. Some final 10a results
+exist only in retained logs and must be reconciled into its work doc.

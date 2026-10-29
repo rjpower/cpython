@@ -1,8 +1,9 @@
 # The plan, our position in it, and how a change is made
 
-Status: in force from 2026-10-27 (user ruling); revised 2026-10-28 on the
-user's direction (landing review, single branching point, standing
-verification gates, the rerun rule, file ownership). This file is the
+Status: revised 2026-10-29 after the takeover audit and the user's
+direction to resume parallel implementation, shorten feedback gates
+where justified, and establish interpreter performance before the JIT.
+This file is the
 working record of the plan and the procedure; `boil/README.md` is the
 starting point for a successor and maps the documents. Documents that
 no longer describe what is being built are deleted, not kept as history;
@@ -22,24 +23,26 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-28) |
+| Step | What | State (2026-10-29 05:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): the attributed DWARF walk, the C-mode checker, kill and retain verification, the stack-hits tool | rungs 0, 1, 1b landed (29a358b492d, 4bb672e0bf4; gated clean), the kill record keeps every word (de6f193f905); rung 2b at a43efa83112 (boil/10a): items 1a (generator send path; its hazard, a stale word in the opaque PyGen_am_send frame after its callees became precise, fixed with the async-gen family), 1b, 3 (UnpackDict in value form), 5 (slot functions, site 13), 6 and 4b (attribute protocol and dict entry points precise) and 7 (13 skips removed) committed; end gates running since 15:36 PDT (gate 0 on three builds and gate 2 default passed, 51,073 tests, 0 fallbacks); before the landing branch, the two checker holes of review 2 (section 0.1: argument order, the hashtable family) are fixed in the same rung; rung 3 (PyMem spans, the writer row, the Py_buffer release skipped in the sweep for a Python exporter, the symtable roots, kill with pymem and structs) and rung 4 (gate 4, the platform matrix, write-up) open; hard stop 2026-11-02 15:30 PDT |
-| 7a | the per-interpreter callback and finalizer queue (note 13; finding B of note 08; note 11 question 18): a call runs on the interpreter that owns the object, never while that interpreter cannot run Python code; a shared-heap interpreter's heap passes to the main interpreter at its close; one GIL per domain | rung 1 implemented 2026-10-28 (four commits on boil/7a: node queue and batch, open and close, owner routing with the pin and queue_ready, OWN_GIL with a shared heap refused); landing review returned fix first (two defects: queue_ready unset on a local splice, a NULL dereference after the close; three weak oracles) and the fixes are 3db9ff26c4b and 75840fe4b9e on boil/7a-rung1; the full ladder is running at 75840fe4b9e and the new landing head is due 2026-10-29 09:00 PDT. Rung 2 takes three items from review 2 (section 0.1): the sweep-order fallback, finalizer completion order, debug output between mark and sweep. Moved up from step 7 on 2026-10-28; design adopted 2026-10-28 10:50 PDT after two review rounds, with three rulings (no fallback forms, section 0.2's two compatibility breaks, two rungs): rung 1 (node queue, owner routing, the pin, delivery at execution, the opening and close, one GIL per domain) due 2026-10-29 13:00 PDT; rung 2 (order across owners, metadata by owner and the registration refusal, retirement, adoption and absorption, the fork child, the latency tool) gate 3 by 2026-10-30 12:00 PDT, hard stop 2026-10-30 18:00 PDT |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs 0, 1, 1b landed; rung 2b implemented on boil/10a at b471a1bb9bc, including checker fixes e40dd593bb6 and watcher fix b471a1bb9bc, but unlanded. No landing branch/review found. Historical default/debug suites passed at a43efa83112; ASan had the known buffer-overflow failure and default stress failed before the targeted watcher fix. Missing final kill/stale-root checks, record reconciliation and current integration tooling must precede landing. Rung 3 is split into 3a writers/PyMem, 3b checker and precision residue, 3c queued releases and detached-state roots; rung 4 closes measurements and support. These subrungs are not implemented |
+| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung 1 implemented at a0338fd7634, not integrated. Second landing review returned fix first: child verification mode, per-call/payload/readiness oracles, untraced lifecycle hazards, omitted unbuilt-module check. Full historical gates do not close those findings. Rung 2 remains design/probes, with uncommitted note 13 and work-plan changes; split below into safety/order, metadata, and retirement/fork milestones. S1's outer/inner ordering concern was reproduced in the prior session; the stream resource case and S3 remain to establish. Old agent delivery times are superseded by section 0.4 |
+| compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | implemented at bf6635fd0a4, not integrated. Landing review returned fix first: phase-specific specialization evidence, invalid negative-control provenance, incomplete measurements. Its owner resumes those findings before further compiler changes |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
-| 6e | the remaining slot families on values; inline int and float receivers | open, after 6d |
-| H | the handler contract (note 14): position stored at safepoints only, a liveness map in place of the clearing stores, one value class per guard, frame pointers omitted in the handler unit; two rungs | design written 2026-10-28, review pending; after 10a rung 3, before 8 (tier 0's templates copy the handler bodies). User ruling 2026-10-28: not LuaJIT-tuned, but no obvious improvement left on the ground; principled and orthogonal mechanisms stay |
+| 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | design only; both reviews returned revise, with a coordinator response drafted on 2026-10-29. Diagnostic position remains published per word; GC uses a separate root-state key. H1 covers independent handler/build changes; H2 covers maps after 10a rung 3; H3 inventories orthogonal operations and dispatch costs before tier 0. No implementation gate is claimed |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
 | 9 | tier 1 | open |
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
 | P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
+| I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target is no kernel-geomean slowdown and explained individual regressions; it is not established by the existing microbenchmark instruction gains |
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -119,6 +122,63 @@ day travelled through messages and work-doc paragraphs.
 | copy propagation across a reentrant call (review 2 §5.1) | review 2 | coordinator's compiler-fix agent | the probe returns 1; same-line tests land; the record shows the folds lost |
 | the contract "a specializer runs no Python code" (specialize_dict_hint() ran a colliding key's `__eq__` and the re-dispatched word reread a rebound local; the guard is the compiler fix's commit) enforced by the checker | compiler fix review | 10a tooling | a checker fixture with a reentrant `_Py_Specialize_*` callee fails; the specializers pass |
 | a reader's folded operand (a local read in place by the op) needs an anchor across the reader's own collecting calls once the eval loop frame is precise (`x + o` where `X.__add__` rebinds x, collects and returns NotImplemented; today the conservative C frame holds the original) | compiler fix review | 10a rung 3 | an oracle that injects a collection at a point where only the reader's precise frame holds the operand, and fails with that root omitted; the compiler fix's test 10 (`x + o`) is a semantic regression only, since `self` and the opaque C frames below hold the operand today |
+
+### 0.4 Execution plan from the takeover
+
+User direction, 2026-10-29: the coordinator may split and reorder work
+for clarity; significant implementation belongs to subagents. Each
+agent owns an existing step worktree and its files. The coordinator
+owns integration, shared tooling, cross-step decisions and status.
+
+The first wave resumes completed code rather than rebuilding it:
+
+| Lane | First assignment | Next boundary |
+|---|---|---|
+| compiler | Close the three findings in `work/reviews/compiler-copyprop-1-landing.md`; preserve existing semantic fix | Gated, reviewable fixups and corrected measurement/control record; coordinator lands before 7a rung 2 |
+| queues | Close the four findings in `work/reviews/7a-1-landing-round2.md`; preserve the dirty rung-2 designs | Rung-1 landing. Then 7a-2a safety/order (failed sweep-order allocation, S1 completion dependencies, S3 debug output); 7a-2b owner metadata; 7a-2c retirement/adoption/fork. Each gets a separate record and gate line |
+| roots | Reconcile integration tooling, finish rung-2b evidence and missing checks, prepare its landing review | Rung-2b landing. Then 10a-3a writers/PyMem first; 3b checker/precision residue; 3c buffer-release and swap paths after the relevant 7a changes. Removing conservative mitigations is a final proved step, not an assumption |
+
+Before changing code each owner supplies a short file list, current
+head, first failing control and checkpoint estimate. Report at least
+every 30 minutes or at a checkpoint; after 45 minutes without progress
+the coordinator checks the cause. No agent merges another lane. Dirty
+design notes are preserved. A new integration commit is merged into each
+step at a safe point before its next landing, never during a gate.
+
+In parallel the coordinator prepares one verification manifest, examines
+the faster debug configuration below, and commissions H3's dispatch
+inventory when an agent slot frees. H1 may proceed independently once
+its checker/build dependencies are clear; H2 waits for 10a's spans and
+reader contract. H3 must account for the 8-bit handler-space assumptions
+inside the 16-bit IR, canonical typed arithmetic, condition/branch
+dispatch, frame passing, range iteration and the recorded call-window
+costs. A proposed operation must have a reusable semantic rule, generated
+metadata, normal/exception behavior, monitoring and root coverage, and a
+generic guard-failure path through the same protocol. Benchmark-specific
+fused sequences are not the plan. The inventory decides which existing
+hand-offs move before tier 0; it does not preapprove numeric-loop
+lowering or a second loop representation.
+
+The next phase completes 6e, H and generations, with file ownership
+allowing independent parts to overlap. Checkpoint I then compares the
+interpreter with upstream on the recorded kernels and representative
+call, allocation, generator, attribute and string workloads. Match
+compiler/build policies, state PGO/LTO/tail-call choices, separate warm
+execution from startup, and repeat elapsed-time runs in quiet windows.
+Use instruction, allocation, box, memory and pause data for attribution.
+Do not drop difficult workloads to meet the target. Persistent deficits
+become bounded runtime/dispatch work before tier 0, with new measurements.
+This checkpoint supersedes the older rule that every performance result
+is merely recorded; intermediate correctness landings still need no
+unrelated tuning. JIT tiers, movement and settled ports follow.
+
+Hourly reporting: while work is active, approximately every hour the
+coordinator updates this state table and `README.md`, appends a dated
+progress entry to `WORKLOG.md`, and gives the user a summary of heads,
+landings, evidence, blockers and the next hour's work. Re-estimate missed
+checkpoints from evidence; the pre-takeover dates are historical, not
+current promises. The first update after this restart is due about
+2026-10-29 06:45 PDT.
 
 ## 1. The loop
 
@@ -282,6 +342,20 @@ ASan or stress) live with their reasons and owners in note 11 section 8.2
 until 10a rung 2 moves them into a file under `boil/tools/` that `gate.sh`
 reads; until then the set runs through `gate.sh` levels 1 and 2 with the
 environment variables set, as 10a rung 1b did.
+
+Fast feedback builds (user-authorized, 2026-10-29): an existing debug
+build may be replaced at a quiescent checkpoint by `--with-pydebug`
+with `CFLAGS='-O1 -g'`, retaining assertions, symbols and the same root
+verification modes. Record actual effective flags, compiler and commit;
+do not label it the old `-Og` build. First validate the negative checker
+fixtures, compiled-stack attribution, kill/stale-root controls and the
+affected tests, since optimization changes stack roots and unwind data.
+Measure build-plus-test turnaround before adopting it for routine gates
+0/1. Release gates and performance records still use release builds;
+ASan and the tail-call/walk matrix remain required where applicable.
+This does not waive a gate, an assertion or a failing test. The existing
+`-Og` debug configuration remains the baseline until that qualification
+is recorded; avoid duplicating all build trees merely to try a flag.
 
 The rerun rule. A gate line is produced at a commit and names it. A code
 change after the line invalidates it; the affected levels run again at

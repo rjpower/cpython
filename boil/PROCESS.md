@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 10:08 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 10:18 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -306,6 +306,16 @@ The internal SafeAddr2Line declaration may additionally change from extern int
 to PyAPI_FUNC(int), following adjacent line-table exports, so that the real
 test extension can call it. This grants private-symbol visibility, not a new
 stable public ABI contract.
+
+Stage2b.2b fixed-int/uint16 storage design84e518cb872e and exact additive
+CAPI patch71ec68cb7da7 clear independent ROOTS/coordinator review at10:18.
+Grant only its pycore_instruments include, three functions beside the safe
+helper and three VARARGS entries, coherently with the new header/storage.
+All five production GetLine callers, including legacy tracing, change together.
+The state hook copies mutable fields before allocating its result. Preserve
+existing GC/compiler/scalar fixtures. This supersedes the storage hold above
+only for this bounded implementation; later monitoring/stats/transport work
+and runtime landing remain separate.
 
 Second bounded exception, reviewed by ROOTS: H3 may add only the proposed
 pycore_ir.h include, ir_scalar_boundary primitive fixture beside the

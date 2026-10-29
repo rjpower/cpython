@@ -39,3 +39,30 @@ Independent review continues on initialization, publication, local OOM rollback
 and retry, global partial progress, enabled-tool membership and the exact
 read-only snapshot. Documented spurious DISABLE callbacks must not become
 new test failures. No additional native probe or rerun is requested here.
+
+## Corrected proposal, 10:18 PDT
+
+Independent ROOTS verdict: IMPLEMENT_2B2B. Coordinator agrees after reading
+the corrected design and exact fixture patch:
+
+- Design SHA256 `84e518cb872e0522247ffced7f131e943add7891c348746e9ca626c62b2f2116`.
+- Patch SHA256 `71ec68cb7da7e217e213aa548a74f352176bf150f9ef233298b291b970899cae`.
+
+All five callers now have explicit bounds; legacy forward/different-line
+DISABLE and same-line backedge delivery remain unchanged. Every line slot is
+initialized, with real-head absolute values and synthetic trailing-word
+-1/token0 kept distinct. All three hooks use VARARGS. The state hook copies
+masks, tool versions, code version and presence flags before result allocation.
+The original rejected patch and probe evidence remain preserved.
+
+Grant the exact additive CAPI include, three functions beside the safe helper,
+and three VARARGS method entries on the H3 branch, coherently with its new
+header/storage. Existing GC, compiler and scalar fixtures remain outside scope.
+PROCESS section0.2 records the private API/layout decision.
+
+Implementation must preserve installed-tool membership, local failure atomicity
+and identical-mask retry, while recording global partial progress separately.
+Require real old-fail/new-pass controls, fixed-width adjacency/line boundaries,
+tracing and CALL restoration, actual allocation/peak accounting, generated
+domain/phase checks and affected normal/debug/kill qualification. No runtime
+landing or validation outcome is inferred from this design clearance.

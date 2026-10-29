@@ -3111,3 +3111,28 @@ storage/ABI and certificate placement in a separate document. No string native,
 test or benchmark work is authorized. Queue2 classifier hold is unchanged.
 Once-only tailcall/retain recommendations are assigned to10a4/H1, without new
 ROOTS2b blockers; retain needs its own reclamation semantics.
+
+
+### 10:18 PDT: release matrix complete; storage implementation cleared
+
+ROOTS release completes all640 jobs (620 individual,20 complete-module):
+41,440tests/1,660 intrinsic skips,9,141 interpreter records,330,157collections,
+zero fallback and42,466 report-only unpinned hits. Completion receipt
+default-complete.json SHA256 d68e077bd9d63a41ce9df0bb1f742d0061f5ce65ba9207fa63cd2b04b5dc8362
+binds plan17a8ba83. Coordinator independently checks that receipt. Every job
+validated frozen source/native/helpers before/after;8ce remains clean.
+Release-full starts17:16:13UTC under c9e full-v2, actual(0,0)/stress0.
+No full-suite outcome is claimed. O1debug continues through repetition13.
+
+Independent ROOTS and coordinator clear corrected monitoring storage design
+84e518cb872e and exact CAPI proposal71ec68cb7da7 as IMPLEMENT_2B2B. Five decoder
+callers/bounds, cached-None/synthetic initialization, proper VARARGS ABI and
+stack snapshots close the initial review findings. The exact additive include,
+three helpers and three entries are granted only on H3 with coherent storage.
+Old rejected proposal/probes remain preserved; other shared fixtures are untouched.
+
+Owner begins the bounded fixed-int/uint16 representation, generated canonical
+relations and prepare/commit implementation. First failing-control checkpoint
+is due within45minutes; full implementation estimate2–3hours before qualification.
+No native integration precedes ROOTS2b. String capacity/ABI audit continues
+without native changes. Next hourly report remains about10:45 PDT.

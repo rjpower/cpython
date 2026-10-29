@@ -82,18 +82,22 @@ def run_test_code(
     with tempfile.TemporaryDirectory() as directory:
         env_vars = dict(env_vars or {}, PYTHON_STATS_DIR=directory)
         script_helper.assert_python_ok(*script_args, **env_vars)
-        values = set()
+        values = []
         for path in Path(directory).glob('*.txt'):
+            count = None
             for line in path.read_text().splitlines():
                 if line.startswith('Rare event (set_class):'):
-                    values.add(line.partition(':')[2].strip())
-        # An explicit dump and the final dump can contain the same snapshot.
-        # Neither depends on whether the shared default directory exists.
+                    if count is not None:
+                        raise AssertionError('duplicate set_class counter')
+                    count = int(line.partition(':')[2])
+            if count is None:
+                raise AssertionError('missing set_class counter')
+            values.append(count)
+        # sys._stats_dump() clears the counters, so each file is a separate
+        # interval. Include the final interval written during shutdown.
         if not values:
             return ''
-        if len(values) != 1:
-            raise AssertionError(f'inconsistent set_class snapshots: {values}')
-        return values.pop()
+        return str(sum(values))
 
 
 @unittest.skipUnless(HAVE_PYSTATS, "requires pystats build option")

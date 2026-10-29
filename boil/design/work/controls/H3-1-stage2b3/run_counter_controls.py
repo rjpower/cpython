@@ -154,7 +154,8 @@ def run():
         output = directory / '_stats_counter_fixture.so'
         command = [compiler, '-shared', '-fPIC', '-O0', '-g', '-UNDEBUG',
                    '-I' + str(BUILD), '-I' + str(ROOT / 'Include'),
-                   '-I' + str(ROOT / 'Include/internal'), '-I' + str(directory),
+                   '-I' + str(ROOT / 'Include/internal'),
+                   '-I' + str(ROOT / 'Include/internal/mimalloc'), '-I' + str(directory),
                    str(SOURCE / 'stats_counter_fixture.c'), '-o', str(output)]
         with (directory / 'compile.log').open('x') as log:
             process = subprocess.run(command, cwd=ROOT, env=ENV, stdout=log, stderr=subprocess.STDOUT)

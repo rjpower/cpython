@@ -3,6 +3,7 @@
 #define Py_BUILD_CORE_MODULE
 #include "Python.h"
 #include "pycore_ir.h"
+#include "pycore_tstate.h"      /* _PyThreadStateImpl declarations in stats. */
 #include "pycore_stats.h"
 #include <stdint.h>
 #include <string.h>

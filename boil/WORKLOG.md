@@ -2541,3 +2541,32 @@ isolated read-only getter and restoration fixture outside its frozen tree.
 Current normal gates continue; complete stress11 coverage is not claimed
 until this prerequisite is fixed. Earlier source-restored queue controls
 remain scoped evidence, rather than proof of uniform worker stress.
+
+### 07:10 PDT: permission context synchronized; three active implementations
+
+The user's fresh steering identified the held roots fixture and directed
+work to continue. The existing ROOTS agent then received the current
+unrestricted developer permissions and applied the same reviewed v2 patch
+successfully in its own worktree. No executor switch or indirect mutation
+bypassed the rejection. The prior hold is closed; normal validation and
+the old-helper control are now running. O1 remains unqualified.
+
+H3 now works on branch boil/h3 in the reused compiler worktree, with the
+compiler landing ref frozen. Its first regeneration matches all seven
+baseline products byte-for-byte. Stage1 preserves IDs as a migration
+invariant; the final design removes inherited category cutoffs and uses
+explicit generated semantic properties. Synthetic-fixture collisions are
+being traced rather than weakening duplicate validation.
+
+QUEUES d43c8b4dd32 passed combined default/debug full suites, 51,102 tests
+each, zero fallback, plus debug cext/regeneration/audit and default probes.
+Its standalone stress prerequisite's old-zero-reset control fails with
+(1000,0); the getter and save/restore positive gates are running. Remaining
+verification gates wait for that shared prerequisite. Manifest discovery
+resolved 23 selector rows to31 test IDs across11 physical modules; the
+registry/parser remains unfinished, and no execution claim is made.
+
+The copy-propagation semantic handoff is closed by landed99435658509 and
+its validated probes/phase controls/counter record; its row is removed from
+PROCESS0.3. Specializer-checker and precise folded-reader proofs remain
+separate open handoffs to ROOTS.

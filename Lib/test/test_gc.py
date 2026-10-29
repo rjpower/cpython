@@ -2859,6 +2859,24 @@ class TracingCollectorTests(unittest.TestCase):
         rc, out, err = assert_python_ok("-c", code)
         self.assertEqual(out.strip(), b"LateStatic")
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_mode_state(self):
+        modes = [("", (0, 0)), ("retain", (1, 0)),
+                 ("retain:structs,pymem", (1, 3))]
+        if support.Py_DEBUG:
+            modes += [("kill", (2, 0)), ("kill:pymem", (2, 1)),
+                      ("kill:structs", (2, 2)), ("kill:pymem,structs", (2, 3))]
+        for mode, expected in modes:
+            code = ("import _testinternalcapi; "
+                    f"assert _testinternalcapi.gc_verify_mode() == {expected!r}, "
+                    "_testinternalcapi.gc_verify_mode()")
+            with self.subTest(mode=mode):
+                assert_python_ok("-c", code, PYTHON_GCVERIFY=mode)
+        # The same environment does not configure an isolated interpreter.
+        assert_python_ok("-I", "-c", "import _testinternalcapi; "
+                         "assert _testinternalcapi.gc_verify_mode() == (0, 0)",
+                         PYTHON_GCVERIFY="retain:structs,pymem")
+
     def test_verify_mode_syntax(self):
         for bad in ("retain:", "retain:pymem,", "kill:heap", "retainer"):
             with self.subTest(bad=bad):

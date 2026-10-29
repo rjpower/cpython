@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 05:45 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 06:25 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs 0, 1, 1b landed; rung 2b implemented on boil/10a at b471a1bb9bc, including checker fixes e40dd593bb6 and watcher fix b471a1bb9bc, but unlanded. No landing branch/review found. Historical default/debug suites passed at a43efa83112; ASan had the known buffer-overflow failure and default stress failed before the targeted watcher fix. Missing final kill/stale-root checks, record reconciliation and current integration tooling must precede landing. Rung 3 is split into 3a writers/PyMem, 3b checker and precision residue, 3c queued releases and detached-state roots; rung 4 closes measurements and support. These subrungs are not implemented |
-| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung 1 implemented at a0338fd7634, not integrated. Second landing review returned fix first: child verification mode, per-call/payload/readiness oracles, untraced lifecycle hazards, omitted unbuilt-module check. Full historical gates do not close those findings. Rung 2 remains design/probes, with uncommitted note 13 and work-plan changes; split below into safety/order, metadata, and retirement/fork milestones. S1's outer/inner ordering concern was reproduced in the prior session; the stream resource case and S3 remain to establish. Old agent delivery times are superseded by section 0.4 |
-| compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | implemented at bf6635fd0a4, not integrated. Landing review returned fix first: phase-specific specialization evidence, invalid negative-control provenance, incomplete measurements. Its owner resumes those findings before further compiler changes |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs 0, 1, 1b landed; rung 2b at 0a57af28ce6 remains unlanded. Checker/watcher fixes and parsed-mode assertions are committed; current final gates and landing review remain. The O1 trial stopped on PyMem attribution in test_verify_kill; no qualification waiver. Rung 3 is split into 3a writers/PyMem, 3b checker and precision residue, 3c queued releases and detached-state roots; rung 4 closes measurements and support |
+| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung 1 remains unlanded. Oracle fixup a6d88557dfa has explicit child modes, per-object delivery and nested-payload checks, a receiving-owner readiness handshake and failing controls; supported unbuilt-module checks pass. Lane 970e14edbde preserves the rung2 designs and current tooling. The module10/11 queue remap is attributed to owner-unlink order; the feeder-finalization hazard remains open. Current end gates then landing review are required. Rung2a safety/order, 2b owner metadata and 2c retirement/adoption/fork remain design/probes; S1 dependency completion is confirmed, resource-case/S3 proof pending |
+| compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | ab18af7d778 cleared independent source/artifact landing review with no blockers; merged locally as 99435658509. Both specialization-phase controls, provenance and corrected 94-row counter comparison close the prior review. Detached integration build/smoke/targeted/full-suite gates are running before the merge is declared validated. Residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | design only; both reviews returned revise, with a coordinator response drafted on 2026-10-29. Diagnostic position remains published per word; GC uses a separate root-state key. H1 covers independent handler/build changes; H2 covers maps after 10a rung 3; H3 inventories orthogonal operations and dispatch costs before tier 0. No implementation gate is claimed |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | design only; note14 incorporates the two reviews' response. Diagnostic position remains published per word; GC uses a separate root-state key. H1 covers handler/build changes; H2 maps wait for10a rung3. H3-1 handler-domain design is assigned, followed by typed float truth and evidence-based dispatch work. No implementation gate is claimed |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
 | 9 | tier 1 | open |
@@ -47,9 +47,11 @@ record and is updated at every landing.
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug
 smoke sets and the mode contract passed on integration. This does not
-land queue routing or root-lifetime changes. At the roots lane's next
-quiescent point it is qualifying O1 debug using the controls in section 3;
-no O1 result or adoption is claimed yet.
+land queue routing or root-lifetime changes. The roots lane's O1 debug
+trial passed checker, stack-walk, actual-worker-mode and 100/100 stale-root
+controls, but a focused PyMem-attribution assertion failed. Qualification
+is stopped pending a traced cause; the test's expected attribution stays
+unchanged. No O1 adoption is claimed. The integration debug gate uses Og.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -165,6 +167,16 @@ generic guard-failure path through the same protocol. Benchmark-specific
 fused sequences are not the plan. The inventory decides which existing
 hand-offs move before tier 0; it does not preapprove numeric-loop
 lowering or a second loop representation.
+
+The first dispatch inventory is complete. H3-1 designs the handler domain:
+IR fields are 16-bit but numbering, deopt metadata, instrumentation and
+statistics still assume 256 handlers. One generated domain definition
+must replace those assumptions before adding operations. H3-2 may then
+add exact-float truth specialization under the existing branch protocol;
+POP_JUMP already includes truth conversion. Frame passing and call-window
+producer placement require measurements and H1/H2 liveness/root contracts.
+Compare/branch encoding needs its own semantic and field-width review.
+Scalar range-loop lowering remains outside this bounded assignment.
 
 The next phase completes 6e, H and generations, with file ownership
 allowing independent parts to overlap. Checkpoint I then compares the

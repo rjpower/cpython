@@ -1,0 +1,6 @@
+regeneration: unchanged status and content
+production compiler, specialization and handler metadata: identical to 1bf1f941c88 except declared comment
+{
+  "tested_revision": "45a789ac036ed56164411dce23201fc8ab54a60b",
+  "production_files_compared": 13
+}

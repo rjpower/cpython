@@ -2415,3 +2415,65 @@ removes its own prefix. A startup banner now names level, build and head
 before commands run. Shell syntax and diff checks pass; existing targeted
 integration gate1 will exercise the changed startup path. No test failure
 is dismissed by this tooling repair.
+
+### 06:25 PDT: compiler merged; qualification and dispatch boundaries
+
+Independent source/artifact review returned LAND for compiler b59ab985ae7.
+The author preserved that normalized review and the three prior blocker
+dispositions in documentation-only ab18af7d778. Coordinator merged it as
+99435658509; detached integration validation is now building new default
+and Og debug configurations from /tmp/boilgate, with outputs under the
+project's build/integration-default and build/integration-debug. The merge
+is not yet claimed as validated. The startup-tooling focused gate1 passed
+on integration90773db0ffd, exercising its new banner and local cleanup.
+
+The roots O1 trial cut smoke time from3m41s to2m37s and passed checker,
+compiled walk, active worker-mode and100/100 stale-root controls. One
+focused test_verify_kill case lacked the required PyMem-holder attribution
+despite an active kill:pymem state. Qualification stopped; the owner is
+tracing fixture storage versus collector attribution, without changing
+the oracle. Og remains the integration debug configuration.
+
+QUEUE's fixture fixup a6d88557dfa and clean lane970e14edbde retain failing
+delivery/readiness controls and actual mode assertions. Module10/11 remap
+differences are now explained by owner-unlink order with event traces.
+The feeder-finalization hazard remains unclosed while bounded diagnostic
+attempts and current end gates run. No new queue runtime has landed.
+
+ROOTS supplied the H3 inventory. The compiler owner now drafts H3-1's
+generated handler domain before any new typed operation; existing256
+assumptions survive inside the16-bit IR. Typed float truth is a bounded
+follow-on, while frame passing, call-window placement and compare/branch
+need their own root/liveness or encoding proofs. Interpreter parity stays
+a measured pre-JIT checkpoint.
+
+The push of existing integration/compiler/queue/roots refs was rejected by
+automatic approval review: recovered session history was not accepted as
+authorization to export repository contents. Explicit approval for the
+same GitHub destination and fast-forward payload is pending; committed
+local work and validation continue. No workaround push was attempted.
+
+### 06:37 PDT: cleanup lock and explicit service authorization
+
+The user confirmed Loom is the internal session server and explicitly
+authorized Loom use and GitHub pushes. README is now handover revision5;
+the committed integration/compiler/queue/roots refs pushed successfully
+to the existing repository. The prior export approval block is closed.
+
+QUEUES found a build-lock lifetime bug in gate_run.sh: command-form flock
+released the lock before sweep, allowing cleanup to kill the next run's
+workers. The coordinator keeps fd8 locked through sweep and only sweeps
+from a signal trap after acquiring the build lock. Slot-before-build
+ordering is unchanged; failure status is preserved. Three process-level
+checks cover cleanup ownership, a terminated waiter and nonzero command
+status, with a fake pkill so no real test worker is targeted. Five runs
+pass. The old runner fails the cleanup invariant; removing only the new
+ownership guard fails the waiter invariant. An initial harness attempt
+signaled before the flock child finished exec; synchronizing on its comm
+fixes that test race. Exact controls/logs are in build/coordinator-20261029.
+
+Detached compiler integration at99435658509 passed gate0 default/debug
+(1,924 each), gate1's16 modules (1,783 each), debug kill's20 copyprop
+tests with active mode assertion, and release gate2 (51,081 tests,
+60,014 collections,0 fallbacks). Og debug gate3 remains in progress.
+These runs use the prior runner; no queued same-build overlap occurred.

@@ -1,0 +1,10 @@
+Using random seed: 3242432376
+0:00:00 load avg: 3.88 mem:   47.3 MiB Run 1 test in parallel using 1 worker process (timeout: 10 min, worker timeout: 15 min)
+
+== Tests result: SUCCESS ==
+
+Total duration: 2.8 sec
+Total tests: run=20 (filtered)
+Total test files: run=1/1 (filtered)
+Result: SUCCESS
+gate 1 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug

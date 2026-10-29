@@ -15,3 +15,9 @@ sites are in `measure/box_audit.py -v`.
 Notes: `code_stats.py` runs the measured interpreter's own
 `compile()`, so rebuilt interpreters report their own opcode metadata. Check
 lint with `uvx ruff check --no-fix boil/tools` (the repo config has `fix=true`).
+
+`gate_run.sh` holds its build lock through worker cleanup. On Linux,
+`uv run --no-project --python /usr/bin/python3 python boil/tools/test_gate_run.py`
+checks cleanup ownership, an interrupted lock waiter and command failure
+status without killing real workers. An optional script path selects a
+negative-control version of the runner.

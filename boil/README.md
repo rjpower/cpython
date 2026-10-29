@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 06:00 PDT after auditing integration d7f3003874f and
+revised 2026-10-29 06:25 PDT at integration merge 99435658509 and
 the three active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -68,14 +68,14 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 05:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 06:25 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
-| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 at a0338fd7634: unlanded, second review says fix first (child verification mode, delivery oracles, lifecycle hazards, required checks) | 7a rung 2: safety/completion order, metadata, retirement/adoption/fork; design and probes only |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at b471a1bb9bc: implemented, checker/watcher fixes committed, landing record and final checks incomplete; no landing review yet | 10a 3a writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
-| 6a, 6b: `PyValue` in the core and the value C API | compiler fix at bf6635fd0a4: unlanded, review says fix first (specialization-phase oracle, control provenance, measurements) | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H design revised after two revise reviews; no implementation claimed | H1 handler/build rules, H2 root maps after 10a rung 3, H3 clean dispatch inventory; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1: oracle fixup a6d88557dfa, clean lane 970e14edbde; current end gates pending, feeder-finalization hazard still under investigation | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at 0a57af28ce6: checker/watcher fixes and actual-mode assertions implemented; current final checks and landing review pending | 10a 3a writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 6a, 6b: `PyValue` in the core and the value C API | Compiler fix ab18af7d778 cleared independent review and merged locally as 99435658509; detached integration gates running | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H design revised after two revise reviews; H3-1 handler-domain design assigned; no implementation claimed | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -98,10 +98,12 @@ The immediate assignment is three independent agent lanes: close the
 compiler landing, close the queue landing, and finish 10a rung 2b's
 evidence and landing. The coordinator owns integration, shared gate
 policy, dispatch/performance scope and hourly documentation/status.
-PROCESS §0.4 gives the dependencies and checkpoint rules. An `-O1`
-debug build is permitted for faster feedback only after qualifying its
-root/walk controls; it does not replace release measurements or sanitizer
-coverage. Existing debug builds currently use `-Og`.
+PROCESS §0.4 gives the dependencies and checkpoint rules. The `-O1`
+debug trial reduced smoke time from 3m41s to 2m37s, but qualification
+stopped at a PyMem-attribution oracle failure in `test_verify_kill`.
+The existing oracle stays in force; `-O1` has not been adopted. Integration
+debug validation still uses `-Og`. Release measurements and sanitizer
+coverage remain required.
 
 ## 3. The documents, and what each is authoritative for
 
@@ -143,7 +145,9 @@ The coordinator's standing duties: an hourly check (`date`, `git log`,
 minutes; verify every claim against the commit and the gate output; push
 an agent's committed head when it is ahead of the remote (fast-forward,
 explicit refspec); land rungs; re-gate each landing on the detached
-checkout `/tmp/boilgate` (builds `build/default` and `build/debug`);
+checkout `/tmp/boilgate` (current builds are integration's
+`build/integration-default` and `build/integration-debug`, keeping large
+outputs in project storage);
 write the worklog gate entry and PROCESS.md §0; set the Loom status;
 give the user a one-page readout with a process assessment when asked,
 and run the whole-project review at each step end.

@@ -2570,3 +2570,28 @@ The copy-propagation semantic handoff is closed by landed99435658509 and
 its validated probes/phase controls/counter record; its row is removed from
 PROCESS0.3. Specializer-checker and precise folded-reader proofs remain
 separate open handoffs to ROOTS.
+
+### 07:30 PDT: stress prerequisite validated; H3 stage1 review
+
+Integration02bcd2f6132 imports the independently reviewed shared stress
+getter/restoration59790b545bcc. Default/debug smoke passes1,924 tests each;
+state tests3 per build and debug kill2/stress1000 two pass. Logs and exact
+commands are in build/coordinator-20261029/stress-state-*. These focused
+coordinator runs are not lane-wide actual-worker stress attestations.
+Integration02bcd, QUEUES5576cdbd755 and H3e7cc59743e1 are pushed.
+
+H3 stage1's independent review clears the generator ownership refactor,
+all seven byte-identical generated products and retained negative-control
+evidence. It requires a saved control-runner fix: variant writes precede
+lock acquisition and restoration follows release. Historical quiescent
+runs remain valid, but the replay script must not expose broken live
+source to another gate. The author is fixing that artifact before landing.
+Stages2–4 and runtime domain closure remain separate unfinished work.
+
+ROOTS's provenance fixture is running in the synchronized permission
+context. O1 also exposed a genuine list-to-tuple lifetime bug: the source
+list is cleared before tuple allocation, losing its elements' roots.
+The bounded reorder moves forward from3a into2b. The PyMem assertion is
+being corrected to require its origin on the same killed-list report line
+whether first or supplemental; old-helper failure remains required.
+No O1 adoption or ROOTS landing is claimed.

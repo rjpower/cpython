@@ -3880,7 +3880,6 @@ byteswriter_create(Py_ssize_t size, int use_bytearray)
     writer->use_bytearray = use_bytearray;
     writer->overallocate = !use_bytearray;
     // The writer is PyMem storage, so the collector must visit its owner slot.
-    _PyGC_AddRoot(&writer->root, &writer->obj, 1);
 
     Py_ssize_t allocated = sizeof(writer->small_buffer) - 1;
     if (size > allocated) {
@@ -3930,7 +3929,6 @@ PyBytesWriter_Discard(PyBytesWriter *writer)
         byteswriter_reset_trailing_byte(writer);
     }
 #endif
-    _PyGC_RemoveRoot(&writer->root);
     if (writer->obj != NULL) {
         Py_DECREF(writer->obj);
     }
@@ -4004,7 +4002,6 @@ byteswriter_finish_with_size(PyBytesWriter *writer, Py_ssize_t final_size)
 
     assert(writer->obj == NULL);
     // Unlinking and freeing the writer cannot collect the returned object.
-    _PyGC_RemoveRoot(&writer->root);
     PyMem_Free(writer);
     return result;
 

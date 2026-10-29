@@ -43,11 +43,14 @@
       ]
     },
     "queue-owner-routing": {
-      "status": "pending",
+      "status": "available",
       "owner": "QUEUES",
-      "condition": "7a rung1 lands before stress runs omit historical module-wide B-class exclusions.",
+      "condition": "7a rung1 owner routing is integrated; the selected build and source snapshot must include the landing before stress runs omit historical module-wide B-class exclusions.",
       "evidence": [
-        "boil/design/work/7a-1.md"
+        "052d8342e562b1b10d10d26d640c98580616a035",
+        "boil/design/work/7a-1.md",
+        "boil/design/work/reviews/7a-1-landing-round3.md",
+        "coordinator: release/debug smoke1924, queues22 per build and actual-worker-kill22 passed 2026-10-29"
       ],
       "runtime_getters": []
     },

@@ -2735,3 +2735,28 @@ automatic cybersecurity classifier; even its read-only handoff failed.
 The only supplied reason was possible cybersecurity risk. No native queue2
 fix was applied; artifacts remain preserved and stopped work is not retried
 through another executor. Other lanes continue. Next hourly report08:45 PDT.
+
+
+### 08:30 PDT: launcher and shared worker setup integrated
+
+Launcher2db451b1b65 cleared independent LAND_LAUNCHER_ONLY review at the
+recorded final hashes. Retained launcher correction3dff5879df8 is isolated
+as integration093b9d2a1c3. Both change only boil tooling/artifacts; native,
+standard-library/test and generated sources match052d8342e56. Primary093
+and H3 checkpoint624c75f6455 are pushed. The ROOTS launcher already enters
+worker.main() through runpy and did not share the bypass defect.
+
+Queue-owner-routing is promoted to available with052 landing/review/gate
+evidence. This does not attest an arbitrary selected binary. Inventory
+rediscovery is still required after test-source changes. Fifteen combined
+registry/launcher controls pass. Promotion exposed the CLI control's
+assumption that stress11 would always be unavailable; it now supplies a
+controlled pending prerequisite, preserving its failure oracle. The first
+edit missed its json import; that control error was corrected before the
+passing run. No profile orchestration or gate-hook claim is made.
+
+ROOTS cleanup repair passes three targeted tests off and kill, including
+the actual-helper ordering regression and natural forkserver/spawn cases,
+without leaked semaphore or double-unlink diagnostics. Retained old-order
+control fails in both contexts. Its source record, reconciliation and
+parallel module-iteration measurement follow before the full matrix.

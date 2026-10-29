@@ -2,6 +2,7 @@
 
 import copy
 import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -101,11 +102,19 @@ class ManifestTests(unittest.TestCase):
             ['show', 'release-full', '--python', 'echo unexpected'],
             ['run', 'release-full'],
         ]
-        for args in commands:
-            with self.subTest(args=args):
-                result = subprocess.run([sys.executable, str(tool), *args], check=False, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                self.assertNotIn('Traceback', result.stderr)
+        # Make the unavailable-profile control independent of landing progress.
+        data = copy.deepcopy(self.data)
+        data['prerequisites']['stress-state']['status'] = 'pending'
+        with tempfile.TemporaryDirectory(prefix='verify-cli-controls-') as directory:
+            manifest = Path(directory) / 'manifest.json'
+            manifest.write_text(json.dumps(data))
+            for args in commands:
+                with self.subTest(args=args):
+                    result = subprocess.run(
+                        [sys.executable, str(tool), '--manifest', str(manifest), *args],
+                        check=False, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertNotIn('Traceback', result.stderr)
 
 
 if __name__ == '__main__':

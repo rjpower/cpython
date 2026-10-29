@@ -3460,6 +3460,16 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
+/* The current interpreter's active live verifier: (mode, extra bits).
+   Mode is 0 off, 1 retain, 2 kill; extra bits are 1 pymem and 2 structs. */
+static PyObject *
+gc_verify_mode(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    int extra;
+    int mode = _PyGC_TraceGetVerifyMode(_PyInterpreterState_GET(), &extra);
+    return Py_BuildValue("(ii)", mode, extra);
+}
+
 static PyObject *
 root_stats_dict(const _PyGCRootStats *s)
 {
@@ -4341,6 +4351,7 @@ static PyMethodDef module_functions[] = {
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
+    {"gc_verify_mode", gc_verify_mode, METH_NOARGS},
     {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
     {"gc_stack_hits", gc_stack_hits, METH_VARARGS},
     {"test_value_spans", test_value_spans, METH_NOARGS},

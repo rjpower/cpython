@@ -153,7 +153,7 @@ after conversion and after compaction in a debug build.
 
 | Proposed | Built |
 |---|---|
-| copy propagation with a kill on redefinition | `_PyRegPass_CopyProp`: borrowed loads only, same line, killed by a write or a line change |
+| copy propagation with a kill on redefinition | `_PyRegPass_CopyProp`: borrowed loads only, same line, killed by a write, a line change, or an op whose family may run Python code (`_PyIR_RUNS_CODE`, since compiler-copyprop; not under calls) |
 | store elimination with the read and write check | `_PyRegPass_StoreElim`: also barred by any op that raises, escapes, jumps, has a dst or writes a local; calls included since 691c92537c6 |
 | COPY and SWAP by renaming; dead pure results removed | `_PyRegPass_SwapRename`, `_PyRegPass_PopTop`; a COPY of a local becomes a second load in the flowgraph instead |
 | TO_BOOL and UNARY_NOT into the jump | done by the flowgraph since step 2b; the value-context form is `_PyRegPass_TruthFold` (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP), and UNARY_NOT takes any value |

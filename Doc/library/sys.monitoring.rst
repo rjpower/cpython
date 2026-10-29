@@ -118,6 +118,15 @@ The following events are supported:
 
    A VM instruction is about to be executed.
 
+   .. note::
+
+      An instruction reads the local variables it names when it executes,
+      not when an earlier instruction would have loaded them.  A callback
+      for this event that rebinds a local through :attr:`frame.f_locals`
+      between the instructions of one expression is seen by the
+      instructions that follow, where a stack machine would already hold
+      the old value.
+
 .. monitoring-event:: JUMP
 
    An unconditional jump in the control flow graph is made.

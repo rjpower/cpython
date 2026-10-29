@@ -4346,7 +4346,52 @@ gc_verify_with_pymem_array(PyObject *self, PyValue arg)
     return PyValue_FromResult(res);
 }
 
+/* Invoke only the specializer for a word in the calling Python frame.
+   Tests can distinguish callbacks during this call from the subsequent generic
+   operation, without depending on an adaptive counter reaching its threshold. */
+static PyObject *
+specialize_current_instruction(PyObject *self, PyObject *args)
+{
+    int offset;
+    PyObject *owner, *operand;
+    if (!PyArg_ParseTuple(args, "iOO:specialize_current_instruction",
+                          &offset, &owner, &operand)) {
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (offset < 0 || offset >= Py_SIZE(code)
+        || _PyCode_InstrFbIndex(code, offset) <= 0)
+    {
+        PyErr_SetString(PyExc_ValueError, "word has no private feedback entry");
+        return NULL;
+    }
+    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, offset));
+    int oparg = _PyCode_InstrOparg(code, offset);
+    _PyInstr *instr = frame->ir_words + offset;
+    PyValue owner_value = PyValue_FromObject(owner);
+    switch (opcode) {
+        case LOAD_ATTR:
+            _Py_Specialize_LoadAttr(owner_value, instr,
+                                   PyTuple_GET_ITEM(code->co_names, oparg >> 1));
+            break;
+        case STORE_ATTR:
+            _Py_Specialize_StoreAttr(owner_value, PyValue_FromObject(operand),
+                                    instr, PyTuple_GET_ITEM(code->co_names, oparg));
+            break;
+        case BINARY_OP:
+            _Py_Specialize_BinaryOp(owner_value, PyValue_FromObject(operand),
+                                   instr, oparg, frame->base);
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "unsupported specialization family");
+            return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},

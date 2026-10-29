@@ -335,6 +335,8 @@ Known values:
     Python 3.16a1 3727 (member sites guard the class version in the shape)
     Python 3.16a1 3728 (no-dict class loads on the shape handlers;
                         STORE_ATTR_SHAPE_POLY, LOAD_ATTR_METHOD_LAZY_DICT)
+    Python 3.16a1 3729 (copy propagation: a pending load dies at an op that
+                        may run Python code)
 
     Python 3.17 will start with 3750
 
@@ -344,7 +346,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3728
+#define PYC_MAGIC_NUMBER 3729
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

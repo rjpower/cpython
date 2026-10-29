@@ -1073,6 +1073,130 @@ class TestIRCases(unittest.TestCase):
         self.run_ir_test(input, output)
         self.assertTrue(self.formats(input)["IR_PASS"].transparent)
 
+    def test_runs_code(self):
+        # A family runs Python code if any member does: an escaping call,
+        # the eval breaker, a frame switch, or an instrumented twin, which
+        # fires a monitoring event.  Copy propagation does not keep a
+        # folded load across such an op (Python/regcfg_passes.c).
+        input = """
+        inst(OP_QUIET, (value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+        inst(OP_FAMILY, (value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+        inst(OP_FAMILY_CALLS, (value -- res)) {
+            res = spam_call(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+        family(OP_FAMILY, 0) = { OP_FAMILY_CALLS };
+        inst(OP_PUSH, (value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+        window inst(OP_PUSH_FRAME, (value -- res)) {
+            frame = SPAM(value);
+            res = PyValue_NULL;
+            INPUTS_DEAD();
+        }
+        family(OP_PUSH, 0) = { OP_PUSH_FRAME };
+        op(_CHECK_PERIODIC, ( -- )) {
+            SPAM();
+        }
+        macro(OP_BREAKER) = _CHECK_PERIODIC;
+        inst(OP_TWIN, (value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+        inst(INSTRUMENTED_OP_TWIN, (value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(value));
+            DEAD(value);
+        }
+    """
+        formats = self.formats(input)
+        self.assertFalse(formats["OP_QUIET"].runs_code)
+        self.assertTrue(formats["OP_FAMILY"].runs_code)
+        self.assertTrue(formats["OP_PUSH"].runs_code)
+        self.assertTrue(formats["OP_BREAKER"].runs_code)
+        self.assertTrue(formats["OP_TWIN"].runs_code)
+        self.assertIs(formats["INSTRUMENTED_OP_TWIN"], formats["OP_TWIN"])
+        out = io.StringIO()
+        ir_metadata_generator.generate_ir_metadata(
+            [self.temp_input_filename], self.analyze(input), out)
+        lines = {line.split(" = ", 1)[0]: line
+                 for line in map(str.strip, out.getvalue().splitlines())
+                 if line.startswith("[")}
+        self.assertNotIn("_PyIR_RUNS_CODE", lines["[OP_QUIET]"])
+        self.assertIn("_PyIR_RUNS_CODE", lines["[OP_FAMILY_CALLS]"])
+        self.assertIn("_PyIR_RUNS_CODE", lines["[OP_TWIN]"])
+
+    def test_borrowed_input_read_before_code(self):
+        # A folded local is read where the handler takes the input.  An
+        # input that a member takes only after a uop that may run Python
+        # code is not borrowable; a specializer runs none.
+        input = """
+        op(_CALLS, (value -- value)) {
+            spam_call(PyValue_ObjectBorrow(value));
+        }
+        specializing op(_SPECIALIZE, (value -- value)) {
+            spam_specialize(PyValue_ObjectBorrow(value));
+        }
+        op(_TAKE, (left, value -- res)) {
+            res = SPAM(PyValue_ObjectBorrow(left), PyValue_ObjectBorrow(value));
+            DEAD(left);
+            DEAD(value);
+        }
+        op(_PEEK_CALLS, (value -- value)) {
+            spam_call();
+        }
+        macro(OP_LATE) = _CALLS + _TAKE;
+        macro(OP_SPECIALIZED) = _SPECIALIZE + _TAKE;
+        macro(OP_PEEK) = _PEEK_CALLS + _TAKE;
+    """
+        formats = self.formats(input)
+        # left is taken after _CALLS ran; value before
+        self.assertEqual(formats["OP_LATE"].borrow_mask, 0b10)
+        self.assertEqual(formats["OP_SPECIALIZED"].borrow_mask, 0b11)
+        # _PEEK_CALLS takes value without using it, so the handler reads
+        # value's field in _TAKE, after the call
+        self.assertEqual(formats["OP_PEEK"].borrow_mask, 0b00)
+        handler = self.handler(self.ir_output(input), "OP_PEEK")
+        self.assertLess(handler.index("spam_call()"),
+                        handler.index("value = IR_SLOT("))
+
+    def test_runs_code_covers_every_handler(self):
+        # Over the real instruction set, each instruction that may run
+        # Python code by its own properties marks its family's format, so
+        # that a member added later cannot leave the family unmarked.
+        with handle_stderr():
+            analysis = analyzer.analyze_files(
+                [os.path.join(test_tools.basepath, "Python", "bytecodes.c")])
+        formats = ir_generator.compute_formats(analysis)
+        insts = {**analysis.instructions, **analysis.ir_only}
+        checked = 0
+        for name, inst in insts.items():
+            fmt = formats.get(name)
+            if fmt is None or fmt.transparent:
+                continue
+            uops = [p for p in inst.parts if isinstance(p, analyzer.Uop)
+                    and "specializing" not in p.annotations]
+            own = name.startswith("INSTRUMENTED_") or any(
+                u.properties.escapes or u.properties.eval_breaker
+                or u.properties.switches_frame or u.properties.returns
+                for u in uops)
+            if own:
+                checked += 1
+                self.assertTrue(fmt.runs_code, name)
+        self.assertGreater(checked, 100)
+        for name in ("CALL_PY_EXACT_ARGS", "LOAD_ATTR_PROPERTY",
+                     "INSTRUMENTED_NOT_TAKEN", "LOAD_GLOBAL", "BINARY_OP"):
+            self.assertTrue(formats[name].runs_code, name)
+        for name in ("LOAD_CONST", "LOAD_FAST_BORROW", "LOAD_DEREF",
+                     "BUILD_TUPLE", "IS_OP", "PUSH_NULL", "STORE_FAST"):
+            self.assertFalse(formats[name].runs_code, name)
+
     def test_metadata(self):
         # IR-only handlers follow the opcodes in name order. An instrumented
         # twin shares the format of its instruction.
@@ -1096,7 +1220,8 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
-        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST, "
+        # The twin fires a monitoring event, so the family runs code
+        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
                 ".roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "

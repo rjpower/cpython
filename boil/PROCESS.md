@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 06:25 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 06:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; hand-offs: FOR_ITER_RANGE spill and nbody +5.3% to step 8, `str +=` to step 9 |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs 0, 1, 1b landed; rung 2b at 0a57af28ce6 remains unlanded. Checker/watcher fixes and parsed-mode assertions are committed; current final gates and landing review remain. The O1 trial stopped on PyMem attribution in test_verify_kill; no qualification waiver. Rung 3 is split into 3a writers/PyMem, 3b checker and precision residue, 3c queued releases and detached-state roots; rung 4 closes measurements and support |
-| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung 1 remains unlanded. Oracle fixup a6d88557dfa has explicit child modes, per-object delivery and nested-payload checks, a receiving-owner readiness handshake and failing controls; supported unbuilt-module checks pass. Lane 970e14edbde preserves the rung2 designs and current tooling. The module10/11 queue remap is attributed to owner-unlink order; the feeder-finalization hazard remains open. Current end gates then landing review are required. Rung2a safety/order, 2b owner metadata and 2c retirement/adoption/fork remain design/probes; S1 dependency completion is confirmed, resource-case/S3 proof pending |
-| compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | ab18af7d778 cleared independent source/artifact landing review with no blockers; merged locally as 99435658509. Both specialization-phase controls, provenance and corrected 94-row counter comparison close the prior review. Detached integration build/smoke/targeted/full-suite gates are running before the merge is declared validated. Residual performance attribution belongs to checkpoint I |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b checkpoint d65a03fc96c remains unlanded. O1 failure is traced to first-carrier-only verifier provenance; an uncommitted post-B enrichment repair preserves marking policy. Its concrete fixture awaits specific approval after automatic review rejected the mutation twice in the agent's older context. No workaround is authorized. Final gates/review and O1 qualification remain pending. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
+| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 remains unlanded. Oracle fixup a6d88557dfa has actual child modes and failing delivery/readiness controls; unbuilt checks pass. Release gate2 at970e14edbde passed51,079 tests/0fallback. Combined e37fa1f966f imports compiler/tooling; bounded feeder wait is under validation, with old-warning/new-completion/live-warning controls. Historical warning's exact state is unknown. Combined final gates/review remain. Rung2a safety/order,2b owner metadata,2c retirement/adoption/fork remain design/probes; S1 completion concern confirmed, resource-case/S3 proof pending |
+| compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | design only; note14 incorporates the two reviews' response. Diagnostic position remains published per word; GC uses a separate root-state key. H1 covers handler/build changes; H2 maps wait for10a rung3. H3-1 handler-domain design is assigned, followed by typed float truth and evidence-based dispatch work. No implementation gate is claimed |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | design only; note14 incorporates the two reviews' response. Diagnostic position remains per word; GC uses a separate root-state key. H1 covers handler/build changes; H2 maps wait for10a rung3. H3-1.md is drafted and in independent review, including target-to-reader sampler schema transport. Typed float truth follows accepted domain work. No implementation gate claimed |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; first frees the specialised-handler space | open |
 | 9 | tier 1 | open |
@@ -50,8 +50,17 @@ smoke sets and the mode contract passed on integration. This does not
 land queue routing or root-lifetime changes. The roots lane's O1 debug
 trial passed checker, stack-walk, actual-worker-mode and 100/100 stale-root
 controls, but a focused PyMem-attribution assertion failed. Qualification
-is stopped pending a traced cause; the test's expected attribution stays
+is stopped. B scans a PyMem carrier under a precise origin first, then
+deduplicates away its core-frame alias, losing that origin. A proposed
+post-B provenance repair is under review; the expected attribution stays
 unchanged. No O1 adoption is claimed. The integration debug gate uses Og.
+
+Shared tooling e02e177903f fixes cleanup lock ownership: fd8 remains locked
+through sweep, and a signaled waiter sweeps only after acquiring the lock.
+Five repetitions of the controlled checks pass; both old cleanup and
+unguarded-waiter controls fail. The new runner's mode-contract gate1 passed
+using the 99435658509 binary. Committed refs are pushed; Loom/GitHub
+authorization is explicit. verify.manifest is still outstanding.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -103,6 +112,7 @@ C API or library reference by the rung that makes it.
 | `PyInterpreterConfig` with `use_main_obmalloc` and `PyInterpreterConfig_OWN_GIL` is refused with `InterpreterError` (note 13 section 7.2) | 7a rung 1 | a shared heap is one collection domain; a domain with two GILs would need a stop-the-world across them, which belongs to step 7's collector policy, not to a queue fix | one GIL per domain by stopping the other GIL's threads at each mark (step 7's problem) |
 | an opcode-level trace function (`f_trace_opcodes`) or a `sys.monitoring` INSTRUCTION callback that rebinds a local between two words of one expression sees the rebound value where upstream's stack kept the old one; documented in `Doc/library/sys.monitoring.rst` and `Doc/reference/datamodel.rst` | compiler fix (copy propagation) | the pass folds a local's load into its reader when no op between them can run Python code; per-instruction events fire before every word, so no compile-time rule covers them | no fold under any instrumentable word, which is every fold |
 | `PyDict_Watch()`, `PyType_Watch()` and `PyUnstable_Code_SetExtra()` refuse an object another interpreter owns (`ValueError`, `ValueError`, `SystemError`); `PyUnstable_Code_GetExtra()` on a foreign code object reports no extra; the reserved dict watcher ids are exempt (note 13 section 3.4) | 7a rung 2 | a watcher bit or extra slot is an index into one interpreter's table; set by another interpreter, it names a different watcher or free function in the owner's table | the registering interpreter kept beside each bit or slot: a field per watched object, and no answer to which interpreter runs a foreign watcher when the object dies on its owner |
+| Sampling binary records use a new format generation, a 32-bit opcode field with UINT32_MAX for None, and a generated handler-schema identity; old versions or incompatible schemas are rejected | H3-1 design decision, 2026-10-29; not implemented | The byte codec already loses existing handler IDs above 254; different builds of this fork can assign different IDs at the same Python version. IDs must survive frame deduplication and serialization, and names must match the captured schema | A byte fallback, reserving a valid 16-bit ID as None, or naming a foreign schema using the reader's current table |
 
 ### 0.3 Hand-off ledger
 
@@ -196,8 +206,8 @@ coordinator updates this state table and `README.md`, appends a dated
 progress entry to `WORKLOG.md`, and gives the user a summary of heads,
 landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
-current promises. The first update after this restart is due about
-2026-10-29 06:45 PDT.
+current promises. The first update after this restart is recorded at
+2026-10-29 06:45 PDT; the next is due about 07:45 PDT while work continues.
 
 ## 1. The loop
 

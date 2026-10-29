@@ -2477,3 +2477,48 @@ Detached compiler integration at99435658509 passed gate0 default/debug
 tests with active mode assertion, and release gate2 (51,081 tests,
 60,014 collections,0 fallbacks). Og debug gate3 remains in progress.
 These runs use the prior runner; no queued same-build overlap occurred.
+
+## 2026-10-29 06:45 PDT: first hourly coordinator update
+
+Compiler ab18af7d778 is landed and integration-validated at 99435658509.
+Detached release and Og debug suites each passed 51,081 tests, with
+60,014/61,865 collections and zero fallbacks. Gate3 completed at filing:
+cext 16 tests (7 skipped, 59.3s), unchanged regeneration and traversal audit
+all passed. Shared cleanup
+fix e02e177903f passed independent QUEUES review, its three process checks
+five times and the existing mode-contract gate1; it is pushed. The binary
+for that last focused run was built at 99435658509, the runner at e02.
+
+QUEUES release at 970e14edbde passed 51,079 tests/62,173 collections with
+zero fallbacks. It merged integration as e37fa1f966f, retaining both
+additive test-extension blocks byte-for-byte through their insertion
+conflict. The new common-deadline feeder wait is under validation: real
+old teardown warns while sentinel shutdown is completing; real fixed
+teardown waits and completes; a deliberately blocked feeder still warns.
+The historical warning's exact state remains unknown. Combined full and
+verification gates precede review; no queue-runtime landing is claimed.
+
+ROOTS diagnosis at d65a03fc96c proves precise-carrier-first provenance
+loss in both retain/kill. Source logging was restored. Its proposed
+post-B enrichment keeps ordinary marking unchanged and handles aliases,
+nested carriers and cycles, with capped unique origins. Review also
+caught an empty-seed sorting invariant and per-origin hash-clear cost;
+the fixture proposal was revised to cover them. The agent's inherited
+approval context rejected the concrete fixture twice as insufficiently
+authorized high-impact work. The bounded repair/fixture approval is
+pending; no workaround or rejected mutation executed. O1 remains
+unqualified and final roots gates remain outstanding.
+
+H3-1's domain design is preserved in integration and independently under
+review. It covers generators, typed IDs, monitoring storage, stats,
+inspection and sampler version/schema. Producer renumbering follows sink
+widening. Review is checking actual target-to-sampler schema transport;
+same Python version cannot establish matching handler numbering. No H3
+source work is authorized before the design response. Typed float truth
+follows; H2-dependent compare/branch and call-window work stays separate.
+
+Next hour: complete/review combined queue gates,
+resolve roots fixture approval and validate provenance repair, answer H3
+review, then assign the unfinished executable verification manifest when
+an implementation slot frees. README/PROCESS and Loom status reflect
+these boundaries. Next hourly update due about 07:45 PDT.

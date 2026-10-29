@@ -5,7 +5,9 @@ Status: the separately reviewed exact make-only grant completed once,
 `MAKE_CLOSURE_CLEAR` accepts the closure. Separately approved diagnostic,
 three wrong-origin controls and18-module correctness now pass and clear
 actual review in the [post-build record](pre-I-baseline-postbuild-plan.md#actual-v2-qualification-and-independent-review).
-**Complete workload origins and timing have not run.** The original source-only draft is preserved below and in
+The separately granted50-row run-mode origin campaign now also passes and
+clears actual review in the [origin record](pre-I-workload-origin-plan.md#actual-run-mode-origin-closure).
+**Timing has not run.** The original source-only draft is preserved below and in
 its hash history; configure success alone did not authorize make.
 
 ## Accepted input and exact proposed command

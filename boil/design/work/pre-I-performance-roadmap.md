@@ -28,8 +28,9 @@ nonstats release elapsed time decides whether an optimization helps.
 Historical 6d instruction ratios are 1.161 for kernels, 0.693 for micro and
 1.699 for memory workloads. They establish neither current elapsed parity
 nor progress to 2×. The old baseline's source/library binding is incomplete.
-An owned exact upstream `321925` build now succeeds and clears independent
-product-closure review; runtime qualification is the next measurement input.
+An owned exact upstream `321925` build and initial origin/correctness
+qualification now pass independent review. All50 actual benchmark-driver origin rows also pass independent review;
+quiet timing has not started.
 
 **Why twenty was not an optimal default.** Note 11, section 8.2, required 20
 passes both individually and in full-module order. The rule was carried into
@@ -68,30 +69,34 @@ audits on release/O1-debug/ASan. Both completed 120-transaction campaigns remain
 historical evidence on `1bfe`, with zero fallback. All pre-change products and
 journals are preserved.
 
-Finish the bounded comparison of emitted root classifications, unwind rules
-and root locations, including the four actual semaphore helpers. Default/debug
-function membership and ranges match; ASan intentionally moves only two raw
-wrappers into the precise section. Literal code/data changes remain recorded;
-selected relocation/string and root/unwind equivalence do not imply whole-image
-byte equality. Root decides historical carry-forward from the completed bridge.
+The completed bounded comparison covers emitted root classifications, unwind
+rules and root locations, including the four actual semaphore helpers.
+Default/debug function membership and ranges match; ASan intentionally moves
+only two raw wrappers into the precise section. Selected relocation/string
+and root/unwind equivalence do not imply whole-image byte equality. Root
+accepted historical carry-forward under that bridge.
 
-Then execute the already proposed fresh affected campaign once per relevant
-configuration: release off, O1-debug off and actual debug kill. It includes
+The fresh affected campaign now passes once per relevant configuration:
+release off, O1-debug off and actual debug kill. Its24 transactions cover
 strict stale-root probes, complete compiled stack walks and Park caller-slot
 controls, the three thread regressions, both eval-root cases and the complete
-changed generated-cases module. It is 24 transactions total, not another 20
-iterations. The cheap internal stale100 probe remains this landing's existing
-hazard check. No new test exclusion or root-policy fallback is introduced.
+changed generated-cases module. They are not another20 iterations. The cheap
+internal stale100 probe remains this landing's existing hazard check. Fresh
+tail build and six strict stale100 cases also pass; bounded tail StackWalk
+waits for fulls because perf-map cleanup interferes. No new test exclusion
+or root-policy fallback is introduced.
 
-The landing qualification still requires current-source full release, full
-debug normal and full debug kill; the 11-module stress set on both builds at
-interval 1,000; the once-only filtered release full at interval 100,000; and fresh ASan kill with stress off
-coverage of the 14 hazard modules plus sort/functools. The ASan union may run
-as one 16-module campaign with the same exact existing allocator exclusion.
-That consolidation changes no covered module or allowed failure. Finish cext,
-unchanged regeneration, traversal audit and declared optional-module/header
-checks. Preserve unsupported modules and existing exclusions explicitly.
-No benchmark or unrelated GC redesign becomes an additional 2b landing gate.
+Current-source full release, full debug normal and full debug kill now pass
+51,132 tests each with zero fallback. Both11-module stress sets pass3,062;
+ASan16 kill passes3,976 under the exact existing allocator filter/options.
+The final filtered release full at interval100,000 has returned an interpreter
+test failure and HTTP unraisables; it remains frozen through terminal cleanup.
+The [triage](10a-2b-stress100k-triage.md) separates threshold scheduling from
+actual collection/retention and HTTP lifecycle causes. No new exclusion or
+retry is introduced. Finish diagnosis and any focused fix, then choose fresh
+qualification from the actual changed contract rather than repeating20.
+Tail StackWalk, cext, unchanged regeneration/traversal and declared optional
+header checks remain; none ran after the current failure.
 
 An independent landing review and primary integration smoke follow. Full
 suites serialize where shared host state requires it; independent bounded
@@ -140,13 +145,22 @@ opcode classifications or a separate optimizer for each consumer.
 Readiness includes the actual benchmark driver's setup/run import and native
 dependency closure in the [baseline plan](pre-I-baseline-postbuild-plan.md);
 the startup diagnostic and correctness suite alone do not establish it.
-As soon as that environment and a stable fork candidate are ready, take a
-quiet release measurement window. Do not wait for
+As soon as that environment and an immutable fork candidate are ready, take
+a bounded quiet release measurement window. The coordinator may use ce2ac's
+normal-full-qualified release as an early diagnostic before landing, with its
+unresolved stress failures explicit. This provides no correctness, parity or
+target qualification. Focused diagnosis and ready GC fixes take priority;
+a noisy window must not block source work. Do not wait for
 every proposed optimization before obtaining the first honest wall-time
 baseline. Rank recurring costs using elapsed profiles plus boxes/allocated
 bytes, GC root/mark/sweep time, survival, dispatch mix, spills and code size.
-This determines the next implementation priority; no imaginary per-technique
-speedup budget is compounded into a 2× promise.
+Historical ROOTS2b instruction records also show keyword-call (+7.1% and
++14.0% on two rows) and attribute-span (+2.8–13.1%) costs. Preserve their old
+source identities and refresh elapsed/box/root attribution on the stable
+candidate. The old suggestion that step8 will replace those paths is not a
+prospective pre-JIT disposition. These measurements determine the next
+implementation priority; no imaginary per-technique speedup budget is
+compounded into a 2× promise.
 
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32
@@ -209,8 +223,10 @@ speedups toward the target or start JIT implementation to conceal a deficit.
 
 **Coordination.** The coordinator owns this plan, measurement choices, shared
 interfaces and integration. Subagents own bounded implementation and independent
-review. Current assignments remain ROOTS comparison/affected qualification,
-independent bridge/baseline review, and baseline diagnostic/correctness helpers.
+review. Current assignments are the remaining ROOTS landing gates and as-built
+record,
+independent final-gate/origin review plus source-only GC3a readiness, and actual
+benchmark-driver origins followed by the quiet measurement plan.
 Next native ownership is H3 union/statistics, then bounded H1, with 6e and GC 3
 parallel where interfaces permit. Full root maps and call-window changes follow
 their actual dependencies. Report evidence and blockers hourly, with clear

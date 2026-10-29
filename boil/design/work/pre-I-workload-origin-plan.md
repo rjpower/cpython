@@ -1,10 +1,11 @@
 # Upstream baseline: actual-driver origin campaign
 
-Status: source-only plan, 2026-10-29. Diagnostic/correctness closure058d9bfb
-clears independent actual review9bac61da. This next campaign has **not run**;
-its bounded adapter and trace-parser successor still need implementation,
-independent review and an exact coordinator grant. Production run.py and
-driver.py remain unchanged. No workload timing is proposed here.
+Status: all50 direct run-mode origin rows passed and clear independent
+actual reviewcbcb847d, 2026-10-29. Closure9e725b7f preserves raw traces,
+receipts and unchanged input/native inventories. Production run.py and
+driver.py remain unchanged. No time-mode, performance metric or extra
+build ran. Earlier source-only/launch requirements below retain their
+historical scope.
 
 The frozen plan is primary
 `build/checkpoint-i-baseline-binding/workload-origins-v1/source-plan.json`,
@@ -139,10 +140,10 @@ and unresolved/deleted mappings retain their distinct limits. Host readelf
 DT_NEEDED/RPATH/RUNPATH inspection may corroborate loader evidence; it
 does not replace it or prove consumed SDK headers.
 
-Before launch review, host-only fixtures should exercise a direct-driver
-trace without a witness marker, its shared workload and regex helpers,
-an early foreign import, unbound cache, missing cleanup, a loader search
-candidate versus actual load, and an unexpected external library. Reuse
+Host-only fixtures exercise a direct-driver trace without a witness
+marker, its shared workload and regex helpers, an early foreign import,
+unbound cache, missing cleanup, a loader search candidate versus actual
+load, and an unexpected external library. Reuse
 the existing valid wrong-origin controls' evidence where inputs/guards
 are unchanged; do not rerun the18-module suite for a trace-parser change.
 
@@ -177,3 +178,91 @@ properly bound elapsed baseline early. Complete workload origins do not
 close SDK consumed-header provenance or upstream/fork eval-policy matching.
 Keep source-specific-fno-gcse, any sensitivity/fully matched cohort and
 the roughly2x pre-JIT target separate from this origin-only campaign.
+
+## Implemented task-owned source package, not executed workloads
+
+The coordinator granted source implementation of this plan. Q now holds
+origin_trace.py, campaign.py and the bounded V2 phase_runner adaptation.
+The original plan documentdedcca9e and first implementation/control bytes
+are preserved under Q/history-first-draft. The original registry source
+plan4f1c1423 remains unchanged and is checked against the final50 rows.
+
+| Frozen source/launch | SHA256 |
+|---|---|
+| phase_runner.py | `bff785d1a898d28a435cbcac2b82cfc379873b7d7294360069c37a40b5a00117` |
+| origin_trace.py | `c398218c5ef1ca10081e991c2864cc6f2e319fc1d0d725c8384e2748286c0e99` |
+| campaign.py | `389a541739e25ca836088a595432c843ca4dd0525207253829af8e75fd340e26` |
+| plan.json | `b5b38e63937f971e90648e5874048d06533cb28a6eff12ab34c74eb4b30af0f6` |
+| origin-launch.json | `23bf93c55c6dea16ddac6431cf95ccc3031170b30691bd546fbe4b11cb428099` |
+
+Seven existing supervisor/lock/inventory/make-guard function bodies are
+AST-identical to V2. New guards bind the50 exact rows,44 shared files,
+15 current host tools (the14 build tools plus readelf),38 selected readable
+qualification artifacts and the exact accepted qualification/cache
+receipts. Old0200 test caches remain untouched. Serial campaign children
+retain a command receipt even on timeout. Native584/source5806/config14
+guards run before, after and after final cleanup under the ordinary protocol.
+
+Static host readelf inspected the existing executable and67 extension
+ELFs, without executing them. `elf-dependencies.json` SHA256
+`faf853da941917bd50e881e6be530dec7bdb5907dcc18d292b5682035eed53fe`
+binds all68 raw DT_NEEDED/RPATH/RUNPATH outputs and readelf's exact bytes.
+The additional admissible external files are libffi, liblzma, libncursesw,
+libpanelw, libtinfo and libz: each exact resolved hash was already in
+pre-makeb960 **and** is named by an actual configured product's DT_NEEDED.
+This is predeclared admissibility, not a claim those six were loaded.
+The parser still requires actual selected link-map/init/fini/open records
+and matching bytes; no arbitrary /usr/lib allowance is present.
+
+Twenty-eight host-only controls pass at these final source hashes;
+`host-controls-v4/results.json` SHA256
+`d786c5cfc0e39a3827dbf0fd53ccf34cbb000ba862c22ab8e760d856b1352025`.
+They include complete direct/shared-corpus traces, early foreign imports,
+unknown loaders, orphan/wrong caches, absent workload/cleanup, foreign
+resolved aliases, search-only foreign candidates versus selected foreign
+loads, unresolvable sonames, wrong programs/extra processes, missing
+extension ELF events, row/qualification/shared-file drift and missing
+inherited locks. A harmless /usr/bin/true host process supplied an actual
+glibc LD_DEBUG format fixture. Synthetic ELF fixture files are never run.
+These are parser/guard evidence, not target workload or timing evidence.
+
+Independent exact package review and a coordinator execution grant are
+still required. The accepted18-module correctness run is not repeated.
+
+Before launch, root and independent review found that the first parser
+omitted generated Python/data products from its accepted file table,
+despite the intended sysconfig allowance. The complete119-artifact frozen
+package is preserved at primary build/checkpoint-i-baseline-binding/
+workload-origins-reviewed-v1, with predecessor provenancef0aa73cc and an
+explicit preservation receipt. The focused successor adds **all584
+manifest-bound build products** to Python file binding, while keeping
+actual ELF filtering and observed-load requirements separate. Added host
+controls accept generated sysconfig code and reject changed bytes and an
+unlisted generated file. Runner, campaign,50 exact commands, shared inputs,
+qualifying18-module receipt and native products remain unchanged. No
+target workload was executed to discover or repair this coverage gap.
+
+## Actual run-mode origin closure
+
+Independent launch review96308cd7 and the exact coordinator grant preceded
+the once-only23bf93c5 launch. All50 rows returned0 and passed origin checks:
+29 kernels,8 memory workloads and13 call/string micro rows, serially under
+the normal slot/build lock. Final/gate/inner returned0 and final cleanup
+verified identical584 native products. Source5806,15 tools,44 shared files
+and38 critical qualification artifacts remained unchanged. Historical0200
+test caches were neither opened nor chmodded. No time mode, perf/RSS/box
+metric, build or18-module correctness rerun was included.
+
+Joint `workload-origin-closure-v1.json`, SHA256
+`9e725b7ff8aa5b06ede10e82c101015ef6b11d497727e782f0eed1bdce56f0ac`,
+under primary build/checkpoint-i-baseline-binding binds1169 raw artifacts.
+The union contains117 trace-observed Python files and118 import names.
+Actual external ELF loads were only the host loader, libc, libm, liblzma
+and libz, each matching its predeclared resolved bytes. The unused ffi/
+curses/panel/tinfo declarations are not reported as observed loads.
+
+Independent actual reviewcbcb847d accepts that run-mode scope, without
+timing/parity credit. The [first quiet timing plan](pre-I-first-quiet-timing-plan.md)
+is source-only and requires separate source/build/quiet-window decisions
+and an exact grant. Extra time-mode JSON-tail imports and SDK/header/eval
+policy limits are not silently closed by these50 run-mode traces.

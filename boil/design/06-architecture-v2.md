@@ -4576,9 +4576,13 @@ record is work/6d-4.md, "As built" and "End gates".
 **6e, after the root/checker contract settles and before I.**
 
 8. Inline receivers of int's and float's methods and getsets: `(5).real`,
-   `x.bit_length()` (chaos, 20,000 boxes a loop). Review the value-self
-   interface and verify the receiver box budgets; tier 1 intrinsics do
-   not replace this interpreter hand-off.
+   `x.bit_length()`. Current chaos source makes 10,000 bit_length calls per
+   workload loop, or 20,000 per registered loops=2 invocation; historical
+   “call into C” counters report 10,000 boxes per loop. These are not a
+   current total-box budget. The [receiver audit](work/pre-I-inline-receiver-audit.md)
+   distinguishes immediate calls, getsets and bound-method storage. Review
+   the value-self interface and verify source-bound receiver budgets;
+   tier 1 intrinsics do not replace this interpreter hand-off.
 
 **The ports phase.**
 

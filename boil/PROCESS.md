@@ -23,14 +23,14 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 14:14 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 14:49 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b is frozen/unlanded at ce2ac8991ee. Original full-debug thread-pool failures have causal Park-padding controls and a precise-Park repair; two raw-mutex annotations close the ASan linked audit. All three builds and native/root-metadata bridge clear review. Both old1bfe120-transaction campaigns pass and stay historical. Fresh affected24 passes243 test-runs/three tail-only skips and1,800 strict stale cases; release full passes51,132/3,458 skips and zero fallback. Debug full is active. Debug kill, release/debug stress11, ASan16 kill, stress100k full, extras, bounded tail support, landing review/integration remain. No automatic20 redo; O1 remains a candidate. Then3a writers/PyMem,3b checker/readers,3c detached-state and queued-buffer roots; rung4 support separately |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains frozen/unlanded ce2ac8991ee. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k returns interpreter-testFAIL plus HTTPENV_CHANGED; run still finishing, no retry/newfilter. Investigate threshold scheduling versus actual collection and HTTP lifecycle separately. Tailwalk/extras, exact landing review and fresh merged default/debug fulls remain. Old1bfe120 stays historical, no automatic20 redo; O1 still candidate. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
@@ -67,8 +67,11 @@ tracker and forkserver/tempdir dependencies. Visible natural-case off/kill
 reruns pass without the semaphore diagnostics.
 The8ce matrices are completed historical evidence; full debug then exposed
 Park retention. Current source is ce2ac8991ee with the precise-Park repair and
-two raw-mutex annotations. Fresh affected24 and release full pass; debug full
-is active under the reviewed seven-profile plan7d40. No O1 adoption is claimed;
+two raw-mutex annotations. Fresh affected24 and six of seven profiles pass under plan7d40. The final
+stress100k returns interpreterFAIL and HTTPENV_CHANGED; it is finishing with
+source/helpers/native products frozen. No retry or new exclusion is allowed.
+See the current stress100k triage record; no critical-window GC or common
+cause has been proved. No O1 adoption is claimed;
 integration debug uses Og. Bounded tail make/stale checks may run in parallel,
 but its complete StackWalk waits for all fulls under their serialization lock
 because perf-map cleanup otherwise interferes. Extras and landing review follow.
@@ -555,7 +558,9 @@ checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
 2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45,11:45 and12:45 PDT.
 The 13:45 update records the new 2× target and revised validation policy.
-The next is due about 14:45 PDT while work continues.
+The14:49 update records six successful branch profiles and the final
+stress100k interpreter/HTTP failures, holding landing. The next is due about
+15:45 PDT while work continues.
 
 The revised [pre-JIT performance roadmap](design/work/pre-I-performance-roadmap.md)
 sets roughly 2× whole-workload interpreter throughput as the target before JIT.
@@ -565,9 +570,9 @@ broad coverage early; reserve expensive repetition for a named hypothesis,
 recorded exposure and bounded stopping rule. Existing 20/20 receipts remain
 historical. No completed campaign is automatically repeated after a small
 source change, and no old receipt is relabeled as a new-source pass. Current
-ROOTS 2b still needs its fresh mode/full/stress/ASan/extras landing gates.
-The fresh ASan14+sort/functools union may run as one 16-module campaign with
-exactly the existing accepted allocator filter and actual kill/stress 0.
+ROOTS2b's fresh mode checks and six profiles now pass; finalstress100k fails
+and must be diagnosed before tail/extras/landing. ASan14+sort/functools ran
+once as16 with the exact accepted allocator filter and actual kill/stress0.
 
 ## 1. The loop
 

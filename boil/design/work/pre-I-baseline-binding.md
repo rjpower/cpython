@@ -215,8 +215,10 @@ and a jointly frozen14-product configuration closure. A separate reviewed
 make-only grant then completed successfully and froze584 products,
 including its disclosed internal interpreter actions. A separately granted
 diagnostic, three valid wrong-origin controls and18-module correctness
-transaction now pass and clear independent actual review; complete workload
-origins and benchmarks have not run. Main and
+transaction now pass and clear independent actual review. The separately
+granted50-row actual-driver run-mode origin campaign also passes and clears
+actual review; see the [origin record](pre-I-workload-origin-plan.md#actual-run-mode-origin-closure).
+Timing has not run. Main and
 all historical baseline products/results remain unchanged. Configuration
 success does not close runtime import binding or qualify a comparison.
 Actual configuration preserves upstream's empty CFLAGS_CEVAL while fork

@@ -15,8 +15,8 @@ this does not add a technical prerequisite to the H1 design.
 
 | Object | Frozen identity / meaning |
 |---|---|
-| Primary | `58c98bec651`, native integration still queue `052d8342e56`; later primary commits include tooling and documentation |
-| ROOTS candidate | `1bfe1a57145`, clean Park prerequisite on primary merge `d8be2e2c36d`; fresh qualification in progress, not landed |
+| Primary | `57b5a61a6f2`, native integration still queue `052d8342e56`; later primary commits include tooling and documentation |
+| ROOTS candidate | `ce2ac8991ee`, precise-Park prerequisite plus two raw-mutex classifications; fresh affected24 and release/debug fulls pass, remaining qualification in progress, not landed |
 | H3 live docs head | `81417aff097`; only stats design differs from the frozen storage/evidence head in native/test/tool paths |
 | H3 storage/evidence | `ffc548603b823484fdf106b1a9de06785017c682`, branch `boil/h3-monitoring-storage-land`; native `76274ed06ec5116214fb3696f4f07e2ca8de4531` |
 | H3/ROOTS and H3/primary merge base | `6c724c29408f4751b570c6980320801921be7e64` |
@@ -26,10 +26,11 @@ The storage evidence manifest remains
 [Frozen-checkpoint review](reviews/H3-1-stage2b2b-evidence-readiness.md)
 clears that exact storage delta and evidence, **not primary LAND**. The
 29 H3 paths under Include/Objects/Python/Modules/Lib/Tools differ from
-the shared base; ROOTS changes 66 such paths. Five paths overlap, below.
+the shared base; ROOTS changes 67 such paths. Five paths overlap, below.
 These counts describe these two snapshots, not a future landing diff.
 
-Read-only `git merge-tree BASE H3 ROOTS` reports all five as changed in
+The read-only `git merge-tree BASE H3 ROOTS` preflight was repeated on
+ce2ac after its two raw-mutex annotations; it reports all five as changed in
 both, with no conflict markers. That is textual three-way preflight,
 not an applied merge, generated closure or semantic compatibility result.
 The actual future primary base must be named after ROOTS lands; repeat
@@ -124,11 +125,13 @@ driver/workers, mode/stress, optimize/assertions and local CAPI origin.
    cext, unchanged regeneration/Clinic, traversal audit and optional-module
    syntax checks. Rebind accepted ASan14 plus sort/functools actual-kill
    coverage and stress11 at N=1000, using only the existing applicable
-   exact exclusions/options and actual mode checks. Keep each of the two
-   eval probes at twenty independent invocations per required build, not
-   just a method's internal loop: PROCESS explicitly requires these for
-   eval-loop changes. This is separate from the old31/11 reclamation
-   matrix, which is not replayed wholesale. No new failure exclusion or global
+   exact exclusions/options and actual mode checks. Run each of the two
+   eval probes once per relevant build/mode, preserving
+   its cheap internal hazard loop. The coordinator's revised PROCESS policy
+   supersedes the old blanket twenty-invocation rule: further independent
+   repetitions need a named failure hypothesis, exposure budget and stopping
+   rule. The old31/11 reclamation matrix is not replayed wholesale. No new
+   failure exclusion or global
    opcode threshold follows. A second full-release stress100k campaign
    is not an automatic H3 rung requirement; ROOTS's once-only profile
    remains its own source-scoped obligation.

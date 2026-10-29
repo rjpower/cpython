@@ -531,3 +531,123 @@ cleanup. Each profile retains its own raw receipt or failure and stops. No
 automatic chain, new exclusions, repetition layer, extras execution, benchmark
 timing, landing or old120 relabel is authorized. The reviewer ran no helper,
 native command, compiler, control or test; only this review was edited.
+
+## Round 8: TAIL_SUPPORT_MAKE_STALE_PLAN_CLEAR
+
+Verdict: **TAIL_SUPPORT_MAKE_STALE_PLAN_CLEAR**, 2026-10-29. The coordinator
+may grant the separate once-only make and strict stale stages. Walk remains
+an independently explicit later stage, after all seven current full-profile
+receipts pass and the full-campaign serialization lock is acquired. This is
+source review, not a tail native PASS, full tail 8.2, retain-mode campaign,
+global build-policy adoption or permission to execute.
+
+Initial helper `32269230`, plan `8145f6b8`, manifest `a93a3115`, REVIEW
+`e67e75c7` had one concrete gap: `check_locked` verified the new tail inventory
+before gate cleanup, but outer `loaded()` afterward covered only the three
+other native builds. A successful outer check receipt could omit tail drift
+during cleanup. Initial bytes are preserved as V1. Make already performed its
+post-cleanup tail comparison and did not have this gap.
+
+| Corrected artifact | SHA256 |
+|---|---|
+| `raw_tail_support.py` | `2b5f1b4e035c43ff6fe255b5742f6dcd11f74df77b9b731fac8fe65ca2e1837a` |
+| `tail-support/plan.json` | `a731c827c6b85757293c4b39fb99ca3d310fc1c23cd8b760a19330f90633fdbb` |
+| `tail-support/frozen-manifest.json` | `0198b76f72bf19b028221790887885d930a4dafb37736ffd4e97fabfd4dcdf94` |
+| `tail-support/REVIEW.md` | `e7415d85686a504807d0a294a26c36468040dac462dc6bb4ab9a8c6b350054c0` |
+
+The exact one-line successor adds `build_receipt(p)` after gate cleanup for
+stale/walk and before the outer launch receipt. It compares the current new
+tail roster, roles and aliases to the head/plan-bound successful build record.
+All frozen hashes and 286 current old-tail product hashes match; source is
+clean `ce2ac`. No tail stage has run. Make preserves the configured Clang21
+input identity, exact Makefile/pyconfig, source and three other native builds;
+it uses fixed `make -s -j4`, normal two-slot admission and the reviewed actual
+inherited FD8/FD9 lock proof. Complete new expanded products and copied bytes
+are frozen under lock after make, before any qualification, then compared
+after cleanup. Bootstrap executions remain build steps.
+
+The stale child checks actual executable, tail/non-ASan/nondebug configuration,
+Python assertions and off/extras0/stress0 at start/end. Its six exact 100/100
+cases require positive collections, main-interpreter coverage, valid integer
+counter domains and zero fallback/unpinned. The later full-v3 walk copy changes
+only tail/nondebug/option identity and worker helper name. It requires all 11
+StackWalk tests, no skips and actual tail-handler precision coverage. Walk
+unpinned remains report-only as in the existing validator.
+
+The shared full lock prevents the known perf-map cleanup collision; no filter
+or test allowance was added. Support stages serialize separately and remain
+explicit with no overwrite/retry/automatic chain. The four recorded host
+checks are bounded precondition evidence, not comprehensive failure injection
+or target coverage. No helper, compiler, control, native build or test was
+executed by this reviewer; only this review was edited. Actual make/stale/walk
+receipts still require their own scope review.
+
+## Round 9: GATE3_CLOSURE_PLAN_CLEAR
+
+Verdict: **GATE3_CLOSURE_PLAN_CLEAR**, 2026-10-29. Reviewed the separate
+fixed once-only closure adapter `raw_gate3_closure.py`
+`43b0f7835f1d1cb04034e2c1cef72a4f88378ec459def2a8e8ebe3dcb1a219ab`,
+plan `f91d152ac13d02173b0c481ad331f0ef1a0e1786028ca489dca0270ed508ee78`,
+manifest `a1bc82bb7417f61d4f098b3c09ff39460ee242d97c63a928bd84c9be602ce75c`
+and REVIEW `dec1e578c2f48fe323f14f5942792dd71d681dbe361c52e340b739a1bc4dc83b`.
+Execution still requires the coordinator's grant after all seven current
+full-profile PASS receipts and their raw artifact hashes are verified. The
+shared serialization lock prevents overlap with those native profiles.
+
+The batch runs sequential debug off/extras0/N0 test_cext with CPU resource,
+without a multiprocessing-only worker override. Its source has 16 cases;
+the six explicit limited/stable-API skips and MSVC-only C++14 skip are bound
+by exact ID/reason Counter. SUCCESS, 16 run/7 skipped, one file, actual driver
+start/end mode/stress, valid root domains, main-interpreter coverage, positive
+collections and zero fallback are required. Unpinned remains reported. These
+are proposed acceptance conditions; the generic host guard reports do
+not establish actual native coverage or a comprehensive negative-control run.
+
+Regeneration of cases and clinic, traversal audit and the 19 missing-module
+syntax commands require zero return and unchanged complete source/native
+guards after each command. Source drift is retained as failure, never reset.
+The optional-module check requires exactly the source-derived 19 ok receipts,
+no warnings/errors/missing-header output and explicit unsupported
+_tkinter/_dbm/_gdbm/readline. The literal UUID stub is part of the frozen shell
+checker. This is syntax-only coverage, not four supported missing modules or
+linked runtime qualification for the borrowed-header modules.
+
+All frozen artifacts and 2,915 borrowed-root file hashes match. The inspected
+roots contain no directory symlinks that would evade their recursive map.
+Root file aliases, resolved bytes and roster are compared before/after; this
+is a superset of consumed borrowed headers, not an exhaustive system SDK image.
+The actual Makefile CXX is `/usr/bin/g++`, matching the bound compiler and
+cc1plus; current C tools/configuration are inherited from the reviewed full
+guard. Command environment uses the allowlisted builder and drops ambient
+compiler/include/make/loader overrides. Dynamic test extensions remain bound
+to test source, literal commands and toolchain rather than nonexistent old
+pre-hashes. The native inventory is rechecked after final gate cleanup.
+
+No new skips, full-tail/retain/repeat matrix, gate4 benchmark, O1 adoption or
+landing approval is introduced. Source clearance does not assert these checks
+have run. The reviewer executed no helper, compiler, build, test or control;
+only this review was edited.
+
+## Round 10: ACTUAL_TAIL_MAKE_STALE_SCOPE_CLEAR
+
+Verdict: **ACTUAL_TAIL_MAKE_STALE_SCOPE_CLEAR**, 2026-10-29. Actual make
+receipt `735212a0bb56470cadbe19c05084b6f9d9d52f152061fc33897515b8792da149`
+and launch `8abd20b5e48ff48bf234774d644dbb3660233882a723ed3a742ab3cfb2067b21`
+return zero at `ce2ac`/plan `a731c827`. All 286 new tail product hashes and
+their preserved payload hashes match. The log's 116-module check reports
+zero failed imports; it remains a build step. Make took 79 seconds under
+concurrent verification load, not a performance measurement.
+
+Strict stale result
+`595321844909d84902ff3bf2c7ed2167a2e80183a9cae651c703c6280b15b4a4`
+and launch `3ddbd1989b6a8bebc63298c29ba4ff837b860dce77f7342239c45f86183d48b8`
+also return zero. Both raw artifacts match their hashes. Actual child
+3585335 reports start/end off/extras0/N0; all six cases are 100/100.
+Its main-interpreter record reports 706 collections, zero fallback and
+zero unpinned, with valid nonnegative counter domains. Source remains clean;
+the reviewed launch's unchanged-input and new-tail post-cleanup guards passed.
+The 13.805-second check duration is verification cost only.
+
+No compiled walk or broader tail qualification is credited. Its separate
+all-seven-full-PASS/shared-lock prerequisite and exact grant remain required.
+The reviewer only read source, receipts and hashes and ran no native command.

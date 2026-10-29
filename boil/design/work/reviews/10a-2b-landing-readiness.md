@@ -143,3 +143,201 @@ handoff, not new2b blockers. Retain requires its own oracle. Shared
 verify.py run/gate orchestration is unfinished; build-owned qualification
 does not implement it, and the targeted shared launcher's global skip hook
 needs separate correction/qualification before future full-profile use.
+
+## Current source preflight, ce2ac versus primary57b5
+
+2026-10-29: **SOURCE_PREFLIGHT_NO_NEW_BLOCKER**, with final qualification,
+as-built documentation, exact candidate and integration review pending.
+This source-only preflight does not replace the historical failures/results
+above and is not a LAND verdict. No candidate command, compiler, test, probe,
+checkout or source mutation was performed.
+
+Compared primary `57b5a61a6f26917d8e4878527c396d00cae58198` with frozen ROOTS
+`ce2ac8991eebb1bbb10698ff2d07a79bd4cba452`. The selected complete delta below
+has binary Git-diff SHA256
+`702d075d7cf8e86b2d8128eb52b4aab800ed85106235e00a2bd0a2a3a5c82bcb`.
+It contains 62 Include/Objects/Python/Modules/Lib/Tools paths, Makefile.pre.in,
+six boil/tools paths and InternalDocs/values.md: 70 total, or 69 excluding
+InternalDocs. The earlier 67-path handoff used a different H3 merge-base and
+path domain; do not reuse its count for this primary comparison. The three
+opt-in diagnostic additions abortbt/cstack/opaque_inliners are retained by
+coordinator ruling; they are neither gates nor reliability evidence.
+
+This bounded check builds on the existing 2b/checker, cleanup, Park source/
+implementation and raw-mutex reviews and their retained falsifying controls.
+The central contracts remain coherent:
+
+- Parameter/result spans use initialized raw slots and pop before freeing
+  their backing buffer. `_PyStack_KwNames` owns its names during allocation;
+  its three call paths size and rebase their span before later collections.
+  `_PyValueSpan_ObjectSlot` gives object out-parameters an actual raw root;
+  checker invalidation/merge/pop logic and negative fixtures protect that
+  contract rather than treating arbitrary PyObject** casts as anchors.
+- Public-header precise marks move to pyport with a core/ELF/compiler guard;
+  generated and explicit helper interfaces change together. The unused
+  `_Py_Check_ArgsIterable` callable parameter is removed at declaration,
+  caller and generated uses. No H1 frame convention or H3 schema change is
+  smuggled into this source delta. Their later union still needs revalidation.
+- Park's seven production callers are four lock/event/once/RW sites in lock.c,
+  SimpleQueue get, thread-state suspension and interpreter-finalization wait.
+  They remain opaque. Their address/expected storage survives the complete
+  wait; SimpleQueue's object-bearing output is the caller's writable `item`
+  slot, covered by its opaque pinned stack until reattachment. Park holds no
+  Python object roots. A future precise queue-get caller needs an explicit
+  output root; neither this repair nor the held Queue2 work grants that change.
+- Park alone becomes precise. The two raw mutex wrappers have unchanged
+  scalar/pointer bodies, exact precise markers and reviewed slow-path/platform
+  closure. The semaphore refactor chooses one monotonic or realtime wait;
+  its retained feature/timeout/error controls preserve errno/result behavior.
+  Real-Park caller-slot/negative classification controls and actual linked
+  CFI/root-location comparison remain distinct evidence.
+- PyMem attribution supplements B using allocated carrier edges with
+  per-origin cycle/alias deduplication. It does not replay arbitrary traverse
+  graphs or change real marks. `_PyList_AsTupleAndClear` allocates/copies while
+  the list still visits its items, then clears size. These repairs have
+  retained carrier/list-transfer controls; report origin order is not fixed.
+- Multiprocessing test cleanup drains finalizers after forkserver stop and
+  before resource-tracker stop, preserving both socket and unregister ordering.
+  Earlier thread-pool and standalone-finalize failures remain retained; they
+  are not erased by the currently fresh affected/full campaigns.
+- The removed source decorators restore real reclamation assertions. Current
+  full-v3 protection rejects skips of the 39 protected selectors/containers;
+  source retirement is distinct from historical matrix coverage. Writer,
+  compiler-metadata, ASan allocator and remote-exec limitations remain exact.
+  `collect` stays explicitly outlined below walk entry; queue `run_queue_ex`
+  remains opaque for its saved exception/live payload. Nothing here retires
+  3a/3b/3c, zero-init, transitive PyMem or other conservative protections.
+
+One nonblocking bookkeeping remnant is `OUTLINED_OPAQUE['vectorcall_call_dict']`:
+that function is now merged into precise `_PyVectorcall_Call`, so the old
+entry names no current function. It supplies no current native bypass. Treat
+its stale explanation as later checker inventory cleanup, not a reason to
+rewrite frozen source during qualification. The narrowed hashtable effects
+now leave callback-bearing operations collecting, strengthening that boundary.
+
+The final review must bind the exact as-built candidate/docs delta and fresh
+seven-profile, extras and conditional tail-walk receipts, including failures,
+skips, actual kinds/state, product inventories and report-only unpinned limits.
+Old1bfe120 remains historical with the accepted ce2ac native bridge. O1 policy,
+landing and primary integration remain coordinator decisions after that review.
+
+Complete selected path inventory:
+
+```text
+Include/cpython/listobject.h
+Include/cpython/pylock.h
+Include/cpython/tupleobject.h
+Include/internal/pycore_call.h
+Include/internal/pycore_ceval.h
+Include/internal/pycore_dict.h
+Include/internal/pycore_gc_trace.h
+Include/internal/pycore_gc_walk.h
+Include/internal/pycore_interpframe.h
+Include/internal/pycore_lock.h
+Include/internal/pycore_object_alloc.h
+Include/internal/pycore_parking_lot.h
+Include/internal/pycore_pystate.h
+Include/internal/pycore_tstate.h
+Include/internal/pycore_value.h
+Include/pyport.h
+Include/pyvalue.h
+InternalDocs/values.md
+Lib/multiprocessing/util.py
+Lib/test/_test_multiprocessing.py
+Lib/test/test_asyncgen.py
+Lib/test/test_capi/test_watchers.py
+Lib/test/test_context.py
+Lib/test/test_ctypes/test_callbacks.py
+Lib/test/test_descr.py
+Lib/test/test_gc.py
+Lib/test/test_generated_cases.py
+Lib/test/test_memoryview.py
+Lib/test/test_set.py
+Lib/test/test_tools/test_gc_inline_audit.py
+Lib/test/test_weakref.py
+Makefile.pre.in
+Modules/_ctypes/cfield.c
+Modules/_testinternalcapi.c
+Modules/_testinternalcapi/gc_walk.c
+Objects/call.c
+Objects/cellobject.c
+Objects/classobject.c
+Objects/descrobject.c
+Objects/dictobject.c
+Objects/exceptions.c
+Objects/genobject.c
+Objects/listobject.c
+Objects/methodobject.c
+Objects/moduleobject.c
+Objects/object.c
+Objects/obmalloc.c
+Objects/setobject.c
+Objects/tupleobject.c
+Objects/typeobject.c
+Python/bytecodes.c
+Python/ceval.c
+Python/ceval.h
+Python/ceval_gil.c
+Python/ceval_macros.h
+Python/context.c
+Python/gc_live.c
+Python/gc_trace.c
+Python/generated_ir_cases.c.h
+Python/parking_lot.c
+Python/pyvalue.c
+Tools/build/gc_inline_audit.py
+Tools/cases_generator/call_effects.py
+Tools/cases_generator/root_check_c.py
+boil/tools/abortbt.c
+boil/tools/cstack.sh
+boil/tools/gate.sh
+boil/tools/measure/stale_probe.py
+boil/tools/opaque_inliners.py
+boil/tools/verify.manifest.json
+```
+
+## Actual stress100k failure checkpoint; landing held
+
+2026-10-29: the current `ce2ac` once-only stress100k-full has an actual
+`test_interpreters.ListAllTests.test_destroyed_by_gc` failure at test_api.py305:
+interpreter34 is still in `[0,34]`. Worker3667921 returns FAILED with 179
+tests/one failure/eight skips. Worker3667375's test_httpservers returns
+ENV_CHANGED with 103 tests/zero failures/eight skips and two unraisables:
+HTTPResponse.close459 → IOBase.close → HTTPResponse.flush472 → fp.flush
+raises ValueError on an already-closed file. Both actual workers started
+off/extras0/stress100000. The full transaction was still active and left
+unsignaled at this source-read checkpoint; its logs/journals are partial,
+not a frozen final manifest. No final PASS or LAND is possible from this
+checkpoint, and all-seven-PASS walk/closure prerequisites remain unsatisfied.
+
+The interpreter case at293–305 uses gc_threshold(1) without explicit collect.
+The positive-stress branch of gc_live.c1745 counts to stress_every and returns
+before ordinary scheduling; threshold1 alone does not force a pass under
+N100000. This is a concrete scheduling hypothesis, not a proven diagnosis.
+The whole-module main-interpreter count121 cannot prove a collection in that
+critical window. First distinguish no collection, a reachable original cycle
+and collection with delayed finalizer/ID-reference destruction. The path is
+weakly cached Interpreter → __del__/_decref → _interpreters.decref →
+_PyInterpreterState_IDDecref; a later list_all wrapper can also acquire a ref.
+Do not infer a Park retention or queue-completion bug from the remaining ID.
+
+For HTTP, the trace proves a not-yet-closed response has a non-None but closed
+fp, not which operation closed it. Source/test files in this path are unchanged
+from primary. The test's explicit check_status_and_reason reader cleanup sets
+response.fp=None before reader.close, so that helper alone does not explain
+the observed state. Keep explicit close/test lifetime, missing reachability
+and finalizer dependency/completion order as separate hypotheses. The existing
+finalizer_order promises referrer-before-transitive-referent queue order;
+order and completion across owner threads are distinct. No retained raw event
+timeline selects one cause. Main0 count252 and zero fallback/unpinned do not
+resolve resource ordering. Current release/debug normal/debug kill fulls had
+both modules PASSED with the same test/skip counts; that remains their scope,
+not a disposition of this failed stress transaction.
+
+Only after terminal preservation and a coordinator ruling should a bounded
+diagnostic observe critical-window collection/finalizer state and actual
+HTTP response/fp identity, explicit close/finalizer order and thread. Use
+case-local existing hooks rather than a new queue executor or generic held
+Queue2 probe. No native diagnostic, code change, exclusion or retry was run or
+authorized by this review. The earlier source-preflight finding remains a
+bounded source check; it never asserted completion of runtime qualification.

@@ -699,3 +699,171 @@ Actual benchmark-driver setup/run imports, consumed SDK/header identity,
 eval-policy sensitivity, final fork cohort, quiet timing and parity claims
 remain separate. No target command, verifier, test or control was executed
 by the reviewer; only this review was edited.
+
+## Round 12: DIRECT_DRIVER_ORIGIN_LAUNCH_PLAN_CLEAR
+
+Verdict: **DIRECT_DRIVER_ORIGIN_LAUNCH_PLAN_CLEAR**, 2026-10-29. This is
+source/host-evidence clearance for the coordinator's exact new grant, not
+actual workload-origin or timing evidence. No target `run/` exists at review.
+
+| Artifact in `workload-origins-v1/` | SHA256 |
+|---|---|
+| `phase_runner.py` | `bff785d1a898d28a435cbcac2b82cfc379873b7d7294360069c37a40b5a00117` |
+| `campaign.py` | `389a541739e25ca836088a595432c843ca4dd0525207253829af8e75fd340e26` |
+| `origin_trace.py` | `c398218c5ef1ca10081e991c2864cc6f2e319fc1d0d725c8384e2748286c0e99` |
+| `plan.json` | `b5b38e63937f971e90648e5874048d06533cb28a6eff12ab34c74eb4b30af0f6` |
+| `origin-launch.json` | `23bf93c55c6dea16ddac6431cf95ccc3031170b30691bd546fbe4b11cb428099` |
+| `provenance.json` | `421e679f749bb26c8f9a2dbed574f4eb2450acaef69292dc79276d389900138c` |
+| `host-controls-v3/results.json` | `d786c5cfc0e39a3827dbf0fd53ccf34cbb000ba862c22ab8e760d856b1352025` |
+
+Initial parser `457f9f94`, plan `d87d6846`, launch `52e1c4d1` and 119-artifact
+package `f0aa73cc` omitted generated build Python/data files from the accepted
+Python file table. That contradicted the explicit sysconfig allowance and
+could cause an avoidable verifier failure on valid generated imports. The
+whole predecessor is preserved at `workload-origins-reviewed-v1`. The exact
+runtime successor adds all 584 accepted manifest-bound products to that table;
+the executable/.so subset and observed ELF-load requirements remain separate.
+Three added host controls accept generated sysconfig code and reject changed
+or unlisted generated files. No target execution discovered this gap.
+
+All 151 successor indexed artifacts, 44 shared inputs, 15 tools, nine allowed
+resolved external ELF files and 584 native-product hashes match. Upstream
+remains clean exact `321925`. The accepted configure/make/qualification
+closures, 38 readable critical qualification artifacts and cache-access
+receipt remain launch guards. Old 0200 test caches are historical outputs;
+the fresh phase neither rereads nor changes them. Seven existing supervisor
+function bodies are unchanged, preserving actual inherited lock proof,
+single-slot admission, bounded cleanup and final input/product verification.
+
+The source plan fixes 50 registry-derived commands: all 29 application kernels,
+eight memory rows and 13 existing call/string micro rows. The latter groups
+are origin diagnostics, not additions to the performance score. The actual
+unmodified driver loads command index7's exact workload, calls its setup and
+run once in run mode, then returns. Existing loop counts/sizes remain intact.
+Each child has its own fresh cache/temp directory and exact clean environment,
+Python verbose tracing and `LD_DEBUG=libs,files`. Per-row bounds are 180 seconds
+or 600 for memory rows; campaign bound is 3600. No automatic retry/overwrite or
+production driver/registry edit is introduced. Failure retains the row command
+receipt and partial traces and stops the campaign.
+
+Python verification requires actual startup/workload code records, normal
+cleanup and process zero, checks file/alias/resolved bytes, and rejects unknown
+loaders or unbound bytecode without inventing a diagnostic-only completion
+marker. Regex corpus helpers are among the 44 bound shared files. ELF parsing
+distinguishes a search candidate from selected link-map/init/fini/open events,
+requires the exact program and one process, hashes actual resolved loads and
+requires observed ELF loads for Python extension traces. Six additional allowed
+libraries have pre-make candidate hashes plus actual configured DT_NEEDED;
+alongside the diagnostic's three, these are nine predeclared admissible files,
+not nine assumed loads or a general /usr/lib allowance. The 68 retained host
+readelf outputs corroborate dependency scope and do not substitute for runtime
+loader traces. The 28 host controls cover the direct/shared-corpus trace,
+search-versus-load, foreign origins/aliases, cache, loader, process, row/input,
+qualification and missing-lock guards; synthetic ELF fixtures are not run.
+
+Only actual receipts can establish the 50 rows' origins. Time-mode's later
+json import and warmup/timed context remain separate, as do consumed headers,
+eval-policy sensitivity, fork cohort, quiet elapsed results and the 2x target.
+The reviewer executed no target, helper, parser, host control, compiler or test;
+only this review was edited.
+
+## Round 13: ACTUAL_50_RUN_MODE_ORIGIN_SCOPE_CLEAR
+
+Verdict: **ACTUAL_50_RUN_MODE_ORIGIN_SCOPE_CLEAR**, 2026-10-29. Actual
+joint closure `workload-origin-closure-v1.json`
+`9e725b7ff8aa5b06ede10e82c101015ef6b11d497727e782f0eed1bdce56f0ac`
+binds the granted plan `b5b38e63` and launch `23bf93c5`. Final receipt
+`fbe642b1d00d7680f29929d78fd1947180fde8cacfe0b9cdcfd352c0e77323ea`
+and inner receipt
+`86bf78fb74342c9dfef006e7024f5080a9ca634944f3cb2720ce8caced699294`
+report zero status, successful postchecks and final cleanup verification.
+Before/after/post-cleanup native inventories agree. All 1,169 indexed evidence
+files and 584 current native-product hashes independently reread and match.
+Shared 44 inputs and 15 host tools match; exact upstream remains clean.
+The accepted 38 critical qualification artifacts remain guards, and historical
+0200 test caches were neither inputs to this campaign nor permission changes.
+
+All 50 unique row receipts have zero return, no timeout and exact frozen
+command/cwd/environment. They preserve the 29 application, eight memory and
+13 micro diagnostic selection and sizes. All 50 origin results report
+DIRECT_DRIVER_ORIGINS_CLEAR and all raw traces have normal audit cleanup.
+Independent aggregation gives 117 trace-bound file entries and 118 imported
+names. Raw spot checks confirm both regex corpus imports during setup, owned
+_pickle for pickle/unpickle and owned _elementtree during XML setup, alongside
+the actual libz/liblzma loader events. These are the real run-mode setup/run
+paths, not a load-only diagnostic or a replacement benchmark driver.
+
+The actual external resolved ELF union is precisely loader, libc, libm,
+liblzma and libz with the predeclared bytes. The additionally admissible
+libffi/ncursesw/panelw/tinfo files are not claimed observed. Search attempts
+remain distinct from selected loads. The original failure, accepted diagnostic,
+correctness and make/configure evidence remain separately labelled.
+
+This closes origins only for these exact run-mode commands. It supplies no
+time-mode json-tail/warmup/timed-context evidence, elapsed/RSS/box measurement,
+consumed-header identity, eval-policy sensitivity, final fork cohort, parity
+or 2x speedup claim. Timing still needs its own reviewed quiet-run plan and
+coordinator grant. No target, verifier, parser or host control was executed
+by the reviewer; only this review was edited.
+
+## Round 14: QUIET_TIMING_TEMPLATE_SOURCE_CLEAR, no launch
+
+Verdict: **QUIET_TIMING_TEMPLATE_SOURCE_CLEAR**, 2026-10-29. This clears
+source design only. Fork runtime and quiet reservation remain null; binding
+validation rejects before any target execution. An actual stable qualified
+fork, its own source/products/ELF and reviewed qualification/origin receipts,
+disclosed flags, quiet reservation and final exact launch need independent
+review and a coordinator grant. No witness or timing is authorized here.
+
+| Artifact in `quiet-timing-v1/` | SHA256 |
+|---|---|
+| `paired.py` | `bc4ee13e9b4ecc4fd7f43191ff355a1326bf9ac4821ced1824003e67c2e51cc8` |
+| `phase_runner.py` | `89a1c73fe8f224dcfb49e09013220f3ec68160a897f68f89aaa8fe389e7c8d86` |
+| `plan.json` | `01fcf21ca3cf9d4334d5887bb704593b5a5524c65e6824dd00bdb9bd916f27a0` |
+| `launch-template.json` | `7a4f13521f572947aa2d9628cd76da00a2b07e3e307b1c778150470b0a48027a` |
+| `provenance.json` | `c76823a2bfb29674d4f2147f1d8b2d3bec4a041719c14107e17366018f5165fa` |
+| `host-controls/results.json` | `9e32a5b91287c0123d563c8e4e8a97794ad05990e799bf842cb175bd87d6dc36` |
+
+Initial runner `6d90090a`/plan `f6acbf29` checked source HEAD and listed bytes
+without checking clean Git status. An added untracked import source could
+change a later measured path while that check passed. The original package
+is preserved at `quiet-timing-reviewed-v1`, provenance `85ee627e`. The narrow
+successor factors the same byte/HEAD checks into `verify_source` and adds
+actual clean porcelain status, exercised before targets, afterward and after
+cleanup. New copied-repository controls accept clean source and reject
+untracked Python additions and tracked drift. All 88 indexed artifacts match;
+the 26 host-only controls run no target interpreter or benchmark module.
+
+Pair collection reuses unchanged Context.command/driver and matching time
+normalization. All 29 application workloads keep their loops and variants;
+each runtime gets one fresh process, one warmup and five serial timed calls.
+First runtime alternates with registry order. All raw values, order, command,
+stdout/stderr and quietness observations are retained; errors/timeouts or
+post-run load rejection stop without retry or a partial-score substitute.
+Five within-process samples are an inexpensive estimate, not independent
+process trials or a calibrated reliability threshold. Complete per-workload
+medians/raw vectors and upstream-over-fork geometric mean require all 29 rows.
+The score is explicitly a source-policy diagnostic, not parity, object-model
+attribution or target attainment with unmatched eval flags or incomplete SDK
+identity. Further repetitions need a question and bounded budget.
+
+One named regex_compile RUNS0 time-mode witness per runtime executes setup
+and one untimed warmup, then the shared driver's json tail and `[]`, using
+that runtime's own source/native/ELF binding. It requires own json and _json.
+The source argument uses the unchanged shared driver and its only declared
+sys.path-changing workload; it is not per-workload time-mode tracing. Measured
+children omit verbose/LD_DEBUG. CPU0 affinity, sibling8 condition, common
+temporary filesystem, readable CPU-policy data and max-load guard are declared;
+pinning alone does not prove quietness. The coordinator must reserve the window
+and require no competing gates/builds before actual binding or collection.
+
+The supervisor acquires both ordinary machine slots together, releases partial
+admission before waiting and retains task/slot descriptors through cleanup.
+The unchanged upstream gate's build FD8 is duplicated to FD11 in the host
+bridge while the nested fork gate owns FD8. Actual inherited descriptions are
+proved separately; neither nested command requests another test slot. The
+host-only nested-gate control checks both build locks using harmless children.
+Complete native maps and source/tool/shared inputs are checked before/after
+and after both gate sweeps, with final failure/success receipts. This does not
+claim immunity to unrelated host interference or supply missing fork evidence.
+No native command or host control was executed by this reviewer.

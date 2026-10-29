@@ -3894,3 +3894,46 @@ before guard simplification. Raw root anchors intentionally retain actual
 boxes and must not be canonicalized. Revalidate the audit on the integrated
 ROOTS/H3 union; no native assertion or optimization is authorized by this audit.
 Next substantive hourly update remains about14:45 PDT.
+
+### 14:49 PDT: six branch profiles pass; final stress reveals blockers
+
+Fresh ce2ac debug normal ac1a914c and debug kill2651f7b9 each pass51,132
+tests/3,401 skips and zero fallback. Release stress11 62988cf3 passes3,062/100
+skips; debug stress11 37edc97d passes3,062/64. ASan16-kill ef9155b4 passes
+3,976/92 with the exact allocator exclusion/options and zero fallback. These
+are branch/source-specific results, not primary landing. Fresh tail make7352
+and strictstale5953 pass6×100 attempts,706 collections/zero fallback/unpinned;
+independent actualtail review clears their bounded scope.
+
+Final stress100k returns an interpreter failure (ListAllTests.test_destroyed_by_gc,
+worker3667921) and HTTPENV_CHANGED/two HTTPResponse unraisables(worker3667375).
+At the last snapshot563/564 returned; test_gc remains live. The original run
+finishes unsignaled/frozen; Walk/closure conditional grants do not activate.
+No retry/filter/source edit. Original interpreter test lowers threshold to1
+but calls no explicit gc.collect; stress scheduling returns before ordinary
+threshold scheduling. Missing critical-window collection is a source hypothesis,
+not yet a measured causal result or confirmed retention. HTTP response flush
+sees a closed referent; explicit closure, missing edge and queued completion
+remain separate hypotheses. Existing held Queue2 work is not retried elsewhere.
+
+Upstream actual50-run closure9e725b7f clears independent reviewcbcb:all50 rows0,
+1,169 evidence files/584 native products unchanged,117 observed source/extension
+files and118 import names. Initial diagnostic/correctness scope stays058d.
+No elapsed measurement ran. Paired timing template source review418c clears
+26 host controls after restoring clean-source-status checks; bindings/reservation
+still required. Root allows source-only ce2ac release binding as a possible
+early diagnostic with known stress failures explicit, after terminal cleanup
+and focused diagnosis if a bounded quiet window fits. Ready GC fixes take
+priority; no target/parity/correctness claim follows.
+
+H3 source owner checklist is ready; native source preflight finds only a
+note11 documentation conflict with current primary. The future merge preserves
+current no20 policy and both evidence histories. No H3 native merge yet.
+GC3a source audit narrows bytes-writer registration/finish and Unicode ownership
+boundaries. 6e audit corrects chaos to10,000 bit_length calls per loop/20,000
+per registered invocation and separates18 NOARGS instance entries from getsets
+and bound-method storage; no ABI/typeflag approval. Historical JSON unchanged.
+Fresh merged gates remain mandatory after eventual LAND; a source-only reuse
+plan keeps small helpers in existing detached checkout and large outputs in
+project storage. O1 remains a candidate, not silently adopted. Next hourly
+update about15:45 PDT, or earlier for a material finding.

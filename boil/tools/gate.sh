@@ -42,16 +42,17 @@ case $level in
 esac
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 build=$(cd "$build" && pwd)
+echo "gate $level starting on $build at $(git -C "$REPO" rev-parse --short HEAD)"
 py="$build/python"
 J=${GATE_JOBS:-16}
 case $level in 0) LIMIT=1200 ;; 1) LIMIT=2400 ;; 2) LIMIT=3600 ;; 3) LIMIT=5400 ;; *) LIMIT=7200 ;; esac
 LIMIT=${GATE_LIMIT:-$LIMIT}
 # The pyc prefix stays on TMPDIR's filesystem (test_import renames a cached
-# pyc into TMPDIR, which fails across devices); stale prefixes from runs
-# whose shell was killed before the trap ran are pruned here after two hours.
+# pyc into TMPDIR, which fails across devices). Each run removes only its
+# own prefix: pruning other runs races with their cleanup and may delete a
+# still-running gate's cache.
 gatetmp="${TMPDIR:-/tmp}/boilgate-pyc"
 mkdir -p "$gatetmp"
-find "$gatetmp" -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null
 tmp=$(mktemp -d "$gatetmp/run-XXXXXX")
 child=
 cleanup() { [ -n "$child" ] && kill -TERM -- -"$child" 2>/dev/null; rm -rf "$tmp"; }

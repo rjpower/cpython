@@ -2,8 +2,10 @@
 
 Status: the separately reviewed exact make-only grant completed once,
 2026-10-29. Products and final cleanup are frozen; independent
-`MAKE_CLOSURE_CLEAR` accepts the closure. **Standalone qualification, origin witnesses and timing
-have not run.** The original source-only draft is preserved below and in
+`MAKE_CLOSURE_CLEAR` accepts the closure. Separately approved diagnostic,
+three wrong-origin controls and18-module correctness now pass and clear
+actual review in the [post-build record](pre-I-baseline-postbuild-plan.md#actual-v2-qualification-and-independent-review).
+**Complete workload origins and timing have not run.** The original source-only draft is preserved below and in
 its hash history; configure success alone did not authorize make.
 
 ## Accepted input and exact proposed command

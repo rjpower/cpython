@@ -478,3 +478,56 @@ any later helper revision; it does not require rerunning native qualification.
 The coordinator still owns carry-forward and the fresh affected/full scope.
 No old120 source/product relabel, automatic repeat/reuse, runtime PASS, O1
 adoption, performance or landing decision follows from this supplement.
+
+## Round 7: FULL_CAMPAIGN_PLAN_CLEAR
+
+Verdict: **FULL_CAMPAIGN_PLAN_CLEAR**, 2026-10-29. This is a source-only
+review of seven explicit once-only profiles on current `ce2ac8991eebb1bbb10698ff2d07a79bd4cba452`;
+the coordinator owns each execution grant. Release-full may start without
+waiting for the separate gate-3 extras or tail-support plan.
+
+| Artifact | SHA256 |
+|---|---|
+| `raw_full_profiles.py` | `98f6ab7e0334bdfaa2f134cdff567e94bfabe9ac1f2e00c8c1f87779463a3188` |
+| `full-campaign/plan.json` | `7d40ccb2617f1f6ebcf5ee5e16f4565d3a3c9ce6260f8f7ed0ff8b4dfde71068` |
+| `full-campaign/frozen-manifest.json` | `37433e366f3518d8479f7a9a890c06db6b76e2fdeeff1c35aed29623feef56de` |
+| `full-campaign/REVIEW.md` | `e5e248455931bbb619a728b5965f8ddbfcebd6c52d2757aed33aa18392156620` |
+| `full-campaign/asan-identity.diff` | `3f7618b7d15c5c5de02ac5205f379c03797bde2650cb75e61e04fe9a5604cd48` |
+
+All frozen artifacts, explicit helper/input hashes, current source hashes and
+858 expanded native-product hashes match. The 24 fresh affected receipts are
+PASS at current head with native return code zero; their 69 referenced raw
+artifacts also match. The adapter requires the corresponding default eight
+or debug sixteen receipts and their raw artifacts again before each launch.
+ASan requires the completed debug affected checks and its own actual native
+identity; the debug receipts do not constitute ASan runtime coverage.
+
+Release-full, debug-full and debug-kill-full preserve the complete 564-module
+roster with only the existing remote-exec exclusion. Historical discovery is
+supported by unchanged discovery source and current source/path roster checks;
+the unchanged full-v3 validator independently requires the fresh scheduled,
+actual-worker and returned module sets to equal that roster. Counts, skip and
+resource outcomes remain measured. Its 39 protected selectors include raw and
+outer skip/container rejection; it binds worker PID/config/seed/selection,
+start/end state, actual main-interpreter root rows and valid counter domains.
+Fallbacks must be zero. Unpinned remains the existing reported quantity and
+open 3c obligation, not a new zero assertion or unique-lifetime count.
+
+Stress11 release/debug use N=1000. The once-only filtered release full uses
+N=100000 and precisely the four existing stress selectors plus remote-exec,
+recorded in a qualification registry copy. No production registry or shared
+runner is changed. ASan16 is the approved ASan14 plus sort/functools union,
+kill mode/N=0, exact existing allocator-overflow selector and remote-exec.
+Its copied assertion helper changes only actual ASan/Py_DEBUG/options identity;
+the worker/state/outer-result/weak-token protocol remains unchanged. Fixed
+ASan options disable stack-use-after-return and leaks, so this is filtered
+ASan evidence. Debug fulls require the explicit candidate ruling environment;
+no global O1 adoption follows from the plan.
+
+One explicit CLI profile runs under serialization before normal machine/build
+admission. Existing output paths prevent overwrite/retry; source/config/tool,
+expanded products/aliases and prerequisite artifacts are rechecked after gate
+cleanup. Each profile retains its own raw receipt or failure and stops. No
+automatic chain, new exclusions, repetition layer, extras execution, benchmark
+timing, landing or old120 relabel is authorized. The reviewer ran no helper,
+native command, compiler, control or test; only this review was edited.

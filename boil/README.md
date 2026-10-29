@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 13:45 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 14:14 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,12 +71,12 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 13:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 14:14 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded. Both old8ce matrices pass; debug full exposes Park retention. The six-file repair1bfe clears source review/71 bounded checks and both120-transaction campaigns. ASan make exposes two unclassified raw wrappers; exact annotation successorce2ac8 is committed after preserved-boundary review; all three builds pass and remain unqualified. Historical ASan14 passes3,616 with its exact accepted allocator exclusion; unfiltered failure stays recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24 passes; release full passes51,132 with zero fallback. Debug full is active; debug kill, stress, ASan16, extras and bounded tail support remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
 | 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats design81417aff097 clears readiness review; native work awaits the source handoff, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
@@ -122,81 +122,34 @@ recorded. Its multiprocessing cleanup repair runs existing finalizers after
 forkserver stop and before tracker stop; actual-helper, old-order and visible
 natural-case controls pass. No skip hides those cleanup failures.
 
-Historical qualification on frozen8ce covers31 individual reclamation cases and11
-complete modules, each repeated 20 times per build, with a separate protected
-shared-heap regression. Whole-module execution preserves internal order;
-actual driver/worker state, exact counts/skips and all imported helpers are
-bound to the contract. The first full-module pilots pass 2,041 tests each,
-with 68 debug or 83 release intrinsic skips and none of the 32 protected
-selectors skipped. Release completes all640 jobs:41,440tests/1,660skips,
-330,157collections and zero fallback;42,466unpinned hits remain report-only.
-Its fresh full-v3 run passes native and audit:51,130tests/3,458outer skips,
-63,597collections and zero fallback. The earlier attempt remains unqualified;
-the repaired observer separates67 inner meta-test skips without a new filter.
-Release stress11 also passes3,061tests/100skips and44,828collections/zero
-fallback. Debug also completes640 jobs:41,440tests/1,360skips,374,245collections
-and zero fallback;65,072unpinned hits remain report-only. Its640-job main0
-supplement passes and full debug starts at11:08. The full run exposes
-a blocker in all three start-method thread-pool release-task-reference tests.
-It finishes51,130tests with exactly those three failures; the armer stops and
-launches no further profiles. Ten unmodified fresh selections reproduce the
-failure. A separate trace finds direct conservative hits for all three
-survivors in _PyParkingLot_Park. Disassembly identifies unused alignment padding.
-All seven caller contracts clear review; a bounded precise-Park fix is underway
-on primary-tooling merge d8be2e2c36d. Every caller keeps its current classification,
-with a new exact-slot/unpark fixture. Six-file candidate94d68f30d309 clears
-source review after the fixture ABI, DWORD parser and structured semaphore
-corrections. All36 old/new branch-control combinations agree. Both gate0s pass
-1,924tests and linked audits. The real Park fixture passes debug off/kill; all
-three original thread families now pass ten fresh off and ten actual-kill
-selections each on O1-debug. All71 bounded checks pass, with no skips,
-5,857collections and zero fallback/unpinned. The class-only negative fails
-the fixture as intended and restored classification passes after cleanup.
-Clean fixup1bfe1a57145 is pushed; bridge604ef3fb binds the same six tested
-inputs and542 unchanged build-product paths, with only two documentation
-changes. Strict stale100 passes release/debug off and debug kill; compiled
-checks pass31 per mode with the existing tailcall-required skip. The deliberate
-unpinned-counter test remains distinct from stale100's strict zero.
-Earlier release audit failures stay retained, with no branch/effect waiver.
-The narrower historical process-pool matrix does not cover this case.
-The coordinator explicitly carries unchanged legacy31/11 evidence forward
-with source/body and caller proofs; it stays evidence on8ce, not a new-head
-20/20 result. The completed default/O1-debug plans each required20 independent runs of
-each of three thread regressions and two eval probes, plus20 complete orders
-of their four modules. The501 listed cases require measured pilot counts;
-the first iteration and exact plans are reviewed before the other19.
-Reviewed pilot26a55 now passes all six transactions per build on clean1bfe:
-five individual1/0 selections, then501tests/116release or101debug skips across
-four complete modules, with no protected skip and zero fallback. Actual module
-contracts and51.203s/144.224s turnaround are retained; these are qualification
-timings, not performance benchmarks. Reviewed nineteen-only plan0d84e7d2 is
-running against those immutable pilots. Release completes114 new jobs plus
-its pilot:120transactions/20iterations,10,120tests/2,320 recorded skips, zero
-fallback. Completion63235055 re-audits every original journal. Debug71/114 new
-jobs pass at13:00;96/114 pass at13:12, with no fallback or exact-contract drift.
-No full suite has started. Separate ASan make-only plan71340975 stops BUILD_FAIL
-at its actual linked audit: two outlined raw-mutex wrappers called by precise
-Park lack precision classifications. No smoke/test ran. Exact two-marker
-proposal34b5e35e clears independent source review and task-copy controls:
-actual-header held-local negatives and linked old/new/omit-each audit oracles
-pass. Transition8efe specified completed matrices, preserved products and an exact
-new executor before the production edit; those conditions are now met.
-Both campaigns now complete120 transactions/20 iterations on1bfe: debug
-completion172f480d records10,120tests/2,020skips including its pilot, with zero
-fallback. Expanded boundary8b7c preserves all four build trees and962 receipt
-paths at quiescence. Executor/boundary review8740 clears; root grants ONLY
-exact two-marker successorce2ac8991ee, new-plan1074 and sequential make-only
-default/debug/ASan. All three make-only builds pass, including the formerly
-failing ASan linked audit. New products remain unqualified pending actual native
-comparison and a separate affected-coverage ruling. No audit exception or
-old-receipt relabel follows.
-There are39 protected selectors. Changed checker-suite coverage, stale100,
-compiled walks, fresh ASan/tail builds and full normal/kill/stress/extras
-remain required on the repaired source before landing review.
-The full gate4 benchmark is a step-end obligation, not a new rung blocker.
-Report-only detached-state unpinned counts stay assigned to3c.
-O1 is approved for this qualification,
-not adopted as shared policy; integration debug still uses Og.
+ROOTS2b is frozen at `ce2ac8991ee`: the precise-Park repair removes stale
+alignment-padding retention, and two raw-mutex precision annotations close
+ASan's linked-audit failure. Release, O1-debug and ASan builds pass. The
+native/CFI/root-location comparison and four-semaphore supplement clear
+independent review. The old1bfe campaigns each completed120 transactions;
+the coordinator accepts them as historical reliability evidence under that
+reviewed bridge. They are not new-head results and will not be repeated20
+times automatically. The full causal history and original failures remain
+in WORKLOG and the rung records.
+
+Fresh affected qualification on ce2ac passes all24 transactions across release
+off, debug off and debug kill:243 test-runs, three existing tail-only skips,
+1,800 strict stale-root cases and zero fallback. The new release full passes
+51,132 tests/3,458 skips, all564 scheduled modules returned and zero fallback
+in63,573 collections. Debug full is active. The seven-profile campaign runs
+once each: release normal, debug normal, debug kill, release/debug stress11,
+ASan16 kill with the exact accepted allocator exclusion, and release stress100k
+with the four existing stress exclusions. Unexpected failures stop the chain.
+Gate3 extras, fresh bounded tail support and landing review remain required.
+Tail make/stale checks may overlap fulls; its complete StackWalk waits until
+fulls finish because their perf-map cleanup otherwise interferes.
+
+The39 protected selectors and actual worker mode/stress/counter contracts stay
+in force. Detached-state unpinned hits remain report-only debt assigned to3c.
+O1 is a qualification candidate; integration debug still uses Og. Whole-tail
+and retain recommendations belong to10a rung4/H1, separately from the bounded
+tail check required for2b. Writer/PyMem and remaining root-reader work follow
+in10a rung3. The step-end benchmark remains distinct from this landing gate.
 
 H3's monitoring storage design now uses fixed absolute int lines and uint16
 handler tokens. Bounded probes confirmed that valid backward AST locations
@@ -255,9 +208,12 @@ before checkpoint-I measurements. One owned exact321925 detached source tree
 is now clean and inventoried. The revised configure runner closes its admission,
 tool and cleanup gaps; configure succeeds and actual configuration closure8908
 clears independent reviewde24. Make-only V3 succeeds; its 584-product closure
-dddc clears independent review5344. A diagnostic/origin and single 18-module
-qualification package is under review.
-No separately invoked baseline qualification or benchmark has run. Common compiler/O3/frame/
+dddc clears independent review5344. The diagnostic/origin and single18-module
+qualification now pass and clear independent review9bac:111 recorded modules,
+100 traced imports, three valid wrong-origin controls correctly rejected, and
+5,145 tests/109 transcript skips. The584 native products remain unchanged.
+A 50-row actual benchmark-driver setup/run origin campaign is being prepared
+for independent review; no workload trace campaign or elapsed benchmark has run. Common compiler/O3/frame/
 zero-initialization policy matches; upstream's eval-unit flags are empty while
 the fork deliberately adds `-fno-gcse`. Report that source-specific difference;
 upstream flag sensitivity or a predeclared fully matched eval policy is required

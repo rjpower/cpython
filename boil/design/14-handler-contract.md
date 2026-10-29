@@ -211,10 +211,16 @@ section 18.1: every exact int that fits int32 is inline, canonicalised
 by `PyValue_FromObject` at ingress. A one-digit exact heap int therefore
 cannot be a handler operand, and the heap arm of `_PyValue_IsCompactInt`
 guards against a representation leak, not a legitimate form. Rung 1
-adds a debug-build assertion of canonical form at the slot-write macros
-and at the value-API returns, runs the suite on the debug builds, and
-fixes at its ingress any producer that fails it (the unchecked
-`_PyValue_FromObject` is the suspect, review 2 section 5.8). Then the
+adds debug-build assertions at semantic slot writes and value-API returns,
+runs the suite on the debug builds, and fixes any producer that violates
+the contract. Current `_PyValue_FromObject` already canonicalizes; review 2's
+unchecked-helper suspicion is stale. The bounded
+[ingress audit](work/pre-I-value-ingress-audit.md) identifies value-native
+function returns that trust the contract, including specialized calls that
+bypass the generic result checker. No actual leak was found in that audit.
+Raw roots deliberately preserve actual boxes and are outside the semantic
+canonical-value domain; converting them could lose a live C reference.
+Revalidate those boundaries on the integrated ROOTS/H3 source. Then the
 int guards test the inline form only and the compact accessors go.
 Boxed NaNs remain legitimate floats; bools and int subclasses remain
 objects. No

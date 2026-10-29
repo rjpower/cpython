@@ -2,8 +2,10 @@
 
 Status: owned source setup, reviewed configure and exact **make-only**
 execution completed, 2026-10-29. Products are frozen and independent
-`MAKE_CLOSURE_CLEAR` accepts the closure. **Standalone qualification, origin witnesses and
-benchmarks remain unapproved and unperformed.** Make included its disclosed
+`MAKE_CLOSURE_CLEAR` accepts the closure. The separately granted diagnostic,
+three wrong-origin controls and18-module correctness transaction now pass
+and clear actual review; see the [post-build record](pre-I-baseline-postbuild-plan.md#actual-v2-qualification-and-independent-review).
+**Complete workload origins and benchmarks remain unperformed.** Make included its disclosed
 bootstrap/freezing/sysconfig/checksharedmods interpreter actions.
 The coordinator authorized this detached comparison-source exception;
 it is not an optimization step branch, native change or performance claim.

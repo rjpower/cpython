@@ -572,3 +572,130 @@ consumed-header closure, final fork cohort, eval-policy sensitivity and
 timing remain separate obligations. No new repetition, production-runner
 edit, parity or performance claim is introduced. The reviewer changed only
 this review and ran no runner, target interpreter, suite or host control.
+
+## Round 9: first diagnostic stopped; retained failure verified
+
+Reviewed `qualification-failure-v1.json`
+`75b4999b121ab4069292c6ec83e8602f181f8e2ea4a9694f006b7a9628baff56`.
+All 367 indexed evidence payloads and 584 current native-product hashes
+match. The positive diagnostic target returned zero and wrote its report;
+the host verifier rejected `UNKNOWN_MODULE_LOADER: pyexpat.errors`.
+Outer/gate/inner statuses are one. Inner input postchecks passed, and the
+retained post-cleanup inventory matches the accepted make inventory.
+The final success flag correctly remains false; it is not qualification.
+No wrong-origin control, correctness transaction, workload or timing ran.
+Source/configuration/tools and original make/config closures are unchanged.
+
+The actual report records `pyexpat.errors` and `pyexpat.model` with no file
+or spec origin and a None loader. Pinned upstream
+`Modules/pyexpat.c:2212` creates these specific children with `PyModule_New`,
+registers them in sys.modules and adds them to the parent extension. The
+parent itself has the expected built-extension origin. The failure exposes
+an incomplete diagnostic classification, not an upstream runtime failure
+or a valid wrong-origin rejection. Preserve the failure and give it no
+positive/control/correctness credit.
+
+The coordinator has authorized only a source-side successor classification
+for these two exact children, bound to the verified parent extension bytes
+and observed parent-attribute identity with the corresponding sys.modules
+child. A blanket None-loader/origin allowance would weaken the verifier.
+Review that successor and its falsifying host controls before any retry or
+target grant. The reviewer executed no target, verifier or control here.
+
+## Round 10: PYEXPAT_SUCCESSOR_LAUNCH_PLAN_CLEAR
+
+Verdict: **PYEXPAT_SUCCESSOR_LAUNCH_PLAN_CLEAR**, 2026-10-29. This clears
+the separately frozen `post-build-v2/` source successor for the coordinator's
+exact retry grant. It does not turn the first failed attempt into a pass or
+execute any new target command. Reviewed updated work record
+`f71ac6e7cc0fff25c021b7a67377f8dc5f4813faa6d51b45f0cc4b5c0bcd9396`.
+
+| Artifact | SHA256 |
+|---|---|
+| `phase_runner.py` | `35b8d365bcf80b70e8d4d384a2e086983aa626e0cd0937af537ffa3329183b1b` |
+| `origin_witness.py` | `2381e2b747dc3d1e1209acff9822cc8f5342771326c3868b81a696b9b3035ec8` |
+| `verify_origin.py` | `a7435dcc2505b66e96110a17691064746e3bfe7308e6bab010f3c3604cc814da` |
+| `plan.json` | `7f201ec8a0949c60f937091e9510ca2277fc302529861ef34e0be94f71cb0686` |
+| `qualification-launch.json` | `77b51ce01a76adbabef55deae3d2fce8b11c1fa22ccea7d7a94a0425cc871883` |
+| `host-controls/results.json` | `9fce98d9ca47da729224e77ab4095a4a9daf9ad7d7fa55c3cffd5fd5af137da0` |
+| `provenance.json` | `59f888285e80193055dfc8d4f9f38c3adda45aa0c2a5ed35d8ff72ddb0b08457` |
+
+The qualifier remains `fac770a5`. All 63 new indexed payloads and explicit
+plan inputs match. All 367 first-failure artifacts and 584 actual native
+product hashes were rechecked unchanged. Source/config/tool identities and
+the original make/config closures are retained. No V2 target `run/` exists.
+The runner additionally requires the preserved failure closure's hash.
+
+The reporter records each module's declared name and observes the actual
+identity of each parent's `errors`/`model` attribute with its sys.modules
+child. The verifier accepts absent file/spec-origin/loader metadata only
+for the two exact names and exact declared names, with the exact two-entry
+namespace roster and true observed identity. Their parent must have the
+expected `pyexpat` extension path, ExtensionFileLoader and accepted bytes;
+the normal manifest/path/hash checks still apply. Missing/unknown children,
+mismatched parent/child identity and foreign parents/loaders remain errors.
+This reflects the pinned C constructor, not a general namespace or None-
+loader exemption. The retained failed report's only unknown-loader entries
+are these two children; that read is diagnostic history, not a V2 positive.
+
+The 28 synthetic host controls include a parent-owned positive and named
+rejections for wrong identity, parent name/origin/loader, unknown child and
+unlisted None-loader module, plus retained origin/trace/native/JUnit/lock
+controls. They test parser/guard behavior without loading the target or an
+extension. The intended target scope remains one positive diagnostic,
+three valid wrong-origin controls and one fixed 18-module correctness run,
+under the same reviewed environment/locks/timeouts/native pre/post guards.
+All workload traces, timing and further qualification remain separately
+held. Only this review was edited; no reviewer execution occurred.
+
+## Round 11: ACTUAL_DIAGNOSTIC_AND_CORRECTNESS_SCOPE_CLEAR
+
+Verdict: **ACTUAL_DIAGNOSTIC_AND_CORRECTNESS_SCOPE_CLEAR**, 2026-10-29.
+Reviewed the granted V2 launch's actual joint closure
+`qualification-closure-v2.json`
+`058d9bfb9d46723f2cb7f1f064d857cc9c643b858532fa106982e74b3ace4b3e`.
+The unchanged plan is `7f201ec8`; the exact launch is `77b51ce0`.
+Outer/gate/inner return codes are zero, final cleanup verification is true,
+and the inner input postcheck passed. Final launch receipt is
+`a476ae69bbd9811130bfdbb4b8eb7affda76a7e8caae623b648f94bc75358269`;
+inner receipt is
+`b81f6cec70496854e1878e58c62952de789747403c8c4dedb13efc9fa405ebc0`.
+
+The positive diagnostic accepted 111 recorded modules and 100 traced imports,
+including the two narrowly classified pyexpat children. All three target
+wrong-origin commands returned zero, imported their intended valid foreign
+copy/math/sysconfig payloads, and received their exact expected WRONG_ORIGIN
+rejection. Recorded deepcopy and sqrt results are valid. These are actual
+target controls, distinct from the earlier synthetic host controls.
+
+The single requested 18-module transaction returned zero. Its transcript
+reports SUCCESS, 18/18 files, 5,145 tests and 109 skips. The retained JUnit
+has 18 suites, 5,145 declared tests, 101 skipped testcase records and 5,044
+non-skipped testcase records, with zero errors/failures. These are separate
+reporting domains; no equality between transcript skips and XML testcase
+skips is inferred. The fixed argv plus unchanged upstream loader supports
+selection inference; this is not an independently instrumented per-module
+success journal. Correctness summary hash is
+`534fc796524ce46c5686028a431dca0d1b1cb34fff28ec11f31efa9d51ec0f99`.
+
+The 584 current product hashes match the accepted make inventory, and the
+before/after inventories agree. Source remains clean at exact upstream
+`321925c92c9e67864cafa1566840927f6f07e90a`; all regular source entries and
+14 tool hashes were independently rechecked. The closure retains the
+original configure/make closures and 367 first-failure artifacts. Of 1,101
+indexed V2 evidence files, 1,099 were independently reread and matched.
+Two task-created test bytecode files are restored to owner-write-only 0200,
+so this reviewer did not change their permissions or independently reread
+their bytes. Supplemental access receipt
+`df8dbb798d47b93a29e85c0f6ac74fa6276d1fb0c25b20f32201b83bd53cbe19`
+records the owner's temporary read permission, hashes, unchanged inodes and
+restored modes. Its generic scope string says mode000; the actual per-file
+0200 records are authoritative. This bounded evidence limitation does not
+affect the reviewed logs, receipts, native products or source identities.
+
+The earlier failure remains a failure. This completes only the granted
+diagnostic, three origin controls and initial correctness transaction.
+Actual benchmark-driver setup/run imports, consumed SDK/header identity,
+eval-policy sensitivity, final fork cohort, quiet timing and parity claims
+remain separate. No target command, verifier, test or control was executed
+by the reviewer; only this review was edited.

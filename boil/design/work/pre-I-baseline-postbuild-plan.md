@@ -1,10 +1,11 @@
 # Checkpoint-I upstream: qualification and import binding
 
-Status: source-only proposal, 2026-10-29. The reviewed make completed and
-froze products in make-closure `dddcf24d`; independent actual-build review
-`53446dc8` clears that closure. Task-owned helpers and an exact launch are
-prepared for review. **None of the standalone commands below has run.** This plan
-does not grant them. It changes no production runner or upstream source.
+Status: V2 diagnostic, three valid wrong-origin controls and one18-module
+correctness transaction passed, 2026-10-29; independent actual review
+`9bac61da` clears closure058d9bfb for that scope. The first launch's host-
+verifier coverage failure remains frozen as75b4999b. All584 native products
+and source/config/tools remain unchanged. Complete workload traces and
+timing have not run. No production runner or upstream source changed.
 
 Use these absolute roots in the eventual frozen command manifest:
 
@@ -24,7 +25,7 @@ tools14, configure8908/config14 and make closure before and after. New
 bytecode, temporary tests and reports belong under Q; do not modify the
 accepted product snapshot. Keep old baseline products/results intact.
 
-## Proposed first target transaction
+## Preserved first target transaction
 
 The coordinator chose one positive diagnostic, three valid wrong-origin
 controls, then **one18-module correctness transaction**. This supersedes
@@ -57,6 +58,103 @@ unchanged. New caches, temporary tests and reports remain under Q. Stop
 on any unexpected failure. Admission/supervision remain the accepted
 ordinary protocol, with no target launch until independent exact review
 and a coordinator grant.
+
+## Actual first diagnostic failure and bounded successor
+
+Independent round8 `QUALIFICATION_LAUNCH_PLAN_CLEAR` (`1ae2ef2e`) and an
+exact coordinator grant preceded the once-only V1 launch e907ee72. Its
+positive target command returned0, wrote a report and complete import
+trace, then the host verifier raised `UNKNOWN_MODULE_LOADER: pyexpat.errors`.
+The adapter stopped immediately. Outer/gate/inner returned1. The inner
+input post-check passed and final gate cleanup completed with identical
+pre/after/post-cleanup inventories, but final `post_cleanup_verified` is
+**false** because the qualification failed; it is not a pass receipt.
+
+`build/checkpoint-i-baseline-binding/qualification-failure-v1.json`, SHA256
+`75b4999b121ab4069292c6ec83e8602f181f8e2ea4a9694f006b7a9628baff56`,
+binds367 actual artifacts, all584 unchanged native products, source5806,
+tools14 and original make/configure closures. V1 source, inputs, reports,
+maps, logs and receipts remain untouched. No retry occurred.
+
+Pinned upstream Modules/pyexpat.c's add_submodule (2212–2239) creates a
+PyModule_New object, installs that exact object in sys.modules and adds
+it as the parent's attribute. Its two callers (2368,2419) create exactly
+pyexpat.errors and pyexpat.model. These are constant namespaces with no
+spec/loader/file, not evidence that an external module was imported.
+The actual first report contains only those two None-loader modules.
+
+The separate source package is at
+`build/checkpoint-i-baseline-binding/post-build-v2/`; use that as Q for a
+prospective fresh attempt. The reporting helper now records the declared
+child name and the actual identity test
+`pyexpat.__dict__[attribute] is sys.modules[child_name]`. The verifier
+accepts absent metadata **only for those two exact children**, with both
+identity records true, the exact verified pyexpat extension origin/loader
+and its accepted product hash. Wrong child identity, external or wrong
+parent, unknown child and unknown loader reject. No general None-loader
+or synthetic-module allowance is introduced. The18-module command and
+three target negatives retain their scope and arguments under the fresh
+Q; no extra build or broad gate rerun is needed to repair this verifier.
+
+| V2 source/launch | SHA256 |
+|---|---|
+| phase_runner.py | `35b8d365bcf80b70e8d4d384a2e086983aa626e0cd0937af537ffa3329183b1b` |
+| origin_witness.py | `2381e2b747dc3d1e1209acff9822cc8f5342771326c3868b81a696b9b3035ec8` |
+| verify_origin.py | `a7435dcc2505b66e96110a17691064746e3bfe7308e6bab010f3c3604cc814da` |
+| Unchanged qualify.py | `fac770a5b814ca0caa3a5db6b9a8ded4a26be911af5cb5f47d141c98db42a34f` |
+| plan.json | `7f201ec8a0949c60f937091e9510ca2277fc302529861ef34e0be94f71cb0686` |
+| qualification-launch.json | `77b51ce01a76adbabef55deae3d2fce8b11c1fa22ccea7d7a94a0425cc871883` |
+
+V2 host-only controls pass28 cases, including valid parent-owned synthetic
+namespaces, wrong child/parent identity, external parent, unknown loader,
+unknown child and unlisted synthetic module. `host-controls/results.json`
+SHA256 is `9fce98d9ca47da729224e77ab4095a4a9daf9ad7d7fa55c3cffd5fd5af137da0`.
+These use synthetic host fixtures, not new target executions. Exact V2
+independent review and coordinator grant remain required.
+
+## Actual V2 qualification and independent review
+
+Independent round10 `PYEXPAT_SUCCESSOR_LAUNCH_PLAN_CLEAR` (`b1e17586`) and
+the coordinator's exact V2 grant preceded its once-only launch77b51ce0.
+Positive diagnostic and all three valid wrong-origin controls succeeded;
+each negative imported its specified valid copied module and was rejected
+at the exact expected origin. Upstream's18-file correctness transaction
+reported SUCCESS. Outer/gate/inner returned0, and final cleanup verification
+passed. No workload or time-mode command followed it.
+
+The joint closure is
+`build/checkpoint-i-baseline-binding/qualification-closure-v2.json`, SHA256
+`058d9bfb9d46723f2cb7f1f064d857cc9c643b858532fa106982e74b3ace4b3e`.
+It binds1101 evidence files/aliases, all584 unchanged native products,
+source5806/tools14, original make/configure closures and all367 preserved
+V1-failure artifacts. The positive report contains111 modules and100
+trace-observed imports; its native map includes this build's executable,
+ten own extension products and the host loader/libc/libm, with resolved
+file hashes. This remains the explicit diagnostic's scope, not complete
+workload import coverage or consumed-header provenance.
+
+The raw transcript reports5,145 tests,109 skips and18/18 files. JUnit
+contains18 suites,5,145 declared tests,101 skipped testcase records and
+5,044 non-skipped testcase records. Preserve these different reporting
+counts; do not invent equivalence or independently mapped per-module
+execution counts. The JUnit acceptance guard has meaningful nonzero
+executed-case evidence. The transcript's18.9seconds is correctness setup
+time, not a benchmark result.
+
+Two test-created cache files were owner-write-only0200. The first evidence
+inventory could not read them. Only their task-owned cache permissions
+temporarily gained owner-read and were restored, including on errors;
+no native/source/old-failure permissions changed. The explicit capture
+receipt `qualification-cache-access-v2.json`, SHA256
+`df8dbb798d47b93a29e85c0f6ac74fa6276d1fb0c25b20f32201b83bd53cbe19`,
+records before/after device, inode, exact0200 mode and byte hashes, and
+binds the joint closure. Its scope prose says mode000; the per-file0200
+records are authoritative. This wording discrepancy is retained rather
+than rewriting the frozen receipt. Independent round11 accepts the
+closure with this bounded owner-capture-only cache evidence; it checked
+the other1099 readable indexed files and unchanged native/source/tools.
+Complete actual-driver origins and timing remain separately reviewed
+and authorized phases.
 
 ## Correctness: one bounded baseline qualification
 

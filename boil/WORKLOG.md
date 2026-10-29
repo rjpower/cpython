@@ -3857,3 +3857,40 @@ correctness modules run. Failure is preserved; author prepares a narrow
 parent-extension ownership classification and meaningful host negatives for
 review, with no target retry yet. This is a verifier limitation, not evidence
 of an upstream interpreter failure. No benchmark or speedup is reported.
+
+### 14:14 PDT: current affected/release full pass; baseline qualification complete
+
+ROOTS ce2ac fresh affected completioncf3d018a passes24 transactions:243
+test-runs/three existing tail-only skips,1,800 strict stale-root cases,4,783
+collections and zero fallback. The deliberate StackWalk unpinned-counter case
+is separate from strict stale checks. Independent full-plan review6405 clears
+seven once-only profiles7d40; root grants the sequential campaign and stops
+on unexpected failure. Release full receipt7b57d7ec passes51,132/3,458 skips,
+all564 scheduled modules returned,63,573 collections/zero fallback. Debug full
+is active; remaining kill/stress/ASan16, extras and bounded tail support are
+not yet credited. Old1bfe120 evidence stays historical under the reviewed bridge.
+
+Fresh tail support plan8145 is frozen for review. Its make and strict stale
+stages may use the free slot while fulls run. Full StackWalk must wait for
+all seven full profiles and acquire their serialization lock: perf-trampoline
+test maps collide with test_perf_profiler cleanup. No skip hides this host
+interference. Whole-tail/retain recommendations remain separate10a4/H1 work.
+
+Owned exact-upstream qualification closure058d9bfb passes the narrowed pyexpat
+successor and clears independent actual-scope review9bac. Positive diagnostic
+records111 modules/100 traced imports; three valid foreign-origin controls
+are rejected. The single18-module run passes5,145 tests/109 transcript skips.
+JUnit's101 skipped testcase records are a distinct reporting domain. All584
+native products and accepted source/config/tool identities remain unchanged.
+Two write-only test caches have owner-captured hashes and restored0200 modes;
+the reviewer independently rereads1,099 of1,101 evidence files. Original V1
+verifier failure remains a failure. Actual50-row benchmark-driver origin plan
+4f1c is source-only; no elapsed measurement or current speedup is reported.
+
+The bounded value-ingress audit finds no actual canonical-value leak. It
+corrects note14's stale suspicion: _PyValue_FromObject already canonicalizes.
+Value-native returns still trust their ABI and need focused debug assertions
+before guard simplification. Raw root anchors intentionally retain actual
+boxes and must not be canonicalized. Revalidate the audit on the integrated
+ROOTS/H3 union; no native assertion or optimization is authorized by this audit.
+Next substantive hourly update remains about14:45 PDT.

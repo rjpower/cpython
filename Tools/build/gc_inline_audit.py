@@ -74,9 +74,12 @@ OUTLINED_OPAQUE = {
         "debug tracing, which runs only under PYTHON_LLTRACE",
     "lltrace_resume_frame":
         "debug tracing, which runs only under PYTHON_LLTRACE",
-    "run_queue":
-        "the collector's queue of callbacks and finalizers, step 7a's "
-        "(finding B, note 11 section 8.2)",
+    "run_queue_ex":
+        "the existing opaque queue body, renamed by step 7a: its saved "
+        "exception and active live_call payload rely on this frame; removal "
+        "requires rung 3c's explicit spans and active-call/saved-exception "
+        "lifetime fixtures. The run_queue wrapper has no managed locals "
+        "and is precise",
     "update_slot_after_setattr":
         "Py_NO_INLINE: the slot update's walk over the subclasses, "
         "update_subclasses() and its callback, is not precise; removal: "

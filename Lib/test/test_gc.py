@@ -2774,6 +2774,72 @@ class TracingCollectorTests(unittest.TestCase):
                 rc, out, err = assert_python_ok("-c", code, **env)
                 self.assertEqual(out.strip(), b"ok")
 
+    @requires_subprocess()
+    @unittest.skipUnless(os.name == "posix", "requires POSIX named semaphores")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_multiprocessing_cleanup_before_tracker(self):
+        import multiprocessing
+        if "forkserver" not in multiprocessing.get_all_start_methods():
+            self.skipTest("requires forkserver")
+        mode, extras = _testinternalcapi.gc_verify_mode()
+        stress = _testinternalcapi.gc_get_stress()
+        verify = ("", "retain", "kill")[mode]
+        if extras:
+            verify += ":" + ",".join(
+                name for bit, name in ((1, "pymem"), (2, "structs"))
+                if extras & bit)
+        prelude = ("import _testinternalcapi\n"
+                   f"assert _testinternalcapi.gc_verify_mode() == {(mode, extras)!r}\n"
+                   f"assert _testinternalcapi.gc_get_stress() == {stress}\n")
+        code = textwrap.dedent("""
+            import gc, multiprocessing, os, sys
+            from multiprocessing import forkserver, resource_tracker, synchronize, util
+            tempdir = util.get_temp_dir()
+            forkserver._forkserver.ensure_running()
+            assert forkserver._forkserver._forkserver_pid is not None
+            assert os.path.isdir(tempdir)
+
+            # Keep the server alive until cleanup, including its directory.
+            directory_finalizer = next(
+                f for f in util._finalizer_registry.values()
+                if f._callback is util._remove_temp_dir)
+            remove_directory = directory_finalizer._callback
+            def checked_remove_directory(*args):
+                assert forkserver._forkserver._forkserver_pid is None
+                remove_directory(*args)
+            directory_finalizer._callback = checked_remove_directory
+
+            holder = [multiprocessing.get_context(sys.argv[1]).RLock()]
+            name = holder[0]._semlock.name
+            finalizer = next(
+                f for f in util._finalizer_registry.values()
+                if f._callback is synchronize.SemLock._cleanup and f._args == (name,))
+            # _TestFinalize saves/clears this registry. A weakref callback
+            # while it is empty cannot run the semaphore's finalizer.
+            saved = util._finalizer_registry.copy()
+            util._finalizer_registry.clear()
+            holder.clear()
+            gc.collect()
+            assert finalizer._weakref() is None
+            util._finalizer_registry.update(saved)
+            assert finalizer.still_active()
+
+            util._cleanup_tests()
+            assert resource_tracker._resource_tracker._exitcode == 0, (
+                resource_tracker._resource_tracker._exitcode)
+            assert forkserver._forkserver._forkserver_pid is None
+            assert not os.path.exists(tempdir)
+            print("ok")
+        """)
+        for context in ("forkserver", "spawn"):
+            with self.subTest(context=context):
+                _, out, err = assert_python_ok(
+                    "-c", prelude + code, context,
+                    PYTHON_GCVERIFY=verify, PYTHON_GCSTRESS=str(stress))
+                self.assertEqual(out.strip(), b"ok")
+                self.assertNotIn(b"resource_tracker: There appear", err)
+                self.assertNotIn(b"FileNotFoundError", err)
+
     # 6d rung 3: CALL_FUNCTION_EX holds a monitored C call's result in a
     # root across the C_RETURN callback, which can collect.
     MONITORED_STARRED_CALL = textwrap.dedent("""

@@ -611,13 +611,14 @@ def _cleanup_tests():
     from multiprocessing import forkserver
     forkserver._forkserver._stop()
 
+    # Drain resource finalizers while the tracker can still unregister
+    # them. This also removes temporary directories (bpo-37421), after
+    # the forkserver has unlinked its socket.
+    _run_finalizers()
+
     # Stop the ResourceTracker process if it's running
     from multiprocessing import resource_tracker
     resource_tracker._resource_tracker._stop()
-
-    # bpo-37421: Explicitly call _run_finalizers() to remove immediately
-    # temporary directories created by multiprocessing.util.get_temp_dir().
-    _run_finalizers()
     support.gc_collect()
 
     support.reap_children()

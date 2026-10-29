@@ -553,7 +553,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
     return nfinalized;
 }
 
-static int
+Py_GC_PRECISE static int
 run_queue(PyThreadState *tstate)
 {
     return run_queue_ex(tstate, 0);

@@ -231,7 +231,13 @@ review. Current assignments are the remaining ROOTS landing gates and as-built
 record,
 independent final-gate/origin review plus source-only GC3a readiness, and actual
 benchmark-driver origins followed by the quiet measurement plan.
-Next native ownership is H3 union/statistics, then bounded H1, with 6e and GC 3
+To avoid a scheduling-only dependency, root now permits isolated H3 statistics
+development from reviewed81417 in a separate managed worktree. Frozen H3 and
+ROOTS products stay intact; actual union qualification and primary landing
+still follow GC disposition. Complete current independent reviews before the
+reviewer changes roles to implementation; another reviewer assesses that code.
+Native builds wait for the first quiet timing window to finish or be declined.
+Next integration ownership is H3 union/statistics, then bounded H1, with 6e and GC 3
 parallel where interfaces permit. Full root maps and call-window changes follow
 their actual dependencies. Report evidence and blockers hourly, with clear
 distinctions between implemented, validated and landed work.

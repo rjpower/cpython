@@ -3962,3 +3962,20 @@ is unresolved and old held Queue2 work remains held. Optional early release
 timing binding6da22295 preserves the failed full and normal-release PASS as
 separate facts. Its reservation is unset and it has no execution grant.
 Focused diagnostics and ready fixes take priority. Next hourly15:45 PDT.
+
+At15:20 root removes a scheduling-only dependency for H3 statistics: its
+reviewed81417 implementation may proceed in a new isolated managed worktree
+while ROOTS stays frozen. The first owner checkpoint covers counters/emitter
+and reporting obligations; source/generator/test/branch-local bench ownership
+is explicit. Current independent diagnostic/timing reviews finish before that
+agent changes roles. No native build during the quiet window, no cross-lane
+merge or primary landing, and no old qualification claimed on the future
+union. A different reviewer must review the stats implementation.
+
+Root also authorizes isolated bytes-writer3a design/implementation sequencing
+from ce2ac, with concrete field/finish/fixture design review before production
+edits. Agent creates managedboil-gc3a-bytes/boil/gc3a-bytes at exactce2ac,
+70MiB disk, clean; no build/cache duplication or frozen-tree mutation.
+Scope is embedded registered-root lifecycle for bytes/bytearray writers,
+not Unicode/general PyMem retirement or Queue2. Native execution waits for
+quiet release and eventual landing must compose the ROOTS successor.

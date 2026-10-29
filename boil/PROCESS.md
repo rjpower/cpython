@@ -234,6 +234,29 @@ fused sequences are not the plan. The inventory decides which existing
 hand-offs move before tier 0; it does not preapprove numeric-loop
 lowering or a second loop representation.
 
+Coordinator exception,2026-10-29 15:20 PDT: stage2b3 handler-statistics
+implementation may branch from reviewed H3 HEAD81417aff097 into a new managed
+worktree/branch, preserving the frozen H3 and ROOTS trees/products. Its
+full-domain counters, generated adaptive property and producer/reader semantics
+have no technical GC prerequisite. The designated owner receives the
+design-listed files, shared generated-cases hunks and branch-local benchmark
+reader/docs rename; historical results stay unchanged. First finish the
+current independent diagnostic/timing reviews, then change roles to stats
+implementation. Root or a different reviewer reviews that code. Native builds
+and tests wait for release of the first quiet measurement window. This permits
+isolated development, not primary landing, a cross-lane merge or qualification
+of a union that has not been built. ROOTS/H3 integration still requires the
+actual shared-source composition, regeneration and fresh union gates.
+
+The same isolated-development exception permits the bounded bytes-writer3a
+lane in `boil-gc3a-bytes`, branch `boil/gc3a-bytes`, from ce2ac8991ee. Its owner
+first fixes the concrete embedded-root/finish-handoff design and additive
+fixture ownership, then implements only bytes/bytearray writer lifecycle.
+Unicode, general PyMem retirement and held Queue2 work stay outside scope.
+It must compose the eventual ROOTS successor before landing; its unlanded base
+and failed stress profile remain explicit. No native execution during the
+quiet window and no mutation of the original ROOTS source/build are permitted.
+
 The first dispatch inventory is complete. H3-1 designs the handler domain:
 IR fields are 16-bit but numbering, deopt metadata, instrumentation and
 statistics still assume 256 handlers. One generated domain definition

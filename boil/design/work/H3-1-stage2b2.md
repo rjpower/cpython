@@ -4,6 +4,11 @@ Status: design only, against frozen `c5cf6ba6d2888ebbad085e990cf47e156a079780`.
 No implementation, new tests, builds or probes have run for this document.
 The stage 2b.1 sources, work record, evidence and earlier stage 2b design
 remain unchanged. This checkpoint keeps every handler ID and word layout.
+ROOTS independently approved 2b.2a only (IMPLEMENT_2A). The response corrects
+the old monitored bounds claim below; 2b.2b remains design, without an
+implementation grant. ROOTS also confirmed the actual precise
+frame-to-code-to-linetable lifetime chain, including detached domain states;
+broader 10a-3c reader work remains separate.
 
 ## Decision and bounded order
 
@@ -70,8 +75,8 @@ does not push/pop its Python frames while the allocator walks them
 `co_linetable`: frame initialization sets the executable (interpframe.h:276),
 frame traversal visits it (frame.c:17), and the collector visits active/data
 stack frames of thread states (gc_trace.c:1400-1429, 2249-2285), including
-detached states. These are the root-lifetime paths for ROOTS to confirm
-against its pending landing, not a new claim about arbitrary C readers.
+detached states. ROOTS confirmed these root-lifetime paths in its 2b.2a
+review; that is not a new claim about arbitrary C readers.
 The InterpreterGuard at tracemalloc.c:421-441 prevents finalization only:
 pystate.c:3030-3101 increments `finalization_guards`; it does not pin an
 individual code object or suspend GC. No guard-name shortcut is permitted.
@@ -83,7 +88,11 @@ SafeAddr2Line already has an allocation-free fallback through
 (codeobject.c:1055-1060, 1075-1100). It reads code-owned immutable bytes and
 local stack state, without locks, Python calls or new allocations. The
 proposed step removes only the earlier monitoring-cache branch; negative
-offsets still return firstlineno, and out-of-range offsets still return -1.
+offsets retain the firstlineno rule. Nonnegative offsets outside the word
+range must return -1 **before** any immutable lookup. The old unmonitored
+fallback checked that bound; the old monitored branch read the cache first
+(codeobject.c:1052-1055), so it did not uniformly guarantee -1. Do not run
+the old cache helper at an invalid offset as a negative control.
 
 For a real instruction head, initialize_lines obtains the same line from
 CheckLineNumber, encodes `line - firstlineno` or NO_LINE, and GetLine decodes

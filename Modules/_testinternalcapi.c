@@ -3830,6 +3830,89 @@ gc_collect_inline_then(PyObject *self, PyObject *args)
     return PyObject_CallOneArg(callable, arg);
 }
 
+/* A child-process fixture for the first receiving GIL acquisition after
+   an inline collection.  The collector cannot start until the receiver is
+   in C; it then publishes its queue and stays blocked until Python has
+   checked the receiver's one safepoint.  No Python runs in the handshake. */
+static PyEvent queue_ready_go;
+static PyEvent queue_ready_queued;
+static PyEvent queue_ready_release;
+
+#define QUEUE_READY_TIMEOUT ((PyTime_t)30 * 1000 * 1000 * 1000)
+
+static int
+queue_ready_wait(PyEvent *event)
+{
+    if (!PyEvent_WaitTimed(event, QUEUE_READY_TIMEOUT, 1)) {
+        PyErr_SetString(PyExc_TimeoutError, "queue readiness handshake timed out");
+        return -1;
+    }
+    return 0;
+}
+
+static PyObject *
+gc_queue_ready_collect(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (queue_ready_wait(&queue_ready_go) < 0) {
+        return NULL;
+    }
+    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+    int64_t before = ts->gc_trace.injected;
+    _PyGC_InjectCollect((PyThreadState *)ts);
+    _PyEvent_Notify(&queue_ready_queued);
+    if (queue_ready_wait(&queue_ready_release) < 0) {
+        return NULL;
+    }
+    if (ts->gc_trace.injected == before) {
+        PyErr_SetString(PyExc_AssertionError, "inline collection did not run");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+gc_queue_ready_receive(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    // Drain an earlier GC request before the collector is allowed to run.
+    // Otherwise a stale event could conceal missing queue publication.
+    if (PyErr_CheckSignals() < 0) {
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT)) {
+        PyErr_SetString(PyExc_AssertionError, "an old GC event is still pending");
+        return NULL;
+    }
+    _PyEvent_Notify(&queue_ready_go);
+    int queued;
+    // Always detach once, including when the collector already notified us.
+    Py_BEGIN_ALLOW_THREADS
+    queued = PyEvent_WaitTimed(&queue_ready_queued, QUEUE_READY_TIMEOUT, 0);
+    Py_END_ALLOW_THREADS
+    if (!queued) {
+        PyErr_SetString(PyExc_TimeoutError, "inline collection did not finish");
+        return NULL;
+    }
+    int scheduled = _Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT);
+    PyInterpreterState *interp = tstate->interp;
+    PyObject *before = _PyGC_LiveQueueInfo(interp);
+    if (before == NULL || PyErr_CheckSignals() < 0) {
+        return NULL;
+    }
+    PyObject *after = _PyGC_LiveQueueInfo(interp);
+    if (after == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(NNi)", before, after, scheduled);
+}
+
+static PyObject *
+gc_queue_ready_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyEvent_Notify(&queue_ready_release);
+    Py_RETURN_NONE;
+}
+
 /* A reference tracer that, against its contract, allocates on each
    creation event, run over n allocations under PYTHON_GCSTRESS=1: no
    collection may start inside it (10a-1b.md item 3).  Returns (events,
@@ -4606,6 +4689,9 @@ static PyMethodDef module_functions[] = {
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
     {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
+    {"gc_queue_ready_collect", gc_queue_ready_collect, METH_NOARGS},
+    {"gc_queue_ready_receive", gc_queue_ready_receive, METH_NOARGS},
+    {"gc_queue_ready_release", gc_queue_ready_release, METH_NOARGS},
     {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
     {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
     {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},

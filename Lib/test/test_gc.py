@@ -2829,6 +2829,13 @@ class PythonFinalizationTests(unittest.TestCase):
 
 def _queue_child(code, **env):
     """Run code in a child after a common prelude; return its stdout."""
+    for name in ("PYTHON_GCVERIFY", "PYTHON_GCSTRESS"):
+        if name not in env and name in os.environ:
+            env[name] = os.environ[name]
+    mode, _, extras = env.get("PYTHON_GCVERIFY", "").partition(":")
+    expected = ({"retain": 1, "kill": 2}.get(mode, 0),
+                sum({"pymem": 1, "structs": 2}[extra]
+                    for extra in set(extras.split(",")) if extra))
     prelude = textwrap.dedent("""
         import gc, os, sys, weakref, _interpreters, _testinternalcapi
         def where():
@@ -2846,8 +2853,10 @@ def _queue_child(code, **env):
                 out += chunk
             return out.decode().split()
     """)
+    prelude += (f"assert _testinternalcapi.gc_verify_mode() == {expected!r}, "
+                "_testinternalcapi.gc_verify_mode()\n")
     rc, out, err = assert_python_ok("-c", prelude + textwrap.dedent(code),
-                                    **env)
+                                  **env)
     return out.decode()
 
 
@@ -2858,6 +2867,18 @@ class InterpreterQueueTests(unittest.TestCase):
     reference's owner, a finalizer, legacy tp_del or destroy call on its
     object's owner, the interpreter whose heap holds the block, and only
     while that interpreter's queue is open."""
+
+    def test_child_verifier_mode(self):
+        modes = [("retain:pymem,structs", (1, 3))]
+        if support.Py_DEBUG:
+            modes.append(("kill", (2, 0)))
+        for mode, expected in modes:
+            with self.subTest(mode=mode):
+                with unittest.mock.patch.dict(os.environ, {"PYTHON_GCVERIFY": mode}):
+                    _queue_child(f"assert _testinternalcapi.gc_verify_mode() == {expected!r}")
+                    # A test-specific request takes precedence over the parent.
+                    _queue_child("assert _testinternalcapi.gc_verify_mode() == (0, 0)",
+                                 PYTHON_GCVERIFY="")
 
     def test_creator_paths_under_stress(self):
         # 9.1: the B class of note 11 section 8.2.
@@ -3091,12 +3112,9 @@ class InterpreterQueueTests(unittest.TestCase):
         self.assertEqual(out.split(), ["20", "[0]"])
 
     def test_allocation_failure(self):
-        # 9.11: a failure at each node allocation of a collection whose
-        # calls have three owners.  Three objects with a finalizer and a
-        # weak reference callback on each of three interpreters make 18
-        # nodes; each position fails once, in the first collection, and
-        # every call still runs once, on its owner.  The interpreter is
-        # read when the call runs.
+        # 9.11: fail each of the 18 node allocations for three owners.
+        # Tokens distinguish every delivery; payloads are read after another
+        # collection so queue roots must retain each call's object graph.
         out = _queue_child("""
             r, w = os.pipe()
             gc.disable()
@@ -3104,26 +3122,34 @@ class InterpreterQueueTests(unittest.TestCase):
             for sub in subs:
                 _interpreters.exec(sub, "import gc; gc.disable()")
             make = f'''if 1:
-                import os, weakref, _interpreters
-                def rec(tag):
+                import gc, os, weakref, _interpreters
+                def rec(kind, token, payload):
+                    gc.collect()
+                    assert payload == [kind, str(token) * 100, {{"token": token}}]
                     me = _interpreters.get_current()[0]
-                    os.write({w}, f"{{tag}}:{{me}} ".encode())
+                    os.write({w}, f"{{kind}}:{{me}}:{{token}} ".encode())
                 class C:
                     def __del__(self):
-                        rec("del")
+                        rec("del", self.token, self.payload)
                 refs = []
-                def build():
+                def build(batch):
                     for i in range(3):
+                        token = batch * 10 + i
                         c = C()
                         c.self = c
-                        refs.append(weakref.ref(c, lambda r: rec("cb")))
-                build()
+                        c.token = token
+                        c.payload = ["del", str(token) * 100, {{"token": token}}]
+                        payload = ["cb", str(token) * 100, {{"token": token}}]
+                        refs.append(weakref.ref(c,
+                            lambda r, t=token, p=payload: rec("cb", t, p)))
             '''
             failures = []
             for n in range(1, 19):
                 exec(make)
+                build(n)
                 for sub in subs:
                     _interpreters.exec(sub, make)
+                    _interpreters.exec(sub, f"build({n})")
                 _testinternalcapi.gc_queue_fail_alloc(n)
                 gc.collect()
                 fired = _testinternalcapi.gc_queue_fail_alloc(0) == 0
@@ -3132,15 +3158,49 @@ class InterpreterQueueTests(unittest.TestCase):
                     for sub in subs:
                         _interpreters.exec(sub, "pass")
                 got = sorted(drain_pipe(r))
-                want = sorted(f"{k}:{i}" for i in [0, *subs]
-                              for k in ("cb", "del") for _ in range(3))
+                want = sorted(f"{kind}:{owner}:{n * 10 + token}"
+                              for owner in [0, *subs]
+                              for kind in ("cb", "del") for token in range(3))
                 if not fired or got != want:
                     failures.append((n, fired, got))
             for sub in subs:
                 _interpreters.destroy(sub)
             print(failures)
         """)
-        self.assertEqual(out.split(), ["[]"])
+        self.assertEqual(out.strip(), "[]")
+
+    def test_queued_payload_survives_collection(self):
+        # Two inline collections run entirely through C callables before the
+        # first drain. No weakref or saved instance keeps the payloads alive.
+        out = _queue_child("""
+            import functools
+            _testinternalcapi.gc_set_stress(0)
+            gc.set_threshold(1 << 30)
+            gc.collect()
+            ran = []
+            class C:
+                def __del__(self):
+                    assert self.payload == [str(self.token) * 100,
+                                            {"token": self.token}]
+                    ran.append(self.token)
+            def make():
+                for token in range(50):
+                    c = C()
+                    c.self = c
+                    c.token = token
+                    c.payload = [str(token) * 100, {"token": token}]
+            make()
+            second = functools.partial(_testinternalcapi.gc_collect_inline_then,
+                                       _testinternalcapi.check_signals_loop)
+            lengths = _testinternalcapi.gc_collect_inline_then(second, 1)
+            assert lengths[0] >= 20, lengths
+            assert lengths[1] == 0, lengths
+            assert len(ran) == lengths[0], (ran, lengths)
+            assert len(set(ran)) == len(ran), ran
+            assert all(0 <= token < 50 for token in ran), ran
+            print("ok")
+        """)
+        self.assertEqual(out.strip(), "ok")
 
     def test_progress_without_collection(self):
         # 9.12: calls spliced to the main interpreter run at its next breaker
@@ -3181,7 +3241,8 @@ class InterpreterQueueTests(unittest.TestCase):
                 for i in range(20):
                     a = A()
                     a.self = a
-                    refs.append(weakref.ref(a, lambda r: ran.append(where())))
+                    refs.append(weakref.ref(a, lambda r, token=i:
+                        ran.append((token, where()))))
             def at_exit():
                 gc.disable()
                 ran = []
@@ -3199,8 +3260,8 @@ class InterpreterQueueTests(unittest.TestCase):
                 # which note 11 question 16 scans conservatively from the
                 # capture to the stack top (handed to 10a).  Every one that
                 # died has had its callback, on this interpreter.
-                dead = sum(r() is None for r in refs)
-                print(dead > 0, len(ran) == dead, sorted(set(ran)))
+                dead = [i for i, ref in enumerate(refs) if ref() is None]
+                print(bool(dead), sorted(ran) == [(i, where()) for i in dead])
                 # The retained ones are not lost: once no stale word holds
                 # them, a later collection runs their callbacks too.  The
                 # close cannot show it: there the weakrefs become garbage
@@ -3210,19 +3271,20 @@ class InterpreterQueueTests(unittest.TestCase):
                     if len(ran) == len(refs):
                         break
                     gc.collect()
-                print(len(ran), sum(r() is None for r in refs))
+                print(sorted(ran) == [(i, where()) for i in range(20)],
+                      all(ref() is None for ref in refs))
             atexit.register(at_exit)
         """)
-        self.assertEqual(out.split(), ["True", "True", "[0]", "20", "20"])
+        self.assertEqual(out.split(), ["True", "True", "True", "True"])
 
     def test_ready_for_every_thread(self):
-        # Invariant 6: the calls an inline collection queues are drained by
-        # whichever of the owner's threads next takes the GIL, while the
-        # collecting thread is blocked (the rung 1 landing review's
-        # finding 1).  No automatic collection runs on either thread, so
-        # only the queue's ready flag can bring the calls to the main thread.
+        # Invariant 6: the collector waits for the receiver in C, queues its
+        # calls, then blocks. The receiver takes the GIL once and checks one
+        # safepoint, before returning to Python or releasing the collector.
         out = _queue_child("""
-            import threading, time
+            import threading
+            # This fixture injects its collection at an exact event.
+            _testinternalcapi.gc_set_stress(0)
             gc.set_threshold(1 << 30)
             class A:
                 pass
@@ -3232,29 +3294,28 @@ class InterpreterQueueTests(unittest.TestCase):
                 for i in range(50):
                     a = A()
                     a.self = a
-                    refs.append(weakref.ref(
-                        a, lambda r: ran.append(threading.get_ident())))
-            lock = threading.Lock()
-            lock.acquire()
+                    refs.append(weakref.ref(a, lambda r, token=i:
+                        ran.append((token, threading.get_ident()))))
             def collector():
                 make()
-                _testinternalcapi.gc_collect_inline_then(lock.acquire, True)
-                lock.release()
+                _testinternalcapi.gc_queue_ready_collect()
             t = threading.Thread(target=collector)
             t.start()
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline:
-                dead = sum(r() is None for r in refs)
-                if dead and len(ran) == dead:
-                    break
-                time.sleep(0.01)
-            # The collecting thread is still blocked on the lock.
-            print(dead > 0, len(ran) == dead,
-                  set(ran) == {threading.get_ident()})
-            lock.release()
-            t.join()
+            try:
+                before, after, scheduled = _testinternalcapi.gc_queue_ready_receive()
+                dead = [i for i, ref in enumerate(refs) if ref() is None]
+                assert scheduled, "the receiving acquisition did not schedule the queue"
+                assert before["length"] > 0, before
+                assert after["length"] == 0, after
+                assert dead, refs
+                assert sorted(ran) == [(i, threading.get_ident()) for i in dead], ran
+                assert t.is_alive(), "collector was released before the check"
+            finally:
+                _testinternalcapi.gc_queue_ready_release()
+                t.join()
+            print("ok")
         """)
-        self.assertEqual(out.split(), ["True", "True", "True"])
+        self.assertEqual(out.strip(), "ok")
 
     def test_collect_after_close(self):
         # After the close (_PyGC_Fini()) every entry to the collector does
@@ -3321,17 +3382,25 @@ class InterpreterQueueTests(unittest.TestCase):
                 import gc, weakref, _testinternalcapi
                 gc.disable()
                 log, where = _testinternalcapi.stash_get()
+                # The owner's module and builtin dictionaries are cleared.
+                def rec(kind, token, payload, collect=gc.collect, stringify=str):
+                    collect()
+                    assert payload == [kind, stringify(token) * 100, {"token": token}]
+                    log.append((kind, token, where()))
                 class C:
                     def __del__(self):
-                        log.append(("del", where()))
+                        rec("del", self.token, self.payload)
                 def make():
                     objs, refs = [], []
                     for i in range(5):
                         c = C()
                         c.self = c
+                        c.token = i
+                        c.payload = ["del", str(i) * 100, {"token": i}]
                         objs.append(c)
-                        refs.append(weakref.ref(
-                            c, lambda r: log.append(("cb", where()))))
+                        payload = ["cb", str(i) * 100, {"token": i}]
+                        refs.append(weakref.ref(c, lambda r, token=i, p=payload:
+                            rec("cb", token, p)))
                     return objs, refs
                 objs, refs = make()
                 # The main interpreter's root keeps them past the close.
@@ -3366,7 +3435,8 @@ class InterpreterQueueTests(unittest.TestCase):
         self.assertEqual(
             out.strip(),
             "0 1 True 0 True "
-            + str(sorted([("cb", 0)] * 5 + [("del", 0)] * 5)))
+            + str(sorted((kind, token, 0) for kind in ("cb", "del")
+                         for token in range(5))))
 
     def test_every_kind_routed(self):
         # 9.17: each kind of call, in each direction separately, waits for

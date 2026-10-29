@@ -5,7 +5,8 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
   which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations and of the NOFB forms, and IR_NUM_HANDLERS;
+  operations and of the NOFB forms (the count is in opcode_ids.h);
+- metadata, dispatch, pristine and installation-state properties;
 - _PyIR_Formats, the format of every handler, indexed by handler, as
   ir_generator.compute_formats() computes it for the handlers it generates;
 - _PyIR_OnlyNames, the names of the IR-only handlers.
@@ -23,6 +24,8 @@ from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
     HandlerDomain,
+    HandlerKind,
+    HandlerState,
     build_handler_domain,
     NOFB_SUFFIX,
     IRFormat,
@@ -36,7 +39,7 @@ from typing import TextIO
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 
 
-def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
+def format_initializer(fmt: IRFormat, nofb: str) -> str:
     flags = ["_PyIR_VALID"]
     if fmt.window:
         flags.append("_PyIR_WINDOW")
@@ -55,7 +58,7 @@ def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
         f"{{ .flags = {' | '.join(flags)}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
         f".fb = {fmt.fb}, .ninputs = {fmt.n_inputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, .shadow = {shadow}, "
+        f".borrow_mask = {fmt.borrow_mask:#x}, "
         f".nofb = {nofb} }}"
     )
 
@@ -82,7 +85,26 @@ def generate_ir_metadata(
         out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
-        out.emit(f"#define {'IR_NUM_HANDLERS':<46} {n}\n\n")
+        out.emit("\n")
+        for kind in HandlerKind:
+            out.emit(f"#define _PyIR_H_{kind.name} {kind.value}\n")
+        for state in HandlerState:
+            out.emit(f"#define _PyIR_STATE_{state.name} {state.value}\n")
+        out.emit("\n")
+        indices = {**domain.opmap, **domain.handlers}
+        for ctype, table, values, prefix, enum in (
+            ("uint16_t", "_PyIR_HandlerFlags", domain.kinds, "_PyIR_H_", HandlerKind),
+            ("uint8_t", "_PyIR_RequiredState", domain.required_state,
+             "_PyIR_STATE_", HandlerState),
+        ):
+            out.emit(f"PyAPI_DATA(const {ctype}) {table}[IR_NUM_HANDLERS];\n")
+            out.emit("#ifdef NEED_IR_METADATA\n")
+            out.emit(f"const {ctype} {table}[IR_NUM_HANDLERS] = {{\n")
+            for name, i in sorted(indices.items(), key=lambda pair: pair[1]):
+                flags = " | ".join(prefix + flag.name for flag in enum
+                                   if values[name] & flag) or "0"
+                out.emit(f"[{i}] = {flags}, /* {name} */\n")
+            out.emit("};\n#endif\n\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "
@@ -103,8 +125,7 @@ def generate_ir_metadata(
         has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
             nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
-            init = format_initializer(formats[name], domain.shadow(name),
-                                      nofb)
+            init = format_initializer(formats[name], nofb)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

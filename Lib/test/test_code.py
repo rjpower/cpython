@@ -514,6 +514,26 @@ class CodeTest(unittest.TestCase):
             foo.__code__.replace(
                 co_code=bad.to_bytes(2, 'little') + foo.__code__.co_code[2:])
 
+    def test_runtime_handlers_not_pristine(self):
+        import marshal
+
+        def f():
+            return "unique pristine marshal payload"
+
+        code = f.__code__
+        payload = marshal.dumps(code)
+        self.assertEqual(payload.count(code.co_code), 1)
+        for name in ("INSTRUMENTED_LINE", "BINARY_OP_ADD_INT",
+                     "INTERPRETER_EXIT", "EXIT_INIT_CHECK"):
+            with self.subTest(handler=name):
+                raw = opname.index(name).to_bytes(2, "little") + code.co_code[2:]
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    code.replace(co_code=raw)
+                # Marshal calls _PyCode_New directly, bypassing replace's
+                # front end. Never execute the deliberately malformed word.
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    marshal.loads(payload.replace(code.co_code, raw, 1))
+
     def test_code_units_padded(self):
         # Cython passes zeroed code in 2-byte units that only spans its line
         # table; the constructor pads it to whole words of CACHE

@@ -266,13 +266,13 @@ dummy_func(
         }
 
         // The constant is an exact int that fits in int32, held inline.
-        inst(LOAD_CONST_INLINE_INT, (-- value)) {
+        pristine inst(LOAD_CONST_INLINE_INT, (-- value)) {
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineInt(value));
         }
 
         // The constant is an exact float other than NaN, held inline.
-        inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
+        pristine inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineFloat(value));
         }
@@ -287,7 +287,7 @@ dummy_func(
             value = PyValue_FromObject(obj);
         }
 
-        inst(LOAD_SMALL_INT_INLINE, (-- value)) {
+        pristine inst(LOAD_SMALL_INT_INLINE, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInt32((int32_t)oparg);
             ERROR_IF(PyValue_IsNull(value));
@@ -1398,7 +1398,7 @@ dummy_func(
             ERROR_IF(true);
         }
 
-        tier1 inst(INTERPRETER_EXIT, (retval --)) {
+        static_exec tier1 inst(INTERPRETER_EXIT, (retval --)) {
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             /* Restore previous frame and return. */
@@ -4423,7 +4423,7 @@ dummy_func(
             _CREATE_INIT_FRAME +
             _PUSH_FRAME;
 
-        inst(EXIT_INIT_CHECK, (should_be_none -- )) {
+        static_exec inst(EXIT_INIT_CHECK, (should_be_none -- )) {
             if (!_PyValue_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                     "__init__() should return None, not '%.200s'",

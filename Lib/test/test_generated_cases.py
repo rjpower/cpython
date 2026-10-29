@@ -1235,11 +1235,10 @@ class TestIRCases(unittest.TestCase):
                 ".roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
-                ".dst = 0, .borrow_mask = 0x0, .shadow = LOAD, .nofb = 0 }")
+                ".dst = 0, .borrow_mask = 0x0, .nofb = 0 }")
         for expected in [
             "#define IR_BACON                                       256",
             "#define IR_PASS                                        257",
-            "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
             "[INSTRUMENTED_LOAD] = "
             f"{load.replace('LOAD,', 'INSTRUMENTED_LOAD,')},",
@@ -1247,7 +1246,7 @@ class TestIRCases(unittest.TestCase):
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
-            ".shadow = IR_PASS, .nofb = 0 },",
+            ".nofb = 0 },",
             '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
             '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:
@@ -1314,7 +1313,7 @@ class TestIRCases(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
         self.assertEqual(
-            domain.shadow("BINARY_OP_ADD"),
+            domain.bases["BINARY_OP_ADD"],
             "BINARY_OP")
 
         out = io.StringIO()
@@ -1425,6 +1424,54 @@ class TestHandlerDomain(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "different analysis"):
                     generate(["test.c"], analysis, domain, out, *extra)
                 self.assertEqual(out.getvalue(), "")
+
+    def test_runtime_state_and_pristine_are_distinct(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        kind, state = ir_generator.HandlerKind, ir_generator.HandlerState
+        for name in ("CACHE", "NOP", "LOAD_CONST_INLINE_INT",
+                     "LOAD_CONST_INLINE_FLOAT", "LOAD_SMALL_INT_INLINE",
+                     "BINARY_OP_ADD", "LOAD_ATTR_NOFB", "IR_JUMP"):
+            with self.subTest(pristine=name):
+                self.assertTrue(domain.kinds[name] & kind.METADATA)
+                self.assertTrue(domain.kinds[name] & kind.DISPATCH)
+                self.assertTrue(domain.kinds[name] & kind.PRISTINE)
+                self.assertEqual(domain.required_state[name], 0)
+        for name, required in (
+                ("BINARY_OP_ADD_INT", state.SPECIALIZATION),
+                ("INSTRUMENTED_LINE", state.MONITORING),
+                ("INSTRUMENTED_LOAD_SUPER_ATTR_NOFB", state.MONITORING),
+                ("INTERPRETER_EXIT", state.STATIC_EXEC),
+                ("EXIT_INIT_CHECK", state.STATIC_EXEC)):
+            with self.subTest(runtime=name):
+                self.assertTrue(domain.kinds[name] & kind.DISPATCH)
+                self.assertFalse(domain.kinds[name] & kind.PRISTINE)
+                self.assertEqual(domain.required_state[name], required)
+        self.assertTrue(domain.kinds["LOAD_CONST_INLINE_INT"] & kind.SPECIALIZED)
+        self.assertTrue(domain.kinds["BINARY_OP"] & kind.METADATA)
+        self.assertFalse(domain.kinds["BINARY_OP"] & kind.DISPATCH)
+        self.assertFalse(domain.kinds["BINARY_OP"] & kind.PRISTINE)
+        out = io.StringIO()
+        opcode_id_generator.generate_opcode_header(["test.c"], analysis, domain, out)
+        self.assertRegex(out.getvalue(), rf"#define IR_NUM_HANDLERS\s+{domain.count}\b")
+
+    def test_inconsistent_admission_properties_rejected(self):
+        domain = ir_generator.build_handler_domain(self.analyze())
+        kind = ir_generator.HandlerKind
+        with self.assertRaisesRegex(ValueError, "dispatch handler has no metadata"):
+            replace(domain, kinds=dict(domain.kinds, NOP=kind.DISPATCH))
+        state = ir_generator.HandlerState.SPECIALIZATION
+        with self.assertRaisesRegex(ValueError, "invalid pristine handler"):
+            replace(domain, required_state=dict(domain.required_state, NOP=state))
+
+    def test_conflicting_pristine_state_rejected(self):
+        for annotations in ("pristine static_exec", "pristine"):
+            name = "NOP" if "static_exec" in annotations else "INSTRUMENTED_LINE"
+            with self.subTest(annotations=annotations):
+                analysis = analyzer.analyze_forest(parse_src(
+                    f"{annotations} inst({name}, (--)) {{ }}"))
+                with self.assertRaisesRegex(ValueError, "pristine handler requires runtime state"):
+                    ir_generator.build_handler_domain(analysis)
 
     def test_base_does_not_classify_specialization(self):
         analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])

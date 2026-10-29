@@ -68,7 +68,9 @@ word_opcode(_PyIRWord *words, int i)
 static inline void
 set_word_opcode(PyCodeObject *code, _PyIRWord *words, int i, int opcode)
 {
-    _PyIR_SetHandler(&words[i], _PyCode_HandlerFor(code, i, opcode));
+    if (!_PyIR_SetHandler(&words[i], _PyCode_HandlerFor(code, i, opcode))) {
+        Py_FatalError("invalid instrumentation handler");
+    }
 }
 
 /* The words of the instruction at index i: one, or for a relaxed FOR_ITER or

@@ -495,6 +495,15 @@ class HandlerKind(IntFlag):
     IR_ONLY = 8
     NOFB = 16
     PSEUDO = 32
+    METADATA = 64
+    DISPATCH = 128
+    PRISTINE = 256
+
+
+class HandlerState(IntFlag):
+    SPECIALIZATION = 1
+    MONITORING = 2
+    STATIC_EXEC = 4
 
 
 def check_handler_count(count: int) -> None:
@@ -514,6 +523,7 @@ class HandlerDomain:
     handlers: Mapping[str, int]
     bases: Mapping[str, str]
     kinds: Mapping[str, HandlerKind]
+    required_state: Mapping[str, HandlerState]
     have_arg: int
     min_instrumented: int
     first_ir_only: int
@@ -521,7 +531,7 @@ class HandlerDomain:
 
     def __post_init__(self) -> None:
         check_handler_count(self.count)
-        for field in ("opmap", "handlers", "bases", "kinds"):
+        for field in ("opmap", "handlers", "bases", "kinds", "required_state"):
             object.__setattr__(self, field,
                                MappingProxyType(dict(getattr(self, field))))
         ids = dict(self.opmap)
@@ -533,22 +543,22 @@ class HandlerDomain:
             raise ValueError("duplicate handler ID")
         if any(not 0 <= handler < self.count for handler in ids.values()):
             raise ValueError("handler ID outside domain")
-        if set(self.bases) != set(ids) or set(self.kinds) != set(ids):
+        if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)
+                or set(self.required_state) != set(ids)):
             raise ValueError("incomplete handler base/kind metadata")
         for name, base in self.bases.items():
             if base not in ids or self.bases[base] != base:
                 raise ValueError(f"invalid handler base for {name}: {base}")
+        for name, kind in self.kinds.items():
+            if kind & HandlerKind.DISPATCH and not kind & HandlerKind.METADATA:
+                raise ValueError(f"dispatch handler has no metadata: {name}")
+            if kind & HandlerKind.PRISTINE and (
+                    not kind & HandlerKind.DISPATCH or self.required_state[name]):
+                raise ValueError(f"invalid pristine handler: {name}")
 
     def require_analysis(self, analysis: Analysis) -> None:
         if analysis is not self.analysis:
             raise ValueError("handler domain belongs to a different analysis")
-
-    def shadow(self, name: str) -> str:
-        # The legacy format shadow normalizes IR variants, but leaves
-        # specializations to the opcode deopt table. Preserve emitted bytes.
-        if self.kinds[name] & (HandlerKind.BINARY_OP | HandlerKind.NOFB):
-            return self.bases[name]
-        return name
 
 
 def _assign_opcodes(
@@ -672,7 +682,27 @@ def build_handler_domain(analysis: Analysis) -> HandlerDomain:
         variant = name + NOFB_SUFFIX
         bases[variant] = bases[name]
         kinds[variant] = kinds[name] | HandlerKind.NOFB
-    return HandlerDomain(analysis, opmap, handlers, bases, kinds,
+    required_state = {name: HandlerState(0) for name in ids}
+    insts = all_instructions(analysis)
+    for name in ids:
+        if name in insts or name in analysis.pseudos or name in derived:
+            kinds[name] |= HandlerKind.METADATA
+        if name in handlers:
+            kinds[name] |= HandlerKind.DISPATCH
+        inst = insts.get(name)
+        annotations = {annotation for part in inst.parts if isinstance(part, Uop)
+                       for annotation in part.annotations} if inst else set()
+        if kinds[name] & HandlerKind.INSTRUMENTED:
+            required_state[name] |= HandlerState.MONITORING
+        if kinds[name] & HandlerKind.SPECIALIZED and "pristine" not in annotations:
+            required_state[name] |= HandlerState.SPECIALIZATION
+        if "static_exec" in annotations:
+            required_state[name] |= HandlerState.STATIC_EXEC
+        if "pristine" in annotations and required_state[name]:
+            raise ValueError(f"pristine handler requires runtime state: {name}")
+        if kinds[name] & HandlerKind.DISPATCH and not required_state[name]:
+            kinds[name] |= HandlerKind.PRISTINE
+    return HandlerDomain(analysis, opmap, handlers, bases, kinds, required_state,
                          have_arg, min_instrumented, first, first + len(derived))
 
 

@@ -59,13 +59,7 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 int
 _PyIR_BaseOpcode(int handler)
 {
-    if (handler == IR_JUMP) {
-        return JUMP_FORWARD;
-    }
-    if (handler >= IR_FIRST_ONLY_HANDLER) {
-        handler = _PyIR_Formats[handler].shadow;
-        assert(handler < IR_FIRST_ONLY_HANDLER);
-    }
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return _PyOpcode_Deopt[handler];
 }
 

@@ -1,0 +1,2 @@
+PASS: regen-cases and clinic leave tracked diff and status unchanged
+diff_sha256 e0a70bfcd17c714a336f4739a861499d2b005f31ffee92a7f2b47cb46ea9f1a7

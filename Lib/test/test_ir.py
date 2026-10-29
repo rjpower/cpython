@@ -59,6 +59,32 @@ class C:
     attr = 5
 
 
+class HandlerScalarBoundaryTest(unittest.TestCase):
+    def test_precast_handler_boundaries(self):
+        from opcode import opmap
+        nop = opmap["NOP"]
+        for rewrite in (False, True):
+            for handler in (-1, 65536, 65536 + nop):
+                with self.subTest(rewrite=rewrite, handler=handler):
+                    accepted, before, after = _testinternalcapi.ir_scalar_boundary(
+                        rewrite, handler)
+                    self.assertEqual(accepted, 0)
+                    self.assertEqual(after, before)
+            accepted, before, after = _testinternalcapi.ir_scalar_boundary(rewrite, nop)
+            self.assertEqual(accepted, 1)
+            self.assertEqual(after, before)
+
+    def test_runtime_wrapper_is_rewrite_only(self):
+        from opcode import opmap
+        handler = opmap["INSTRUMENTED_LINE"]
+        accepted, before, after = _testinternalcapi.ir_scalar_boundary(False, handler)
+        self.assertEqual((accepted, after), (0, before))
+        accepted, before, after = _testinternalcapi.ir_scalar_boundary(True, handler)
+        self.assertEqual(accepted, 1)
+        self.assertEqual(after & 65535, handler)
+        self.assertEqual(after >> 16, before >> 16)
+
+
 class AssemblerTest(unittest.TestCase):
 
     def check_offsets(self, func):

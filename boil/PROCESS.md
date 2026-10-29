@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 12:28 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 12:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -452,9 +452,22 @@ pass with their existing tailcall skip and intentional unpinned-counter event.
 Exact pilot26a55 clears review40a38bae and passes six transactions per build:
 five1/0 selectors plus complete four-module501tests/116release or101debugskips,
 no protected skip/zero fallback. The first iterations take51.203/144.224s;
-these qualification timings are not performance measurements. New nineteen-only
-plans bind the immutable pilot iterationzero and exact observed contracts;
-review remains required before expansion or any full profile.
+these qualification timings are not performance measurements. Reviewed
+nineteen-only plan0d84e7d2/adapter9ace5493 now runs114 new transactions per build,
+with pilot iterationzero bound unchanged. At12:45 release81/114 and debug35/114
+pass, with no failure/fallback or exact-contract drift. Complete markers must
+re-audit all original journals. No full profile or O1 adoption follows yet.
+
+Separate make-only support plan71340975/a6f4ba2b clears review after a named
+Makefile/pyconfig pre/post guard closes its original configuration gap. ASan
+make stops BUILD_FAIL at the actual inline audit after73.901s: precise Park
+calls outlined raw-mutex Lock/Unlock wrappers lacking precision classification.
+No smoke/test ran; this is separate from the known allocator-test failure.
+Proposal34b5e35e adds only two wrapper precision markers; designfb291817 is
+under independent source review. The current1bfe repetitions remain frozen;
+no source edit, audit exception, support retry or tailcall make is granted.
+Copied source/compiler controls and later source/native reconciliation require
+an explicit ruling; neither blanket rerun nor automatic reuse is assumed.
 
 The coordinator explicitly carries unchanged legacy31-selector/11-module
 evidence forward at8ce, supported by body correspondence42350872, all seven
@@ -481,14 +494,25 @@ four unavailable-header modules explicit. Review exact plans and pilot scope
 before any full profile; serialize full suites, keep two slots and frozen
 inputs, and do not queue a same-build waiter. O1 adoption remains separate.
 
+Source-only H3 handoff062da730 identifies five overlapping paths that textually
+compose but still require semantic review and regeneration on the actual union.
+Prospective serial ownership is storage union, H3 statistics, bounded H1 frame
+passing, then H3 transport/renumbering. Fixing the known op<256 counter omission
+first improves attribution and stats/non-stats interface qualification; it is a
+scheduling choice, not a new H1/H2 prerequisite. The baseline binding audit
+6bd23aca confirms old upstream srcdir points at the active fork; preserve old
+results and prepare a separately owned exact-upstream environment and runner
+identity. No baseline checkout/build/run or measurement is approved by that
+source-only document. No parity or speedup is claimed from these plans.
+
 Hourly reporting: while work is active, approximately every hour the
 coordinator updates this state table and `README.md`, appends a dated
 progress entry to `WORKLOG.md`, and gives the user a summary of heads,
 landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
-2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45 and11:45 PDT. The next
-is due about12:45 PDT while work continues.
+2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45,11:45 and12:45 PDT.
+The next is due about13:45 PDT while work continues.
 
 ## 1. The loop
 

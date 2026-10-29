@@ -209,3 +209,205 @@ state/root witnesses and turnaround before any remaining nineteen. Any
 failed or skipped protected case remains a failure; no filter or automatic
 resumption is approved. Full normal/kill/ASan/stress/extras plans require
 their subsequent frozen review and remain held.
+
+## Round 3: NINETEEN_ONLY_PLAN_CLEAR
+
+Independent source/artifact continuation, preserving the preceding review
+at SHA256 `40a38bae78520c3e7c59b38aa7d84d9b1ab7277606a3782a4f890102f14cb66b`.
+The coordinator accepted the twelve pilot receipts at clean ROOTS
+`1bfe1a57145f8d32c27558a981023146333ee37d` under plan `26a55aa75ff0`.
+This verdict clears only the frozen continuation plan for **nineteen new
+six-transaction iterations per build**. It does not clear full/support
+plans, O1 adoption, integration or landing. No native/build/test/probe
+execution or ROOTS source/helper/plan edit was performed by this reviewer.
+
+Artifacts below are relative to ROOTS `build/takeover-20261029/`:
+
+| Artifact | SHA256 |
+|---|---|
+| `park-prerequisite/postfix-remaining/plan.json` | `0d84e7d24f5bdbbe720a2b27d98ebdabf66891d65f8c04556ec0d936991cf117` |
+| `postfix_remaining.py` | `9ace5493e61c2051dc59d962ca619103337b9aaee43376d4e72310a6f08c5763` |
+| `park-prerequisite/postfix-remaining/frozen-artifacts.json` | `d8fb6556320118a194e4468e1ecc97098d484860dab83e7fd588c541348d69d6` |
+| `park-prerequisite/postfix-remaining/host-controls.json` | `b062bbff3ffb90d4bc6ecd3b9e6db13319f98d9219de37324619fd615d190824` |
+| `postfix_remaining_controls.py` | `53dd7b84d8687e1bf62fe216167b3ef1378fec21896e8d0c10d6e6f005a59871` |
+| Accepted pilot `postfix-pilot/complete-summary.json` | `4c609efa757eba1701140c05c6859328d17eac4ab8e2b72d7d0bd13641798cbf` |
+
+I checked all thirteen frozen artifact hashes, all 48 iteration-zero
+receipt/log/state/root paths, the pilot's 6,322 current source-map hashes
+and all 542 current native paths. The native maps, job definitions,
+protected set, source identity and six retained helper hashes equal the
+accepted pilot's. The new wrapper imports that unchanged pilot's
+current-1bfe `loaded()` for its complete source/helper/copied-input guard;
+it does not revive an obsolete precommit/8ce guard. Its own plan/helper,
+complete 48-path bridge, exact timeout/helper sets and pilot-derived
+contracts are checked separately. No pilot helper, plan or receipt was
+rewritten. Initial continuation drafts remain preserved.
+
+The pilot supplies iteration zero once. New indexes are exactly 1–19,
+with the five isolated selectors and complete four-module transaction
+unchanged: 114 new jobs/build, plus the accepted six = 120/build. Each
+individual still requires one test/zero skips; each whole-module job must
+match the following **executed-pilot** statistics and the complete saved
+`Counter((test_id, reason))` for each physical module:
+
+| Module | Default tests/skips | Candidate O1 debug tests/skips |
+|---|---:|---:|
+| `test_gc` | 141/17 | 141/2 |
+| Each of the three complete thread modules | 120/33 | 120/33 |
+| Four-module total | 501/116 | 501/101 |
+
+These values are now grounded in accepted runtime receipts, separately
+from the earlier coincident 501-case discovery count. No set conversion,
+skip-count-only allowance or guessed total replaces the ID/reason
+multisets. Different order is allowed; missing/additional pairs, changed
+IDs/reasons and multiplicity substitutions fail. The adapter derives the
+contracts from immutable pilot receipts and checks that derivation again
+before every transaction.
+
+The existing full-v3 validation remains in front of that exact-contract
+check: actual paired driver/worker off/extras0/stress0, exact module/filter
+selection, PID/config/seed correspondence, authoritative outer-result
+identity/statistics/skip events, all39 protected raw/outer/base/subtest/
+class/module skip checks, valid nonnegative counter domains, main0 for
+every required PID, positive collections and zero fallback. A matching
+physical PID represented only by another interpreter still fails. Unpinned
+is reported as 3c debt without root-row deduplication or lifetime/lineage
+claims. Protected success retains the recorded loader/selection/count
+inference; there is no new per-ID success event journal.
+
+Every new invocation uses exclusive output creation and refuses any
+existing log/root/state/result path. Failure records FAIL where possible
+and propagates out of the build loop, with no automatic retry or resume.
+The CLI has only prepare/run19, not a full/support armer. Per-job current
+source/helper/native pre/post guards, fresh pycache, shared-cache policy,
+gate_run slots/build locks and 1,800/1,200-second ceilings remain intact.
+The two exact `run19 default` / `run19 debug` host-uv commands in the frozen
+REVIEW may use the two existing slots; no same-build waiter is added.
+
+Completion is stronger than reaching the end of a loop. `complete()`
+requires every exact build/index/job receipt, head/plan/name/PASS/return
+code and exact three-artifact path set; hashes each journal, reloads its
+original state/root records and reruns both provenance validation and the
+pilot contract. Stored summaries/contracts must equal those fresh audits.
+Only after 114 valid receipts and final source/native guards does it create
+an exclusive `complete-BUILD.json` containing receipt hashes. Its aggregate
+counts cover the nineteen new iterations only; the pilot remains separately
+bound iteration zero. Missing, failed or truncated partial rows cannot
+produce that marker.
+
+The retained host controls support those source paths: six named roster/
+count/ID/reason/multiplicity corruptions reject; skip-order and duplicate
+multiplicity positives pass; missing receipt, failed partial row and
+truncated JSON each leave completion absent. A real debug four-module
+journal passes with three explicitly synthetic provenance rebindings.
+These controls were inspected, not rerun, and are not new native coverage.
+
+There is no source blocker to this nineteen-only continuation. Preserve
+partial failures and exact products/inputs throughout. Completion receipts
+and raw evidence still need the coordinator's outcome review; full,
+support-build/variant and O1 decisions remain separate. Do not hold this
+bounded continuation for those unrelated future plans.
+
+## Round 4: separate support MAKE_ONLY plan
+
+### V1: REVISE configuration-input freeze
+
+Reviewed make-only plan
+`park-prerequisite/support-builds/plan.json`, SHA256
+`7e257ecc7a1be55673b1b580c1de34250fb6ca8e12005b034ec29101c77d59db`,
+adapter `postfix_support_builds.py`, SHA256
+`30251b7f4d76951307724cec5a08885e67a324a70ec22c0963fcd2e8a72ac678`,
+twelve-file manifest
+`f92bfd18a22b32e913725fbb216e7ce84856b69f54061990bf4368fd4ac740f8`
+and host-control report
+`ae5cdae8750bb47506ce1b1fd83194a9156ef933bc529922ffa4a66403001e3c`.
+Paths are relative to ROOTS `build/takeover-20261029/`.
+All twelve artifact hashes, both old support native inventories (271
+paths each) and the configured gcc/clang compiler binary hashes match.
+No make, candidate interpreter, test or probe was executed by the reviewer.
+
+One blocking gap: after make, `loaded(build)` rechecks clean source,
+pilot products/helpers and CC identity, but does not require the support
+Makefile and `pyconfig.h` to retain their frozen input hashes. The later
+CONFIG_ARGS checks distinguish ASan/debug/tailcall families only; changes
+to OPT/CFLAGS or other configuration could be captured as fresh products
+rather than rejected. Native outputs are supposed to change, while these
+configuration inputs are fixed. Add exact pre/post configuration equality
+and a meaningful host-only wrong-configuration rejection before make;
+preserve this first plan/adapter/control/manifest when refreezing.
+
+The intended split is otherwise sound: fixed make-j4 under the ordinary
+two-slot/build-lock runner; capture complete NEW products inside the lock
+after make and before any qualification smoke/test; retain the outer log
+and post-cleanup product/receipt checks. Bootstrap/fresh-interpreter build
+tools are build execution, not test coverage. The fixed terminal
+`-- -m test` host-wrapper marker requests existing slot detection only;
+the CLI rejects other forms and has no smoke/test action. No shared runner
+change, test-coverage claim, old ASan provenance waiver or runtime-mode
+clearance follows. The missing-lock/unknown-build/no-smoke control reports
+were inspected, not rerun. **No support make launch clears V1.** The
+already cleared default/debug nineteen-only plan is unaffected.
+
+### V2: MAKE_ONLY_SOURCE_PLAN_CLEAR
+
+The narrow configuration fix closes V1's blocker. Reviewed frozen plan
+`713409750bbf938b9f070c82ead3946192beb57f2c8ef6d7898e30943fe8033d`,
+adapter `a6f4ba2bbbeae024b60d7e65c5518ece026b510aeab0e0b55eff89b0de833f13`,
+`frozen-artifacts-v2.json`
+`091c6213869147899997ad42b7b2f970b051eb197e7055d8f52682f2bf7353e4`
+and `host-controls-v2.json`
+`a16ad8ab44b103387a013fc88e520557a93eeab8d4f9c280d1702138375bd26e`.
+The source of the seven host controls is
+`support_build_controls_v2.py`, SHA256
+`ea0584387775a71b39f4bf9f2db6c53a30fc8e8025fdb118ae7daa2799899433`.
+All thirteen frozen artifacts match. Preserved `plan.json.v1` and
+`adapter.v1.py` have the exact first-round hashes recorded above.
+
+The only adapter change is `check_configuration`, called by every
+`loaded(build)`: each support Makefile and `pyconfig.h` must match its
+original plan hash. Thus pre-make, post-make and post-gate-cleanup guards
+all reject configuration drift while permitting compiled outputs to
+change. The four new controls alter only the host process's expected-hash
+plan-read boundary, one build/file at a time, and reach the precise
+`support configuration drift: ...` assertion before make. The original
+missing-fd, unknown-build and no-smoke controls remain. These controls
+were inspected, not rerun; actual plan/configuration/product bytes were
+not changed by them.
+
+I rechecked all 6,322 source inputs, the unchanged 542 default/debug
+products, both old support inventories (271 paths/build), compiler binary
+hashes and v2 frozen artifacts. Support symlink targets are separately
+present in these inventories, and hashing each alias reads its target
+bytes. The compiler/configuration/command/native-before maps are unchanged
+from V1. The configured C compilers are gcc15 for debug ASan and clang21
+for the release tailcall build; the frozen Makefiles retain their full
+flags/options/source bindings. This source review executes no compiler,
+make, candidate interpreter or runtime check.
+
+Clearance is for the two exact `build asan` and `build tailcall` host-uv
+commands in support-builds/REVIEW, with fixed `make -C BUILD -s -j4` and
+1,200-second outer ceiling. Each uses the unchanged normal two-slot
+gate_run admission and its own build lock. Before make, the inner process
+checks fd8 against the actual build-lock inode and fd9 against an actual
+normal slot file and obtains nonblocking exclusive flock on each inherited
+descriptor. The gate shell holds those locks through the host wrapper's
+post-make source/config/compiler/pilot-product checks, NEW product capture,
+exclusive build receipt and subsequent cleanup. Its fixed slot-detection
+marker is not a test invocation. No same-build waiter, shared runner edit
+or production-source/configuration change is authorized.
+
+Normal make's bootstrap/fresh-interpreter executions remain build steps.
+On success, the complete NEW runtime-product map is captured under lock
+**after make and before qualification**, in `BUILD.build.json`; the outer
+`BUILD.launch.json` binds its hash and build log and rechecks source and
+the resulting products after cleanup. Existing outputs prevent retry or
+overwrite; make/source/configuration/cleanup failures remain failures.
+The source/native guards also protect the concurrently running default/
+debug matrix, whose sources and products remain frozen.
+
+**STOP at that build receipt.** A later independently reviewed variant
+adapter must consume this NEW map and run smoke with `GATE_NO_BUILD=1`,
+plus actual native-kind/mode/assertion checks, before claiming any support
+runtime coverage. This verdict clears no smoke, hazard, stale/walk, full,
+ASan filter/variance, O1, integration or landing result. Current build
+receipts and any failures still require coordinator outcome review.

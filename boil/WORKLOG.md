@@ -3637,3 +3637,68 @@ single-use private continuation. Root's continuation finding is closed without
 adopting arbitrary old pointers. H3 layout/decoder and H1/ROOTS lifetime interfaces
 still require review; no S1/native/layout/storage/mutation grant follows.
 The coordinator reads the revision and both review rounds. Next hourly12:45 PDT.
+
+
+### 12:45 PDT: hourly checkpoint; repetitions progress, ASan audit prerequisite
+
+Primary native integration remains052d8342e56, ROOTS clean1bfe and H3 live-docs
+81417aff097/frozen-storageffc548603b8 are pushed. Root checks remote heads.
+Park source review,71 bounded checks, class negative/restoration, strict stale
+and compiled controls pass at their recorded bindings. Both six-job pilot
+cohorts (twelve jobs total) pass under26a55, with five1/0 selectors and four-module501/116release
+or101debug. Independent c2908399 clears nineteen-only0d84/9ace/d8fb with exact
+pilot Counters, all39 protections,48 immutable pilot paths and114-journal
+completion replay. Both continuations run; latest owner snapshot81/114release
+and35/114debug pass,13/5 complete new module orders, zero fallback and no
+source/product/count/skip drift. Root's earlier direct snapshot71/29 agrees.
+These counts exclude the separately accepted pilot; no new full PASS exists.
+
+Support make-only review first finds missing post-make configuration identity.
+V1 artifacts7e257/302 stay retained. V2 exact Makefile/pyconfig checks and four
+named host drift negatives close it;71340975/a6f4ba2b/091c6213 clears review
+3d9d2634. Root launches ASan make only, with prospective complete new products
+captured under normal slot/build lock before qualification. It stops BUILD_FAIL
+after73.901s at the actual linked audit: newly precise Park calls outlined
+_PyRawMutex_Lock and Unlock, unmarked static wrappers. MakeRC2/wrapperRC1;
+source/config/default-debug guards remain PASS. Log27b2a2c8 and build9c7dfe4b
+stay failures, with no smoke/test coverage. This is not the old allocator oracle.
+Tailcall does not start. Owner and independent peer inspect raw native-only
+wrapper/slow/platform ownership; exact two-marker proposal34b5e35e/designfb291817
+is unapplied. No effect waiver, outlined allowance, forced-inline workaround,
+source edit or retry is granted. Finish current frozen repetitions; decide
+copied controls and source/native reconciliation from that review, without
+automatic redo or reuse. Full plans stay source-only until final source settles.
+
+The coordinator reads H3 preflight062da730: five shared native/test paths merge
+textually, but precise monitoring/root spans, args-iterable signature, CAPI ABI,
+checker cases and generated expansions need actual union review. Queue052's13
+non-boil paths are12 native/test plus one C-API document. Keep H3ffc frozen;
+union waits for ROOTS landing and needs fresh gates/primary landing review.
+Prospective serial handoff is storage union -> statistics -> H1 -> remaining
+transport/renumbering, so complete handler counts and real tailcall stats
+baseline precede the calling-convention experiment. This schedules ownership,
+not a new H1 technical dependency or native grant. Matched nonstats release
+timing remains H1 benefit evidence; op<256 currently omits higher entries,
+not a proven memory-corruption claim.
+
+String S0f3a94/review5d333 stays ready for cross-owner interfaces, without S1,
+layout, storage or mutation approval. Baseline audit6bd23aca confirms retained
+baseline source/stdlib config resolves into the active fork; old runner results
+lack full import/native identity. Preserve old artifacts and the clean main
+checkout. Plan a separately owned exact321925 detached source/build and new
+result identity, with matched and stock-policy cohorts distinguished; no new
+checkout/build/interpreter/benchmark ran. Bound runner updates before I.
+
+Next hour: finish frozen repetitions, close raw-wrapper design/controls and
+choose the narrow source-qualified continuation; freeze fresh full/kill/ASan/
+stress/extras plans afterward. O1 shared policy remains pending required full
+evidence. Queue2 remains held by its prior automatic classifier, with no
+permission question pending. Next hourly report about13:45 PDT.
+
+At12:47 independent7fcca37c clears the exact raw-wrapper design for two
+precision markers, with all ten static-Bucket calls, semaphore platforms,
+caller-owned roots and default-reentrant slow calls audited. Root reads the
+full review and grants only task-copy source/compiled oracle controls while
+1bfe repetitions continue. Real header edit/rebuild still waits for quiescence,
+control outcomes and a reviewed native bridge/affected rerun plan. No extra
+marker, slow-body edit, effect exception or support retry is covered.

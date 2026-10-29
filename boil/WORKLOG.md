@@ -2945,3 +2945,31 @@ preserve full gate2/3 semantics, with cext/regen/traversal separately. Shared
 verify.py orchestration/gate hooks remain unimplemented. Final v2 component
 controls/review remain. Queue2 classifier hold is unchanged; no stopped work
 is retried. Next hourly user/documentation checkpoint remains about09:45 PDT.
+
+
+### 09:22 PDT: remaining full-gate policy and bounded H3 scope
+
+Reviewed ROOTS's build-owned remaining full-gate plan. Full release, normal
+debug and kill debug preserve the complete default suite and sole existing
+remote-exec exclusion, exact actual worker cohorts and positive/zero-fallback
+counters. Candidate O1 full suites may follow its repeated qualification;
+global gate-policy adoption waits for complete evidence. Cext16, regeneration
+status/content comparison, traverse and optional-extension checks remain
+separate. No new shared gate hook is inferred. ASan sort/functools kill-only
+completion is approved to cover stress-set modules absent from ASan14.
+
+Coordinator approves the once-only full-release stress100k qualification
+policy with the complete module roster and only the four existing stress
+selectors plus the remote-exec selector. No test_misc/B/ASan exclusion.
+Actual driver/workers must retain mode(0,0)/stress100000; source/helper/native
+bindings, complete results,1200s worker/7200s outer ceilings and30-minute
+checkpoint are required. Preserve a qualification-only registry diff promoting
+full-stress-policy and extending only those existing exclusion IDs. Frozen8ce
+and the running matrix registry remain unchanged. A successful filtered
+profile does not close writer/compiler rooting debt; no run has begun yet.
+
+H3 corrected monitoring design33cef3ae191078a1 and exact additive safe-lookup
+hook are approved by ROOTS/coordinator. A one-line private-symbol export in
+pycore_code.h is also approved for the actual test extension. Immutable2b.2a
+implementation begins; no storage2b.2b implementation is authorized. Separate
+H1 frame-passing/checker/build design617bea5 is preserved with no execution.

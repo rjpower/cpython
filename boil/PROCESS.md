@@ -294,6 +294,10 @@ instruments include or GC fixture changes are part of this grant. The
 corrected design is SHA256
 33cef3ae191078a1f578df57f9ac9dae3fee7143f4d214b6510ca9add310bda7;
 only immutable lookup2b.2a implementation is authorized.
+The internal SafeAddr2Line declaration may additionally change from extern int
+to PyAPI_FUNC(int), following adjacent line-table exports, so that the real
+test extension can call it. This grants private-symbol visibility, not a new
+stable public ABI contract.
 
 Second bounded exception, reviewed by ROOTS: H3 may add only the proposed
 pycore_ir.h include, ir_scalar_boundary primitive fixture beside the
@@ -332,6 +336,24 @@ preserve full gate2/3 suite semantics and perform cext, regeneration/content
 comparison and traversal audit separately. This is not execution through
 verify.py run or a new shared gate hook. No source or helper changes during
 the repeated matrix, and no overlapping full test_perf_profiler suites.
+Candidate O1 full normal/kill suites may follow its complete repeated matrix
+as further qualification; global O1 gate-policy adoption follows the required
+full evidence. ASan kill completion adds test_sort and test_functools to the
+separate14-module evidence, with no stress interval or additional exclusion.
+
+The once-only full-release stress100k policy is now approved for qualification
+on8ce: complete default module roster, actual mode(0,0)/stress100000 in driver
+and workers, four existing stress exclusions plus the machine remote selector.
+Use the current *test_resize*, *Writer*, unicode test_from_format and
+*test_verify_kill* selectors unchanged; writers/compiler spans remain3a debt.
+No test_misc/B-class or ASan-only exclusion applies. A separate qualification
+registry copy may promote only full-stress-policy and extend those existing
+exclusion IDs/applicability to this profile, retaining the original, exact diff
+and hashes. Do not edit the frozen matrix registry. Outer ceiling7200s,
+worker1200s and30-minute progress check apply. Success completes the explicitly
+filtered scheduled profile, with full cohort/root evidence; it does not close
+the underlying unfiltered writer/compiler obligations. Unexpected failures
+remain failures and get no automatic new selector.
 
 H3 monitoring is split into an immutable SafeAddr2Line prerequisite2b.2a,
 then coherent uint16 storage/relations2b.2b. Independent2a design clearance

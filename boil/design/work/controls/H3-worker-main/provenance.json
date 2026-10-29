@@ -1,0 +1,72 @@
+{
+  "base": "6c724c29408f4751b570c6980320801921be7e64",
+  "native_state": "uncommitted H3 stage2a draft at explicitly recorded hashes; no clean-stage1 or later-integration claim",
+  "sources": {
+    "Include/internal/pycore_ir.h": "856a6006988307d28ee67b7bc82cd91b1a355e95c7bd2f3333a696031856f754",
+    "Include/internal/pycore_ir_metadata.h": "89a8c568721eeaf16b64c608392502e657b01edeac18323bd24c7d7e2e8bcee6",
+    "Include/internal/pycore_opcode_metadata.h": "63de5388cad9f22f33736573603ca53ccbf476e21bc00d4e337b1cf67a3e0fed",
+    "Include/opcode_ids.h": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+    "Lib/test/test_code.py": "60e194368abd0b0a67f1b3bccb8e03fe34dabb542f052a97fdef984914666f35",
+    "Lib/test/test_generated_cases.py": "507ad00e47c7523107aa9d82c4b4e189f758f040dcc88cf49e373ab846e392f6",
+    "Lib/test/test_ir.py": "5045ccf9f4b952613115cb06f3fb56847acd099a77dcbdea1338ea2308662c36",
+    "Modules/_testinternalcapi.c": "d031f5e57f02b064df2d5b967a06bee8f5a6ea40104bffdd51c43a236e3382c3",
+    "Objects/codeobject.c": "4af5fb4605ef7323b981a9994b6967eaa09a48d6027b368d457dd33635b5984b",
+    "Python/assemble.c": "e1e9eb4bfd9eac3b6f7d02cc04a5f820d567b58e81b58e59d6a169f340dc264b",
+    "Python/bytecodes.c": "cf5f7c177820d6640b59f079d6c878a4db48d06c42f17cb0e6b4547e780e879e",
+    "Python/instrumentation.c": "0aba70e7cc8a795bf3e6ac81a9f4a64921cb3cb613d6b75364d7011b3e1faf32",
+    "Python/ir.c": "89df1b0566a298b654a02a67dfe80008929288e276a09908ce07da947909d2bf",
+    "Python/specialize.c": "9d87cb5fdf1b550720873fd645c649a0ff609ec8e04687395ae71bb19d8ac8e0",
+    "Tools/cases_generator/ir_generator.py": "d30a55601af6ea3e7359c662b7a6291e41c22869b3b9caa620999e5a607dc0cf",
+    "Tools/cases_generator/ir_metadata_generator.py": "56de2c3e3bf9d6222113f8b0e1d42ac8dcb7363a5c45d45f3423e4745c6b7d42",
+    "Tools/cases_generator/lexer.py": "40596eaab735fa6630e3a11432d6bad1753e6ef0b2a81d6e7cd293f8855c2fce",
+    "Tools/cases_generator/opcode_id_generator.py": "ccb4f92fb5432f3670d28b56ccffe9f790e4b81e28d1eefe46bdee41a3046895",
+    "Tools/cases_generator/opcode_metadata_generator.py": "9eed1565e2a8bc34aa1e6ed291d8cffa71d6be805e578400ef4f4930ca37f3cd",
+    "boil/design/work/controls/compiler-copyprop-1/assert-kill-worker.py": "aa986f0cc6fbf230be84ccf84d010384de33599d1c04908e942a9ce5fcb2ce89",
+    "boil/design/work/controls/H3-1-stage1/assert-kill-worker.py": "f256660476433085aa68e8b1f02cd941d79b80daad21fb3077f2faad4141af0d",
+    "boil/design/work/controls/H3-1-stage1/isolated-worker.py": "11bc3b160c219d25b071b327fbd8c3845e07db55a18abea097bd58a1a3937f3b"
+  },
+  "builds": {
+    "default": {
+      "build/default/python": "16d082c82415c5f83b1265f49f79319b7c3ba9b949e9c3b2d726078f8b51a5f1",
+      "build/default/pyconfig.h": "b5a7d11bb3f7315543313cb91ea3855397491f315aab6b9b771eec8bfa8f8cd0",
+      "build/default/Makefile": "aef20aa4deee2ba4c41b885bf11123a009338fefc17356cb605f85534942f82e",
+      "build/default/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so": "8877fa9cf6077b602ea7d940f1a294872336920ef9c8c208d4658fa74545031b"
+    },
+    "debug": {
+      "build/debug/python": "6a73106f574a4242bead2436855e08fe09862a9581b8b1242cdb847c0ec5bd94",
+      "build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+      "build/debug/Makefile": "7161e4e3eb90bc5c198c7af83439b31b019576f0a7a118984f5251bfdcdbc136",
+      "build/debug/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "8ff91c8a821c27341d209b00dd61fd6924b5fb9bd81b0390ed4b1b2563bfca04"
+    }
+  },
+  "worker_main_source_sha256": "d32b7ea772edfaa1e28f53c3c1a7219cdd132498416adcbde7d9159f331eab2f",
+  "evidence": {
+    "relocations.json": "003ae0bab7e131190418850bf1fec77aa2eb476a165fc9d09d77632438936c50",
+    "run_controls.py": "5c1aa66f1e677c252f5afb6fda1015ed112fa72db1c1142c6ae0525ae444dd31",
+    "compiler-workers.jsonl": "9886936f5bd5d4efccf7208b7fab0d53d9c5f9a440ebd4f84526f9d13cc8495c",
+    "h3-workers.jsonl": "9886936f5bd5d4efccf7208b7fab0d53d9c5f9a440ebd4f84526f9d13cc8495c",
+    "compiler-protocol.log": "1a1c89f287fa89ae4a9387b473e5eddadaa9ad6f89f710ea956a70de2755cd5d",
+    "compiler-worker.py": "7538b379914d5f11ebc6b80f8633f0dc221b9b5d2919fdb2a0ced2906b7b0308",
+    "copied-controls.log": "6a528f87395cbcd51d678d69790b668ae69b26320ec58bd24bc508fd0d0f3ecf",
+    "isolated-worker.py": "11bc3b160c219d25b071b327fbd8c3845e07db55a18abea097bd58a1a3937f3b",
+    "baseline-products.sha256": "c5cd9a3932527d72534d0676840e31c72d54eb3fe76581b6fccb9242273be232",
+    "h3-protocol.log": "4016d14305b503ef9c04dd114766e28cac1b8e2d12d27c3d1af215679d53986c",
+    "h3-worker.py": "7b9501ce4296c33dfb9a1dbc607b23784e00188d762309c017d1995c5e793d3c",
+    "isolated-controls/positive.log": "a565640cf19727fff387843229e9ead77982fe81ec4d7610cfe643b897bbbf81",
+    "isolated-controls/capacity.log": "e3d8e236d3f9b24562b04d71af4bc8dd9bfd94f630745f53d8d4facd9b12a32d",
+    "isolated-controls/manifest.json": "ab8df278383cc751654b8d0e7b4f638cb478a00f437a7e716fff7bd91ed69a87",
+    "isolated-controls/kind.log": "9ee4449e62aaf51063c951c99a38206192c8260426aef0838cfec88654698a3d",
+    "isolated-controls/capacity.patch": "7c607e6f92d5c4ee147173257cb8af5566c60be422033449c35fa1a4ec0d3d6f",
+    "isolated-controls/duplicate.patch": "78a5b00a84501b311b2f4fe7c19ead6fac70c003418dab450d820c0fe09257a6",
+    "isolated-controls/kind.patch": "12bd558a5efd19ccfa83d64bc417b5de7a930f50557ec5d9185882ddc85582a5",
+    "isolated-controls/consumer.patch": "983fb7fcaed11b4960d0c6eacf1119e9f88bc85abfb431a6e6e7700f9469e4e5",
+    "isolated-controls/name.patch": "11a3167f568cc6cc2dd5f5833230225ec5372a9c4eb0011e665923abb54a398e",
+    "isolated-controls/consumer.log": "6b368eedc51cb262a46fa4c5f5c4cc8c0f23023cf2c020993cb58f6f53398d91",
+    "isolated-controls/duplicate.log": "b7cfd32cc62eff6477e5dfa2d06e42b5494f549509378e9d90fd2fdb22a4cf9a",
+    "isolated-controls/pin.patch": "7befe9d5b5fa263cd802073a89b87a3b0566e1eb832a93fa01554f60c7ff82b3",
+    "isolated-controls/base.log": "6af97cd0c4ddbfcb916433d44ef12a1ec3e9f7215b852ef5a47fc10f82eca221",
+    "isolated-controls/base.patch": "e0b6944ada675e7b772e56c2eba818af1e109b7c7658ade9c3d0e24614402e6c",
+    "isolated-controls/name.log": "b6ae4f012df3feedf1070d5be5529ab247fb4f66500c9f40856ae65a66fbe753",
+    "isolated-controls/pin.log": "898c976e0ada08aeb8d6d91d0be36dd62726c591e8d2a00ffb070c0a3fcfc8e9"
+  }
+}

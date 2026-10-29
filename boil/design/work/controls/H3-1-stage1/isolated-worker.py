@@ -34,8 +34,9 @@ print("isolated", role, "generator verified", ir_generator.__file__, actual,
       flush=True)
 
 if is_worker:
-    from test.libregrtest.worker import worker_process
-    worker_process(sys.argv[-1])
+    from test.libregrtest.worker import main
+    sys.argv = ["test.libregrtest.worker", sys.argv[-1]]
+    main()
 else:
     assert sys.argv[3:5] == ["-m", "test"], sys.argv
     sys.argv = ["test"] + sys.argv[5:]

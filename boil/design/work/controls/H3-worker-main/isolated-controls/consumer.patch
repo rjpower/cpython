@@ -1,0 +1,12 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -557,8 +557,7 @@
+                 raise ValueError(f"invalid pristine handler: {name}")
+ 
+     def require_analysis(self, analysis: Analysis) -> None:
+-        if analysis is not self.analysis:
+-            raise ValueError("handler domain belongs to a different analysis")
++        pass
+ 
+ 
+ def _assign_opcodes(

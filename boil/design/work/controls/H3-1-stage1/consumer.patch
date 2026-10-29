@@ -1,0 +1,12 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -540,8 +540,7 @@
+                 raise ValueError(f"invalid handler base for {name}: {base}")
+ 
+     def require_analysis(self, analysis: Analysis) -> None:
+-        if analysis is not self.analysis:
+-            raise ValueError("handler domain belongs to a different analysis")
++        pass
+ 
+     def shadow(self, name: str) -> str:
+         # The legacy format shadow normalizes IR variants, but leaves

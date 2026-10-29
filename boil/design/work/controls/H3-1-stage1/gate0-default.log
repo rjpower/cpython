@@ -1,0 +1,26 @@
+gate 0 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default at f46276debf3
+The following modules are *disabled* in configure script:
+_sqlite3                                                       
+
+The necessary bits to build these optional modules were not found:
+_bz2                  _dbm                  _decimal           
+_gdbm                 _hashlib              _ssl               
+_tkinter              _uuid                 _zstd              
+readline                                                       
+To find the necessary bits, look in configure.ac and config.log.
+
+Could not build the ssl module!
+Python requires a OpenSSL 1.1.1 or newer
+
+Checked 116 modules (37 built-in, 67 shared, 1 n/a on linux-x86_64, 1 disabled, 10 missing, 0 failed on import)
+Using random seed: 1678590422
+0:00:00 load avg: 8.11 mem:   48.7 MiB Run 9 tests in parallel using 8 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:31 load avg: 6.19 mem:  421.4 MiB running (1): test_capi (31.1 sec)
+
+== Tests result: SUCCESS ==
+
+Total duration: 46.5 sec
+Total tests: run=1,924 (filtered) skipped=50
+Total test files: run=9/9 (filtered)
+Result: SUCCESS
+gate 0 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default

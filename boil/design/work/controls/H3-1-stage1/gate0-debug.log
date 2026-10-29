@@ -1,0 +1,34 @@
+gate 0 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug at f46276debf3
+The following modules are *disabled* in configure script:
+_sqlite3                                                       
+
+The necessary bits to build these optional modules were not found:
+_bz2                  _dbm                  _decimal           
+_gdbm                 _hashlib              _ssl               
+_tkinter              _uuid                 _zstd              
+readline                                                       
+To find the necessary bits, look in configure.ac and config.log.
+
+Could not build the ssl module!
+Python requires a OpenSSL 1.1.1 or newer
+
+Checked 116 modules (37 built-in, 67 shared, 1 n/a on linux-x86_64, 1 disabled, 10 missing, 0 failed on import)
+Using random seed: 1810579984
+0:00:00 load avg: 4.71 mem:   45.7 MiB Run 9 tests in parallel using 8 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:38 load avg: 3.39 mem:   93.9 MiB running (1): test_capi (37.4 sec)
+0:01:08 load avg: 2.25 mem:  128.4 MiB running (1): test_capi (1 min 7 sec)
+0:01:38 load avg: 1.63 mem:  202.2 MiB running (1): test_capi (1 min 37 sec)
+0:02:08 load avg: 1.24 mem:    1.1 GiB running (1): test_capi (2 min 7 sec)
+0:02:38 load avg: 1.09 mem:    1.1 GiB running (1): test_capi (2 min 37 sec)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_capi/test_pyvalue.py:143: DeprecationWarning: Bitwise inversion '~' on bool is deprecated and will be removed in Python 3.16. This returns the bitwise inversion of the underlying int object and is usually not what you expect from negating a bool. Use the 'not' operator for boolean negation or ~int(x) if you really want the bitwise inversion of the underlying int.
+  expected = expected_func(*args)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_capi/test_pyvalue.py:148: DeprecationWarning: Bitwise inversion '~' on bool is deprecated and will be removed in Python 3.16. This returns the bitwise inversion of the underlying int object and is usually not what you expect from negating a bool. Use the 'not' operator for boolean negation or ~int(x) if you really want the bitwise inversion of the underlying int.
+  self.assertValue(func(*args), expected)
+
+== Tests result: SUCCESS ==
+
+Total duration: 2 min 43 sec
+Total tests: run=1,924 (filtered) skipped=20
+Total test files: run=9/9 (filtered)
+Result: SUCCESS
+gate 0 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug

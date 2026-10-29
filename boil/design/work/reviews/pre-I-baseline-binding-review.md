@@ -410,3 +410,165 @@ ruled in round4; no sensitivity build is added now.
 
 The reviewer executed no runner, host control, configure, compiler, make,
 candidate interpreter, test or benchmark and changed only this review.
+
+## Round 6: actual MAKE_CLOSURE_CLEAR
+
+Verdict: **MAKE_CLOSURE_CLEAR**, 2026-10-29, for the completed once-only
+coordinator-granted V3 build. This verifies product establishment and its
+retained closure; it is not standalone correctness, origin binding, final
+benchmark-cohort qualification or parity. Reviewed joint
+`build/checkpoint-i-baseline-binding/make-closure.json`
+`dddcf24dbea8b0eead4b4bec8eb09f6801837a62b1b696bdd4de8a25b5e54a42`.
+The updated make work record is
+`9eb17bf90669f07a77684b2a0f4ede60bcafdf06a9a3a660cec466cd02e3794c`.
+
+The actual build uses unchanged runner `a3f271b5`, plan `d08ddfa2` and
+launch `74e12464`. Its final receipt is
+`241d86940daa38d0466281dcccb2dec90155c0277fe0b75986eb655240246940`,
+inner receipt
+`8539798e5b2d51476c7593cb2c877d0f2d0545d31ec5672e7f233c5dbfb3baa0`,
+post-build/post-cleanup manifest
+`ab41a2dfedb83d7976c4560209d3cb925770cd150d75bafafc0acc81e48f87db`,
+and raw make log
+`29b712caac5aaf8dc09d8208f7d28ad72ac5122112b980d74cf10ac39644e321`.
+Outer/gate/inner statuses are zero, inner post-verification is true, final
+cleanup verification is true and no failure is recorded. Actual command
+and cwd remain the approved `/usr/bin/make -j4 all` and owned upstream build.
+
+All 518 indexed V3 evidence payloads and all 584 actual build-product
+payloads match the closure. Both retained product manifests equal the joint
+product map, and an independent file roster agrees, including symlinks.
+The 67 build-library alias texts and resolved targets were checked separately.
+The 134 `.so` paths represent 67 module implementations and their aliases,
+not 134 implementations. There are 570 new paths beyond configure's fourteen;
+objects, bootstrap/testembed executables, libpython archive, generated frozen
+headers/sysconfig/build details and extension products are retained.
+
+All fourteen accepted configuration files and original configure closure
+artifacts remain unchanged. Source hashes and fourteen actual tool payloads
+also agree; upstream Git is clean at exact `321925`. New Python is
+38,581,192 bytes, SHA256
+`4565c7f92f126a1ad6dab0ae756ec57fec612103682062c25bf9cfdc7da576e7`.
+The compile log retains O3/NDEBUG/frame/zero-init flags and the accepted
+empty upstream eval-unit policy. Generated sysconfig source paths point
+at the owned upstream checkout; that metadata is not a substitute for the
+later actual workload import-origin witness.
+
+The raw make log reports 116 checked modules: 37 builtin, 67 shared, one
+not applicable, one disabled, ten missing and zero failed imports. Missing
+SSL and the other configured optional backends remain explicit. These
+are normal build-internal checks; no separately invoked correctness suite,
+origin witness or timing is reported or credited. The retained command
+scope stops after make, inventory capture and final cleanup. This is not
+a claim of complete system-wide process lineage. Make took 61.092 seconds
+and launch/cleanup 66.120 seconds, both setup durations.
+
+The separately frozen pre-make supplement
+`b960cb2e5dee062d456cd54eeb12b1c84db633c2be2364a122f390041f67a13f`
+binds 341 SDK candidate paths/metadata with its stated missing candidates.
+It remains candidate evidence, not consumed-header or loaded-library proof;
+the accepted later dependency/cohort boundary is unchanged. So are the
+recorded eval-flag difference, sensitivity obligation and absence of a
+matching final fork cohort. Subsequent runtime qualification, transitive
+startup/workload origins and wrong-origin controls need separate reviewed
+plans and grants. No current parity or performance result follows.
+
+Only this review was edited. The reviewer ran no build, compiler, target
+interpreter, test, import witness or benchmark.
+
+## Round 7: post-build launch FIX_FIRST, narrow JUnit guard
+
+Reviewed `pre-I-baseline-postbuild-plan.md`
+`5211e709f1e77226939dfd91677914ef18cebf491adce15cd85e44de06421b88`
+and `build/checkpoint-i-baseline-binding/post-build-v1/` runner
+`1fe7dc9ab2d1e385c2a6923be86b50aad6d3624fe40f880519921a0fcabb3b19`,
+plan `86afd0905050fb5ea031c6ca3971dee427d44a8488870b176340ae796a12c6de`,
+launch `3dfdab7c0a47eceeebee438f8bd51250774054c72f03c0a8a0330267aa2b8661`,
+verifier `91fe0447ca55abfe60ebb0f61d69c21e0c47af503cacaf7ad7877bdf02ba35d1`,
+108-artifact provenance
+`9faba737f23613345de85ff6908b95b2d68cb75f3bfdb21c818a04c910ec7394`
+and seventeen synthetic host controls
+`24dca02a1966916a091ac397e100810de604c618ae2c10c9c37cfad91dc469dd`.
+All indexed hashes and explicit plan inputs match. No target command has
+run, and no reviewer helper/compiler/interpreter execution occurred.
+
+The fixed order, scope and provenance guards are coherent: one positive
+diagnostic, three valid copied-file wrong-origin controls, then one fixed
+18-module upstream regrtest transaction. The supervisor retains normal
+one-slot admission and all three actual locks without a second test-marker
+slot. Before/after/cleanup guards enforce accepted make/config/source/tool
+evidence and all 584 native products. Clean target environments exclude
+both PYTHON and _PYTHON injection except each intentional negative. Copy,
+math and generated sysconfig fixtures match their actual upstream originals;
+the adapter requires valid import/functional results and exact wrong-origin
+errors, rather than accepting an unrelated ImportError.
+
+The verifier binds explicit diagnostic files, verbose startup-to-exit traces,
+bytecode/source correspondence and the live process's mapped ELF files.
+The synthetic controls reach intended early/transient origin, loader,
+configuration, trace, native-inventory and lock errors. This diagnostic has
+its own script-directory context; no full benchmark-workload import binding,
+consumed-header proof or timing follows. The requested correctness roster
+is fixed in argv and uses unchanged upstream loader behavior. Its raw XML/
+transcript provide observed coverage, not a new per-ID success journal.
+
+**FIX_FIRST:** `qualify.py` calls its JUnit guard failed-or-empty, but it
+only checks that at least one testsuite element exists and that errors/
+failures are zero. A nonempty suite list with zero tests, or all skipped
+cases, can receive PASS. Require nonzero actual executed cases and reject
+empty/all-skipped synthetic JUnit at the intended guard. Preserve actual
+counts/skips and selection inference; do not invent expected totals or a
+new module-roster framework. The coordinator agrees this narrow correction
+and host controls must precede a launch grant. No other launch blocker was
+identified in this frozen package. Preserve this version and append the
+refrozen disposition; no new native gate or repeat is required.
+
+## Round 8: QUALIFICATION_LAUNCH_PLAN_CLEAR
+
+Verdict: **QUALIFICATION_LAUNCH_PLAN_CLEAR**, 2026-10-29, for the refrozen
+successor package only. The sole round7 blocker closes. The coordinator
+must grant the exact launch; this review executes no target command and
+credits no target diagnostic, wrong-origin control or correctness result.
+
+The runner remains `1fe7dc9ab2d1e385c2a6923be86b50aad6d3624fe40f880519921a0fcabb3b19`,
+origin witness `0d1d1057` and verifier `91fe0447`. New identities are:
+
+| Artifact in `post-build-v1/` | SHA256 |
+|---|---|
+| `qualify.py` | `fac770a5b814ca0caa3a5db6b9a8ded4a26be911af5cb5f47d141c98db42a34f` |
+| `plan.json` | `4c172485584e78ab51f73ae0884bee2185aa7133b32976edf071d0ac64945d0a` |
+| `qualification-launch.json` | `e907ee72bf30ee2f2c29a3313a7584b7fdd3177739b65f38f8eefc8d3480f704` |
+| `host-controls-v4/results.json` | `3e95782f3e6dfc146237cc450bc97cfaf7fe548385efb63eb006397ea8749558` |
+| `provenance.json` | `339737472d48498b3db1019730f766815db40b8242d03e08f23c09c3c25fceaa` |
+
+The updated work record is
+`9883526dd43a8d07a45af4ab748e1ff8dd23beb28d2deaaa5c3d72edd2353f21`.
+All 152 indexed payload hashes and explicit plan-input hashes agree. The
+earlier reviewed package remains under `history-review-v1/`, with round7
+findings intact. No `run/` target evidence directory exists at review.
+
+The narrow `summarize_junit` addition requires a positive observed
+non-skipped testcase count supported by the suite's declared tests minus
+skips. Empty suite lists, zero-test suites and all-skipped suites reject;
+errors/failures still reject. Four new synthetic JUnit cases prove those
+three negatives and one valid executed positive, alongside the seventeen
+retained parser/guard cases in the new 21-case host batch. These are host
+controls, not target execution. Summary wording now distinguishes fixed
+requested argv and unchanged upstream-loader selection inference from
+observed JUnit names/counts; it makes no new per-module success-journal claim.
+
+All previously reviewed target commands, valid copied wrong-origin fixtures,
+exact expected errors, environment/cwd, supervisor/locks, native-product
+guards and time bounds remain unchanged. The granted scope can be only:
+one positive diagnostic, valid copy/math/sysconfig wrong-origin executions,
+then one 18-module correctness transaction. Unexpected failures, wrong
+control outcomes, native drift or partial/failing final cleanup stop it.
+Actual receipts/counts/skips/maps and original source/config/tool/native
+identities require subsequent independent review before any further phase.
+
+The positive diagnostic's own startup/transitive imports and mapped ELF
+files are its provenance scope. Full benchmark-driver setup/run traces,
+consumed-header closure, final fork cohort, eval-policy sensitivity and
+timing remain separate obligations. No new repetition, production-runner
+edit, parity or performance claim is introduced. The reviewer changed only
+this review and ran no runner, target interpreter, suite or host control.

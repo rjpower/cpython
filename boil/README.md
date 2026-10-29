@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 13:27 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 13:45 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,12 +71,12 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 13:27 PDT; evidence is from local commits and retained logs.
+2026-10-29 13:45 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded. Both old8ce matrices pass; debug full exposes Park retention. The six-file repair1bfe clears source review/71 bounded checks and both120-transaction campaigns. ASan make exposes two unclassified raw wrappers; exact annotation successorce2ac8 is committed after preserved-boundary review and is rebuilding, still unqualified. Historical ASan14 passes3,616 with its exact accepted allocator exclusion; unfiltered failure stays recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded. Both old8ce matrices pass; debug full exposes Park retention. The six-file repair1bfe clears source review/71 bounded checks and both120-transaction campaigns. ASan make exposes two unclassified raw wrappers; exact annotation successorce2ac8 is committed after preserved-boundary review; all three builds pass and remain unqualified. Historical ASan14 passes3,616 with its exact accepted allocator exclusion; unfiltered failure stays recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
 | 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats design81417aff097 clears readiness review; native work awaits the source handoff, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
@@ -95,10 +95,12 @@ Performance position, instructions on the internal benchmark set
 kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. These historical
 instruction ratios do not establish current elapsed-time performance.
 Generations, 6e and the handler/interpreter work precede checkpoint I;
-the JIT follows it. Matched release wall-time measurements must
-establish interpreter parity or better on the kernel set, with individual
-regressions reported and resolved or explicitly dispositioned. Micro
-instruction gains alone do not establish that result.
+the JIT follows it. The target is roughly 2× upstream interpreter throughput
+on the declared application/kernel set, measured with release wall time and
+individual regressions reported and resolved or explicitly dispositioned.
+Micro instruction gains alone do not establish that result.
+The [revised roadmap](design/work/pre-I-performance-roadmap.md)
+sets the measurement contract, GC landing path and structural performance work.
 
 The pre-JIT backlog includes H1 frame passing, numeric guards and build
 policy; 6e inline-receiver boxing; H3 exact-float truth and call-window
@@ -159,7 +161,7 @@ Earlier release audit failures stay retained, with no branch/effect waiver.
 The narrower historical process-pool matrix does not cover this case.
 The coordinator explicitly carries unchanged legacy31/11 evidence forward
 with source/body and caller proofs; it stays evidence on8ce, not a new-head
-20/20 result. Fresh default/O1-debug plans each require20 independent runs of
+20/20 result. The completed default/O1-debug plans each required20 independent runs of
 each of three thread regressions and two eval probes, plus20 complete orders
 of their four modules. The501 listed cases require measured pilot counts;
 the first iteration and exact plans are reviewed before the other19.
@@ -177,14 +179,15 @@ at its actual linked audit: two outlined raw-mutex wrappers called by precise
 Park lack precision classifications. No smoke/test ran. Exact two-marker
 proposal34b5e35e clears independent source review and task-copy controls:
 actual-header held-local negatives and linked old/new/omit-each audit oracles
-pass. Transition8efe clears design review; production edit waits for both
-completed matrices, preserved products and the exact new executor plan.
+pass. Transition8efe specified completed matrices, preserved products and an exact
+new executor before the production edit; those conditions are now met.
 Both campaigns now complete120 transactions/20 iterations on1bfe: debug
 completion172f480d records10,120tests/2,020skips including its pilot, with zero
 fallback. Expanded boundary8b7c preserves all four build trees and962 receipt
 paths at quiescence. Executor/boundary review8740 clears; root grants ONLY
 exact two-marker successorce2ac8991ee, new-plan1074 and sequential make-only
-default/debug/ASan. All new products remain unqualified pending actual native
+default/debug/ASan. All three make-only builds pass, including the formerly
+failing ASan linked audit. New products remain unqualified pending actual native
 comparison and a separate affected-coverage ruling. No audit exception or
 old-receipt relabel follows.
 There are39 protected selectors. Changed checker-suite coverage, stale100,
@@ -251,7 +254,9 @@ source/build/import environment and stronger runner identity are required
 before checkpoint-I measurements. One owned exact321925 detached source tree
 is now clean and inventoried. The revised configure runner closes its admission,
 tool and cleanup gaps; configure succeeds and actual configuration closure8908
-clears independent reviewde24. Make-only V3 clears independent review and its exact launch is granted.
+clears independent reviewde24. Make-only V3 succeeds; its 584-product closure
+dddc clears independent review5344. A diagnostic/origin and single 18-module
+qualification package is under review.
 No separately invoked baseline qualification or benchmark has run. Common compiler/O3/frame/
 zero-initialization policy matches; upstream's eval-unit flags are empty while
 the fork deliberately adds `-fno-gcse`. Report that source-specific difference;

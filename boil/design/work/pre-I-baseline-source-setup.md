@@ -1,10 +1,17 @@
 # Checkpoint-I upstream: owned source and proposed build phases
 
-Status: owned source setup and reviewed **configure-only** execution
-completed, 2026-10-29. **Make, target-interpreter execution, separate
-tests/probes and benchmarks remain unapproved and unperformed.**
+Status: owned source setup, reviewed configure and exact **make-only**
+execution completed, 2026-10-29. Products are frozen and independent
+`MAKE_CLOSURE_CLEAR` accepts the closure. **Standalone qualification, origin witnesses and
+benchmarks remain unapproved and unperformed.** Make included its disclosed
+bootstrap/freezing/sysconfig/checksharedmods interpreter actions.
 The coordinator authorized this detached comparison-source exception;
 it is not an optimization step branch, native change or performance claim.
+
+Current make closure is `dddcf24dbea8b0eead4b4bec8eb09f6801837a62b1b696bdd4de8a25b5e54a42`.
+The [make work record](pre-I-baseline-make-plan.md#exact-granted-execution-and-frozen-products)
+records exact grants, receipts, product counts and remaining provenance
+limits. Earlier phase descriptions below retain their historical scope.
 
 ## Completed setup and preserved inputs
 
@@ -16,7 +23,8 @@ Created only the repository-managed detached checkout
 Git and have independent SHA256 content/link inventories. At that initial
 source-setup checkpoint status was clean, with no build directory, configure
 outputs, interpreter or extension. The later approved configure created
-only the14 recorded build/configuration files; tracked source stays clean.
+the14 recorded configuration files; the separately approved make produced
+570 additional files/aliases. Tracked source stays clean.
 Owner is `/root/string_design`, coordinator `/root`; reuse by another task
 requires a handoff. Main and all historical baseline builds/results remain.
 

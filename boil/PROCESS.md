@@ -23,14 +23,14 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 13:27 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 13:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains unlanded. Frozen8ce release/debug matrices each pass640jobs/41,440tests; release full/stress11 pass. Debug full fails exactly three thread-pool task-reference tests. Ten original controls and trace identify stale alignment padding in opaque _PyParkingLot_Park. Bounded precise-Park prerequisite clears design review; current worktree merges primary64ab asd8be2e2c36d and implements the fix. Six-file candidate94d68f30d309 clears source review after ABI/type/structured-semaphore corrections. Both gate0s pass1,924 and linked audits; all71 bounded checks pass with no skips/5,857collections/zero fallback and unpinned, including ten off+kill runs per thread family. Class-negative/restoration passes. Both fresh120-transaction campaigns now complete on1bfe with39 protected selectors and zero fallback. Exact raw-wrapper successorce2ac8 is unqualified and rebuilding after preserved-boundary review8740; full normal/kill/ASan/stress/extras remain; explicit bounded carry-forward keeps old31/11 evidence historical. No full profile launches before exact plan/pilot review. Old8ce receipts remain historical; O1 stays candidate. After bounded proof: new qualification plan, required full/kill/ASan/stress/extras, landing review/integration. Rung3a writers/PyMem,3b checker residue,3c detached-state roots and rung4 support follow |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains unlanded. Frozen8ce release/debug matrices each pass640jobs/41,440tests; release full/stress11 pass. Debug full fails exactly three thread-pool task-reference tests. Ten original controls and trace identify stale alignment padding in opaque _PyParkingLot_Park. Bounded precise-Park prerequisite clears design review; current worktree merges primary64ab asd8be2e2c36d and implements the fix. Six-file candidate94d68f30d309 clears source review after ABI/type/structured-semaphore corrections. Both gate0s pass1,924 and linked audits; all71 bounded checks pass with no skips/5,857collections/zero fallback and unpinned, including ten off+kill runs per thread family. Class-negative/restoration passes. Both fresh120-transaction campaigns now complete on1bfe with39 protected selectors and zero fallback. Exact raw-wrapper successorce2ac8 is unqualified; all three builds pass after preserved-boundary review8740; full normal/kill/ASan/stress/extras remain; explicit bounded carry-forward keeps old31/11 evidence historical. No full profile launches before exact plan/pilot review. Old8ce receipts remain historical; O1 stays candidate. After bounded proof: new qualification plan, required full/kill/ASan/stress/extras, landing review/integration. Rung3a writers/PyMem,3b checker residue,3c detached-state roots and rung4 support follow |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
@@ -42,7 +42,7 @@ record and is updated at every landing.
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
 | P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
-| I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target is no kernel-geomean slowdown and explained individual regressions; it is not established by the existing microbenchmark instruction gains |
+| I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target, revised2026-10-29, is roughly2× upstream interpreter throughput on the declared application/kernel suite, with individual regressions and memory/pause tradeoffs reported; it is not established by the existing microbenchmark instruction gains |
 
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug
@@ -495,8 +495,8 @@ evidence forward at8ce, supported by body correspondence42350872, all seven
 opaque caller contracts, new real-Park/class controls and the required fresh
 full chain. No old receipt is renamed as new-head20/20; this is a bounded
 ruling, not a general reuse rule. Revised proposal4b87878d preservesca275v1.
-After clean fixup commit and source/native/helper rebinding, each default and
-O1-debug repeat plan must run20 fresh individual selections of EACH of three
+After clean fixup commit and source/native/helper rebinding, each completed default and
+O1-debug repeat plan required20 fresh individual selections of EACH of three
 thread-pool regressions and BOTH eval-probe methods, plus20 complete combined
 orders of the three thread modules and test_gc:120 transactions per build.
 Protect39 actual selectors. The four-module listing has501 cases; measure
@@ -550,7 +550,20 @@ landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
 2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45,11:45 and12:45 PDT.
-The next is due about13:45 PDT while work continues.
+The 13:45 update records the new 2× target and revised validation policy.
+The next is due about 14:45 PDT while work continues.
+
+The revised [pre-JIT performance roadmap](design/work/pre-I-performance-roadmap.md)
+sets roughly 2× whole-workload interpreter throughput as the target before JIT.
+It also supersedes the blanket twenty-pass rule prospectively. Use fail-old/
+pass-new controls, one affected-module pass per relevant configuration and
+broad coverage early; reserve expensive repetition for a named hypothesis,
+recorded exposure and bounded stopping rule. Existing 20/20 receipts remain
+historical. No completed campaign is automatically repeated after a small
+source change, and no old receipt is relabeled as a new-source pass. Current
+ROOTS 2b still needs its fresh mode/full/stress/ASan/extras landing gates.
+The fresh ASan14+sort/functools union may run as one 16-module campaign with
+exactly the existing accepted allocator filter and actual kill/stress 0.
 
 ## 1. The loop
 
@@ -698,7 +711,7 @@ quick-test. Each rung goes through all of it.
 | 0 | build the tree, `python -c pass`, a smoke set of test files (grammar, opcodes, builtin, dict, list, tuple, class, generators, capi) | after every change that builds; a minute |
 | 1 | the rung's targeted test files (`gate.sh 1 BUILD test_a test_b ...`) | before every commit |
 | 2 | the full suite on the release build; the root counters summed with no stack-walk fallback | at each milestone within a rung |
-| 3 | the full suite on the debug build, `-u cpu test_cext`, `make regen-cases clinic` leaving the tree unchanged, `Tools/boil/traverse_audit.py --check` (every type with references and no or a partial traverse is in `Tools/boil/traverse_allow.txt` with a reason), the root counters with no fallback; and for a rung that touches the collector, the roots, the object layout or the eval loop, the verification set: the full suite on debug under `PYTHON_GCVERIFY=kill`, the ASan build on the hazard list of note 11 section 8.2 under kill, `PYTHON_GCSTRESS=1000` on the stress set, and twenty runs of each eval-loop probe | at the rung end, before the landing review |
+| 3 | the full suite on the debug build, `-u cpu test_cext`, `make regen-cases clinic` leaving the tree unchanged, `Tools/boil/traverse_audit.py --check` (every type with references and no or a partial traverse is in `Tools/boil/traverse_allow.txt` with a reason), the root counters with no fallback; and for a rung that touches the collector, the roots, the object layout or the eval loop, the verification set: the full suite on debug under `PYTHON_GCVERIFY=kill`, the ASan build on the hazard list of note 11 section 8.2 under kill, `PYTHON_GCSTRESS=1000` on the stress set, and the affected eval-loop root controls, with additional repetition justified by a specific failure hypothesis | at the rung end, before the landing review |
 | 4 | the internal benchmark set recorded (`boil/bench/run.py`, label = the step) and the measurement section written with attribution | at the step end |
 
 Modules this machine does not build (`_ssl`, `_hashopenssl`, `_decimal`,

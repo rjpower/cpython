@@ -3797,3 +3797,63 @@ A coordination delay was corrected: the reviewer had completed its prior turn,
 so queued messages did not activate it. Root explicitly restarted both bounded
 reviews and received separate verdicts. No evidence or source changed during
 that wait. Next substantive hourly report remains13:45 PDT.
+
+### 13:45 PDT: target roughly 2× before JIT; replace blanket repetition
+
+The user sets roughly twice upstream interpreter performance as the pre-JIT
+goal, using holistic, clean, established techniques. New coordinator roadmap
+pre-I-performance-roadmap.md defines the elapsed application/kernel score,
+individual regressions and memory/pause guardrails, the GC landing path and
+the IR/value/collector work. It makes the first trustworthy wall-time baseline
+an early milestone instead of waiting until every planned optimization lands.
+No technique is assigned a speculative multiplicative speedup.
+
+The old20 rule came from note11 section8.2, without measured failure rates or
+a stopping model. Both large old matrices passed; the full suite found the
+missing thread case. Its original failure, root attribution and classification
+negative supplied the causal evidence. PROCESS gate3 and note11 now replace
+blanket20 prospectively with fail-old/pass-new controls, one affected pass per
+relevant configuration, broad coverage early and hypothesis-driven bounded
+repetition. Existing receipts and cheap internal hazard probes stay unchanged.
+The current2b campaign will not restart20 iterations. The ASan14+2 union may
+run once as16 modules with the same exact allocator exclusion and actual mode.
+
+ROOTS ce2ac's release, O1-debug and ASan make-only builds all pass; ASan's
+original linked audit failure is closed at build level. All three expanded
+inventories have281 unchanged paths, five changed and no alias changes.
+Comparison67-artifact manifesta15b8 clears independent evidence review26e17:
+default/debug function maps match; ASan changes only the two raw wrappers'
+precision membership. Selected unwind/root-location equivalence and identical
+error strings are derived evidence; raw whole-image code equality is not claimed.
+An actual four-semaphore supplement2973/dcb0 closes a symbol-selection hole and
+is under independent review. Current affected24-transaction plan is source-only;
+full normal/kill/stress/ASan/extras and landing remain. No new source test runs yet.
+
+Owned upstream make closuredddc independently clears53446:584 products, source,
+tools and14 accepted configuration files unchanged, zero build-internal import
+failures. A diagnostic/three valid wrong-origin controls/one18-module qualification
+package is reviewed; a zero-executed JUnit guard needs a narrow host-tested fix
+before launch. No standalone upstream qualification or elapsed benchmark ran.
+Remaining SDK dependency and eval-flag comparison limits are explicit.
+
+Agents continue the GC bridge/affected adapter, independent review and baseline
+qualification helpers. Next ownership is actual H3 union/statistics then bounded
+H1;6e and remaining GC correctness can overlap under distinct interfaces. H2
+root maps wait for precise readers/spans. Generations, safe call windows and
+linear private-string growth address structural costs before the JIT. Next
+hourly update about14:45 PDT.
+
+At13:48 the actual semaphore supplement clears independent review4b68. Root
+accepts the1bfe120 results as historical reliability evidence under the complete
+source/native/root bridge, without claiming new-head passes or whole-image byte
+equality. Root reads the complete affected adapter681290 and plan8c7314, then
+grants24 once-only checks. Default lane4754 and debug lane30431 start; debug off
+then kill share one sequential lane. Unexpected failures stop further launches.
+
+The upstream JUnit guard fix clears review1ae2 and root grants exact e907 launch.
+Its first diagnostic process returns0, but the origin verifier rejects the
+legitimate synthetic pyexpat.errors namespace. No wrong-origin controls or
+correctness modules run. Failure is preserved; author prepares a narrow
+parent-extension ownership classification and meaningful host negatives for
+review, with no target retry yet. This is a verifier limitation, not evidence
+of an upstream interpreter failure. No benchmark or speedup is reported.

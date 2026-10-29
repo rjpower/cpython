@@ -211,8 +211,10 @@ The coordinator first authorized owned-source setup. The
 detached exact321925 checkout,5806 source hashes, ownership and concrete
 separate configure/make-only plans and independent reviews. A later exact
 configure-only grant completed successfully with unchanged source/tools
-and a jointly frozen14-product configuration closure. Make, target
-interpreter, separate tests/probes and benchmarks have not run. Main and
+and a jointly frozen14-product configuration closure. A separate reviewed
+make-only grant then completed successfully and froze584 products,
+including its disclosed internal interpreter actions. Standalone
+qualification, origin witnesses and benchmarks have not run. Main and
 all historical baseline products/results remain unchanged. Configuration
 success does not close runtime import binding or qualify a comparison.
 Actual configuration preserves upstream's empty CFLAGS_CEVAL while fork

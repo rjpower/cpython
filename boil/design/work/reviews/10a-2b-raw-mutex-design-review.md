@@ -368,3 +368,113 @@ the coordinator's bridge/affected-repeat ruling are still required before
 separately reviewed smoke, affected checks and fresh full-chain plans.
 No old120 relabel, automatic carry-forward/repetition, tailcall build,
 landing, baseline or timing grant follows from this clearance.
+
+## Round 5: COMPARISON_EVIDENCE_CLEAR, selected closure only
+
+Verdict: **COMPARISON_EVIDENCE_CLEAR**, 2026-10-29. Reviewed frozen
+`transition/comparison-manifest.json`
+`a15b8cf1ef9981d94c05d42fac5ab7b94a6360b20fe28e550e7f2d18d026c555`
+and `COMPARISON-READY.md`
+`8614118610d6a5b1767bcf7ccafa24eaa4d716155827d26b302da261009c6d5d`.
+All 67 indexed artifacts match. The clean actual successor is
+`ce2ac8991eebb1bbb10698ff2d07a79bd4cba452`, with exactly the approved two
+header markers and unchanged bodies. Its three make/build/cleanup receipts
+record success and 286 newly frozen paths each, explicitly unqualified.
+No reviewer native command, metadata-tool rerun or owner edit occurred.
+
+The reviewer checked all 858 current default/debug/ASan product payload
+hashes, changed old/new preserved payload hashes and the exact new-source
+map. Literal comparisons report 281 byte-identical and five changed paths
+per build, no added/removed paths and no alias changes. The five are Python,
+bootstrap, freeze_module, testembed and the libpython archive. Full payloads
+and literal section/function differences remain retained. Thousands of
+function code hashes differ even where ranges match; this evidence does
+not establish raw-code equality or reduce all differences to build strings.
+
+All four default/debug ELF images retain their function-name/section/range/
+size maps. In every ASan ELF, only RawMutex Lock/Unlock change section
+membership, from `.text` to `py_gc_precise`; function sizes remain equal
+but many addresses and literal bodies change. This is the intended frame
+classification change, not native runtime qualification. Archive member
+lists and bytes remain separate from claims about executed code.
+
+Focused runtime CFI JSON is literally equal for default/debug. For ASan,
+the additional derived report rebases each actual FDE start and retains its
+size/CFA/register rules and CIE; those selected relative rules compare
+equal. Independently joining the retained selected FDEs to actual symtab
+records shows their starts and lengths equal the selected functions' full
+ranges on both sides, rather than merely overlapping them. The derivation
+is additional evidence; raw CFI addresses/hashes are not normalized away.
+
+The selected default DWARF differs in three fatal-string call values and
+debug in two. Allocated-section address decoding gives identical old/new
+string contents. Other selected local expressions, owner-relative live
+ranges and frame-base attributes agree. The one debug unmapped range is
+identical on both sides and has equal start/end: it covers no PC and remains
+unmapped. Its explicit closure is
+`cd4b4fa74d4d5f4d61127ac5f0b9256d273ffd423399166b78d39b3ecb4d7dca`.
+ASan's selected expression sequence, mapped owner-relative ranges and frame
+bases agree. Derived reports
+`a485bad33aab2d7fce46ea40d91ea1f7ad986680547c026035b67a443d94b7dc`
+and `555fa6ef2eb4f8b639e863d29e6648cf4b80946cf2cc555121922af429f9ba3c`
+preserve their limits and the literal differences.
+
+**Selection limit and narrow follow-up:** the actual decoded runtime set
+is Park/Unpark/UnparkAll, both RawMutex slow paths and, when outlined, both
+wrappers. The regex names `SemWait`, which is absent; the actual semaphore
+functions are `_PySemaphore_Init/Destroy/Wait/Wakeup`. Those are present
+in the changed runtime image and retain literal inventory evidence, but
+were not focused-decoded in this package. The named queue get caller lives
+in the byte-identical `_queue` extension rather than the selected runtime
+payload. Therefore this is not complete decoded callee-closure or blanket
+DWARF equality. The coordinator has requested a read-only semaphore metadata
+supplement before its carry-forward ruling; no new native gate or repetition
+is assigned by that request.
+
+The selected-frame evidence is coherent within these stated limits. The
+coordinator still decides historical `1bfe` 120-evidence carry-forward,
+affected checks and the fresh full ladder using the actual bridge and
+supplement. Old receipts retain their original source/product identities.
+No automatic reuse/repetition, native PASS, standalone test, O1 adoption,
+benchmark or landing follows from this comparison clearance. Diagnostic
+analysis-tool draft failures remain host-analysis history, not runtime
+failures or qualification retries.
+
+## Round 6: SEMAPHORE_SUPPLEMENT_CLEAR
+
+Verdict: **SEMAPHORE_SUPPLEMENT_CLEAR**, 2026-10-29. The separate
+`transition/semaphore-manifest.json`
+`dcb0eee3596789f23ecc4b6b12d1acf4ae9d07328db881351feb53bd515fc2e8`
+binds 34 matching artifacts, including `semaphore-supplement.json`
+`2973f7823ba2fcd06977352a8e375d30e48f7c77926bffeb79a20e8926859f13`.
+It preserves original comparison manifest `a15b8cf1` and source `ce2ac`.
+No new native build, test, probe or reviewer metadata-tool rerun occurred.
+
+The selector now names the four actual functions: `_PySemaphore_Init`,
+`_PySemaphore_Destroy`, `_PySemaphore_Wait`, `_PySemaphore_Wakeup` and their
+clones. Default/debug selected CFI is literally identical; ASan's additional
+relative FDE/CIE/CFA-rule comparison is equal. Independent FDE-to-symbol joins
+confirm each selected FDE starts at its actual function and covers its full
+size on both sides. Frame-base attributes agree across all three builds.
+
+Default/debug's complete selected location interval/expression lists agree
+at absolute PCs, including 25/10 inline-child intervals outside the narrow
+four-symbol owner filter. No owner-relative equality is claimed for those
+unmapped intervals. ASan has zero unmapped intervals and equal owner-relative
+ranges/expressions. Ten default and three debug changed constant addresses
+decode to identical original error strings; ASan's expression sequence is
+identical. The retained queue-module bytes and aliases agree old/new; its
+caller is correctly attributed to that extension rather than the main ELF.
+This closes round5's concrete semaphore selection gap within the named
+runtime closure, without claiming blanket decoded metadata equivalence.
+
+One nonblocking analysis-input bookkeeping point remains: the semaphore
+derived helper's internal `phase2` input points at the original root-metadata
+result, while its actual CFI/DWARF reads use semaphore-metadata files. The
+separate frozen 34-artifact manifest binds those actual files, so package
+closure and the reviewed comparison are intact. Correct that input label in
+any later helper revision; it does not require rerunning native qualification.
+
+The coordinator still owns carry-forward and the fresh affected/full scope.
+No old120 source/product relabel, automatic repeat/reuse, runtime PASS, O1
+adoption, performance or landing decision follows from this supplement.

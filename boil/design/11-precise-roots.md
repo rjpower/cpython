@@ -538,13 +538,13 @@ the `PyUnicode_Join` repro with the barrier compiled out.
 
 | Hack-register row (note 08 section 3) | Replaced by | Proof |
 |---|---|---|
-| `-ftrivial-auto-var-init=zero` for the whole build | precise frames are not scanned; opaque frames' stale locals are retention, and promotion is the remedy for one a test meets | flag removed; stale-root probe 100/100 on both builds; section 8.2 20/20 |
+| `-ftrivial-auto-var-init=zero` for the whole build | precise frames are not scanned; opaque frames' stale locals are retention, and promotion is the remedy for one a test meets | flag removed; stale-root probe 100/100 on both builds; section 8.2 hazard-driven qualification |
 | 16 KB clears before and after a collection, and in `gc.collect()` | the entry paths are precise; the walk starts at the captured context | `_PyGC_LiveClearStack`, `_PyGC_ClearStackBelow`, `_PyGC_ClearStackBuffer` deleted; the same probe |
 | 1 KB clear at each C entry to the eval loop | the eval loop's frame is precise; its prologue's saves are the caller's | `_PyGC_LiveClearEvalStack` deleted; the same probe |
 | `_PyGC_CLEAR_ARRAY` after handler calls; scratch arrays zeroed | the arrays are in precise frames, their contents anchored or in a span | the macro, its three uses and the `= {0}` in `VALUES_TO_OBJECTS` deleted; suite |
 | popped `_PyValueRoot` slots cleared; saved registers cleared after use | a popped span in a precise frame is not scanned; in an opaque frame it is a stale local, retention under the same rule as the flag's removal; start contexts are read only by the walk | the clear in the pop, the `entry_regs` memset and the clear on attach deleted; opaque pushers keep their pushes |
 | eval-loop activation ranges; `Py_NO_INLINE` on about 25 helpers | the walk's classification; helpers precise (4.3) | `_PyEvalActivation`, `scan_activations`, `_PyEval_EvalFrameEntry` deleted |
-| the about 12 tests that skip or allow a survivor | the walk, the call layer and `gc.collect()`'s wrapper precise | each test in 8.2 without its skip, 20/20 on both builds |
+| the about 12 tests that skip or allow a survivor | the walk, the call layer and `gc.collect()`'s wrapper precise | each test in 8.2 without its skip, on both builds under the revised qualification policy |
 | one-past-the-end pointer in a callee-saved register | precise frames not scanned (6.1) | the asyncgen tests pass on release builds; no end-aliased word owned by a precise frame |
 | C-local PyMem arrays reachable only through the transitive scan | spans and `_PyGCRoot` (6.2) | the suite with the transitive scan off for core frames; the PyMem mode reports nothing |
 | inline-fallback collection scans everything | allocations are safepoints (4.2) | `scan_activations` and `ALLOCATING` gone |
@@ -572,8 +572,15 @@ the object at the first collection 100 times in 100. test_gc gets it as
 
 ### 8.2 Skips and allowances removed
 
-Each must pass 20 times in 20, alone and in its module's full order, on
-dev-default and dev-debug.
+Prospective policy revised 2026-10-29: the earlier rule required 20 passes
+alone and in full-module order on default/debug. Those completed receipts
+remain historical; twenty was a heuristic, not a calibrated confidence bound.
+Future changes use fail-old/pass-new and invariant-breaking controls, one
+complete affected-module pass per relevant build/mode, and broad milestone
+coverage early. Additional repetition needs a named failure hypothesis,
+recorded exposure and a bounded stopping rule. The strict stale-root probe
+and kill/ASan/stress obligations remain; no skip or known failure is waived.
+See the [coordinator roadmap](work/pre-I-performance-roadmap.md).
 
 - test_weakref: `test_clearing_weakrefs_in_gc`,
   `test_weak_keys_destroy_while_iterating`,
@@ -771,8 +778,8 @@ reviewed work doc (`boil/design/work/10a-<n>.md`) and ends at gate level 3
 |---|---|---|---|
 | 0 | 0.5 | Baseline counters (9); c_roots committed as `boil/tools/measure/c_roots.py`; measurements at ac59664de47; the ASan build tried | `python -c pass`; counters on collector_live16 |
 | 1 | 2.5 | The C mode (2.1) and its negative tests, first; the walk (3.1 to 3.4), the capture stub and detach unwind, classification, the loader generation; the data-stack and chain visits, the entry visitor and the return order (4.3, 4.4); the inline audit; kill and retain modes, injection and stress; then `Py_GC_PRECISE` on the eval loop, the handlers and the entry paths, each passing the C mode; allocations as safepoints; activations, clears, `_PyGC_CLEAR_ARRAY` and the inline full scan deleted | the negative tests; the C mode on the eval loop's hand-written parts; the inline audit; the compiled-stack walk tests; the injection tests; the probe; test_gc; test_weakref, test_generators, test_coroutines, test_asyncgen, test_capi, test_ctypes; the loader test; both suites; stress on the rung's set |
-| 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 at 20/20 |
-| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 at 20/20 without the flag |
+| 2 | 1 | The ceval.c helpers and the call layer precise, with spans and `Py_GC_ARGS_ANCHORED`; the 8.2 skips removed | the C mode on call.c alone; the borrowing test; the probe's call-layer cases; test_call, test_capi, test_descr, test_context, test_asyncgen, test_weakref, multiprocessing; both suites; 8.2 hazard-driven qualification |
+| 3 | 1 | PyMem: the spans of 6.2, `_PyList_AsTupleAndClear` reordered, the writers' `_PyGCRoot`, the PyMem mode; kill mode and its demonstration; transitive scan off for core frames once the mode is clean; `-ftrivial-auto-var-init=zero` removed; the struct scan deleted | test_sort, test_functools, test_descr's mro tests, test_json, test_unicode; the demonstration; both suites; the verifier gate; 8.2 hazard-driven qualification without the flag |
 | 4 | 0.5 | Gate level 4: `step10a` recorded, note 06 section 20 with measurements and attribution, the hack register updated | `boil/bench/run.py --set all --metric instr,rss` and the memory group's time on an idle machine |
 
 **What blocks a rung from landing**, at any time and at the hard stop: a

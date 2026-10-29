@@ -112,7 +112,8 @@ C API or library reference by the rung that makes it.
 | `PyInterpreterConfig` with `use_main_obmalloc` and `PyInterpreterConfig_OWN_GIL` is refused with `InterpreterError` (note 13 section 7.2) | 7a rung 1 | a shared heap is one collection domain; a domain with two GILs would need a stop-the-world across them, which belongs to step 7's collector policy, not to a queue fix | one GIL per domain by stopping the other GIL's threads at each mark (step 7's problem) |
 | an opcode-level trace function (`f_trace_opcodes`) or a `sys.monitoring` INSTRUCTION callback that rebinds a local between two words of one expression sees the rebound value where upstream's stack kept the old one; documented in `Doc/library/sys.monitoring.rst` and `Doc/reference/datamodel.rst` | compiler fix (copy propagation) | the pass folds a local's load into its reader when no op between them can run Python code; per-instruction events fire before every word, so no compile-time rule covers them | no fold under any instrumentable word, which is every fold |
 | `PyDict_Watch()`, `PyType_Watch()` and `PyUnstable_Code_SetExtra()` refuse an object another interpreter owns (`ValueError`, `ValueError`, `SystemError`); `PyUnstable_Code_GetExtra()` on a foreign code object reports no extra; the reserved dict watcher ids are exempt (note 13 section 3.4) | 7a rung 2 | a watcher bit or extra slot is an index into one interpreter's table; set by another interpreter, it names a different watcher or free function in the owner's table | the registering interpreter kept beside each bit or slot: a field per watched object, and no answer to which interpreter runs a foreign watcher when the object dies on its owner |
-| Sampling binary records use a new format generation, a 32-bit opcode field with UINT32_MAX for None, and a generated handler-schema identity; old versions or incompatible schemas are rejected | H3-1 design decision, 2026-10-29; not implemented | The byte codec already loses existing handler IDs above 254; different builds of this fork can assign different IDs at the same Python version. IDs must survive frame deduplication and serialization, and names must match the captured schema | A byte fallback, reserving a valid 16-bit ID as None, or naming a foreign schema using the reader's current table |
+| Sampling records use a new format generation, 32-bit opcode with UINT32_MAX for None and verified target handler-schema identity. Remote debug offsets use a new cookie/layout protocol and size-checked prefix; incompatible layouts, target schemas and files are rejected | H3-1 design decision, 2026-10-29; not implemented | IDs above 254 are already lost. Same Python version can hide different numbering; identity must come from the target, be checked before interpretation and retained by the writer | Byte/sentinel fallback, sampler-local identity without target proof, cross-schema remapping or old-layout decoding |
+| Remove C HAVE_ARGUMENT/MIN_SPECIALIZED_OPCODE/MIN_INSTRUMENTED_OPCODE/IR_FIRST_ONLY_HANDLER and their existing Python exports/re-exports inventoried in H3-1 section 5; preserve unrelated EXTENDED_ARG/name APIs | H3-1 final renumber; coordinator decision 2026-10-29, not implemented | Numeric separators cannot describe the generated domain; HAVE_ARGUMENT=41 already misclassifies WITH_EXCEPT_START. Existing hasarg/_opcode.has_arg and generated kinds express the properties | An approximate separator, silently changing its meaning or an old-ID compatibility fallback |
 
 ### 0.3 Hand-off ledger
 
@@ -187,6 +188,14 @@ POP_JUMP already includes truth conversion. Frame passing and call-window
 producer placement require measurements and H1/H2 liveness/root contracts.
 Compare/branch encoding needs its own semantic and field-width review.
 Scalar range-loop lowering remains outside this bounded assignment.
+
+H3-1's second independent design review returned IMPLEMENT after closing
+actual-target schema provenance, pristine-word/runtime-state admissibility,
+and threshold-export decisions. Begin its first stage under existing IDs;
+close consumers and remote transport before final renumbering. The
+reviewed design and both rounds are in work/H3-1.md and work/reviews/.
+Stage 1's generator ownership must remain separate from ROOTS's C checker
+and queue/roots test-hook changes. No typed operation is part of this rung.
 
 The next phase completes 6e, H and generations, with file ownership
 allowing independent parts to overlap. Checkpoint I then compares the

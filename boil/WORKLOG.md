@@ -2522,3 +2522,22 @@ resolve roots fixture approval and validate provenance repair, answer H3
 review, then assign the unfinished executable verification manifest when
 an implementation slot frees. README/PROCESS and Loom status reflect
 these boundaries. Next hourly update due about 07:45 PDT.
+
+### 07:00 PDT: handler-domain design accepted; stress witness gap
+
+H3-1 round1 returned REVISE on actual-target schema transport, pristine
+construction/runtime-state distinction and misleading threshold exports.
+The coordinator ruled explicit threshold removal and sampler protocol
+compatibility changes. The author revised the design; independent round2
+returned IMPLEMENT, no remaining design blocker. Both source/artifact-only
+reviews are preserved. First implementation stage preserves emitted IDs;
+consumer/transport closure precedes renumbering and its pyc magic change.
+
+ROOTS's manifest design found that parsed verifier state does not reveal
+stress_every. Coordinator source review also found gc_alloc_in_reftracer
+sets stress to1 then0 inside the test_gc worker, silently disabling an
+ambient stress interval for subsequent tests. QUEUES is preparing an
+isolated read-only getter and restoration fixture outside its frozen tree.
+Current normal gates continue; complete stress11 coverage is not claimed
+until this prerequisite is fixed. Earlier source-restored queue controls
+remain scoped evidence, rather than proof of uniform worker stress.

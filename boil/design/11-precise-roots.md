@@ -416,7 +416,7 @@ collecting calls for root_check.
 
 ## 5. The JIT
 
-**Tier 0** (note 05) compiles a block into a tail-call handler whose inline
+**Tier 0** compiles a block into a tail-call handler whose inline
 paths store every result in its slot and whose other instructions call
 handlers. Its registers (r12 to r15: frame, slot pointer, thread state,
 `next_instr`) hold no object. At every call every live value is in a frame
@@ -999,7 +999,7 @@ subset, the functions whose frames held the only root of a live object;
 ## 14. Sources
 
 - Note 06 sections 3.4, 6, 14.2, 14.3, 15.2, 15.4, 16.3, 17.2, 18 and 19;
-  note 08 sections 3 and 6; note 09 section 2; note 10; note 05.
+  note 08 sections 3 and 6; note 09 section 2; note 10.
 - Code at ac59664de47: Python/gc_trace.c (`scan_stack`, `scan_structs`,
   `live_mark_roots`, the capture functions), Python/gc_live.c
   (`collect_from_entry`, `_PyGC_LiveCollectHere`), Python/ceval_gil.c

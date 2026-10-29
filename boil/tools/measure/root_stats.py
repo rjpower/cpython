@@ -79,8 +79,18 @@ def main(argv):
         report(*load([out]))
         return rc
     if len(argv) == 3 and argv[1] == "check":
-        total, lines = load(argv[2:]) if os.path.exists(argv[2]) else (Counter(), 0)
+        # A gate run collects thousands of times; no file or no record means
+        # the counters were not written, not that there was nothing to count
+        # (the 2026-10-28 whole-project review found this passing on a
+        # missing file).
+        if not os.path.exists(argv[2]):
+            print(f"roots: no counter file at {argv[2]}", file=sys.stderr)
+            return 1
+        total, lines = load(argv[2:])
         n = total["collections"]
+        if lines == 0 or n == 0:
+            print(f"roots: {argv[2]} has no collection records", file=sys.stderr)
+            return 1
         print(f"roots: {lines} processes, {n:,} collections, "
               f"fallbacks {total['fallbacks']:,}, unpinned {total['unpinned']:,}"
               f" ({total['unpinned'] / n if n else 0:.2f} per collection)")

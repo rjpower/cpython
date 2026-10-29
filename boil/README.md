@@ -12,9 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 09:48 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 10:08 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
-component9dd24bf42c4, worker setup093b9d2a1c3 and
+component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 09:48 PDT; evidence is from local commits and retained logs.
+2026-10-29 10:08 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -126,13 +126,22 @@ shared-heap regression. Whole-module execution preserves internal order;
 actual driver/worker state, exact counts/skips and all imported helpers are
 bound to the contract. The first full-module pilots pass 2,041 tests each,
 with 68 debug or 83 release intrinsic skips and none of the 32 protected
-selectors skipped. At09:44, release has8 complete iterations and debug7 of20 each, with no
+selectors skipped. At10:06, release has16 complete iterations and debug10 of20 each, with no
 validated failure/fallback; both matrices remain in progress. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Full normal/kill,
 stress, measurements and landing review remain. Report-only detached-state
 unpinned counts stay assigned to3c. O1 is approved for this qualification,
 not adopted as shared policy; integration debug still uses Og.
+
+H3's monitoring storage design now uses fixed absolute int lines and uint16
+handler tokens. Bounded probes confirmed that valid backward AST locations
+break the old line codec. Independent review requires all five decoder
+callers and the fork's actual test-hook ABI to be covered before implementation.
+The private API/layout decision is recorded in PROCESS section0.2.
+The pre-I [string design](design/work/pre-I-linear-string-concat.md) is ready
+for review; a separate Unicode storage/ABI audit continues. No string
+implementation or monitoring-storage implementation is approved yet.
 
 Shared gate cleanup now holds the build lock until its sweep finishes;
 an interrupted waiter cannot sweep another run's workers. The controlled

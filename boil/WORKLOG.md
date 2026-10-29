@@ -3083,3 +3083,31 @@ work/pre-I-linear-string-concat.md: alias/escape proof, frame/monitoring/f_local
 and C-data lifetime constraints, failure behavior and linear-growth acceptance.
 No string code/test/benchmark/build work begins before design review. H3's
 storage design remains with its owner; no other lane is merged during gates.
+
+
+### 10:08 PDT: monitoring storage review and string design
+
+All three agents remain active. At10:06, ROOTS release has16 complete matrix
+iterations/525 validated jobs and O1debug10/349 of20/640 each. Zero fallback
+in completed jobs; release-full host waits for its validated completion.
+Source8ce and frozen matrix/full-v2 helpers are unchanged. No full run began.
+
+H3's eight authorized bounded children on dc02 confirm valid-AST failures in
+the old line codec: backward lines corrupt/drop release events and abort Og;
+INT_MAX also aborts Og. Immutable locations agree before monitoring. The
+single proposed replacement is fixed int absolute lines plus uint16 originals.
+Source/layout memory forecasts are explicit; actual new allocations are unrun.
+Coordinator records the private API/layout decision before implementation.
+
+Initial storage design2738f4d3/fixture1bf0f9cd needs revision. Coordinator found
+two omitted active decoder calls in legacy_tracing.c; ROOTS found two pointer
+METH_O hooks incompatible with this fork's PyValue method ABI. Owner is fixing
+the inventory, bounds, ownership and exact hooks. No storage implementation or
+shared-hunk grant is issued while independent review continues.
+
+The separate pre-I string design1616f77f is frozen for review, with mutation
+disabled in its proposed first rung. Its author now audits Unicode capacity
+storage/ABI and certificate placement in a separate document. No string native,
+test or benchmark work is authorized. Queue2 classifier hold is unchanged.
+Once-only tailcall/retain recommendations are assigned to10a4/H1, without new
+ROOTS2b blockers; retain needs its own reclamation semantics.

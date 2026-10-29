@@ -3864,6 +3864,14 @@ _PyGC_TraceCount(PyInterpreterState *interp)
     return interp->gc.trace == NULL ? 0 : interp->gc.trace->count;
 }
 
+int
+_PyGC_TraceGetVerifyMode(PyInterpreterState *interp, int *extra)
+{
+    struct _gc_trace_state *ts = interp->gc.trace;
+    *extra = ts == NULL ? 0 : ts->live_verify_ex;
+    return ts == NULL ? VERIFY_OFF : ts->live_verify;
+}
+
 PyObject *
 _PyGC_TraceGetHoles(PyInterpreterState *interp)
 {
@@ -4197,6 +4205,13 @@ _PyGC_TraceVerify(PyThreadState *tstate)
 Py_ssize_t
 _PyGC_TraceCount(PyInterpreterState *interp)
 {
+    return 0;
+}
+
+int
+_PyGC_TraceGetVerifyMode(PyInterpreterState *interp, int *extra)
+{
+    *extra = 0;
     return 0;
 }
 

@@ -9,6 +9,8 @@
 #   3  full suite (debug build), -u cpu test_cext, regen leaves the tree unchanged,
 #      Tools/boil/traverse_audit.py --check
 #   4  internal benchmark set recorded as boil/bench/results/$GATE_LABEL.json
+# Levels 2/3 accept only the optional regrtest pair --python WORKER_COMMAND,
+# for an instrumented worker launcher; neither accepts a narrowed test set.
 # Levels 2 and 3 also sum the live collector's root counters over the suite
 # and fail on a stack-walk fallback (note 11 section 10).
 # Environment: GATE_JOBS (default 16), GATE_NO_BUILD=1 (level 0 skips make),
@@ -27,6 +29,15 @@
 main() {
 set -eu
 level=$1; build=$2; shift 2
+case $level in
+2|3)
+    if [ "$#" -ne 0 ]; then
+        if [ "$#" -ne 2 ] || [ "$1" != --python ]; then
+            echo "gate $level accepts only --python WORKER_COMMAND" >&2
+            exit 2
+        fi
+    fi ;;
+esac
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 build=$(cd "$build" && pwd)
 py="$build/python"
@@ -86,10 +97,10 @@ case $level in
     # an -i before a -m makes every unmatched test run (filter.py match_test).
     run "$py" -m test -q --timeout 600 -j"$J" "$@" -i "$IGNORE" ;;
 2)
-    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE"
+    run "$py" -m test -q --timeout 900 -j"$J" -i "$IGNORE" "$@"
     roots ;;
 3)
-    run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE"
+    run "$py" -m test -q --timeout 1200 -j"$J" -i "$IGNORE" "$@"
     roots
     run "$py" -m test -q -u cpu test_cext
     # Status and content: a generated file already modified before the

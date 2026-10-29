@@ -51,8 +51,9 @@ and 3):
    a full-heap mark and sweep (`gc_trace.c`, `gc_live.c`) with a
    referrer-first sweep for deallocators that read their referents;
    weak references in a side table; finalizers and destroy hooks queued
-and drained at permitted execution points. Owner-correct routing is
-   implemented on the unlanded 7a branch (note 13). Roots are precise where frames
+   and drained at permitted execution points. Owner-correct routing is
+   implemented on the unlanded 7a branch (note 13). Roots are precise
+   where frames
    are marked `Py_GC_PRECISE` and checked by the C-mode checker, and
    conservative elsewhere (an attributed DWARF stack walk, PyMem blocks,
    data segments; note 11). Verification modes: `PYTHON_GCVERIFY=retain`
@@ -126,7 +127,7 @@ at most two rounds, implement in small gated commits on a step branch,
 landing review on a detached checkout, a `--no-ff` merge into
 integration by the coordinator, a quick-test of the merge on a fresh
 detached checkout, and a whole-project review at each step's end. One
-Opus agent per step owns a worktree and a branch; the coordinator owns
+implementation agent per step owns a worktree and a branch; the coordinator owns
 integration and PROCESS.md. Every brief carries a clock deadline per
 rung, a hard stop, a test ladder (small first), a report every 30
 minutes and an explicit scope cut.
@@ -152,9 +153,10 @@ and run the whole-project review at each step end.
   behaviours, variable-width encodings or dual representations; a fixed
   form with a measured limit (the 4,095-slot shape limit, the 12-bit
   field) is the pattern. A design that proposes a fallback is sent back.
-- Gates are correctness gates. Performance is recorded with attribution
-  at every rung and never tuned for; a regression attributed to a later
-  step is left on the table (PROCESS.md §3, note 06 section 6).
+- Intermediate gates establish correctness and record performance with
+  attribution. Checkpoint I separately requires pre-JIT interpreter
+  parity; an unresolved deficit cannot simply be deferred to the JIT
+  (PROCESS.md §§0.4 and 3).
 - Tests are the oracle: a safety test names its negative control and the
   record shows the control failing; evidence is recorded at the event,
   not at setup; the test asserts the invariant, not a symptom.

@@ -3492,3 +3492,23 @@ that production-body edit is not yet granted. Compare parser support and exact
 feature/error-path equivalence before ruling. Preserve failed attempts and
 continue checking every platform branch. This refines the pending audit work;
 it is not a runtime success or a new exclusion.
+
+
+### 11:48 PDT: structured semaphore selection approved
+
+The coordinator reads exact proposal688badc429a7 and independent source
+assessment, then grants the three-scalar-statement timed-wait refactor in
+parking_lot.c. A bool records whether monotonic wait was selected; it is set
+after sem_clockwait returns even on error. The realtime wait runs only when
+not selected. Feature absent/false therefore uses realtime once, feature true
+uses monotonic once, and negative timeout still uses sem_wait once. No new
+errno write/callback/root effect or platform-backend change is introduced.
+
+A proper parser continuation solution would stitch partial if/else across
+macro alternatives and duplicate common AST tails; that broader analysis is
+not replaced with directive skipping. The permanent explicit-selection source
+form must pass copied actual-old/new-body feature×timeout×error controls,
+old-form-parser failure/new-form success and the inactive-branch root negative,
+then full source and linked inline audits plus native builds/fixture tests.
+No runtime success or native Windows coverage follows from the proposal.
+Combined refreeze/peer review remains required before final qualification.

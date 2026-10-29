@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 11:45 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:48 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 11:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:48 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -146,7 +146,9 @@ with a new exact-slot/unpark fixture. V1's method-ABI correction and DWORD-only
 parser extension are authorized; focused results and a new freeze remain pending.
 The release inline-audit failure is retained, with no branch/effect waiver.
 After the DWORD controls pass, checking the full helper reveals a CPP-spanning
-else unsupported by the parser; a minimal correction is under review.
+else unsupported by the parser. Exact structured selection refactor688badc429a7
+is approved with old/new-body feature/timeout/error equivalence controls;
+refreeze, source/linked audits and native results remain pending.
 The narrower process-pool matrix does not cover this case. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,

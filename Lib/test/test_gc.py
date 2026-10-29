@@ -2847,10 +2847,38 @@ class TracingCollectorTests(unittest.TestCase):
         # A reference tracer runs with collection deferred: one that
         # allocates under stress sees no collection inside it, and the
         # allocations around it still collect.
+        before = _testinternalcapi.gc_get_stress()
         events, inside, total = _testinternalcapi.gc_alloc_in_reftracer(200)
+        self.assertEqual(_testinternalcapi.gc_get_stress(), before)
         self.assertGreaterEqual(events, 200)
         self.assertEqual(inside, 0)
         self.assertGreater(total, 0)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_stress_mode_state(self):
+        code = "import _testinternalcapi; print(_testinternalcapi.gc_get_stress())"
+        for every in (0, 1000):
+            with self.subTest(every=every):
+                rc, out, err = assert_python_ok(
+                    "-c", code, PYTHON_GCSTRESS=str(every))
+                self.assertEqual(int(out), every)
+        rc, out, err = assert_python_ok(
+            "-E", "-c", code, PYTHON_GCSTRESS="1000")
+        self.assertEqual(int(out), 0)
+
+        # A fixture's temporary stress=1 must preserve the inherited interval.
+        # This child observes startup state; no setter repairs it for the test.
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            before = _testinternalcapi.gc_get_stress()
+            assert before == 1000, before
+            _testinternalcapi.gc_alloc_in_reftracer(20)
+            after = _testinternalcapi.gc_get_stress()
+            assert after == before, (before, after)
+            print(before, after)
+        """)
+        rc, out, err = assert_python_ok("-c", code, PYTHON_GCSTRESS="1000")
+        self.assertEqual(out.strip(), b"1000 1000")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_stress(self):

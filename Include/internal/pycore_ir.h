@@ -113,6 +113,8 @@ enum {
 #define _PyIR_FORWARD       8   // the oparg is a forward distance in words
 #define _PyIR_TRANSPARENT   32  // runs another handler on the same fields
 #define _PyIR_STORE_DST     64  // dst may name a local: a folded STORE_FAST
+#define _PyIR_RUNS_CODE     128 // a member may run Python code, which may
+                                // rebind a local through frame.f_locals
 
 #define _PyIR_NO_DST        INT8_MIN
 

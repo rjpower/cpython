@@ -5,7 +5,9 @@ from itertools import combinations, product
 import opcode
 import sys
 import textwrap
+import types
 import unittest
+import warnings
 try:
     import _testinternalcapi
 except ImportError:
@@ -1189,6 +1191,481 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         # The borrowed load of self folds into LOAD_ATTR
         attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
         self.assertEqual(attr.srcs, (0,))
+
+# The events of _rebind_caller_x(): the name of the frame whose x it
+# rebound and the handler that frame was executing.
+_rebinds = []
+
+def _rebind_caller_x(depth=2):
+    # Rebinds the local x of the frame `depth` levels above this one, as a
+    # debugger would through frame.f_locals, and records the frame and its
+    # executing handler at the event.
+    frame = sys._getframe(depth)
+    handler = [i.opname for i in dis.get_instructions(frame.f_code, adaptive=True)
+               if i.offset == frame.f_lasti]
+    _rebinds.append((frame.f_code.co_name, handler[0]))
+    frame.f_locals["x"] = 2
+
+
+class CopyPropagationAcrossCodeTests(BytecodeTestCase):
+    """A borrowed load folded into its reader reads the local when the
+    reader runs.  An op in between that runs Python code can rebind the
+    local through frame.f_locals, so the fold must not cross it: the reader
+    sees the value the load saw (boil/design/work/compiler-copyprop-1.md).
+    Each function returns the reader's result, computed from the operand
+    it used, and the local after the line; _rebinds records each
+    rebinding with the frame and the handler running there."""
+
+    def setUp(self):
+        self.addCleanup(sys.settrace, sys.gettrace())
+        sys.settrace(None)
+        _rebinds.clear()
+
+    def check(self, f, *args):
+        """Run f past specialisation; every call rebinds x in f and still
+        returns the saved operand.  Returns the handlers that the
+        rebinding ran under."""
+        handlers = set()
+        for _ in range(100):
+            _rebinds.clear()
+            self.assertEqual(f(*args), (1, 2))
+            self.assertGreater(len(_rebinds), 0)
+            self.assertEqual({name for name, _ in _rebinds}, {f.__name__})
+            handlers |= {handler for _, handler in _rebinds}
+        return handlers
+
+    def test_call(self):
+        def change():
+            _rebind_caller_x()
+            return 0
+        def f():
+            x = 1
+            # change is a cell: the CALL is the first op that runs code
+            return x + change(), x
+        self.assertEqual(self.check(f), {"CALL", "CALL_PY_EXACT_ARGS"})
+
+    def test_property(self):
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o.attr, x
+        self.assertEqual(self.check(f, O()), {"LOAD_ATTR", "LOAD_ATTR_PROPERTY"})
+
+    def test_getattr(self):
+        class O:
+            def __getattr__(self, name):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o.attr, x
+        self.assertIn("LOAD_ATTR", self.check(f, O()))
+
+    def test_subscript(self):
+        class O:
+            def __getitem__(self, i):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + o[0], x
+        self.assertEqual(self.check(f, O()),
+                         {"BINARY_OP", "BINARY_OP_SUBSCR_GETITEM"})
+
+    def test_reflected_binary_op(self):
+        class O:
+            def __radd__(self, other):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            y = 0
+            return x + (y + o), x
+        self.assertIn("BINARY_OP", self.check(f, O()))
+
+    def test_comparison(self):
+        class O:
+            def __lt__(self, other):
+                _rebind_caller_x()
+                return 0
+        def f(o):
+            x = 1
+            return x + (o < 0), x
+        self.assertIn("COMPARE_OP", self.check(f, O()))
+
+    def test_global_in_dict_subclass(self):
+        # A generic LOAD_GLOBAL calls __getitem__ of globals that are not
+        # an exact dict.
+        class Globals(dict):
+            def __getitem__(self, key):
+                if key == "G":
+                    _rebind_caller_x()
+                return dict.__getitem__(self, key)
+        ns = Globals(G=0, _rebind_caller_x=_rebind_caller_x)
+        exec("def f():\n    x = 1\n    return x + G, x\n", ns)
+        self.assertEqual(self.check(ns["f"]), {"LOAD_GLOBAL"})
+
+    def test_global_colliding_key(self):
+        # The lookup of a builtin in an exact module dict compares with a
+        # key of the same hash, whose __eq__ runs.
+        class Key(str):
+            def __hash__(self):
+                return hash("copyprop_builtin")
+            def __eq__(self, other):
+                if other == "copyprop_builtin":
+                    _rebind_caller_x()
+                return False
+        import builtins
+        builtins.copyprop_builtin = 0
+        self.addCleanup(delattr, builtins, "copyprop_builtin")
+        ns = {"_rebind_caller_x": _rebind_caller_x, Key("other"): 0}
+        exec("def f():\n    x = 1\n    return x + copyprop_builtin, x\n", ns)
+        self.assertEqual(self.check(ns["f"]), {"LOAD_GLOBAL"})
+
+    def test_under_settrace(self):
+        # The instrumented forms run while a trace function is set; the
+        # tracer records the call of the rebinding function from f and
+        # the property's line events
+        events = []
+        def trace(frame, event, arg):
+            if frame.f_code.co_name in ("change", "attr"):
+                events.append((frame.f_code.co_name, event,
+                               frame.f_back.f_code.co_name))
+            return trace
+        def change():
+            _rebind_caller_x()
+            return 0
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        def f():
+            x = 1
+            return x + change(), x
+        def g(o):
+            x = 1
+            return x + o.attr, x
+        sys.settrace(trace)
+        try:
+            r1 = f()
+            r2 = g(O())
+        finally:
+            sys.settrace(None)
+        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
+        self.assertIn(("change", "call", "f"), events)
+        self.assertIn(("attr", "line", "g"), events)
+        self.assertEqual([name for name, _ in _rebinds], ["f", "g"])
+
+    def test_under_monitoring(self):
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        mon.use_tool_id(tool, "copyprop")
+        self.addCleanup(mon.free_tool_id, tool)
+        self.addCleanup(mon.set_events, tool, 0)
+        events = []
+        def on_call(code, offset, callable, arg0):
+            if callable is length and code is f.__code__:
+                events.append(("CALL", code.co_name))
+                # The callback's caller is the function that calls len
+                _rebind_caller_x()
+        def on_start(code, offset):
+            if code.co_name == "attr":
+                events.append(("PY_START", code.co_name))
+        def on_line(code, line):
+            if code.co_name == "attr":
+                events.append(("LINE", code.co_name))
+        for event, callback in ((mon.events.CALL, on_call),
+                                (mon.events.PY_START, on_start),
+                                (mon.events.LINE, on_line)):
+            mon.register_callback(tool, event, callback)
+            self.addCleanup(mon.register_callback, tool, event, None)
+        class O:
+            @property
+            def attr(self):
+                _rebind_caller_x()
+                return 0
+        # A cell, so that the CALL, not a LOAD_GLOBAL, is the first op
+        # after the load of x that runs code
+        length = len
+        def f(s):
+            x = 1
+            return x + length(s), x
+        def g(o):
+            x = 1
+            return x + o.attr, x
+        mon.set_events(tool, mon.events.CALL | mon.events.PY_START
+                       | mon.events.LINE)
+        try:
+            r1 = f("")
+            r2 = g(O())
+        finally:
+            mon.set_events(tool, 0)
+        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
+        self.assertIn(("CALL", "f"), events)
+        self.assertIn(("PY_START", "attr"), events)
+        self.assertIn(("LINE", "attr"), events)
+        self.assertEqual([name for name, _ in _rebinds], ["f", "g"])
+
+    def test_specializer_runs_no_code(self):
+        # The word a specializer rewrites is dispatched again and reads its
+        # fields anew, so a specializer must run no Python code.  Looking
+        # up the attribute's hint in an instance dict whose keys are not all
+        # exact str compares a colliding key, whose __eq__ rebinds x; the
+        # word dispatched again would then load from or store to the other
+        # object.
+        witnessed = []
+        other = types.SimpleNamespace(a="other")
+        class Key(str):
+            def __hash__(self):
+                return hash("a")
+            def __eq__(self, name):
+                caller = sys._getframe(1)
+                if name == "a" and caller.f_code in (load.__code__,
+                                                     store.__code__):
+                    witnessed.append(caller.f_code.co_name)
+                    caller.f_locals["x"] = other
+                return False
+        class A:
+            pass
+        def make():
+            o = A()
+            o.__dict__[Key("k")] = 0
+            o.a = "first"
+            return o
+        def load(o):
+            x = o
+            return x.a
+        def store(o):
+            x = o
+            x.a = "stored"
+        results = [load(make()) for _ in range(300)]
+        self.assertEqual(set(results), {"first"})
+        receivers = [make() for _ in range(300)]
+        for o in receivers:
+            store(o)
+        self.assertEqual({o.a for o in receivers}, {"stored"})
+        self.assertEqual(other.a, "other")
+        # The lookups compared the colliding key while both functions ran
+        self.assertEqual(set(witnessed), {"load", "store"})
+
+    def test_specializer_type_lookup_runs_no_code(self):
+        # A specializer's lookup on a type misses the type cache after any
+        # change to the type, and then compares the keys of the dicts on the
+        # MRO; a class namespace may hold a str subclass key whose __eq__
+        # rebinds x.  The type is changed before every call, so that the
+        # specializing execution misses.
+        def check(target, namespace, owner, f, other):
+            hits = []
+            class Key(str):
+                def __hash__(self):
+                    return hash(target)
+                def __eq__(self, name):
+                    caller = sys._getframe(1)
+                    if name == target and caller.f_code is f.__code__:
+                        hits.append(caller.f_code.co_name)
+                        caller.f_locals["x"] = other
+                    return False
+            with warnings.catch_warnings():
+                # non-string key in the __dict__ of class C
+                warnings.simplefilter("ignore", RuntimeWarning)
+                C = type("C", (), {Key("k"): 0, **namespace})
+            receiver = owner(C)
+            results = set()
+            for i in range(300):
+                C.version = i
+                results.add(f(receiver))
+            self.assertEqual(results, {"orig"}, target)
+            # The lookups compared the colliding key while f ran
+            self.assertTrue(hits, target)
+
+        def f_attr(o):
+            x = o
+            return x.a
+        check("a", {"a": "orig"}, lambda C: C, f_attr,
+              types.SimpleNamespace(a="other"))
+        check("a", {"a": "orig"}, lambda C: C(), f_attr,
+              types.SimpleNamespace(a="other"))
+        def f_hook(o):
+            x = o
+            return x.missing
+        check("__getattr__", {"__getattr__": lambda self, name: "orig"},
+              lambda C: C(), f_hook, types.SimpleNamespace(missing="other"))
+        check("__getattribute__",
+              {"__getattribute__": lambda self, name: "orig"},
+              lambda C: C(), f_attr, types.SimpleNamespace(a="other"))
+        def f_subscript(o):
+            x = o
+            return x[0]
+        check("__getitem__", {"__getitem__": lambda self, i: "orig"},
+              lambda C: C(), f_subscript, ["other"])
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_specialization_phase_runs_no_code(self):
+        # The C fixture calls a specializer directly, never its generic
+        # operation. Every comparison records the phase and native-call word
+        # at the event; a later generic lookup is a separate positive witness.
+        probe = _testinternalcapi.specialize_current_instruction
+        def load(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o.a
+        def missing(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o.missing
+        def store(o, offset):
+            phase = "specialize"
+            probe(offset, o, "stored")
+            phase = "execute"
+            o.a = "stored"
+        def subscript(o, offset):
+            phase = "specialize"
+            probe(offset, o, 0)
+            phase = "execute"
+            return o[0]
+
+        cases = (
+            ("dict_load", "a", {}, load, "LOAD_ATTR", "dict", "orig"),
+            ("dict_store", "a", {}, store, "STORE_ATTR", "dict", None),
+            ("class_attr", "a", {"a": "orig"}, load,
+             "LOAD_ATTR", "class", "orig"),
+            ("instance_attr", "a", {"a": "orig"}, load,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getattr", "__getattr__",
+             {"__getattr__": lambda self, name: "orig"}, missing,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getattribute", "__getattribute__",
+             {"__getattribute__": lambda self, name: "orig"}, load,
+             "LOAD_ATTR", "instance", "orig"),
+            ("getitem", "__getitem__", {"__getitem__": lambda self, i: "orig"},
+             subscript, "BINARY_OP", "instance", "orig"),
+            ("mro_store", "a", {}, store, "STORE_ATTR", "instance", None),
+        )
+        for label, target, namespace, f, opname, kind, expected in cases:
+            with self.subTest(label=label):
+                events = []
+                class Key(str):
+                    def __hash__(self):
+                        return hash(target)
+                    def __eq__(self, name):
+                        caller = sys._getframe(1)
+                        if name == target and caller.f_code is f.__code__:
+                            events.append((caller.f_locals["phase"],
+                                           caller.f_lasti))
+                        return False
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    C = type("C", (), namespace if kind == "dict" else
+                             {Key("collision"): 0, **namespace})
+                owner = C if kind == "class" else C()
+                if kind == "dict":
+                    owner.__dict__[Key("collision")] = 0
+                    owner.a = "orig"
+                offset = next(i.offset for i in dis.get_instructions(f)
+                              if i.opname == opname)
+                # Each forced attempt starts with an invalidated type cache.
+                # Separate code objects avoid feedback left by another case.
+                f = types.FunctionType(f.__code__.replace(), f.__globals__,
+                                       f.__name__, closure=f.__closure__)
+                for version in range(3):
+                    C.version = version
+                    events.clear()
+                    result = f(owner, offset)
+                    self.assertEqual([phase for phase, _ in events
+                                      if phase == "specialize"], [], events)
+                    self.assertTrue(events, (label, "generic lookup not reached"))
+                    self.assertTrue(all(word == offset for _, word in events), events)
+                    self.assertEqual(result, expected)
+                    if opname == "STORE_ATTR":
+                        self.assertEqual(owner.a, "stored")
+
+    def test_folded_operand_outlives_rebinding(self):
+        # The reader's own callee rebinds the folded local and collects;
+        # the reader still hands the original operand to __radd__.  A
+        # semantic regression for the PROCESS.md 0.3 row "a reader's folded
+        # operand needs an anchor across the reader's own collecting calls"
+        # (10a rung 3).  It passes today because self and the opaque C
+        # frames of the binary-op chain hold the operand; the row's oracle
+        # injects a collection where only the reader's precise frame holds
+        # it (compiler-copyprop-1.md, review round 2).
+        seen = []
+        class X:
+            def __init__(self, tag):
+                self.tag = tag
+            def __add__(self, other):
+                _rebind_caller_x(2)
+                gc.collect()
+                return NotImplemented
+        class O:
+            def __radd__(self, other):
+                seen.append(other.tag)
+                return 0
+        def f(o, i):
+            x = X(f"tag{i}")
+            return x + o, x
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+        for i in range(20):
+            self.assertEqual(f(O(), i), (0, 2))
+        self.assertEqual(seen, [f"tag{i}" for i in range(20)])
+
+    # The folds that stay: nothing between the load and its reader runs
+    # code.  Instruction.srcs lists the slots the reader reads, bottom
+    # first, so the reader names x's own slot.
+
+    def assertReadsLocal(self, f, opname, name, folded=True):
+        code = f.__code__
+        reader = [i for i in dis.get_instructions(f) if i.opname == opname][0]
+        x = code.co_varnames.index(name)
+        if folded:
+            self.assertEqual(reader.srcs[0], x)
+        else:
+            # The reader takes the value of a load into a temporary
+            self.assertNotEqual(reader.srcs[0], x)
+            self.assertInBytecode(f, 'LOAD_FAST_BORROW', name)
+
+    def test_fold_under_constant(self):
+        def f(x):
+            return x + 1000
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_local(self):
+        def f(x, y):
+            return x + y
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_cell(self):
+        def f(x):
+            c = 1
+            def g():
+                return c
+            return x + c
+        self.assertReadsLocal(f, 'BINARY_OP', 'x')
+
+    def test_fold_under_tuple_and_is(self):
+        def f(x, a, b):
+            return x == (a, b)
+        def g(x, a, b):
+            return x + (a is b)
+        self.assertReadsLocal(f, 'COMPARE_OP', 'x')
+        self.assertReadsLocal(g, 'BINARY_OP', 'x')
+
+    def test_no_fold_under_global(self):
+        def f(x):
+            return x + G
+        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
+
+    def test_no_fold_under_attribute(self):
+        def f(x, o):
+            return x + o.a
+        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
+
 
 class DirectCfgOptimizerTests(CfgOptimizationTestCase):
 

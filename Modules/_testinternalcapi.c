@@ -3878,6 +3878,7 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
     if (PyRefTracer_SetTracer(alloc_tracer, NULL) < 0) {
         return PyValue_NULL;
     }
+    int old_stress = _PyGC_LiveGetStress();
     _PyGC_LiveSetStress(interp, 1);
     for (int32_t i = 0; i < n; i++) {
         PyObject *item = PyList_New(0);
@@ -3885,7 +3886,7 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
             break;
         }
     }
-    _PyGC_LiveSetStress(interp, 0);
+    _PyGC_LiveSetStress(interp, old_stress);
     (void)PyRefTracer_SetTracer(old, old_data);
     if (PyErr_Occurred()) {
         return PyValue_NULL;
@@ -3895,6 +3896,13 @@ gc_alloc_in_reftracer(PyObject *self, PyValue arg)
         "(LLL)", (long long)alloc_tracer_state.events,
         (long long)alloc_tracer_state.inside,
         (long long)(after.collections - before.collections)));
+}
+
+/* The configured process-wide allocation interval, without changing it. */
+static PyObject *
+gc_get_stress(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return PyLong_FromLong(_PyGC_LiveGetStress());
 }
 
 /* PYTHON_GCSTRESS=every from now on; 0 turns it off */
@@ -4375,7 +4383,52 @@ gc_verify_with_pymem_array(PyObject *self, PyValue arg)
     return PyValue_FromResult(res);
 }
 
+/* Invoke only the specializer for a word in the calling Python frame.
+   Tests can distinguish callbacks during this call from the subsequent generic
+   operation, without depending on an adaptive counter reaching its threshold. */
+static PyObject *
+specialize_current_instruction(PyObject *self, PyObject *args)
+{
+    int offset;
+    PyObject *owner, *operand;
+    if (!PyArg_ParseTuple(args, "iOO:specialize_current_instruction",
+                          &offset, &owner, &operand)) {
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (offset < 0 || offset >= Py_SIZE(code)
+        || _PyCode_InstrFbIndex(code, offset) <= 0)
+    {
+        PyErr_SetString(PyExc_ValueError, "word has no private feedback entry");
+        return NULL;
+    }
+    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, offset));
+    int oparg = _PyCode_InstrOparg(code, offset);
+    _PyInstr *instr = frame->ir_words + offset;
+    PyValue owner_value = PyValue_FromObject(owner);
+    switch (opcode) {
+        case LOAD_ATTR:
+            _Py_Specialize_LoadAttr(owner_value, instr,
+                                   PyTuple_GET_ITEM(code->co_names, oparg >> 1));
+            break;
+        case STORE_ATTR:
+            _Py_Specialize_StoreAttr(owner_value, PyValue_FromObject(operand),
+                                    instr, PyTuple_GET_ITEM(code->co_names, oparg));
+            break;
+        case BINARY_OP:
+            _Py_Specialize_BinaryOp(owner_value, PyValue_FromObject(operand),
+                                   instr, oparg, frame->base);
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "unsupported specialization family");
+            return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_functions[] = {
+    {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
@@ -4395,6 +4448,7 @@ static PyMethodDef module_functions[] = {
     {"gc_borrow_across", gc_borrow_across, METH_VARARGS},
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
+    {"gc_get_stress", gc_get_stress, METH_NOARGS},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
     {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},

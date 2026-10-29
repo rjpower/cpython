@@ -2415,3 +2415,183 @@ removes its own prefix. A startup banner now names level, build and head
 before commands run. Shell syntax and diff checks pass; existing targeted
 integration gate1 will exercise the changed startup path. No test failure
 is dismissed by this tooling repair.
+
+### 06:25 PDT: compiler merged; qualification and dispatch boundaries
+
+Independent source/artifact review returned LAND for compiler b59ab985ae7.
+The author preserved that normalized review and the three prior blocker
+dispositions in documentation-only ab18af7d778. Coordinator merged it as
+99435658509; detached integration validation is now building new default
+and Og debug configurations from /tmp/boilgate, with outputs under the
+project's build/integration-default and build/integration-debug. The merge
+is not yet claimed as validated. The startup-tooling focused gate1 passed
+on integration90773db0ffd, exercising its new banner and local cleanup.
+
+The roots O1 trial cut smoke time from3m41s to2m37s and passed checker,
+compiled walk, active worker-mode and100/100 stale-root controls. One
+focused test_verify_kill case lacked the required PyMem-holder attribution
+despite an active kill:pymem state. Qualification stopped; the owner is
+tracing fixture storage versus collector attribution, without changing
+the oracle. Og remains the integration debug configuration.
+
+QUEUE's fixture fixup a6d88557dfa and clean lane970e14edbde retain failing
+delivery/readiness controls and actual mode assertions. Module10/11 remap
+differences are now explained by owner-unlink order with event traces.
+The feeder-finalization hazard remains unclosed while bounded diagnostic
+attempts and current end gates run. No new queue runtime has landed.
+
+ROOTS supplied the H3 inventory. The compiler owner now drafts H3-1's
+generated handler domain before any new typed operation; existing256
+assumptions survive inside the16-bit IR. Typed float truth is a bounded
+follow-on, while frame passing, call-window placement and compare/branch
+need their own root/liveness or encoding proofs. Interpreter parity stays
+a measured pre-JIT checkpoint.
+
+The push of existing integration/compiler/queue/roots refs was rejected by
+automatic approval review: recovered session history was not accepted as
+authorization to export repository contents. Explicit approval for the
+same GitHub destination and fast-forward payload is pending; committed
+local work and validation continue. No workaround push was attempted.
+
+### 06:37 PDT: cleanup lock and explicit service authorization
+
+The user confirmed Loom is the internal session server and explicitly
+authorized Loom use and GitHub pushes. README is now handover revision5;
+the committed integration/compiler/queue/roots refs pushed successfully
+to the existing repository. The prior export approval block is closed.
+
+QUEUES found a build-lock lifetime bug in gate_run.sh: command-form flock
+released the lock before sweep, allowing cleanup to kill the next run's
+workers. The coordinator keeps fd8 locked through sweep and only sweeps
+from a signal trap after acquiring the build lock. Slot-before-build
+ordering is unchanged; failure status is preserved. Three process-level
+checks cover cleanup ownership, a terminated waiter and nonzero command
+status, with a fake pkill so no real test worker is targeted. Five runs
+pass. The old runner fails the cleanup invariant; removing only the new
+ownership guard fails the waiter invariant. An initial harness attempt
+signaled before the flock child finished exec; synchronizing on its comm
+fixes that test race. Exact controls/logs are in build/coordinator-20261029.
+
+Detached compiler integration at99435658509 passed gate0 default/debug
+(1,924 each), gate1's16 modules (1,783 each), debug kill's20 copyprop
+tests with active mode assertion, and release gate2 (51,081 tests,
+60,014 collections,0 fallbacks). Og debug gate3 remains in progress.
+These runs use the prior runner; no queued same-build overlap occurred.
+
+## 2026-10-29 06:45 PDT: first hourly coordinator update
+
+Compiler ab18af7d778 is landed and integration-validated at 99435658509.
+Detached release and Og debug suites each passed 51,081 tests, with
+60,014/61,865 collections and zero fallbacks. Gate3 completed at filing:
+cext 16 tests (7 skipped, 59.3s), unchanged regeneration and traversal audit
+all passed. Shared cleanup
+fix e02e177903f passed independent QUEUES review, its three process checks
+five times and the existing mode-contract gate1; it is pushed. The binary
+for that last focused run was built at 99435658509, the runner at e02.
+
+QUEUES release at 970e14edbde passed 51,079 tests/62,173 collections with
+zero fallbacks. It merged integration as e37fa1f966f, retaining both
+additive test-extension blocks byte-for-byte through their insertion
+conflict. The new common-deadline feeder wait is under validation: real
+old teardown warns while sentinel shutdown is completing; real fixed
+teardown waits and completes; a deliberately blocked feeder still warns.
+The historical warning's exact state remains unknown. Combined full and
+verification gates precede review; no queue-runtime landing is claimed.
+
+ROOTS diagnosis at d65a03fc96c proves precise-carrier-first provenance
+loss in both retain/kill. Source logging was restored. Its proposed
+post-B enrichment keeps ordinary marking unchanged and handles aliases,
+nested carriers and cycles, with capped unique origins. Review also
+caught an empty-seed sorting invariant and per-origin hash-clear cost;
+the fixture proposal was revised to cover them. The agent's inherited
+approval context rejected the concrete fixture twice as insufficiently
+authorized high-impact work. The bounded repair/fixture approval is
+pending; no workaround or rejected mutation executed. O1 remains
+unqualified and final roots gates remain outstanding.
+
+H3-1's domain design is preserved in integration and independently under
+review. It covers generators, typed IDs, monitoring storage, stats,
+inspection and sampler version/schema. Producer renumbering follows sink
+widening. Review is checking actual target-to-sampler schema transport;
+same Python version cannot establish matching handler numbering. No H3
+source work is authorized before the design response. Typed float truth
+follows; H2-dependent compare/branch and call-window work stays separate.
+
+Next hour: complete/review combined queue gates,
+resolve roots fixture approval and validate provenance repair, answer H3
+review, then assign the unfinished executable verification manifest when
+an implementation slot frees. README/PROCESS and Loom status reflect
+these boundaries. Next hourly update due about 07:45 PDT.
+
+### 07:00 PDT: handler-domain design accepted; stress witness gap
+
+H3-1 round1 returned REVISE on actual-target schema transport, pristine
+construction/runtime-state distinction and misleading threshold exports.
+The coordinator ruled explicit threshold removal and sampler protocol
+compatibility changes. The author revised the design; independent round2
+returned IMPLEMENT, no remaining design blocker. Both source/artifact-only
+reviews are preserved. First implementation stage preserves emitted IDs;
+consumer/transport closure precedes renumbering and its pyc magic change.
+
+ROOTS's manifest design found that parsed verifier state does not reveal
+stress_every. Coordinator source review also found gc_alloc_in_reftracer
+sets stress to1 then0 inside the test_gc worker, silently disabling an
+ambient stress interval for subsequent tests. QUEUES is preparing an
+isolated read-only getter and restoration fixture outside its frozen tree.
+Current normal gates continue; complete stress11 coverage is not claimed
+until this prerequisite is fixed. Earlier source-restored queue controls
+remain scoped evidence, rather than proof of uniform worker stress.
+
+### 07:10 PDT: permission context synchronized; three active implementations
+
+The user's fresh steering identified the held roots fixture and directed
+work to continue. The existing ROOTS agent then received the current
+unrestricted developer permissions and applied the same reviewed v2 patch
+successfully in its own worktree. No executor switch or indirect mutation
+bypassed the rejection. The prior hold is closed; normal validation and
+the old-helper control are now running. O1 remains unqualified.
+
+H3 now works on branch boil/h3 in the reused compiler worktree, with the
+compiler landing ref frozen. Its first regeneration matches all seven
+baseline products byte-for-byte. Stage1 preserves IDs as a migration
+invariant; the final design removes inherited category cutoffs and uses
+explicit generated semantic properties. Synthetic-fixture collisions are
+being traced rather than weakening duplicate validation.
+
+QUEUES d43c8b4dd32 passed combined default/debug full suites, 51,102 tests
+each, zero fallback, plus debug cext/regeneration/audit and default probes.
+Its standalone stress prerequisite's old-zero-reset control fails with
+(1000,0); the getter and save/restore positive gates are running. Remaining
+verification gates wait for that shared prerequisite. Manifest discovery
+resolved 23 selector rows to31 test IDs across11 physical modules; the
+registry/parser remains unfinished, and no execution claim is made.
+
+The copy-propagation semantic handoff is closed by landed99435658509 and
+its validated probes/phase controls/counter record; its row is removed from
+PROCESS0.3. Specializer-checker and precise folded-reader proofs remain
+separate open handoffs to ROOTS.
+
+### 07:30 PDT: stress prerequisite validated; H3 stage1 review
+
+Integration02bcd2f6132 imports the independently reviewed shared stress
+getter/restoration59790b545bcc. Default/debug smoke passes1,924 tests each;
+state tests3 per build and debug kill2/stress1000 two pass. Logs and exact
+commands are in build/coordinator-20261029/stress-state-*. These focused
+coordinator runs are not lane-wide actual-worker stress attestations.
+Integration02bcd, QUEUES5576cdbd755 and H3e7cc59743e1 are pushed.
+
+H3 stage1's independent review clears the generator ownership refactor,
+all seven byte-identical generated products and retained negative-control
+evidence. It requires a saved control-runner fix: variant writes precede
+lock acquisition and restoration follows release. Historical quiescent
+runs remain valid, but the replay script must not expose broken live
+source to another gate. The author is fixing that artifact before landing.
+Stages2–4 and runtime domain closure remain separate unfinished work.
+
+ROOTS's provenance fixture is running in the synchronized permission
+context. O1 also exposed a genuine list-to-tuple lifetime bug: the source
+list is cleared before tuple allocation, losing its elements' roots.
+The bounded reorder moves forward from3a into2b. The PyMem assertion is
+being corrected to require its origin on the same killed-list report line
+whether first or supplemental; old-helper failure remains required.
+No O1 adoption or ROOTS landing is claimed.

@@ -1075,15 +1075,27 @@ class RegCfgTest(unittest.TestCase):
 
     # a. Copy propagation
 
-    def test_load_folds_under_a_global_and_a_call(self):
+    def test_load_folds_under_a_constant_only(self):
+        # A pending load dies at an op that may run Python code: a global
+        # (a dict subclass or a colliding key) and a call may rebind x
+        # through frame.f_locals before the reader runs
+        def const(x):
+            return x * 3
         def mul(x):
             return x * K
         def add(x):
             return x + one()
-        for f in mul, add:
-            self.assertNotIn("LOAD_FAST_BORROW", self.names(f))
-            op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
-            self.assertEqual(op[2][0], 0)
+        for f, folded in (const, True), (mul, False), (add, False):
+            with self.subTest(f=f.__name__):
+                names = self.names(f)
+                op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
+                if folded:
+                    self.assertNotIn("LOAD_FAST_BORROW", names)
+                    self.assertEqual(op[2][0], 0)
+                else:
+                    self.assertIn("LOAD_FAST_BORROW", names)
+                    self.assertNotEqual(op[2][0], 0)
+        self.run_specialized(lambda: self.assertEqual(const(2), 6))
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
         self.run_specialized(lambda: self.assertEqual(add(2), 3))
 

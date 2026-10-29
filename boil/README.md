@@ -12,7 +12,8 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 16:09 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 16:50 PDT. Last qualified runtime merge is 052d8342e56;
+local GC integration candidate f2a5b3ca33d awaits fresh gates. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,21 +72,22 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 16:09 PDT; evidence is from local commits and retained logs.
+2026-10-29 16:50 PDT; evidence is from local commits and retained logs.
 
 The coordinator accepts the independently reviewed scoped ROOTS2b exception:
 the inherited HTTP/finalizer-progress failures stay explicit final GC and
-performance blockers. Finish the successor tail/extras binding, then compose
-ROOTS2b and the reviewed bytes-writer3a into one detached integration candidate
-with one fresh mandatory merged ladder. The original stress100k full remains
+performance blockers. The successor tail/extras checks now pass. ROOTS2b and the reviewed
+bytes-writer3a compose as detached candidate f2a5; its O3/Og compilations
+complete and its fresh smoke/affected campaign is active. Mandatory merged
+full/kill/stress/ASan qualification still remains. The original stress100k full remains
 failed; there is no all-seven-PASS claim. PROCESS records this scheduling ruling.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP/trashcan public controls establish inherited exposure; scoped incremental exception accepted with final GC/perf debt retained. Successor tail/extras, exact review and one fresh ROOTS+bytes union ladder remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b native branch remains ce2ac, executed source c679/docs handback837; local combined candidate f2a5 awaits qualification. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP/trashcan public controls establish inherited exposure; scoped incremental exception accepted with final GC/perf debt retained. Tail11/0, cext16/seven declared skips, unchanged regen/traversal and19 headers pass; exact union source review clears. Fresh union smoke/affected is active, broader ladder remains | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation in isolated boil-h3-stats from81417 clears independent source review; owned build and bounded lifecycle/reader/generator checks pass, private controls active. Actual union qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation in isolated boil-h3-stats from81417 clears independent source review; owned build and bounded lifecycle/reader/generator checks pass, private controls pass. Actual H3+GC source union e9a1 clears composition review and its owned Py_STATS build passes; native target qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -113,6 +115,14 @@ the JIT follows it. The target is roughly 2× upstream interpreter throughput
 on the declared application/kernel set, measured with release wall time and
 individual regressions reported and resolved or explicitly dispositioned.
 Micro instruction gains alone do not establish that result.
+
+[Four bounded native profiles](design/work/pre-I-shared-cost-attribution.md)
+now measure collection at54%/47%/31% of coroutine/comprehension/generator hot
+time, versus zero hot collections in Richards. This prioritizes shared GC
+work, without proving generation savings. A small finalizer-order eligibility
+patch is implemented in isolation at a285 and its O3 build passes; semantic
+controls and matched timing remain. Nonmoving generations has a reviewed
+direction but needs the closed store/constructor/domain ledger before minors.
 The [revised roadmap](design/work/pre-I-performance-roadmap.md)
 sets the measurement contract, GC landing path and structural performance work.
 
@@ -150,7 +160,9 @@ recorded. Its multiprocessing cleanup repair runs existing finalizers after
 forkserver stop and before tracker stop; actual-helper, old-order and visible
 natural-case controls pass. No skip hides those cleanup failures.
 
-ROOTS2b is frozen at `ce2ac8991ee`: the precise-Park repair removes stale
+ROOTS2b native products remain at `ce2ac8991ee`, executed test/docs source
+c679 and documentation handback837. Local union f2a5 includes bytes3a; fresh
+qualification is active. The precise-Park repair removes stale
 alignment-padding retention, and two raw-mutex precision annotations close
 ASan's linked-audit failure. Release, O1-debug and ASan builds pass. The
 native/CFI/root-location comparison and four-semaphore supplement clear
@@ -187,8 +199,9 @@ diagnostic deadline. They establish inherited exposure, not identical causes
 or absence of interaction. Independent review and the coordinator permit an
 incremental ROOTS landing while retaining both issues as final GC/performance
 debt. The [triage record](design/work/10a-2b-stress100k-triage.md) preserves
-all failures. Successor tail walk/extras, exact candidate review and the fresh
-merged default/debug/kill ladder remain. Fulls and perf-sensitive walks
+all failures. Successor tail walk11/0, cext16/seven existing skips, unchanged
+regeneration/traversal and19 headers pass, and exact source review clears.
+The fresh merged default/debug/kill ladder remains. Fulls and perf-sensitive walks
 serialize because their perf-map cleanup interferes.
 
 The39 protected selectors and actual worker mode/stress/counter contracts stay

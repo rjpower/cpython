@@ -4148,3 +4148,55 @@ Root independently verifies variant log/extension hashes and source/plan
 linkage in review1e82f399ddf. H3's six-path composition inventory and H1's
 smallest coherent passed-frame readiness are source-only; no native union,
 actual tailcall claim or runtime optimization has landed.
+
+### 16:50 PDT: hourly checkpoint, actual GC candidate and first GC optimization
+
+ROOTS branch handback837 adds only completion docs after executed c679/nativece.
+Successor tail11/0 and extras complete under scoped exception: cext16 with its
+seven exact declared skips, unchanged regeneration/Clinic, traversal and19
+header receipts/four unsupported. Completion0e0a8f3b preserves old full100k FAIL,
+all raw artifacts and inherited HTTP/progress debt. Root merges837 and bytes089
+as local candidate f2a5, resolves note11's documentation conflict by retaining
+both actual exclusions/handoffs and primary's hazard-driven future policy.
+Independent actual composition review clears; the only non-boil delta versus
+built writerf5 is the known two-line test_api eligibility annotation.
+
+Detached /tmp/boilgate is frozen at f2a5. Both existing primary O3/Og makes
+return native0. Original adapters then reject expected generated Makefile
+changes; those FAIL receipts remain. Exactly the two source-template hunks
+(header audit scope and ceval.h dependency) reconstruct old Makefile hashes;
+pyconfig/config.status/compiler/flags are unchanged. Root accepts a locked
+post-build supplement and complete152-path maps/aliases per build. No make
+retry. Fresh campaign879c84e4/plan5c3177ea starts its16 early jobs: pass/smoke
+per build, affected/eval/strict-stale once across default0/debug0/debug2.
+Six full/stress/ASan profiles remain for separate final selection/origin review;
+no full100k retry, new filter or broad tail matrix. No qualification/primary
+push of the native candidate follows yet.
+
+Isolated H3 union e9a1 composes from f2a5 plus reviewed stats5d108 without
+textual conflicts. Root reviews the actual shared-source delta and seven
+idempotent generated products. Host90 retains two stale NOFB snapshot failures
+and one existing expected failure; only the two expectations change and both
+pass once. One fresh owned Py_STATS build passes configure/make (25.4/87.1s),
+116 checked modules/zero failed imports,587 products and cleanup closure.
+Actual stats/producer-reader/frame/root checks remain; no old receipt is
+relabeled. Nonstats integration follows the GC checkpoint separately.
+
+The four-row profiling conclusion is now used for work: GC54/47/31% in the
+three slow rows, zero hot collections in Richards. Candidate/death counts
+do not measure allocation ages or isolate generation savings. A source audit
+finds existing cleared-generator finalizer calls already skip queueing, but
+the earlier ordering DFS still processes those roots. Small isolated change
+a285 shares actual eligibility at root/emission/enqueue, preserves unrestricted
+dead transit traversal, and adds a pure-Python closed-generator/code-constant
+ordering regression. Root clears source; owned O3 build passes (108.5s,
+67 shared modules/zero failed imports). Semantic tests, copied ordering
+negative and matched parent timing remain due; no gain claimed.
+
+Nonmoving generations direction clears independent review; activation needs
+complete owner/store/constructor/domain closure, per-object safe-promotion
+evidence, pre-callback remembered-set commit, omission oracle and bounded major
+policy. Minors remain unimplemented. H1 is a later bounded matched-tailcall
+experiment. The release application score remains the earlier0.828 diagnostic;
+the roughly2× target and final GC/lifecycle correctness are not achieved.
+Next hourly checkpoint about17:50 PDT; material failures are reported sooner.

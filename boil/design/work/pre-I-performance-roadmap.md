@@ -212,6 +212,18 @@ counting integration continues; H1 stays a bounded later experiment. A
 source-only generations design must first establish complete mutator/barrier,
 root, weakref and finalizer contracts. Known lifecycle defects remain blockers.
 
+As of16:50, GC candidate f2a5 includes ROOTS and bytes-writer roots; branch
+tail/extras and exact source review clear, native O3/Og compilations complete,
+and fresh smoke/affected qualification is active. H3 source union e9a1 has a
+fresh owned Py_STATS build, with actual runtime checks next. In parallel,
+[finalizer-order eligibility](pre-I-finalizer-order-proposal.md) is implemented
+and O3-built at a285 in isolation: avoid DFS roots/order entries for finalizers
+that cannot run, retaining dead transit traversal. Its semantic negative and
+matched timing remain due. This addresses avoidable death-pipeline work,
+separately from old-live scanning. The
+[generations direction](7-nonmoving-generations-design.md) clears review but
+requires the closed store/constructor/domain ledger before implementation.
+
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32
 values canonical so integer guards need one inline representation; preserve

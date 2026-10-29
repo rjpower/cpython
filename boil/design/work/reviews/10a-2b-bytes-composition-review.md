@@ -66,3 +66,39 @@ matching ASan extensions/options, exact existing allocator filter and fresh
 once-only ASan16 plus new writer coverage. Do not weaken old source guards,
 call the products union-built or apply this reuse to a later H3/native union.
 No ASan reuse or execution is authorized by this review.
+
+## Actual composition: ACTUAL_SOURCE_COMPOSITION_CLEAR
+
+2026-10-29. Reviewed exact primary candidate
+f2a5b3ca33d1ed5a526983f9094137c03120f37b, merging ROOTS
+837ea97fd75d1ec3580363aaa5cdc02b3176b889 and bytes08953c89274.
+837 changes only the two ROOTS work records beyond reviewed c679; source
+execution/nativece2ac distinctions remain explicit. This closes the
+prospective source-composition question without repeating parent reviews.
+
+The actual full `git diff f5e818b0454 f2a5b3ca33d -- ':!boil'` changes exactly
+Lib/test/test_interpreters/test_api.py, by the two eligibility lines already
+reviewed. The body is unchanged. Therefore the entire tracked non-boil native/
+header/generated/build-input set, including the private writer struct, CAPI
+fixture and both writer-class tests, matches the owned writer f5 source.
+This confirms the earlier prospective equivalence on the actual commit.
+It does not claim new products were built or configuration inputs consumed
+from the primary tree.
+
+The actual note11 resolution retains primary's hazard-driven prospective
+repetition/retirement policy and roadmap link, plus ROOTS's outlined-callee
+rule, historical-versus-current exclusions, precise threshold eligibility,
+carrier attribution, raw-buffer/ASan and DEBUG_PYDICT material. The shared
+launcher is byte-unchanged from primary1e82: literal global slot paths remain.
+Primary PROCESS/README are unchanged by composition; coordinator worklog
+additions are retained. Unrelated pending attribution/generations work docs
+were excluded; no working-tree source was edited by this reviewer.
+
+No native/test/tool integration blocker was found. The coordinator may use
+this source closure for its fresh primary release/Og integration plans and
+explicitly bounded writer-ASan reuse decision. Preserve nativef5/config/product
+identity plus separately verified current runtime origins for reused ASan;
+the historical driver/config receipt does not become a retroactive full SDK/
+backend-consumption manifest. No implicit H3 reuse, old-receipt relabeling,
+new exclusion, broad stress retry or LAND verdict follows. Current-candidate
+native gate results and detached landing review remain outstanding.

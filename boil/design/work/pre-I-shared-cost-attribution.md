@@ -201,7 +201,11 @@ all three slow rows spend a substantial measured fraction collecting, while
 the winning object/call control has no hot collections. A generational or
 other retained-set intervention deserves its existing design/ownership
 review before dispatch-only tuning. These four rows do not prove a particular
-generational implementation or a numerical speedup. Generator evaluator
+generational implementation or a numerical speedup. Coroutines alone reports
+48.56M collected objects against 56.43M candidates: per-object death bookkeeping
+may remain expensive even if old-live scans disappear. Those totals do not
+measure allocation ages. Candidate/survival,
+death-pipeline and RSS evidence must separate those costs. Generator evaluator
 work remains material after GC; resolve its source sites and use qualified
 H3 frame/box counters if that distinction would change the next intervention.
 No broad counter instrumentation or additional profile run is required to

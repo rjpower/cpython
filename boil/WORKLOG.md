@@ -2853,3 +2853,40 @@ checkpoint, and review the manifest source/build prerequisite. Debug O1
 remains qualification work, not adopted policy. Queue2 stays held by the
 automatic classifier with preserved artifacts; no stopped probe is retried.
 Next hourly documentation/user report is due about09:45 PDT.
+
+
+### 08:54 PDT: ROOTS source settled; next handler oracle exposed a bug
+
+ROOTS8ce9c57c662 retires the shared-heap source skip locally. All40 fresh
+stress selections pass (20release/20O1debug), zero skipped, with80 paired
+actual driver/worker witnesses and child state/end-stress assertions.
+Kill+stress also passes. Precommit evidence bindsf1 plus the exact retained
+patch; its test_gc hash equals8ce. Primary keeps its source-skip row until
+ROOTS lands. Current discovery finds2,041 cases. Final contracts distinguish
+68 debug versus83 release intrinsic skips, with32 protected selectors.
+Replay controls now reject zero collections and protected subtest skips
+in addition to missing/substituted/partial evidence.
+
+Coordinator approves final release/O1debug qualification on frozen8ce;
+O1 is not adopted as shared policy. Precise-entry-paths availability may
+change only in a hash-bound qualification registry copy with current
+implementation/checker/control evidence, not by claiming its matrix has
+already passed. Original registry, exact diff and qualifying scope remain
+visible. No other pending requirement changes. Build-owned adapter results
+must not be labeled verify.py run/gate-hook execution. First current
+individual/full-module qualification per build precedes the remaining20.
+
+H3's real NOFB monitoring oracle found inherited missing CALL events:
+the shared body compared a derived raw ID against its semantic instruction.
+Coordinator authorizes the generic uses_opcode assignment to inst.name;
+raw targets/dispatch and existing stats remain unchanged. Regeneration
+changes exactly two SUPER_ATTR body assignments. Missing-event baseline
+is retained; CALL/C_RETURN/C_RAISE and collecting callback controls are
+required, along with exact twin/field restoration. The oracle is not relaxed.
+
+Manifest identity/result design is approved for a separate v2 prerequisite,
+not the run/gate hook. It adds explicit source/runtime/tool roots, build
+receipts, actual module origins and result/skip witnesses. Existing
+/tmp/boilgate at clean052 and integration-debug are reserved for a later
+reviewed bounded receipt rebuild; no source checkout/reconfiguration is
+authorized. Host controls and exact build plan review precede that step.

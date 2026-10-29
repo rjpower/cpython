@@ -295,6 +295,22 @@ seed, driver/worker identities, actual-state witnesses and root counters.
 Measure this harness on settled source before projecting its remaining
 cost. The serial feedback iteration is not relabeled as this harness.
 
+Final ROOTS2b qualification uses frozen native/test source8ce9c57c662.
+Its restored shared-heap regression passed20 fresh selections per build
+with actual stress witnesses; source-skip retirement is local to that
+branch until landing. The final contract distinguishes debug/release skip
+allowances and protects32 selectors, including the restored regression.
+The coordinator permits only precise-entry-paths implementation availability
+to be promoted in a hash-bound qualification copy of the registry, with
+current checker/negative/control evidence. Preserve its original and exact
+diff. This establishes availability of the implementation under test, not
+success of its own qualification or availability on primary. No other
+pending prerequisite or test condition changes. Build-owned adapter runs
+do not claim execution through the unfinished verify.py run/gate hook.
+O1 debug is approved for this qualification matrix with assertions and
+all required controls; adopting it as shared gate policy waits for the
+complete required evidence. Freeze every imported adapter/contract helper.
+
 Planned native landing order is QUEUES1, ROOTS2b, then H3 runtime stage2.
 H3 implementation proceeds independently in its worktree; integration
 holds its native changes while ROOTS's final matrix uses settled source,

@@ -3941,6 +3941,16 @@ gc_hold_in_core_mem(PyObject *self, PyObject *args)
     return _PyGC_TestHoldInCoreMem(callable, give_back);
 }
 
+static PyObject *
+gc_verify_carrier_origins(PyObject *self, PyObject *args)
+{
+    int shape, reverse;
+    if (!PyArg_ParseTuple(args, "ip", &shape, &reverse)) {
+        return NULL;
+    }
+    return _PyGC_TestCarrierOrigins(shape, reverse);
+}
+
 /* _PyGC_TestBorrowAcross(container, callback, kind). */
 static PyObject *
 gc_borrow_across(PyObject *self, PyObject *args)
@@ -4381,6 +4391,7 @@ static PyMethodDef module_functions[] = {
     {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
     {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
     {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
+    {"gc_verify_carrier_origins", gc_verify_carrier_origins, METH_VARARGS},
     {"gc_borrow_across", gc_borrow_across, METH_VARARGS},
     {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},

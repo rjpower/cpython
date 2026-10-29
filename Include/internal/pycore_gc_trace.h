@@ -346,6 +346,9 @@ extern void _PyGC_Quarantine(void *ptr);
 PyAPI_FUNC(PyObject *) _PyGC_TestHoldInCoreMem(PyObject *callable,
                                                int give_back);
 
+/* Deterministic post-B carrier attribution fixture; no real marks change. */
+PyAPI_FUNC(PyObject *) _PyGC_TestCarrierOrigins(int shape, int reverse);
+
 /* For the borrowing tests (10a-2.md section 4): borrow list[0], or with
  * _PyGC_BORROW_WEAK the target of the weak reference container; call
  * callback, which drops every other reference to it; collect; and return

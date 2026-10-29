@@ -1752,6 +1752,37 @@ class TracingCollectorTests(unittest.TestCase):
                          and "of a core frame" in line]
                 self.assertEqual(len(found), want, err)
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_verify_carrier_origins(self):
+        # Explicit seed order avoids dependence on register allocation. A
+        # second list outside the B set must not become a candidate.
+        for shape in range(5):
+            for reverse in (False, True):
+                with self.subTest(shape=shape, reverse=reverse):
+                    result = _testinternalcapi.gc_verify_carrier_origins(
+                        shape, reverse)
+                    origins = result["origins"]
+                    if shape == 4:
+                        self.assertEqual(result["candidates"], 2)
+                        self.assertTrue(result["sorted"])
+                        self.assertTrue(result["flags_unchanged"])
+                        continue
+                    count = 11 if shape == 2 else 3 if shape == 3 else 2
+                    self.assertEqual(len(origins), min(count, 8))
+                    self.assertEqual(len(set(origins)), len(origins))
+                    self.assertEqual(result["more"], max(count - 8, 0))
+                    self.assertEqual(result["candidates"], 1)
+                    self.assertTrue(result["flags_unchanged"])
+                    self.assertTrue(all(rec[3] == 123 for rec in origins))
+                    if shape != 2:
+                        expected = ({(0x1000, 0x2000, 1, 123),
+                                     (0x1000, 0x2000, 2, 123),
+                                     (0x1000, 0x3000, 2, 123)}
+                                    if shape == 3 else
+                                    {(0x1000, 0x2000, 1, 123),
+                                     (0x1008, 0x2000, 2, 123)})
+                        self.assertEqual(set(origins), expected)
+
     STACK_HITS = textwrap.dedent("""
         import gc, _testinternalcapi
         class Probe:
@@ -1824,8 +1855,12 @@ class TracingCollectorTests(unittest.TestCase):
             self.assertIn(b"in _Py_TYPE_impl", err)
         else:
             self.assertIn(b"gc verify kill: Py_TYPE of the list at ", err)
-            self.assertIn(b"reached only through a PyMem block that the "
-                          b"word at ", err)
+            # The first origin depends on layout. Require the PyMem/core
+            # origin in this killed-list record, including when supplemental.
+            self.assertRegex(
+                err, rb"(?m)^gc verify kill: Py_TYPE of the list at [^\n]*"
+                rb"(?:reached only through |, and through )a PyMem block that "
+                rb"the word at 0x[0-9a-f]+ of a core frame at [^\n]+ points to[^\n]*$")
 
     MISSED_ROOT = textwrap.dedent("""
         import gc, sys, _testinternalcapi

@@ -715,11 +715,14 @@ In debug builds each collection marks twice before it frees anything:
   struct scan, and PyMem blocks that core opaque frames point to.
 
 Q, the objects in B but not A, were reached only through skipped words. A
-side table records each with the words that reached it: the one B marked
-it from, then every other skipped word whose value is the object, up to
-eight (the rest counted). Each has its address, its owner (function,
-class) and the collection number. A report names them all, since which
-word B meets first depends on the stack's layout. Two modes use Q, one
+side table records each with the words that reached it: B's first origin,
+then other skipped words that refer directly to the object or reach an
+object word through allocated PyMem carriers, up to eight (the rest
+counted). Carrier attribution follows nested PyMem pointers, with aliases
+and cycles visited once per origin; it does not replay alternative paths
+through arbitrary object tp_traverse graphs. Each origin has its word
+address, owner and collection number. A report keeps the supplemental
+origins because B's first origin depends on the stack's layout. Two modes use Q, one
 for retention and one for detection.
 
 - **`PYTHON_GCVERIFY=retain`**, a diagnostic. B decides: Q is kept

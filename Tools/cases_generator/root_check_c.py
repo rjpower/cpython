@@ -208,6 +208,8 @@ TYPE_WORDS = {
     "vectorcallfunc", "ternaryfunc", "binaryfunc", "unaryfunc",
     "PyCFunction", "getter", "setter", "descrgetfunc", "PyThreadState",
     "PyInterpreterState", "PyTime_t",
+    # Platform typedefs also occur in inactive branches checked on Unix.
+    "DWORD",
 }
 QUALIFIERS = {"const", "volatile", "static", "register", "restrict",
               "extern", "inline", "_Py_ALIGNED_DEF", PRECISE, ARGS_ANCHORED,

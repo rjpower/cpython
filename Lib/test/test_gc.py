@@ -3209,6 +3209,36 @@ class StackWalkTests(unittest.TestCase):
         self.assertTrue(found)
 
     @threading_helper.requires_working_threading()
+    @unittest.skipIf(Py_GIL_DISABLED, "fixture retains the producer GIL")
+    def test_parking_lot_caller_slot(self):
+        # Park holds raw wait state; the opaque caller owns the writable
+        # payload slot even after unpark, before the consumer reattaches.
+        for omit_caller in (False, True):
+            with self.subTest(omit_caller=omit_caller):
+                _testinternalcapi.gc_walk_park_reset()
+                received = []
+                thread = threading.Thread(
+                    target=lambda: received.append(
+                        _testinternalcapi.gc_walk_park_hold()))
+                thread.start()
+                try:
+                    before, after, same_capture = (
+                        _testinternalcapi.gc_walk_park_observe(omit_caller))
+                finally:
+                    _testinternalcapi.gc_walk_park_release()
+                    threading_helper.join_thread(thread)
+                self.assertTrue(same_capture)
+                caller = before[1]
+                if omit_caller:
+                    self.assertEqual(caller, 1)
+                else:
+                    self.assertIn(caller, (2, 3))  # core/extension opaque
+                covered = 0 if omit_caller else 1
+                self.assertEqual(before, (1, caller, covered, covered, 0))
+                self.assertEqual(after, (1, caller, covered, covered, 0))
+                self.assertEqual(received, [0x5a5a5a5a000000f1])
+
+    @threading_helper.requires_working_threading()
     def test_detached_register(self):
         # A thread that detaches with an object only in a callee-saved
         # register (note 11 question 16): through Py_BEGIN_ALLOW_THREADS, a

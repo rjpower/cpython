@@ -2509,6 +2509,32 @@ Py_GC_PRECISE static int f(PyObject *o) {
         self.assertIn("getter_fn",
                       root_check_c.typedef_names(root_check_c.tokens_of(src)))
 
+    def test_windows_scalar_cast(self):
+        # Windows SDK typedefs are unavailable to a Unix header scan, but
+        # the C mode must still check the complete inactive branch.
+        src = """
+Py_GC_PRECISE static DWORD f(PyTime_t div) {
+    DWORD millis = 0;
+#if defined(MS_WINDOWS)
+    millis = (DWORD) div;
+#else
+    millis = 0;
+#endif
+    return millis;
+}
+"""
+        self.assertEqual(self.check(src), [])
+        missing_root = src.replace("millis = (DWORD) div;", """
+    millis = (DWORD) div;
+    PyObject *x = PyLong_FromLong(1);
+    collect();
+    use(x);
+""")
+        errors = self.check(missing_root)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'x' is held only in a C local across the collecting "
+                      "call to 'collect'", errors[0])
+
     def test_call_through_pointer_collects(self):
         bodies = {
             "direct": root_check_c.tokens_of("{ return fp(x); }"),

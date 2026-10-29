@@ -8,6 +8,7 @@
 #include "pycore_gc_trace.h"      // _PyGC_TraceLiveRootsOfHidden()
 #include "pycore_gc_walk.h"
 #include "pycore_lock.h"          // PyEvent
+#include "pycore_parking_lot.h"   // _PyParkingLot_Park()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
@@ -755,6 +756,178 @@ gc_walk_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+/* A real Park owns no object-bearing word.  Its opaque caller's writable
+   output slot must still be scanned, both while parked and after unpark has
+   published a payload but the consumer has not reattached. */
+static PyEvent park_ready;
+static PyThreadState *park_holder;
+static uintptr_t *park_slot;
+static uint8_t park_waiting;
+
+static Py_NO_INLINE __attribute__((optimize("no-optimize-sibling-calls")))
+PyObject *
+gc_walk_park_hold(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    uintptr_t slot = SENTINEL(0xf0);
+    uint8_t expected = 0;
+    park_holder = _PyThreadState_GET();
+    park_slot = &slot;
+    // No intervening detach: the observer cannot regain the GIL until
+    // Park has captured this caller's persistent stack and detached.
+    _PyEvent_Notify(&park_ready);
+    int result = _PyParkingLot_Park(&park_waiting, &expected, sizeof(expected),
+                                    -1, &slot, 1);
+    park_slot = NULL;
+    park_holder = NULL;
+    if (result != Py_PARK_OK) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture did not park");
+        return NULL;
+    }
+    return PyLong_FromUnsignedLongLong(slot);
+}
+
+struct park_walk {
+    uintptr_t park_start, park_end, caller_start, caller_end;
+    uintptr_t *slot;
+    uintptr_t expected;
+    int park_class, caller_class, slot_seen, value_ok, fell_back;
+};
+
+static void
+park_walk_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa, int cls)
+{
+    struct park_walk *walk = arg;
+    if (walk->park_start <= pc && pc < walk->park_end) {
+        walk->park_class = cls;
+    }
+    if (walk->caller_start <= pc && pc < walk->caller_end) {
+        walk->caller_class = cls;
+    }
+}
+
+static void _Py_NO_SANITIZE_ADDRESS
+park_walk_scan(void *arg, uintptr_t start, uintptr_t end)
+{
+    struct park_walk *walk = arg;
+    uintptr_t slot = (uintptr_t)walk->slot;
+    if (start <= slot && slot + sizeof(*walk->slot) <= end) {
+        walk->slot_seen = 1;
+        walk->value_ok = *walk->slot == walk->expected;
+    }
+}
+
+static void
+park_walk_at(struct park_walk *walk, const _PyGCContext *ctx)
+{
+    _PyGCWalk w = {
+        .scan = park_walk_scan,
+        .frame = park_walk_frame,
+        .arg = walk,
+        .top = ((_PyThreadStateImpl *)park_holder)->c_stack_top,
+    };
+    walk->fell_back = _PyGC_WalkStack(&w, ctx);
+}
+
+static void
+park_publish(void *arg, void *park_arg, int has_more_waiters)
+{
+    if (park_arg != NULL) {
+        *(uintptr_t *)park_arg = SENTINEL(0xf1);
+    }
+}
+
+static PyObject *
+gc_walk_park_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+gc_walk_park_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (park_holder != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture is still active");
+        return NULL;
+    }
+    park_ready = (PyEvent){0};
+    park_waiting = 0;
+    Py_RETURN_NONE;
+}
+
+static PyValue
+gc_walk_park_observe(PyObject *self, PyValue arg)
+{
+    if (!_PyValue_IsFalse(arg) && !_PyValue_IsTrue(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected an omit-caller flag");
+        return PyValue_NULL;
+    }
+    Py_BEGIN_ALLOW_THREADS
+    PyEvent_Wait(&park_ready);
+    Py_END_ALLOW_THREADS
+
+    PyObject *result = NULL;
+    int registered = 0;
+    _PyGCFrameDesc park, caller;
+    if (park_holder == NULL || park_slot == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "fixture is not parked");
+        goto done;
+    }
+    _PyGCDetachRecord *record =
+        &((_PyThreadStateImpl *)park_holder)->gc_trace.detach;
+    _PyGCContext captured = record->cap;
+    if (!record->valid || !record->pinned
+        || _PyGC_DecodeDescriptor((uintptr_t)&_PyParkingLot_Park, &park) < 0
+        || _PyGC_DecodeDescriptor((uintptr_t)&gc_walk_park_hold, &caller) < 0
+        || !(park.func_start <= captured.pc && captured.pc < park.func_end))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "no pinned Park capture");
+        goto done;
+    }
+    if (_PyValue_IsTrue(arg)) {
+        // Negative control: omit this otherwise opaque caller's slot.
+        if (_PyGC_RegisterCodeRange(caller.func_start, caller.func_end,
+                                    _PyGC_FRAME_PRECISE, _PyGC_RANGE_TEST,
+                                    NULL) < 0)
+        {
+            PyErr_SetString(PyExc_RuntimeError, "the code range table is full");
+            goto done;
+        }
+        registered = 1;
+    }
+    struct park_walk before = {
+        .park_start = park.func_start, .park_end = park.func_end,
+        .caller_start = caller.func_start, .caller_end = caller.func_end,
+        .slot = park_slot, .expected = SENTINEL(0xf0),
+        .park_class = -1, .caller_class = -1,
+    };
+    park_walk_at(&before, &captured);
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    struct park_walk after = {
+        .park_start = park.func_start, .park_end = park.func_end,
+        .caller_start = caller.func_start, .caller_end = caller.func_end,
+        .slot = park_slot, .expected = SENTINEL(0xf1),
+        .park_class = -1, .caller_class = -1,
+    };
+    // Retaining the GIL prevents attachment; it does not prove that the
+    // consumer has already returned from its semaphore wait.
+    park_walk_at(&after, &captured);
+    int same_capture = record->valid && record->pinned
+        && memcmp(&record->cap, &captured, sizeof(captured)) == 0;
+    result = Py_BuildValue("((iiiii)(iiiii)i)",
+                          before.park_class, before.caller_class,
+                          before.slot_seen, before.value_ok, before.fell_back,
+                          after.park_class, after.caller_class,
+                          after.slot_seen, after.value_ok, after.fell_back,
+                          same_capture);
+done:
+    if (registered) {
+        _PyGC_UnregisterCodeRange(caller.func_start);
+    }
+    _PyParkingLot_Unpark(&park_waiting, park_publish, NULL);
+    return PyValue_FromResult(result);
+}
+
 /* 10a rung 2b item 3 (10a-2b.md section 1): an unpacked call's arguments
    in its caller's span.  gc_unpack_consumer(d, collect, k=obj), called
    with kwargs d through gc_unpack_call(), registers its frame precise,
@@ -884,6 +1057,10 @@ static PyMethodDef test_methods[] = {
     {"gc_walk_detach_holding", _PyCFunction_CAST(gc_walk_detach_holding), METH_O},
     {"gc_walk_release", gc_walk_release, METH_NOARGS},
     {"gc_walk_reset", gc_walk_reset, METH_NOARGS},
+    {"gc_walk_park_reset", gc_walk_park_reset, METH_NOARGS},
+    {"gc_walk_park_hold", gc_walk_park_hold, METH_NOARGS},
+    {"gc_walk_park_observe", _PyCFunction_CAST(gc_walk_park_observe), METH_O},
+    {"gc_walk_park_release", gc_walk_park_release, METH_NOARGS},
     {NULL},
 };
 

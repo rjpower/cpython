@@ -598,7 +598,12 @@ dev-default and dev-debug.
 - test_context: `test_hamt_gc_2` (release);
 - _test_multiprocessing: `test_finalize` (release; a padding slot in a call
   frame) and `_TestPool.test_release_task_refs` (all builds; a blocked pool
-  thread's call frame);
+  thread's call frame). The latter includes both WithProcessesTestPool
+  and WithThreadsTestPool in the fork, forkserver and spawn modules;
+  selecting only the process modules does not cover blocked consumers in
+  the thread pool. The 8ce matrices covered the process variants; the
+  first full O1 debug suite exposed all three thread variants still
+  failing through unused Park-frame padding (10a-2b.md, Park prerequisite);
 - test_set `test_container_iterator` and test_memoryview `test_gc` (debug;
   the alignment slot of `gc.collect()`'s wrapper);
 - test_descr `test_slots`'s and test_ctypes `test_issue_7959`'s allowance of
@@ -611,7 +616,15 @@ reports the root word's owner (function by `dladdr()`, class, offset),
 names the function to promote. An extension owner keeps the skip, named in
 its comment, and the row moves to 10b with that evidence.
 
-Known exclusions, which are not 10a's:
+Historical exclusions from the pre-Q1 runs follow. They record the original
+failures, not the current executed selection. Q1 and the forty passing
+shared-heap callback selections retired finding B's source skip. Current
+PROCESS rulings and `boil/tools/verify.manifest.json` supersede the whole
+test_capi.test_misc and import-class exclusions below. The executed stress
+policy uses only the retained `writer-resize`, `writers`, `writer-format`
+and `kill-pymem-metadata` exclusion rows, plus the machine remote-execution
+selector. Writer/root debt remains open; these historical broader filters
+must not be restored by deriving a new runner from this prose.
 
 - Under stress (`PYTHON_GCSTRESS=1000`), test_capi.test_misc as a whole.
   B class: shared-heap subinterpreter creation (finding B, question 18,

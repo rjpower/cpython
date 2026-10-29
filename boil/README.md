@@ -71,7 +71,7 @@ landing; this is the summary as of 2026-10-28 16:00 PDT.
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 (per-interpreter queues): landing review passed after fixes, full ladder clean, landing head due 2026-10-29 09:00 PDT | 7a rung 2: order across owners, metadata by owner, retirement and adoption, the fork child; takes review 2's sweep-order fix and two finalizer-order probes |
 | 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b (precise roots: the call layer, slot functions, dict entry points, the skips removed): end gates running; then two checker soundness fixes, landing review | 10a rungs 3 and 4: PyMem spans, writer buffers, buffer release, the platform matrix |
 | 6a, 6b: `PyValue` in the core and the value C API | compiler fix: copy propagation folds a local past an op that can run Python code (review 2 §5.1, reproduced); landing branch due 2026-10-29 14:00 PDT | 6e: remaining slot families, inline numeric receivers, the identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: slots on values (complete 2026-10-28) | | 7 generations; 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: slots on values (complete 2026-10-28) | | H: the handler contract (note 14), after 10a rung 3 and before 8; 7 generations; 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Performance position, instructions on the internal benchmark set
@@ -87,7 +87,7 @@ costs; that is a plan, not evidence.
 | `boil/README.md` | this: the starting point |
 | `boil/PROCESS.md` | the plan of record and position (§0), cleanup inputs from the reviews with owners (§0.1), intentional compatibility breaks (§0.2), the hand-off ledger (§0.3), the loop (§1), worktrees and branches (§2), the gate ladder (§3), reporting and tracing (§4) |
 | `boil/design/06-architecture-v2.md` | the architecture (sections 1 to 5), the step plan as first written (section 6), and one decision section per landed step (sections 9 to 21): what was built, what deviated, measurements |
-| `boil/design/07` to `13` | step design notes: 07 compiler passes, 08 the review at 6a and the hack register (section 3: every expedient kept, with its owner), 09 the object protocol, 10 the internal benchmark set and the ports deferral, 11 precise roots, 12 object slots on values, 13 per-interpreter queues (lands with 7a rung 1) |
+| `boil/design/07` to `14` | step design notes: 07 compiler passes, 08 the review at 6a and the hack register (section 3: every expedient kept, with its owner), 09 the object protocol, 10 the internal benchmark set and the ports deferral, 11 precise roots, 12 object slots on values, 13 per-interpreter queues (lands with 7a rung 1), 14 the handler contract |
 | `boil/design/reviews/` | peer reviews of the design notes; the whole-project review prompt |
 | `boil/design/work/<step>-<rung>.md` | one work doc per rung: design, review response, as-built record, gate lines with commits, hazards traced, hand-offs |
 | `boil/design/work/reviews/` | each rung's design review (`-review.md`) and landing review (`-landing.md`), kept per round |

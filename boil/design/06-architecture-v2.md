@@ -589,6 +589,13 @@ set, memory and collector group) is the record at every step, built now
 as step B. 6b's rung 4 was stopped at this ruling with the port states
 recorded.
 
+Plan revision, 2026-10-28 (note 14). A step H, the handler contract,
+is inserted after 10a rung 3 and before 8: what every generated handler
+does about position, frame, collector liveness, guards and the build,
+stated as generator rules so that tier 0's templates copy the lean form.
+The user's ruling: the interpreter need not be tuned to LuaJIT's level,
+but obvious improvements are not left on the ground.
+
 Why this order. The IR work comes first because it is independent of the
 object model, is where the current design is weakest, and because every
 later step writes handlers in the generator, which should be in its final

@@ -110,8 +110,11 @@ restored before the next run. `manifest.json` records the restored
 
 All seven controls produced exit 2 with the intended test failure/error;
 the retained logs contain assertions, not just exit summaries.
-`run_controls.py` reproduces the exact patches under the gate lock and
-machine slots, restoring source in a finally block. The final source
+The historical runner changed live source before taking the test lock and
+restored it after release. Those manually quiescent runs and restored
+hashes remain evidence, but the reproducer did not itself guarantee source
+isolation. The independent review found that defect; the correction below
+replaces it with copies, leaving these historical logs intact. The final source
 hash is `79150615e5cb059cff7b6fb8428a95dad363db2205e689d4d92237390282c0b9`.
 Controls prove these generator invariants, not all remaining wide runtime
 consumers or the future pristine-state contract.
@@ -158,4 +161,57 @@ codec coherently. Stage 4 renumbers only after closure, removes threshold
 exports and bumps magic. None is silently counted as complete by this
 numbering-preserving generator commit. H3-2 operations, H1/H2 root work,
 ROOTS checker enforcement and checkpoint-I performance obligations retain
-their existing owners. Independent stage-1 implementation review is due.
+their existing owners. The independent implementation review and its runner fix are recorded below.
+
+
+## Landing review: copied-source control fix
+
+`reviews/H3-1-stage1-landing.md` returned FIX_FIRST: generator code and
+identity evidence cleared review, but the retained control script wrote a
+broken live generator before acquiring the test/build lock and restored it
+after release. A per-build lock would also not protect the other build's
+shared source reads. The earlier reproduction-lock claim is corrected
+above; manually quiescent historical controls are not relabeled as
+lock-protected transactions.
+
+The fix eliminates live mutation. `run_controls.py` copies generator
+Python files plus `Python/bytecodes.c` and `Include/opcode.h` into a unique
+task-owned directory under `build/H3-1/isolated-controls`. Every changed
+variant is written only there. `isolated-worker.py` initializes copied
+imports in both the regrtest driver and every worker, checks all seven
+numeric-generator/analyzer module paths, and asserts the copied generator
+hash before running tests. File readers see the copied inputs at their
+normal relative locations. No parent-only import-path change is assumed
+to survive worker spawning.
+
+Tests still use the existing gate runner's machine slots and qualified
+build lock, with no nested locks. Each transaction is bounded by
+`timeout -k 30 2400`, matching gate 1's process-group ceiling and cleanup
+rather than invoking an unbounded runner. Those locks protect test/build use;
+source safety comes from never writing the live tree. Hash snapshots
+before, after each case and after all cases cover live generator sources,
+inputs, test module and all seven generated products. Consequently neither
+build can observe a broken live variant, even while another build's gate
+runs. The unique copied tree and its pycache are removed afterward, with
+fresh logs and provenance retained under `isolated/`. The exact fault
+patches are identical to the retained files in its parent directory.
+
+Fresh evidence is retained under `isolated/`: the copied positive suite
+passes all 7 domain tests; all 7 copied negative variants fail with the
+same source and patch hashes as the original controls. Both driver and
+worker verify copied imports and variant hashes. The positive log contains
+no traceback; its explicit `-m platform` auxiliary probe is supported by
+the launcher. The original live Ogdebug `test_generated_cases` module also
+passes all 62 tests. Manifest before/after snapshots are identical, all
+current live files match them, and the copied tree/pycache was removed.
+The manifest records runner/worker hashes, exact bounded commands and
+revision `e7cc59743e1` plus this uncommitted artifact-only fixup; these runs
+are not relabeled as a later commit's tests. Production generator/C/test sources and all seven products are unchanged from
+`e7cc59743e1`; this fix changes only the evidence runner, its worker,
+review/disposition record and captured results. The original smoke,
+targeted and kill runs retain their exact source-hash scope; no new full
+runtime gate is claimed or needed for this artifact-only change.
+
+| Finding | Disposition |
+|---|---|
+| Live mutation occurs before lock acquisition and restoration after release; one build lock cannot protect both builds' shared sources | Replace live mutation with task-owned copied generators/inputs; explicitly verify copied driver/worker imports and hashes, live before/after equality and scratch cleanup. Fresh positive/negative evidence below is the reviewable fixup; original review remains FIX_FIRST rather than rewritten as a new review verdict. |

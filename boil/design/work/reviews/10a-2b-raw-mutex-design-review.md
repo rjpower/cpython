@@ -148,3 +148,133 @@ source/product binding. This review prescribes neither automatic reuse nor
 an automatic repeat of all 120 transactions. Tailcall make, support smoke,
 full tests, variant adapters and later landing each keep their existing
 separate authorization and review boundaries.
+
+## Round 2: task-copy control evidence
+
+Verdict: **TASK_COPY_CONTROLS_CLEAR**, 2026-10-29. The preceding design
+review remains history. This closes its source-checker and linked-oracle
+controls, not its real ASan build or source/native reconciliation boundary.
+Production source remains clean `1bfe`; no source update or build retry is
+authorized by this disposition. The reviewer read retained files and
+checked hashes without running the checker, compiler, audit or fixtures.
+
+Reviewed `raw-mutex-design/controls-v1/plan.json`
+`2d80a1c24d6ea3900a96314f83e34943ddd3d40ac53ebc7a4a68e9db940fe7da`,
+`result.json`
+`a6c0617cdf24ca58720e7b22df3d8defd3911c6b6d6d67e1b4df0eddf21593ea`,
+and `build/takeover-20261029/raw_mutex_controls.py`
+`6adfa48c0df3a5ef6ee47d6dfc916e2f5a4aa2fc76281b6d5252a4bce24b07fd`.
+All 32 retained artifact hashes, the plan's 813 default/debug/ASan native
+entries, the pilot's complete frozen source map and the actual GCC binary
+hash match current bytes. The plan binds the unchanged proposal/header and
+pilot identity. The runner checks the actual inherited ASan build lock and
+one of the two machine slots before compiling, then repeats source/helper/
+compiler/native guards before writing its non-overwritten result.
+
+Both complete proposed-header definitions were explicitly parsed as
+precise, and each extracted definition was checked equal to its old bytes
+plus the marker. Both actual-header source positives pass. Each copied
+header inserts `held = PyLong_FromLong(7)` immediately before its own slow
+call and reads it afterward. Each produces exactly one held-local error at
+that unchanged slow call. These are expected checker failures; no managed
+object was actually created or collected by the control.
+
+The four retained fixtures are linked PIE executables with `.debug_info`,
+both outlined wrapper symbols and recorded precise-section membership.
+Their wrapper bodies match the extracted source. GCC15.2 uses `-Og -g
+-fsanitize=address` and fixture-only outlining/IPA restrictions. The old
+variant has exactly both named outlined findings; the fully marked variant
+has none; each omitted marker restores exactly its own named finding.
+The recorded ELF/nm/DWARF/audit logs agree with those outcomes. The CAS
+implementation and collecting slow stubs in this fixture are simplified
+oracle scaffolding, not replacement production synchronization code.
+
+The runner contains no target-interpreter or compiled-fixture invocation;
+its subprocesses compile or inspect retained files. No runtime, contention,
+platform, reclamation, ASan-safety or performance positive follows from
+these controls. The original actual ASan `BUILD_FAIL` remains unresolved
+until a separately authorized real-source build. Any new outlined finding
+still stops the two-marker scope. All original source-freeze, native bridge,
+qualification and coordinator-grant requirements remain in force.
+
+## Round 3: post-quiescence transition design
+
+Verdict: **TRANSITION_DESIGN_CLEAR**, 2026-10-29. Reviewed ROOTS
+`raw-mutex-design/TRANSITION.md`, SHA256
+`8efe77a5151ca5bdb250a84180d2471c2fc92dd8c5985a69d3dde86164a832a6`.
+No native execution, source change, preservation copy or owner-file edit
+was performed by the reviewer. This clears the schedule and evidence
+boundaries; exact boundary/snapshot and executor plans remain unreviewed,
+so no production edit or rebuild starts from this disposition alone.
+
+The plan preserves both complete `1bfe` matrices and their pilot iteration
+zero before any edit, with immutable source/helper/configuration/compiler/
+product bindings. At review time source was still clean `1bfe`; the retained
+release completion matches its stated hash
+`63235055669267369b32a1ae04101f599b222d0176f7ce1c045ac1aa7d558c06`.
+This review does not newly audit or claim completion of either matrix.
+Both completed receipts and actual process/build quiescence must be checked
+at the handoff. Preserve every old product path's alias/target identity and
+bytes, including separately labeled failed ASan and old tailcall products.
+Content-addressed copying may deduplicate bytes without collapsing path or
+build provenance. The 542-path default/debug set is the accepted runtime/
+configuration inventory, not a claim to preserve every intermediate object
+in the build directory. Keep its original coverage definition explicit.
+
+**Commit-order ruling.** PROCESS section 1.3 and gate 1 normally require
+targeted tests before every commit. Section B instead commits the exact
+marker change before fresh native builds to obtain a clean guard identity.
+The coordinator explicitly accepts this **one-time exception**: only after
+both old matrices finish and the preserved, quiescent boundary verifies,
+the exact two-marker patch `34b5e35e6b58` may be committed on the strength
+of the independently reviewed source and task-copy source/linked controls
+(`a6c0617c`; round2 review `b7d5eaf5`). This exception establishes source
+identity only. It is neither native gate1/PASS nor landing qualification,
+does not cover another source hunk, and creates no general policy. A new
+clean HEAD, exact header hash and complete approved-delta source guard must
+be recorded. Old HEAD-bound `loaded()` guards must fail on new source and
+remain unchanged. No amend, rebase or attribution trailer is introduced.
+
+The make-only sequence is sound: retain exact configuration/compiler
+inputs, admit one transaction per build under normal slot/build locks,
+run fresh default/debug/ASan makes with bootstrap actions identified as
+build steps, then capture complete NEW products under lock before smoke.
+Tailcall has its own make/product freeze. Any additional outlined finding
+stops this two-marker scope. Executor identities, timeouts, pre/post guards,
+failure receipts and lock lifetimes still need their concrete plan review.
+
+Full retained ELF payloads make later independent decoding possible.
+Compare every changed runtime product and alias, including executable code,
+symbol/section membership, data/relocation layout, CFI and root-relevant
+DWARF/inlined ranges/locations. Summaries should identify changed sections,
+symbols and relevant root/unwind differences; use focused decoding where
+needed rather than enormous text dumps for every ELF. Preserve complete
+bytes and tool identities so concise reporting does not discard evidence.
+Report version/build metadata differences too. Current absence of default/
+debug wrapper symbols does not establish future output equality.
+
+The mandatory **STOP for coordinator disposition** after those comparisons
+is correct. Neither a clean source delta nor equal selected machine code
+automatically rebinds old 120-transaction evidence. Old receipts always name
+`1bfe`. The coordinator must decide the native/source/precision/unwind bridge
+and affected repetition scope from actual results. No automatic carry-forward
+or automatic complete 120-transaction repetition is prescribed here.
+
+The proposed bounded fresh set is appropriately scoped: strict stale100,
+complete StackWalkTests with real Park/caller-slot/detached-register controls,
+the three original thread selectors, both separate eval invocations and
+whole test_generated_cases on release/debug/debug-kill. The StackWalkTests
+source includes the real Park control; its method listing is not a runtime
+count guarantee. Apply actual-kind/debug/assertion/mode/seed/main0/domain/
+zero-fallback/protected-skip checks in a newly frozen adapter, preserving the
+39-case policy and honest selection-based success inference. New ASan and
+tailcall qualification remain bound to their actual fresh products, with
+only accepted selectors and no invented release-kill or ASan1000 claim.
+
+The full new-source chain in section E stays required through separately
+reviewed plans and grants. The old source-only full draft is not an execution
+identity after the header change. Fresh driver/scheduled/returned module
+rosters and actual counts/skips/resources must be observed; the source roster
+alone does not prove execution. Once-only tail/retain work remains the
+existing 10a4/H1 handoff. No O1 adoption, baseline setup, benchmark, root
+policy change or weaker exclusion follows from this transition review.

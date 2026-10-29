@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 12:45 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 13:00 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,12 +71,12 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 12:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 13:00 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded. Both old8ce matrices pass; debug full exposes Park retention. The six-file repair1bfe clears source review/71 bounded checks and both pilots; nineteen continuations run. ASan make stops at two unclassified raw wrappers; a bounded source proposal is under review. Historical ASan14 passes3,616 with its exact accepted allocator exclusion; unfiltered failure stays recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded. Both old8ce matrices pass; debug full exposes Park retention. The six-file repair1bfe clears source review/71 bounded checks and both pilots; nineteen continuations run. ASan make stops at two unclassified raw wrappers; two-marker design/control review clears, with transition pending debug completion. Historical ASan14 passes3,616 with its exact accepted allocator exclusion; unfiltered failure stays recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
 | 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats design81417aff097 clears readiness review; native work awaits the source handoff, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
@@ -168,13 +168,18 @@ five individual1/0 selections, then501tests/116release or101debug skips across
 four complete modules, with no protected skip and zero fallback. Actual module
 contracts and51.203s/144.224s turnaround are retained; these are qualification
 timings, not performance benchmarks. Reviewed nineteen-only plan0d84e7d2 is
-running against those immutable pilots:81/114release and35/114debug new jobs
-pass at the hourly snapshot, with no fallback or exact-contract drift.
+running against those immutable pilots. Release completes114 new jobs plus
+its pilot:120transactions/20iterations,10,120tests/2,320 recorded skips, zero
+fallback. Completion63235055 re-audits every original journal. Debug71/114 new
+jobs pass at13:00, with no fallback or exact-contract drift.
 No full suite has started. Separate ASan make-only plan71340975 stops BUILD_FAIL
 at its actual linked audit: two outlined raw-mutex wrappers called by precise
 Park lack precision classifications. No smoke/test ran. Exact two-marker
-proposal34b5e35e is under independent source review; current source/repeats stay
-unchanged. No support retry, tailcall build or audit exception is granted.
+proposal34b5e35e clears independent source review and task-copy controls:
+actual-header held-local negatives and linked old/new/omit-each audit oracles
+pass. Transition8efe clears design review; production edit waits for both
+completed matrices, preserved products and the exact new executor plan.
+Current source/repeats stay unchanged; no support retry or audit exception.
 There are39 protected selectors. Changed checker-suite coverage, stale100,
 compiled walks, fresh ASan/tail builds and full normal/kill/stress/extras
 remain required on the repaired source before landing review.
@@ -236,7 +241,10 @@ The source-only [baseline binding plan](design/work/pre-I-baseline-binding.md)
 confirms that the old upstream executable's configured library root is the
 active fork. Preserve its historical results; a separately owned exact-upstream
 source/build/import environment and stronger runner identity are required
-before checkpoint-I measurements. No new baseline build or benchmark has run.
+before checkpoint-I measurements. One owned exact321925 detached source tree
+is now clean and inventoried; configure-runner review found admission, tool
+closure and cleanup-receipt gaps before execution. No configure, new baseline
+build or benchmark has run.
 
 Shared gate cleanup now holds the build lock until its sweep finishes;
 an interrupted waiter cannot sweep another run's workers. The controlled

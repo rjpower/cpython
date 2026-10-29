@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 12:45 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 13:00 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -457,6 +457,9 @@ nineteen-only plan0d84e7d2/adapter9ace5493 now runs114 new transactions per buil
 with pilot iterationzero bound unchanged. At12:45 release81/114 and debug35/114
 pass, with no failure/fallback or exact-contract drift. Complete markers must
 re-audit all original journals. No full profile or O1 adoption follows yet.
+At13:00 release completion63235055 independently re-audits all114 new jobs;
+with its pilot this is120transactions/20iterations,10,120tests/2,320 recorded
+skips and zero fallback. Debug71/114 new jobs pass; its completion is pending.
 
 Separate make-only support plan71340975/a6f4ba2b clears review after a named
 Makefile/pyconfig pre/post guard closes its original configuration gap. ASan
@@ -464,10 +467,17 @@ make stops BUILD_FAIL at the actual inline audit after73.901s: precise Park
 calls outlined raw-mutex Lock/Unlock wrappers lacking precision classification.
 No smoke/test ran; this is separate from the known allocator-test failure.
 Proposal34b5e35e adds only two wrapper precision markers; designfb291817 is
-under independent source review. The current1bfe repetitions remain frozen;
-no source edit, audit exception, support retry or tailcall make is granted.
-Copied source/compiler controls and later source/native reconciliation require
-an explicit ruling; neither blanket rerun nor automatic reuse is assumed.
+source review clears as recorded below. Current1bfe repetitions stay frozen;
+no audit exception, support retry or tailcall make is granted. The conditional
+transition ruling below governs the later source edit.
+Copied source/compiler controls2d80/a6c pass and clear independentb7d review:
+both real header bodies are checked, each held-local negative reaches its Slow
+call, linked old2/new0/omit1/1 findings and symbols/sections/DWARF agree.
+Transition8efe clears reviewdacaf. Root grants a one-time source/linked-control
+gated commit for ONLY two markers after both completed matrices/quiescence and
+preserved boundary/exact executor review; it establishes a clean new identity,
+not nativegate1/PASS or landing. Fresh make/inventory/comparison must stop for
+root's affected-coverage decision. No blanket rerun or automatic reuse.
 
 The coordinator explicitly carries unchanged legacy31-selector/11-module
 evidence forward at8ce, supported by body correspondence42350872, all seven

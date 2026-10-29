@@ -3702,3 +3702,37 @@ full review and grants only task-copy source/compiled oracle controls while
 1bfe repetitions continue. Real header edit/rebuild still waits for quiescence,
 control outcomes and a reviewed native bridge/affected rerun plan. No extra
 marker, slow-body edit, effect exception or support retry is covered.
+
+
+### 13:00 PDT: release twenty complete; raw controls and transition ready
+
+Release completion63235055 re-audits114 fresh receipts/journals at1bfe/0d84;
+with the immutable pilot it completes120transactions/20iterations,
+10,120tests/2,320 exact recorded skips and zero fallback. New nineteen alone
+record230,148collections/40,464report-only unpinned. Root reads completion
+and fresh progress directly: debug71/114 new jobs pass,11new whole-module
+orders, no failures/fallback; no debug completion yet. Full profiles stay held.
+
+Task-copy raw controls2d80/a6c pass: actual complete header definitions/bodies,
+exact held-Slow negatives, four live linked GCC/ASan fixtures with old2/new0/
+omit1/1 findings, sections and DWARF. No target interpreter/fixture executed.
+All813 current product entries/source/compiler/helper inputs stay unchanged.
+Independentb7d validates32 artifacts. Root reads the result; real ASan audit
+failure remains unclosed. Transition8efe/dacaf preserves all1bfe products and
+receipts, establishes new guards, fixed-config make/new-product-before-smoke,
+and actual code/precision/CFI/root-DWARF comparison before a separate coverage
+decision. Root explicitly permits a one-time source/linked-control-gated
+two-marker commit after both completions, quiescence, preserved snapshot and
+reviewed executor. It is unqualified native source, not gate1/PASS/landing.
+No actual header edit/rebuild, automatic120 reuse/redo or support retry yet.
+
+The separate owned upstream source checkout is now cleanexact321925 with5806
+tracked inputs; root independently checks its clean HEAD. No configure/build
+or target interpreter ran. Baseline review accepts source/concept, but finds
+runner blockers before configure: slot lifetime/duplicate admission, missing
+inherited-lock proof, incomplete claimed compiler-tool closure and final outer
+cleanup receipt. Author revises task-owned artifacts with harmless host controls;
+source and all old baselines stay intact. Match fork's actual auto-var-init=zero
+as well as compiler/frame-pointer policy in the attribution cohort; no stock
+production claim follows. Source-setup workrecord and native-phase plans await
+their frozen review. Next hourly report remains13:45 PDT.

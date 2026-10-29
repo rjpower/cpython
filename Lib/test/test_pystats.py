@@ -79,14 +79,21 @@ def run_test_code(
     code = textwrap.dedent(TEST_TEMPLATE)
     code = code.replace('_TEST_CODE_', textwrap.dedent(test_code))
     script_args = args + ['-c', code]
-    env_vars = env_vars or {}
-    res, _ = script_helper.run_python_until_end(*script_args, **env_vars)
-    stderr = res.err.decode("ascii", "backslashreplace")
-    for line in stderr.split('\n'):
-        if 'Rare event (set_class)' in line:
-            label, _, value = line.partition(':')
-            return value.strip()
-    return ''
+    with tempfile.TemporaryDirectory() as directory:
+        env_vars = dict(env_vars or {}, PYTHON_STATS_DIR=directory)
+        script_helper.assert_python_ok(*script_args, **env_vars)
+        values = set()
+        for path in Path(directory).glob('*.txt'):
+            for line in path.read_text().splitlines():
+                if line.startswith('Rare event (set_class):'):
+                    values.add(line.partition(':')[2].strip())
+        # An explicit dump and the final dump can contain the same snapshot.
+        # Neither depends on whether the shared default directory exists.
+        if not values:
+            return ''
+        if len(values) != 1:
+            raise AssertionError(f'inconsistent set_class snapshots: {values}')
+        return values.pop()
 
 
 @unittest.skipUnless(HAVE_PYSTATS, "requires pystats build option")

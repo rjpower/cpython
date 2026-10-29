@@ -1,0 +1,4 @@
+default positive 0
+default token_truncate 1
+default line_truncate 1
+default raw_alias 1

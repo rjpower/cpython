@@ -139,6 +139,278 @@ class MonitoringTestBase:
         sys.monitoring.free_tool_id(TEST_TOOL3)
 
 
+class MonitoringStorageTest(MonitoringTestBase, unittest.TestCase):
+    def test_primitive_storage_boundaries(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        baseline = [(255, -1), (511, 0), (65535, 2**31 - 1)]
+        for index in range(3):
+            for opcode in (0, 255, 256, 511, 65535):
+                for line in (-1, 0, 1, 2**31 - 1):
+                    with self.subTest(index=index, opcode=opcode, line=line):
+                        expected = baseline[:]
+                        expected[index] = (opcode, line)
+                        self.assertEqual(capi.monitoring_storage_roundtrip(index, opcode, line),
+                                         tuple(expected))
+        for args in ((-1, 1, 1), (3, 1, 1), (0, -1, 1),
+                     (0, 65536, 1), (0, 65536 + dis.opmap["NOP"], 1), (0, 1, -2)):
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                capi.monitoring_storage_roundtrip(*args)
+
+    def test_deinstrument_scalar_and_alias(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        import _opcode_metadata
+        ids = {**_opcode_metadata.opmap, **_opcode_metadata._ir_opmap}
+        for name, opcode in ids.items():
+            if name.startswith("INSTRUMENTED_"):
+                expected = ids.get(name.removeprefix("INSTRUMENTED_").removesuffix("_NOFB"), 0)
+                if name in ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"):
+                    expected = 0
+                self.assertEqual(capi.monitoring_deinstrument(opcode), expected, name)
+        for opcode in (-1, 65535, 65536, 65536 + ids["NOP"]):
+            self.assertEqual(capi.monitoring_deinstrument(opcode), -1)
+        self.assertEqual(capi.monitoring_deinstrument(ids["NOP"]), 0)
+        self.assertEqual(capi.monitoring_deinstrument(ids["INSTRUMENTED_LOAD_SUPER_ATTR_NOFB"]),
+                         ids["LOAD_SUPER_ATTR"])
+
+    def test_new_tool_retains_existing_membership(self):
+        for initial, added in ((E.INSTRUCTION, E.INSTRUCTION),
+                               (E.LINE | E.INSTRUCTION, E.LINE)):
+            with self.subTest(initial=initial, added=added):
+                namespace = {}
+                exec("def f(x):\n    y = x + 1\n    return y * 2\n", namespace)
+                func = namespace["f"]
+                code = func.__code__
+                seen = []
+                def record(current, offset):
+                    if current is code:
+                        seen.append(offset)
+                sys.monitoring.register_callback(TEST_TOOL, E.INSTRUCTION, record)
+                try:
+                    sys.monitoring.set_local_events(TEST_TOOL, code, initial)
+                    self.assertEqual(func(3), 8)
+                    expected = seen[:]
+                    self.assertTrue(expected)
+                    seen.clear()
+                    sys.monitoring.set_local_events(TEST_TOOL2, code, added)
+                    self.assertEqual(func(3), 8)
+                    self.assertEqual(seen, expected)
+                finally:
+                    for tool in (TEST_TOOL, TEST_TOOL2):
+                        sys.monitoring.set_local_events(tool, code, 0)
+
+    def test_disabled_site_does_not_lose_enabled_membership(self):
+        for event in (E.LINE, E.INSTRUCTION):
+            for nested in (False, True):
+                with self.subTest(event=event, nested=nested):
+                    namespace = {}
+                    exec("def f(x):\n    y = x + 1\n    return y * 2\n", namespace)
+                    func = namespace["f"]
+                    code = func.__code__
+                    first, second = [], []
+                    disabled = None
+                    def record_a(current, site):
+                        nonlocal disabled
+                        if current is code:
+                            first.append(site)
+                            if disabled is None:
+                                disabled = site
+                            if site == disabled:
+                                return sys.monitoring.DISABLE
+                    def record_b(current, site):
+                        if current is code:
+                            second.append(site)
+                    sys.monitoring.register_callback(TEST_TOOL, event, record_a)
+                    sys.monitoring.register_callback(TEST_TOOL2, event, record_b)
+                    initial = E.LINE | E.INSTRUCTION if nested else event
+                    try:
+                        sys.monitoring.set_local_events(TEST_TOOL, code, initial)
+                        func(3)
+                        all_sites = set(first)
+                        enabled = all_sites - {disabled}
+                        self.assertTrue(enabled)
+                        first.clear()
+                        sys.monitoring.set_local_events(TEST_TOOL2, code, event)
+                        func(3)
+                        # DISABLE may permit extra events; enabled membership is mandatory.
+                        self.assertTrue(enabled <= set(first), (enabled, first))
+                        self.assertTrue(all_sites <= set(second), (all_sites, second))
+                        first.clear()
+                        sys.monitoring.restart_events()
+                        func(3)
+                        self.assertIn(disabled, first)
+                    finally:
+                        for tool in (TEST_TOOL, TEST_TOOL2):
+                            sys.monitoring.set_local_events(tool, code, 0)
+                            sys.monitoring.register_callback(tool, event, None)
+
+    def test_local_allocation_failure_and_identical_retry(self):
+        import gc
+        capi = import_helper.import_module("_testinternalcapi")
+        alloc = import_helper.import_module("_testcapi")
+        for transition in (False, True):
+            failures = 0
+            reached_success = False
+            for ordinal in range(8):
+                with self.subTest(transition=transition, ordinal=ordinal):
+                    namespace = {}
+                    exec("def f(x):\n    y = x + 1\n    return y * 2\n", namespace)
+                    func = namespace["f"]
+                    code = func.__code__
+                    func(3)
+                    initial = E.LINE | E.INSTRUCTION if transition else 0
+                    sys.monitoring.set_local_events(TEST_TOOL, code, initial)
+                    before = capi.monitoring_state(code)
+                    words = capi.get_ir(code, True)
+                    seen = []
+                    def record(current, offset):
+                        if current is code:
+                            seen.append(offset)
+                    tool = TEST_TOOL2 if transition else TEST_TOOL
+                    sys.monitoring.register_callback(tool, E.INSTRUCTION, record)
+                    gc.collect()
+                    requested = E.LINE | E.INSTRUCTION
+                    try:
+                        try:
+                            alloc.call_with_nomemory(ordinal, 0, sys.monitoring.set_local_events,
+                                                     tool, code, requested)
+                        except MemoryError:
+                            failures += 1
+                            self.assertEqual(capi.monitoring_state(code), before)
+                            self.assertEqual(capi.get_ir(code, True), words)
+                            self.assertEqual(sys.monitoring.get_local_events(tool, code), 0)
+                        else:
+                            reached_success = True
+                        sys.monitoring.set_local_events(tool, code, requested)
+                        self.assertEqual(func(3), 8)
+                        self.assertTrue(seen)
+                    finally:
+                        for tool in (TEST_TOOL, TEST_TOOL2):
+                            sys.monitoring.set_local_events(tool, code, 0)
+                    if reached_success:
+                        break
+            self.assertTrue(reached_success)
+            self.assertGreaterEqual(failures, 3)
+
+    def test_uninstrumented_code_retains_configured_local_events(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        CO_NO_MONITORING_EVENTS = 0x2000000  # Include/cpython/code.h
+        sys.monitoring.set_events(TEST_TOOL2, E.PY_START)
+        sys.monitoring.set_events(TEST_TOOL2, 0)
+        def func(x):
+            # Refresh global state with the suppressed frame on the stack.
+            sys.monitoring.set_events(TEST_TOOL2, E.PY_START)
+            sys.monitoring.set_events(TEST_TOOL2, 0)
+            return x + 1
+        func.__code__ = func.__code__.replace(
+            co_flags=func.__code__.co_flags | CO_NO_MONITORING_EVENTS)
+        code = func.__code__
+        seen = []
+        def record(current, offset):
+            if current is code:
+                seen.append(offset)
+        sys.monitoring.register_callback(TEST_TOOL, E.INSTRUCTION, record)
+        before = capi.get_ir(code, True)
+        requested = E.LINE | E.INSTRUCTION
+        try:
+            sys.monitoring.set_local_events(TEST_TOOL, code, requested)
+            self.assertEqual(sys.monitoring.get_local_events(TEST_TOOL, code), requested)
+            self.assertEqual(capi.get_ir(code, True), before)
+            state = capi.monitoring_state(code)
+            self.assertFalse(any(state[1]))
+            self.assertEqual(state[4], (0, 0, 0, 0, 0))
+            self.assertEqual(func(3), 4)
+            self.assertEqual(seen, [])
+            self.assertEqual(capi.monitoring_state(code), state)
+        finally:
+            sys.monitoring.set_events(TEST_TOOL2, 0)
+            sys.monitoring.set_local_events(TEST_TOOL, code, 0)
+        self.assertEqual(sys.monitoring.get_local_events(TEST_TOOL, code), 0)
+
+    def test_uninstrumented_generator_throw(self):
+        CO_NO_MONITORING_EVENTS = 0x2000000  # Include/cpython/code.h
+        sys.monitoring.set_events(TEST_TOOL2, E.PY_START)
+        sys.monitoring.set_events(TEST_TOOL2, 0)
+        def gen():
+            try:
+                yield 1
+            except ValueError:
+                yield 2
+        gen.__code__ = gen.__code__.replace(
+            co_flags=gen.__code__.co_flags | CO_NO_MONITORING_EVENTS)
+        seen = []
+        def record(current, offset):
+            if current is gen.__code__:
+                seen.append(offset)
+        sys.monitoring.register_callback(TEST_TOOL, E.INSTRUCTION, record)
+        try:
+            sys.monitoring.set_local_events(TEST_TOOL, gen.__code__, E.INSTRUCTION | E.LINE)
+            it = gen()
+            self.assertEqual(next(it), 1)
+            self.assertEqual(it.throw(ValueError), 2)
+            it.close()
+            self.assertEqual(seen, [])
+        finally:
+            sys.monitoring.set_local_events(TEST_TOOL, gen.__code__, 0)
+
+    def test_uninstrumented_handled_exception_without_local_data(self):
+        import gc
+        capi = import_helper.import_module("_testinternalcapi")
+        CO_NO_MONITORING_EVENTS = 0x2000000  # Include/cpython/code.h
+        def suppressed():
+            try:
+                return 1 // 0
+            except ZeroDivisionError:
+                return 7
+        ordinary = types.FunctionType(suppressed.__code__, globals())
+        suppressed.__code__ = suppressed.__code__.replace(
+            co_flags=suppressed.__code__.co_flags | CO_NO_MONITORING_EVENTS)
+        self.assertIsNone(capi.monitoring_state(suppressed.__code__))
+        events = []
+        def record(current, offset, exc):
+            if current is suppressed.__code__ or current is ordinary.__code__:
+                events.append(current)
+                gc.collect()
+        sys.monitoring.register_callback(TEST_TOOL2, E.EXCEPTION_HANDLED, record)
+        try:
+            sys.monitoring.set_events(TEST_TOOL2, E.EXCEPTION_HANDLED)
+            self.assertEqual(suppressed(), 7)
+            self.assertIsNone(capi.monitoring_state(suppressed.__code__))
+            self.assertEqual(events, [])
+            self.assertEqual(ordinary(), 7)
+            self.assertEqual(events, [ordinary.__code__])
+        finally:
+            sys.monitoring.set_events(TEST_TOOL2, 0)
+
+    def test_absolute_lines_from_valid_ast(self):
+        import ast
+        for first, line in ((10, 1), (10, 8), (1, 2**31 - 1)):
+            with self.subTest(first=first, line=line):
+                loc = dict(lineno=line, col_offset=0, end_lineno=line, end_col_offset=1)
+                body = ast.Return(value=ast.Constant(value=1, **loc), **loc)
+                node = ast.FunctionDef(
+                    name="f", args=ast.arguments(posonlyargs=[], args=[], kwonlyargs=[],
+                                                 kw_defaults=[], defaults=[]),
+                    body=[body], decorator_list=[], lineno=first, col_offset=0,
+                    end_lineno=max(first, line), end_col_offset=1)
+                namespace = {}
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "<lines>", "exec"), namespace)
+                func = namespace["f"]
+                code = func.__code__
+                valid = {ln for _, _, ln in code.co_lines() if ln is not None}
+                seen = []
+                def record(current, lineno):
+                    if current is code:
+                        seen.append(lineno)
+                sys.monitoring.register_callback(TEST_TOOL, E.LINE, record)
+                try:
+                    sys.monitoring.set_local_events(TEST_TOOL, code, E.LINE)
+                    self.assertEqual(func(), 1)
+                    self.assertTrue(set(seen) <= valid, (seen, valid))
+                    self.assertIn(line, seen)
+                finally:
+                    sys.monitoring.set_local_events(TEST_TOOL, code, 0)
+
+
 class MonitoringCountTest(MonitoringTestBase, unittest.TestCase):
 
     def check_event_count(self, func, event, expected):

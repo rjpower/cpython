@@ -514,6 +514,26 @@ class CodeTest(unittest.TestCase):
             foo.__code__.replace(
                 co_code=bad.to_bytes(2, 'little') + foo.__code__.co_code[2:])
 
+    def test_runtime_handlers_not_pristine(self):
+        import marshal
+
+        def f():
+            return "unique pristine marshal payload"
+
+        code = f.__code__
+        payload = marshal.dumps(code)
+        self.assertEqual(payload.count(code.co_code), 1)
+        for name in ("INSTRUMENTED_LINE", "BINARY_OP_ADD_INT",
+                     "INTERPRETER_EXIT", "EXIT_INIT_CHECK"):
+            with self.subTest(handler=name):
+                raw = opname.index(name).to_bytes(2, "little") + code.co_code[2:]
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    code.replace(co_code=raw)
+                # Marshal calls _PyCode_New directly, bypassing replace's
+                # front end. Never execute the deliberately malformed word.
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    marshal.loads(payload.replace(code.co_code, raw, 1))
+
     def test_code_units_padded(self):
         # Cython passes zeroed code in 2-byte units that only spans its line
         # table; the constructor pads it to whole words of CACHE
@@ -1451,6 +1471,104 @@ def bug93662():
 
 
 class CodeLocationTest(unittest.TestCase):
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_safe_addr2line_with_monitoring(self):
+        self.check_safe_addr2line(_testinternalcapi.code_safe_addr2line)
+
+    def check_safe_addr2line(self, lookup, *, check_bounds=True):
+        source = textwrap.dedent("""
+            def loop():
+                total = 0
+                for value in (1, 2, 3):
+                    total = (
+                        total + value
+                    )
+                return total
+
+            def inner():
+                yield 1
+
+            def send():
+                yield from inner()
+
+            def handled(value):
+                try:
+                    return 10 // value
+                except ZeroDivisionError:
+                    return -1
+        """)
+        previous = _testinternalcapi.set_ir_max_forward(0)
+        try:
+            namespace = {}
+            exec(compile(source, "<safe-line-lookup>", "exec"), namespace)
+        finally:
+            _testinternalcapi.set_ir_max_forward(previous)
+        cases = ((namespace["loop"], lambda f: self.assertEqual(f(), 6), 3),
+                 (namespace["send"], lambda f: self.assertEqual(list(f()), [1]), 2),
+                 (namespace["handled"], lambda f: (
+                     self.assertEqual(f(2), 5), self.assertEqual(f(0), -1)), 0))
+        mon = sys.monitoring
+        tool = mon.PROFILER_ID
+        mon.use_tool_id(tool, "safe line lookup")
+        current = None
+        expected = {}
+        handlers = []
+        observed = []
+
+        def callback(code, offset):
+            if code is current:
+                self.assertNotEqual(handlers[offset], "IR_JUMP")
+                if not observed:
+                    gc_collect()
+                self.assertEqual(lookup(code, offset), expected[offset])
+                observed.append(offset)
+
+        mon.register_callback(tool, mon.events.INSTRUCTION, callback)
+        try:
+            for func, run, jumps in cases:
+                current = code = func.__code__
+                handlers = [word[0] for word in _testinternalcapi.get_ir(code)]
+                self.assertEqual(handlers.count("IR_JUMP"), jumps)
+                expected = {index: -1 if line is None else line
+                            for start, end, line in code.co_lines()
+                            for index in range(start, end)}
+                self.assertEqual(len(expected), len(handlers))
+                observed = []
+
+                def check(phase):
+                    for index, line in expected.items():
+                        self.assertEqual(lookup(code, index), line,
+                                         (phase, func.__name__, index,
+                                          handlers[index], "immutable line lookup"))
+                    for index in (-1, -23):
+                        self.assertEqual(lookup(code, index), code.co_firstlineno)
+                    if check_bounds:
+                        for index in (len(handlers), len(handlers) + 1, 2**31 - 1):
+                            self.assertEqual(lookup(code, index), -1)
+
+                check("before")
+                try:
+                    mon.set_local_events(tool, code,
+                                         mon.events.LINE | mon.events.INSTRUCTION)
+                    check("monitored")
+                    run(func)
+                    self.assertTrue(observed)
+                finally:
+                    mon.set_local_events(tool, code, 0)
+                check("disabled")
+        finally:
+            mon.register_callback(tool, mon.events.INSTRUCTION, None)
+            mon.free_tool_id(tool)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_safe_addr2line_empty(self):
+        def f():
+            pass
+        code = f.__code__.replace(co_code=b"", co_linetable=b"")
+        self.assertEqual(_testinternalcapi.code_safe_addr2line(code, 0), -1)
+        self.assertEqual(_testinternalcapi.code_safe_addr2line(code, -1),
+                         code.co_firstlineno)
 
     def check_positions(self, func):
         pos1 = list(func.__code__.co_positions())

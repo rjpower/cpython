@@ -1,0 +1,1 @@
+PASS: positive rejects original scalars; both cast-before-check controls accept 65536+NOP

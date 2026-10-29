@@ -15,6 +15,8 @@ from _opcode import stack_effect
 
 from _opcode_metadata import (_specializations, _specialized_opmap, opmap,  # noqa: F401
                               _ir_opmap, HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE)  # noqa: F401
+from _opcode_metadata import (_handler_flags, _handler_bases, _handler_operations,
+                              _HANDLER_SPECIALIZED)
 EXTENDED_ARG = opmap['EXTENDED_ARG']
 
 # The code is register IR: a word per instruction, whose handler is an

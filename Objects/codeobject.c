@@ -593,48 +593,50 @@ error:
     return -1;
 }
 
-/* The caller is responsible for ensuring that the given data is valid. */
+static PyObject *check_words(PyObject *, PyObject *, PyObject *, Py_ssize_t);
 
+/* Structural validation precedes this shared pristine-word check. */
 PyCodeObject *
 _PyCode_New(struct _PyCodeConstructor *con)
 {
-    if (intern_code_constants(con) < 0) {
+    PyObject *checked = check_words(con->code, con->fbinit, con->consts,
+        PyTuple_GET_SIZE(con->localsplusnames) + (Py_ssize_t)con->stacksize);
+    if (checked == NULL) {
         return NULL;
     }
-
+    struct _PyCodeConstructor local = *con;
+    local.code = checked;
+    con = &local;
+    PyCodeObject *co = NULL;
     PyObject *replacement_locations = NULL;
-    // Compact the linetable if we are opted out of debug
-    // ranges.
+    if (intern_code_constants(con) < 0) {
+        goto done;
+    }
+    // Compact the linetable if we are opted out of debug ranges.
     if (!_Py_GetConfig()->code_debug_ranges) {
         replacement_locations = remove_column_info(con->linetable);
         if (replacement_locations == NULL) {
-            return NULL;
+            goto done;
         }
         con->linetable = replacement_locations;
     }
-
     Py_ssize_t size = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
-    // The feedback table follows the words, two entries to an item
+    // The feedback table follows the words, two entries to an item.
     Py_ssize_t nfb = con->fbinit != NULL
         ? PyBytes_GET_SIZE(con->fbinit) / (Py_ssize_t)sizeof(uint32_t) : 0;
     Py_ssize_t nitems = size + (nfb + 1) / 2;
-    PyCodeObject *co;
     co = PyObject_NewVar(PyCodeObject, &PyCode_Type, nitems);
     if (co == NULL) {
-        Py_XDECREF(replacement_locations);
         PyErr_NoMemory();
-        return NULL;
+        goto done;
     }
     Py_SET_SIZE(co, size);
-
-
     if (init_code(co, con) < 0) {
-        Py_XDECREF(replacement_locations);
-        Py_DECREF(co);
-        return NULL;
+        Py_CLEAR(co);
     }
-
+done:
     Py_XDECREF(replacement_locations);
+    Py_DECREF(checked);
     return co;
 }
 
@@ -666,7 +668,7 @@ inline_const_fits(_PyIRWord word, PyObject *consts)
  * constant handlers that no longer fit their constant run LOAD_CONST, as
  * after code.replace(co_consts=...). */
 static PyObject *
-check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
+check_words(PyObject *code, PyObject *fbinit, PyObject *consts, Py_ssize_t nslots)
 {
     PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
@@ -684,6 +686,12 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                          "code: word %zd has no handler %d", i, handler);
             goto error;
         }
+        if (!_PyIR_HasProperty(handler, _PyIR_H_PRISTINE)) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd handler %d is not allowed in pristine code",
+                         i, handler);
+            goto error;
+        }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
         for (int k = 0; k < 4; k++) {
             int role = fmt->roles[k];
@@ -692,7 +700,7 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                  || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
             {
                 PyErr_Format(PyExc_ValueError,
-                             "code: word %zd names slot %u of %d", i, value,
+                             "code: word %zd names slot %u of %zd", i, value,
                              nslots);
                 goto error;
             }
@@ -718,7 +726,9 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                     return NULL;
                 }
             }
-            _PyIR_SetHandler(&word, LOAD_CONST);
+            if (!_PyIR_SetHandler(&word, LOAD_CONST)) {
+                Py_FatalError("invalid inline constant fallback handler");
+            }
             memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
                    sizeof(word));
         }
@@ -747,7 +757,6 @@ code_new_with_fbinit(
     PyCodeObject *co = NULL;
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
-    PyObject *checked = NULL;
     PyObject *padded = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
@@ -882,11 +891,6 @@ code_new_with_fbinit(
     if (_PyCode_Validate(&con) < 0) {
         goto error;
     }
-    checked = check_words(code, fbinit, consts, nlocalsplus + stacksize);
-    if (checked == NULL) {
-        goto error;
-    }
-    con.code = checked;
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
         PyErr_SetString(PyExc_ValueError,
                         "code: co_nlocals != len(co_varnames)");
@@ -901,7 +905,6 @@ code_new_with_fbinit(
 error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
-    Py_XDECREF(checked);
     Py_XDECREF(padded);
     return co;
 }
@@ -1027,14 +1030,14 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
+    assert(addrq >= 0 && addrq < Py_SIZE(co));
     _PyCoMonitoringData *data = _Py_atomic_load_ptr_acquire(&co->_co_monitoring);
     if (data) {
         _PyCoLineInstrumentationData *lines = _Py_atomic_load_ptr_acquire(&data->lines);
         if (lines) {
-            return _Py_Instrumentation_GetLine(co, lines, addrq);
+            return _Py_Instrumentation_GetLine(lines, addrq);
         }
     }
-    assert(addrq >= 0 && addrq < Py_SIZE(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
@@ -1046,12 +1049,11 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
-    if (co->_co_monitoring && co->_co_monitoring->lines) {
-        return _Py_Instrumentation_GetLine(co, co->_co_monitoring->lines, addrq);
-    }
     if (!(addrq >= 0 && addrq < Py_SIZE(co))) {
         return -1;
     }
+    /* This can run without an attached thread state. Keep it independent
+       of lazily published monitoring storage. */
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
@@ -2315,6 +2317,7 @@ free_monitoring_data(_PyCoMonitoringData *data)
         PyMem_Free(data->tools);
     }
     if (data->lines) {
+        PyMem_Free(data->lines->original_opcodes);
         PyMem_Free(data->lines);
     }
     if (data->line_tools) {

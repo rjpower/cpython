@@ -23,7 +23,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_ADD);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
@@ -286,7 +286,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_AND);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
@@ -473,7 +473,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
@@ -616,7 +616,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
@@ -758,7 +758,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_AND);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
@@ -826,7 +826,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_FLOOR_DIVIDE);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
@@ -894,7 +894,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_LSHIFT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
@@ -962,7 +962,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_MATRIX_MULTIPLY);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
@@ -1030,7 +1030,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_MULTIPLY);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
@@ -1098,7 +1098,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_OR);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
@@ -1166,7 +1166,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_POWER);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
@@ -1234,7 +1234,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_REMAINDER);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
@@ -1302,7 +1302,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_RSHIFT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
@@ -1370,7 +1370,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_SUBTRACT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
@@ -1438,7 +1438,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_TRUE_DIVIDE);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
@@ -1506,7 +1506,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_XOR);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
@@ -1574,7 +1574,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_LSHIFT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
@@ -1719,7 +1719,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_MATRIX_MULTIPLY);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
@@ -1787,7 +1787,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_MULTIPLY);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
@@ -1973,7 +1973,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_OR);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
@@ -2101,7 +2101,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_POWER);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
@@ -2169,7 +2169,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_REMAINDER);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
@@ -2310,7 +2310,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_RSHIFT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
@@ -2444,7 +2444,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_SUBSCR);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
@@ -3055,7 +3055,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_SUBTRACT);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
@@ -3295,7 +3295,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_TRUE_DIVIDE);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
@@ -3363,7 +3363,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_XOR);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
@@ -8051,7 +8051,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(COMPARE_OP);
+            INSTRUCTION_STATS(COMPARE_OP_NOFB);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -8323,7 +8323,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(CONTAINS_OP);
+            INSTRUCTION_STATS(CONTAINS_OP_NOFB);
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -11022,7 +11022,9 @@
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
             }
-            assert(next_opcode > 0 && next_opcode < 256);
+            assert(next_opcode > 0 &&
+                   _PyIR_HasProperty(next_opcode, _PyIR_H_METADATA) &&
+                   _PyIR_BaseOpcode(next_opcode) == next_opcode);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
             DISPATCH_GOTO();
         }
@@ -11152,7 +11154,7 @@
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(_PyFrame_InstrOffset(frame, this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -11446,12 +11448,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
+            INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR_NOFB);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
+            opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             PyValue global_super_st;
             PyValue class_st;
             PyValue self_st;
@@ -11909,7 +11911,8 @@
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
+                    if (code_version != global_version &&
+                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);
@@ -12921,7 +12924,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR);
+            INSTRUCTION_STATS(LOAD_ATTR_NOFB);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -13979,7 +13982,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL);
+            INSTRUCTION_STATS(LOAD_GLOBAL_NOFB);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -14677,13 +14680,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_SUPER_ATTR);
+            INSTRUCTION_STATS(LOAD_SUPER_ATTR_NOFB);
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = LOAD_SUPER_ATTR_NOFB;
+            opcode = LOAD_SUPER_ATTR;
             PyValue global_super_st;
             PyValue class_st;
             PyValue self_st;
@@ -16495,7 +16498,8 @@
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
+                    if (code_version != global_version &&
+                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);
@@ -17210,7 +17214,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR);
+            INSTRUCTION_STATS(STORE_ATTR_NOFB);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;

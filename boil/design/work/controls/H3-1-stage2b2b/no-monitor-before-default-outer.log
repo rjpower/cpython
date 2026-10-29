@@ -1,0 +1,15 @@
+no-monitor-before default 1
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 53, in <module>
+    main(*sys.argv[1:4])
+    ~~~~^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 48, in main
+    assert result.returncode == 0, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {"requested": 96, "actual": 0, "events": [], "words_unchanged_by_setter": true}
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/no_monitoring_flag.py", line 33, in <module>
+    assert actual == requested, ("configured request lost for uninstrumented code", requested, actual)
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError: ('configured request lost for uninstrumented code', 96, 0)
+

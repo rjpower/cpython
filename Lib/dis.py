@@ -16,6 +16,10 @@ from opcode import *
 from opcode import (
     __all__ as _opcodes_all,
     _ir_formats,
+    _handler_flags,
+    _handler_bases,
+    _handler_operations,
+    _HANDLER_SPECIALIZED,
     _ir_opmap,
     _nb_ops,
     _common_constants,
@@ -88,9 +92,6 @@ _LOC_CD = _opcode.IR_LOC_CD
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
-_IR_FIRST_ONLY_HANDLER = _opcode.IR_FIRST_ONLY_HANDLER
-_BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
-_BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
 _FB_ATTR = _FEEDBACK_KINDS.index("ATTR")
@@ -239,8 +240,7 @@ def _get_code_object(x):
 
 def _deoptop(op):
     """The opcode that handler op stands for, without specialisation"""
-    fmt = _ir_formats[op] if op < len(_ir_formats) else None
-    return op if fmt is None else fmt[4]
+    return _handler_bases[op] if 0 <= op < len(_handler_bases) else op
 
 def _get_code_array(co, adaptive):
     return co._co_code_adaptive if adaptive else co.co_code
@@ -397,8 +397,8 @@ def _decode_word(handler, fields, fbinit=None):
     elif imm == _LOC_NONE:
         arg = 0
     elif imm == _LOC_FBARG:
-        if _BINARY_OP_FIRST <= handler <= _BINARY_OP_LAST:
-            arg = handler - _BINARY_OP_FIRST
+        if _handler_operations[handler] is not None:
+            arg = _handler_operations[handler]
         else:
             arg = _feedback_arg(fbinit, fb)
     else:
@@ -896,7 +896,8 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # A handler of the IR only, such as BINARY_OP_ADD or a NOFB form,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
-            op = _deoptop(runs) if runs >= _IR_FIRST_ONLY_HANDLER else runs
+            op = (runs if _handler_flags[runs] & _HANDLER_SPECIALIZED
+                  else _deoptop(runs))
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
         else:

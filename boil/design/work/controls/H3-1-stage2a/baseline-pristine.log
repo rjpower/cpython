@@ -1,0 +1,1 @@
+BUG: accepted pristine INSTRUMENTED_LINE 255 without monitoring state; not executing it

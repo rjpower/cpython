@@ -186,7 +186,7 @@ extern int _PyLineTable_PreviousAddressRange(PyCodeAddressRange *range);
 // and can be called without an attached tstate. Used by dump_frame() in
 // Python/traceback.c. The function uses heuristics to detect freed memory,
 // it's not 100% reliable.
-extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
+PyAPI_FUNC(int) _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 
 
 

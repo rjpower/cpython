@@ -29,6 +29,8 @@
 #  error "this header file must not be included directly"
 #endif
 
+#include "opcode_ids.h"          // IR_NUM_HANDLERS
+
 #define SPECIALIZATION_FAILURE_KINDS 60
 
 /* Stats for determining who is calling PyEval_EvalFrame */
@@ -61,7 +63,7 @@ typedef struct _opcode_stats {
     /* Inline stack values that the instruction boxed to use an input as an
        object (boil/design/02-tagged-values.md, section 4) */
     uint64_t boxes;
-    uint64_t pair_count[256];
+    uint64_t pair_count[IR_NUM_HANDLERS];
 } OpcodeStats;
 
 typedef struct _call_stats {
@@ -143,7 +145,7 @@ typedef struct _rare_event_stats {
 } RareEventStats;
 
 typedef struct _stats {
-    OpcodeStats opcode_stats[256];
+    OpcodeStats opcode_stats[IR_NUM_HANDLERS];
     CallStats call_stats;
     ObjectStats object_stats;
     RareEventStats rare_event_stats;

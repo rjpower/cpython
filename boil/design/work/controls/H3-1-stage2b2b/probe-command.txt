@@ -1,0 +1,12 @@
+Working directory: /home/power/code/cpython/.worktrees/boil-compiler-copyprop
+Frozen native source: dc02f76c0ccf69cd7195431dc0335a349bdec48f
+Executed script SHA256: 7feccf21ac66fb3f2da3a205a5d8e194d7446b0d70c72fa625f06dae8af0b612
+Unexecuted v1 SHA256: 4ab3de7d009be1ebfc95c070a4d6265716863b49cd0d445e7df12c25d532b6b4
+
+UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project -- timeout -k 30 180 boil/tools/gate_run.sh build/default/.gate.lock /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python uv run --no-project --python /usr/bin/python3 -- python build/H3-1-stage2b2b/probe_ast.py default -- -m test > build/H3-1-stage2b2b/default-probe.log 2>&1
+
+UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project -- timeout -k 30 180 boil/tools/gate_run.sh build/debug/.gate.lock /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python uv run --no-project --python /usr/bin/python3 -- python build/H3-1-stage2b2b/probe_ast.py debug -- -m test > build/H3-1-stage2b2b/debug-probe.log 2>&1
+
+The trailing -m test requests the existing gate_run machine slot; no regrtest suite is invoked.
+Children sanitize inherited verifier/stress/optimization variables, check actual state, disable core files, use a fresh pycache and have individual 120-second ceilings.
+Exit codes of the children are observations, not successful storage gates. Read the eight individual logs and manifests for compiled ASTs and semantic/assertion failures.

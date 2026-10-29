@@ -1,0 +1,3 @@
+debug new same_event 0
+debug new other_event 0
+debug new oom 0

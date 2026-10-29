@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/storage_probe.py", line 31, in <module>
+    assert module.deinstrument(alias) == base, ("canonical alias", module.deinstrument(alias), base)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('canonical alias', 0, 94)

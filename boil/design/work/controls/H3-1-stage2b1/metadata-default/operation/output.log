@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<string>", line 32, in <module>
+    assert item.arg == 0, ('operation metadata', item)
+           ^^^^^^^^^^^^^
+AssertionError: ('operation metadata', Instruction(opname='BINARY_OP', opcode=42, arg=10, argval=10, argrepr='-', offset=1, start_offset=1, starts_line=True, line_number=28, label=None, positions=Positions(lineno=28, end_lineno=28, col_offset=11, end_col_offset=16), cache_info=[('kind', 1, b'\x03'), ('state', 1, b'\x00'), ('counter', 2, b'\x01\x00'), ('arg', 4, b'\x00\x00\x00\x00'), ('first', 4, b'\x00\x00\x00\x00'), ('second', 4, b'\x00\x00\x00\x00')], handler='BINARY_OP_ADD', dst=2, srcs=(0, 1), fb=1))

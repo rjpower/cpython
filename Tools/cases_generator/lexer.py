@@ -237,6 +237,8 @@ annotations = {
     "returns",
     "stores_early",
     "ir_only",
+    "pristine",
+    "static_exec",
 }
 
 __all__ = []

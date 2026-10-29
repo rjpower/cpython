@@ -297,7 +297,10 @@ class dict by value (today `C.x = i` boxes the new and old values).
   pushing the getter's frame; the executor's PROPERTY path (megamorphic
   sites, `getattr()`, C callers) stops boxing in `PyObject_CallOneArg`.
 - A classmethod's bound method is an allocation per generic call
-  (section 10); binding it as (callable, type) is left for tier 1.
+  (section 10). Binding it as (callable, type) was proposed for tier 1.
+  Its current owner is H3's measured pre-I call-layer inventory; this
+  note does not approve a representation change or removal of an
+  allocation whose identity is observable.
 - **Native object fields box.** A `_Py_T_OBJECT` or `Py_T_OBJECT_EX`
   member (`property.__doc__`), and a setter that keeps its argument in a
   `PyObject *` field (`Pickler.persistent_id`), hold an object, so
@@ -518,7 +521,9 @@ After 6d an inline value is boxed at these slot boundaries:
 
 Unconverted third-party slots are an ABI mismatch (2.1), not boxes.
 Allocations that remain: a classmethod's bound method and a `tp_call`'s
-argument tuple (tier 1), and what a getter computes if rung 4 is cut.
+argument tuple, and what a getter computes if rung 4 is cut. The call
+allocations belong to H3's measured pre-I call-layer inventory; changes
+need the applicable alias/liveness and initialized-span contracts.
 
 Note 08's register: "object slots box" is retired with its proof (the
 box audit's slot cases at zero, and the identity tests). New rows:
@@ -657,8 +662,10 @@ note 06 section 21, report.
    (chaos: 20,000 per loop). A closed fix: a type flag saying int's and
    float's method descriptors and getsets take `PyValue self`, and
    Clinic's `self: value` converter for their roughly 50 entries.
-   Recommendation: a step after 10a, or tier 1's intrinsics for the hot
-   ones, ruled with chaos's numbers.
+   Current owner (2026-10-29): 6e, after the root/checker contract settles
+   and before checkpoint I. Review this value-self interface and verify
+   the receiver box budgets. Tier 1 intrinsics remain a later option,
+   not a deferral of the interpreter work.
 2. **The remaining slot families on values**, with the wrappers'
    argument boxes. Recommendation: step 6e after 10a, scoped by a
    measurement of 19.11's slot-wrapper row; it would take rung 4 if cut,
@@ -666,8 +673,10 @@ note 06 section 21, report.
 3. **Order with 10a.** Section 7's order: rung 1 at once; rungs 2 to 4
    from the integration commit holding 10a's rung 2; 10a's rung 1b marks
    the bridges 6d rewrites. Confirm, or move the marks to 6d.
-4. **Specialised handlers past 255.** Recommendation: a cleanup step
-   before tier 0 (step 8), which will want handlers of its own.
+4. **Specialised handlers past 255.** Current owner (2026-10-29): H3-1's
+   generated handler domain, consumer/transport closure and final
+   renumbering, before new operations and checkpoint I. Step 8 consumes
+   that domain; it does not free the space itself.
 5. **Capacity acceptance.** The rule lands as written, untuned. Recorded:
    the suite's dictionary-mode entries by reason (6c: `capacity` 26,542)
    and `capacity_rule.py`'s over-capacity objects per kernel, type and S.

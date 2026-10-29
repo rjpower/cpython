@@ -2760,3 +2760,674 @@ the actual-helper ordering regression and natural forkserver/spawn cases,
 without leaked semaphore or double-unlink diagnostics. Retained old-order
 control fails in both contexts. Its source record, reconciliation and
 parallel module-iteration measurement follow before the full matrix.
+
+
+### 08:31 PDT: bounded handler and roots repair reviews cleared
+
+Independent LAND_STAGE2A review of624c75f6455 confirms unchanged numeric
+IDs/base semantics, shared pristine admission and reference ownership,
+checked scalar construction/rewrite, recorded hashes and strict-kill
+counters. The bounded verdict is retained in reviews/H3-1-stage2a-landing.md.
+Native integration still follows ROOTS2b; monitoring/stats/inspection,
+transport, renumbering and final H3 gates remain open.
+
+Cleanup/queue-annotation repair172b406be0c also cleared bounded review;
+its four files are unchanged by tooling merge67477efa986. This is not
+ROOTS2b final clearance. The actual-helper regression directly checks
+child stderr. Earlier quiet natural-case passes do not prove clean
+successful stderr because -W hides worker output; visible-output reruns
+are in progress before any such claim. This limits the08:30 statement.
+Source/gate evidence remains with its original revision.
+
+
+### 08:36 PDT: pre-JIT handoffs reconciled; faster matrix measured
+
+A read-only dispatch/performance audit found active handoffs still assigning
+interpreter deficits to steps8/9. PROCESS, README and notes06/12/14 now
+assign frame passing/numeric guards/build policy toH1, inline receivers
+to6e, handler domain and exact-float truth toH3, call-window/starred-call
+boxing toH3 with H1/H2 alias/liveness/spans, and range-spill attribution
+beforeI. Coordinator must commission the string/compiler design with a
+valid uniqueness/escape proof. Historical measurements and rejected-rope
+rationale remain intact. Scalar-loop lowering and compare/branch encoding
+are not approved by this reassignment. Intermediate rungs record results;
+checkpointI still requires matched release performance before any JIT.
+No opcode-count target or benchmark-specific fusion is introduced.
+
+ROOTS timing-only whole-module iteration atf1f93c6f0e2 completes in109.008s:
+11 complete modules,2,041tests/69skips,12 actual-state process pairs,
+439 root records/16,467collections/0fallback/3,007unpinned. Full source
+snapshot remains unchanged. Exact scheduled/returned PID/config/seed and
+all69skip events are retained; coordinator independently confirms no
+reclamation selector is skipped. Report-only unpinned attribution and the
+final exact count/skip contract remain required; this is not full20 proof.
+
+Before repeated qualification the coordinator found the shared-heap
+callback source skip still present despite queue1 landing. ROOTS must
+close its existing item7 handoff, or document the precise failure/ruling,
+before final source freeze. No20-iteration run has begun. Visible natural
+cleanup controls now pass off/kill; three inherited asyncgen warnings in
+the whole-module log remain visible and are not filtered. H3's next design
+splits names/inspection, monitoring, statistics and remaining widths into
+separate checkpoints, with first-scope independent review now starting.
+
+
+### 08:44 PDT: hourly coordinator checkpoint
+
+Landed runtime remains queue1 merge052d8342e56, with detached integration
+checks complete. Shared launcher2db451b1b65, worker setup093b9d2a1c3 and
+pre-I ownership corrections eeb96dfc543 are integrated/pushed. No new
+native change in primary is claimed. H3 stage2a624c75f6455 cleared bounded
+landing review; integration follows ROOTS2b. Its next design d387aca48a9
+cleared IMPLEMENT_2B1 and names/inspection/NOFB implementation is building.
+ROOTS/coordinator approved only the exact additional get_ir selector hunk.
+Later monitoring, raw statistics, widths, transport and renumbering remain.
+
+ROOTS sourcef1f93c6f0e2 includes cleanup172b and shared tooling. Current O1
+checks pass: source41/0, five negative controls, compiled audit, stale100
+off/kill705collections each/0fallback/0unpinned, affected216/3skips and
+focused-kill52/1skip. The restored shared-heap regression passes stress
+and kill+stress;20 separate stress selections per build are still running.
+Final repeated31-case/whole11-module qualification has not begun; the
+source skip must close before freezing its expected count/skip contract.
+
+The109.008s timing run has439 interpreter records across367physical PIDs,
+not439physical processes. Its3,007unpinned hits occupy73 nonzero rows
+across17PIDs:2,984 non-main-interpreter hits and23 main-interpreter hits,
+including the deliberate counter fixture. The scan/swap/dump functions
+match the earlier0b source. Existing detached-main-state attribution stays
+with3c; no zero-unpinned suite claim or new exception is introduced.
+Eight real-evidence replay corruptions are rejected: missing scheduled
+worker/result/end, positive narrowed count, changed config, absent counters,
+fallback and skipped protected selector. This is replay evidence; final
+contracts use current discovery and protect the restored B case as well.
+
+The manifest run/gate-hook design now explicitly separates selected build
+source (/tmp/boilgate for integration), active primary tools, actual Lib
+module origins and build receipts. Snapshot hashes alone do not prove
+compiled-binary provenance. No run/hook implementation is claimed.
+
+Next hour: finish source-skip closure and final matrix contract/controls,
+start settled release/debug qualification, reach H3's first bounded runtime
+checkpoint, and review the manifest source/build prerequisite. Debug O1
+remains qualification work, not adopted policy. Queue2 stays held by the
+automatic classifier with preserved artifacts; no stopped probe is retried.
+Next hourly documentation/user report is due about09:45 PDT.
+
+
+### 08:54 PDT: ROOTS source settled; next handler oracle exposed a bug
+
+ROOTS8ce9c57c662 retires the shared-heap source skip locally. All40 fresh
+stress selections pass (20release/20O1debug), zero skipped, with80 paired
+actual driver/worker witnesses and child state/end-stress assertions.
+Kill+stress also passes. Precommit evidence bindsf1 plus the exact retained
+patch; its test_gc hash equals8ce. Primary keeps its source-skip row until
+ROOTS lands. Current discovery finds2,041 cases. Final contracts distinguish
+68 debug versus83 release intrinsic skips, with32 protected selectors.
+Replay controls now reject zero collections and protected subtest skips
+in addition to missing/substituted/partial evidence.
+
+Coordinator approves final release/O1debug qualification on frozen8ce;
+O1 is not adopted as shared policy. Precise-entry-paths availability may
+change only in a hash-bound qualification registry copy with current
+implementation/checker/control evidence, not by claiming its matrix has
+already passed. Original registry, exact diff and qualifying scope remain
+visible. No other pending requirement changes. Build-owned adapter results
+must not be labeled verify.py run/gate-hook execution. First current
+individual/full-module qualification per build precedes the remaining20.
+
+H3's real NOFB monitoring oracle found inherited missing CALL events:
+the shared body compared a derived raw ID against its semantic instruction.
+Coordinator authorizes the generic uses_opcode assignment to inst.name;
+raw targets/dispatch and existing stats remain unchanged. Regeneration
+changes exactly two SUPER_ATTR body assignments. Missing-event baseline
+is retained; CALL/C_RETURN/C_RAISE and collecting callback controls are
+required, along with exact twin/field restoration. The oracle is not relaxed.
+
+Manifest identity/result design is approved for a separate v2 prerequisite,
+not the run/gate hook. It adds explicit source/runtime/tool roots, build
+receipts, actual module origins and result/skip witnesses. Existing
+/tmp/boilgate at clean052 and integration-debug are reserved for a later
+reviewed bounded receipt rebuild; no source checkout/reconfiguration is
+authorized. Host controls and exact build plan review precede that step.
+
+
+### 09:18 PDT: frozen matrices active; handler checkpoint reviewed
+
+Primary native integration remains052d8342e56. ROOTS8ce9c57c662 is frozen:
+the shared-heap regression passes20 fresh stress selections per build, and
+final20-iteration release/O1debug qualification is running. First whole11
+pilots pass2,041 tests each,68 debug/83 release skips, with none of32 protected
+selectors skipped. Contracts bind exact scheduled/returned workers, state,
+configuration, seed and concrete skip IDs/reasons;11 rejection controls
+include protected subtests and zero collections. No completed matrix claim.
+
+Current8ce ASan14 passes3,616 tests/91skips, actual driver+14workers in
+kill mode(2,0), stress0:342 interpreter records/162physical PIDs,
+16,712collections/zero fallback/3,478 report-onlyunpinned. Its exact accepted
+allocator exclusion remains visible; unfiltered gate0 retains its original
+AddressSanitizerTests failure. Asyncgen/coroutine and file warnings remain
+in the evidence. Fresh release/tailcall stale100 controls pass all six cases,
+705collections/zero fallback/unpinned per build. Checker/compiled-walk29cases
+pass each, release1skip/tailcall0,296collections/zero fallback and one
+deliberate counter-test unpinned hit each. Two targeted harness failures
+(flag placement, uv PID indirection) remain recorded; corrected v3 passes.
+
+H3c5cf6ba6d288 clears independent LAND_2B1: full-domain names/properties,
+disassembly and exact NOFB restoration, including the inherited SUPER body
+CALL-event bug. Candidate smoke1,924 per build, affected889 per build and
+actual-kill889/nine workers pass;37root records/764collections/zero fallback
+or unpinned. All55 source and8 build-product hashes match. This is bounded
+checkpoint evidence, not final H3 closure, committed-head reruns or a native
+integration. Runtime landing remains after ROOTS2b.
+
+H3's next draft separates immutable safe-line lookup2b.2a from coherent
+monitoring storage2b.2b. Independent2a design review confirms the actual
+detached frame->code->linetable roots and requires explicit synthetic-word
+behavior, ordinary-position equivalence and exact shared-hook approval.
+No2b.2b implementation is authorized. A separate H1 frame-passing design
+is commissioned; no dispatch-count threshold is introduced.
+
+Coordinator independently qualifies the separate controlled052 build receipt
+for v2 component controls. Exact clean/build/startup/smoke commands pass;
+6,188 pre/post source inputs are identical and105 current build outputs match.
+Smoke1,924/20skips produces162 interpreter records across59physical PIDs,
+1,314collections/zero fallback/226 report-onlyunpinned. Actual source/runtime
+origins, GCC15.2/Py_DEBUG1/Og configuration and compiler/log hashes match.
+Ten optional missing modules remain explicit. Original unreviewed receipt
+is unchanged; qualified copy and coordinator review are separate. No full
+profile, O1 adoption or current-ROOTS evidence is inferred. ROOTS release
+matrix was paused only between gates for the receipt and has resumed.
+
+For remaining ROOTS full gates, use the frozen actual-driver/worker adapter
+under normal locks/slots/timeouts/freshcache after exact command review;
+preserve full gate2/3 semantics, with cext/regen/traversal separately. Shared
+verify.py orchestration/gate hooks remain unimplemented. Final v2 component
+controls/review remain. Queue2 classifier hold is unchanged; no stopped work
+is retried. Next hourly user/documentation checkpoint remains about09:45 PDT.
+
+
+### 09:22 PDT: remaining full-gate policy and bounded H3 scope
+
+Reviewed ROOTS's build-owned remaining full-gate plan. Full release, normal
+debug and kill debug preserve the complete default suite and sole existing
+remote-exec exclusion, exact actual worker cohorts and positive/zero-fallback
+counters. Candidate O1 full suites may follow its repeated qualification;
+global gate-policy adoption waits for complete evidence. Cext16, regeneration
+status/content comparison, traverse and optional-extension checks remain
+separate. No new shared gate hook is inferred. ASan sort/functools kill-only
+completion is approved to cover stress-set modules absent from ASan14.
+
+Coordinator approves the once-only full-release stress100k qualification
+policy with the complete module roster and only the four existing stress
+selectors plus the remote-exec selector. No test_misc/B/ASan exclusion.
+Actual driver/workers must retain mode(0,0)/stress100000; source/helper/native
+bindings, complete results,1200s worker/7200s outer ceilings and30-minute
+checkpoint are required. Preserve a qualification-only registry diff promoting
+full-stress-policy and extending only those existing exclusion IDs. Frozen8ce
+and the running matrix registry remain unchanged. A successful filtered
+profile does not close writer/compiler rooting debt; no run has begun yet.
+
+H3 corrected monitoring design33cef3ae191078a1 and exact additive safe-lookup
+hook are approved by ROOTS/coordinator. A one-line private-symbol export in
+pycore_code.h is also approved for the actual test extension. Immutable2b.2a
+implementation begins; no storage2b.2b implementation is authorized. Separate
+H1 frame-passing/checker/build design617bea5 is preserved with no execution.
+
+
+### 09:34 PDT: full harness cleared; component receipt correction
+
+ROOTS full-harnessv2 plan c9e05359d7afd3a1 clears coordinator review after
+closing absent/empty PASSED statistics and protected case/subtest/setup/module
+skip gaps. All20 negative replays and accounted class-skip/normalized-name
+positives pass. Both564-module rosters and helper hashes match; first plan62988
+and original helpers remain preserved. Approved full profiles still wait for
+each build's20 repetitions. No full run or source/helper change to the running
+matrix is implied. ASan sort/functools completion separately passes359/1skip,
+actual driver+2workers kill/stress0,124collections/zero fallback/one report-only
+unpinned. ASan14+2 cover the required module union as separate runs.
+
+The v2 component's first attempt failed before native execution because the
+host harness created pycache in the strict frozen tool directory. Retained
+retry disables those host writes. Its four fresh native discoveries pass;
+the first actual off control then rejects the extension-origin inventory
+before executing the test. Original105-output receipt records symlink names
+but omits67 actual extension target contents. Coordinator's initial receipt
+review missed that binding gap; the original qualification is superseded,
+with both original receipt files unchanged. No component positive is claimed.
+
+Approved repair binds each in-build alias and its resolved target bytes,
+rejects outside targets, and adds meaningful target-mutation/link controls.
+Independent check confirms67 unchanged aliases/targets, exact hashes/inodes/
+sizes/ctime/mtime; latest mutation16:10:00.623679UTC predates original build
+completion16:10:23UTC. No intervening build/output writes are recorded. A
+new manifest and separately reviewed post-build supplement are required;
+no redundant rebuild is authorized while that evidence is assessed.
+
+Coordinator also found cext's instrumented renderer omitted -j while adding
+--python, which regrtest rejects. Approved correction explicitly uses one
+isolated module worker (-j1), the same16 cases/cpu resource/no filters, and
+canonicalizes its short scheduled name for actual-origin checks. This differs
+from ordinary sequential gate3 argv; numeric gate behavior remains unchanged.
+No frozen launcher changes occur during an active attempt, and no failure is
+relabeled as passing. H3's bounded safe-line qualification continues while
+the component's replacement receipt/tools/plan are reviewed.
+
+
+### 09:45 PDT: hourly coordinator checkpoint
+
+Primary native integration remains052d8342e56. ROOTS8ce is unchanged and
+both final matrices progress:8 complete release iterations and7 debug of20
+each, with no validated failures/fallbacks. Release's recent pause in results
+was test-slot contention, not a stopped host/native hang: compiler component
+held one slot, ROOTS debug the other; release resumed forward progress.
+The component has now released its slot. Owner estimates, contingent on
+restored capacity, release completion10:10–10:20 and debug10:45–11:00 PDT.
+These are scheduling budgets, not interpreter performance measurements.
+
+Full-harnessv2 c9e05359d7afd3a1 is cleared after20 negative replays and explicit
+fixture-skip/protected-case accounting. Both564-module rosters match. The
+release-full/stress11-release host waits for default's validated640-job
+completion. Full suites remain serialized; debug full/kill follow debug20
+as candidate O1 qualification. O1 is not globally adopted. ASan14 passes3,616
+tests and separate sort/functools359 cover its required union; original
+unfiltered ASan failure and exact accepted exclusion remain visible.
+
+H3 immutable line checkpointdc02f76c0ccf clears independent LAND_2A after
+release/Og smoke1,924 each, affected1,519 each and actual-kill1,519. Source56,
+products8 and copied controls match;156 root records/156PIDs give1,498collections
+and zero fallback/unpinned. Earlier names/inspectionc5cf also remains cleared.
+No H3 runtime merge precedes ROOTS2b. Storage2b.2b preparation is design only:
+hard membership controls must not prohibit documented spurious DISABLE events,
+and local-mask OOM/retry behavior plus exact primitive hooks need review.
+H1 frame-passing design remains preserved; no H1 implementation began.
+
+Shared v2 component's corrected frozen batch completes0 on controlled052.
+All seven positives pass: exact case off/kill,203-case module order with5 exact
+source skips, two separate repetitions, cext16/7 exact source skips with one
+isolated worker, and auxiliary kill. All seven isolated negatives return their
+expected failure/status markers;11 actual-evidence corruptions are rejected.
+Final full source/tool/172-output identity postflight passes. This is component
+qualification only; no named/full profile or run/gate hook is implemented.
+Final source/evidence review precedes landing. The initial105-output receipt
+and failed/unexecuted harness attempts remain superseded and preserved.
+
+Next hour: finish matrix qualification as capacity allows, begin approved full
+release work, close the v2 component review, and review monitoring storage's
+bounded design/grants. Commission the separate alias-safe pre-I string design
+after the component checkpoint. Queue2 remains held by the earlier automatic
+classifier; no stopped probe is retried and no user approval is pending.
+Next hourly documentation/user report is due about10:45 PDT.
+
+
+### 09:48 PDT: verification identity/result component landed
+
+Primary9dd24bf42c4 lands the bounded v2 identity/result prerequisite after
+coordinator LAND_COMPONENT review. All105 indexed artifact hashes, final
+source/test/document hashes and complete source/tool/172-output identity match.
+Coordinator independently reconciled all six raw driver cohorts from concrete
+discovery, exact source skips, scheduling/results, origins, XML and counters.
+Seven positives, seven isolated expected failures and11 actual-evidence
+corruptions pass their contracts;36 host controls pass. Batch ends16:45:01UTC.
+Old helper/receipt/harness failures remain retained; no committed-head native
+rerun is claimed or needed for this boil/tools-only landing.
+
+Primary native sources, production registry, gate.sh, gate_run.sh and worker
+shell adapter remain unchanged. Native integration is still052. No full-suite,
+ASan or named profile coverage, orchestration or numeric gate hook is inferred.
+The cleared H3 runtime checkpoints remain behind ROOTS2b. Both ROOTS matrices
+continue on8ce without source/helper changes.
+
+The component agent now owns design-only
+work/pre-I-linear-string-concat.md: alias/escape proof, frame/monitoring/f_locals
+and C-data lifetime constraints, failure behavior and linear-growth acceptance.
+No string code/test/benchmark/build work begins before design review. H3's
+storage design remains with its owner; no other lane is merged during gates.
+
+
+### 10:08 PDT: monitoring storage review and string design
+
+All three agents remain active. At10:06, ROOTS release has16 complete matrix
+iterations/525 validated jobs and O1debug10/349 of20/640 each. Zero fallback
+in completed jobs; release-full host waits for its validated completion.
+Source8ce and frozen matrix/full-v2 helpers are unchanged. No full run began.
+
+H3's eight authorized bounded children on dc02 confirm valid-AST failures in
+the old line codec: backward lines corrupt/drop release events and abort Og;
+INT_MAX also aborts Og. Immutable locations agree before monitoring. The
+single proposed replacement is fixed int absolute lines plus uint16 originals.
+Source/layout memory forecasts are explicit; actual new allocations are unrun.
+Coordinator records the private API/layout decision before implementation.
+
+Initial storage design2738f4d3/fixture1bf0f9cd needs revision. Coordinator found
+two omitted active decoder calls in legacy_tracing.c; ROOTS found two pointer
+METH_O hooks incompatible with this fork's PyValue method ABI. Owner is fixing
+the inventory, bounds, ownership and exact hooks. No storage implementation or
+shared-hunk grant is issued while independent review continues.
+
+The separate pre-I string design1616f77f is frozen for review, with mutation
+disabled in its proposed first rung. Its author now audits Unicode capacity
+storage/ABI and certificate placement in a separate document. No string native,
+test or benchmark work is authorized. Queue2 classifier hold is unchanged.
+Once-only tailcall/retain recommendations are assigned to10a4/H1, without new
+ROOTS2b blockers; retain needs its own reclamation semantics.
+
+
+### 10:18 PDT: release matrix complete; storage implementation cleared
+
+ROOTS release completes all640 jobs (620 individual,20 complete-module):
+41,440tests/1,660 intrinsic skips,9,141 interpreter records,330,157collections,
+zero fallback and42,466 report-only unpinned hits. Completion receipt
+default-complete.json SHA256 d68e077bd9d63a41ce9df0bb1f742d0061f5ce65ba9207fa63cd2b04b5dc8362
+binds plan17a8ba83. Coordinator independently checks that receipt. Every job
+validated frozen source/native/helpers before/after;8ce remains clean.
+Release-full starts17:16:13UTC under c9e full-v2, actual(0,0)/stress0.
+No full-suite outcome is claimed. O1debug continues through repetition13.
+
+Independent ROOTS and coordinator clear corrected monitoring storage design
+84e518cb872e and exact CAPI proposal71ec68cb7da7 as IMPLEMENT_2B2B. Five decoder
+callers/bounds, cached-None/synthetic initialization, proper VARARGS ABI and
+stack snapshots close the initial review findings. The exact additive include,
+three helpers and three entries are granted only on H3 with coherent storage.
+Old rejected proposal/probes remain preserved; other shared fixtures are untouched.
+
+Owner begins the bounded fixed-int/uint16 representation, generated canonical
+relations and prepare/commit implementation. First failing-control checkpoint
+is due within45minutes; full implementation estimate2–3hours before qualification.
+No native integration precedes ROOTS2b. String capacity/ABI audit continues
+without native changes. Next hourly report remains about10:45 PDT.
+
+
+### 10:25 PDT: full-suite observer repair; old monitoring controls
+
+ROOTS release-full reports native SUCCESS:51,130tests/3,458skips,564 returned
+modules (94 whole-module skips,8 resource-denied),4m11. Qualification then
+correctly rejects an unaccounted skip count; no result receipt or stress11
+run follows. The original attempt, helpers and c9e plan remain preserved.
+Two independent agents trace the mismatch to inner TestResult objects used
+by meta-tests: doctest4/15, support3/6, unittest2/48, zipimport_support0/7
+(reported skips/raw addSkip events), exactly67 excess events overall.
+No native failure is established and no qualification PASS is claimed.
+
+Existing rows lack result identity, so re-audit cannot prove exact outer
+membership. The reviewed repair direction uses separate full-only helpers,
+captures the actual scheduled test_func result before stats conversion, and
+binds raw events with monotonic weakref-backed result tokens. This avoids
+address reuse and retaining inner results. Exact outer counts/skips and all32
+protected-selector checks remain; no >= rule or per-module exception.
+Draft helper/plan/control review precedes one fresh full rerun. The four
+matrix helpers and native8ce stay frozen while debug continues.
+
+H3 design/evidence commit878647973ba is pushed. Six bounded old-control children
+finish on release/Og: same-event and cross-event additions both lose tool A's
+existing INSTRUCTION sites; local setter OOM raises but changes requested
+mask0 to96. All are semantic assertion failures on both builds. Native
+implementation now begins under the already reviewed bounded grant.
+
+String storage audit73fae302 is retained with its frozen parent. It identifies
+explicit Unicode flag initialization/accounting, writable-writer/resize
+exclusions, ASCII-to-Latin-1 header changes, permanent metadata after seal,
+and pre-CREATE certificate publication. This is source evidence, with no
+string native execution or implementation approval. S1 shadow tracking is
+a development checkpoint, not an independent production overhead landing.
+
+
+### 10:45 PDT: hourly coordinator checkpoint
+
+Primary native integration remains052d8342e56; identity/result component9dd
+is landed, but production run/gate orchestration is not. ROOTS source8ce stays
+clean. Release's20 repetitions complete640jobs/41,440tests/1,660skips with
+330,157collections/zero fallback. The independently checked main0/domain
+supplement binds all640 inputs and1,480 required PID occurrences. O1debug has
+16 complete repetitions and is finishing17; remaining matrix estimate is
+about18–22minutes from10:41, contingent on shared slots, not a speed result.
+
+The first full native SUCCESS remains qualificationFAIL because global
+addSkip included67 inner meta-test events. Separate full-only v3 repair14739d
+clears independent review after exact outer-result/configuration bindings,
+weakref-backed tokens, protected skip checks and main0/counter-domain checks.
+Four observer controls and45 validator negatives plus positives pass. The
+original failed attempt/helpers and earlier proposals are preserved.
+
+Fresh release-full native+audit passes51,130tests/3,458outer skips,564modules,
+565 actual driver/workers,63,597collections/zero fallback;2,889unpinned visits
+are report-only. Coordinator verifies receipt195c64bee179667a. Stress11-release
+also passes3,061tests/100skips,11modules,44,828collections/zero fallback,6,519
+report-only unpinned; receipt68feb053300b33f7. Thirteen driver visits remain
+unattributed, rather than being labeled interpreter swaps. No filter is added.
+
+Debug's guarded host waits for640/17a8 plus its read-only main0 supplement,
+then only normal-full, kill-full and stress11 with candidate-after20. O1 is
+not adopted globally; integration debug remains Og. Fullstress100k follows
+the debug fulls. Cext/regeneration/traversal/optional closure, an explicit
+idle benchmark window and landing review remain. No native integration date
+is promised before those results.
+
+H3 implementation is underway at8786479 plus frozen production diff2245622b /
+source manifest603366f4. Development controls pass both builds for valid
+backward/INT_MAX lines, existing-tool membership and local OOM rollback/retry.
+Early450-case gates pass; broader/smoke qualification is still in progress.
+Real allocator interception measures equal-n low/high requests[28,6,6],40bytes
+peak; failure prefixes free all unpublished bytes and preserve state. This
+is requested-byte evidence, not RSS or final-candidate qualification.
+
+Independent source review finds one remaining blocker: no-monitoring-flags
+code now loses configured local-request bookkeeping. Coordinator rules to
+preserve the old request while keeping installation absent. A valid code.replace
+negative is retained; fix/refreeze and affected reruns follow current gates.
+Prior hashes/results stay distinct. Synthetic-cache/copied-helper controls
+and final allocation/kill/source review remain before landing behind ROOTS2b.
+
+String design and storage audit are retained as source analysis only. Capacity
+bit/trailer, code certificate backing and H1/ROOTS observer interfaces still
+need decisions before implementation. Queue2 remains held by the earlier
+automatic classifier; no user approval is pending or stopped probe retried.
+
+Next hour: finish debug20 and start its approved full chain; close H3's bounded
+bookkeeping finding and qualify the refrozen candidate. Keep shared full
+orchestration's outer-result handoff explicit. Next report is due about11:45 PDT.
+
+
+### 10:49 PDT: corrected storage source cleared; H1 readiness review
+
+H3 refreezes the no-monitoring-flags bookkeeping correction at source manifest
+54b2832334af6148e6852799333361e1e089ffc6fc7642dbec92503ab84084a9 and full patch
+7c64784ac0481248cdf88f5d381da355d028246a008615531768c8af8a0c907d.
+Independent peer verifies all12 file hashes and the bounded two-file delta,
+and returns SOURCE_REVIEW_CLEAR. The valid code.replace regression preserves
+configured request/tool version while leaving installation absent. This is
+source clearance, not landing approval;603 smoke/affected evidence is historical.
+Final affected/kill and isolated controls run under the new source identity,
+with versioned measurement copies preserving earlier outputs.
+
+The compiler reviewer now audits preserved H1-1 for the smallest frame-passing
+experiment, exact transitions and checker/compiler attribution prerequisites.
+No H1 code/build/test/benchmark work is authorized by that read-only assignment.
+Final H3 evidence review takes priority when available. Root maps, clearing
+stores, build/frame-pointer policy and string certificate choices stay separate.
+
+At10:48, both test slots were in active H3 jobs while ROOTS debugi18case07
+waited normally. Active jobs finish untouched; H3 then uses one lane and yields
+the other to ROOTS, preserving landing-critical progress. No source/gate policy
+or filter changes. The hourly schedule remains11:45 PDT.
+
+
+### 11:04 PDT: eligibility prerequisite and bounded H1 readiness
+
+H3's54b broad gate fails after1,262 completed tests because executing a valid
+CO_NO_MONITORING_EVENTS code object after a global monitoring-version change
+loops at RESUME. The2s pre-edit probe independently reproduces the old failure
+with its marker and stack. Preserve both failed records; this is inherited
+behavior exposed by executing the stronger regression, not a reason to weaken it.
+
+Independent review clears eligibility proposal-v3 d5d88a7b8f80: guard refresh
+inside the existing RESUME version mismatch, return early from direct refresh,
+and guard the cold monitor_handled callback. The exact ceval.h hunk is granted.
+No version acknowledgment or shared static-code write. Ordinary callback,
+flagged on-stack/request-state, generator.throw and separate no-local-data
+handled-exception controls accompany the fix. The owner applies/regenerates and
+freezes combined native13-file manifest
+ a6c07b4ce7b2932a82c2bc8bcc187f8940359fe1674951f075ee1b98773e8557
+and production patch
+ b209836201b0fbdc9356dae76ec1fbe4a2e8fc259acc702be025ccfe6503abc6.
+Combined-candidate native qualification starts; no independent prerequisite
+landing or runtime success is claimed. Earlier storage source clearance and
+measurement identities remain historical.
+
+At11:00 ROOTS debug has599/640 jobs and18 complete repetitions with no validated
+failure/fallback. The guarded matrix-to-main0-to-full chain remains armed.
+Reserve its test lane: H3 submits one transaction at a time, with no same-build
+waiter consuming the second slot before acquiring its build lock.
+
+The compiler peer clears H1-1 bounded frame-passing design readiness and records
+its exact transition/interface/compiler-root controls in the new review. It
+needs an integrated baseline and explicit H3 generator/build handoff before
+implementation; H2 maps and frame-pointer policy are separate. No H1 source or
+build is started. The peer now inventories ROOTS landing receipts and remaining
+gates read-only, avoiding duplicate native runs. Queue2 remains held by the
+prior automatic classifier; no permission question is pending. Next hourly
+report remains11:45 PDT.
+
+
+### 11:09 PDT: debug matrix complete; first combined eligibility pass
+
+ROOTS frozen8ce debug completes620 individual selections and20 whole-module
+runs:640jobs/41,440tests/1,360allowedskips,374,245collections, zero fallback,
+65,072report-onlyunpinned. Summary81d65e028d1a and640-row results5a561e5b2ac6
+match the independently read hashes/counts. The completion marker contains only
+jobs/global plan17a8 and is byte-identical across builds by design; each build's
+summary/results/native bindings supply the distinct identity. Read-only debug
+main0 supplement07d7f4455aa3 passes all640jobs/1,480requiredPIDoccurrences.
+The unchanged guarded armer starts debug-full at11:08:13, then kill-full and
+stress11 only after native+audit success. O1 shared policy remains unchanged.
+
+Coordinator accepts a bounded ASan14 provenance deviation: its retained plan
+has actual worker source/Makefile/sys.version/origin/state but lacks pre/post
+native-byte inventory. The later2-module completion manifest's271 native paths
+match current bytes, and the peer checks file/alias/target ctime+mtime: latest
+15:56:27.980870UTC precedes ASan14 start16:07:58.320878UTC. Source stays8ce and
+there are no intervening build/config writes. This operational bridge supports
+existing bounded evidence without a redundant rerun; it is not retrospective
+cryptographic proof. Preserve the limitation, require stronger manifests for
+future runs, and reopen only on an identity conflict or source change.
+Repeated full rootfile PID/interpreter keys remain separate finalization events;
+no unsupported exact fixture attribution or lifetime deduplication is claimed.
+
+H3 first combined release probe passes at11:05. Coordinator reads both receipts:
+identical probe4dee9c0f235f and outere2333a581754; old7c child exits1 after2s
+watchdog, combineda6c child exits0. Before/after18old and19new inputs match and
+both log hashes verify. New binaryc96ddb788f3c records actual optimize0/debugTrue,
+verifier(0,0)/stress0. Suppressed/on-stack/generator paths complete without
+callbacks; ordinary code gets17 instruction sites and handled callback[0,6],
+while suppressed no-local-data state remainsNone. Broader gates remain pending.
+
+Gate4 is explicitly step-end under PROCESS section3; do not turn earlier
+'pending measurements' shorthand into a new full benchmark rung blocker.
+Retain rung-specific as-built attribution and later checkpoint-I obligations.
+No loaded-machine measurements start. Next hourly report remains11:45 PDT.
+
+
+### 11:12 PDT: debug full exposes thread-pool lifetime blocker
+
+Active debug-full reports fork and forkserver test_threads failures in
+WithThreadsTestPool.test_release_task_refs: three CountedObjects remain
+weakref-live at _test_multiprocessing.py3442. The test deletes its input list,
+waits for threaded cleanup and calls support.gc_collect before asserting task
+arguments/results are released. Native8ce/helpers remain unchanged. Preserve
+the unsignaled full run and let its armer stop on failure; no kill/stress launch,
+new exclusion, weaker oracle or optimization rollback is approved.
+
+ROOTS traces the actual lifetime read-only before proposing a bounded fix.
+Its640-job matrix remains valid for its selected process-pool cases; it does
+not establish thread-pool coverage. The independent landing inventory records
+NOT READY and the exact remaining gates, plus accepted ASan provenance limits
+and the step-end gate4 distinction. No runtime integration is approved.
+H3 progresses independently: combined release smoke1,924 and affected1,370 pass,
+with allocation/synthetic/request/global-OOM controls. Copied-helper compiler
+setup failed under default GNU23, not a semantic negative pass; the untouched
+failed logs/helper are retained. Its versioned successor matches production
+C11/assert context without changing copied bodies or native source. Final
+controls and debug/kill qualification continue. Next report remains11:45 PDT.
+
+
+### 11:15 PDT: combined H3 source cleared; ROOTS diagnostic boundary
+
+Independent review96e493f68d59 clears H3 combineda6c/b209 source after verifying
+all13 live hashes, binary diff and exact reverse of the approved three guards,
+including both generated expansions. The new executing-code, generator.throw
+and no-local-data handled-exception controls preserve the intended oracles.
+The copied-helper C11/assert-context correction clears review: all positive
+compiles/runs succeed, and token/line narrowing plus raw-alias variants fail
+named semantic assertions. The earlier compiler setup failure remains failure.
+This is source/control clearance; final debug/kill/allocation/restoration gate
+evidence remains separate and native integration stays held behind ROOTS2b.
+
+ROOTS full now reports the same thread-pool task-reference failure in fork,
+forkserver and spawn. Python worker/result loops already clear task locals and
+support.gc_collect performs three collections; no forgotten-test-collection
+claim is supported. Owner prepares a bounded diagnostic, with independent peer
+review of observer-created reference/collection effects, before source edits.
+No debug diagnostic is queued behind the active same-build full lock. Source,
+helpers, failed full evidence and exact original assertion are preserved.
+Next hourly report remains11:45 PDT.
+
+
+### 11:28 PDT: task-root owner identified; H3 candidate preserved before union
+
+ROOTS debug full finishes with51,130tests/3failures/3,401skips, exactly the
+fork/forkserver/spawn thread-pool release-task-reference failures. Failure
+artifactfb74bc3f79da records nativeRC2/armerRC1,565actual driver/workers,
+66,950collections/zero fallback,4,009report-onlyunpinned and post-run unchanged
+source/native/helper bindings. Coordinator reads it independently. No qualified
+receipt exists and no chained kill/stress/full100k run starts.
+
+Independent peer clears bounded diagnostic18ffce654859, preserving the original
+failed comparison and a single pre-entry-prefix stack-hit snapshot before later
+inspection. Ten unmodified fresh fork-thread selections fail identically; the
+separate trace fails with zero dropped records. All three survivors have direct
+conservative stack hits at offset0 in the176-byte _PyParkingLot_Park frame,
+PCdebug/python+0x36b2fa, stack-hit IDs16–19. These IDs are not asserted to be
+exactly the test's three collections. Later frame locals remain supplementary.
+The owner audits disassembly and all park-argument/callback/caller contracts
+before a bounded fix. No production edit, blanket precision annotation or
+symptom-specific word clearing is approved yet.
+
+H3 storage code76274ed06ec and evidenceffc548603b8 are clean/pushed on boil/h3
+and boil/h3-monitoring-storage-land. Source a6c/b209 is unchanged; release and
+Og smoke1,924 each, affected1,370 each, actual-kill1,370 with11worker.main
+witnesses/839collections/zero fallback and unpinned all pass. Allocation, valid
+AST, synthetic lines, OOM/retry and copied semantic controls pass both builds.
+Regeneration/Clinic, frozen IDs,13marked-file C checker, traversal and19optional
+syntax checks complete; four header-unavailable modules remain untested.
+The earlier runpy audit-launcher import failure and corrected launch remain
+separate. Final evidence review proceeds on immutableffc, not a new native run.
+
+Ancestry corrects the coordinator's proposed safe tooling merge: common ancestor
+with primary64eb is6c724c29408, so H3 lacks queue052 native/test changes, not just
+9dd tooling. The merge was held before any action. Explicitly defer the normal
+primary merge until ROOTS2b settles, preserving the existing landing order and
+avoiding duplicate union qualification. Frozen H3 receipts qualify their own
+source only; final native union review/gates remain required. The owner may
+write stage2b3 raw-stats/handler-pair design only; sampler transport is separate,
+and no next H3 native work starts. H1 still waits for integrated generator/build
+handoff. Next hourly report remains11:45 PDT.
+
+
+### 11:31 PDT: frozen storage evidence clears; parking padding isolated
+
+Independent FROZEN_STORAGE_CHECKPOINT_CLEAR atffc548603b8 is recorded in the
+new H3 evidence-readiness review33169a5e2981. It reconciles240indexed artifacts,
+13changed/46unchanged source inputs,7generated products, both native/config/CAPI
+identities, actual-kill worker/main0 counters, all short controls and exact
+requested-byte accounting/restoration. Allocation failure sizes remain unmeasured;
+no RSS, high-canonical execution, full suite, ASan or merged-runtime claim follows.
+The coordinator reads the full record. No detached review tree is created while
+the native-union base remains unsettled. H3 proceeds only with raw-stats design.
+
+ROOTS disassembly isolates each direct survivor hit as uninitialized alignment
+padding at rsp0/rbp-a0 in a176-byte _PyParkingLot_Park frame. Timeout begins-a98
+and wait_entry-a80; no instruction uses the padding word. The owner audits all
+seven callers, callback arguments and producer-to-parked-consumer result
+anchoring before proposing a single-function precise classification. No pad
+zeroing, walkrange heuristic or blanket precision is approved. The compiler
+peer is assigned that forthcoming bounded design review. Next report11:45 PDT.

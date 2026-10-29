@@ -12,8 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 08:25 PDT at integration merge 052d8342e56, shared
-tooling e02e177903f, verification launcher 2db451b1b65, worker setup 093b9d2a1c3 and
+revised 2026-10-29 11:31 PDT at integration merge 052d8342e56, shared
+tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
+component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -70,14 +71,14 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 08:25 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:31 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b reconciled queue landing as cb0b6c21b97. Bounded O1 checks pass; semaphore cleanup ordering is causally confirmed and its helper fix/regression is in progress. Final matrix waits for settled source | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b frozen at 8ce9c57c662. Restored shared-heap regression passes 20 fresh selections per build; the release matrix passes all20 repetitions; O1-debug continues. ASan14 passes 3,616 tests with its exact accepted allocator exclusion; unfiltered ASan failure remains recorded | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 under independent review. Monitoring/stats/inspection and transport closure follow | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Immutable safe-line checkpoint dc02f76c0ccf also cleared independent review; fixed-int/uint16 monitoring storage implementation is authorized after independent review; stats and transport closure follow | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -91,45 +92,98 @@ unchanged regeneration. Roots final gates remain unlanded.
 
 Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
-kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. The plan
-expects generations (7) and tier 0 (8) to recover the kernel and memory
-costs; that is a plan, not evidence. The user now requires a pre-JIT
-performance checkpoint: matched release wall-time measurements must
+kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. These historical
+instruction ratios do not establish current elapsed-time performance.
+Generations, 6e and the handler/interpreter work precede checkpoint I;
+the JIT follows it. Matched release wall-time measurements must
 establish interpreter parity or better on the kernel set, with individual
 regressions reported and resolved or explicitly dispositioned. Micro
 instruction gains alone do not establish that result.
+
+The pre-JIT backlog includes H1 frame passing, numeric guards and build
+policy; 6e inline-receiver boxing; H3 exact-float truth and call-window
+placement with root/liveness contracts; range-spill attribution; and a
+string/compiler design for linear concatenation with an alias/escape proof.
+PROCESS §0.4 assigns these explicitly. None is deferred automatically to
+the JIT, and scalar-loop lowering remains a separate unapproved design.
 
 The compiler correction and queue rung 1 are landed. Active agents finish
 10a rung 2b and H3's handler domain, with independent review at each boundary.
 The queue rung 2 agent was stopped by an automatic cybersecurity classifier,
 including its read-only handoff; no native rung 2 fix was applied. Existing
 artifacts are preserved. This is not a missing user authorization.
-The coordinator owns integration, shared gate
-policy, dispatch/performance scope and hourly documentation/status.
-PROCESS §0.4 gives the dependencies and checkpoint rules. The `-O1`
-debug trial reduced smoke time from 3m41s to 2m37s, but qualification
-stopped at a PyMem-attribution oracle failure in `test_verify_kill`.
-Logging confirmed that a precise carrier root scans a PyMem block before
-its core-frame alias; the block's second origin is then lost. Death and
-reachability assertions behave correctly. The proposed fix enriches
-post-mark provenance without changing collection policy. The existing
-oracle must retain all distinct origins; its assertion must accept PyMem
-as either the first or a supplemental origin on the same report line.
-Further O1 checks exposed a real list-to-tuple lifetime bug: clearing the
-list before tuple allocation removes its element roots. A minimal reorder
-is committed in rung 2b, brought forward from rung 3a. All ten fresh
-reproductions pass after the fix; the original failed ten of ten.
-`-O1` has not been adopted. Integration
-debug validation still uses `-Og`. The first O1 reclamation iteration took
-542 seconds: 31 separate cases and 11 complete modules. Two multiprocessing
-cases return SUCCESS but report semaphore cleanup errors. A causal trace
-on queue-reconciled source confirms that registry clearing loses the weakref
-cleanup, then tracker shutdown unlinks before late finalizers. The approved
-repair moves existing finalizers after forkserver stop and before tracker
-stop, with actual-helper and old-order controls. The final matrix may run different
-complete modules concurrently while preserving each module's internal
-order and each individual case's separate process. Release measurements
-and sanitizer coverage remain required.
+The coordinator owns integration, shared gate policy, dispatch/performance
+scope and hourly documentation/status. PROCESS §0.4 gives the dependencies.
+ROOTS2b fixes both lost PyMem-origin attribution and list-to-tuple element
+root lifetime. Original-helper and old-lifetime negative controls remain
+recorded. Its multiprocessing cleanup repair runs existing finalizers after
+forkserver stop and before tracker stop; actual-helper, old-order and visible
+natural-case controls pass. No skip hides those cleanup failures.
+
+Final qualification uses frozen8ce: 31 individual reclamation cases and 11
+complete modules, each repeated 20 times per build, with a separate protected
+shared-heap regression. Whole-module execution preserves internal order;
+actual driver/worker state, exact counts/skips and all imported helpers are
+bound to the contract. The first full-module pilots pass 2,041 tests each,
+with 68 debug or 83 release intrinsic skips and none of the 32 protected
+selectors skipped. Release completes all640 jobs:41,440tests/1,660skips,
+330,157collections and zero fallback;42,466unpinned hits remain report-only.
+Its fresh full-v3 run passes native and audit:51,130tests/3,458outer skips,
+63,597collections and zero fallback. The earlier attempt remains unqualified;
+the repaired observer separates67 inner meta-test skips without a new filter.
+Release stress11 also passes3,061tests/100skips and44,828collections/zero
+fallback. Debug also completes640 jobs:41,440tests/1,360skips,374,245collections
+and zero fallback;65,072unpinned hits remain report-only. Its640-job main0
+supplement passes and full debug starts at11:08. The full run exposes
+a blocker in all three start-method thread-pool release-task-reference tests.
+It finishes51,130tests with exactly those three failures; the armer stops and
+launches no further profiles. Ten unmodified fresh selections reproduce the
+failure. A separate trace finds direct conservative hits for all three
+survivors in _PyParkingLot_Park; callback/caller ownership audit precedes a fix.
+The narrower process-pool matrix does not cover this case. ASan14 plus
+separate sort/functools completion and fresh
+release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,
+debug stress, once-only full stress100k, extras and landing review remain.
+The full gate4 benchmark is a step-end obligation, not a new rung blocker.
+Report-only detached-state unpinned counts stay assigned to3c.
+O1 is approved for this qualification,
+not adopted as shared policy; integration debug still uses Og.
+
+H3's monitoring storage design now uses fixed absolute int lines and uint16
+handler tokens. Bounded probes confirmed that valid backward AST locations
+break the old line codec. Corrected design84e518cb872e and exact fixture71ec68cb7da7
+clear independent review, including all five decoder callers, the fork's
+test-hook ABI and allocation-safe snapshots. Implementation and its bounded
+qualification clear independent frozen-checkpoint review. Actual native union
+qualification and primary landing review remain.
+Development line/membership/OOM controls pass;
+the no-monitoring-flags bookkeeping correction clears source review at
+manifest54b2832334af. Its broader gate then exposed an inherited refresh loop
+when valid flagged code executes RESUME after a monitoring-version change.
+That failed run is retained. An independently reviewed eligibility prerequisite
+guards the version-mismatch refresh, direct refresh and handled-exception
+callback paths. It does not acknowledge versions or write shared static code.
+The combined candidate is frozen at manifest a6c07b4ce7b2 for requalification;
+earlier evidence is not relabeled as final qualification. The exact same
+watchdog probe fails on the old release candidate and passes on the combined
+candidate, with ordinary and suppressed callbacks distinguished; broader
+combined release smoke1,924/affected1,370 pass. Independent source review
+clears a6c07b4ce7b2, including the three guards and generated expansions.
+Copied-helper narrowing/alias controls fail their named semantic assertions;
+debug smoke1,924/affected1,370 and actual-kill1,370 also pass. Regeneration,
+checker/traversal and19 optional syntax checks complete. Frozen candidate
+ffc548603b8 is pushed and clears independent evidence review. It predates queue052;
+its results do not qualify the queue/ROOTS/H3 union. Merge/requalification waits
+for ROOTS2b, preserving the existing native landing order.
+The H1 frame-passing design clears
+[bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
+with source/build handoff required before implementation.
+The private API/layout decision is recorded in PROCESS section0.2.
+The pre-I [string design](design/work/pre-I-linear-string-concat.md) is ready
+for review; its [Unicode storage/ABI audit](design/work/pre-I-string-storage-audit.md)
+is complete as source analysis, with representation and certificate decisions
+still pending. No string
+implementation is approved yet; monitoring-storage runtime landing remains pending.
 
 Shared gate cleanup now holds the build lock until its sweep finishes;
 an interrupted waiter cannot sweep another run's workers. The controlled
@@ -144,8 +198,19 @@ fff4e0e9b08: 15 profiles, seven safety-control groups and actual case
 inventory validation pass. Execution and numeric-gate integration remain
 unfinished. The launcher component landed as 2db451b1b65 after independent review;
 it does not establish orchestration, complete coverage or source snapshot
-enforcement. Shared worker-launch correction 093b9d2a1c3 preserves
-regrtest's temporary cwd and exit timeout by calling worker.main().
+enforcement. The v2 identity/result prerequisite is landed; profile
+orchestration remains pending. The controlled052 rebuild passes smoke1,924/20skips,
+with 6,188 unchanged source inputs and zero fallback. Its initial105-entry
+receipt missed extension target bytes and is superseded. The strict repair
+and independently reviewed172-entry supplement bind all67 targets as well as
+aliases, without a new build. All seven bounded v2 positives now pass: off/kill,
+whole context/weakref modules, separate repetitions, one-worker cext and the
+auxiliary launcher. Exact existing source skips are recorded. Seven isolated
+failure controls and
+11 evidence-corruption checks also pass. Independent review cleared the
+component, landed as9dd24bf42c4. No named/full profile or run/gate hook is claimed. Shared worker-launch correction
+093b9d2a1c3 preserves regrtest's temporary cwd and exit timeout by calling
+worker.main().
 
 Opcode categories will use explicit generated properties. H3 removes
 inherited numeric category cutoffs such as HAVE_ARGUMENT; instruction

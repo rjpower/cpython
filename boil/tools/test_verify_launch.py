@@ -1,14 +1,17 @@
 """Safety controls for fixed launch forms and process-state witnesses."""
 
 import copy
+import dataclasses
+import hashlib
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import verify
 import verify_launch as launch
@@ -23,18 +26,29 @@ class LauncherTests(unittest.TestCase):
         self.profile = self.data['profiles']['release-full']
         self.plan = {
             'run': 'control', 'profile': 'release-full', 'stage': 'main',
-            'source_revision': 'control', 'source_sha256': '0' * 64,
-            'config_sha256': '0' * 64, 'manifest_sha256': '0' * 64,
+            'manifest_sha256': '0' * 64,
             'launcher_sha256': '0' * 64, 'worker_sha256': '0' * 64,
-            'validator_sha256': '0' * 64, 'executable_sha256': '0' * 64,
+            'validator_sha256': '0' * 64,
             'evidence': str(self.evidence),
             'jobs': 2, 'selection_index': None,
+            'identity': {'path': '/control/identity.json', 'sha256': '0' * 64},
+            'xml': str(Path(self.directory.name) / 'results.xml'),
+            'pycache_prefix': str(Path(self.directory.name) / 'pycache'),
         }
         self.worker = ['-m', 'test.libregrtest.worker',
-                       json.dumps({'tests': ['test_gc'], 'match_tests': []})]
-        identity = patch.object(launch, 'runtime_identity')
-        identity.start()
+                       json.dumps({'tests': ['test_gc'], 'match_tests': [], 'random_seed': 42})]
+        self.identity = {'qualification': 'component-only', 'build': self.directory.name,
+                         'runtime_root': str(verify.REPO)}
+        identity = patch.object(launch, 'runtime_identity', return_value=(self.identity, []))
+        self.runtime_identity = identity.start()
         self.addCleanup(identity.stop)
+        for target, name in ((launch, 'record_worker_results'), (verify, 'load_identity')):
+            mocked = patch.object(target, name, return_value=self.identity)
+            mocked.start()
+            self.addCleanup(mocked.stop)
+        context = patch.object(verify, 'source_context', return_value={})
+        context.start()
+        self.addCleanup(context.stop)
         self.addCleanup(setattr, sys, 'argv', sys.argv[:])
 
     def records(self):
@@ -57,6 +71,59 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual([row['phase'] for row in self.records()], ['start', 'end', 'failure'])
         self.assertTrue(all(row['tests'] == ['test_gc'] for row in self.records()))
 
+    def test_original_error_survives_an_end_state_failure_in_evidence(self):
+        with patch.object(launch, 'actual_state', side_effect=[((0, 0), 0), ((0, 0), 1000)]), \
+             patch.object(launch.runpy, 'run_module', side_effect=ImportError('original error')), \
+             self.assertRaisesRegex(ValueError, 'actual state mismatch at end'):
+            launch.execute(self.plan, self.data, self.profile, 'worker', self.worker, '0' * 64)
+        self.assertEqual(self.records()[-1]['module_error'], 'ImportError: original error')
+
+    def test_actual_scheduler_result_and_reporter_bindings(self):
+        names = ('test', 'test.libregrtest', 'test.libregrtest.run_workers',
+                 'test.libregrtest.result', 'test.libregrtest.main')
+        modules = {name: types.ModuleType(name) for name in names}
+        scheduler, result_module, main = [modules[name] for name in names[2:]]
+        original_create = Mock(return_value=types.SimpleNamespace(pid=123))
+        scheduler.create_worker_process = original_create
+
+        @dataclasses.dataclass
+        class Result:
+            test_name: str
+
+        @dataclasses.dataclass
+        class Stats:
+            tests_run: int
+            failures: int
+            skipped: int
+
+        result = Result('test.test_control')
+        result_module.TestResult = Result
+        Result.from_json = staticmethod(lambda value: result)
+        reporter = types.SimpleNamespace(run_started=Mock(), summary=Mock())
+        started, summary = reporter.run_started, reporter.summary
+        main.get_reporter = lambda: reporter
+        worker = {'tests': [result.test_name], 'match_tests': [], 'random_seed': 42}
+        config = json.dumps(worker)
+        runtests = types.SimpleNamespace(as_json=lambda: config, **worker)
+        with patch.dict(sys.modules, modules):
+            launch.record_scheduling(self.plan, {'pid': 1})
+            scheduler.create_worker_process(runtests, 7)
+            self.assertIs(Result.from_json('control'), result)
+            observed = main.get_reporter()
+            observed.run_started(runtests)
+            observed.summary(types.SimpleNamespace(stats=Stats(1, 0, 0)), 'SUCCESS')
+            with self.assertRaisesRegex(ValueError, 'duplicate'):
+                scheduler.create_worker_process(runtests, 7)
+        original_create.assert_called_once_with(runtests, 7, None)
+        started.assert_called_once_with(runtests)
+        summary.assert_called_once()
+        schedule, returned, selection, final = self.records()
+        self.assertEqual(schedule['worker_config_sha256'], hashlib.sha256(config.encode()).hexdigest())
+        for key in ('worker_pid', 'worker_config_sha256', 'random_seed', 'tests', 'match_tests'):
+            self.assertEqual(schedule[key], returned[key])
+        self.assertEqual(selection['tests'], worker['tests'])
+        self.assertEqual(final['stats']['tests_run'], 1)
+
     def test_platform_is_auxiliary_coverage(self):
         with patch.object(launch, 'actual_state', return_value=((0, 0), 0)), \
              patch.object(launch.runpy, 'run_module') as run:
@@ -74,6 +141,7 @@ class LauncherTests(unittest.TestCase):
                     launch.execute(self.plan, self.data, self.profile, role, command, '0' * 64)
                 run.assert_not_called()
         self.assertTrue(all(row['phase'] == 'failure' for row in self.records()))
+        self.runtime_identity.assert_not_called()
 
     def test_ignored_environment_and_missing_getter_fail_before_module(self):
         self.profile = self.data['profiles']['debug-kill-full']
@@ -91,9 +159,9 @@ class LauncherTests(unittest.TestCase):
         binary = root / 'python'
         binary.write_text('control; not executed')
         binary.chmod(0o755)
-        plan = dict(self.plan, version=1, manifest=str(verify.DEFAULT_MANIFEST),
+        plan = dict(self.plan, version=2, manifest=str(verify.DEFAULT_MANIFEST),
                     manifest_sha256=launch.digest(verify.DEFAULT_MANIFEST),
-                    build=str(root), executable_sha256='0' * 64,
+                    build=str(root),
                     inventory=None, inventory_sha256=None,
                     launcher_sha256=launch.digest(launch.__file__),
                     worker_sha256=launch.digest(launch.WORKER),
@@ -102,6 +170,7 @@ class LauncherTests(unittest.TestCase):
         path.write_text(json.dumps(plan))
         launch.load_plan(path, launch.digest(path))
         controls = [
+            lambda p: p.update(version=1),
             lambda p: p.update(command=['echo never execute']),
             lambda p: p.update(selection_index=0),
             lambda p: p.update(manifest_sha256='0' * 64),
@@ -138,8 +207,8 @@ class LauncherTests(unittest.TestCase):
             'cases': [item['selector'] for item in items],
             'source_hashes': {str(path.relative_to(verify.REPO)): launch.digest(path) for path in paths},
         }))
-        plan = dict(self.plan, version=1, manifest=str(manifest), manifest_sha256=launch.digest(manifest),
-                    build=str(root), executable_sha256='0' * 64,
+        plan = dict(self.plan, version=2, manifest=str(manifest), manifest_sha256=launch.digest(manifest),
+                    build=str(root),
                     inventory=str(inventory), inventory_sha256=launch.digest(inventory),
                     launcher_sha256=launch.digest(launch.__file__),
                     worker_sha256=launch.digest(launch.WORKER), validator_sha256=launch.digest(verify.__file__))
@@ -161,6 +230,16 @@ class LauncherTests(unittest.TestCase):
         loaded, registry, profile = launch.load_plan(path, launch.digest(path))
         args = launch.driver_arguments(loaded, registry, profile)
         self.assertEqual(args[4:7], [items[0]['module'], '-m', items[0]['selector']])
+
+    def test_cext_stage_uses_one_isolated_worker_without_filters(self):
+        self.plan['stage'] = 'cext'
+        self.profile = self.data['profiles']['debug-kill-full']
+        args = launch.driver_arguments(self.plan, self.data, self.profile)
+        self.assertEqual(args[:5], ['-q', '-u', 'cpu', '-j1', 'test_cext'])
+        self.assertEqual(args[5:], ['--junit-xml', self.plan['xml'],
+                                   '--python', str(launch.WORKER)])
+        self.assertNotIn('-m', args)
+        self.assertNotIn('-i', args)
 
     def test_adapter_preserves_flags_and_rejects_code_options(self):
         binary = Path(self.directory.name) / 'python'

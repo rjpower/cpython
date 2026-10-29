@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 12:20 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 12:28 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -246,7 +246,7 @@ The pre-JIT dispatch/performance backlog has explicit owners:
 | Inline numeric receivers, remaining slot/Clinic boxing | 6e | Canonical ingress and value-call contracts; boxing counts plus correctness and release performance |
 | Call-window producer placement and remaining starred-call entry boxing | H3 follow-up with H1/H2 root/liveness/span contracts | Alias-safe initialized windows across normal and exception paths; allocations/boxes and matched performance |
 | Range register-base spill and historical nbody/comprehension regressions | H1/H3 code-generation investigation; coordinator attribution | Refresh historical results on frozen C/stdlib sources; fix persistent interpreter deficits without assuming scalar-loop lowering |
-| Linear string concatenation | Coordinator commissions string/compiler design | Uniqueness/escape proof preserving aliases and immutable strings; linear-growth evidence. Tier1 is not the default owner |
+| Linear string concatenation | String/compiler S0 clears readiness; H3/code-layout and H1/ROOTS interfaces precede mutation-disabled S1; Unicode S2 and observer S3 precede S4 | Uniqueness/escape proof preserving aliases and immutable strings; enabled-path overhead and linear-growth evidence. Tier1 is not the default owner |
 | Remove collector clearing stores | H2 after complete maps/helper spans | Root-state oracle and omitted-root negative controls; no removal from an assumed calling convention |
 
 These are semantic and measurement obligations, not an opcode-count target.
@@ -449,6 +449,12 @@ Clean fixup1bfe1a57145 is pushed; bridge604ef3fb preserves the six tested
 inputs and542 release/debug native paths, with only two documentation changes.
 Strict stale100 passes release/debug off and debug kill; compiled31 checks
 pass with their existing tailcall skip and intentional unpinned-counter event.
+Exact pilot26a55 clears review40a38bae and passes six transactions per build:
+five1/0 selectors plus complete four-module501tests/116release or101debugskips,
+no protected skip/zero fallback. The first iterations take51.203/144.224s;
+these qualification timings are not performance measurements. New nineteen-only
+plans bind the immutable pilot iterationzero and exact observed contracts;
+review remains required before expansion or any full profile.
 
 The coordinator explicitly carries unchanged legacy31-selector/11-module
 evidence forward at8ce, supported by body correspondence42350872, all seven

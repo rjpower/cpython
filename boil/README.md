@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 12:20 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 12:28 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 12:20 PDT; evidence is from local commits and retained logs.
+2026-10-29 12:28 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -120,7 +120,7 @@ recorded. Its multiprocessing cleanup repair runs existing finalizers after
 forkserver stop and before tracker stop; actual-helper, old-order and visible
 natural-case controls pass. No skip hides those cleanup failures.
 
-Final qualification uses frozen8ce: 31 individual reclamation cases and 11
+Historical qualification on frozen8ce covers31 individual reclamation cases and11
 complete modules, each repeated 20 times per build, with a separate protected
 shared-heap regression. Whole-module execution preserves internal order;
 actual driver/worker state, exact counts/skips and all imported helpers are
@@ -163,6 +163,13 @@ with source/body and caller proofs; it stays evidence on8ce, not a new-head
 each of three thread regressions and two eval probes, plus20 complete orders
 of their four modules. The501 listed cases require measured pilot counts;
 the first iteration and exact plans are reviewed before the other19.
+Reviewed pilot26a55 now passes all six transactions per build on clean1bfe:
+five individual1/0 selections, then501tests/116release or101debug skips across
+four complete modules, with no protected skip and zero fallback. Actual module
+contracts and51.203s/144.224s turnaround are retained; these are qualification
+timings, not performance benchmarks. The nineteen-only plan is being prepared
+against those immutable pilot receipts; no remaining repetition/full suite starts
+before its review.
 There are39 protected selectors. Changed checker-suite coverage, stale100,
 compiled walks, fresh ASan/tail builds and full normal/kill/stress/extras
 remain required on the repaired source before landing review.
@@ -205,11 +212,13 @@ The H1 frame-passing design clears
 [bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
 with source/build handoff required before implementation.
 The private API/layout decision is recorded in PROCESS section0.2.
-The pre-I [string design](design/work/pre-I-linear-string-concat.md) receives
-[REVISE before S1](design/work/reviews/pre-I-linear-string-concat-design-review.md):
-its compiler proof and epoch transitions need concrete algorithms and one
-certificate owner. A docs-only prerequisite revision is underway, directed
-toward immutable code-owned metadata installed before CREATE. The
+The pre-I [string design](design/work/pre-I-linear-string-concat.md) now has a
+[reviewed S0 proof/owner prerequisite](design/work/pre-I-linear-string-proof-owner.md).
+The first REVISE and subsequent S0_READINESS_CLEAR are preserved in its
+[review](design/work/reviews/pre-I-linear-string-concat-design-review.md).
+It specifies compiler fixed points/final-word checks, runtime epoch transitions
+and immutable code-owned metadata installed before CREATE. Cross-owner interface
+review and a bounded mutation-disabled S1 plan remain required. The
 [Unicode storage/ABI audit](design/work/pre-I-string-storage-audit.md) remains
 source analysis; storage and cross-owner interfaces need separate review.
 No string implementation is approved; monitoring-storage landing remains pending.

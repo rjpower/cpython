@@ -167,3 +167,125 @@ copy bound, interrupted epochs, retained published slack, RSS/pauses and
 non-concatenating workload overhead are appropriate pre-JIT acceptance
 criteria. No arbitrary operation/count threshold or refcount resurrection
 is needed.
+
+## Round 2: S0 proof and owner revision
+
+Verdict: **S0_READINESS_CLEAR for cross-owner interface review**. The
+revised rules close the round-1 proof/owner design gaps at this boundary.
+They do not approve S1 implementation, a new code-object layout, a complete
+effect decoder, Unicode capacity storage, observer closure or mutation.
+H3 and H1/ROOTS must review the named interfaces on the actual integrated
+source before a bounded S1 work plan is assigned.
+
+Reviewed primary `3ea46bb331dde956d1cfefc30322bf5d2d64ef94` and these
+uncommitted design revisions:
+
+| Document | SHA256 |
+|---|---|
+| `pre-I-linear-string-proof-owner.md` | `f3a94cf340f1083ebfe81f480845a2bb64b8bc2b227dbc45c14975bd5d25a521` |
+| `pre-I-linear-string-concat.md` | `a126dc8ff556379d8ad418e8a14a18187035db90e4aeae9865dfb26bdfdc005d` |
+| `pre-I-string-storage-audit.md` | `3fae0db264561fa8ea733044776181ae625cb2bc01b8ace967ac7003187d4c81` |
+
+The preceding review remains verbatim; its pre-append SHA256 is
+`72b53832a9ec0d0abfefe257deb861f413b601bc03a0ae59be5eaa4b6597187e`.
+The first S0 draft is preserved at
+`pre-I-string-history/S0-first-draft-ea38d1179b73.md`, SHA256
+`ea38d1179b73917867e1f36121c746584495333b1c3cda55044ba97cab37a09a`.
+That draft was superseded after the coordinator identified the need to
+separate fresh grants from continuations; this review assesses the revised
+token rule, not the earlier draft. Review used source reads and Git
+metadata only. No native/build/test/probe execution, author-file edit or
+new runtime evidence is claimed.
+
+| Round-1 issue | S0 disposition |
+|---|---|
+| Ownership facts and transfer rules | Closed for interface review: actual post-compaction CFG, Shared/transaction-local Borrow provenance, MayOwn possibility set, strong-copy sealing, pre-write retirement and separate success/slow/error actions are explicit. No permission transfers through a strong copy, even one that clears its source. |
+| Joins, loops and exceptions | Closed at this boundary: MayOwn joins by union as an overapproximation, never a bit grant. Finite monotone fixed points replace bounded iteration guesses. Exception handlers start with empty owner bits; preserved/implicit exception uses cannot pose as consumed append reads. |
+| Final physical admission | Closed as a required new interface: decode actual words, feedback, window extents, local kinds and exception metadata; verify op-to-word/slot projection; independently recompute effects, CFG, liveness and ownership. Synthetic relaxed jumps are real nodes with checked targets/output state. |
+| Stale activation/slot permission | Closed in the abstract state machine: clear before writes/transitions, monotonically advancing generation and revocation serial, no caller-bitmap restoration, no counter wrap, and sticky disable on optional allocation/exhaustion failure. Concrete lifetime and allocation hooks remain H1/ROOTS review. |
+| One certificate owner | Closed as a design choice: one dedicated immutable code-owned pure-data pointer, consumed through a separate private constructor parameter, installed before CREATE, preserving lazy `_co_exec`. No `co_extra`, eager storage or dual-backing fallback. |
+| Failure/publication/resurrection lifetime | Closed in the proposed contract: exactly one owner through failures and transfer; safe NULL field before cleanup; NULL on uncertified construction/replace/marshal/static/frozen paths; no upgrade; survive DESTROY retention until actual deallocation; separate fixed-field/payload accounting. |
+
+### Fresh grants and existing-private continuations
+
+The revised distinction is necessary and coherent. A fresh grant accepts
+only a never-published helper allocation after successful complete storage
+to the certified local. It cannot turn a supplied old object private.
+Continuing the same allocation instead requires a token captured while
+its owner bit is actually set, after the site's exact operand guards.
+The token binds active frame/plan/site/local, generation, revocation serial
+and the original object through reviewed roots. Every seal, unrelated
+write or frame transition invalidates it. Validation, token consumption,
+known destination retirement, any slot write and continuation grant form
+one noninterruptible commit; its own retirement changes the serial, so
+the token cannot be replayed. A stale token takes copying semantics and
+cannot readopt the old allocation.
+
+This permits the intended loop without weakening the escape join. In the
+simple admitted loop, the first non-aliasing append allocates fresh; the
+backedge may carry its bit through reviewed no-escape paths and empty
+polls. An unrelated induction-variable write can advance the serial
+without clearing the string's bit; the next append captures a new token.
+The MayOwn union at a header records both bit-zero entry and bit-one
+backedge paths. If a predecessor publishes an alias, its actual bit is
+cleared and the join cannot restore it; that execution must allocate a
+different fresh result before another grant. The live bit and token,
+not the abstract set or a matching address, decide continuation.
+
+No live compiler-admission or linear-growth result follows from that
+reasoning. `Lib/test/test_ir.py:1029–1037` already exercises the plain
+local `s += "ab"` shape, and both retained string microbenchmarks use it;
+those sources establish a relevant existing form, not a private-path
+receipt. S1 must retain the simple-loop admission oracle as well as the
+one-predecessor escape rejection. Generic iterator/condition/callback
+routes still seal unless S3 independently approves their fast paths.
+
+### Source grounding and limits for the owner reviews
+
+The final-word verifier is explicitly **new work**. Current
+`_PyIRFormat`/borrow_mask and `_PyIR_RUNS_CODE` do not supply complete
+ordered/implicit/exception effects. `_PyRegOp`'s nimplicit values are
+exception-live inputs (`pycore_regcfg.h:38–50`); the existing copy/store
+passes and compaction do not prove privacy. S0 correctly requires a full
+decoder for admitted forms, independently recomputed physical facts and
+rejection of unknown format/control-flow/hidden effects or bypassable
+barriers. A seal-all action is acceptable only where it really precedes
+all effects. H3 must review that contract and its generated/member
+consumers; this verdict does not declare such a decoder present.
+
+The specialized member's target identity and NULL-on-failure behavior are
+real (`bytecodes.c:952–996`), and generated input consumption and local
+stores differ (`ceval_macros.h:530–588`). Keep the member-specific error
+contract; the generic/reflected route seals without inventing an early
+binding clear. A private-left/empty-right alias that traverses an actual
+slot clear/store must use the same continuation discipline, not the fresh
+grant API. These ordering facts belong in the decoder and commit interface.
+
+The constructor proposal matches the actual finite call boundary:
+`assemble.c:571`, `marshal.c:1948`, `codeobject.c:896,1008`, with declaration
+in `pycore_code.h:160`. All callers must explicitly supply plan or NULL.
+Current `init_code` itself calls CREATE (`codeobject.c:485`); the owned
+transfer/final check must therefore occur before that notification, not
+after `_PyCode_New` returns. `_PyCode_Destroy:2366–2375` is not deallocation;
+the pure-data plan must remain valid after a DESTROY watcher retains code.
+Account for the field through actual struct extent and add only payload
+bytes to `code_sizeof:2688`. `_Py_InitCleanup`/`_PyCode3`, deepfreeze and
+remote code size/co_words offsets are real consumers; their layouts and
+NULL initialization still need H3/C-ABI review on the integrated head.
+
+The proposed negative controls target the actual missing proof: an extra
+implicit use, predecessor-only alias, exceptional edge/depth, compacted
+slot overlap and synthetic target must fail their own verifier assertions,
+not unrelated scalar checks. Shadow state controls cover specialized vs
+generic errors, frame reuse, exhaustion and stale/replayed tokens. The
+pre-CREATE/failure/DESTROY/NULL/sizeof controls cover the chosen payload
+lifetime. These are adequate source-level specifications to review next;
+none has been implemented or executed here.
+
+S0 is ready to take those exact decoder/schema/constructor interfaces to
+H3 and the owner-segment/root/retirement interfaces to H1/ROOTS. Their
+decisions and a bounded mutation-disabled S1 plan remain required before
+native work. S2 storage/ABI, S3 observer/foreign-entry closure, S4 mutation
+and matched enabled-path overhead/growth evidence retain their original
+boundaries. No blanket ownership grant, production barrier landing or
+performance claim follows.

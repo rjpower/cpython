@@ -3604,3 +3604,36 @@ directed toward dedicated code-owned pure-data metadata installed before
 CREATE, preserving lazy exec and actual-deallocation lifetime. H3/code-layout
 and H1/ROOTS interfaces still require review; no native or capacity change is
 granted. Keep later S2/S3 closure separate. Next hourly report12:45 PDT.
+
+
+### 12:28 PDT: first repaired-source pilots pass; string S0 ready for interfaces
+
+Independent review40a38bae clears exact pilot26a55, adapter1d624 and14-file
+manifest00e230 after all6,322 source/542 native hashes, sourceclean1bfe and
+eleven host corruption controls. The coordinator launches only six transactions
+per build. Both pilots pass and STOP; all ten individual selections run1test
+with no skips. Four complete modules run501tests,116release/101debug skips,
+four PASSED each. Per-thread module120/33 and test_gc141/17release or141/2debug
+are measured, not assumed from listing. Existing process/thread-inapplicable,
+cpu/walltime resource, free-threaded GC/debug-kill/tailcall skips are preserved
+by exact ID/reason. None covers a protected selector.
+
+Root reads all twelve current receipts directly: exact1bfe/26a55 provenance,
+RC0 and pre/post source/native guards agree. Module results6a1745f2/e69d7fd0
+record11,609/13,369collections and zero fallback;2,133/3,254unpinned remain3c
+report-only. Release module33.098s, whole iteration51.203s; debug97.033s and
+144.224s, with no concurrent support build. Nineteen more at that load estimate
+16.2/45.7minutes, not a benchmark or a promised finish. New nineteen-only plans
+must bind immutable pilot iterationzero, exact observed contracts and current
+source/products/helpers. No remaining repetition, full profile or support
+build launches from the pilot ruling alone.
+
+Separate string author supplies focused S0 f3a94cf3, preserving firstea38 draft.
+Independent round2 review5d333c2f clears S0 readiness for cross-owner interfaces:
+concrete conservative joins/transfers/exception and final physical-word checks,
+one code-owned pre-CREATE plan, explicit new complete decoder requirement,
+activation/local retirement and separate fresh-allocation grant versus checked
+single-use private continuation. Root's continuation finding is closed without
+adopting arbitrary old pointers. H3 layout/decoder and H1/ROOTS lifetime interfaces
+still require review; no S1/native/layout/storage/mutation grant follows.
+The coordinator reads the revision and both review rounds. Next hourly12:45 PDT.

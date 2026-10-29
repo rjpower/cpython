@@ -1,6 +1,6 @@
 # Pre-I linear string concatenation
 
-Status: design for coordinator review, 2026-10-29. No implementation,
+Status: revised design for independent review, 2026-10-29. No implementation,
 test, benchmark or build execution is authorized by this document.
 Source audit: primary `9dd24bf42c4`; the sources cited below were read,
 not changed. The separately qualified verification component is frozen.
@@ -9,6 +9,16 @@ Owner: coordinator-assigned string/compiler work before checkpoint I.
 ROOTS owns collecting-C/constructor safety; H1 owns frame/root transitions;
 H3 owns generated handler properties and executable metadata storage. This
 proposal does not take those owners' files or approve their pending work.
+
+The first readiness review returned **REVISE before S1**. The focused
+[S0 proof/owner revision](pre-I-linear-string-proof-owner.md) now specifies
+conservative transfer/join/exception rules, final-word admission and an
+activation-generation state machine. It selects one optional immutable
+code-owned pure-data pointer, installed before CREATE and retained until
+actual deallocation, preserving lazy execution copies. That revision
+supersedes this draft's open certificate-storage choice; independent
+review and H3/H1/ROOTS interface decisions remain. The prior drafts and
+review are retained with commit/hash identities in S0.
 
 ## 1. Decision sought
 
@@ -22,7 +32,8 @@ flattens nor allocates.
 The proposed capacity representation is concrete but needs a separate
 Unicode storage/ABI audit before implementation (section 5). Approval of
 the proof does not approve that storage choice or enable a fast path.
-The proposed first implementation scope is the proof and revocation machinery,
+The next reviewable prerequisite is S0's proof and owner interface, with
+no implementation. S1 would implement proof and revocation machinery
 with mutation disabled. Sections 8–9 give the later bounded split and
 acceptance conditions. No stage is assigned automatically to tier 1.
 
@@ -91,8 +102,9 @@ At a dispatch boundary, each private object must satisfy all of these:
    Unknown forms take the copying path. No permission is inferred from
    address equality, a storage flag, a root or a refcount compatibility API.
 
-The compiler derives a certificate from actual register use/definition
-and implicit reads after copy/store/truth transforms, then projects and
+As specified in S0, the compiler derives a certificate from actual
+register use/definition and implicit reads after copy/store/truth
+transforms, then projects and
 verifies it against final physical slots and assembled words, including
 synthetic jumps. A family-level `_PyIR_RUNS_CODE` bit is a conservative
 barrier input, not a uniqueness certificate. Existing copy-propagation
@@ -105,13 +117,15 @@ the first new private result copies them. This covers a reusable local
 append rule, including both spellings above, rather than a fixed loop,
 literal, iteration count or benchmark fusion.
 
-Only core-compiled, verified certificates are admitted. Code constructors,
-`code.replace`, marshal and freeze must drop or rederive them from their
-actual admitted code; a supplied flag/bitmap is never trusted. This does
-not claim H3-2a's scalar checks prove a CFG. The initial constructor path
+Only core-compiled, verified certificates are admitted. The selected
+initial path gives code constructors, `code.replace`, marshal, static and
+frozen code an explicit NULL certificate, without later upgrade; a
+supplied flag/bitmap is never trusted. This does not claim H3-2a's scalar
+checks prove a CFG. The initial constructor path
 may simply leave this optional optimization unavailable. H3 must review
-certificate storage, canonical handler selection and renumber consumers
-before code is written; do not smuggle it into an assumed `co_extra` slot.
+the selected dedicated code field, canonical handler selection and
+renumber consumers before code is written; do not smuggle it into an
+assumed `co_extra` slot.
 
 ## 4. Revocation and observer closure
 
@@ -126,7 +140,11 @@ no object-address alias table or extra field in every frame is proposed.
 The bitmap contains no owning object pointers. Locals/root records own
 the actual objects. Optional metadata allocation failure disables the
 optimization instead of adding a Python exception. ROOTS/H1 must review
-thread cleanup, frame movement and all owner retirement paths.
+thread cleanup, frame movement and all owner retirement paths. S0 defines
+enter/resume, seal, pre-write retirement, fresh grant and segment retirement:
+bits are never restored after a call or at a join, and a generation check
+prevents a reused frame address from inheriting an old grant. Strong copies
+always seal; they do not transfer permission.
 
 | Boundary | Required action before exposure |
 |---|---|
@@ -180,8 +198,10 @@ Proposed representation for helper-created compact exact strings only:
   at byte offset `(L + 1) * kind`. This avoids alignment assumptions.
   The reserved word fits even when `L == C`. Within a private append,
   read it before copying, overwrite the old tail as necessary, and write
-  it after the new terminator. No API may read beyond its documented
-  canonical `L + 1` units. After sealing, both data and metadata are fixed.
+  it after the new terminator. String results depend only on logical
+  characters and their terminator; retained diagnostic/implementation
+  physical reads keep their existing bounds contracts, as distinguished
+  in the storage audit. After sealing, both data and metadata are fixed.
 * `__sizeof__` reports reserved character storage plus this word for the
   flagged form; ordinary strings retain their existing calculation.
   Allocator/collector accounting charges the full requested allocation,
@@ -308,6 +328,7 @@ not establish mutation, capacity or linear growth, which remain S4 claims.
 
 | Rung | Reviewable work and required controls |
 |---|---|
+| S0: proof/owner prerequisite | The focused companion specifies transfer/join/exception rules, final physical-word verification, one pre-CREATE code-owned plan and current-frame segment/local-bit transitions. Independent review, then H3/code-layout and H1/ROOTS interface decisions; source-only, no implementation. |
 | S1: proof only | Certificate derivation/verification, optional per-thread owner bitmap and revocation, mutation disabled. Test ordinary/implicit reads and writes, including `LOAD_FAST_AND_CLEAR`, comprehension save/restore and exception-target clearing; copy/store/compaction remapping; both append spellings; constructors/replace/marshal/freeze; and exact owner retirement at frame export/call/return/unwind/detach. H1/ROOTS/H3 approve their shared interfaces first. |
 | S2: flat capacity helper, not enabled by Python append | Unicode owner decides section 5; implement constructor initialization, capacity arithmetic/accounting and private transaction controls. Exercise normal/debug allocators, exact capacity, reserve failure with successful exact retry, actual final allocation failure, overflow, each width transition, embedded zero/surrogates, self-append and two private operands. No API/layout claim based on one ASCII case. |
 | S3: closed observer/foreign-entry inventory | Complete section 4 and collecting-root controls before enabling mutation. Aliases through another local/container/cell/global/constructor; pre-existing locals proxy; Python/C frame getters/cache/rebinding; warmed/cold reflected fallback; monitoring/trace/profile enable/disable and exceptions; pending/finalizer/signal callbacks and another thread at detach. C stashes retain object plus DATA/UTF8 pointers across append, growth, widening and collection. Active reftracer/custom allocator modes prove fallback. |
@@ -348,8 +369,10 @@ Preserve noisy or slower rows and their uncertainty. The coordinator owns
 checkpoint-I whole-workload attribution; this design owns its actual
 copy-growth/alias correctness evidence, not unrelated tuning.
 
-Required decisions before implementation: Unicode capacity/ABI approval;
-H3 certificate storage and generated semantic consumers; H1/ROOTS owner
-retirement/root/constructor/foreign-entry interfaces; exact first-rung
-scope and gates. These are pre-I dependencies. No proof, storage choice,
+Required decisions before S1 implementation: independent S0 readiness;
+H3 approval of the selected certificate field/constructor lifetime and
+complete semantic decoder; H1/ROOTS owner-segment/pre-write/root interfaces;
+exact shadow scope and gates. Unicode capacity/ABI approval belongs to S2,
+and full observer/foreign-entry closure to S3, before S4 mutation. These
+are pre-I dependencies. No proof, storage choice,
 native implementation or gate outcome is preapproved by this document.

@@ -2,8 +2,10 @@
 
 Status: design/source audit for coordinator review, 2026-10-29. This is
 an addendum to `pre-I-linear-string-concat.md`, not an implementation
-grant. The parent remains unchanged at SHA256
-`1616f77fe3ce3317f44f5c4ca07d3404d192a40433982d38bb54b3c91cdf47be`.
+grant. The original parent was reviewed at SHA256
+`1616f77fe3ce3317f44f5c4ca07d3404d192a40433982d38bb54b3c91cdf47be`;
+the later S0 revision below selects certificate ownership while preserving
+this storage inventory and its separate approval boundary.
 
 Audited primary HEAD: `db96fc12f15c850848e9afac3cabb948530c0814`.
 The relevant `Objects`, `Include`, `Python`, `Tools/build`, remote-reader
@@ -36,12 +38,11 @@ The smallest storage contract is:
   their existing object-domain allocation/free pair. No debug prefix or
   allocator usable-size query becomes part of the representation.
 
-Recommend a compiler-only, immutable certificate attached **during code
-construction, before CREATE watchers**. A dedicated optional code-owned
-pointer is the clearest initial ownership contract; its code-layout cost
-and H3 storage integration require an explicit ruling. Section 6 also
-describes an execute-owned alternative using the existing `_co_exec`
-pointer. Neither assumes a reserved `co_extra` index.
+The revised design selects a compiler-only immutable certificate in a
+dedicated optional code-owned pointer, attached **during code construction,
+before CREATE watchers**. Its code-layout cost and H3 integration still
+require review. Section 6 retains the earlier alternatives as source
+analysis; they are not implementation fallbacks.
 
 Before implementation, the coordinator and Unicode/C-ABI owner must rule
 on the bit/trailer and platform-layout checks; H3 must rule on certificate
@@ -241,6 +242,16 @@ Unicode layouts or interpreting old unnamed padding as a named flag.
 
 ## 6. Compiler certificate storage and revalidation options
 
+Decision for the next design revision: the
+[S0 proof/owner prerequisite](pre-I-linear-string-proof-owner.md) selects
+the dedicated optional **code-owned pure-data pointer**, passed through
+the private constructor and installed before CREATE. It preserves lazy
+`_co_exec` creation and survives DESTROY retention until actual deallocation.
+The alternatives below remain the original source-analysis record, not
+implementation fallbacks. S0 specifies owned transfer/failure handling,
+explicit NULL on uncertified paths, accounting and the required H3/H1/
+ROOTS reviews. No native/layout approval follows from this choice.
+
 The compiler path is `optimize_and_assemble_code_unit`
 (`Python/compile.c:1662`) through register conversion/passes/compaction
 (`Python/regcfg.c:1405`, `:1432`), `_PyAssemble_MakeCodeObject`
@@ -273,8 +284,9 @@ Recommend the pre-CREATE call path. The exact candidate internal boundary
 is an owned optional plan parameter from assembler `makecode` into
 `_PyCode_New`/`init_code`; update all internal callers, with NULL on
 non-certified paths. It is not a new Python-visible constructor argument.
-H3 chooses the backing above before implementation. An alternative with
-post-construction analysis must make **permanent no-upgrade** explicit
+H3 reviews the selected dedicated backing before implementation. The
+original alternative with post-construction analysis would have to make
+**permanent no-upgrade** explicit
 once CREATE/publication has occurred; absence stays absence for that
 object, even if no execution copy existed yet. This is less useful than
 construction-time attachment and is not the recommendation.

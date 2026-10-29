@@ -3170,3 +3170,59 @@ exclusions, ASCII-to-Latin-1 header changes, permanent metadata after seal,
 and pre-CREATE certificate publication. This is source evidence, with no
 string native execution or implementation approval. S1 shadow tracking is
 a development checkpoint, not an independent production overhead landing.
+
+
+### 10:45 PDT: hourly coordinator checkpoint
+
+Primary native integration remains052d8342e56; identity/result component9dd
+is landed, but production run/gate orchestration is not. ROOTS source8ce stays
+clean. Release's20 repetitions complete640jobs/41,440tests/1,660skips with
+330,157collections/zero fallback. The independently checked main0/domain
+supplement binds all640 inputs and1,480 required PID occurrences. O1debug has
+16 complete repetitions and is finishing17; remaining matrix estimate is
+about18–22minutes from10:41, contingent on shared slots, not a speed result.
+
+The first full native SUCCESS remains qualificationFAIL because global
+addSkip included67 inner meta-test events. Separate full-only v3 repair14739d
+clears independent review after exact outer-result/configuration bindings,
+weakref-backed tokens, protected skip checks and main0/counter-domain checks.
+Four observer controls and45 validator negatives plus positives pass. The
+original failed attempt/helpers and earlier proposals are preserved.
+
+Fresh release-full native+audit passes51,130tests/3,458outer skips,564modules,
+565 actual driver/workers,63,597collections/zero fallback;2,889unpinned visits
+are report-only. Coordinator verifies receipt195c64bee179667a. Stress11-release
+also passes3,061tests/100skips,11modules,44,828collections/zero fallback,6,519
+report-only unpinned; receipt68feb053300b33f7. Thirteen driver visits remain
+unattributed, rather than being labeled interpreter swaps. No filter is added.
+
+Debug's guarded host waits for640/17a8 plus its read-only main0 supplement,
+then only normal-full, kill-full and stress11 with candidate-after20. O1 is
+not adopted globally; integration debug remains Og. Fullstress100k follows
+the debug fulls. Cext/regeneration/traversal/optional closure, an explicit
+idle benchmark window and landing review remain. No native integration date
+is promised before those results.
+
+H3 implementation is underway at8786479 plus frozen production diff2245622b /
+source manifest603366f4. Development controls pass both builds for valid
+backward/INT_MAX lines, existing-tool membership and local OOM rollback/retry.
+Early450-case gates pass; broader/smoke qualification is still in progress.
+Real allocator interception measures equal-n low/high requests[28,6,6],40bytes
+peak; failure prefixes free all unpublished bytes and preserve state. This
+is requested-byte evidence, not RSS or final-candidate qualification.
+
+Independent source review finds one remaining blocker: no-monitoring-flags
+code now loses configured local-request bookkeeping. Coordinator rules to
+preserve the old request while keeping installation absent. A valid code.replace
+negative is retained; fix/refreeze and affected reruns follow current gates.
+Prior hashes/results stay distinct. Synthetic-cache/copied-helper controls
+and final allocation/kill/source review remain before landing behind ROOTS2b.
+
+String design and storage audit are retained as source analysis only. Capacity
+bit/trailer, code certificate backing and H1/ROOTS observer interfaces still
+need decisions before implementation. Queue2 remains held by the earlier
+automatic classifier; no user approval is pending or stopped probe retried.
+
+Next hour: finish debug20 and start its approved full chain; close H3's bounded
+bookkeeping finding and qualify the refrozen candidate. Keep shared full
+orchestration's outer-result handoff explicit. Next report is due about11:45 PDT.

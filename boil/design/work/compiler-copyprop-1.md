@@ -807,3 +807,25 @@ experiment source variant. No guard-removal source or before-equivalent
 compiler is left in the checkout. Task-owned scratch scripts are removed
 after this record is committed; logs, exact patches and counter artifacts
 needed to review the result stay in the tree.
+
+
+### Landing review round 2: accepted
+
+The independent read-only review of `b59ab985ae7` against integration
+`71c1e8d1fa9` returned **LAND**, with no blockers. It is preserved as
+`reviews/compiler-copyprop-1-landing-2.md`; the original fix-first review
+is unchanged. This documentation-only disposition commit changes no
+tested C, test module, worker launcher or measurement artifact.
+
+| Prior landing blocker | Fixing commits and accepted disposition |
+|---|---|
+| 1: receiver assertions did not establish the no-Python specialization phase | `229abc18a1b`: direct C phase fixture, eight paths, dict-guard two-failure control, MRO-guard six-failure control, and omitted getattribute semantic case. Round 2 accepted the phase distinction and controls; adaptive thresholds, redispatch and unexercised native paths remain outside the proof |
+| 2: invalid guard-free provenance and vague targeted-gate record | `229abc18a1b`: withdraw invalid historical control and retain exact patches, hashes and failures. `b59ab985ae7`: final revision/build/extension provenance, both-build targeted gates, actual-mode kill witness and negative control, regeneration/unbuilt evidence, and historical gate-survival explanation. Round 2 reconstructed guard hashes and both exact 41c716c5947 baseline files, and matched all 20 final source hashes plus both interpreter/extension hashes |
+| 3: incorrect instruction comparisons and absent allocation/box evidence | `229abc18a1b`: corrected instruction comparisons and paired controlled 94-row counters. `b59ab985ae7`: final scope and evidence record. Round 2 recalculated the comparisons and accepted the before-equivalent label; coordinator checkpoint I retains unexplained instruction/counter/RSS changes and memory allocation/pause scope, without treating them as proven attribution |
+
+The review accepted the bounded fixup and honest historical full-suite
+record. The coordinator still owns the merged integration ladder before
+landing. The checker hand-off, missing-reader-root oracle and
+allocation-time buffer-release work stay with 10a; the verdict does not
+close them. No new tests or builds were run for this documentation-only
+commit or by the independent reviewer.

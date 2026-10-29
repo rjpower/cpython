@@ -51,3 +51,44 @@ the existing teardown emits a dangling-thread warning: alive/active/limbo
 state, Python stack, recorded conservative stack hits, Python referrers,
 and the pending finalizer registry. A successful run without a warning
 is a non-reproduction, not a cause or a fix.
+
+
+The feeder investigation made three bounded forkserver-process runs (183
+passing tests and 7 skips each), with no warning, including two during
+concurrent suite load. These are non-reproductions. A controlled schedule
+then identifies a real completion race: queue collection has sent the
+sentinel, but the feeder is still closing its pipes when teardown checks
+for dangling threads. The historical warning has no such captured state;
+its exact cause remains unknown.
+
+`feeder_completion.py` reproduces that race with a one-second Python
+switch interval. `old` reconstructs only BaseMixin.tearDownClass from
+exact commit `970e14edbde`; it exits 1 after the warning, while the actual
+current method exits 0 after waiting for completion. `blocked` holds the
+real feeder in reader.close after the sentinel, shortens this control's
+wait budget to 0.1 seconds, and proves the live-thread warning survives;
+it then releases and joins the feeder. `feeder-events.txt` preserves all
+three observed event streams on the merged debug source. Run each in a
+fresh child from the repository root:
+
+```
+UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project -- \
+    build/debug/python -B boil/design/work/7a-1-evidence/feeder_completion.py MODE
+```
+
+The source fix waits only for newly created QueueFeederThread objects,
+using one shared monotonic deadline; the existing dangling-thread warning
+and stopped-thread collection/recheck remain. No exclusion is introduced.
+The first observer-triggering experiment exposed a missing
+print_warning.orig_stderr attribute in the diagnostic wrapper. The
+wrapper now preserves it; the failure is retained in build storage. The
+three earlier warning-free suite runs did not reach that broken path.
+One later attempt expired while waiting for the busy debug build lock;
+it ran no control and supplies no test result.
+
+`assert_kill_worker.py` is the roots lane's actual-state assertion,
+unchanged; its shell adapter uses this worktree's debug build and
+preserves interpreter flags. BOIL_MODE_EVIDENCE selects a queue-owned
+JSONL log. This provides per-worker (2, 0) evidence for the final plain
+kill suite. The -E control must fail with actual state (0, 0) before
+running the requested worker module.

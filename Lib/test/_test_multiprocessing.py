@@ -7763,6 +7763,13 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
+        # Closing a queue notifies its feeder before the feeder has finished
+        # closing pipe handles. Give that asynchronous shutdown a bounded wait.
+        deadline = time.monotonic() + support.SHORT_TIMEOUT
+        for thread in threads:
+            if thread.name == "QueueFeederThread":
+                thread.join(max(0.0, deadline - time.monotonic()))
+        thread = None
         if threads and not any(t.is_alive() for t in threads):
             # A queue's feeder thread that stopped after the collection
             # above was still in threading._active then; only the next

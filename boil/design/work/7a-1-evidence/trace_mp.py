@@ -45,6 +45,7 @@ def traced_teardown(cls):
                       [type(arg).__name__ for arg in finalizer._args],
                       file=sys.stderr, flush=True)
         original_warning(message)
+    warning.orig_stderr = original_warning.orig_stderr
     mp.support.print_warning = warning
     try:
         original_teardown(cls)

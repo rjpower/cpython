@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 11:31 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:45 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 11:31 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:45 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -139,7 +139,14 @@ a blocker in all three start-method thread-pool release-task-reference tests.
 It finishes51,130tests with exactly those three failures; the armer stops and
 launches no further profiles. Ten unmodified fresh selections reproduce the
 failure. A separate trace finds direct conservative hits for all three
-survivors in _PyParkingLot_Park; callback/caller ownership audit precedes a fix.
+survivors in _PyParkingLot_Park. Disassembly identifies unused alignment padding.
+All seven caller contracts clear review; a bounded precise-Park fix is underway
+on primary-tooling merge d8be2e2c36d. Every caller keeps its current classification,
+with a new exact-slot/unpark fixture. V1's method-ABI correction and DWORD-only
+parser extension are authorized; focused results and a new freeze remain pending.
+The release inline-audit failure is retained, with no branch/effect waiver.
+After the DWORD controls pass, checking the full helper reveals a CPP-spanning
+else unsupported by the parser; a minimal correction is under review.
 The narrower process-pool matrix does not cover this case. ASan14 plus
 separate sort/functools completion and fresh
 release/tailcall stale100 and compiled-walk controls pass. Debug full normal/kill,
@@ -175,6 +182,10 @@ checker/traversal and19 optional syntax checks complete. Frozen candidate
 ffc548603b8 is pushed and clears independent evidence review. It predates queue052;
 its results do not qualify the queue/ROOTS/H3 union. Merge/requalification waits
 for ROOTS2b, preserving the existing native landing order.
+The next statistics design81417aff097 clears its revised independent review:
+raw entries and semantic events remain separate, with dispatch-mode-specific
+prediction counting and producer metadata. It is design only; no next native
+change precedes the integrated-source handoff.
 The H1 frame-passing design clears
 [bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
 with source/build handoff required before implementation.

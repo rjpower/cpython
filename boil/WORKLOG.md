@@ -3431,3 +3431,64 @@ seven callers, callback arguments and producer-to-parked-consumer result
 anchoring before proposing a single-function precise classification. No pad
 zeroing, walkrange heuristic or blanket precision is approved. The compiler
 peer is assigned that forthcoming bounded design review. Next report11:45 PDT.
+
+
+### 11:45 PDT: hourly coordinator checkpoint
+
+Primary native integration remains052d8342e56; shared identity/result9dd is
+landed but run/gate orchestration remains unfinished. H3 frozen storage
+native76274/evidenceffc548603b8 clears independent source/evidence review,
+including240artifact hashes, release/Og smoke1,924 and affected1,370 each,
+actual-kill1,370/839collections/zero fallback and unpinned, allocation and
+semantic negatives, regeneration/checker/traversal and19optional syntax checks.
+The candidate predates queue052. Preserve its branch and receipts; primary
+union merge/requalification remains behind ROOTS2b. No merged LAND is claimed.
+
+ROOTS8ce release/debug each finish640jobs/41,440tests, with zero fallback;
+fresh release full/stress11 pass. Debug full remains FAILURE:51,130tests and
+exactly three thread-pool task-reference failures. Ten original fresh controls
+and the separate trace identify all three survivors in unused Park alignment
+padding. The seven-caller/handoff audit clears a bounded precision annotation,
+header contract and structural fixture; every caller stays opaque. Future
+queue-reader precision still needs an explicit output-slot anchor.
+
+At the quiescent boundary ROOTS merges primary64ab asd8be2e2c36d:27incoming paths
+all underboil,1084native product paths unchanged, old verifier bytes and8ce
+receipts preserved. Park implementation-v1 changes only its approved four files.
+Peer finds incompatible METH_O declaration before fixture execution; Boolean
+pointer-bit layout may conceal it, so no crash is claimed. ProperPyValue
+argument/result/cast correction is authorized. Release gate0 fails its inline
+audit because inlined Semaphore_Wait's inactive Windows DWORD cast is not in
+the parser type inventory. PyTime_t was already recognized; preserve that
+refinement and failed gate. Exact extension grants only DWORD plus realistic
+cast-positive/unanchored-object-negative TestRootCheckC controls. No branch
+omission, effect exemption, noinline workaround or outlined allowance.
+Refreeze/review and first bounded controls are expected around noon, contingent
+on current builds; no new full profiles or source-qualified success is claimed.
+
+Independent stats design review first returns REVISE for double-counted family
+arithmetic and unrecoverable truth-event attribution. Docs-only81417aff097
+closes both and clears round2 IMPLEMENT readiness. Original draft/review history
+stay preserved. Raw family totals sum entries once; semantic events retain
+recorded owners. Computed-goto/switch prediction bypasses the counter, whereas
+tailcall re-enters and counts; producer dispatch-mode identity and separate
+expectations preserve both. No statistics native/build work starts yet.
+H1 frame-passing design is also ready after integrated generator/build handoff;
+H2 maps, numeric guards, typed truth, value receivers, call-window placement,
+range spills, string concatenation and interpreter parity remain pre-JIT work.
+
+Next hour: close Park fixture ABI/parser findings, prove old-fail/new-pass with
+actual frame/caller-slot and omitted-root controls, then rule on the smallest
+sufficient fresh qualification plan. Old matrix rows remain historical rather
+than new-native PASS; no arbitrary count threshold, new exclusion, Og rollback
+or full gate4 benchmark is introduced. Keep H3 candidate frozen and design
+handoffs ready. Queue2 remains held by the prior automatic classifier; no user
+permission question is pending. Next hourly report is due about12:45 PDT.
+
+At the report boundary, DWORD old-fail/new-pass controls succeed, but forcing
+the complete Semaphore_Wait source exposes a second parser limitation: a
+CPP-spanning else. The owner proposes a three-scalar-statement selection flag;
+that production-body edit is not yet granted. Compare parser support and exact
+feature/error-path equivalence before ruling. Preserve failed attempts and
+continue checking every platform branch. This refines the pending audit work;
+it is not a runtime success or a new exclusion.

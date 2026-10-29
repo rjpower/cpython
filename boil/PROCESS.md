@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 11:31 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 11:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | rungs0,1,1b landed; rung2b unlanded, queue integration reconciled as cb0b6c21b97. Provenance/list-transfer repair committed82165f8a2a9. Original carrier helper fails eight origin subcases; zero-seed-sort control fails both orderings; old list transfer traps10/10, fixed passes10/10. Bounded O1 checks pass; first31-case/11-module feedback iteration took541.745s. Cleanup repair172b406be0c and actual-helper regression cleared bounded review; tooling merged67477efa986. Settled O1 controls pass; whole11 timing109.008s/2041tests passes. Shared-heap callback unskip passes20 selections per build, frozen8ce9c57c662. Both final matrices pass640jobs/41,440tests each; release skips1,660 and debug1,360 are the exact intrinsic allowances. Debug has374,245collections/zero fallback and a passing640-job main0 supplement; full debug starts11:08 and exposes weakref-live task objects in fork/forkserver thread-pool tests. Full ends51,130tests/3failures/3,401skips, zero fallback, armer stopped. Ten fresh original tests reproduce; a separate trace finds all three survivors in conservative _PyParkingLot_Park stack words. Ownership audit precedes source changes. The matrix covers different process-pool selectors. Whole-module contracts protect32 selectors. ASan14 passes3,616/91skips with its exact accepted allocator exclusion; unfiltered ASan gate0 remains FAIL. Fresh release/tailcall stale100 and compiled-walk controls pass. Release full-v3 passes51,130tests/3,458outer skips,63,597collections/zero fallback; stress11-release passes3,061/100skips,44,828collections/zero fallback. Original full attempt remains qualificationFAIL on inner skip accounting. Debugfull normal/kill/stress, once-only full100k, extras/review and O1 adoption remain pending. Gate4 is step-end. Rung3a writers/PyMem,3b checker/precision residue,3c queued releases/detached-state roots and rung4 measurements/support follow |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains unlanded. Frozen8ce release/debug matrices each pass640jobs/41,440tests; release full/stress11 pass. Debug full fails exactly three thread-pool task-reference tests. Ten original controls and trace identify stale alignment padding in opaque _PyParkingLot_Park. Bounded precise-Park prerequisite clears design review; current worktree merges primary64ab asd8be2e2c36d and implements the fix. V1 fixture ABI and DWORD cast-parser corrections are authorized; new freeze/controls remain pending. DWORD controls pass; full helper parsing then exposes a CPP-spanning else. Its correction is under review. No full profile launches on the draft. Old8ce receipts remain historical; O1 stays candidate. After bounded proof: new qualification plan, required full/kill/ASan/stress/extras, landing review/integration. Rung3a writers/PyMem,3b checker residue,3c detached-state roots and rung4 support follow |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Stage2b.1 names/inspection/NOFB c5cf6ba6d288 cleared LAND_2B1. Immutable SafeAddr2Line checkpointdc02f76c0ccf cleared LAND_2A, smoke1,924/affected1,519 per build and actual-kill1,519. Storage2b.2b design84e518cb872e/fixture71ec68cb7da7 clear independent review; fixed int/uint16 implementation is under source review and qualification. Early line/membership/OOM controls pass; no-monitoring-flags bookkeeping correction clears source review at54b2832334af. The broader54b gate exposes an inherited flagged-code refresh loop; reviewed three-guard prerequisite d5d88a7b8f80 is applied in combined manifest a6c07b4ce7b2. Combined source clears independent review; release smoke1,924/affected1,370 and semantic negative controls pass. Debug smoke1,924/affected1,370 and actual-kill1,370 pass; regen/checker/traverse/19unbuilt close. Candidateffc548603b8 is pushed and clears independent frozen-checkpoint evidence review. It lacks queue052 ancestry; actual union qualification and runtime landing remain pending. H1 frame-passing design617bea5 clears bounded readiness review, with source/build handoff required before implementation. Monitoring/stats, transport closure and final renumbering follow; typed float truth is separate |
+| H | handler contract (note 14), generated handler domain and orthogonal interpreter dispatch | Stage1 landed6c724c29408. Stage2a624c75f6455, names/NOFBc5cf6ba6d288 and immutable-linedc02f76c0ccf clear bounded review. Monitoring storage native76274/evidenceffc548603b8 clears frozen-checkpoint source/evidence review: release/Og smoke1,924 and affected1,370 each, actual-kill1,370, controls and audits pass. It predates queue052; actual queue/ROOTS/H3 union qualification and primary landing remain pending. Stats design81417aff097 clears revised readiness review; next native edits wait for integrated source/ownership. H1 frame-passing design617bea5 is ready after generator/build handoff, independent of H2 maps. H2 waits for10a3. Transport/final renumbering precede typed truth operations; no opcode-count threshold |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
@@ -320,6 +320,11 @@ existing GC/compiler/scalar fixtures. This supersedes the storage hold above
 only for this bounded implementation; later monitoring/stats/transport work
 and runtime landing remain separate.
 
+New test hooks must use this fork's method typedefs. In particular, METH_O
+requires PyValue for both the argument and result, with the method cast;
+ordinary PyObject argument hooks may use the existing VARARGS convention.
+Boolean pointer-bit coincidence does not validate an incompatible signature.
+
 The54b broader gate exposes an inherited CO_NO_MONITORING_EVENTS refresh loop
 when ordinary flagged code executes RESUME after a global version change.
 Preserve that failed gate. Eligibility proposal-v3 d5d88a7b8f80 clears independent
@@ -415,14 +420,29 @@ Only next-stage stats design proceeds meanwhile; no next H3 native edit.
 Tooling/docs with unchanged runtime sources and products use the explicit
 affected-level rerun rule.
 
+The Park prerequisite is independently approved under design1cbc5217 and
+reviews/10a-2b-parking-lot-design-review.md. Scope: Park's precision marker,
+borrowed-storage header contract, the gc_walk part/test_gc fixture, plus a
+DWORD-only TYPE_WORDS correction and TestRootCheckC controls. Keep every caller
+opaque; the exact caller output slot must remain covered across unpark while
+unattached. Future3a must explicitly anchor that slot if converting its caller.
+V1's METH_O declaration mismatch and actual release inline-audit failure remain
+preserved. The parser failure is the Windows DWORD cast, not PyTime_t. No
+inactive-branch omission, effect waiver or outlined allowance is approved.
+The subsequent full-body check exposes a CPP-spanning else; no semaphore-body
+rewrite is granted yet. Compare proper parser support with a minimal equivalent
+source form before extending scope.
+New helper/source/native identities and explicit post-fix qualification ruling
+are required; do not relabel old8ce results or launch full profiles yet.
+
 Hourly reporting: while work is active, approximately every hour the
 coordinator updates this state table and `README.md`, appends a dated
 progress entry to `WORKLOG.md`, and gives the user a summary of heads,
 landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
-2026-10-29 06:45 PDT, followed by07:41,08:44,09:45 and10:45 PDT. The next
-is due about11:45 PDT while work continues.
+2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45 and11:45 PDT. The next
+is due about12:45 PDT while work continues.
 
 ## 1. The loop
 

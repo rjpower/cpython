@@ -41,7 +41,12 @@ function. You can create and destroy them using the following functions:
       :c:member:`~PyInterpreterConfig.check_multi_interp_extensions`
       must be ``1`` (non-zero).
       If this is ``1`` then :c:member:`~PyInterpreterConfig.gil`
-      must not be :c:macro:`PyInterpreterConfig_OWN_GIL`.
+      must not be :c:macro:`PyInterpreterConfig_OWN_GIL`;
+      :c:func:`Py_NewInterpreterFromConfig` fails for that combination.
+      The interpreters that share the main interpreter's allocator are
+      collected together, and their garbage collector callbacks and
+      finalizers run on the interpreter that owns each object, which
+      requires one GIL among them.
 
    .. c:member:: int allow_fork
 

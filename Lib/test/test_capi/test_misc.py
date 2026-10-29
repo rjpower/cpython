@@ -1858,8 +1858,8 @@ class SubinterpreterTest(unittest.TestCase):
         kwlist[-1] = 'own_gil'
 
         expected_to_work = {
-            (True, True, True, True, True, True, True):
-                (ALL_FLAGS, True),
+            (True, True, True, True, True, False, False):
+                (ALL_FLAGS & ~EXTENSIONS, False),
             (True, False, False, False, False, False, False):
                 (OBMALLOC, False),
             (False, False, False, True, False, True, False):
@@ -1868,6 +1868,8 @@ class SubinterpreterTest(unittest.TestCase):
 
         expected_to_fail = {
             (False, False, False, False, False, False, False),
+            # One GIL per heap domain: boil/PROCESS.md section 0.2.
+            (True, True, True, True, True, True, True),
         }
 
         # gh-117649: The free-threaded build does not currently allow
@@ -2268,15 +2270,16 @@ class InterpreterConfigTests(unittest.TestCase):
                 allow_threads=False,
                 allow_daemon_threads=True,
             ),
-            dict(
-                gil='own',
-                use_main_obmalloc=True,
-            ),
         ]
         invalid = [
             dict(
                 use_main_obmalloc=False,
                 check_multi_interp_extensions=False
+            ),
+            # One GIL per heap domain: boil/PROCESS.md section 0.2.
+            dict(
+                gil='own',
+                use_main_obmalloc=True,
             ),
         ]
         if Py_GIL_DISABLED:

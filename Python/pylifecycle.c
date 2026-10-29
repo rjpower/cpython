@@ -621,6 +621,19 @@ init_interp_settings(PyInterpreterState *interp,
         return _PyStatus_ERR("invalid interpreter config 'gil' value");
     }
 
+    /* The interpreters that share the main interpreter's object allocator
+       are collected together and route their collector calls to each
+       other's queues, which assumes one GIL among them (note 13 section
+       7.2; an intentional compatibility break, boil/PROCESS.md 0.2).  The
+       main interpreter has its own GIL by definition. */
+    if (config->use_main_obmalloc && config->gil == PyInterpreterConfig_OWN_GIL
+        && !_Py_IsMainInterpreter(interp))
+    {
+        return _PyStatus_ERR("an interpreter that shares the main "
+                             "interpreter's object allocator must share "
+                             "its GIL");
+    }
+
     return _PyStatus_OK();
 }
 
@@ -1007,6 +1020,9 @@ pycore_interp_init(PyThreadState *tstate)
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
+
+    // Python code can run here from now on, so the collector's queue can.
+    status = _PyGC_LiveOpenQueue(interp);
 
 done:
     /* sys.modules['sys'] contains a strong reference to the module */

@@ -104,6 +104,14 @@ def generate_ir_metadata(
                                    if values[name] & flag) or "0"
                 out.emit(f"[{i}] = {flags}, /* {name} */\n")
             out.emit("};\n#endif\n\n")
+        for table, values in (("_PyIR_Instrumented", domain.instrumented),
+                              ("_PyIR_Deinstrument", domain.deinstrumented)):
+            out.emit(f"PyAPI_DATA(const uint16_t) {table}[IR_NUM_HANDLERS];\n")
+            out.emit("#ifdef NEED_IR_METADATA\n")
+            out.emit(f"const uint16_t {table}[IR_NUM_HANDLERS] = {{\n")
+            for name in sorted(values, key=lambda name: indices[name]):
+                out.emit(f"[{name}] = {values[name]},\n")
+            out.emit("};\n#endif\n\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "

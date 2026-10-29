@@ -1030,14 +1030,14 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
+    assert(addrq >= 0 && addrq < Py_SIZE(co));
     _PyCoMonitoringData *data = _Py_atomic_load_ptr_acquire(&co->_co_monitoring);
     if (data) {
         _PyCoLineInstrumentationData *lines = _Py_atomic_load_ptr_acquire(&data->lines);
         if (lines) {
-            return _Py_Instrumentation_GetLine(co, lines, addrq);
+            return _Py_Instrumentation_GetLine(lines, addrq);
         }
     }
-    assert(addrq >= 0 && addrq < Py_SIZE(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
@@ -2317,6 +2317,7 @@ free_monitoring_data(_PyCoMonitoringData *data)
         PyMem_Free(data->tools);
     }
     if (data->lines) {
+        PyMem_Free(data->lines->original_opcodes);
         PyMem_Free(data->lines);
     }
     if (data->line_tools) {

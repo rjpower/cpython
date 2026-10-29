@@ -11128,7 +11128,9 @@
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
             }
-            assert(next_opcode > 0 && next_opcode < 256);
+            assert(next_opcode > 0 &&
+                   _PyIR_HasProperty(next_opcode, _PyIR_H_METADATA) &&
+                   _PyIR_BaseOpcode(next_opcode) == next_opcode);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
             DISPATCH_GOTO();
         }
@@ -11258,7 +11260,7 @@
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(_PyFrame_InstrOffset(frame, this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -12015,7 +12017,8 @@
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
+                    if (code_version != global_version &&
+                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);
@@ -16601,7 +16604,8 @@
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
+                    if (code_version != global_version &&
+                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);

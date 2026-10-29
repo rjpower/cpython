@@ -525,6 +525,8 @@ class HandlerDomain:
     kinds: Mapping[str, HandlerKind]
     required_state: Mapping[str, HandlerState]
     operations: Mapping[str, int]
+    instrumented: Mapping[str, str]
+    deinstrumented: Mapping[str, str]
     have_arg: int
     min_instrumented: int
     first_ir_only: int
@@ -533,7 +535,7 @@ class HandlerDomain:
     def __post_init__(self) -> None:
         check_handler_count(self.count)
         for field in ("opmap", "handlers", "bases", "kinds", "required_state",
-                      "operations"):
+                      "operations", "instrumented", "deinstrumented"):
             object.__setattr__(self, field,
                                MappingProxyType(dict(getattr(self, field))))
         ids = dict(self.opmap)
@@ -557,6 +559,15 @@ class HandlerDomain:
                 or any(not 0 <= op < operation_count
                        for op in self.operations.values())):
             raise ValueError("invalid handler operation metadata")
+        for base, monitored in self.instrumented.items():
+            if (base not in ids or monitored not in ids
+                    or not self.kinds[monitored] & HandlerKind.INSTRUMENTED
+                    or self.bases[base] != base
+                    or self.bases[monitored] != monitored):
+                raise ValueError(f"invalid instrumentation relation: {base}")
+        for monitored, base in self.deinstrumented.items():
+            if self.instrumented.get(base) != monitored or base == monitored:
+                raise ValueError(f"invalid deinstrumentation relation: {monitored}")
         for name, base in self.bases.items():
             if base not in ids or self.bases[base] != base:
                 raise ValueError(f"invalid handler base for {name}: {base}")
@@ -713,9 +724,27 @@ def build_handler_domain(analysis: Analysis) -> HandlerDomain:
             raise ValueError(f"pristine handler requires runtime state: {name}")
         if kinds[name] & HandlerKind.DISPATCH and not required_state[name]:
             kinds[name] |= HandlerKind.PRISTINE
+    instrumented: dict[str, str] = {}
+    deinstrumented: dict[str, str] = {}
+    formats = compute_formats(analysis)
+    for name in analysis.instructions:
+        if not kinds[name] & HandlerKind.INSTRUMENTED:
+            continue
+        if name in ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"):
+            instrumented[name] = name
+            continue
+        base = name.removeprefix("INSTRUMENTED_")
+        if base not in analysis.instructions:
+            continue
+        if (kinds[base] & (HandlerKind.INSTRUMENTED | HandlerKind.SPECIALIZED)
+                or formats[base] != formats[name]):
+            raise ValueError(f"incompatible instrumentation pair: {base}, {name}")
+        instrumented[base] = name
+        instrumented[name] = name
+        deinstrumented[name] = base
     operations = {name: op for op, name in enumerate(binary)}
     return HandlerDomain(analysis, opmap, handlers, bases, kinds, required_state,
-                         operations,
+                         operations, instrumented, deinstrumented,
                          have_arg, min_instrumented, first, first + len(derived))
 
 

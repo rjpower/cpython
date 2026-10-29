@@ -300,6 +300,9 @@ monitor_handled(PyThreadState *tstate,
                 _PyInterpreterFrame *frame,
                 _PyInstr *instr, PyObject *exc)
 {
+    if (_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS) {
+        return 0;
+    }
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_EXCEPTION_HANDLED)) {
         return 0;
     }

@@ -1366,6 +1366,27 @@ class TestHandlerDomain(unittest.TestCase):
             inst(POP, (value --)) { DEAD(value); }
         """))
 
+    def test_monitoring_relations(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        for base, twin in domain.instrumented.items():
+            self.assertTrue(domain.kinds[twin] & ir_generator.HandlerKind.INSTRUMENTED)
+            if base != twin:
+                self.assertEqual(domain.deinstrumented[twin], base)
+            self.assertEqual(domain.instrumented[twin], twin)
+        self.assertEqual(domain.instrumented["CALL"], "INSTRUMENTED_CALL")
+        self.assertEqual(domain.instrumented["INSTRUMENTED_LINE"], "INSTRUMENTED_LINE")
+        self.assertNotIn("INSTRUMENTED_LINE", domain.deinstrumented)
+        with self.assertRaises(TypeError):
+            domain.instrumented["CALL"] = "NOP"
+        with self.assertRaisesRegex(ValueError, "instrumentation relation"):
+            replace(domain, instrumented={"CALL": "NOP"})
+        with self.assertRaisesRegex(ValueError, "deinstrumentation relation"):
+            replace(domain, deinstrumented={"INSTRUMENTED_CALL": "NOP"})
+        minimal = ir_generator.build_handler_domain(self.analyze())
+        self.assertEqual(dict(minimal.instrumented), {})
+        self.assertEqual(dict(minimal.deinstrumented), {})
+
     def test_full_domain_name_table(self):
         analysis = analyzer.analyze_forest(parse_src("""
             inst(NOP, (--)) { }

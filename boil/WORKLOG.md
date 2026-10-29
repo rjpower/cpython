@@ -3012,3 +3012,49 @@ from ordinary sequential gate3 argv; numeric gate behavior remains unchanged.
 No frozen launcher changes occur during an active attempt, and no failure is
 relabeled as passing. H3's bounded safe-line qualification continues while
 the component's replacement receipt/tools/plan are reviewed.
+
+
+### 09:45 PDT: hourly coordinator checkpoint
+
+Primary native integration remains052d8342e56. ROOTS8ce is unchanged and
+both final matrices progress:8 complete release iterations and7 debug of20
+each, with no validated failures/fallbacks. Release's recent pause in results
+was test-slot contention, not a stopped host/native hang: compiler component
+held one slot, ROOTS debug the other; release resumed forward progress.
+The component has now released its slot. Owner estimates, contingent on
+restored capacity, release completion10:10–10:20 and debug10:45–11:00 PDT.
+These are scheduling budgets, not interpreter performance measurements.
+
+Full-harnessv2 c9e05359d7afd3a1 is cleared after20 negative replays and explicit
+fixture-skip/protected-case accounting. Both564-module rosters match. The
+release-full/stress11-release host waits for default's validated640-job
+completion. Full suites remain serialized; debug full/kill follow debug20
+as candidate O1 qualification. O1 is not globally adopted. ASan14 passes3,616
+tests and separate sort/functools359 cover its required union; original
+unfiltered ASan failure and exact accepted exclusion remain visible.
+
+H3 immutable line checkpointdc02f76c0ccf clears independent LAND_2A after
+release/Og smoke1,924 each, affected1,519 each and actual-kill1,519. Source56,
+products8 and copied controls match;156 root records/156PIDs give1,498collections
+and zero fallback/unpinned. Earlier names/inspectionc5cf also remains cleared.
+No H3 runtime merge precedes ROOTS2b. Storage2b.2b preparation is design only:
+hard membership controls must not prohibit documented spurious DISABLE events,
+and local-mask OOM/retry behavior plus exact primitive hooks need review.
+H1 frame-passing design remains preserved; no H1 implementation began.
+
+Shared v2 component's corrected frozen batch completes0 on controlled052.
+All seven positives pass: exact case off/kill,203-case module order with5 exact
+source skips, two separate repetitions, cext16/7 exact source skips with one
+isolated worker, and auxiliary kill. All seven isolated negatives return their
+expected failure/status markers;11 actual-evidence corruptions are rejected.
+Final full source/tool/172-output identity postflight passes. This is component
+qualification only; no named/full profile or run/gate hook is implemented.
+Final source/evidence review precedes landing. The initial105-output receipt
+and failed/unexecuted harness attempts remain superseded and preserved.
+
+Next hour: finish matrix qualification as capacity allows, begin approved full
+release work, close the v2 component review, and review monitoring storage's
+bounded design/grants. Commission the separate alias-safe pre-I string design
+after the component checkpoint. Queue2 remains held by the earlier automatic
+classifier; no stopped probe is retried and no user approval is pending.
+Next hourly documentation/user report is due about10:45 PDT.

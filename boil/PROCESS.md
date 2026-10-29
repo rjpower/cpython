@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 09:34 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 09:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -35,7 +35,7 @@ record and is updated at every landing.
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Stage2b.1 names/inspection/NOFB c5cf6ba6d288 cleared LAND_2B1. Immutable SafeAddr2Line prerequisite has independent design clearance; storage2b.2b still requires separate review/grants. H1 frame-passing design is commissioned. Monitoring/stats, transport closure and final renumbering follow; typed float truth is separate |
+| H | handler contract (note 14): dependency-based frame access, canonical guards, build policy; complete root maps and helper spans replace collector clearing stores | H1/H2 remain design, maps wait for10a rung3. H3-1 stage1 landed6c724c29408 and integration-validated. Stage2a domain/pristine changes pass smoke1,924 per build, affected974 per build and actual-kill974; frozen624c75f6455 cleared LAND_STAGE2A, native landing held behindROOTS2b. Shared worker.main correction3dff5879df8 isolated for integration. Stage2b.1 names/inspection/NOFB c5cf6ba6d288 cleared LAND_2B1. Immutable SafeAddr2Line checkpointdc02f76c0ccf cleared LAND_2A, smoke1,924/affected1,519 per build and actual-kill1,519. Storage2b.2b still requires separate review/grants; its design must preserve allowed spurious DISABLE behavior and settle OOM retry. H1 frame-passing design617bea5 is preserved without implementation. Monitoring/stats, transport closure and final renumbering follow; typed float truth is separate |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
@@ -90,13 +90,15 @@ boil/tools/verification.md. The v2 identity/result component is in progress:
 explicit build-source/runtime/tool roots, actual imported origins and complete
 source/output bindings. Controlled clean052 smoke passes1,924/20skips,
 1,314collections/zero fallback;226unpinned hits are report-only. Its initial
-receipt is superseded as incomplete: extension aliases lacked target-byte
-hashes. Actual control rejected that inventory before test execution. Strict
-alias/target binding, mutation controls and a separately reviewed supplement
-are required before further runtime controls. Independent checks confirm all67
-current targets match retained metadata and predate the build completion;
-no intervening output writes are recorded. No v2 component positive, named/full
-profile or current-ROOTS result is claimed. Run/gate hooks remain separate.
+105-entry receipt is superseded because extension aliases lacked
+content hashes. Strict alias/target repair and the separately reviewed172-entry
+supplement now bind all67 targets; independent metadata checks and command
+history establish no intervening output write. All seven bounded component
+positives pass, including exact off/kill,203-case module-order/5source skips,
+separate repetitions, cext16/7source skips and auxiliary kill. Seven isolated
+failure controls and11 evidence-corruption checks pass; final
+component review remains. This is not a named/full profile, current-ROOTS result
+or completed run/gate hook. Those remain separate.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
 until 10a rung 2 marks the C API entry paths (trace with the stack-hits
@@ -379,8 +381,8 @@ progress entry to `WORKLOG.md`, and gives the user a summary of heads,
 landings, evidence, blockers and the next hour's work. Re-estimate missed
 checkpoints from evidence; the pre-takeover dates are historical, not
 current promises. The first update after this restart is recorded at
-2026-10-29 06:45 PDT; the second is recorded at 07:41 PDT, and the third at08:44 PDT. The next is
-due about09:45 PDT while work continues.
+2026-10-29 06:45 PDT, followed by07:41,08:44 and09:45 PDT. The next is due
+about10:45 PDT while work continues.
 
 ## 1. The loop
 

@@ -2359,3 +2359,20 @@ debug configuration only after root/walk/control qualification. Existing
 debug builds use Og; no faster configuration has been qualified yet.
 Note 14 incorporates the second design review's response as a design
 specification; its required dynamic evidence is not a passed result.
+
+### 05:50 PDT: verifier worker support and shared prerequisite
+
+All three implementation lanes have started. ROOTS needs active-mode
+assertions in regrtest workers, so levels 2 and 3 now accept the single
+optional --python worker-command pair; other extra arguments fail before
+a run, preserving full-suite coverage. Shell syntax and both rejected-
+argument cases were checked. ROOTS owns the runtime worker demonstration
+and will retain its launcher source with the gate record.
+
+QUEUES is isolating an actual-state verifier getter and focused test
+before its larger fixture fixes. Once gated, the coordinator will review
+and integrate that independent prerequisite so ROOTS can merge it from
+integration; this is not a merge between step branches. No queue-runtime
+landing is implied by the getter. The documentation commit 7af7ce89618
+was pushed to the existing integration branch after recovering the user's
+explicit prior authorization to commit and push as needed.

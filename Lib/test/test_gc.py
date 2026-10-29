@@ -1493,6 +1493,45 @@ class TracingCollectorTests(unittest.TestCase):
                 break
         self.assertEqual(order, ["outer", "middle", "inner"])
 
+    def test_finalizer_order_through_closed_generator(self):
+        import types
+
+        order = []
+
+        class F:
+            def __init__(self, name, other=None):
+                self.name = name
+                self.other = other
+
+            def __del__(self):
+                name = (self.other.gi_code.co_consts[-1].name
+                        if self.other is not None else None)
+                order.append((self.name, name))
+
+        def build():
+            outer = F("outer")
+            inner = F("inner")
+
+            def template():
+                yield None
+
+            # A cleared generator needs no finalizer call, but its code
+            # still connects outer to inner through the constants tuple.
+            code = template.__code__.replace(
+                co_consts=template.__code__.co_consts + (inner,))
+            generator = types.FunctionType(code, {})()
+            generator.close()
+            self.assertIsNone(generator.gi_frame)
+            self.assertIs(generator.gi_code.co_consts[-1], inner)
+            outer.other = generator
+            return weakref.ref(outer), weakref.ref(inner), weakref.ref(generator)
+
+        refs = build()
+        gc.collect()
+        self.assertEqual(order, [("outer", "inner"), ("inner", None)])
+        for ref in refs:
+            self.assertIsNone(ref())
+
     def test_weakref_callback_runs_after_collection(self):
         class A:
             pass

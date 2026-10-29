@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 15:14 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 15:45 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,14 +71,14 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 15:14 PDT; evidence is from local commits and retained logs.
+2026-10-29 15:45 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused interpreter diagnostics are granted. Tail walk, extras, review and fresh merge gates remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b remains unlanded at ce2ac8991ee. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP reproduces; its separate observer times out after identifying one creating testcase. Tail walk, extras, review and fresh merge gates remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats design81417aff097 clears readiness review; native work awaits the source handoff, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation is under independent source review in isolated boil-h3-stats from81417; actual union qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -94,6 +94,13 @@ Performance position, instructions on the internal benchmark set
 (`boil/bench/results/6d.json` over `baseline.json`; recorded, not tuned):
 kernels 1.161, microbenchmarks 0.693, memory workloads 1.699. These historical
 instruction ratios do not establish current elapsed-time performance.
+The first release elapsed diagnostic on unlanded ce2ac now measures0.828×
+upstream throughput across29 kernels (about21% more elapsed time):22 slower
+rows/seven faster. Coroutines, comprehensions and generators regress most;
+float, Richards and nbody are the strongest wins. All rows and raw-sample
+limits are in the [timing record](design/work/pre-I-first-quiet-timing-plan.md).
+This initial diagnostic has unresolved GC stress failures and source/build
+comparison limits; it establishes neither correctness nor the2× target.
 Generations, 6e and the handler/interpreter work precede checkpoint I;
 the JIT follows it. The target is roughly 2× upstream interpreter throughput
 on the declared application/kernel set, measured with release wall time and
@@ -102,9 +109,13 @@ Micro instruction gains alone do not establish that result.
 The [revised roadmap](design/work/pre-I-performance-roadmap.md)
 sets the measurement contract, GC landing path and structural performance work.
 
-The source-only [writer readiness audit](design/work/pre-I-gc3a-writer-readiness.md)
-identifies a bounded bytes-writer repair and Unicode final-result/root lifetime
-choices. The [receiver audit](design/work/pre-I-inline-receiver-audit.md)
+The [writer readiness audit](design/work/pre-I-gc3a-writer-readiness.md)
+now has a bounded bytes-writer implementation on isolated branch
+boil/gc3a-bytes at f5e818b0454: the embedded owner root and lifecycle fixture
+clear coordinator source review. Release/O1-debug builds pass; the O1-debug
+actual-kill affected module passes52 tests/zero fallback. Release off is
+running, and the omitted-registration negative remains due. Unicode ownership
+stays separate. The [receiver audit](design/work/pre-I-inline-receiver-audit.md)
 separates immediate calls, getsets and bound-method storage; no new ABI is
 approved. H3's [owner checklist](design/work/H3-owner-readiness.md) is ready
 for the actual integrated-source handoff.
@@ -153,12 +164,14 @@ timeout and ENV_CHANGED in httpservers with two HTTPResponse unraisables.
 Receipt64448666 retains native exit2 and50,722 reported tests; the timed-out
 worker prevents a qualified aggregate root-counter result. No retry/filter or
 tail-walk/extras launch follows. Source inspection
-suggests the interpreter test's threshold1 request is bypassed by the stress
-scheduler; it contains no explicit collect. Critical-window collection is
-not yet demonstrated, so confirmed retention is not claimed. HTTP lifecycle
-ordering and the GC timeout remain separate unresolved questions. Four
-once-only interpreter diagnostics are reviewed and granted; no scheduler fix
-or test exclusion is selected. The
+and four once-only diagnostics support a threshold-trigger mismatch: original
+stress fails/off passes, copied stress charges no root phase/off charges one.
+The documented stress override stays unchanged; an exact test-eligibility
+annotation is reviewed but unapplied. This is not demonstrated post-collection
+retention. Unchanged HTTP103/8 reproduces two finalizer errors; the separate
+Python observer identifies a response created by the colorized logging error
+test, then times out. Its partial timeline does not establish the buffer
+closer or queue cause. HTTP and the trashcan timeout remain unresolved. The
 [triage record](design/work/10a-2b-stress100k-triage.md) gives the next controls.
 Tail walk/extras, independent landing review and fresh merged default/debug
 full gates remain. Fulls and perf-sensitive walks serialize because their
@@ -166,7 +179,8 @@ perf-map cleanup interferes.
 
 The39 protected selectors and actual worker mode/stress/counter contracts stay
 in force. Detached-state unpinned hits remain report-only debt assigned to3c.
-O1 is a qualification candidate; integration debug still uses Og. Whole-tail
+O1 is permitted for the isolated writer lane with assertions/symbols and
+compiled root-walk checks; integration debug still uses Og. Whole-tail
 and retain recommendations belong to10a rung4/H1, separately from the bounded
 tail check required for2b. Writer/PyMem and remaining root-reader work follow
 in10a rung3. The step-end benchmark remains distinct from this landing gate.
@@ -235,8 +249,10 @@ qualification now pass and clear independent review9bac:111 recorded modules,
 All50 actual benchmark-driver setup/run origin rows now pass and clear
 independent actual-scope review, closure9e725b7f, with unchanged inputs. The
 [first quiet timing plan](design/work/pre-I-first-quiet-timing-plan.md) and
-its paired adapter clear source review; fork/reservation binding and actual
-execution remain. No elapsed benchmark or current speedup score exists.
+its paired adapter have completed the first bounded elapsed diagnostic:
+all29 rows/290 samples, geometric mean0.828243 upstream/fork. Independent
+review clears its actual scope, retaining the failed-stress/unlanded and
+source-policy limitations. Native before/after/cleanup maps agree; no retry.
 Common compiler/O3/frame/
 zero-initialization policy matches; upstream's eval-unit flags are empty while
 the fork deliberately adds `-fno-gcse`. Report that source-specific difference;

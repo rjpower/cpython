@@ -56,6 +56,35 @@ allocation timing. The bound worker seed is991443983 with explicit
 --no-randomize; new hashseed0 does not replay the full's unknown randomized
 hash seed or process history. No scheduler change or exclusion is chosen.
 
+### Actual outcomes and coordinator disposition,15:24 PDT
+
+The four once-only diagnostics are terminal; independent review clears their
+actual scope (`four-diagnostic-summary.json`, bb50b7d3).
+
+| Diagnostic | Actual result | Successful root phases charged in copied window |
+|---|---|---|
+| Unchanged original, stress100000 | FAIL/native2, one case/zero skips | Not observed |
+| Unchanged original, stress off | PASS/native0, one case/zero skips | Not observed |
+| Copied window, stress100000 | FAIL/native1, interpreter remains in[0,1] | 10→10 |
+| Copied window, stress off | PASS/native0, interpreter absent from[0] | 16→17 |
+
+The first original failure's diagnostic adapter incorrectly required a
+suite-result snapshot that regrtest omits when the suite raises. Preserve its
+INVALID adapter receipt86008c1a and nativeFAIL2; offline supplemented54cbe8
+validates the exact failure from paired start/end and scheduled/returned
+evidence. The original was not rerun. The narrow validator correction permits
+only the remaining three commands and changes no full-suite validator.
+
+Root keeps the documented stress override and production scheduler unchanged.
+These controls support trigger-dependent test eligibility, not demonstrated
+retention after collection. The copied counters have the observer and
+interpreter-scope limits above. Root reviews the exact two-line stress
+eligibility annotation for this test, matching existing byte-trigger tests;
+the body remains unchanged. Application and once-only normal/eligibility
+checks wait for the quiet timing window to finish. No broad filter, stress
+pause or new hot-path state is introduced. Original fullFAIL remains; HTTP
+and the trashcan timeout still require separate disposition.
+
 ## HTTP response: separate lifecycle hypotheses
 
 `test_httpservers` worker3667375 returns ENV_CHANGED:103 tests/no failures/
@@ -73,6 +102,34 @@ response/referent instances and the first close transition. A clean stderr
 rerun is not proof. Do not assume a common cause with interpreter scheduling.
 If evidence points at the already-held Queue2 completion work, preserve that
 handoff and hold; do not retry its probes or implementation via another agent.
+
+### Actual bounded HTTP diagnosis,15:35–15:40 PDT
+
+The unchanged whole module reproduces both closed-fp HTTPResponse unraisables:
+103 tests/eight skips, ENV_CHANGED/native3, receiptc0ca71ff. Paired actual
+driver/worker and source/native guards pass; its93 charged collections have
+zero fallback/unpinned. It remains a diagnostic environment failure.
+
+The separate ordinary-Python observer reaches its unchanged180s worker
+deadline: native2, receipt4ae5e6f9, incomplete worker pairing and no qualified
+root aggregate. Preserve all748 partial events and the timeout trace; do not
+retry it. One error associates response/fp tokens86/87 with the colorized
+logging test_err creation: close entry sees fp open, flush entry sees it
+closed, then ValueError. This does not identify the buffer closer, establish
+baseline completion ordering or provide complete module coverage. Observer
+frames, weak tokens, allocations and event I/O change scheduling; the timeout
+is not evidence of a baseline timeout.
+
+Before targets, root source review removed gc.get_referrers from the observer:
+in this fork it invokes snapshot(), which explicitly collects. The unexecuted
+predecessor is preserved; executed observer has no such introspection or extra
+explicit collection. This public-Python diagnostic is a distinct safer scope;
+old held forced C/Queue2 probes were not retried. The next source-derived
+control is the existing two logging classes/four cases against source-bound
+primary052 and ce, once each if the primary products/stdlib can be established.
+No native comparison is granted yet; no inherited cause is assumed merely
+because HTTP source matches. Eligibility patch stays unapplied while ce guards
+are needed for this comparison.
 
 ## GC timeout: distinguish queue progress from deadlock
 

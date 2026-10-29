@@ -421,3 +421,70 @@ but new hashseed0 differs from the full's recorded randomized-hash flag and
 does not replay its process history. No HTTP/trashcan repair, full rerun,
 Queue2 probe, exclusion or production change follows from this plan. No
 target, host control or diagnostic was executed by this reviewer.
+
+## First diagnostic: native failure reproduced; harness invalidated
+
+Only original-stress ran under the reviewed V2 plan. Native exit 2 reproduced
+the exact assertion with one test, one failure, zero skips: interpreter1
+remains in [0,1]. Driver3727483 and worker3727486 each have start/end records;
+scheduled/returned worker PID, seed991443983 and config `5b1278ce` agree.
+Actual state is off/extras0/N100000 with the declared new hashseed0. The
+original result remains qualification=False / INVALID_OR_UNEXPECTED because
+the diagnostic required an absent suite-result. Its three recorded raw hashes
+match. This harness error is distinct from the native assertion failure.
+
+The source explains that absence: full_result_observer.capture_result emits
+suite-result only after test_func returns; single._run_suite105 instead raises
+TestFailedWithDetails, caught at229 into the returned FAILED result. The
+diagnostic-only validator may require outer results for PASSED while permitting
+absence for this exact FAILED/native2/one-test/one-failure/zero-skip/no-error
+case with complete driver/worker pairing, selection, seed and config evidence.
+Any present outer must still agree. Keep full-v3 helpers/qualification rules
+unchanged. Validate the preserved failure offline into a separate record;
+do not rerun original-stress or overwrite its invalid harness receipt. The
+remaining three jobs require the corrected frozen plan and coordinator grant.
+No reviewer target/native command or diagnostic was run.
+
+## Diagnostic V3: remaining-three plan clear
+
+Verdict: **REMAINING_THREE_PLAN_CLEAR** for plan `ff85cad6`, runner `86bbe01c`,
+manifest `feb77e44`, host controls `6c4dfe32` and offline supplement `ed54cbe8`.
+All eleven manifest hashes match. The narrow validator now accepts absent
+outer only for the exact target FAILED/native2/one-test/one-failure/zero-skip/
+no-error result with complete driver/worker pairing, selection, seed and config.
+PASSED still requires an outer snapshot; any present outer must agree.
+Host negatives reject passed-without-outer, wrong failure count, missing
+worker end and a present outer's wrong seed. Shared full-v3 helpers and
+qualification rules are unchanged.
+
+The separate read-only supplement matches the retained native failure and
+source catch path; the original `86008c1a` harnessINVALID receipt is preserved.
+The CLI now admits only original-off, window-stress and window-off; it rejects
+original-stress before execution. The coordinator may grant those three
+separate commands. This does not rewrite or rerun the failed original, make
+any native failure a correctness PASS, or disposition stress100k. No target
+or host control was executed by this reviewer.
+
+## Four actual diagnostic outcomes
+
+Verdict: **ACTUAL_DIAGNOSTIC_SCOPE_CLEAR** for summary
+`bb50b7d365daf89ef4f0f3fa8c4d9f3909714e7541750c522bce3ec95a0fd9a6`.
+The original-stress nativeFAIL2/harnessINVALID receipt and separate offline
+supplement remain unchanged. Original-off passes one test/zero skips with
+paired driver/worker and agreeing returned/outer stats. Copied stress fails
+the same assertion, ids [0,1], with charged main0 root phases 10→10; copied
+off passes, ids [0], with phases 16→17. The remaining three raw artifact sets
+match their receipt hashes. Their start/end identities, off/extras0/actual N,
+recorded seed/hash policy and main0/nonnegative/zero-fallback root domains
+agree; native source/product guards complete after the commands.
+
+This supports a threshold-trigger eligibility distinction under the declared
+stress override: gc_live1745 replaces ordinary threshold scheduling, and
+test_gc1224/1289 already treats byte-trigger expectations separately. It does
+not show a target retained after a charged mark, exclude other-interpreter
+marks or queued finalizers, or reproduce the full's unknown randomized hash
+history. Copied getter allocations perturb timing. Keep all four outcomes
+distinct from correctness qualification and preserve the full FAIL. A narrow
+test-eligibility adaptation requires its own reviewed source grant; no
+scheduler change, blanket filter or uncalibrated repeats follow. HTTP and
+trashcan liveness remain unresolved. No reviewer native command was executed.

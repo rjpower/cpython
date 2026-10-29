@@ -3979,3 +3979,71 @@ edits. Agent creates managedboil-gc3a-bytes/boil/gc3a-bytes at exactce2ac,
 Scope is embedded registered-root lifecycle for bytes/bytearray writers,
 not Unicode/general PyMem retirement or Queue2. Native execution waits for
 quiet release and eventual landing must compose the ROOTS successor.
+
+### 15:28 PDT: trigger diagnosis complete; first elapsed comparison starts
+
+Four once-only interpreter diagnosticsbb50b7d3 complete: unchanged stress
+FAIL2/offPASS0, copied stressFAIL1/offPASS0. Copied critical main-interpreter
+charged root phases are10→10 under stress and16→17 off. First stress's
+adapter incorrectly demanded a suite snapshot absent on failure; preserve
+INVALID86008c1a/nativeFAIL2 and offline supplemented54cbe8. No rerun.
+Independent actual-scope review clears these bounded facts. Root keeps the
+documented threshold override and reviews a test-only stress-eligibility
+annotation consistent with existing threshold tests, unapplied until timing
+finishes. No scheduler patch, broad filter or post-mark retention claim.
+
+Final quiet plane9a46e75/reservation7f647dab clears independent narrow review
+and root's immediate host check. Exact launch939e1a59 starts once at15:28:28:
+29 alternating kernel pairs/five serial samples after warmup, seed0, admission
+30s/native900s, at most20-minute opportunity. Both native slots/builds remain
+reserved through cleanup. No retry, extension or partial score. ce2ac remains
+unlanded with stress fullFAIL64448666; fork-driver origin, eval-policy and SDK
+limits remain explicit. This is an initial diagnostic, not target attainment.
+
+Stats managedworktreeboil-h3-stats/boil/h3-stats starts at81417; its author now
+implements the reviewed coherent domain-counting/reporting fix. Independent
+review will come from another owner. Nontrivial host work pins2,3, native work
+waits. Bytes3a owner prepares the concrete short lifetime/fixture checkpoint;
+HTTP source proposal proceeds separately. No native integration has landed.
+
+### 15:45 PDT: elapsed diagnostic and two implementation lanes
+
+First quiet release comparison completes15:30 at unchangedce2ac, independent
+actual-scope review clear:29 rows/58 fresh processes/290 positive timed values,
+upstream/fork geometric mean0.828243 (about21% more fork elapsed time),22
+slower/seven faster. Coroutines0.365, comprehensions0.528 and generators0.592
+are the largest deficits; float1.923, Richards1.897 and nbody1.603 lead the
+wins. Closure68da9ae2 retains all raw values; normal source/native/cleanup
+guards pass, no retry. Unlanded GC failures, fork-driver origin/eval-policy/SDK
+limits stay explicit. This is diagnostic throughput, not2× attainment or
+correctness. Prioritize shared allocation/GC, frame transitions and value/call
+movement attribution; no row-specific operation or arbitrary opcode cutoff.
+
+The unchanged HTTP module reproduces both finalizer errors,103/8,
+ENV_CHANGED/native3, receiptc0ca71ff with paired actual-state guards. Root
+rejects passive-referrer introspection before execution because this fork's
+gc.get_referrers explicitly collects. The corrected ordinary-Python observer
+then times out at180s, receipt4ae5e6f9 with incomplete worker evidence; its
+748 partial events associate one response with colorizedtest_err and a
+closed-state transition during close/flush. Buffer closer/cause remains
+unknown; no observer retry or claim of baseline timeout. Source-derived
+four-case primary052-versus-ce plan is being prepared using existing owned
+integration products, with no native launch yet. Current fullFAIL remains.
+
+Bytes3a sourcef5e818b0454 is committed/clean in isolatedboil-gc3a-bytes.
+Root clears the focused9-line production owner-root change and lifecycle
+fixture/test diff. Owned release/O1-debug builds pass under normal slots/locks;
+debug actual-kill affected module passes52/zero skips,73 charged collections
+and zero fallback/unpinned. Release off is active. O1 keeps assertions/symbols and is permitted for this lane,
+without rebuilding existing integrationOg. Once-only affected positives and
+the copied omitted-registration negative follow successful builds; no broad
+full campaign yet and no general PyMem/Unicode retirement.
+
+Isolated H3stats code from81417 now covers the generated counter domain,
+actual target entries, generated adaptive property and coherent producer/
+reader/benchmark semantics. Host15 reader/bench and five generator tests pass;
+copied reader defects fail intended assertions. Independent source review is
+active while writer builds run. Native size/pair/lifecycle/entry controls and
+actual union qualification remain. No new native change landed in primary.
+ROOTS still needs HTTP/trashcan disposition, bounded tail/extras, exact landing
+review and fresh merged fulls. Next hourly checkpoint about16:45 PDT.

@@ -23,19 +23,19 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 15:14 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 15:45 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains frozen/unlanded ce2ac8991ee. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k is terminal FAIL: interpreter assertion, GC timeout and HTTPENV_CHANGED; no retry/newfilter. Four focused interpreter diagnostics granted; no repair or exclusion selected. Tailwalk/extras, exact landing review and fresh merged default/debug fulls remain. Old1bfe120 stays historical, no automatic20 redo; O1 still candidate. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains frozen/unlanded ce2ac8991ee. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k is terminal FAIL: interpreter assertion, GC timeout and HTTPENV_CHANGED; no retry/newfilter. Four diagnostics support trigger-dependent eligibility; test-only annotation reviewed/unapplied. HTTP reproduces, observer times out; cause unresolved. Isolated bytes3a f5e818 builds active. Tailwalk/extras, exact landing review and fresh merged default/debug fulls remain. Old1bfe120 stays historical, no automatic20 redo; O1 still candidate. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14), generated handler domain and orthogonal interpreter dispatch | Stage1 landed6c724c29408. Stage2a624c75f6455, names/NOFBc5cf6ba6d288 and immutable-linedc02f76c0ccf clear bounded review. Monitoring storage native76274/evidenceffc548603b8 clears frozen-checkpoint source/evidence review: release/Og smoke1,924 and affected1,370 each, actual-kill1,370, controls and audits pass. It predates queue052; actual queue/ROOTS/H3 union qualification and primary landing remain pending. Stats design81417aff097 clears revised readiness review; next native edits wait for integrated source/ownership. H1 frame-passing design617bea5 is ready after generator/build handoff, independent of H2 maps. H2 waits for10a3. Transport/final renumbering precede typed truth operations; no opcode-count threshold |
+| H | handler contract (note 14), generated handler domain and orthogonal interpreter dispatch | Stage1 landed6c724c29408. Stage2a624c75f6455, names/NOFBc5cf6ba6d288 and immutable-linedc02f76c0ccf clear bounded review. Monitoring storage native76274/evidenceffc548603b8 clears frozen-checkpoint source/evidence review: release/Og smoke1,924 and affected1,370 each, actual-kill1,370, controls and audits pass. It predates queue052; actual queue/ROOTS/H3 union qualification and primary landing remain pending. Stats implementation from81417 is under independent source review in isolated boil-h3-stats; native validation remains due before actual integration. H1 frame-passing design617bea5 is ready after generator/build handoff, independent of H2 maps. H2 waits for10a3. Transport/final renumbering precede typed truth operations; no opcode-count threshold |
 | 7 | generational collection over the precise root set | open; decides header flag bits and side bitmaps |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
@@ -70,10 +70,15 @@ Park retention. Current source is ce2ac8991ee with the precise-Park repair and
 two raw-mutex annotations. Fresh affected24 and six of seven profiles pass under plan7d40. The final
 stress100k is terminal FAIL64448666: interpreter assertion, test_gc trashcan
 timeout and HTTPENV_CHANGED. Missing terminal worker evidence prevents a
-qualified root aggregate. Source/helpers/native products stay frozen for four
-reviewed once-only interpreter diagnostics; no retry or new exclusion follows.
-See the current stress100k triage record; no critical-window GC or common
-cause has been proved. No O1 adoption is claimed;
+qualified root aggregate. Source/helpers/native products stay frozen for
+bounded primary-versus-candidate attribution; four once-only interpreter
+diagnostics are complete. No retry or broad exclusion follows.
+Four focused controls support the interpreter test's threshold-trigger
+eligibility mismatch; the scheduler stays unchanged. HTTP reproduces on the
+unchanged module; a separate observer identifies a creating testcase but then
+times out, so its timeline remains partial and buffer closure unexplained.
+The trashcan timeout remains separate. See the triage record. O1 is allowed
+for the isolated bytes-writer qualification; no global replacement is claimed;
 integration debug uses Og. Bounded tail make/stale checks may run in parallel,
 but its complete StackWalk waits for all fulls under their serialization lock
 because perf-map cleanup otherwise interferes. Extras and landing review follow.
@@ -584,8 +589,10 @@ current promises. The first update after this restart is recorded at
 2026-10-29 06:45 PDT, followed by07:41,08:44,09:45,10:45,11:45 and12:45 PDT.
 The 13:45 update records the new 2× target and revised validation policy.
 The14:49 update records six successful branch profiles and the final
-stress100k interpreter/HTTP failures, holding landing. The next is due about
-15:45 PDT while work continues.
+stress100k interpreter/HTTP failures, holding landing. The15:45 update adds
+terminal timeout/trigger diagnosis, the first29-row elapsed diagnostic0.828×,
+isolated writer builds and H3 statistics implementation/source review.
+The next is due about16:45 PDT while work continues.
 
 The revised [pre-JIT performance roadmap](design/work/pre-I-performance-roadmap.md)
 sets roughly 2× whole-workload interpreter throughput as the target before JIT.

@@ -930,3 +930,55 @@ The runner and pair collector are unchanged. Null quiet reservation still
 prevents targets; focused failure diagnostics take priority. Exact eventual
 quiet admission and launch require a separate coordinator ruling. No native
 command, target, host control, witness or timing was executed by this reviewer.
+
+## Round 17: bounded quiet reservation proposal
+
+Proposal `619b74b7bc238851b24a055fa2631e4bf499c894fc46bce41a5e7a2bb434ce8f`
+is **PROPOSAL_SOURCE_CLEAR**, not launchable. The unchanged runner/collector
+accept plan-only admission30s/native ceiling900s and explicit child hashseed0;
+all 60 declared commands carry it (two untimed witnesses and 58 measured
+processes). The earlier omission ran no timing. The proposal clearly assigns
+reservation start/expiry to an immediate manual coordinator check, while
+existing locks remain held through cleanup. It requires binding original
+nativeFAIL2/harnessINVALID plus separate offline interpretation, the remaining
+three terminal diagnostic receipts and a concrete quiescence reservation
+through plan.inputs. Null reservation/final-hash placeholders remain; those
+actual inputs and exact launch need coordinator review/grant. No template
+redesign, new guard or reviewer execution is required or authorized.
+
+## Round 18: final bounded quiet binding clear
+
+Verdict: **FINAL_QUIET_BINDING_CLEAR** for plan
+`e9a46e758bf9bba180f2c5c141278d3087ac5f0ba4ad74cfa3e1e046e8e4cec4`,
+launch `939e1a59da03ac0557a165aaf4c7ac1c0c6b54115a9de0c724c453f1d30ee9ad`,
+reservation `7f647dab643a6bb9e901b2fc6aee360df5c0b21f1e3dadc6b41514ad268b0f0a`
+and provenance `7672ac2dd32670a8d184f1e82bfe59f79b1a9fed5e8567ab07996782f017e7c7`.
+Indexed and input hashes match. Only reviewed reservation/inputs/child seed0/
+admission30s/ceiling900s/status differ from the accepted terminal-bound plan;
+all other plan fields canonical-equal. The four actual diagnostic receipts,
+separate offline supplement, summary and raw streams are guarded inputs.
+Runner/collector and exact launch environment remain unchanged. The root
+manual start/quiescence check must occur before 22:32:41 UTC; the reservation
+does not add runner expiry enforcement. All earlier failure and interpretation
+limits remain. No target or host control was executed by this reviewer.
+
+## Round 19: actual early elapsed diagnostic
+
+Verdict: **ACTUAL_EARLY_TIMING_SCOPE_CLEAR** for closure
+`68da9ae2865d95c69bb00ef0d90dc8bf46bbbb42a17ffb34149a87444fb13553`.
+All 2,385 indexed hashes match. Final `fadaac6d` and inner `ade5ec63` report
+zero return codes and verified post-command/cleanup guards; native maps agree.
+The exact 29 planned workload names match the score; 58 fresh measured
+processes retain all 290 positive values, five serial samples each, with
+alternating first runtime. Both named RUNS0 shared-tail witnesses report
+DIRECT_DRIVER_ORIGINS_CLEAR. Recorded measurement affinity is CPU0 with
+sibling8 declared; governor/boost/frequency observations remain available.
+Recomputing the upstream-over-fork geometric mean gives 0.82824309837826,
+matching score `a4e2ff92`. Every workload/regression remains in the denominator.
+
+This is the predeclared inexpensive source-policy diagnostic. It does not
+qualify correctness, landing, parity, object-model attribution or the ~2×
+target; the unlanded fork's full FAIL, incomplete per-workload time-mode origin
+evidence, fork-only eval flag and consumed-SDK limits remain explicit. No
+automatic repetition or tuning decision follows. No reviewer native command
+or benchmark was run.

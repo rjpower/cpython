@@ -1,15 +1,17 @@
 # First quiet interpreter wall-time diagnostic
 
-Source implementation prepared for independent review, 2026-10-29. No timing, zero-sample time-mode witness,
-extra build or host CPU-policy change has run. Upstream's diagnostic,
-correctness and 50-row run-mode origin campaigns clear actual review;
-the latter closure is 9e725b7f. The fork timing source/build is still a
-coordinator-selected immutable candidate with explicit qualification scope.
-After the final stress failure, root permits source-only binding of ce2ac's
-normal-full-qualified release for a possible early diagnostic before landing.
-Its unresolved stress failures must remain explicit; this is not landing or
-correctness qualification. No launch is granted by that scheduling decision.
-This plan creates no new timing framework or production runner change.
+The first once-only elapsed diagnostic completed on 2026-10-29 at 15:30 PDT,
+under the coordinator's exact e9a46e75 plan/939e1a59 launch grant and independent
+FINAL_QUIET_BINDING_CLEAR. Both shared JSON-tail witnesses and all 29 paired
+application rows completed; final cleanup and source/product guards passed.
+The measured upstream/fork geometric mean is **0.828243** (fork elapsed time
+about 1.207 times upstream). This is a five-sample initial diagnostic; actual
+closure independently clears ACTUAL_EARLY_TIMING_SCOPE_CLEAR in baseline review
+round 19. The fork is unlanded ce2ac with unresolved stress
+failures, different eval-unit flags and limited workload-origin evidence.
+This result establishes neither parity, the ~2× target, correctness nor landing
+qualification. The retained design and history below describe the bounded
+transaction and preserve its limitations. No production benchmark runner changed.
 
 ## Inputs and one JSON-tail witness
 
@@ -236,3 +238,76 @@ evidence after failure, not correctness or a claimed aggregate. The earlier
 cbbdaef1 binding packet is preserved separately. Quiet reservation remains
 null; focused four-case interpreter probes take priority. No target, timing,
 native build or original profile retry is granted by this update.
+
+## Actual first diagnostic: 2026-10-29 15:28–15:30 PDT
+
+Root granted the exact frozen launch after all four interpreter diagnostics
+terminated and the native hold began. The host snapshot had one-minute load
+0.509, no project native/compiler process, both machine slots and both build
+locks available; root separately confirmed quiescence. The unchanged runner
+retained both slots/build locks through cleanup. Children used CPU 0,
+PYTHONHASHSEED=0, one warmup and five timed values per process; order alternated
+by row. No sample or row was retried. Both named RUNS=0 JSON-tail witnesses
+completed before measurements.
+
+Closure `build/checkpoint-i-baseline-binding/quiet-timing-closure-v1.json`
+SHA-256 `68da9ae2865d95c69bb00ef0d90dc8bf46bbbb42a17ffb34149a87444fb13553`
+binds 2,385 files, including all raw outputs, 58 measurements and 290 timed
+values. Final receipt `fadaac6d` reports native exit 0 and verified cleanup;
+inner `ade5ec63` reports verified completion. Native before/after/post-cleanup
+maps agree. Source/product checks passed; this is actual diagnostic evidence,
+with independent ACTUAL_EARLY_TIMING_SCOPE_CLEAR in baseline review round 19.
+
+The score is upstream elapsed / fork elapsed; above 1 favors the fork.
+The 29-row geometric mean is 0.828243, with 22 slower rows and seven faster
+rows in this initial collection. All rows remain visible:
+
+| Workload | Upstream / fork |
+| --- | ---: |
+| coroutines | 0.365 |
+| comprehensions | 0.528 |
+| generators | 0.592 |
+| deepcopy_reduce | 0.618 |
+| xml_etree_iterparse | 0.621 |
+| deepcopy | 0.661 |
+| unpickle | 0.666 |
+| logging_silent | 0.681 |
+| json_loads | 0.713 |
+| nqueens | 0.719 |
+| logging_format | 0.738 |
+| pickle | 0.741 |
+| deepcopy_memo | 0.746 |
+| logging_simple | 0.752 |
+| regex_compile | 0.776 |
+| xml_etree_generate | 0.781 |
+| unpack_sequence | 0.799 |
+| xml_etree_process | 0.805 |
+| json_dumps | 0.830 |
+| xml_etree_parse | 0.849 |
+| fannkuch | 0.942 |
+| deltablue | 0.978 |
+| go | 1.039 |
+| chaos | 1.065 |
+| spectral_norm | 1.110 |
+| raytrace | 1.130 |
+| nbody | 1.603 |
+| richards | 1.897 |
+| float | 1.923 |
+
+The dominant observed regressions are coroutines, comprehensions and
+generators; float, richards and nbody are the largest observed wins. This
+collection prioritizes follow-up; it does not attribute the differences to a
+single optimization. Keep the frozen parent build for comparisons rather than
+repeating the whole collection automatically. Extend samples only for a named
+instability or decision, preserving these original values.
+
+The fork remains the unlanded ce2ac candidate. The full-normal suite passed,
+but stress100k failed and its killed GC worker prevents a qualified root
+aggregate. The original-stress diagnostic's invalid adapter receipt and offline
+interpretation remain separate; stress eligibility evidence is no correctness
+repair. Fork CFLAGS_CEVAL includes -fno-gcse while upstream's is empty; common
+compiler/O3/frame-pointer/zero-init settings are not complete eval-unit matching.
+The fork lacks the upstream's 50-row actual-driver origin campaign. Its own
+source/native bindings and this shared-tail witness are narrower evidence.
+External SDK candidate inventories do not prove consumed header bytes. These
+limits must accompany every interpretation of the first elapsed result.

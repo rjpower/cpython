@@ -29,8 +29,20 @@ Historical 6d instruction ratios are 1.161 for kernels, 0.693 for micro and
 1.699 for memory workloads. They establish neither current elapsed parity
 nor progress to 2×. The old baseline's source/library binding is incomplete.
 An owned exact upstream `321925` build and initial origin/correctness
-qualification now pass independent review. All50 actual benchmark-driver origin rows also pass independent review;
-quiet timing has not started.
+qualification now pass independent review. All50 upstream actual
+benchmark-driver origin rows also pass independent review.
+
+The first release elapsed diagnostic finished15:30 PDT on frozen unlanded
+ce2ac: upstream/fork geometric mean **0.828243** across all29 kernels,
+22 slower rows and seven faster. This is about1.207× the upstream elapsed
+time in geometric-mean terms. Largest regressions are coroutines0.365,
+comprehensions0.528 and generators0.592; strongest wins are float1.923,
+Richards1.897 and nbody1.603. The [timing record](pre-I-first-quiet-timing-plan.md)
+retains all29 rows/290 values and independent actual-scope review.
+Five serial samples after warmup are an initial estimate. Unresolved GC
+stress failures, fork-driver origin limits, fork-only -fno-gcse and incomplete
+consumed-SDK proof prevent correctness, parity or target qualification.
+Do not automatically rerun the suite or claim the ratio explains its causes.
 
 **Why twenty was not an optimal default.** Note 11, section 8.2, required 20
 passes both individually and in full-module order. The rule was carried into
@@ -165,6 +177,16 @@ candidate. The old suggestion that step8 will replace those paths is not a
 prospective pre-JIT disposition. These measurements determine the next
 implementation priority; no imaginary per-technique speedup budget is
 compounded into a 2× promise.
+
+The first elapsed result makes allocation/GC, frame creation/resume and
+call/value movement the immediate attribution priorities. Profile the shared
+mechanisms in coroutines, generators and comprehensions, with a fast numeric
+or object workload as a control. Separate setup from timed work and distinguish
+whole-process root counters from the hot window; reuse the existing root/pause
+and native profiling tools before adding instrumentation. Full-domain handler
+statistics will improve dispatch attribution, but existing native symbols
+and collector counters need not wait for that landing. A result on one row
+does not authorize a row-specific opcode or a custom loop optimizer.
 
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32

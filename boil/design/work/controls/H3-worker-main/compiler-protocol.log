@@ -1,0 +1,171 @@
+== CPython 3.16.0a1+dev (heads/boil/h3-dirty:6c724c29408, Oct 29 2026, 08:09:09) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: debug
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/build/test_python_worker_2416282æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/compiler-worker.py
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 1686464195
+0:00:00 load avg: 1.43 mem:   47.3 MiB Run 2 tests in parallel using 2 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:02 load avg: 1.64 mem:  121.8 MiB [1/2] test_code passed
+test_bad_index (test.test_code.CoExtra.test_bad_index) ... ok
+test_free_called (test.test_code.CoExtra.test_free_called) ... ok
+test_free_different_thread (test.test_code.CoExtra.test_free_different_thread) ... ok
+test_get_non_code (test.test_code.CoExtra.test_get_non_code) ... ok
+test_get_set (test.test_code.CoExtra.test_get_set) ... ok
+test_interned_constants (test.test_code.CodeConstsTest.test_interned_constants) ... skipped 'does not intern all constants'
+test_interned_string (test.test_code.CodeConstsTest.test_interned_string) ... ok
+test_interned_string_default (test.test_code.CodeConstsTest.test_interned_string_default) ... ok
+test_interned_string_in_frozenset (test.test_code.CodeConstsTest.test_interned_string_in_frozenset) ... ok
+test_interned_string_in_tuple (test.test_code.CodeConstsTest.test_interned_string_in_tuple) ... ok
+test_interned_string_with_null (test.test_code.CodeConstsTest.test_interned_string_with_null) ... ok
+test_unusual_constants (test.test_code.CodeConstsTest.test_unusual_constants) ... ok
+test_co_branches (test.test_code.CodeLocationTest.test_co_branches) ... ok
+test_code_new_empty (test.test_code.CodeLocationTest.test_code_new_empty) ... ok
+test_docstring_under_o2 (test.test_code.CodeLocationTest.test_docstring_under_o2) ... ok
+test_lines (test.test_code.CodeLocationTest.test_lines) ... ok
+test_positions (test.test_code.CodeLocationTest.test_positions) ... ok
+test_closure_injection (test.test_code.CodeTest.test_closure_injection) ... ok
+test_co_positions_artificial_instructions (test.test_code.CodeTest.test_co_positions_artificial_instructions) ... ok
+test_co_positions_empty_linetable (test.test_code.CodeTest.test_co_positions_empty_linetable) ... ok
+test_code_equal_with_instrumentation (test.test_code.CodeTest.test_code_equal_with_instrumentation)
+GH-109052 ... ok
+test_code_equality (test.test_code.CodeTest.test_code_equality) ... ok
+test_code_hash_uses_bytecode (test.test_code.CodeTest.test_code_hash_uses_bytecode) ... ok
+test_code_hash_uses_firstlineno (test.test_code.CodeTest.test_code_hash_uses_firstlineno) ... ok
+test_code_hash_uses_order (test.test_code.CodeTest.test_code_hash_uses_order) ... ok
+test_code_richcompare_raise_exception (test.test_code.CodeTest.test_code_richcompare_raise_exception) ... ok
+test_code_units_padded (test.test_code.CodeTest.test_code_units_padded) ... ok
+test_constructor (test.test_code.CodeTest.test_constructor) ... ok
+test_empty_linetable (test.test_code.CodeTest.test_empty_linetable) ... ok
+test_endline_and_columntable_none_when_no_debug_ranges (test.test_code.CodeTest.test_endline_and_columntable_none_when_no_debug_ranges) ... ok
+test_endline_and_columntable_none_when_no_debug_ranges_env (test.test_code.CodeTest.test_endline_and_columntable_none_when_no_debug_ranges_env) ... ok
+test_invalid_bytecode (test.test_code.CodeTest.test_invalid_bytecode) ... ok
+test_local_kinds (test.test_code.CodeTest.test_local_kinds) ... ok
+test_newempty (test.test_code.CodeTest.test_newempty) ... ok
+test_nlocals_mismatch (test.test_code.CodeTest.test_nlocals_mismatch) ... ok
+test_qualname (test.test_code.CodeTest.test_qualname) ... ok
+test_replace (test.test_code.CodeTest.test_replace) ... ok
+test_replace_inline_constant (test.test_code.CodeTest.test_replace_inline_constant) ... ok
+test_returns_only_none (test.test_code.CodeTest.test_returns_only_none) ... ok
+test_runtime_handlers_not_pristine (test.test_code.CodeTest.test_runtime_handlers_not_pristine) ... ok
+test_shrinking_localsplus (test.test_code.CodeTest.test_shrinking_localsplus) ... ok
+test_stateless (test.test_code.CodeTest.test_stateless) ... ok
+test_var_counts (test.test_code.CodeTest.test_var_counts) ... ok
+test_basic (test.test_code.CodeWeakRefTest.test_basic) ... ok
+test_code (test)
+Doctest: test.test_code ... ok
+
+----------------------------------------------------------------------
+Ran 45 tests in 1.017s
+
+OK (skipped=1)
+0:00:08 load avg: 1.83 mem:   52.0 MiB [2/2] test_opcache passed
+test_assign_init_code (test.test_opcache.TestCallCache.test_assign_init_code) ... ok
+test_dont_specialize_custom_vectorcall (test.test_opcache.TestCallCache.test_dont_specialize_custom_vectorcall) ... ok
+test_push_init_frame_fails (test.test_opcache.TestCallCache.test_push_init_frame_fails) ... ok
+test_recursion_check_for_general_calls (test.test_opcache.TestCallCache.test_recursion_check_for_general_calls) ... ok
+test_specialize_call_function_ex_py (test.test_opcache.TestCallCache.test_specialize_call_function_ex_py) ... ok
+test_specialize_call_function_ex_py_fail (test.test_opcache.TestCallCache.test_specialize_call_function_ex_py_fail) ... ok
+test_too_many_defaults_0 (test.test_opcache.TestCallCache.test_too_many_defaults_0) ... ok
+test_too_many_defaults_1 (test.test_opcache.TestCallCache.test_too_many_defaults_1) ... ok
+test_too_many_defaults_2 (test.test_opcache.TestCallCache.test_too_many_defaults_2) ... ok
+test_kinds (test.test_opcache.TestFeedback.test_kinds) ... ok
+test_operand_versions (test.test_opcache.TestFeedback.test_operand_versions) ... ok
+test_poly_and_mega (test.test_opcache.TestFeedback.test_poly_and_mega) ... ok
+test_125868 (test.test_opcache.TestInstanceDict.test_125868) ... ok
+test_dict_dematerialization_copy (test.test_opcache.TestInstanceDict.test_dict_dematerialization_copy) ... ok
+test_dict_dematerialization_multiple_refs (test.test_opcache.TestInstanceDict.test_dict_dematerialization_multiple_refs) ... ok
+test_dict_dematerialization_pickle (test.test_opcache.TestInstanceDict.test_dict_dematerialization_pickle) ... ok
+test_dict_dematerialization_subclass (test.test_opcache.TestInstanceDict.test_dict_dematerialization_subclass) ... ok
+test_dict_materialization (test.test_opcache.TestInstanceDict.test_dict_materialization) ... ok
+test_dictionary_mode_is_terminal (test.test_opcache.TestInstanceDict.test_dictionary_mode_is_terminal) ... ok
+test_values_on_instance (test.test_opcache.TestInstanceDict.test_values_on_instance) ... ok
+test_descriptor_added_after_optimization (test.test_opcache.TestLoadAttrCache.test_descriptor_added_after_optimization) ... ok
+test_load_borrowed_slot_should_not_crash (test.test_opcache.TestLoadAttrCache.test_load_borrowed_slot_should_not_crash) ... ok
+test_load_shadowing_slot_should_raise_type_error (test.test_opcache.TestLoadAttrCache.test_load_shadowing_slot_should_raise_type_error) ... ok
+test_metaclass_del_descriptor_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_del_descriptor_after_optimization) ... ok
+test_metaclass_descriptor_added_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_descriptor_added_after_optimization) ... ok
+test_metaclass_descriptor_shadows_class_attribute (test.test_opcache.TestLoadAttrCache.test_metaclass_descriptor_shadows_class_attribute) ... ok
+test_metaclass_getattribute (test.test_opcache.TestLoadAttrCache.test_metaclass_getattribute) ... ok
+test_metaclass_set_descriptor_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_set_descriptor_after_optimization) ... ok
+test_metaclass_swap (test.test_opcache.TestLoadAttrCache.test_metaclass_swap) ... ok
+test_store_borrowed_slot_should_not_crash (test.test_opcache.TestLoadAttrCache.test_store_borrowed_slot_should_not_crash) ... ok
+test_store_shadowing_slot_should_raise_type_error (test.test_opcache.TestLoadAttrCache.test_store_shadowing_slot_should_raise_type_error) ... ok
+test_type_descriptor_shadows_attribute_getset (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_getset) ... ok
+test_type_descriptor_shadows_attribute_member (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_member) ... ok
+test_type_descriptor_shadows_attribute_method (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_method) ... ok
+test_descriptor_added_after_optimization (test.test_opcache.TestLoadMethodCache.test_descriptor_added_after_optimization) ... ok
+test_metaclass_del_descriptor_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_del_descriptor_after_optimization) ... ok
+test_metaclass_descriptor_added_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_descriptor_added_after_optimization) ... ok
+test_metaclass_descriptor_shadows_class_attribute (test.test_opcache.TestLoadMethodCache.test_metaclass_descriptor_shadows_class_attribute) ... ok
+test_metaclass_getattribute (test.test_opcache.TestLoadMethodCache.test_metaclass_getattribute) ... ok
+test_metaclass_set_descriptor_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_set_descriptor_after_optimization) ... ok
+test_metaclass_swap (test.test_opcache.TestLoadMethodCache.test_metaclass_swap) ... ok
+test_type_descriptor_shadows_attribute_member (test.test_opcache.TestLoadMethodCache.test_type_descriptor_shadows_attribute_member) ... ok
+test_type_descriptor_shadows_attribute_method (test.test_opcache.TestLoadMethodCache.test_type_descriptor_shadows_attribute_method) ... ok
+test_descriptor_not_double_executed_on_spec_fail (test.test_opcache.TestLoadSuperAttrCache.test_descriptor_not_double_executed_on_spec_fail) ... ok
+test_binary_subscr_getitem (test.test_opcache.TestRacesDoNotCrash.test_binary_subscr_getitem) ... ok
+test_binary_subscr_list_int (test.test_opcache.TestRacesDoNotCrash.test_binary_subscr_list_int) ... ok
+test_for_iter_gen (test.test_opcache.TestRacesDoNotCrash.test_for_iter_gen) ... ok
+test_for_iter_list (test.test_opcache.TestRacesDoNotCrash.test_for_iter_list) ... ok
+test_load_attr_class (test.test_opcache.TestRacesDoNotCrash.test_load_attr_class) ... ok
+test_load_attr_class_with_metaclass_check (test.test_opcache.TestRacesDoNotCrash.test_load_attr_class_with_metaclass_check) ... ok
+test_load_attr_getattribute_overridden (test.test_opcache.TestRacesDoNotCrash.test_load_attr_getattribute_overridden) ... ok
+test_load_attr_instance_value (test.test_opcache.TestRacesDoNotCrash.test_load_attr_instance_value) ... ok
+test_load_attr_method_no_dict (test.test_opcache.TestRacesDoNotCrash.test_load_attr_method_no_dict) ... ok
+test_load_attr_method_shape (test.test_opcache.TestRacesDoNotCrash.test_load_attr_method_shape) ... ok
+test_load_attr_module (test.test_opcache.TestRacesDoNotCrash.test_load_attr_module) ... ok
+test_load_attr_property (test.test_opcache.TestRacesDoNotCrash.test_load_attr_property) ... ok
+test_load_attr_slot (test.test_opcache.TestRacesDoNotCrash.test_load_attr_slot) ... ok
+test_load_attr_with_hint (test.test_opcache.TestRacesDoNotCrash.test_load_attr_with_hint) ... ok
+test_load_global_module (test.test_opcache.TestRacesDoNotCrash.test_load_global_module) ... ok
+test_store_attr_shape (test.test_opcache.TestRacesDoNotCrash.test_store_attr_shape) ... ok
+test_store_attr_with_hint (test.test_opcache.TestRacesDoNotCrash.test_store_attr_with_hint) ... ok
+test_store_attr_with_hint_materialized_dict (test.test_opcache.TestRacesDoNotCrash.test_store_attr_with_hint_materialized_dict) ... ok
+test_store_subscr_list_int (test.test_opcache.TestRacesDoNotCrash.test_store_subscr_list_int) ... ok
+test_unpack_sequence_list (test.test_opcache.TestRacesDoNotCrash.test_unpack_sequence_list) ... ok
+test_attr_materialized_dict (test.test_opcache.TestSpecializer.test_attr_materialized_dict) ... ok
+test_binary_op (test.test_opcache.TestSpecializer.test_binary_op) ... ok
+test_binary_subscr (test.test_opcache.TestSpecializer.test_binary_subscr) ... ok
+test_call_c_function_extra_flags (test.test_opcache.TestSpecializer.test_call_c_function_extra_flags) ... ok
+test_call_list_append (test.test_opcache.TestSpecializer.test_call_list_append) ... ok
+test_call_list_append_memory_error (test.test_opcache.TestSpecializer.test_call_list_append_memory_error) ... ok
+test_compare_op (test.test_opcache.TestSpecializer.test_compare_op) ... ok
+test_contain_op (test.test_opcache.TestSpecializer.test_contain_op) ... ok
+test_for_iter (test.test_opcache.TestSpecializer.test_for_iter) ... ok
+test_get_iter (test.test_opcache.TestSpecializer.test_get_iter) ... ok
+test_load_attr_enum (test.test_opcache.TestSpecializer.test_load_attr_enum) ... ok
+test_load_attr_module_subclass_with_data_descriptor (test.test_opcache.TestSpecializer.test_load_attr_module_subclass_with_data_descriptor) ... ok
+test_load_attr_module_with_getattr (test.test_opcache.TestSpecializer.test_load_attr_module_with_getattr) ... ok
+test_load_super_attr (test.test_opcache.TestSpecializer.test_load_super_attr)
+Ensure that LOAD_SUPER_ATTR is specialized as expected. ... ok
+test_pop_jump_if (test.test_opcache.TestSpecializer.test_pop_jump_if) ... ok
+test_send_async_for (test.test_opcache.TestSpecializer.test_send_async_for) ... ok
+test_send_with (test.test_opcache.TestSpecializer.test_send_with) ... ok
+test_send_yield_from (test.test_opcache.TestSpecializer.test_send_yield_from) ... ok
+test_send_yield_from_iter (test.test_opcache.TestSpecializer.test_send_yield_from_iter) ... ok
+test_specialized_iter_doesnt_skip_send_check (test.test_opcache.TestSpecializer.test_specialized_iter_doesnt_skip_send_check) ... ok
+test_store_attr_instance_value (test.test_opcache.TestSpecializer.test_store_attr_instance_value) ... ok
+test_store_attr_slot (test.test_opcache.TestSpecializer.test_store_attr_slot) ... ok
+test_store_attr_with_hint (test.test_opcache.TestSpecializer.test_store_attr_with_hint) ... ok
+test_store_subscr (test.test_opcache.TestSpecializer.test_store_subscr) ... ok
+test_to_bool (test.test_opcache.TestSpecializer.test_to_bool) ... ok
+test_unpack_sequence (test.test_opcache.TestSpecializer.test_unpack_sequence) ... ok
+
+----------------------------------------------------------------------
+Ran 90 tests in 6.627s
+
+OK
+
+== Tests result: SUCCESS ==
+
+All 2 tests OK.
+
+Total duration: 8.1 sec
+Total tests: run=135 skipped=1
+Total test files: run=2/2
+Result: SUCCESS

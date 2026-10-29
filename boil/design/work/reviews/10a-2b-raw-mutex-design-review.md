@@ -278,3 +278,93 @@ rosters and actual counts/skips/resources must be observed; the source roster
 alone does not prove execution. Once-only tail/retain work remains the
 existing 10a4/H1 handoff. No O1 adoption, baseline setup, benchmark, root
 policy change or weaker exclusion follows from this transition review.
+
+## Round 4: executor and actual preserved boundary clear
+
+Verdict: **TRANSITION_EXECUTOR_AND_BOUNDARY_CLEAR**, 2026-10-29. This
+clears the exact executor and completed preservation boundary for the
+coordinator's separate production grant: exact two-marker commit under the
+round3 exception, `bind-new`, then sequential make-only default/debug/ASan,
+stopping on failure and before qualification. No reviewer execution,
+production edit, commit, copy or owner-artifact change occurred.
+
+Reviewed ROOTS transition identities:
+
+| Artifact | SHA256 |
+|---|---|
+| `build/takeover-20261029/raw_mutex_transition.py` | `4e44a595c303ac72b4203f2675ce6ef2070aa677077ae7450424b20b870b448a` |
+| `transition/spec.json` | `ef5fb2fb5532cc9096f142bfa2b68b941bf2736907d7b9525bfaae27ce58a6af` |
+| `transition/frozen-manifest.json` | `713fa2f3fccca053918c5b85eee4b51c592e16f240675666b94a9c52cd28be8a` |
+| `transition/REVIEW.md` | `5a344f98daed04296fbdbc26ef1fee4178f377e10c2dfda8536f3949f95b4d18` |
+| `transition/host-controls.json` | `2f00258c1858c8fda65ca3ab2418e24283e95743b4b7f74fdd71a039d3716ab6` |
+| `transition/before.json` | `8b7c757892f9729655ce48e2b90306d76112611921b51e01658d30db03b6c860` |
+| `transition/boundary-validation.json` | `799623d57b2f8f356ffce75b915f2786a953adc1ae35cc25ba6ab734bcbc39c1` |
+
+Here `transition/` is below `park-prerequisite/raw-mutex-design/` in the
+existing build evidence directory. The earlier executor/spec/controls are
+retained under `review-v1/`. V2 adds actual archive/checker/auditor tools and
+corrects make-versus-wrapper failure handling; it does not change runtime
+source or broaden the two-marker patch.
+
+The actual boundary remains clean `1bfe`, tree
+`712048b168386b94222ccb8c9da282e4bc3b2e3f`. Both completed matrices are
+represented by 962 preserved completion/result/log/state/root paths. The
+executor replays each build's 114 exact new result identities and six pilot
+transactions through unchanged raw state/root/skip-contract validators,
+checks aggregate correspondence, and takes all four build locks without
+waiting before copying. The reviewer checked all 962 path hashes, all 6,322
+source-map hashes, all 597 copied payload hashes and all 1,144 current
+expanded product payload paths. Manifest source-audit/tool hashes also
+match. Actual quiescence and the executed preservation step were separately
+authorized and observed by the coordinator; this review does not rerun them.
+
+Each build now has 286 prospectively preserved paths, with aliases/resolved
+targets and type/size/device/inode metadata. The original 271-path maps
+remain separately retained. The 597 deduplicated payloads occupy
+1,207,028,085 bytes; deduplication confers no shared-build/lifetime claim.
+Default/debug retain their completed `1bfe` scope, ASan retains BUILD_FAIL
+without smoke, and tailcall remains historical. ELF build programs,
+archives and generated sysconfig/build-selection inputs are now included
+prospectively. No thin archive was found; thin-member closure would be
+required before claiming such an archive as a qualified input.
+
+The inspected old launcher/selected-source paths use the covered Python
+driver for GC and multiprocessing children and do not invoke pre-existing
+testembed/bootstrap/freezer programs. This is source correspondence, not
+complete process-lineage proof. The coordinator's accepted historical
+loader-fixture ruling remains explicit: temporary shared-library bytes were
+not retained; fixed C strings/literal compiler command/toolchain provenance
+and actual load/unload/walk assertions suffice for that historical scope.
+No retrospective ELF hashes, extra wrapper or old-matrix rerun is required.
+Prospective compiler/configuration binding is required for later such runs.
+
+`inherited_lock` now proves the inherited open description already owns a
+FLOCK WRITE lock, confirms actual file identity and tests independent-open
+conflict before touching its flock. The sixteen host controls exercise
+held/unheld/wrong-inode locks, raw-root domain and roster/completion failure,
+extra-source/config/alias drift, make-environment overrides and exit-code
+polarity. Raw make2 plus host1 is retained failure evidence; make0/host1 or
+make2/host0 cannot qualify. These are host guard/control results, not native
+build or runtime passes.
+
+Actual archive tools, GCC-selected assembler/linker/frontends, host checker,
+ELF auditor, shell/UV/host Python and compiler bytes/versions are bound.
+Make's allowlisted environment excludes ambient make/compiler/loader/Python
+overrides. Exact Makefile/pyconfig guards run pre/post; expanded config/log/
+sysconfig inputs are preserved as before/after evidence rather than falsely
+treated as immutable make outputs. Serial explicit stages, fixed make-j4,
+1,200-second bounds and normal gate slots/build locks retain the reviewed
+scope. New complete products are copied under lock before any smoke; the
+outer launch re-enumerates the complete expanded roster and aliases after
+cleanup and binds its log/build receipt. Unexpected failure or incomplete
+evidence stops progression.
+
+The successor guard requires exactly one clean child commit, the sole
+approved header difference and exact substituted full-source hashes. It
+does not call old HEAD-bound guards to qualify new source. Other builds
+must retain their old or already-frozen new products. All new products
+remain explicitly unqualified. Code/precision/CFI/root-DWARF comparison and
+the coordinator's bridge/affected-repeat ruling are still required before
+separately reviewed smoke, affected checks and fresh full-chain plans.
+No old120 relabel, automatic carry-forward/repetition, tailcall build,
+landing, baseline or timing grant follows from this clearance.

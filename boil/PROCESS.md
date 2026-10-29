@@ -23,14 +23,14 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 13:14 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 13:27 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains unlanded. Frozen8ce release/debug matrices each pass640jobs/41,440tests; release full/stress11 pass. Debug full fails exactly three thread-pool task-reference tests. Ten original controls and trace identify stale alignment padding in opaque _PyParkingLot_Park. Bounded precise-Park prerequisite clears design review; current worktree merges primary64ab asd8be2e2c36d and implements the fix. Six-file candidate94d68f30d309 clears source review after ABI/type/structured-semaphore corrections. Both gate0s pass1,924 and linked audits; all71 bounded checks pass with no skips/5,857collections/zero fallback and unpinned, including ten off+kill runs per thread family. Class-negative/restoration passes. Fresh qualification requires120 transactions/build,39 protected selectors, reviewed pilot counts, full normal/kill/ASan/stress/extras; explicit bounded carry-forward keeps old31/11 evidence historical. No full profile launches before exact plan/pilot review. Old8ce receipts remain historical; O1 stays candidate. After bounded proof: new qualification plan, required full/kill/ASan/stress/extras, landing review/integration. Rung3a writers/PyMem,3b checker residue,3c detached-state roots and rung4 support follow |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b remains unlanded. Frozen8ce release/debug matrices each pass640jobs/41,440tests; release full/stress11 pass. Debug full fails exactly three thread-pool task-reference tests. Ten original controls and trace identify stale alignment padding in opaque _PyParkingLot_Park. Bounded precise-Park prerequisite clears design review; current worktree merges primary64ab asd8be2e2c36d and implements the fix. Six-file candidate94d68f30d309 clears source review after ABI/type/structured-semaphore corrections. Both gate0s pass1,924 and linked audits; all71 bounded checks pass with no skips/5,857collections/zero fallback and unpinned, including ten off+kill runs per thread family. Class-negative/restoration passes. Both fresh120-transaction campaigns now complete on1bfe with39 protected selectors and zero fallback. Exact raw-wrapper successorce2ac8 is unqualified and rebuilding after preserved-boundary review8740; full normal/kill/ASan/stress/extras remain; explicit bounded carry-forward keeps old31/11 evidence historical. No full profile launches before exact plan/pilot review. Old8ce receipts remain historical; O1 stays candidate. After bounded proof: new qualification plan, required full/kill/ASan/stress/extras, landing review/integration. Rung3a writers/PyMem,3b checker residue,3c detached-state roots and rung4 support follow |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
@@ -460,7 +460,10 @@ re-audit all original journals. No full profile or O1 adoption follows yet.
 At13:00 release completion63235055 independently re-audits all114 new jobs;
 with its pilot this is120transactions/20iterations,10,120tests/2,320 recorded
 skips and zero fallback. Debug71/114 new jobs pass at13:00 and96/114 at13:12;
-its completion is pending.
+both campaigns subsequently complete. Debug completion172f480d has120 total
+transactions/20iterations,10,120tests/2,020 recorded skips including pilot and
+zero fallback. Its new nineteen record264,498collections/61,810 report-only
+unpinned. All old source identities remain unchanged in those receipts.
 
 Separate make-only support plan71340975/a6f4ba2b clears review after a named
 Makefile/pyconfig pre/post guard closes its original configuration gap. ASan
@@ -479,6 +482,13 @@ gated commit for ONLY two markers after both completed matrices/quiescence and
 preserved boundary/exact executor review; it establishes a clean new identity,
 not nativegate1/PASS or landing. Fresh make/inventory/comparison must stop for
 root's affected-coverage decision. No blanket rerun or automatic reuse.
+Actual quiescent boundary8b7c/validation7996 preserves1,144 expanded product
+paths and597 copied payloads, with962 original receipt/artifact paths. Review8740
+clears exact executor4e44/spec ef5f. Root grants the sole two-marker clean
+successorce2ac8991ee under the recorded exception, binds new-plan1074, then
+sequential make-only default/debug/ASan. Every new product remains unqualified;
+actual source/code/precision/CFI/root-DWARF comparison and root disposition must
+precede affected checks. No standalone smoke/full/tail or landing grant follows.
 
 The coordinator explicitly carries unchanged legacy31-selector/11-module
 evidence forward at8ce, supported by body correspondence42350872, all seven
@@ -519,7 +529,12 @@ and5806 tracked inputs. Revised runnerd853/plan419a closes launch blockers;
 the exact configure-only grant succeeds with final2dd5/inner1107/products379f.
 Joint closure8908 clears actual-configuration reviewde24: O3/NDEBUG, frame
 pointers, zero-initialization and disabled JIT/stats/PGO/LTO/BOLT match policy.
-Make remains held for its concrete executor and final-closure/config guards.
+Separate make-only V3a3f271/plan d08d enforces accepted final/config closure;
+independent reviewa6c3 clears it and root grants exact make-launch74e1 once.
+Normal bootstrap/freezing/sysconfig/checksharedmods are disclosed build steps.
+No standalone qualification, origin witness or timing is included. Supplementb960
+binds341 pre-make external candidate paths; it does not prove every consumed
+header/library. Remaining dependency closure must close before final timing.
 Upstream `CFLAGS_CEVAL` is empty; the fork deliberately adds `-fno-gcse`. Keep this
 source-specific difference explicit rather than claiming every flag matches
 or isolating object-model effects. Before checkpoint-I parity, require upstream

@@ -215,3 +215,9 @@ and a jointly frozen14-product configuration closure. Make, target
 interpreter, separate tests/probes and benchmarks have not run. Main and
 all historical baseline products/results remain unchanged. Configuration
 success does not close runtime import binding or qualify a comparison.
+Actual configuration preserves upstream's empty CFLAGS_CEVAL while fork
+release deliberately uses -fno-gcse. Treat the common O3/compiler/FP/
+zero-init policy as partly matched; require the separately planned
+upstream sensitivity or a predeclared fully matched eval cohort before
+parity. The make-only work doc records this boundary; no extra build or
+performance measurement is implied.

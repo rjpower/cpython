@@ -3764,3 +3764,36 @@ reports the difference; it cannot isolate object-model performance. Before claim
 require upstream `-fno-gcse` sensitivity or select a predeclared fully matched eval
 policy from evidence. No extra build is ordered now solely for that comparison.
 H1 parent/changed benefit retains identical eval policy. Next hourly13:45 PDT.
+
+### 13:27 PDT: both campaigns complete; bounded rebuilds granted
+
+Debug completion172f480d closes its114 new jobs plus pilot:120 transactions,
+20 iterations,10,120 tests/2,020 recorded skips, zero fallback. New nineteen
+record264,498 collections and61,810 report-only unpinned. Release63235055 stays
+complete with10,120 tests/2,320 skips. Root reads the actual debug completion.
+At quiescence, boundary8b7c and validation7996 preserve962 original receipt paths,
+all6,322 tracked inputs and1,144 expanded product paths across four builds.
+The597 deduplicated payloads total1,207,028,085 bytes. Old271-path maps stay
+separate; ASan retains BUILD_FAIL and tailcall its historical support status.
+
+Independent executor/boundary review8740 clears16 focused host controls, actual
+inherited locks, complete raw journal replay, tool/environment guards and full
+post-cleanup product/alias checks. Root grants the exact two annotations under
+the recorded one-time source/control-gated commit exception. New clean commit
+ce2ac8991ee changes only the two Py_GC_PRECISE prefixes; root reviews that diff.
+New-plan1074 binds the unqualified identity. Sequential default/debug/ASan make
+is granted and default starts. No standalone smoke/full/tail starts; comparison
+of actual code/precision/CFI/root-DWARF must inform the affected-coverage ruling.
+
+Baseline make-only V3a3f271/d08d and exact launch74e1 clear independent reviewa6c3.
+Root grants that once-only make-j4 all with normal bootstrap/freezing/import
+build steps and unchanged14-file accepted configuration. No standalone target
+qualification or timing is granted. Read-only supplementb960 hashes341 external
+candidate paths before make; it does not retroactively establish full consumed
+SDK identity. That remaining gap stays explicit before the final timing cohort.
+The author prepares a minimal post-build correctness/origin plan in parallel.
+
+A coordination delay was corrected: the reviewer had completed its prior turn,
+so queued messages did not activate it. Root explicitly restarted both bounded
+reviews and received separate verdicts. No evidence or source changed during
+that wait. Next substantive hourly report remains13:45 PDT.

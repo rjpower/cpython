@@ -212,6 +212,13 @@ the header confirms debug/shared-library/GIL-disabled off and tailcall0,
 and JIT flags/objects are absent. Host regeneration-Python detection
 reports3.14.4, not execution of a new upstream interpreter.
 
+Actual-config reviewde24b7f8 also records the source-specific eval flag:
+upstream CFLAGS_CEVAL is empty; fork release deliberately adds -fno-gcse.
+Retain that accepted upstream config unchanged. Common compiler/O3/FP/
+zero-init match does not establish all-per-unit-flag matching or isolate
+object-model cost. Before parity, require an upstream sensitivity or a
+predeclared fully matched eval cohort; no extra build is authorized now.
+
 Configured required json/pickle/math/array/expat/elementtree backends are
 available to build; that is not proof of compiled/imported availability.
 The optional missing/disabled modules remain decimal, dbm, gdbm, readline,
@@ -223,3 +230,6 @@ must bind the accepted **final launch success and joint closure**, not
 just V2's current inner-only build check, and freeze accepted configuration
 through make/cleanup. This remains a bounded make-phase design/review item;
 no build or post-build witness is authorized by configure success.
+The separate [make-only plan](pre-I-baseline-make-plan.md) now proposes
+that final-receipt/closure/configuration guard without altering original
+V2 or any configure input. Its copied-host controls are not a make grant.

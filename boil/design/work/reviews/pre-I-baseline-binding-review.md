@@ -335,3 +335,78 @@ native/alias/generated-product capture before later qualification. Existing
 inner-only make checks are not sufficient launch authority. No reviewer
 command executed configure, a compiler, candidate Python, tests or timing;
 only the review record was changed.
+
+## Round 5: MAKE_ONLY_PLAN_CLEAR
+
+Verdict: **MAKE_ONLY_PLAN_CLEAR**, 2026-10-29, for the exact separate V3
+plan below. This clears a first unqualified product-establishment build for
+the coordinator's exact-command grant, not execution or native qualification.
+Reviewed `pre-I-baseline-make-plan.md`
+`af2eee87c055bc1d3da61ae2fb3f5d70dce026eb92a545319e43b3395b4dbcf5`
+and primary `build/checkpoint-i-baseline-binding/make-v3/`:
+
+| Artifact | SHA256 |
+|---|---|
+| `phase_runner.py` | `a3f271b50940a091f03245d7b3ef4179f1ca0e7b7eec82499ce5bc0b7567d9b4` |
+| `plan.json` | `d08ddfa21196e0d8e64c018530c9029419516c0aca543ba9b0b327bdaafa5096` |
+| `make-launch.json` | `74e124646fbdff98c41145e1995b3829b35c87429a0774a870db4c785e740f72` |
+| `host-controls-v2/results.json` | `469dc1d3e15adeb9844d3c583be156e78df50d242d056a61c61c80e0184e6176` |
+| `provenance.json` | `7abc6e476db5d7a4b4e8c29e43243c4eaaaa7ca31cccd1ebee16387db2cefd5c` |
+
+All 396 indexed artifact hashes, plan-input hashes, fourteen tool payload
+hashes, source regular-file hashes and actual fourteen configured-product
+hashes agree. Upstream remains clean at exact `321925`; no target Python
+exists at this review. Original V2/configure artifacts remain unchanged.
+
+The V3 delta preserves the reviewed lock/supervisor protocol and adds the
+required actual-configuration closure. `accepted_configuration` enforces
+accepted joint closure `8908a1cc`, every raw artifact it binds, final launch
+`2dd59476` with zero gate status/true cleanup/no failure, successful inner
+receipt `1107b06e`, and product manifest `379f7603`. It requires matching
+source/build identities and all accepted configuration bytes. The locked
+pre-make check additionally requires the exact fourteen-file build roster;
+later new outputs are allowed while every accepted configuration input
+must remain unchanged. Those guards run after the command and again after
+actual gate cleanup. This closes round4's final-receipt/configuration item.
+
+The build-only parser rejects configure and wrong configure-identity CLI
+arguments. The frozen UV outer command/environment/cwd, host identity,
+nonblocking task admission, one normal machine slot, inherited lock proofs,
+separate-session supervisor and no-overwrite evidence paths retain their
+reviewed meaning. The native command is exactly `/usr/bin/make -j4 all` in
+the owned build directory, bounded at 3,600 seconds after normal admission.
+The make scope explicitly includes normal bootstrap/freezing, generated
+sysconfig/platform/build-details and checksharedmods actions. These may
+execute new build programs and import new extensions as build steps; they
+are not standalone tests or import-origin qualification.
+
+The eight retained copied-host cases use the exact V3 runner with harmless
+host commands. The positive captures an additional text product. Failed
+final configure status, joint closure drift, raw configure-log drift,
+configuration-byte drift and wrong CLI identity reject at their intended
+guards before the host command. Deliberate mutation after a successful host
+command leaves inner return0 but `post_verified=false`; cleanup mutation
+leaves inner success/gate0 but final `post_cleanup_verified=false` with the
+named configuration failure. Both deny final success. The earlier scratch/
+phase-directory collision is retained as a harness failure with no semantic
+negative credit. Original V2's thirteen controls remain evidence of its
+unchanged protocol bodies, not relabeled V3 runs.
+
+Capture complete new product/alias bytes under lock after make, compare
+post-cleanup state and jointly freeze final/inner receipts, logs and all
+inventories before any later qualification. Stop on failure or partial
+evidence. No smoke, separately invoked target probe/import witness, test,
+benchmark, final cohort certification or parity follows from make success.
+
+The coordinator explicitly rules that incomplete consumed SDK/header byte
+closure does not block this first unqualified build. Bounded supplemental
+pre-make hashes may be retained separately without rewriting V3 or copying
+the SDK. Configure detection is not full consumed-header identity; remaining
+dependency gaps must stay explicit and close before final timing/parity
+cohort claims. No retrospective provenance is invented. The accepted empty
+upstream eval-unit flags and the fork's disclosed `-fno-gcse` difference,
+later sensitivity obligation and H1 matched-policy requirement remain as
+ruled in round4; no sensitivity build is added now.
+
+The reviewer executed no runner, host control, configure, compiler, make,
+candidate interpreter, test or benchmark and changed only this review.

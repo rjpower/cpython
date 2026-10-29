@@ -2336,3 +2336,26 @@ the parent waited, not why the child hung; owner 7a rung 2 with the fork
 path, evidence required the hung child's native and Python stacks, on
 recurrence). The remote branches boil/6d-rung4 and boil/audit2 are left
 in place like the earlier landing branches.
+
+## 2026-10-29 05:45 PDT: takeover audit and resumed plan
+
+Integration remains d7f3003874f before this documentation change; no new
+runtime landing is claimed. Three read-only agents audited branch
+ancestry, saved gates, reviews and the remaining roadmap. Compiler head
+bf6635fd0a4 and queue head a0338fd7634 both have completed fix-first
+landing reviews, now preserved here. Root head b471a1bb9bc includes the
+checker and watcher fixes but lacks a landing record and final checks.
+The prior status prose overstated completion; README and PROCESS now
+separate implemented from landed work. No full gates were rerun by this
+audit. Remote head freshness was not established (SSH configuration and
+sandbox network access prevented the read-only check).
+
+The user authorized parallel implementation, plan subdivision, faster
+debug feedback where useful, and interpreter parity before the JIT.
+PROCESS 0.4 assigns the three resumed lanes, splits later queue/root
+work, adds H3's orthogonal-dispatch inventory and checkpoint I, and
+records hourly documentation/status updates. Section 3 permits an O1
+debug configuration only after root/walk/control qualification. Existing
+debug builds use Og; no faster configuration has been qualified yet.
+Note 14 incorporates the second design review's response as a design
+specification; its required dynamic evidence is not a passed result.

@@ -13,7 +13,7 @@ This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
 revised 2026-10-29 08:25 PDT at integration merge 052d8342e56, shared
-tooling e02e177903f, verification registry fff4e0e9b08 and
+tooling e02e177903f, verification launcher 2db451b1b65, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -142,9 +142,9 @@ state tests passed on both, and debug kill/stress checks passed. The
 verification registry, validator and plan display are landed as
 fff4e0e9b08: 15 profiles, seven safety-control groups and actual case
 inventory validation pass. Execution and numeric-gate integration remain
-unfinished. The frozen launcher component cleared independent review;
-its landing does not establish orchestration, complete coverage or source
-snapshot enforcement. A separate shared worker-launch correction preserves
+unfinished. The launcher component landed as 2db451b1b65 after independent review;
+it does not establish orchestration, complete coverage or source snapshot
+enforcement. Shared worker-launch correction 093b9d2a1c3 preserves
 regrtest's temporary cwd and exit timeout by calling worker.main().
 
 Opcode categories will use explicit generated properties. H3 removes

@@ -18,9 +18,15 @@ plan-only and runtime checks unperformed; it returns 2 for declared pending
 prerequisites, a missing executable, or missing required case inventory.
 `run` is not implemented and is rejected. The verifier and stress getters
 are integrated; their actual state in a selected binary is still untested
-by this display. Pending queue, precise-entry-path and full-stress-policy
+by this display. Pending precise-entry-path and full-stress-policy
 requirements cannot be turned into green results by leaving out a hook or
 narrowing a selection.
+
+Queue owner routing is available after integration052d8342e56 and its
+detached checks. A selected build must still be bound to source containing
+that landing; availability in this registry does not qualify an older
+binary. The existing case inventory predates queue test-source changes
+and must be rediscovered before actual case-profile execution.
 
 The schema has no commands, shell evaluation, profile inheritance or
 fallback getter/setter. Unknown fields, versions, modes, profiles,

@@ -1,11 +1,16 @@
 # Verification v2: controlled build receipt review
 
-Status at09:33 PDT: the initial105-output qualification below is superseded
+Status at09:35 PDT: the separate172-output supplement is qualified for
+component controls. The initial105-output receipt remains superseded; both
+original files and failed attempts stay unchanged. This is a post-build
+supplement, not a claim that the initial inventory covered target bytes.
+
+Finding at09:33 PDT: the initial105-output qualification below was superseded
 as incomplete. The first real launcher attempt exposed 67 extension symlinks
 whose link identities were recorded without their target contents. Do not
 reuse the original qualified receipt for further controls. Both original
-receipt files remain unchanged; a strict target-binding repair and separately
-reviewed supplement are pending. No component positive gate is claimed.
+receipt files remained unchanged while target-binding repair and review
+proceeded. No component positive gate had run.
 
 Decision, 2026-10-29 09:17 PDT: qualify the retained build receipt for the
 identity/result component controls. This is not a profile, full-suite or
@@ -54,3 +59,17 @@ post-build command inventory records no intervening build/output writes.
 This supports a post-build supplement; it does not make the original105-entry
 manifest complete. A replacement output manifest must bind both aliases and
 actual target contents before the replacement receipt can be qualified.
+
+Supplement clearance09:35 PDT: independently checked unreviewed supplement
+`4e3b667e7a31fcb08e0a3debd5963c10abbbf99c0d0d651f38fc28c18b7514b5`
+differs from the original unreviewed receipt only in its output reference.
+New manifest
+`f1cdf79fbf924e4aa00a6b6ee14ea5f224924501345667526a8f21acb0bdc960`
+preserves all105 prior entries exactly and adds precisely67 verified target
+contents. All172 current entries, source inputs, command logs, compiler and
+configuration match. Target metadata and the command inventory establish
+the post-build binding without an intervening output write or another rebuild.
+The repaired inventory rejects outside targets and captures link identities
+and resolved bytes. The owner reports36 host controls, with old-inventory
+target-mutation/external-link failures retained. Further runtime controls
+require a new frozen identity/plan referencing this supplement.

@@ -3575,3 +3575,32 @@ six-line oracle; all six native stale100 probes report100/100. Preserve that
 harness failure and move witnesses to stderr before a refrozen bounded retry.
 No full profile or matrix has launched. H3/H1 native union handoff still waits;
 next hourly report remains12:45 PDT.
+
+
+### 12:20 PDT: clean Park fixup pushed; scope review and string prerequisite
+
+ROOTS commits/pushes1bfe1a57145. Postcommit bridge604ef3fb binds the same six
+implementation/test inputs and542 unchanged release/debug product paths;
+only two work/design documentation hashes differ from the bounded snapshot.
+Fresh strict six-case stale100 passes release off, debug off and actual debug
+kill. Compiled checker/walk coverage passes31 tests per mode with its existing
+tailcall-required skip; deliberate test_unpinned_counter accounts for one
+unpinned event and does not weaken stale100's zero rule. Failed stale wrapper
+attempt stays retained; corrected stderr witnesses preserve its native oracle.
+
+Independent qualification scope reviewbcc3b44e agrees with the exact historical
+carry-forward,39 protected IDs,501 listed cases and120 transactions/build.
+The first iteration means five fresh individuals plus one four-module job per
+build, not just the module order. Exact new clean-source plans and actual pilot
+receipts still need review. The prior compiler reviewer thread was evicted at
+the four-thread limit; the independent stats reviewer takes over bridge/plan
+review using the preserved history. No pilot/full execution has started.
+
+String review72b53832 returns REVISE before S1: define concrete certificate
+transfers/joins/exception/final-word admission and activation/slot retirement,
+then choose one immutable owner. It finds no current copying-path FIX_FIRST
+defect. The coordinator assigns a docs-only S0 revision to a separate author,
+directed toward dedicated code-owned pure-data metadata installed before
+CREATE, preserving lazy exec and actual-deallocation lifetime. H3/code-layout
+and H1/ROOTS interfaces still require review; no native or capacity change is
+granted. Keep later S2/S3 closure separate. Next hourly report12:45 PDT.

@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 12:13 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 12:20 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -445,6 +445,10 @@ V3 six-file patch94d68f30d309 clears source review; both gate0s and linked
 audits pass1,924tests. Its71 bounded checks pass with no skips,5,857collections
 and zero fallback/unpinned. Classification-negative/restoration reportdb936
 passes. The bounded summary632414b6 is not final qualification.
+Clean fixup1bfe1a57145 is pushed; bridge604ef3fb preserves the six tested
+inputs and542 release/debug native paths, with only two documentation changes.
+Strict stale100 passes release/debug off and debug kill; compiled31 checks
+pass with their existing tailcall skip and intentional unpinned-counter event.
 
 The coordinator explicitly carries unchanged legacy31-selector/11-module
 evidence forward at8ce, supported by body correspondence42350872, all seven

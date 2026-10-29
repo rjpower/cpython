@@ -52,3 +52,45 @@ and the bounded affected/regen/ID checks in the reviewed design. A real
 tailcall Py_STATS build is needed for any tailcall-runtime claim. The
 230,368-byte growth remains source arithmetic, not measured sizeof or RSS.
 No native gate, landing or performance result is claimed here.
+
+## First matching native checkpoint
+
+The reviewed core is committed as d462e8338ce on isolated boil/h3-stats.
+A fresh owned build/pystats configured with --enable-pystats CC=gcc and made
+with -j4 all under ordinary global admission/build locking. Both commands
+returned0; complete products/config/compiler/source were frozen before tests
+and rechecked after gate cleanup. Actual configuration is Py_STATS1,
+nondebug/GIL/non-tail GCC/O3 with retained FP/zero-init/fork eval policy.
+Checksharedmods reported116 checked and0 failed imports. Bootstrap/build
+checks establish products; they are not a broad qualification suite.
+
+The first bounded target transaction ran21 tests: the new legitimate high
+handler test and all15 reader tests passed, but five legacy lifecycle tests
+failed because they read only stderr and the producer used existing shared
+/tmp/py_stats. Its failure remains in build/H3-1-stage2b3/tests-result.json;
+no remaining generator cases ran. A task launcher import failure before that
+transaction ran no target and is retained separately.
+
+A reviewed test-only helper correction at b39cc421b19 read private output
+files. Five of six stats tests passed; dump failed because the helper wrongly
+required equal snapshots. Actual sysmodule.c _stats_dump prints then clears,
+so those files represent disjoint intervals. The failed attempt is retained;
+it is not a native counter failure or a passing module. The final helper
+896d4c4cee5 sums interval counts and rejects missing/duplicate fields. Root
+reviewed its source bridge from d462 (only test_pystats.py changed) and granted
+only the remaining dump test and previously unexecuted five generator/domain
+cases:1/0skip and5/0skip pass. Other passing stats/reader receipts are retained
+without repetition. Actual verifier state was off/extras0/stress0. Original
+complete native/config/tool maps remain identical after final cleanup.
+
+Private fixture/driver source is now prepared for review, not executed.
+It consumes exact current/historical counter spans, the actual generated
+LOAD_CONST predicted span, and renamed historical C typedefs. Planned numeric
+controls cover full-domain rows/both pair axes, disabled-phase local advance,
+clear and C-local activation lifetime, normal predicted bypass, actual
+sizeof/RawCalloc and old-cutoff/counter-order defects. A host-only copied old
+emitter uses the existing per-operation/NOFB oracle. Neither the C model nor
+source inspection alone qualifies real frame transitions or tailcall runtime.
+The native request/size and these controls remain pending; +230,368 remains
+arithmetic until their matching compiled output exists. Full union, broad
+modes and performance gates remain separate.

@@ -71,12 +71,17 @@ Invariants:
 
 import argparse
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from enum import IntFlag
+from types import MappingProxyType
 
 from analyzer import (
     Analysis,
     CodeSection,
     Instruction,
+    Family,
+    PseudoInstruction,
     Uop,
     Skip,
     Flush,
@@ -123,11 +128,6 @@ INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
 INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
 LABEL_START_MARKER = "/* BEGIN LABELS */"
 LABEL_END_MARKER = "/* END LABELS */"
-
-def first_ir_only_handler(analysis: Analysis) -> int:
-    """The first handler of the IR only.  They follow the pseudo-instructions,
-    so that a number names one opcode, pseudo-instruction or handler."""
-    return 1 + max((p.opcode for p in analysis.pseudos.values()), default=255)
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Python/ceval_macros.h), from this_instr, which every handler defines.
@@ -488,23 +488,200 @@ def nofb_bases(analysis: Analysis) -> list[str]:
         and formats[name].imm == LOC_FBARG)
 
 
-def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name.  BINARY_OP itself has none:
-    its operations do."""
-    ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name != BINARY_OP_FAMILY}
-    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
-    for i, name in enumerate(names):
-        ids[name] = first_ir_only_handler(analysis) + i
-    return ids
+class HandlerKind(IntFlag):
+    SPECIALIZED = 1
+    INSTRUMENTED = 2
+    BINARY_OP = 4
+    IR_ONLY = 8
+    NOFB = 16
+    PSEUDO = 32
 
 
-def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
+def check_handler_count(count: int) -> None:
+    if not 0 < count <= 1 << 16:
+        raise ValueError(f"handler count {count} does not fit the 16-bit domain")
+
+
+@dataclass(frozen=True)
+class HandlerDomain:
+    """One numeric product shared by all generators for a symbolic analysis.
+
+    The initial layout retains the existing pseudo positions and thresholds.
+    They move only after every runtime consumer supports the full ID width.
+    """
+    analysis: Analysis
+    opmap: Mapping[str, int]
+    handlers: Mapping[str, int]
+    bases: Mapping[str, str]
+    kinds: Mapping[str, HandlerKind]
+    have_arg: int
+    min_instrumented: int
+    first_ir_only: int
+    count: int
+
+    def __post_init__(self) -> None:
+        check_handler_count(self.count)
+        for field in ("opmap", "handlers", "bases", "kinds"):
+            object.__setattr__(self, field,
+                               MappingProxyType(dict(getattr(self, field))))
+        ids = dict(self.opmap)
+        for name, handler in self.handlers.items():
+            if name in ids and ids[name] != handler:
+                raise ValueError(f"conflicting handler ID for {name}")
+            ids[name] = handler
+        if len(set(ids.values())) != len(ids):
+            raise ValueError("duplicate handler ID")
+        if any(not 0 <= handler < self.count for handler in ids.values()):
+            raise ValueError("handler ID outside domain")
+        if set(self.bases) != set(ids) or set(self.kinds) != set(ids):
+            raise ValueError("incomplete handler base/kind metadata")
+        for name, base in self.bases.items():
+            if base not in ids or self.bases[base] != base:
+                raise ValueError(f"invalid handler base for {name}: {base}")
+
+    def require_analysis(self, analysis: Analysis) -> None:
+        if analysis is not self.analysis:
+            raise ValueError("handler domain belongs to a different analysis")
+
+    def shadow(self, name: str) -> str:
+        # The legacy format shadow normalizes IR variants, but leaves
+        # specializations to the opcode deopt table. Preserve emitted bytes.
+        if self.kinds[name] & (HandlerKind.BINARY_OP | HandlerKind.NOFB):
+            return self.bases[name]
+        return name
+
+
+def _assign_opcodes(
+    instructions: dict[str, Instruction],
+    families: dict[str, Family],
+    pseudos: dict[str, PseudoInstruction],
+) -> tuple[dict[str, int], int, int]:
+    """Assigns opcodes, then returns the opmap,
+    have_arg and min_instrumented values"""
+    instmap: dict[str, int] = {}
+
+    # 0 is reserved for cache entries. This helps debugging.
+    instmap["CACHE"] = 0
+
+    # 17 is reserved as it is the initial value for the specializing counter.
+    # This helps catch cases where we attempt to execute a cache.
+    instmap["RESERVED"] = 17
+
+    # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
+    instmap["RESUME"] = 128
+
+    # This is an historical oddity.
+    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
+
+    # A reserved slot exists even when a small DSL has no body for it.
+    pinned_instrumented = {"INSTRUMENTED_LINE": 255}
+    instmap.update(pinned_instrumented)
+
+    instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
+
+    specialized: set[str] = set()
+    no_arg: list[str] = []
+    has_arg: list[str] = []
+
+    for family in families.values():
+        specialized.update(inst.name for inst in family.members)
+
+    for inst in instructions.values():
+        name = inst.name
+        if name in specialized:
+            continue
+        if name in instrumented:
+            continue
+        if inst.properties.oparg:
+            has_arg.append(name)
+        else:
+            no_arg.append(name)
+
+    # Specialized ops appear in their own section, and those that do not fit
+    # take the numbers below RESUME that no other instruction uses.
+    # Instrumented opcodes are at the end of the valid range
+    min_internal = instmap["RESUME"] + 1
+    min_instrumented = 256 - len(set(instrumented) | pinned_instrumented.keys())
+
+    next_opcode = 1
+
+    def add_instruction(name: str) -> None:
+        nonlocal next_opcode
+        if name in instmap:
+            return  # Pre-defined name
+        while next_opcode in instmap.values():
+            next_opcode += 1
+        instmap[name] = next_opcode
+        next_opcode += 1
+
+    for name in sorted(no_arg):
+        add_instruction(name)
+    for name in sorted(has_arg):
+        add_instruction(name)
+    # For compatibility
+    next_opcode = min_internal
+    for name in sorted(specialized):
+        if next_opcode == min_instrumented:
+            next_opcode = 1
+        add_instruction(name)
+        assert instmap[name] < min_instrumented
+    next_opcode = min_instrumented
+    for name in instrumented:
+        add_instruction(name)
+
+    for op, name in enumerate(sorted(pseudos), 256):
+        instmap[name] = op
+
+    return instmap, len(no_arg), min_instrumented
+
+
+def build_handler_domain(analysis: Analysis) -> HandlerDomain:
+    opmap, have_arg, min_instrumented = _assign_opcodes(
+        analysis.instructions, analysis.families, analysis.pseudos)
+    first = 1 + max((opmap[name] for name in analysis.pseudos), default=255)
+    handlers = {name: opmap[name] for name in analysis.instructions
+                if name != BINARY_OP_FAMILY}
+    binary = binary_op_handlers(analysis)
+    nofb = nofb_bases(analysis)
+    derived = (sorted(analysis.ir_only) + binary
+               + [name + NOFB_SUFFIX for name in nofb])
+    for handler, name in enumerate(derived, first):
+        if name in opmap or name in handlers:
+            raise ValueError(f"duplicate handler name: {name}")
+        handlers[name] = handler
+    ids = {**opmap, **handlers}
+    bases = {name: name for name in ids}
+    kinds = {name: HandlerKind(0) for name in ids}
+    for name, inst in analysis.instructions.items():
+        if is_specialization(inst):
+            assert inst.family is not None
+            bases[name] = inst.family.name
+            kinds[name] |= HandlerKind.SPECIALIZED
+        if name.startswith("INSTRUMENTED"):
+            kinds[name] |= HandlerKind.INSTRUMENTED
+    for name in analysis.pseudos:
+        kinds[name] |= HandlerKind.PSEUDO
+    for name in analysis.ir_only:
+        kinds[name] |= HandlerKind.IR_ONLY
+    if "IR_JUMP" in analysis.ir_only:
+        bases["IR_JUMP"] = "JUMP_FORWARD"
+    for name in binary:
+        bases[name] = BINARY_OP_FAMILY
+        kinds[name] |= HandlerKind.BINARY_OP
+    for name in nofb:
+        variant = name + NOFB_SUFFIX
+        bases[variant] = bases[name]
+        kinds[variant] = kinds[name] | HandlerKind.NOFB
+    return HandlerDomain(analysis, opmap, handlers, bases, kinds,
+                         have_arg, min_instrumented, first, first + len(derived))
+
+
+def handler_instructions(analysis: Analysis,
+                         domain: HandlerDomain) -> dict[str, Instruction]:
     "The instruction that each handler runs, by handler name"
+    domain.require_analysis(analysis)
     insts = all_instructions(analysis)
-    result = {name: insts[name] for name in handler_ids(analysis)
-              if name in insts}
+    result = {name: insts[name] for name in domain.handlers if name in insts}
     for name in binary_op_handlers(analysis):
         result[name] = insts[BINARY_OP_FAMILY]
     for name in nofb_bases(analysis):
@@ -1617,12 +1794,12 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("\n")
 
 
-def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
+def generate_ir_cases(analysis: Analysis, domain: HandlerDomain, formats: dict[str, IRFormat],
                       outfile: TextIO, lines: bool) -> None:
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
-    for name, inst in sorted(handler_instructions(analysis).items()):
+    for name, inst in sorted(handler_instructions(analysis, domain).items()):
         emitter.handler_format = formats[name]
         generate_handler(name, inst, formats[name], emitter, out)
         emitter.handler_format = None
@@ -1642,8 +1819,9 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
         emitter.emit("}\n\n")
 
 
-def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
-                lines: bool) -> None:
+def generate_ir(filenames: list[str], analysis: Analysis, domain: HandlerDomain,
+                outfile: TextIO, lines: bool) -> None:
+    domain.require_analysis(analysis)
     formats = compute_formats(analysis)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
@@ -1656,7 +1834,7 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 #endif /* _Py_TAIL_CALL_INTERP */
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, formats, outfile, lines)
+    generate_ir_cases(analysis, domain, formats, outfile, lines)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
 #if !_Py_TAIL_CALL_INTERP
@@ -1689,16 +1867,12 @@ def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
             f"{prefix}{name}(TAIL_CALL_PARAMS)")
 
 
-def num_handlers(analysis: Analysis) -> int:
-    return (first_ir_only_handler(analysis) + len(analysis.ir_only)
-            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
-
-
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
-                        outfile: TextIO) -> None:
+                        domain: HandlerDomain, outfile: TextIO) -> None:
     "The dispatch tables, indexed by handler"
-    ids = handler_ids(analysis)
-    n = num_handlers(analysis)
+    domain.require_analysis(analysis)
+    ids = domain.handlers
+    n = domain.count
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     targets = ["&&_unknown_opcode,\n"] * n
@@ -1737,8 +1911,9 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
 def generate_ir_from_files(filenames: list[str], outfilename: str,
                            lines: bool) -> None:
     data = analyze_files(filenames)
+    domain = build_handler_domain(data)
     with open(outfilename, "w") as outfile:
-        generate_ir(filenames, data, outfile, lines)
+        generate_ir(filenames, data, domain, outfile, lines)
 
 
 arg_parser = argparse.ArgumentParser(
@@ -1769,7 +1944,8 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_ir(args.input, data, outfile, args.emit_line_directives)
+        generate_ir(args.input, data, domain, outfile, args.emit_line_directives)
     with open(args.targets, "w") as outfile:
-        generate_ir_targets(args.input, data, outfile)
+        generate_ir_targets(args.input, data, domain, outfile)

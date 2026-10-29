@@ -1,0 +1,7 @@
+Include/opcode_ids.h: OK
+Include/internal/pycore_opcode_metadata.h: OK
+Include/internal/pycore_ir_metadata.h: OK
+Include/internal/pycore_uop_ids.h: OK
+Python/generated_ir_cases.c.h: OK
+Python/ir_targets.h: OK
+Lib/_opcode_metadata.py: OK

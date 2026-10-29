@@ -1,4 +1,5 @@
 import contextlib
+from dataclasses import replace
 import io
 import os
 import sys
@@ -35,6 +36,10 @@ with test_tools.imports_under_tool("cases_generator"):
     from cwriter import CWriter
     import ir_generator
     import ir_metadata_generator
+    import opcode_id_generator
+    import opcode_metadata_generator
+    import py_metadata_generator
+    import uop_id_generator
     import parser
     import root_check_c
     from stack import Local, Stack
@@ -99,6 +104,7 @@ class TestAnalysisErrors(unittest.TestCase):
         with handle_stderr():
             analysis = analyzer.analyze_files([self.temp_input_filename])
             ir_generator.generate_ir([self.temp_input_filename], analysis,
+                                     ir_generator.build_handler_domain(analysis),
                                      io.StringIO(), False)
 
     def check_error(self, input: str, regex: str = ""):
@@ -386,7 +392,8 @@ class TestIRCases(unittest.TestCase):
     def ir_output(self, input: str) -> str:
         analysis = self.analyze(input)
         out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        ir_generator.generate_ir([self.temp_input_filename], analysis,
+                                 ir_generator.build_handler_domain(analysis), out, False)
         _, rest = out.getvalue().split(ir_generator.INSTRUCTION_START_MARKER)
         instructions, _ = rest.split(ir_generator.INSTRUCTION_END_MARKER)
         return instructions
@@ -1123,8 +1130,10 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(formats["OP_TWIN"].runs_code)
         self.assertIs(formats["INSTRUMENTED_OP_TWIN"], formats["OP_TWIN"])
         out = io.StringIO()
+        analysis = self.analyze(input)
         ir_metadata_generator.generate_ir_metadata(
-            [self.temp_input_filename], self.analyze(input), out)
+            [self.temp_input_filename], analysis,
+            ir_generator.build_handler_domain(analysis), out)
         lines = {line.split(" = ", 1)[0]: line
                  for line in map(str.strip, out.getvalue().splitlines())
                  if line.startswith("[")}
@@ -1218,7 +1227,8 @@ class TestIRCases(unittest.TestCase):
         analysis = self.analyze(input)
         out = io.StringIO()
         ir_metadata_generator.generate_ir_metadata(
-            [self.temp_input_filename], analysis, out)
+            [self.temp_input_filename], analysis,
+            ir_generator.build_handler_domain(analysis), out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
         # The twin fires a monitoring event, so the family runs code
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
@@ -1258,9 +1268,10 @@ class TestIRCases(unittest.TestCase):
         }
     """
         analysis = self.analyze(input)
-        self.assertEqual(analysis.pseudos["JUMP"].opcode, 256)
-        self.assertEqual(ir_generator.first_ir_only_handler(analysis), 257)
-        self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"], 257)
+        domain = ir_generator.build_handler_domain(analysis)
+        self.assertEqual(domain.opmap["JUMP"], 256)
+        self.assertEqual(domain.first_ir_only, 257)
+        self.assertEqual(domain.handlers["IR_BACON"], 257)
 
     def test_binary_op_handlers(self):
         # BINARY_OP has one generic handler per operation, with the operation
@@ -1294,7 +1305,8 @@ class TestIRCases(unittest.TestCase):
         handlers = ir_generator.binary_op_handlers(analysis)
         self.assertEqual(handlers[0], "BINARY_OP_ADD")
         self.assertIn("BINARY_OP_SUBSCR", handlers)
-        ids = ir_generator.handler_ids(analysis)
+        domain = ir_generator.build_handler_domain(analysis)
+        ids = domain.handlers
         self.assertNotIn("BINARY_OP", ids)
         self.assertEqual(ids["IR_BACON"], 256)
         self.assertEqual([ids[name] for name in handlers],
@@ -1302,11 +1314,12 @@ class TestIRCases(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
         self.assertEqual(
-            ir_metadata_generator.shadow_of("BINARY_OP_ADD", analysis),
+            domain.shadow("BINARY_OP_ADD"),
             "BINARY_OP")
 
         out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        ir_generator.generate_ir([self.temp_input_filename], analysis,
+                                 ir_generator.build_handler_domain(analysis), out, False)
         code = out.getvalue()
         self.assertNotIn("TARGET(BINARY_OP)", code)
         generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
@@ -1320,12 +1333,118 @@ class TestIRCases(unittest.TestCase):
 
         out = io.StringIO()
         ir_metadata_generator.generate_ir_metadata(
-            [self.temp_input_filename], analysis, out)
+            [self.temp_input_filename], analysis,
+            ir_generator.build_handler_domain(analysis), out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
         self.assertIn("#define _PyIR_BINARY_OP_FIRST" + " " * 26
                       + "BINARY_OP_ADD", lines)
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
+
+
+class TestHandlerDomain(unittest.TestCase):
+    def analyze(self):
+        return analyzer.analyze_forest(parse_src("""
+            inst(NOP, (--)) { }
+            inst(POP, (value --)) { DEAD(value); }
+        """))
+
+    def test_capacity_without_large_tables(self):
+        for count in (1, 255, 256, 512, 65535, 65536):
+            with self.subTest(count=count):
+                ir_generator.check_handler_count(count)
+        for count in (0, -1, 65537):
+            with self.subTest(count=count):
+                with self.assertRaisesRegex(ValueError, "16-bit domain"):
+                    ir_generator.check_handler_count(count)
+        domain = ir_generator.build_handler_domain(self.analyze())
+        with self.assertRaisesRegex(ValueError, "16-bit domain"):
+            replace(domain, count=65537)
+
+    def test_absent_instrumented_pin(self):
+        # The legacy LINE pin reserves 255 without requiring its body in a
+        # minimal DSL. Previously the real instrumented handler became 256,
+        # outside the dispatch table or colliding with the first IR handler.
+        source = """
+            inst(INSTRUMENTED_TWIN, (--)) {
+                PRE_DISPATCH_GOTO();
+                DISPATCH_GOTO();
+            }
+        """
+        for extra, count in (("", 256),
+                             ("ir_only inst(IR_BACON, (--)) { }", 257)):
+            with self.subTest(ir_only=bool(extra)):
+                analysis = analyzer.analyze_forest(parse_src(source + extra))
+                domain = ir_generator.build_handler_domain(analysis)
+                self.assertEqual(domain.opmap["INSTRUMENTED_LINE"], 255)
+                self.assertNotIn("INSTRUMENTED_LINE", domain.handlers)
+                self.assertEqual(domain.handlers["INSTRUMENTED_TWIN"], 254)
+                self.assertEqual(domain.count, count)
+                if extra:
+                    self.assertEqual(domain.handlers["IR_BACON"], 256)
+                self.assertEqual(len(set(domain.handlers.values())),
+                                 len(domain.handlers))
+
+    def test_duplicate_id_rejected(self):
+        domain = ir_generator.build_handler_domain(self.analyze())
+        # An ID accidentally reused by the allocator must fail before any
+        # consumer can emit a plausible but ambiguous dispatch table.
+        opmap = dict(domain.opmap, NOP=domain.opmap["CACHE"])
+        handlers = dict(domain.handlers, NOP=domain.opmap["CACHE"])
+        with self.assertRaisesRegex(ValueError, "duplicate handler ID"):
+            replace(domain, opmap=opmap, handlers=handlers)
+
+    def test_derived_name_collision_rejected(self):
+        analysis = analyzer.analyze_forest(parse_src("""
+            ir_only inst(RESUME, (--)) { }
+        """))
+        with self.assertRaises(ValueError):
+            ir_generator.build_handler_domain(analysis)
+
+    def test_base_metadata_rejected(self):
+        domain = ir_generator.build_handler_domain(self.analyze())
+        bases = dict(domain.bases, NOP="MISSING")
+        with self.assertRaisesRegex(ValueError, "invalid handler base"):
+            replace(domain, bases=bases)
+
+    def test_consumers_reject_another_analysis(self):
+        analysis = self.analyze()
+        domain = ir_generator.build_handler_domain(self.analyze())
+        consumers = (
+            (opcode_id_generator.generate_opcode_header, ()),
+            (opcode_metadata_generator.generate_opcode_metadata, ()),
+            (py_metadata_generator.generate_py_metadata, ()),
+            (uop_id_generator.generate_uop_ids, (False,)),
+            (ir_metadata_generator.generate_ir_metadata, ()),
+            (ir_generator.generate_ir, (False,)),
+            (ir_generator.generate_ir_targets, ()),
+        )
+        for generate, extra in consumers:
+            with self.subTest(consumer=generate.__name__):
+                out = io.StringIO()
+                with self.assertRaisesRegex(ValueError, "different analysis"):
+                    generate(["test.c"], analysis, domain, out, *extra)
+                self.assertEqual(out.getvalue(), "")
+
+    def test_base_does_not_classify_specialization(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        kind = ir_generator.HandlerKind
+        for name, base in (("BINARY_OP_ADD", "BINARY_OP"),
+                           ("LOAD_ATTR_NOFB", "LOAD_ATTR"),
+                           ("INSTRUMENTED_LOAD_SUPER_ATTR_NOFB",
+                            "INSTRUMENTED_LOAD_SUPER_ATTR")):
+            with self.subTest(handler=name):
+                self.assertEqual(domain.bases[name], base)
+                self.assertNotEqual(name, base)
+                self.assertFalse(domain.kinds[name] & kind.SPECIALIZED)
+        self.assertTrue(domain.kinds["BINARY_OP_ADD_INT"] & kind.SPECIALIZED)
+        self.assertEqual(domain.bases["BINARY_OP_ADD_INT"], "BINARY_OP")
+        self.assertEqual(domain.bases["IR_JUMP"], "JUMP_FORWARD")
+        self.assertTrue(domain.kinds["INSTRUMENTED_LOAD_SUPER_ATTR_NOFB"]
+                        & kind.INSTRUMENTED)
+        self.assertTrue(domain.kinds["INSTRUMENTED_LOAD_SUPER_ATTR_NOFB"]
+                        & kind.NOFB)
 
 
 class TestRootCheckC(unittest.TestCase):

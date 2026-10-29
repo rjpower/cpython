@@ -4,10 +4,13 @@ Independent read-only source review, 2026-10-29. This is a development
 checkpoint, not landing approval. No H3 source, test, build or configuration
 was changed by this review; no native execution or tests were run.
 
-Final development verdict: **SOURCE_REVIEW_CLEAR** for refrozen manifest
-`54b2832334af6148e6852799333361e1e089ffc6fc7642dbec92503ab84084a9`.
-The one initial finding below is fixed in that reviewed delta. Runtime
-gates and landing evidence still require their separate review.
+Current development verdict: **SOURCE_REVIEW_CLEAR** for combined manifest
+`a6c07b4ce7b2932a82c2bc8bcc187f8940359fe1674951f075ee1b98773e8557`,
+production diff
+`b209836201b0fbdc9356dae76ec1fbe4a2e8fc259acc702be025ccfe6503abc6`.
+The earlier 54b source clearance and its initial finding/correction remain
+historical below. The applied eligibility follow-up is reviewed separately
+here; runtime gates and landing evidence still require their own review.
 
 Reviewed worktree: `boil-compiler-copyprop`, HEAD/baseline
 `878647973ba08be9f2c8e32e972504b507440b46` plus the frozen 12-file diff.
@@ -147,3 +150,99 @@ binary provenance require their later review at the refrozen identity.
 The earlier 603-manifest smoke/affected runs do not qualify the subsequent
 bookkeeping change. No runtime landing verdict is issued by this
 development review.
+
+## Applied eligibility follow-up
+
+The new executing private-flag regression exposed an inherited RESUME loop
+in the 54b/7c broad monitoring run: constructor code version zero differs
+from an advanced global version; force's intentional CO_NO_MONITORING_EVENTS
+no-op leaves it unchanged, and _MAYBE_INSTRUMENT redispatches the same word.
+That failed broad attempt and trace remain failures. Earlier bookkeeping
+clearance does not certify its execution or conceal that inherited loop.
+
+Coordinator approved property-based eligibility guards, not a version
+acknowledgment or a version-zero-only regression. The first two-guard
+proposal also missed monitor_handled: with a global EXCEPTION_HANDLED event
+and no local metadata it bypassed do_monitor_exc's property guard and could
+dereference NULL monitoring data. The approved third hunk closes that path.
+Exact reviewed proposal SHA256s:
+
+* `eligibility-proposal-v3.patch`:
+  `d5d88a7b8f8073af2c776955055f39127f19fd0c6d8b28fe85a2299aa2e2c717`.
+* `eligibility-proposal-v3.md`:
+  `b6541798db7aadea86eee2fa97ec78c925a12b4e66c539b2a49bae325ed53218`.
+
+The applied source matches these three hunks exactly. Removing the new
+guard text in memory recovers the old bytecodes.c and instrumentation.c
+hashes, the unchanged HEAD ceval.h, and the old generated cases after
+removing precisely two expansions. The complete live binary diff and all
+13 source hashes match combined-production.patch/combined-sources.json.
+Only test_monitoring.py, bytecodes.c, instrumentation.c, generated cases
+and the newly granted ceval.h differ from 54b; the other eight hashes match.
+No new CAPI hook, checker rule, handler ID or storage layout was added.
+
+The source conclusions are bounded:
+
+* _MAYBE_INSTRUMENT tests the flag inside the existing version-mismatch
+  condition, preserving the tracing and version-equality source fast paths.
+  Both RESUME expansions use it. Periodic checks and ordinary error/refresh/
+  redispatch behavior remain. No emitted-code or timing benefit is asserted.
+* instrument_lock_held returns on the property before version comparison or
+  its debug cross-check. This covers _Py_Instrument, generator.throw entry
+  and global executing-frame refresh without writing code version or
+  allocating/installing state. The actual const/shared _Py_InitCleanup
+  object remains untouched; its local setter shim rejection remains too.
+* The exact cold monitor_handled property return precedes global fallback
+  and callback dispatch. All other direct exception routes use the existing
+  do_monitor_exc guard: RAISE, RERAISE, PY_THROW, PY_UNWIND and STOP_ITERATION.
+  Instruction/line/jump/call/return/yield/resume callbacks require installed
+  instrumented handlers or their explicit opcode predicates. Pristine
+  admission rejects such wrappers and replacement constructs fresh words;
+  suppressed code cannot acquire them through the guarded force path.
+  Public Fire APIs use explicit PyMonitoringState/codelike, not frame
+  metadata, and are outside this execution eligibility rule.
+* Selected-local force calls still commit the configured request/tool
+  version with no installed state. No version acknowledgment, static write,
+  active-mask fiction or debug-sanity weakening substitutes for suppression.
+
+The three source regressions explicitly advance monitoring versions,
+exercise on-stack global refresh with unchanged suppressed state, execute
+yield/throw/close, and handle an exception without allocating local metadata.
+The last checks actual None before/after and pairs suppressed execution
+with an ordinary EXCEPTION_HANDLED callback that collects and must deliver.
+They preserve execution coverage rather than removing the failing call.
+
+I inspected the retained fixed probe and logs without executing them.
+Probe `4dee9c0f235f44fc0bd42469be80eeed53fedfb1764e5b642a82822a3468b52b`
+under recorder
+`e2333a581754a02745174958d6ae0fe04eab04530eb0c42afdc593c470687475`
+reaches the entry marker and exits 1 at its two-second watchdog on 7c.
+The same probe exits 0 on combined release binary
+`c96ddb788f3cbbda953abeb9ad879fd6e39e40fa49b91568622eb133c514814a`,
+reporting no suppressed events, ordinary instruction delivery and ordinary
+handled-exception delivery. Logs match their indexed hashes; each attempt's
+own before/after input map is unchanged (18 old inputs, 19 combined inputs).
+The timeout alone does not isolate the third guard; the separate no-local-
+metadata handled-exception regression supplies that path's runtime oracle.
+
+The copied-helper harness's first final attempt is an actual compile failure,
+not a successful negative control. Preserve old driver
+`fae5c2fac60d9dbc5e69867eb0b90ae69836f77e0543c2c354ea74d040537e1c`
+and its failed final-storage-default folder/log. Corrected driver
+`d211a146ecc4c9299c316ea974b8582d4ab8f44629f61367fa46aa7c6f2bc81a`
+uses explicit -std=c11, matching production Makefile's core language mode,
+and undefines NDEBUG before Python.h, matching _testinternalcapi.c's actual
+assertion context. Copied bodies and consumed header paths/hashes are bound;
+the dependency files select the copied header and actual build pyconfig.h.
+The final2 manifest
+`d53cbac4e2582b6f306891d257477b3fd80273f96c8215a921f3a88eb0e221a6`
+and logs show the positive execution succeeding and token truncation, line
+truncation and raw-alias variants failing their specific semantic assertions.
+Their compile steps succeeded; source/header/patch/output/dependency hashes
+match, and live input hashes are unchanged. This is a copied-helper control,
+not execution of a new high canonical production handler.
+
+SOURCE_REVIEW_CLEAR applies to this combined source only. Final release/Og,
+actual-kill, allocation/accounting, restoration and generation evidence must
+be reviewed at a6c/b209. No standalone prerequisite qualification or landing
+approval follows from combined-candidate results.

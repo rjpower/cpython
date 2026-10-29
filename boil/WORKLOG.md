@@ -3348,3 +3348,25 @@ setup failed under default GNU23, not a semantic negative pass; the untouched
 failed logs/helper are retained. Its versioned successor matches production
 C11/assert context without changing copied bodies or native source. Final
 controls and debug/kill qualification continue. Next report remains11:45 PDT.
+
+
+### 11:15 PDT: combined H3 source cleared; ROOTS diagnostic boundary
+
+Independent review96e493f68d59 clears H3 combineda6c/b209 source after verifying
+all13 live hashes, binary diff and exact reverse of the approved three guards,
+including both generated expansions. The new executing-code, generator.throw
+and no-local-data handled-exception controls preserve the intended oracles.
+The copied-helper C11/assert-context correction clears review: all positive
+compiles/runs succeed, and token/line narrowing plus raw-alias variants fail
+named semantic assertions. The earlier compiler setup failure remains failure.
+This is source/control clearance; final debug/kill/allocation/restoration gate
+evidence remains separate and native integration stays held behind ROOTS2b.
+
+ROOTS full now reports the same thread-pool task-reference failure in fork,
+forkserver and spawn. Python worker/result loops already clear task locals and
+support.gc_collect performs three collections; no forgotten-test-collection
+claim is supported. Owner prepares a bounded diagnostic, with independent peer
+review of observer-created reference/collection effects, before source edits.
+No debug diagnostic is queued behind the active same-build full lock. Source,
+helpers, failed full evidence and exact original assertion are preserved.
+Next hourly report remains11:45 PDT.

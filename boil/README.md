@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 11:12 PDT at integration merge 052d8342e56, shared
+revised 2026-10-29 11:15 PDT at integration merge 052d8342e56, shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 11:12 PDT; evidence is from local commits and retained logs.
+2026-10-29 11:15 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -162,7 +162,10 @@ The combined candidate is frozen at manifest a6c07b4ce7b2 for requalification;
 earlier evidence is not relabeled as final qualification. The exact same
 watchdog probe fails on the old release candidate and passes on the combined
 candidate, with ordinary and suppressed callbacks distinguished; broader
-combined-candidate gates remain pending.
+combined release smoke1,924/affected1,370 pass. Independent source review
+clears a6c07b4ce7b2, including the three guards and generated expansions.
+Copied-helper narrowing/alias controls fail their named semantic assertions;
+debug/kill and final evidence review remain pending.
 The H1 frame-passing design clears
 [bounded readiness review](design/work/reviews/H1-1-design-readiness.md),
 with source/build handoff required before implementation.

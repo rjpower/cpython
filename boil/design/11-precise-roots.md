@@ -669,8 +669,17 @@ Known exclusions, which are not 10a's:
   `byteswriter_check_consistency` assertion, and a segfault) and
   test_unicode `PyUnicodeWriterTest.test_write_char` (a segfault). 7a
   reproduced both without its changes on 10a's build/debug at 288a274f57c:
-  test_singletons 4 of 10, test_write_char 5 of 10. Both exclusions come
-  off when rung 3 roots the writer buffers.
+  test_singletons 4 of 10, test_write_char 5 of 10. 10a rung 2b's end
+  gate widened them (the coordinator, 2026-10-28) to `-i '*test_resize*'
+  -i '*Writer*' -i '*test_unicode.CAPITest.test_from_format'`. Run sequentially under
+  `PYTHON_GCSTRESS=1000`, test_capi failed in writer users that
+  `*WriterTest*` does not match: PyUnicodeWriterFormatTest's
+  `test_recover_error` (a segfault) and test_unicode's `test_from_format`
+  (an object corrupted after PyUnicode_FromFormat calls). The build
+  before rung 2b's item 6 fails the same way: test_capi.test_unicode at
+  N = 50 fails 3 of 3 on both builds. The segfault is a memory-safety
+  finding in the current tree, and it is rung 3's first item. The
+  exclusions come off when rung 3 roots the writer buffers.
 
   Also excluded under stress: test_gc's `*test_verify_kill*`, owner rung
   3. Its `kill:pymem` child traps when a collection lands inside

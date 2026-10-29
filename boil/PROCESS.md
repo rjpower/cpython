@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 09:45 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 09:48 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -86,7 +86,7 @@ The ASan filter names only the established failing AddressSanitizerTests
 case, retaining five passing same-named allocator tests. Launcher-only
 execution cleared independent review. Orchestration and gate integration
 remain outstanding in
-boil/tools/verification.md. The v2 identity/result component is in progress:
+boil/tools/verification.md. The v2 identity/result component landed as9dd24bf42c4 after independent review:
 explicit build-source/runtime/tool roots, actual imported origins and complete
 source/output bindings. Controlled clean052 smoke passes1,924/20skips,
 1,314collections/zero fallback;226unpinned hits are report-only. Its initial
@@ -96,8 +96,9 @@ supplement now bind all67 targets; independent metadata checks and command
 history establish no intervening output write. All seven bounded component
 positives pass, including exact off/kill,203-case module-order/5source skips,
 separate repetitions, cext16/7source skips and auxiliary kill. Seven isolated
-failure controls and11 evidence-corruption checks pass; final
-component review remains. This is not a named/full profile, current-ROOTS result
+failure controls and11 evidence-corruption checks pass. All105 indexed artifact
+hashes and six raw driver cohorts independently reconcile. This is not a
+named/full profile or current-ROOTS result
 or completed run/gate hook. Those remain separate.
 
 Standing concerns, with owners: conservative-retention artefacts in tests
@@ -194,7 +195,7 @@ The first wave resumes completed code rather than rebuilding it:
 
 | Lane | First assignment | Next boundary |
 |---|---|---|
-| compiler | Correctness/copyprop landed99435658509; reviewer now cleared manifest launcher component | Independent review of subsequent landing checkpoints |
+| compiler | Correctness/copyprop landed99435658509; verification identity/result component9dd24bf42c4 cleared and landed | Design-only pre-I linear-string concatenation; no source/test/benchmark changes until reviewed |
 | queues | Rung1 landed052d8342e56; round3 review and integration checks complete | Rung2a design/probes held by automatic classifier, including read-only handoff; preserve artifacts, do not retry stopped work elsewhere. Then2b owner metadata and2c retirement/adoption/fork; each gets a separate record and gate line |
 | roots | Reconcile integration tooling, finish rung-2b evidence and missing checks, prepare its landing review | Rung-2b landing. Then 10a-3a writers/PyMem first; 3b checker/precision residue; 3c buffer-release and swap paths after the relevant 7a changes. Removing conservative mitigations is a final proved step, not an assumption |
 

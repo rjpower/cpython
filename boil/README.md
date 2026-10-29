@@ -12,8 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 09:45 PDT at integration merge 052d8342e56, shared
-tooling e02e177903f, verification launcher 2db451b1b65, worker setup 093b9d2a1c3 and
+revised 2026-10-29 09:48 PDT at integration merge 052d8342e56, shared
+tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
+component9dd24bf42c4, worker setup093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -70,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 09:45 PDT; evidence is from local commits and retained logs.
+2026-10-29 09:48 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
@@ -155,8 +156,8 @@ aliases, without a new build. All seven bounded v2 positives now pass: off/kill,
 whole context/weakref modules, separate repetitions, one-worker cext and the
 auxiliary launcher. Exact existing source skips are recorded. Seven isolated
 failure controls and
-11 evidence-corruption checks also pass. Final component review remains; no
-named/full profile or run/gate hook is claimed. Shared worker-launch correction
+11 evidence-corruption checks also pass. Independent review cleared the
+component, landed as9dd24bf42c4. No named/full profile or run/gate hook is claimed. Shared worker-launch correction
 093b9d2a1c3 preserves regrtest's temporary cwd and exit timeout by calling
 worker.main().
 

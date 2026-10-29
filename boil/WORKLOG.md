@@ -3370,3 +3370,44 @@ review of observer-created reference/collection effects, before source edits.
 No debug diagnostic is queued behind the active same-build full lock. Source,
 helpers, failed full evidence and exact original assertion are preserved.
 Next hourly report remains11:45 PDT.
+
+
+### 11:28 PDT: task-root owner identified; H3 candidate preserved before union
+
+ROOTS debug full finishes with51,130tests/3failures/3,401skips, exactly the
+fork/forkserver/spawn thread-pool release-task-reference failures. Failure
+artifactfb74bc3f79da records nativeRC2/armerRC1,565actual driver/workers,
+66,950collections/zero fallback,4,009report-onlyunpinned and post-run unchanged
+source/native/helper bindings. Coordinator reads it independently. No qualified
+receipt exists and no chained kill/stress/full100k run starts.
+
+Independent peer clears bounded diagnostic18ffce654859, preserving the original
+failed comparison and a single pre-entry-prefix stack-hit snapshot before later
+inspection. Ten unmodified fresh fork-thread selections fail identically; the
+separate trace fails with zero dropped records. All three survivors have direct
+conservative stack hits at offset0 in the176-byte _PyParkingLot_Park frame,
+PCdebug/python+0x36b2fa, stack-hit IDs16–19. These IDs are not asserted to be
+exactly the test's three collections. Later frame locals remain supplementary.
+The owner audits disassembly and all park-argument/callback/caller contracts
+before a bounded fix. No production edit, blanket precision annotation or
+symptom-specific word clearing is approved yet.
+
+H3 storage code76274ed06ec and evidenceffc548603b8 are clean/pushed on boil/h3
+and boil/h3-monitoring-storage-land. Source a6c/b209 is unchanged; release and
+Og smoke1,924 each, affected1,370 each, actual-kill1,370 with11worker.main
+witnesses/839collections/zero fallback and unpinned all pass. Allocation, valid
+AST, synthetic lines, OOM/retry and copied semantic controls pass both builds.
+Regeneration/Clinic, frozen IDs,13marked-file C checker, traversal and19optional
+syntax checks complete; four header-unavailable modules remain untested.
+The earlier runpy audit-launcher import failure and corrected launch remain
+separate. Final evidence review proceeds on immutableffc, not a new native run.
+
+Ancestry corrects the coordinator's proposed safe tooling merge: common ancestor
+with primary64eb is6c724c29408, so H3 lacks queue052 native/test changes, not just
+9dd tooling. The merge was held before any action. Explicitly defer the normal
+primary merge until ROOTS2b settles, preserving the existing landing order and
+avoiding duplicate union qualification. Frozen H3 receipts qualify their own
+source only; final native union review/gates remain required. The owner may
+write stage2b3 raw-stats/handler-pair design only; sampler transport is separate,
+and no next H3 native work starts. H1 still waits for integrated generator/build
+handoff. Next hourly report remains11:45 PDT.

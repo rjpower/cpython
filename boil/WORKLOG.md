@@ -3136,3 +3136,37 @@ relations and prepare/commit implementation. First failing-control checkpoint
 is due within45minutes; full implementation estimate2–3hours before qualification.
 No native integration precedes ROOTS2b. String capacity/ABI audit continues
 without native changes. Next hourly report remains about10:45 PDT.
+
+
+### 10:25 PDT: full-suite observer repair; old monitoring controls
+
+ROOTS release-full reports native SUCCESS:51,130tests/3,458skips,564 returned
+modules (94 whole-module skips,8 resource-denied),4m11. Qualification then
+correctly rejects an unaccounted skip count; no result receipt or stress11
+run follows. The original attempt, helpers and c9e plan remain preserved.
+Two independent agents trace the mismatch to inner TestResult objects used
+by meta-tests: doctest4/15, support3/6, unittest2/48, zipimport_support0/7
+(reported skips/raw addSkip events), exactly67 excess events overall.
+No native failure is established and no qualification PASS is claimed.
+
+Existing rows lack result identity, so re-audit cannot prove exact outer
+membership. The reviewed repair direction uses separate full-only helpers,
+captures the actual scheduled test_func result before stats conversion, and
+binds raw events with monotonic weakref-backed result tokens. This avoids
+address reuse and retaining inner results. Exact outer counts/skips and all32
+protected-selector checks remain; no >= rule or per-module exception.
+Draft helper/plan/control review precedes one fresh full rerun. The four
+matrix helpers and native8ce stay frozen while debug continues.
+
+H3 design/evidence commit878647973ba is pushed. Six bounded old-control children
+finish on release/Og: same-event and cross-event additions both lose tool A's
+existing INSTRUCTION sites; local setter OOM raises but changes requested
+mask0 to96. All are semantic assertion failures on both builds. Native
+implementation now begins under the already reviewed bounded grant.
+
+String storage audit73fae302 is retained with its frozen parent. It identifies
+explicit Unicode flag initialization/accounting, writable-writer/resize
+exclusions, ASCII-to-Latin-1 header changes, permanent metadata after seal,
+and pre-CREATE certificate publication. This is source evidence, with no
+string native execution or implementation approval. S1 shadow tracking is
+a development checkpoint, not an independent production overhead landing.

@@ -2595,3 +2595,51 @@ The bounded reorder moves forward from3a into2b. The PyMem assertion is
 being corrected to require its origin on the same killed-list report line
 whether first or supplemental; old-helper failure remains required.
 No O1 adoption or ROOTS landing is claimed.
+
+## 2026-10-29 07:41 PDT: second hourly coordinator update
+
+QUEUES remains frozen at 5cc31bacee1. Full debug kill passes 51,104 tests,
+65,601 collections and zero fallback; 3,764 unpinned words are reported,
+not a suite failure. The explicit 14 ASan inputs expand to 24 test files:
+3,589 tests/90 skips pass in 6m43s with only the established exact overflow
+case excluded. The original unfiltered ASan smoke remains FAIL. Three
+debug subprocess runs pass 371 each. Stress11/probes and landing review
+remain; no queue-runtime landing is claimed.
+
+ROOTS provenance/list-transfer fix 82165f8a2a9 is committed and reconciled
+with integration as 0b13048a633. The list reorder passes ten fresh children;
+the original traps ten of ten. The corrected origin assertion accepts the
+fixed supplemental-origin report and rejects the retained old-helper
+report. Moving the zero-seed return before sorting fails both fixture
+orderings. Merged O1 bounded checks pass: smoke 1,924, affected modules 186,
+plain-kill focused 51, checker 41 files/five negative controls, compiled
+inline audit and stale100 off/kill with 705 collections each and zero
+fallback/unpinned. Actual driver/worker records agree with required
+states. The first full 31-case/11-module iteration is running; its cost and
+remaining 19 iterations precede an O1 adoption decision and final gates.
+
+H3 stage1 code cleared independent review. Its corrected saved runner
+uses copied generators/inputs, verifies copied module paths and hashes in
+actual driver/workers, has a timeout and removes its scratch tree. The
+positive seven tests and all seven deliberately broken variants meet their
+oracles; live Og debug generator tests pass 62. It explicitly handles
+regrtest's platform-reporting auxiliary call. Final commit and integration
+checks follow; stages2–4 remain open. Stage1 is independently landable
+tooling with byte-identical products, not proof of runtime domain closure.
+
+Registry/validator/plan-display stage1 landed as fff4e0e9b08 after coordinator
+review. Seven safety-control groups and actual normalized case inventory
+validation pass; 15 profiles are defined. Review narrowed the ASan filter
+to preserve five passing same-named allocator tests and distinguished the
+raw discovery log from normalized inventory. Execution is not implemented.
+ROOTS will prepare launcher contracts first, then orchestration/gate hook,
+without delaying its runtime qualification. Integration and ROOTS heads
+through fff4/0b130 are pushed; no permission hold remains.
+
+Checkpoint I must bind both C and standard-library sources to frozen
+upstream/fork revisions. Retained baseline 15e96bf639d differs from
+upstream 321925c92c9 only by a worklog, but its configured source path is
+the active fork. This binding must be established before new parity
+measurements; historical records are preserved. Next hour: finish queue
+stress/probes and review, integrate H3 stage1, obtain ROOTS matrix cost,
+and qualify the manifest launcher. Next hourly update about 08:45 PDT.

@@ -12,8 +12,8 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 07:30 PDT at integration merge 99435658509, shared
-tooling e02e177903f, stress-state prerequisite 02bcd2f6132 and
+revised 2026-10-29 07:41 PDT at integration merge 99435658509, shared
+tooling e02e177903f, verification registry fff4e0e9b08 and
 the three active step worktrees. This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -69,14 +69,14 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 07:30 PDT; evidence is from local commits and retained logs.
+2026-10-29 07:41 PDT; evidence is from local commits and retained logs.
 
 | Done | In flight | Open |
 |---|---|---|
-| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 at 5576cdbd755: combined default/debug full suites at d43c8b4dd32 pass, 51,102 each and zero fallback; shared stress-state prerequisite integrated; remaining kill/ASan/stress gates in progress | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at d65a03fc96c plus verifier-origin repair/fixture under validation; permission context synchronized, no approval hold remains; final checks and landing review pending | 10a 3a writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers | 7a rung 1 at 5cc31bacee1: normal suites pass 51,102 each at d43c8b4dd32; full debug kill passes 51,104 with zero fallback; ASan14 passes 3,589 with its exact exclusion; three subprocess runs pass 371 each; stress11/probes and review remain | 7a rung 2a safety/completion order, 2b owner metadata, 2c retirement/adoption/fork; design and probes only |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b at 0b13048a633: provenance repair and list-transfer lifetime fix committed as 82165f8a2a9, integration reconciled; bounded O1 checks pass; first complete reclamation iteration running; final checks and review pending | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H3-1 stage1 at e7cc59743e1: independent review clears generator refactor and byte-identical products; saved control runner needs isolation fix before landing | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28) | H3-1 stage1 at e7cc59743e1 plus runner fixup: code review clears the refactor; isolated positive and seven negative controls pass their oracles; final commit/landing pending | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -110,7 +110,8 @@ oracle must retain all distinct origins; its assertion must accept PyMem
 as either the first or a supplemental origin on the same report line.
 Further O1 checks exposed a real list-to-tuple lifetime bug: clearing the
 list before tuple allocation removes its element roots. A minimal reorder
-is being validated in rung 2b, brought forward from rung 3a.
+is committed in rung 2b, brought forward from rung 3a. All ten fresh
+reproductions pass after the fix; the original failed ten of ten.
 `-O1` has not been adopted. Integration
 debug validation still uses `-Og`. Release measurements and sanitizer
 coverage remain required.
@@ -123,8 +124,10 @@ Loom and GitHub use are explicitly authorized; integration through
 exposes actual stress state and restores the prior interval after the
 reftracer fixture; integration smoke passed 1,924 tests per build, focused
 state tests passed on both, and debug kill/stress checks passed. The
-verification manifest has an uncommitted validator and plan display;
-execution and numeric-gate integration remain unfinished.
+verification registry, validator and plan display are landed as
+fff4e0e9b08: 15 profiles, seven safety-control groups and actual case
+inventory validation pass. Execution and numeric-gate integration remain
+unfinished; the roots agent is preparing a separate launcher checkpoint.
 
 Opcode categories will use explicit generated properties. H3 removes
 inherited numeric category cutoffs such as HAVE_ARGUMENT; instruction

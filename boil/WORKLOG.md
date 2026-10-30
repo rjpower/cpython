@@ -5066,3 +5066,40 @@ the status report inventories seven shared directions. Tests continue to
 favor observable lifetime, data and resource behavior, with focused critical
 invariant units. Qualified GC is landed and unchanged; no new runtime patch
 is part of this performance/documentation checkpoint.
+
+### 14:27 PDT: current GC costs and experiment closure decisions
+
+Four once-only current-source counter windows pass on unchanged qualified
+release products. Timed GC/wall is47.1% coroutines,54.1% comprehensions,
+29.7% generators and0% Richards. Mark/root closure is8.0%/3.7%/10.8%/0% of
+wall and already inside GC, not extra root-discovery time. All modes are
+off/extras0/N0, all native/cleanup checks pass, zero fallback. The existing
+probe and50-call hot budget are unchanged; no threshold or code change.
+
+One whole-process coroutine profile adds2,124 software CPU samples with zero
+lost events and successful cleanup. It includes setup/warmup/shutdown, not
+an exact hot window. Collector share45.76%, heap classification8.47% and
+sweep10.40% are overlapping inclusive figures. Source-correlated samples
+show repeated dead-object flag/eligibility checks, weakref handling and an
+all-dead buffer-retention scan. Finalizer-order time is mostly eligibility
+rejection, not evidence that ordering graphs dominate. Some libc symbols are
+unresolved; sampled lines are not exact instruction costs.
+
+Index40e9ea00 binds33 artifacts; root independently rehashes every artifact
+and recomputes all four GC fractions from raw snapshots. The
+[assessment](design/work/pre-I-gc-policy-and-experiment-decisions.md) compares
+the policy with BDWGC/Go/Lua primary descriptions. Selective death processing
+is now the first source-backed code candidate: actual work eligibility and
+stage subsets, preserving resurrection/readiness/ordering/OOM semantics.
+Budget sensitivity remains a diagnostic, not an assumed fix. No optimization
+was implemented or speedup claimed.
+
+The [inventory](design/work/worktree-closure-plan.md) classifies39 physical
+worktrees:22 landed copies,8 intentional negative controls,1 deferred foreign
+topic,2 dirty historical trees and6 retained including the repository anchor.
+H1 is tail-only and unmeasured, so select archival for this GCC milestone.
+H2 has no immediate consumer, so archive its tested partial patch rather than
+merge unused code. Target three operational checkouts plus the Git anchor;
+retain required receipts/refs first and handle the identified dirty/shell/
+ambient-build exceptions separately. No worktree/ref was removed or runtime
+experiment merged in this cycle. Unrelated user changes remain untouched.

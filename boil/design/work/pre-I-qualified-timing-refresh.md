@@ -115,7 +115,9 @@ The old ce2ac score0.828243 and GC-heavy profiles are historical hypotheses,
 not current ratios or promised generation savings. The [new result](pre-I-post-GC-timing.md)
 supports the bounded32/64MiB existing-budget question in the
 [first-slice proposal](pre-I-first-slice-decision.md#bounded-next-question-existing-gc-budget).
-Reuse
+Subsequent [current cost attribution](pre-I-gc-policy-and-experiment-decisions.md)
+points to selective death processing as the first code candidate; the budget
+question remains a diagnostic of amortization and memory cost. Reuse
 [setup/warmup/hot-window attribution](pre-I-shared-cost-attribution.md) on
 three persistent regressions and one object/allocation control. Separate
 elapsed timing from profiling. Existing release GC time/candidates/bytes,

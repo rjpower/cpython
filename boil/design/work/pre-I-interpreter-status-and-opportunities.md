@@ -24,8 +24,10 @@ unfinished boundaries between those layers: native self/slot interfaces,
 frame transitions and initialized root spans, and complete final-word effects.
 Those deserve shared solutions before adding unrelated fast paths. The
 [first-slice decision tree](pre-I-first-slice-decision.md#evidence-based-decision-tree)
-chooses among existing GC-budget sensitivity, matched dispatch/H1, numeric
-NOARGS and producer facts using current shared cost. NOARGS is not automatically
+prioritizes selective collector death processing from current cost evidence;
+budget sensitivity remains a diagnostic, with numeric NOARGS and producer
+facts conditional on their own attribution. H1 reopens only for an active
+Clang-tail target. NOARGS is not automatically
 first; an ABI expansion needs conversion attribution and measured benefit. Existing
 typed handlers are useful implementation structure, but do not yet constitute
 one orthogonal parameterized operation model.
@@ -93,10 +95,11 @@ transport/renumbering and typed operations remain. See
 runtime checks and strict stale controls exist; old combined harness receipts
 have an informational platform-header limitation. Static code changes are
 mixed, and no elapsed benefit is measured. Its matched Clang experiment is
-parked during GC. See [H1 record](H1-1.md) and
+selected for archival for the current GCC milestone. See [H1 record](H1-1.md) and
 [passed-frame readiness](H1-passed-frame-readiness.md).
 
-**H2 is isolated and inert**, native5df336 with test-only parser bridgeb3e6847.
+**H2 is isolated and inert**, selected for archival rather than a merge without
+a consumer; native5df336 with test-only parser bridgeb3e6847.
 Its generated scalar-temporary decoder supports27 pristine handlers and
 explicitly rejects126 unsupported ones. Corrected release/debug-kill affected
 validation exists; original parser failure remains preserved. It changes no
@@ -154,8 +157,8 @@ on matched nonstats release products.
 | 1. Close value/native boundaries | `binaryfunc` remains object/object→object; native self boxes in generic and specialized numeric methods/getsets. Other slot wrappers, Clinic residue and native fields add distinct conversions. | Extend declared callback/slot conventions in place, with matching wrappers, Clinic generation and specialized dispatch. Preserve values until an actual object consumer requires a box. A numeric NOARGS receiver slice is finite; bound-method storage/getsets remain explicit separate closures. | All generic/specialized/escaped routes must agree on ABI, wrong-receiver/error order and roots. Preserve raw box roots when the callback actually needs the box. Recount actual box sites/allocations, then elapsed work; no bit_length-only intrinsic. [Receiver audit](pre-I-inline-receiver-audit.md), [value ingress](pre-I-value-ingress-audit.md), [note12](../12-object-slots-on-values.md). |
 | 2. Simplify frame/call/resume transitions | Historical generator samples concentrate in SEND/YIELD/dispatch; coroutine work includes frame traversal and return-slot movement. Python calls, native calls, throw/close and suspended frames have related but distinct handoffs. | Treat create/enter/resume/return/unwind as one explicit initialized-state protocol, then remove redundant adaptation or allocation only where that protocol proves it unnecessary. Keep specialized direct frame entry and generic fallback coherent. | Current frame/exception/IP publication, escaped frame introspection, PEP523, monitoring, recursion and error spans must remain correct. Measure frame creation versus hot resume separately. Do not optimize a required state store away because a source sample landed there. [Handler contract](../14-handler-contract.md), [attribution](pre-I-evaluator-source-attribution.md). |
 | 3. Make operation families orthogonal | Existing macros reuse guards/bodies, but semantics, receiver/storage/result facts and feedback mode are not one explicit family contract. Adding more one-off targets risks repeating dispatch and root logic. | Define operation plus independent admission/representation/call-mode dimensions in the existing DSL and derive concrete targets/metadata from that one declaration. Retain the existing word format unless actual constraints justify changing it. LOAD_ATTR int32/float/string/object modes must state whether they mean stored representation, checked result or observation. | Each admitted combination needs exact guard/fallback/error/monitoring/root behavior; unsupported combinations are rejected. Compare generated coverage and native code size. Parameterization should reduce duplicated semantics, not generate every Cartesian combination or a second opcode/effect inventory. H3 properties are the starting point, not a numeric handler quota. |
-| 4. Complete H2 before retiring clearing | Scalar effects are partial; frame clearing/root scans still cover live state. Removing stores based on virtual registers or ordinary CFG alone would miss physical rewrites and transition windows. | Finish the generated final-word effects/CFG/liveness producer first, validate independently against compiler projection, then migrate readers and publication one contract at a time. | Exception edges, aliased physical slots, relaxed SEND/FOR_ITER, replacement handlers, created/suspended/escaped frames and raw call windows must all be covered. No all-slots "map" success, unsupported-opcode acceptance or activation of incomplete maps. Only then compare clearing/scanning cost and RSS retention. [H2 review](reviews/H2-root-effects-source-review.md), [note14](../14-handler-contract.md). |
-| 5. Test dispatch and feedback costs coherently | Historical generator evaluator samples include dispatch; Richards includes feedback addressing/shape matches. Current tail handlers reload frame. | Use the existing same-Clang goto/tail and H1 passed-frame comparisons, then inspect shared feedback/addressing and call boundaries if a measured deficit remains. Prefer one convention over permanent dual machinery. | Match compiler/flags/backend/root contracts, retain diagnostic IP publication, inspect spills/code size and elapsed distributions. GCC non-tail versus Clang tail confounds compiler and topology. A sample on a landing pad is not its exact instruction cost. No local fusion solely to improve one row. [H1](H1-1.md), [offline join](pre-I-evaluator-source-attribution.md). |
+| 4. Complete physical liveness before retiring clearing | Scalar effects are partial; frame clearing/root scans still cover live state. Removing stores based on virtual registers or ordinary CFG alone would miss physical rewrites and transition windows. | For a scheduled usable slice, reuse archived H2 work to finish generated final-word effects/CFG/liveness, validate against compiler projection, then migrate readers/publication one contract at a time. | Exception edges, aliased physical slots, relaxed SEND/FOR_ITER, replacement handlers, created/suspended/escaped frames and raw call windows must all be covered. No all-slots "map" success, unsupported-opcode acceptance or activation of incomplete maps. Only then compare clearing/scanning cost and RSS retention. [H2 review](reviews/H2-root-effects-source-review.md), [note14](../14-handler-contract.md). |
+| 5. Test dispatch and feedback costs coherently | Profiles include evaluator work; Richards includes feedback addressing/shape matches. Current tail handlers reload frame. | Inspect current-backend feedback/addressing and call boundaries where measured. Reopen same-Clang H1 comparisons only for an active tail-backend decision. Prefer one convention over permanent dual machinery. | Match compiler/flags/backend/root contracts, retain diagnostic IP publication, inspect spills/code size and elapsed distributions. GCC non-tail versus Clang tail confounds compiler and topology. A sample on a landing pad is not its exact instruction cost. No local fusion solely to improve one row. [H1](H1-1.md), [offline join](pre-I-evaluator-source-attribution.md). |
 | 6. Make proven private string appends linear | Flat immutable strings plus no refcounts leave local repeated append without a refcount-based uniqueness test. | Use a certified nonescaping local append epoch and geometric capacity while preserving ordinary flat string representation. Publication/aliasing seals the epoch. Reuse the proposed code-owned proof/activation owner, not ropes or speculative universal uniqueness. | Complete escape/join/exception/overwrite/final-word admission and owner-generation proof; preserve lazy exec and all storage observers. Initial shared prefixes need a fresh private result; in-place continuation needs the same valid transaction, not any old pointer. Scaling and alias negatives decide value. [Design](pre-I-linear-string-concat.md), [proof/owner prerequisite](pre-I-linear-string-proof-owner.md). |
 | 7. Reduce shared allocation/GC work | Historical coroutine/comprehension/generator windows spend substantial time collecting and processing dead objects, while Richards has no hot collections. | First test the existing allocation-budget control on unchanged qualified source with a declared memory allowance; also scrutinize shared frame/allocation churn. Consider nonmoving generations only after real owner/store/barrier coverage. Reuse existing queue/root contracts rather than add another resource scheduler. | Old→young barriers, partial constructors, opaque roots, promotion/reentry and an independent full-young oracle must close. Record candidates, survival, death work, RSS and pauses. Generations do not remove inevitable dead-object bookkeeping or C ABI boxes. [Generations design](7-nonmoving-generations-design.md) and its store ledgers remain prerequisites, not implementation. |
 
@@ -189,6 +192,14 @@ heap expansion has a well-known precedent in the
 proposed controlled question, not a threshold recommendation or speedup claim.
 
 ## What the measurements actually establish
+
+Fresh [cost attribution](pre-I-gc-policy-and-experiment-decisions.md) records
+timed GC shares47.1%/54.1%/29.7%/0% for coroutines/comprehensions/generators/
+Richards. Mark/root closure is8.0%/3.7%/10.8%/0% of wall time and already
+included in GC. A whole-process coroutine profile implicates heap
+classification, sweeping and repeated lifetime eligibility checks; the first
+code candidate is selective death processing, with all existing semantics
+preserved. No source optimization or budget change has run.
 
 The new matched eval-nogcse [29-row diagnostic](pre-I-post-GC-timing.md) reports
 **0.8242992363 upstream/fork**,21 slower rows and eight faster. Coroutines0.4489,
@@ -226,8 +237,9 @@ Do not attribute the aggregate difference from historical ce2ac to GC: both
 fork source and the upstream ceval-flag cohort changed, and the old fork was
 unqualified. The [next bounded proposal](pre-I-first-slice-decision.md#bounded-next-question-existing-gc-budget)
 compares existing32/64MiB allocation budgets on unchanged qualified products,
-with collection/death/root work, RSS and pauses, before generations or numeric
-ABI work. This document authorizes no experiment. Roughly2× remains a soft
+with collection/death/root work, RSS and pauses. It remains a useful diagnostic;
+the fresh profile makes selective death processing the first source-backed
+code candidate. No generation or numeric ABI is selected. Roughly2× remains a soft
 guide. Keep a proposed change only when
 its shared design is simpler or its measured benefit pays for its complexity;
 preserve a clean negative result instead of adding exceptions until it wins.

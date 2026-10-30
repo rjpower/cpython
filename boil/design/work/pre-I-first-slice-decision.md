@@ -13,21 +13,25 @@ uses the [status report](pre-I-interpreter-status-and-opportunities.md),
 conditional on current shared-cost evidence and measured benefit; roughly2×
 is soft guidance, not an acceptance threshold.
 
-**Next proposed question: existing GC-budget sensitivity.** The new elapsed
-diagnostic retains large generator/coroutine/comprehension deficits, but does
-not attribute their current cost. Compare one larger allocation budget on
-unchanged qualified products before introducing generations or a numeric ABI.
+**First source-backed code candidate: selective death processing.** Fresh
+[counter windows and a coroutine profile](pre-I-gc-policy-and-experiment-decisions.md#why-the-fork-is-slower)
+show substantial GC cost outside mark/root closure, including repeated
+eligibility checks and passes over unrelated dead objects. Refine actual work
+eligibility and stage subsets before introducing generations or a numeric ABI.
+The existing-budget sensitivity below remains a diagnostic of amortization
+and memory cost, not the selected explanation or a forecasted fix.
 The finite NOARGS closure remains a candidate whose ABI cost needs a current
-conversion budget. The prepared matched H1 comparison follows if non-GC
-resume/dispatch cost remains the discriminating question. None is an automatic
+conversion budget. H1 is selected for archival for the current GCC milestone;
+its matched comparison becomes relevant only if Clang tail dispatch is an
+active target. None is an automatic
 implementation or experiment grant.
 
-## Three choices
+## Shared interpreter choices after the collector cost question
 
 | Choice | Source-backed opportunity | Smallest coherent boundary | Why choose or defer |
 | --- | --- | --- | --- |
 | Numeric NOARGS value receiver/result | Generic descriptor calls box inline self in `method_check_args`; specialized NOARGS calls explicitly root a new object box, then canonicalize the object result. Stored bound methods have a separate object-self storage box. | One declared value-self/value-result NOARGS callback convention, all18 int/float instance entries, generic/unbound/specialized/escaped call routes, Clinic and shared implementation adapters. Getsets, classmethods, other argument conventions and bound-method storage stay separate. | Choose only if current receiver conversions materially contribute. Eighteen is the actual finite entry set, not an optimization quota; the ABI closure must earn its cost. |
-| Shared frame/call/resume transitions | Historical generator/coroutine samples expose dispatch, return-slot movement, traversal and frame transitions. Direct Python frame entry already exists. | The already-isolated H1 passed-frame experiment is finite; broader create/enter/resume/return/unwind consolidation is not yet one bounded patch. | Use H1's matched result first. Do not redesign transitions or delete required IP/exception/root stores from source-line samples. Larger frame/allocation work needs a current shared-cost attribution before choosing its slice. |
+| Shared frame/call/resume transitions | Generator/coroutine profiles expose evaluator and frame movement costs alongside GC. Direct Python frame entry already exists. | Select a bounded current-GCC call/frame intervention from actual profiles; H1 is a separate archived Clang-tail experiment. | Do not redesign transitions or delete required IP/exception/root stores from source-line samples. Separate frame creation, copying and resume cost before choosing the slice. |
 | Generated producer/consumer facts | A shape load already copies one64-bit value. Slot kinds promise I32/F64/any-value, but following numeric guards do not consume that promise. Specialized int/float comparisons produce canonical bools; generic rich comparison need not. | First prove a one-use canonical-BOOL producer/consumer contract with unchanged two-word/IP/monitoring boundaries; no general typed IR or H2 activation. | Choose if repeated guard work is material and all entries, generic fallback, exceptions, debugger jumps and instrumentation establish the fact. Typed LOAD_ATTR alone saves no payload load or boxing. Avoid dependent unchecked consumers before that proof. |
 
 The first column identifies mechanisms; any elapsed benefit remains a
@@ -38,8 +42,9 @@ correctness requirements rather than optional performance assumptions.
 
 | Current matched evidence | Smallest next question | Minimum attribution |
 | --- | --- | --- |
-| Collection remains a large shared cost | Existing allocation-budget sensitivity on unchanged qualified source, before new barriers or ABI work | Collection/root/death work, elapsed time, RSS and pauses within a declared memory allowance. The current budget is already `max(configured_floor, live_object_bytes)`, with a32MiB default floor; larger budgets cannot remove required death processing. |
-| A non-GC generator/coroutine deficit remains | Existing matched dispatch/H1 comparison before broader frame/resume redesign | Separate frame creation/allocation from hot resume/dispatch. Required exception, return-slot and IP stores are not redundant merely because they appear in samples. |
+| GC cost is largely outside mark/root closure | Actual cleanup eligibility and selective stage traversal, with budget sensitivity as a control | Preserve weakrefs, finalizer ordering/resurrection, buffer readiness and OOM rollback; measure reclamation work and elapsed cost. |
+| Repeated tracing work or collection frequency is material | Existing allocation-budget sensitivity before new barriers | Collection/root/death work, elapsed time, RSS and pauses within a declared memory allowance. The current budget is already `max(configured_floor, live_object_bytes)`, with a32MiB default floor; larger budgets cannot remove required death processing. |
+| A non-GC generator/coroutine deficit remains | A bounded current-backend call/frame investigation before redesign; H1 only for an active Clang-tail target | Separate frame creation/allocation from hot resume/dispatch. Required exception, return-slot and IP stores are not redundant merely because they appear in samples. |
 | Numeric receiver conversions materially contribute across workloads | Closed18-method NOARGS convention | Current receiver-box/site counts separated from legitimate results and escaped bound-method storage, followed by matched release benefit and code-cost review. |
 | Repeated guard work remains material | One canonical-BOOL producer/consumer proof | Eligible producer/consumer pairs and emitted guard instructions, preserving alternate entries and monitoring. |
 

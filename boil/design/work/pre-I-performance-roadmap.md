@@ -248,17 +248,18 @@ at call and C-API boundaries. Require measured box-site removal and broad
 release benefit, not just a faster isolated helper. This lane can overlap
 handler work where file ownership and interfaces are distinct.
 
-**5. Make the generated interpreter cheaper under one protocol.** First run
-the bounded H1 frame-passing experiment against an identical parent build,
-including all handler entries, predicted dispatch, error paths and callbacks.
-Keep it only if release elapsed time improves without harmful spills/code-size
-growth. It is the smallest historical handler cost, not the central 2× theory.
-Then simplify canonical numeric guards and fix demonstrated register-base
+**5. Make the generated interpreter cheaper under one protocol.** Use
+current-backend profiles to choose a dispatch change. H1 is selected
+for archival because it affects Clang tail dispatch, not the measured GCC
+interpreter. Reopen its bounded comparison only for an active tail-backend
+decision, preserving handler entries, prediction, errors and callbacks.
+Simplify canonical numeric guards and fix demonstrated register-base
 spills. Generated properties and coherent calling conventions apply to all
 handlers; do not add benchmark-specific variants. Keep per-word diagnostic
 position publication and eval-breaker behavior.
 
-After precise readers/spans are ready, H2 derives physical-slot liveness from
+After precise readers/spans are ready, a usable liveness slice can reuse the
+archived H2 decoder work to derive physical-slot liveness from
 the final IR, including synthetic jumps and normal/exception/suspend edges.
 Validate construction and live-root/retention negatives before removing GC-only
 clearing stores. All frame readers must respect the map; arbitrary code
@@ -304,11 +305,13 @@ choose the next coherent change without an open-ended score-chasing loop.
 **Coordination.** The coordinator owns comparison policy, reservations and
 integration. GC qualification and post-merge smoke are complete. Current work
 interprets the [completed matched29 diagnostic](pre-I-post-GC-timing.md);
-the next proposed question is bounded existing-budget sensitivity, not an
-automatic experiment. Further quiet work requires review and reservation.
+fresh cost attribution prioritizes selective collector death processing, with
+existing-budget sensitivity retained as a diagnostic. Further quiet work
+requires review and reservation.
 H1 frame passing has isolated native/runtime evidence but
-no elapsed benefit; the informational header-harness limitation stays named.
-H2 remains an inert partial decoder, not active maps or clearing. H3 is landed.
+no elapsed benefit; it and H2 are selected for archival for this GCC milestone.
+H2 has no current consumer. A future usable liveness slice can reuse its patch;
+H3 is landed. The informational H1 header-harness limitation stays named.
 No numeric NOARGS ABI or other prospective source recommendation is implemented.
 
 Full suites and perf-sensitive walks serialize because they share perf-map

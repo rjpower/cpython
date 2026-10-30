@@ -229,7 +229,7 @@ The first wave resumes completed code rather than rebuilding it:
 
 | Lane | First assignment | Next boundary |
 |---|---|---|
-| compiler | Reentrancy/copyprop99435658509 and shared verification components landed; H3 qualified in d6a23 | H1/H2 isolated with bounded evidence. Timing parked. Detailed interpreter report and holistic operation-family reflection follow GC fixes |
+| compiler | Reentrancy/copyprop99435658509, shared verification and H3 landed; matched post-GC elapsed baseline and current cost attribution complete | H1/H2 selected for archival for current GCC milestone. Reuse their patches only for a scheduled backend/liveness slice; selective collector death processing is the first source-backed performance candidate |
 | queues | Supported single-drainer/readiness policy is qualified and integrated75e8; old failure and causal controls retained | No supported callback-completion blocker remains. Foreign/adoption, parallel callback progress and repeated interpreter lifecycle remain deferred; no generic completion DAG |
 | roots | ROOTS/writers and supported snapshot/buffer repairs are integrated through75e8 | Preserve hybrid coverage. Complete separately named reader/checker/PyMem precision and platform work before removing conservative roots; no full-suite pass substitutes for that proof |
 
@@ -1061,7 +1061,10 @@ The ordinary fork O3 products are reused with their actual native/runtime
 bindings. The [elapsed record](design/work/pre-I-post-GC-timing.md) reports
 0.824299 upstream/fork; independent review passed; no ABI implementation
 or new H1/H2 landing is claimed. H3 is landed; H1 frame passing and the inert H2 decoder
-remain isolated. The [status report](design/work/pre-I-interpreter-status-and-opportunities.md),
+remain isolated and are selected for archival for the current GCC milestone.
+Fresh [cost attribution and closure decisions](design/work/pre-I-gc-policy-and-experiment-decisions.md)
+prioritize selective death processing; budget sensitivity remains a diagnostic.
+The [status report](design/work/pre-I-interpreter-status-and-opportunities.md),
 [first-slice decision](design/work/pre-I-first-slice-decision.md) and
 [timing plan](design/work/pre-I-qualified-timing-refresh.md) precede new shared
 interpreter work. Roughly2× remains soft guidance, not a numerical gate.

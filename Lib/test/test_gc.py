@@ -49,6 +49,19 @@ def _gc_mode_checked(code, mode):
             "_testinternalcapi.gc_verify_mode()\n" + code)
 
 
+def _assert_debug_output(code):
+    mode, extras = _testinternalcapi.gc_verify_mode()
+    verify = ("", "retain", "kill")[mode]
+    if extras:
+        verify += ":" + ",".join(
+            name for bit, name in ((1, "pymem"), (2, "structs"))
+            if extras & bit)
+    prelude = ("import _testinternalcapi\n"
+               f"assert _testinternalcapi.gc_verify_mode() == {(mode, extras)!r}\n"
+               "assert _testinternalcapi.gc_get_stress() == 0\n")
+    return assert_python_ok("-c", prelude + code,
+                            PYTHON_GCVERIFY=verify, PYTHON_GCSTRESS="")
+
 ### Support code
 ###############################################################################
 
@@ -1659,7 +1672,7 @@ def make_garbage(n):
             assert any('collectable' in line for line in lines), lines
             assert any('bytes freed' in line for line in lines), lines
         """)
-        assert_python_ok("-c", code)
+        _assert_debug_output(code)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_debug_output_after_garbage_publication(self):
@@ -1691,7 +1704,7 @@ def make_garbage(n):
             gc.garbage.clear()
             gc.collect()
         """)
-        assert_python_ok("-c", code)
+        _assert_debug_output(code)
 
     @threading_helper.requires_working_threading()
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
@@ -1738,7 +1751,7 @@ def make_garbage(n):
             assert not errors, errors
             assert phases and all(phases), 'debug writer before snapshot retirement'
         """)
-        assert_python_ok("-c", code)
+        _assert_debug_output(code)
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_debug_output_buffer_oom(self):
@@ -1760,7 +1773,7 @@ def make_garbage(n):
             assert _testinternalcapi.gc_fail_debug_alloc(0) == 0, 'buffer OOM did not fire'
             assert not calls, 'buffer OOM called Python writer'
         """)
-        _, _, err = assert_python_ok("-c", code)
+        _, _, err = _assert_debug_output(code)
         lines = err.splitlines()
         objects = [line for line in lines if b"gc: collectable" in line]
         self.assertGreater(len(objects), 20)
@@ -1791,7 +1804,7 @@ def make_garbage(n):
                 gc.set_debug(0)
             assert phases and all(phases), 'debug writer before snapshot retirement'
         """)
-        _, _, err = assert_python_ok("-c", code)
+        _, _, err = _assert_debug_output(code)
         self.assertIn(b"bytes freed", err)
         self.assertNotIn(b"writer failure", err)
 
@@ -1817,7 +1830,7 @@ def make_garbage(n):
                 gc.disable()
             assert not calls, 'inline collection called Python writer'
         """)
-        _, _, err = assert_python_ok("-c", code)
+        _, _, err = _assert_debug_output(code)
         self.assertIn(b"bytes freed", err)
 
     def test_weakref_callback_runs_after_collection(self):

@@ -1124,23 +1124,16 @@ _memory_release(PyMemoryViewObject *self)
 }
 
 int
-_PyMemoryView_DeallocReleasesWithCode(PyObject *op)
+_PyMemoryView_HasAcquisition(PyObject *op)
 {
-    _PyManagedBufferObject *mbuf;
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf = (_PyManagedBufferObject *)op;
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        return !(self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            && self->master.obj != NULL;
     }
-    else {
-        assert(PyMemoryView_Check(op));
-        PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-        if (self->flags & _Py_MEMORYVIEW_RELEASED) {
-            return 0;
-        }
-        mbuf = self->mbuf;
-    }
-    return !(mbuf->flags & _Py_MANAGED_BUFFER_RELEASED)
-        && mbuf->master.obj != NULL
-        && _PyBuffer_ReleaseRunsCode(mbuf->master.obj);
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    return !(self->flags & _Py_MEMORYVIEW_RELEASED) && self->mbuf != NULL;
 }
 
 int
@@ -1162,7 +1155,9 @@ _PyMemoryView_ReleaseReady(PyObject *op)
 int
 _PyMemoryView_ReleaseForDealloc(PyObject *op)
 {
-    if (!_PyMemoryView_ReleaseReady(op)) {
+    if (!_PyMemoryView_HasAcquisition(op)
+        || !_PyMemoryView_ReleaseReady(op))
+    {
         return 0;
     }
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {

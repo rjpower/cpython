@@ -37,3 +37,31 @@ O3 and focused ASan are deferred to the coherent GC union. Stop on failure.
 
 Frozen source/negative and the fuller proof/limitations are retained in ignored
 build/buffer-readiness/source-v1. Qualification and integration remain pending.
+
+## First native feedback and finite source correction
+
+Original d6bf31251dd O1 build/cleanup passed, including116module checks. New5
+actual-kill/N0 tests passed with129collections/0fallback/0unpinned. Whole4 then
+failed:479tests/5failures/23skips. Three memoryview GC cases retained a cycle;
+the ordinary Python buffer-release and owner-routing cases missed release.
+Raw failure9d09d4b0 and post-gate verification471d383e remain unchanged. No
+negative build/run or native retry followed. Whole-run unpinned3252 is report-only.
+
+Two source defects were exposed. A ready native view had no DEAD_HOOK, so its
+unready managed owner could retain a path back to that view before it unregistered.
+Also, releasing an outer wrapper could make its returned view ready, but memory
+DESTROY consumption did not trigger the existing explicit-collection second pass.
+
+The source successor discovers every active view registration and managed master
+acquisition, including NULL-release exporters. The private predicate is renamed
+to _PyMemoryView_HasAcquisition; the unreferenced Python-only callback classifier
+is removed. Actual consumption contributes to the existing completion count
+after error reporting. Already consumed and still unready nodes contribute zero.
+The existing maximum of two explicit passes is unchanged: this is not a universal
+chain-depth guarantee or a new pending-wakeup protocol. More native-only views
+now require queued unregister work; performance remains unmeasured.
+
+Struct and test source bytes are unchanged from d6bf. No assertion or gc.collect
+loop was altered. Successor qualification is pending source review and a fresh
+make-only build in the owned configured O1 tree; old native receipts keep their
+original source identities and cannot qualify this C correction.

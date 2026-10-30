@@ -377,14 +377,14 @@ queue_splice(GCState *gc, call_batch *b)
 /* What op's dealloc would call under reference counting, besides freeing:
    the DESTROY event of the dict, type, function and code watchers, a code
    object's co_extra free functions, a module's m_free, a capsule's destructor, the release of a memoryview's or
-   managed buffer's buffer when the exporter's __release_buffer__ would run
-   (_PyBuffer_ReleaseRunsCode()).  The sweep may not run code or
+   managed buffer's active acquisition.  The sweep may not run code or
    allocate, so the collector calls these first, with op and what it
    reaches resurrected, as reference counting calls them while op is
    intact.  op is swept at a later collection, without them. */
-static void
+static int
 run_destroy_hook(PyThreadState *tstate, PyObject *op)
 {
+    int consumed = 0;
     PyTypeObject *tp = Py_TYPE(op);
     if (PyDict_Check(op)) {
         // CPython's own watchers hear of it in dict_dealloc().
@@ -410,7 +410,8 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
     else if (tp == &_PyManagedBuffer_Type || tp == &PyMemoryView_Type) {
         /* An earlier callback may have acquired another export since this
            node was selected.  Only actual consumption acknowledges release. */
-        if (_PyMemoryView_ReleaseForDealloc(op)) {
+        consumed = _PyMemoryView_ReleaseForDealloc(op);
+        if (consumed) {
             op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
         }
     }
@@ -424,6 +425,7 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
         PyErr_FormatUnraisable("Exception ignored while destroying a %s "
                                "object", tp->tp_name);
     }
+    return consumed;
 }
 
 #ifdef Py_DEBUG
@@ -499,7 +501,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
         _Py_ScheduleGC(tstate);
         return 0;
     }
-    int nfinalized = 0;
+    int ncompleted = 0;
     ts->gc_trace.running_queue = 1;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     live_call *node;
@@ -527,12 +529,12 @@ run_queue_ex(PyThreadState *tstate, int closing)
             }
         }
         else if (call.kind == CALL_DESTROY) {
-            run_destroy_hook(tstate, call.op);
+            ncompleted += run_destroy_hook(tstate, call.op);
         }
         else if (call.kind == CALL_LEGACY) {
             // As subtype_dealloc() does under reference counting: the weak
             // references go first.
-            nfinalized++;
+            ncompleted++;
             if (_PyType_SUPPORTS_WEAKREFS(Py_TYPE(call.op))) {
                 PyObject_ClearWeakRefs(call.op);
             }
@@ -544,7 +546,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
             }
         }
         else {
-            nfinalized++;
+            ncompleted++;
             PyObject_CallFinalizer(call.op);
             if (_PyErr_Occurred(tstate)) {
                 PyErr_FormatUnraisable("Exception ignored while finalizing "
@@ -554,7 +556,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
     }
     ts->gc_trace.running_queue = 0;
     _PyErr_SetRaisedException(tstate, exc);
-    return nfinalized;
+    return ncompleted;
 }
 
 Py_GC_PRECISE static int
@@ -1852,11 +1854,11 @@ done:
 /* One pass: collect, then run the queue.  The object allocations of the
    collection and of the queue go to the heap for non-GC objects, whatever
    the allocation that triggered it had selected
-   (_PyObject_MallocWithType()).  Returns the number of finalizers and
-   tp_dels that ran in *nfinalized. */
+   (_PyObject_MallocWithType()).  Returns finalizers, tp_dels and actually
+   consumed memory acquisitions in *ncompleted, after error reporting. */
 Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
-             _PyGC_Reason reason, int *nfinalized)
+             _PyGC_Reason reason, int *ncompleted)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     struct _mimalloc_thread_state *m = &ts->mimalloc;
@@ -1870,7 +1872,7 @@ collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
     ts->gc_trace.entry.sp = 0;
     int python_ok = !ls->no_python && live_python_ok(tstate);
     debug_flush(&out, python_ok);
-    *nfinalized = python_ok ? run_queue(tstate) : 0;
+    *ncompleted = python_ok ? run_queue(tstate) : 0;
     if (heap != NULL) {
         m->current_object_heap = heap;
     }
@@ -1898,23 +1900,24 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     if (outer_entry.sp == 0) {
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
     }
-    int nfinalized;
-    Py_ssize_t n = collect_pass(tstate, ls, reason, &nfinalized);
+    int ncompleted;
+    Py_ssize_t n = collect_pass(tstate, ls, reason, &ncompleted);
     /* The objects that finalizers did not resurrect are garbage again.  An
        explicit collection frees them, as the reference counting build
        does within one collection; an automatic one leaves them to the
        next, and so does a shutdown collection before the modules are
-       cleared, which a later one follows.  Finalizers do not run twice, so
-       one more pass is enough for the objects the first one found. */
+       cleared, which a later one follows.  Consumed memory acquisitions can
+       make another owner ready.  Retain the bounded second pass; it does not
+       promise to exhaust arbitrary acquisition-chain depth. */
     PyInterpreterState *interp = tstate->interp;
     int later_follows = _PyInterpreterState_GetFinalizing(interp) != NULL
                         && interp->imports.modules != NULL;
-    if (nfinalized > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
+    if (ncompleted > 0 && reason != _Py_GC_REASON_HEAP && !later_follows
         && outer_entry.sp == 0)
     {
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
         ls->skip_verify = 1;
-        n += collect_pass(tstate, ls, reason, &nfinalized);
+        n += collect_pass(tstate, ls, reason, &ncompleted);
         ls->skip_verify = 0;
     }
     ts->gc_trace.entry = outer_entry;

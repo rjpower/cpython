@@ -1346,7 +1346,7 @@ _PyGC_LiveFailDebugAlloc(int n)
     return left;
 }
 
-static void
+Py_GC_PRECISE static void
 debug_flush(debug_output *out, int python_ok)
 {
     for (size_t i = 0; i < out->used; ) {
@@ -2635,4 +2635,3 @@ _PyGC_LiveGetStats(PyInterpreterState *interp, Py_ssize_t *bytes_freed,
     *live_bytes = ls ? ls->live_bytes : 0;
     *pause_max = ls ? PyTime_AsSecondsDouble(ls->pause_max_ns) : 0.0;
 }
-

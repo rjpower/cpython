@@ -1579,6 +1579,129 @@ class TracingCollectorTests(unittest.TestCase):
         gc.collect()
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_allocation_failure(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            class Sub(_testcapi.DeallocReader):
+                pass
+            def build():
+                previous = None
+                for _ in range(4):
+                    reader = Sub(_testcapi.StatefulReferent())
+                    reader.previous = previous
+                    previous = reader
+            gc.collect()
+            # No finalizers/callbacks/hooks: delivery must not cause an
+            # automatic second pass that hides the failed first pass.
+            # Index array, edge-array growth, and eight graph scratch arrays.
+            for allocation in range(1, 11):
+                build()
+                before = gc.get_stats()[2]
+                _testinternalcapi.gc_fail_order_alloc(allocation)
+                try:
+                    collected = gc.collect()
+                finally:
+                    order_left = _testinternalcapi.gc_fail_order_alloc(0)
+                assert order_left == 0, (allocation, order_left)
+                assert collected == 0, (
+                    'ordering OOM swept objects', allocation, collected)
+                after = gc.get_stats()[2]
+                assert after['bytes_freed'] == before['bytes_freed'], (
+                    'ordering OOM freed blocks', allocation)
+                assert after['live_bytes'] >= before['live_bytes']
+                assert gc.collect() >= 4
+                assert not any(type(obj) is Sub for obj in gc.get_objects())
+                assert gc.get_stats()[2]['bytes_freed'] > before['bytes_freed']
+            print('ordering failures preserved all ten chains')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(), 'ordering failures preserved all ten chains')
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_failure_delivers_queued_calls_once(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            calls = []
+            during_finalizer = []
+            class Sub(_testcapi.DeallocReader):
+                pass
+            def chain():
+                referent = _testcapi.StatefulReferent()
+                for _ in range(4):
+                    referent = Sub(referent)
+                return referent
+            class Finalized:
+                def __init__(self, reader):
+                    self.reader = reader
+                def __del__(self):
+                    during_finalizer.append(gc.get_stats()[2]['bytes_freed'])
+                    calls.append('finalizer')
+            def build():
+                # This chain stays dead when the finalizer's own chain
+                # is resurrected, so late ordering still needs storage.
+                chain()
+                finalizer = Finalized(chain())
+                return weakref.ref(finalizer,
+                                   lambda ref: calls.append('callback'))
+            gc.collect()
+            ref = build()
+            before = gc.get_stats()[2]['bytes_freed']
+            _testinternalcapi.gc_fail_order_alloc(1)
+            try:
+                gc.collect()
+            finally:
+                order_left = _testinternalcapi.gc_fail_order_alloc(0)
+            assert order_left == 0
+            assert calls == ['callback', 'finalizer'], calls
+            # The first pass freed nothing, even though its routed calls
+            # run afterward. A manual collection may then do a second pass.
+            assert during_finalizer == [before], during_finalizer
+            gc.collect()
+            assert calls == ['callback', 'finalizer'], calls
+            assert not any(type(obj) is Sub for obj in gc.get_objects())
+            assert gc.get_stats()[2]['bytes_freed'] > before
+            assert ref() is None
+            print('partial batch delivered exactly once and reclaimed in order')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(),
+                         'partial batch delivered exactly once and reclaimed in order')
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_after_finalizer_resurrection(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            saved = []
+            class Sub(_testcapi.DeallocReader):
+                pass
+            class Finalized:
+                def __del__(self):
+                    saved.append(self)
+            def build():
+                first = Sub(_testcapi.StatefulReferent())
+                second = Sub(_testcapi.StatefulReferent())
+                first.other = second
+                second.other = first
+                finalizer = Finalized()
+                finalizer.reader = second
+                return weakref.ref(first), weakref.ref(second)
+            refs = build()
+            gc.collect()
+            assert len(saved) == 1
+            assert all(ref() is not None for ref in refs)
+            saved.clear()
+            gc.collect()
+            assert all(ref() is None for ref in refs)
+            print('resurrected flagged cycle survives until its owner is dropped')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(),
+                         'resurrected flagged cycle survives until its owner is dropped')
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_dealloc_reads_referents_in_a_cycle(self):
         # Readers that refer to each other through their attributes, which
         # their deallocs do not read: the sweep breaks the cycle.

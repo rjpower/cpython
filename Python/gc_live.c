@@ -963,6 +963,7 @@ undo_dead(_PyGCMarkResult *res)
 {
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         res->dead[i].op->ob_flags &= ~_Py_GC_DEAD_FLAG;
+        res->live_bytes += res->dead[i].block_size;
     }
 }
 
@@ -1013,6 +1014,32 @@ typedef struct {
     int oom;
 } first_edges;
 
+/* Separate from the node-only failure hook: fail sweep-order allocations
+   without changing the queue's partial-delivery contract. */
+static int fail_order_alloc_countdown = 0;
+
+int
+_PyGC_LiveFailOrderAlloc(int n)
+{
+    int left = fail_order_alloc_countdown;
+    fail_order_alloc_countdown = n;
+    return left;
+}
+
+static void *
+order_alloc(void *items, size_t count, size_t item_size)
+{
+    if (count > (size_t)PY_SSIZE_T_MAX / item_size) {
+        return NULL;
+    }
+    if (fail_order_alloc_countdown > 0
+        && --fail_order_alloc_countdown == 0)
+    {
+        return NULL;
+    }
+    return realloc(items, count * item_size);
+}
+
 static int
 first_key_cmp(const void *a, const void *b)
 {
@@ -1029,8 +1056,13 @@ first_edge_visit(PyObject *op, void *arg)
         return 0;
     }
     if (g->nedges == g->cap) {
+        if (g->cap > PY_SSIZE_T_MAX / 2) {
+            g->oom = 1;
+            return 0;
+        }
         Py_ssize_t cap = g->cap ? 2 * g->cap : 64;
-        first_key *edges = realloc(g->edges, cap * sizeof(first_key));
+        first_key *edges = order_alloc(g->edges, (size_t)cap,
+                                      sizeof(first_key));
         if (edges == NULL) {
             g->oom = 1;
             return 0;
@@ -1049,19 +1081,23 @@ order_by_edges(_PyGCMarkResult *res, Py_ssize_t *node, Py_ssize_t n,
                first_key *edges, Py_ssize_t nedges)
 {
     int status = -1;
-    first_key *keys = malloc((n + 1) * sizeof(first_key));
-    Py_ssize_t *start = calloc(n + 1, sizeof(Py_ssize_t));
-    Py_ssize_t *cursor = malloc((n + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *target = malloc((nedges + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *succ = malloc((nedges + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *stack = malloc((n + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *order = malloc((n + 1) * sizeof(Py_ssize_t));
-    char *seen = calloc(n + 1, 1);
+    size_t nodes = (size_t)n + 1;
+    size_t refs = (size_t)nedges + 1;
+    first_key *keys = order_alloc(NULL, nodes, sizeof(first_key));
+    Py_ssize_t *start = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *cursor = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *target = order_alloc(NULL, refs, sizeof(Py_ssize_t));
+    Py_ssize_t *succ = order_alloc(NULL, refs, sizeof(Py_ssize_t));
+    Py_ssize_t *stack = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *order = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    char *seen = order_alloc(NULL, nodes, 1);
     if (keys == NULL || start == NULL || cursor == NULL || target == NULL
         || succ == NULL || stack == NULL || order == NULL || seen == NULL)
     {
         goto done;
     }
+    memset(start, 0, nodes * sizeof(Py_ssize_t));
+    memset(seen, 0, nodes);
     for (Py_ssize_t u = 0; u < n; u++) {
         keys[u] = (first_key){res->dead[node[u]].op, u};
     }
@@ -1132,12 +1168,16 @@ done:
     return status;
 }
 
-/* The indices into res->dead of the dead objects swept first, in sweep
-   order, and their number in *pn.  NULL if memory runs out, after which
-   they are swept in heap order. */
-static Py_ssize_t *
-order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
+/* Prepare the remaining dead objects' first-pass order after batching and
+   debug output, before the sweep starts any deallocation. */
+static int
+order_dead_first(_PyGCMarkResult *res, Py_ssize_t **pnode, Py_ssize_t *pn)
 {
+    *pnode = NULL;
+    *pn = 0;
+    if (!(res->kinds & _PyGC_DEAD_FIRST)) {
+        return 0;
+    }
     Py_ssize_t n = 0;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         int kinds = res->dead[i].kinds;
@@ -1147,9 +1187,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
             n++;
         }
     }
-    Py_ssize_t *node = malloc((n + 1) * sizeof(Py_ssize_t));
+    if (n == 0) {
+        return 0;
+    }
+    Py_ssize_t *node = order_alloc(NULL, (size_t)n, sizeof(Py_ssize_t));
     if (node == NULL) {
-        return NULL;
+        return -1;
     }
     n = 0;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
@@ -1162,8 +1205,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
     }
     first_edges g = {0};
     for (g.from = 0; g.from < n; g.from++) {
-        (void)_PyGC_TraceTraverse(res->dead[node[g.from]].op,
-                                  first_edge_visit, &g);
+        if (_PyGC_TraceTraverse(res->dead[node[g.from]].op,
+                               first_edge_visit, &g) != 0 || g.oom)
+        {
+            g.oom = 1;
+            break;
+        }
     }
     if (g.oom
         || (g.nedges > 0 && order_by_edges(res, node, n, g.edges, g.nedges) < 0))
@@ -1172,8 +1219,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
         node = NULL;
     }
     free(g.edges);
+    if (node == NULL) {
+        return -1;
+    }
+    *pnode = node;
     *pn = n;
-    return node;
+    return 0;
 }
 
 /* Inlined: the sweep calls it for every dead object, and the call alone
@@ -1221,7 +1272,7 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
    that a dealloc can read its type. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
-      Py_ssize_t *bytes_freed)
+      const Py_ssize_t *first, Py_ssize_t nfirst, Py_ssize_t *bytes_freed)
 {
     Py_ssize_t ncollected = 0;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
@@ -1233,15 +1284,10 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             continue;
         }
         if (phase == 0) {
-            Py_ssize_t nfirst;
-            Py_ssize_t *first = order_dead_first(res, &nfirst);
-            if (first != NULL) {
-                for (Py_ssize_t j = 0; j < nfirst; j++) {
-                    sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
-                }
-                free(first);
-                continue;
+            for (Py_ssize_t j = 0; j < nfirst; j++) {
+                sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
             }
+            continue;
         }
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
             int kinds = res->dead[i].kinds;
@@ -1531,6 +1577,8 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     add_root_stats(ls, &res.roots);
     call_batch batch = {NULL, NULL};
+    Py_ssize_t *first = NULL;
+    Py_ssize_t nfirst = 0;
     int failed = clear_callback_weakrefs(&batch, &res) < 0
                  || handle_finalizers(gc, &batch, &res, &garbage) < 0
                  || queue_destroy_hooks(&batch, &res) < 0;
@@ -1538,12 +1586,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     barrier_after_mark(tstate, &res);
     route_calls(tstate, &res, &batch);
     unpin_domain(&res);
-    if (failed) {
-        // Out of memory: keep everything.  What was queued runs.
-        undo_dead(&res);
-        garbage.n = 0;
-    }
-    else {
+    if (!failed) {
         for (Py_ssize_t i = 0;
              (res.kinds & _PyGC_DEAD_WEAKREFS) && i < res.ndead; i++)
         {
@@ -1566,8 +1609,17 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
                 }
             }
         }
-        ncollected = sweep(tstate, gc, &res, &bytes_freed);
+        failed = order_dead_first(&res, &first, &nfirst) < 0;
+        if (!failed) {
+            ncollected = sweep(tstate, gc, &res, first, nfirst, &bytes_freed);
+        }
     }
+    if (failed) {
+        // Out of memory: keep everything.  What was queued runs.
+        undo_dead(&res);
+        garbage.n = 0;
+    }
+    free(first);
     (void)PyTime_PerfCounterRaw(&t1);
 
     ls->bytes_freed += bytes_freed;
@@ -1582,7 +1634,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     cur.ts_stop = t1;
     cur.heap_size = res.nobjects;
     record_stats(gc, &cur);
-    gc->heap_size = res.nobjects - res.ndead;
+    gc->heap_size = failed ? res.nobjects : res.nobjects - res.ndead;
     gc->long_lived_total = gc->heap_size;
 
     gc->alloc_bytes = 0;

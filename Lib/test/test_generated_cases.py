@@ -2681,6 +2681,25 @@ Py_GC_PRECISE static int f(PyObject *o) {
         self.assertIn("getter_fn",
                       root_check_c.typedef_names(root_check_c.tokens_of(src)))
 
+    def test_mimalloc_segment_lookup_does_not_collect(self):
+        src = """
+Py_GC_PRECISE PyObject *f(PyObject *op, uintptr_t address) {
+    _mi_gc_segment_of(address);
+    return op;
+}
+"""
+        self.assertEqual(self.check(src), [])
+        # This declaration is for the exact metadata reader, not a family
+        # exemption or permission to retain an object across a Python call.
+        collecting = src.replace("    return op;", """
+    PyObject_CallNoArgs(op);
+    return op;
+""")
+        errors = self.check(collecting)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'op' is held only in a C local across the collecting "
+                      "call to 'PyObject_CallNoArgs'", errors[0])
+
     def test_windows_scalar_cast(self):
         # Windows SDK typedefs are unavailable to a Unix header scan, but
         # the C mode must still check the complete inactive branch.

@@ -59,6 +59,9 @@ NON_COLLECTING = frozenset({
     "_PyReftracerTrack", "_Py_NewReference", "_Py_NewReferenceNoTotal",
     "_PyGC_ObjectMapSet", "_PyGC_ObjectMapChunk", "_PyShape_InitRoot",
     "_PyObject_CheckObjectHeap",
+    # GC segment-map lookup: bounds/index arithmetic and two acquire loads
+    # (mimalloc/internal.h); no allocation, callback, lock or detach.
+    "_mi_gc_segment_of",
     # a compiler intrinsic, and inline assembly that reads the stack pointer
     "__builtin_return_address", "_PyGC_StackAddress",
     # the verifier's trap in Py_TYPE() (debug builds): it reports and aborts

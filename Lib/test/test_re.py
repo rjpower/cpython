@@ -1963,16 +1963,14 @@ class ReTests(unittest.TestCase):
         # object, the exporter of its buffer, until it is freed; here it is
         # their only holder across a collection, and a tracing collector
         # frees what no traverse visits.
-        # No __release_buffer__: the scanner releases its buffer in its
-        # dealloc, in the sweep, where Python code may not run (audit-2
-        # hand-off 1, boil/design/work/audit-2.md, owned by 10a rung 3).
-        # When that lands, give the exporter a __release_buffer__ and
-        # check that it is called once the scanner is collected.
+        released = []
         class Exporter:
             def __init__(self, data):
                 self.data = bytearray(data)
             def __buffer__(self, flags):
                 return memoryview(self.data)
+            def __release_buffer__(self, view):
+                released.append(view.tobytes())
 
         def text(first):
             return "".join(chr(ord(first) + i % 10) for i in range(1000))
@@ -1991,6 +1989,7 @@ class ReTests(unittest.TestCase):
         for pattern, make in cases:
             kind = type(make("")).__name__
             with self.subTest(kind=kind):
+                released.clear()
                 expected = contents(make(text("a")))
                 scanner = re.compile(pattern).scanner(make(text("a")))
                 held = [type(r).__name__ for r in gc.get_referents(scanner)]
@@ -2005,9 +2004,10 @@ class ReTests(unittest.TestCase):
                 self.assertIsNotNone(m)
                 self.assertEqual(contents(m.group(1)), expected[-3:])
                 self.assertEqual(contents(m.string), expected)
-                # The scanner releases the buffer when it is freed.
+                # Ordinary finalization releases the acquisition before sweep.
                 del m, scanner
                 gc_collect()
+                self.assertEqual(released, [expected] if kind == "Exporter" else [])
 
     def test_bug_817234(self):
         iter = re.finditer(r".*", "asdf")

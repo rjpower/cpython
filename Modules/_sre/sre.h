@@ -121,6 +121,7 @@ typedef struct {
     PatternObject* pattern;
     SRE_STATE state;
     int executing;
+    int releasing;
 } ScannerObject;
 
 #endif

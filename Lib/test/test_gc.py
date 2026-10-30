@@ -7,7 +7,7 @@ from test.support import (verbose,
 from test.support.os_helper import temp_dir, TESTFN, unlink
 from test.support.script_helper import (assert_python_ok,
                                         assert_python_failure, make_script)
-from test.support import threading_helper, gc_threshold
+from test.support import threading_helper, gc_threshold, import_helper
 
 import gc
 import os
@@ -4023,10 +4023,11 @@ def _queue_child(code, **env):
 @unittest.skipIf(_testcapi is None, "requires _testcapi")
 class BufferLifetimeTests(unittest.TestCase):
     def test_unready_memoryview_retains_closure_and_recovers_oom(self):
+        import_helper.import_module('_testbuffer')
         for fail in (False, True):
             with self.subTest(fail=fail):
                 _queue_child(f"fail = {fail!r}\n" + textwrap.dedent("""
-                    import pickle
+                    from _testbuffer import ndarray
                     gc.disable()
                     events = []
                     class Exporter:
@@ -4037,7 +4038,7 @@ class BufferLifetimeTests(unittest.TestCase):
                     gc.collect()
                     def make_cycle():
                         obj = Exporter()
-                        obj.holder = pickle.PickleBuffer(memoryview(obj))
+                        obj.holder = ndarray(memoryview(obj))
                         return weakref.ref(obj)
                     ref = make_cycle()
                     if fail:
@@ -4049,15 +4050,188 @@ class BufferLifetimeTests(unittest.TestCase):
                     obj = ref()
                     assert obj is not None, 'unready exporter closure was lost'
                     assert events == [], events
-                    # This unported holder deliberately needs explicit release.
-                    with obj.holder.raw() as raw:
-                        assert bytes(raw) == b"abc"
-                    obj.holder.release()
+                    # This unported native holder has no outward exports or
+                    # transformed metadata.  Drop its reverse edge explicitly.
+                    assert obj.holder[0] == ord('a')
+                    obj.holder = None
                     del obj
                     for _ in range(4):
                         gc.collect()
                     assert events == [b"abc"], events
                 """), PYTHON_GCSTRESS="")
+
+    def test_picklebuffer_cycle_release(self):
+        _queue_child("""
+            import pickle
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    for read in (self.holder.raw,
+                                 lambda: memoryview(self.holder)):
+                        try:
+                            read()
+                        except ValueError:
+                            pass
+                        else:
+                            raise AssertionError(
+                                'release must observe a closed PickleBuffer')
+                    self.holder.release()
+                    self.holder.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                obj.holder = pickle.PickleBuffer(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            backing.extend(b"d")
+        """)
+
+    def test_picklebuffer_explicit_release_reentry_and_failure(self):
+        _queue_child("""
+            import pickle
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    try:
+                        self.holder.raw()
+                    except ValueError:
+                        pass
+                    else:
+                        raise AssertionError('releasing PickleBuffer is readable')
+                    self.holder.release()
+                    self.holder.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            obj = Exporter()
+            obj.holder = pickle.PickleBuffer(obj)
+            obj.holder.release()
+            obj.holder.release()
+            obj.holder.__del__()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            del obj
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    def test_scanner_cycle_release(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    observed = (self.scanner.search(),
+                                self.scanner.prefixmatch(),
+                                self.scanner.match())
+                    self.scanner.__del__()
+                    events.append((observed, view.tobytes()))
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            def make_cycle():
+                obj = Exporter()
+                obj.scanner = re.compile(rb"(a)").scanner(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [((None, None, None), b"abc")], (
+                'release must observe an exhausted scanner', events)
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    def test_scanner_constructor_release_failure(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            try:
+                re.compile('(a)').scanner(Exporter())
+            except TypeError as exc:
+                assert 'string pattern on a bytes-like object' in str(exc)
+            else:
+                raise AssertionError('incompatible scanner input accepted')
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    @unittest.skipUnless(support.Py_DEBUG, 'requires debug interruption hook')
+    def test_scanner_explicit_finalize_while_executing(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, interrupted = [], []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    assert scanner.search() is None
+                    scanner.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+            class Interrupt(Exception):
+                def __init__(self):
+                    scanner.__del__()
+                    assert events == [], 'active scanner acquisition released'
+                    try:
+                        scanner.search()
+                    except ValueError:
+                        pass
+                    else:
+                        raise AssertionError('active scanner allowed reentry')
+                    interrupted.append(True)
+                    gc.collect()
+            pattern = re.compile(rb"(a)")
+            pattern._fail_after(0, Interrupt)
+            scanner = pattern.scanner(Exporter())
+            try:
+                scanner.search()
+            except Interrupt:
+                pass
+            else:
+                raise AssertionError('interruption hook did not run')
+            assert interrupted == [True], interrupted
+            assert scanner.search().group() == b"a"
+            assert events == [], events
+            scanner.__del__()
+            scanner.__del__()
+            assert scanner.search() is None
+            assert events == [b"abc"], events
+            backing.extend(b"d")
+        """)
 
     def test_unpack_iterator_cycle_release(self):
         _queue_child("""

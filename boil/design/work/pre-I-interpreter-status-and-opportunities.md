@@ -1,0 +1,142 @@
+# Interpreter status and prospective improvements
+
+Source review, 2026-10-30. GC safety is landed through runtime `ff6ed9d6bfb`;
+the main-only/drainer/buffer candidate `3c6b8daa506` is **not yet landed or
+fully qualified**. This report inspects that candidate and existing records.
+It adds no native run, timing, implementation grant or current speed score.
+The user requested this provisional quality review in parallel with the
+remaining GC validation; GC correctness remains the implementation priority.
+
+The core architecture is coherent: compile once into register IR, carry one
+canonical value representation, generate handlers from one DSL, and keep
+feedback separate from immutable code. The largest design gaps are the
+unfinished boundaries between those layers: native self/slot interfaces,
+frame transitions and initialized root spans, and complete final-word effects.
+Those deserve shared solutions before adding unrelated fast paths. Existing
+typed handlers are useful implementation structure, but do not yet constitute
+one orthogonal parameterized operation model.
+
+## What is implemented
+
+| Layer | Actual implementation | Important remaining boundary |
+| --- | --- | --- |
+| Compiler | `compile.c` obtains the optimized stack CFG; `regcfg.c:1404` runs swap renaming, copy propagation, store elimination, pop-top and truth folding, then physical slot compaction. `assemble.c` emits words, feedback initializers, source locations and exception tables. | No runtime lowering from ordinary bytecode. The compiler still starts with stack-shaped semantics; the final physical IR is not yet the authority for complete H2 liveness. |
+| IR | `pycore_ir.h:12`: one64-bit word,16-bit handler and four12-bit fields with generated slot/immediate/feedback roles; CD can hold wider data. Code words are immutable; `ir.c:245` lazily creates mutable execution words and feedback. | Four fields are not four interchangeable operands. Folded inputs, call windows, relaxed jumps and exception successors have distinct real semantics. |
+| Handlers | `bytecodes.c` declares operations, guards, macro compositions and specialization families. `ir_generator.py` generates executable cases; IR metadata describes formats, properties and instrumentation relationships. | There is one source of generated truth, but some complex effects still need explicit semantics before maps or ownership proofs can consume it. |
+| Values and objects | Canonical64-bit `PyValue`: inline exact int32/non-NaN doubles, otherwise object pointers; bool, large integers, subclasses and NaN stay objects. Core frames/containers/cells/instance slots use values. Shapes describe positional attributes; materialized dictionaries enter terminal dictionary mode. | Object-pointer APIs still box; raw native fields are not automatically value storage. This is an intentional object/ABI migration, requiring rebuilt ports. |
+| Calls and slots | Value vectorcall, value arguments/results for METH_O/FASTCALL/METHOD, value `tp_call` and attribute/getter results. Generic and specialized call routes coexist. | Native self remains an object; NOARGS retains object result; many numeric/sequence/mapping/wrapper slots still take objects. Bound-method object storage and VARARGS tuples are separate allocation sources. |
+| Dispatch | Generated computed-goto/switch and preserve_none/musttail backends exist. Current tail handlers pass slots/thread/IP/word, plus stats sequence state, and reload frame from the thread state. | A backend's existence is not a measured win. H1's passed-frame convention remains isolated; changing diagnostic IP publication is outside that experiment. |
+| Roots and memory | Full-heap nonmoving tracing, no reference counts, explicit precise value/raw spans and checked precise C frames, conservative opaque stack/PyMem-carrier roots. Frame clearing remains active. | No active H2 maps, generational barriers/minors or moving collector. Current frame pointers, initialized slots and hybrid coverage cannot be removed by implication. |
+
+Source anchors: [register pass driver](../../../Python/regcfg.c),
+[IR/feedback interface](../../../Include/internal/pycore_ir.h),
+[operation DSL](../../../Python/bytecodes.c),
+[value representation](../../../Include/pyvalue.h),
+[native method conventions](../../../Include/methodobject.h),
+[dispatch macros](../../../Python/ceval_macros.h), and
+[root contract](../11-precise-roots.md). These common interpreter sources
+are shared with the inspected candidate; the pending GC composition is
+separately reviewed in [the union source review](reviews/gc-simple-union-source-review.md).
+
+## Existing common and typed families
+
+The source already shares meaningful machinery. BINARY_OP groups int arithmetic,
+division/remainder, bitwise/shift operations, float arithmetic, Unicode addition,
+subscription and generic extension. Shared guards admit inline or compact exact
+integers. Int/float/string comparisons, list/tuple/dict/string subscription,
+sequence unpacking and list/tuple/range/generator iteration have specializations.
+Generic value APIs retain overflow, subclass and user-code fallback semantics.
+
+LOAD/STORE_ATTR shares shape/version/transition and polymorphic plans, alongside
+module, slot, property and dictionary-mode routes. Method loading can forward a
+descriptor and value receiver without constructing a bound method first. CALL
+has Python exact/general, bound-method, builtin and descriptor conventions.
+SEND/YIELD inline generator/coroutine transitions while retaining exception,
+return-slot, frame and IP state. These are common families, not an absence of
+specialization or a need to add a separate arithmetic interpreter.
+
+Several dimensions remain entangled in target names and adapters: semantic
+operation, receiver admission, stored representation, result representation,
+call convention, monitoring and available feedback. A shape proof that a slot
+is filled does not automatically prove its value is int32. A non-NaN float
+representation does not admit numeric subclasses. A predicted entry is not an
+ordinary counted dispatch entry. A clean parameterized design must preserve
+those distinctions rather than assign one ambiguous "type" parameter.
+
+## Landed, isolated and proposed work
+
+**H3 domain/storage/statistics is landed** through qualified5a45→d6a23 and is
+present in3c6. Its302-entry domain is capacity, not an optimization threshold.
+Generated dispatch/pristine/adaptive/specialized/instrumented/NOFB properties
+control eligibility. Monitoring has reviewed full-domain storage interfaces.
+Py_STATS counts actual target entries/pairs before predicted labels and tracks
+activation-local sequence state even when aggregation is disabled. Readers
+validate metadata and distinguish entries from semantic/site counts. Later
+transport/renumbering and typed operations remain. See
+[H3 source/results](H3-1-stage2b3-implementation.md).
+
+**H1 passed-frame is isolated**, native62456/tool-test94ab. Source/audits,
+runtime checks and strict stale controls exist; old combined harness receipts
+have an informational platform-header limitation. Static code changes are
+mixed, and no elapsed benefit is measured. Its matched Clang experiment is
+parked during GC. See [H1 record](H1-1.md) and
+[passed-frame readiness](H1-passed-frame-readiness.md).
+
+**H2 is isolated and inert**, native5df336 with test-only parser bridgeb3e6847.
+Its generated scalar-temporary decoder supports27 pristine handlers and
+explicitly rejects126 unsupported ones. Corrected release/debug-kill affected
+validation exists; original parser failure remains preserved. It changes no
+runtime root reader, clearing policy, code/frame layout or register reuse.
+Complete effects/CFG/fixedpoint, final-word verification, independent compiler
+projection and frame-reader/initialized-span closure remain before activation.
+See [H2 source and evidence review](reviews/H2-root-effects-source-review.md).
+
+Generations and alias-safe linear string growth are designs, not implemented
+speedups. JIT and movement remain deferred. No isolated branch is silently
+included in this candidate's implementation or performance claims.
+
+## Ranked opportunities for the next review
+
+This ranking weighs reuse, existing evidence and proof readiness. It is not a
+speedup forecast or approval to begin seven parallel implementations. Settle
+the supported GC boundary, then choose a small coherent source slice and
+measure it on matched nonstats release products.
+
+| Priority | Current symptom | Clean shared direction | Required proof or falsifying evidence |
+| --- | --- | --- | --- |
+| 1. Close value/native boundaries | `binaryfunc` remains object/object→object; native self boxes in generic and specialized numeric methods/getsets. Other slot wrappers, Clinic residue and native fields add distinct conversions. | Extend declared callback/slot conventions in place, with matching wrappers, Clinic generation and specialized dispatch. Preserve values until an actual object consumer requires a box. A numeric NOARGS receiver slice is finite; bound-method storage/getsets remain explicit separate closures. | All generic/specialized/escaped routes must agree on ABI, wrong-receiver/error order and roots. Preserve raw box roots when the callback actually needs the box. Recount actual box sites/allocations, then elapsed work; no bit_length-only intrinsic. [Receiver audit](pre-I-inline-receiver-audit.md), [value ingress](pre-I-value-ingress-audit.md), [note12](../12-object-slots-on-values.md). |
+| 2. Simplify frame/call/resume transitions | Historical generator samples concentrate in SEND/YIELD/dispatch; coroutine work includes frame traversal and return-slot movement. Python calls, native calls, throw/close and suspended frames have related but distinct handoffs. | Treat create/enter/resume/return/unwind as one explicit initialized-state protocol, then remove redundant adaptation or allocation only where that protocol proves it unnecessary. Keep specialized direct frame entry and generic fallback coherent. | Current frame/exception/IP publication, escaped frame introspection, PEP523, monitoring, recursion and error spans must remain correct. Measure frame creation versus hot resume separately. Do not optimize a required state store away because a source sample landed there. [Handler contract](../14-handler-contract.md), [attribution](pre-I-evaluator-source-attribution.md). |
+| 3. Make operation families orthogonal | Existing macros reuse guards/bodies, but semantics, receiver/storage/result facts and feedback mode are not one explicit family contract. Adding more one-off targets risks repeating dispatch and root logic. | Define operation plus independent admission/representation/call-mode dimensions in the existing DSL and derive concrete targets/metadata from that one declaration. Retain the existing word format unless actual constraints justify changing it. LOAD_ATTR int32/float/string/object modes must state whether they mean stored representation, checked result or observation. | Each admitted combination needs exact guard/fallback/error/monitoring/root behavior; unsupported combinations are rejected. Compare generated coverage and native code size. Parameterization should reduce duplicated semantics, not generate every Cartesian combination or a second opcode/effect inventory. H3 properties are the starting point, not a numeric handler quota. |
+| 4. Complete H2 before retiring clearing | Scalar effects are partial; frame clearing/root scans still cover live state. Removing stores based on virtual registers or ordinary CFG alone would miss physical rewrites and transition windows. | Finish the generated final-word effects/CFG/liveness producer first, validate independently against compiler projection, then migrate readers and publication one contract at a time. | Exception edges, aliased physical slots, relaxed SEND/FOR_ITER, replacement handlers, created/suspended/escaped frames and raw call windows must all be covered. No all-slots "map" success, unsupported-opcode acceptance or activation of incomplete maps. Only then compare clearing/scanning cost and RSS retention. [H2 review](reviews/H2-root-effects-source-review.md), [note14](../14-handler-contract.md). |
+| 5. Test dispatch and feedback costs coherently | Historical generator evaluator samples include dispatch; Richards includes feedback addressing/shape matches. Current tail handlers reload frame. | Use the existing same-Clang goto/tail and H1 passed-frame comparisons, then inspect shared feedback/addressing and call boundaries if a measured deficit remains. Prefer one convention over permanent dual machinery. | Match compiler/flags/backend/root contracts, retain diagnostic IP publication, inspect spills/code size and elapsed distributions. GCC non-tail versus Clang tail confounds compiler and topology. A sample on a landing pad is not its exact instruction cost. No local fusion solely to improve one row. [H1](H1-1.md), [offline join](pre-I-evaluator-source-attribution.md). |
+| 6. Make proven private string appends linear | Flat immutable strings plus no refcounts leave local repeated append without a refcount-based uniqueness test. | Use a certified nonescaping local append epoch and geometric capacity while preserving ordinary flat string representation. Publication/aliasing seals the epoch. Reuse the proposed code-owned proof/activation owner, not ropes or speculative universal uniqueness. | Complete escape/join/exception/overwrite/final-word admission and owner-generation proof; preserve lazy exec and all storage observers. Initial shared prefixes need a fresh private result; in-place continuation needs the same valid transaction, not any old pointer. Scaling and alias negatives decide value. [Design](pre-I-linear-string-concat.md), [proof/owner prerequisite](pre-I-linear-string-proof-owner.md). |
+| 7. Reduce shared allocation/GC work after correctness | Historical coroutine/comprehension/generator windows spend substantial time collecting and processing dead objects, while Richards has no hot collections. | Pursue a nonmoving generational/retained-set intervention only after real owner/store/barrier coverage; also scrutinize shared frame/allocation churn. Reuse existing queue/root contracts rather than add another resource scheduler. | Old→young barriers, partial constructors, opaque roots, promotion/reentry and an independent full-young oracle must close. Record candidates, survival, death work, RSS and pauses. Generations do not remove inevitable dead-object bookkeeping or C ABI boxes. [Generations design](7-nonmoving-generations-design.md) and its store ledgers remain prerequisites, not implementation. |
+
+## What the measurements actually establish
+
+The historical owned-upstream-versus-ce2ac diagnostic reported a29-kernel
+geomean of0.828243 for upstream/fork elapsed time:22 slower rows and seven
+faster. Coroutines0.365, comprehensions0.528 and generators0.592 contrasted
+with float1.923, Richards1.897 and nbody1.603. Those five-sample initial
+estimates used an unlanded failing-stress fork and disclosed fork-only
+`-fno-gcse`, fork-driver origin and SDK limits. They are **not a3c6 score**,
+correctness qualification or a present parity claim. Every row remains in the
+[timing record](pre-I-first-quiet-timing-plan.md).
+
+The same historical ce release's four-row profiling measured hot GC fractions
+54.0%/47.0%/30.8%/0% for coroutines/comprehensions/generators/Richards. Root
+time is part of GC; callback-pause accounting can undercount delivery. The
+sampled evaluator shares were27.3%/21.1%/51.1%/79.5%, with no lost samples
+but unresolved libc/ancestry. Death/candidate totals establish per-object
+bookkeeping, not an allocation-age distribution or a generation speedup.
+The offline source join identifies common frame/feedback/dispatch sites, but
+skid, inlining and compiler line attribution prevent exact instruction-cost
+claims. See [shared costs](pre-I-shared-cost-attribution.md) and
+[source join](pre-I-evaluator-source-attribution.md).
+
+After GC lands, the detailed report should replace the pending boundary with
+the exact qualified source, refresh only the agreed matched performance
+cohort, and publish regressions and uncertainty alongside the implemented
+interfaces. Roughly2× remains a soft guide. Keep a proposed change only when
+its shared design is simpler or its measured benefit pays for its complexity;
+preserve a clean negative result instead of adding exceptions until it wins.

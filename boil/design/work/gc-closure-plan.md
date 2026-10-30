@@ -94,8 +94,9 @@ separate support decisions; process exit does not excuse ordinary leaks.
    unknown-origin ambient in-source build. All588 owned debug products were
    unchanged; preserve that build and failure. Clean existing worktree
    boil-buffer-xid-main-only, new branch boil/gc-final-validation at3c6, owns
-   a fresh O1 out-of-source build. Next: new13, conditional whole9, four
-   reviewed causal omissions in one negative build, then actual-union release,
+   a fresh O1 out-of-source build. Build/cleanup pass98s; new13 passes13/0
+   and whole9 passes1863/120skips, zero fallback, completion95d56f4c checked.
+   Next: four reviewed causal omissions in one negative build, then release,
    debug and ASan profiles plus closure. Reuse existing recipes/modes/locks;
    stop unexpected failures, diagnose and keep original results. Independent
    source/evidence review precedes primary merge and post-merge smoke. Process

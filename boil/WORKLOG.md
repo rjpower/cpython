@@ -4795,3 +4795,27 @@ candidate untouched. A read-only interpreter quality review/prospective list
 now runs alongside GC qualification, ahead of implementation and matched
 timing after landing. Existing H1/H2 remain isolated. Primary runtime remains
 safetyff6; final GC source is complete but not landed.
+
+
+### 11:28 PDT: final bounded GC checks pass; interpreter quality report drafted
+
+Actual3c6 fresh O1 new13 passes13/0skips (212collections/0fallback/0unpinned).
+Whole affected9 passes1863/120skips (10435collections/0fallback/1report-only
+unpinned). Cleanup passes; root and independent reviewer check completion
+95d56f4c/all37 references, actualkill/N0/config/source and raw summaries.
+No broad qualification or landing follows from this bounded result.
+
+The reviewed eight-profile/closure recipe reuses accepted protocols, exact
+filters and executable modes, adding focused ASan15 for previously uncovered
+Unpickler/XID acquisitions. O3 and isolated four-omission O1 builds proceed
+in parallel. Original O3 log-path host error opened no subprocess; a two-path
+output-only correction preserves it and leaves argv/helper/plan unchanged.
+Final broader execution waits for causal outcomes and scanner test-source
+review under the user's external-behavior guidance. No active source edit.
+
+Provisional pre-I-interpreter-status-and-opportunities.md reviews the actual
+architecture and seven shared opportunities. Root reads it and checks all27
+relative destinations. LandedH3 and isolatedH1/H2 stay distinct; historical
+0.828243 timing is not a current score. No performance implementation or new
+timing is authorized before GC landing. Behavioral testing policy is recorded
+in PROCESS/closure plan; critical ownership/rollback units remain appropriate.

@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 11:20 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 11:28 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -31,7 +31,7 @@ record and is updated at every landing.
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
 | 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
-| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final supported-runtime union3c6b8daa506 composes main-only admission, one rooted drainer, all six concrete buffer owner families and checked safeguard removal; source reviews clear bounded validation. Final O1 qualification uses a clean existing worktree after an unknown in-source build blocked the original make before compilation. Preserve the old build and FAIL. New13/whole9, four causal controls, release/ASan/full/closure and landing remain; no final-union native pass claimed. Foreign/adoption machinery stays deferred |
+| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final supported-runtime union3c6b8daa506 composes main-only admission, one rooted drainer, all six concrete buffer owner families and checked safeguard removal; source reviews clear bounded validation. Clean-tree final O1 new13 and whole9 pass (13/0 and1863/120skips), zero fallback. Preserve the prior make-precondition failure and unknown ambient build. O3/negative builds active; causal4, release/ASan/full/closure and landing remain. Foreign/adoption machinery stays deferred |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
@@ -1005,7 +1005,7 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 11:20 PDT
+### Current coordinator ruling, 2026-10-30 11:28 PDT
 
 **User direction, 11:22 PDT: observable behavior first.** Integration tests
 should primarily check useful liveness and reclamation, readable live data,
@@ -1020,9 +1020,9 @@ principle to new or corrected tests; do not rewrite the active frozen candidate
 or weaken existing regressions merely to obtain a pass.
 
 Read-only interpreter implementation/design review now runs in parallel with
-GC qualification at the user's request. It will inventory current operations,
-value bridges, calls, dispatch and roots, and rank prospective general
-improvements. Its source-based recommendations are provisional until fresh
+GC qualification at the user's request. The provisional [report](design/work/pre-I-interpreter-status-and-opportunities.md)
+inventories operations, value bridges, calls, dispatch and roots and ranks
+seven prospective shared improvements. Its source-based recommendations are provisional until fresh
 matched timing after GC landing. Performance implementation stays behind that
 landing; no current speedup claim follows from historical diagnostics.
 
@@ -1051,8 +1051,11 @@ tree and its branch/packets remain. A fresh out-of-source O1 configure/build
 is required by the new path/configuration. Independent checks clear the
 mechanical reuse of the accepted build/target recipe and executable modes.
 
-After build, run new13 (ND4, XID8, retention/OOM1) then conditional affected9
-once, with actual kill/N0 and the declared unsupported-creation classification.
+Fresh build/cleanup now pass in98s. New13 (ND4, XID8, retention/OOM1)
+passes13/0skips, then affected9 passes1863/120skips, actual kill/N0 and zero
+fallback. Completion95d56f4c/all37 references are independently checked.
+Fresh O3 and the one negative build are active. Eight broader profiles and
+closure have a reviewed recipe; actual receipt/source binding remains.
 Source-review four disjoint causal omissions before one copied negative build:
 drainer claim, SRE null-before-release, transactional Unpickler replacement,
 and ND closed-owner read guard. Each needs its named assertion, not a crash

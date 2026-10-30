@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 11:20 PDT. Latest runtime merge is ff6ed9d6bfb,
+revised 2026-10-30 11:28 PDT. Latest runtime merge is ff6ed9d6bfb,
 integrating qualified GC safety candidate9e223040 over prior runtime
 d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
 post-merge smoke pass. Shared
@@ -72,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 11:20 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 11:28 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -245,15 +245,23 @@ are the milestone; foreign adoption, generic cleanup APIs and a completion
 DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
 are authorized.
 
-**11:22 PDT update.** The fresh final-union O1 build succeeds in98 seconds,
-with116 modules checked and no import failures. Its independently checked
-products/configuration now bind the new13/affected9 target plan; those results
-are still pending. Broader release/debug/ASan qualification preparation runs
-in parallel. A read-only interpreter quality review and prospective improvement
-list are also assigned now; performance changes and fresh timing follow GC
-landing. Tests should emphasize observable liveness, resource usability and
-bounded memory, with critical internal invariants checked in focused units
-(PROCESS, current coordinator ruling).
+**11:28 PDT update.** The actual final-union O1 build/cleanup passes in98
+seconds. New13 passes13/0skips; whole affected9 passes1,863 reported tests/
+120skips, with zero GC fallback. Source/native/mode and all37 completion
+references are independently checked. This is bounded feedback, not landing.
+O3 release and the isolated four-omission negative build are active; eight
+release/debug/ASan profiles plus closure have a reviewed execution recipe.
+Their final receipt/source binding follows the causal controls and review of
+one scanner integration test under the new behavioral-testing guidance.
+
+The provisional [interpreter status and opportunities report](design/work/pre-I-interpreter-status-and-opportunities.md)
+now records the implemented architecture, isolated H1/H2 and seven ranked
+shared improvements. It covers value/native boundaries, frame/call/resume,
+orthogonal operation families, H2 liveness, dispatch/feedback, alias-safe
+linear string growth and later generations. Recommendations are source-based;
+implementation and matched timing follow GC landing. There is no refreshed
+performance score. Tests should emphasize liveness, valid data, resource reuse
+and bounded memory, with critical internal invariants in focused units.
 
 Shared verifier/worker components are landed; full profile/gate orchestration
 is still separate work in `boil/tools/verification.md`. All jobs retain real source/config/product,

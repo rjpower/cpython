@@ -7,6 +7,14 @@ and handed to the independent native operator. This note changes none of
 it. Historical S1/resource and multiple-predecessor evidence remains as
 indexed in primary `7a-2a-safety-design.md`; no probe was rerun.
 
+Lifecycle recommendation reconciled after independent review: the current
+direction is [7a-lifecycle-prerequisites.md](reviews/7a-lifecycle-prerequisites.md).
+Admission stays OPEN throughout cooperative waits and closes only at the
+successful final stopped-world zero-RUNNING readiness commit. The earlier
+early-gate and child-cancellation alternatives below are superseded as
+recommendations, not implemented contracts. Retirement/adoption and exact
+fork/public error interfaces still require their source reviews.
+
 **Conclusion:** the sparse per-call graph and normal dispatch protocol can
 be specified locally. Activation is blocked by two finite contracts: a
 stable pre-batch graph snapshot (S3 owner), and close/fork handling of a
@@ -108,17 +116,19 @@ completion ordering, not dynamic tracking of mutations during callbacks.
 | `pystate.c:931 DeleteExceptMain` | Existing Clear-under-head-lock path is not note13 §5.5's planned allocation-free/no-Python disposal. Adding waiting-list splicing cannot repair that path. |
 
 Note13 §5.1 requires drain through empty READY AND WAITING before close.
-The previous safety draft's proposed transfer of an opened owner's waiters
-to main would change that contract; **it is not an approved resolution**.
+The accepted lifecycle review recommends transfer of an opened owner's
+remaining READY/WAITING nodes to main AFTER owner metadata retirement and
+heap/root/state adoption. This changes the old strict foreign-drain
+contract; its explicit note13 revision and implementation remain required.
 A close blocked on a foreign predecessor cannot spin while holding the
 shared GIL; the predecessor needs to resume. More fundamentally, an
 already-stranded predecessor in the closing owner can never resume.
 
 Recommended prerequisite direction, requiring coordinator/lifecycle review:
 quiesce active dispatches BEFORE the finalizing state prevents GIL reentry
-and BEFORE RemoveExcept/Clear. A closing-owner admission gate and a wait that
-releases GIL/locks must preserve incoming-node rooting, allow other owners'
-unrelated progress, and forbid reentrant self-close from waiting on itself.
+and BEFORE RemoveExcept/Clear. Admission remains open while waiting with
+GIL/locks released, including for this owner's other workers. Preserve
+incoming-node rooting and reject reentrant self-close before state mutation.
 Quiescence alone does not resolve a WAITING node whose predecessor belongs
 to an idle foreign owner: specify cooperative progress/close ordering or
 explicitly revise §5.1 and adopt its nodes/roots/metadata safely. An
@@ -142,12 +152,11 @@ Proposed minimal close protocol, subject to lifecycle review:
    existing EndInterpreter current-frame fatal checks do not prove this
    for all C callbacks. Extending that fatal/reentrant-call contract needs
    explicit root acceptance; never self-wait.
-2. In the world-started pre-finalization loop, publish an OWNER-local
-   admission gate under domain GIL. Other threads of that owner stop
-   starting queue dispatches; the closing thread can continue draining.
-   Existing RUNNING callbacks finish normally. Other owners' unrelated
-   ready callbacks remain parallel. This is shutdown admission, not a
-   single-drainer rule for ordinary operation.
+2. In the world-started pre-finalization loop, leave admission OPEN for
+   ordinary dispatch, including this owner's other workers. An active
+   callback can join a worker that needs its own ready finalizer; an early
+   gate would deadlock that dependency. The former early-gate proposal is
+   superseded. Existing RUNNING callbacks finish normally.
 3. If RUNNING is nonempty, publish a dedicated wait notification before
    detaching; wait with neither GIL, pending mutex nor HEAD held. Completion
    signals under the existing domain-GIL transition protocol; recheck
@@ -158,8 +167,10 @@ Proposed minimal close protocol, subject to lifecycle review:
 4. Recheck RUNNING alongside the final `should_continue` predicates in
    the existing world-stopped/head-locked readiness check (:2335). On
    work/race, follow the existing StartTheWorld + pending-unlock loop,
-   then wait outside locks. Leave the admission gate set through close
-   so there is no zero-count→SetFinalizing race. Atexit/pending callbacks
+   then wait outside locks with admission OPEN. ONLY on successful zero-
+   RUNNING readiness, all other predicates and finalization-guard CAS,
+   latch admission closed under the stopped world/HEAD transaction. Keep
+   it latched through SetFinalizing before the world restarts. Atexit/pending callbacks
    and subinterpreter finalization can themselves run/queue calls, so a
    one-shot check before the whole function is insufficient.
 5. Only then set the attach-blocking finalizing state and remove/clear
@@ -182,10 +193,19 @@ WAITING drain, nor retire/adopt owner metadata. The smallest full lifecycle
 prerequisite must settle both; no successful zero-RUNNING check authorizes
 freeing a WAITING owner.
 
-### Fork policy proposed for explicit ruling
+### Historical child-cancellation alternative (superseded recommendation)
 
-Fork is different: a vanished thread's RUNNING call cannot return. Prefer
-explicit child cancellation/disposal, rather than making fork wait for all
+The accepted review now recommends pre-fork quiescence of other threads'
+dispatches, preserving the main-thread survivor. Admission stays open
+through cooperative waits and latches only at a successful final stopped
+check; no inherited lock is held while waiting. See the lifecycle review
+for exact placement/error/parent restoration requirements. The cancellation
+sketch below is retained as history, not a code direction: graph tombstones
+alone cannot prevent later GC from rediscovering never-started finalizers,
+and dependent native cleanup/redelivery policy was not established.
+
+Fork is different: a vanished thread's RUNNING call cannot return. The
+earlier draft preferred explicit child cancellation/disposal over making fork wait for all
 callbacks or pretending they completed. Cancel the vanished RUNNING nodes
 AND their transitive dependent closure. Remove cancelled READY/WAITING
 nodes without invoking Python or releasing their dependents to ready;
@@ -223,12 +243,13 @@ queued dependent finalizers may never run, and external resources may
 remain until process cleanup. Root must accept/document that fork-specific
 limit. It is not permission to cancel blocked calls at ordinary shutdown.
 
-Alternative: pre-fork admission/quiescence after before-fork Python hooks
+Current review direction: pre-fork quiescence after before-fork Python hooks
 and before import/HEAD/world-stop locks, accounting for the surviving
-call and restoring admission in parent/child. It can block fork indefinitely
+call and restoring admission in parent/child/error. Leave admission open
+while waiting; commit it only at the final stopped readiness check. It can block fork indefinitely
 on an unrelated daemon callback and needs a broader admission protocol;
-there is no such guarantee in current `PyOS_BeforeFork`. Do not silently
-choose it merely to avoid specifying child cancellation.
+there is no such guarantee in current `PyOS_BeforeFork`. This compatibility
+and void-API error contract must be explicit before implementation.
 
 ## Finite next assignments and validation, without new probes
 

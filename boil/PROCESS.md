@@ -173,7 +173,10 @@ C API or library reference by the rung that makes it.
 | `PyDict_Watch()`, `PyType_Watch()` and `PyUnstable_Code_SetExtra()` refuse an object another interpreter owns (`ValueError`, `ValueError`, `SystemError`); `PyUnstable_Code_GetExtra()` on a foreign code object reports no extra; the reserved dict watcher ids are exempt (note 13 section 3.4) | 7a rung 2 | a watcher bit or extra slot is an index into one interpreter's table; set by another interpreter, it names a different watcher or free function in the owner's table | the registering interpreter kept beside each bit or slot: a field per watched object, and no answer to which interpreter runs a foreign watcher when the object dies on its owner |
 | Sampling records use a new format generation, 32-bit opcode with UINT32_MAX for None and verified target handler-schema identity. Remote debug offsets use a new cookie/layout protocol and size-checked prefix; incompatible layouts, target schemas and files are rejected | H3-1 design decision, 2026-10-29; not implemented | IDs above 254 are already lost. Same Python version can hide different numbering; identity must come from the target, be checked before interpretation and retained by the writer | Byte/sentinel fallback, sampler-local identity without target proof, cross-schema remapping or old-layout decoding |
 | Remove C HAVE_ARGUMENT/MIN_SPECIALIZED_OPCODE/MIN_INSTRUMENTED_OPCODE/IR_FIRST_ONLY_HANDLER and their existing Python exports/re-exports inventoried in H3-1 section 5; preserve unrelated EXTENDED_ARG/name APIs | H3-1 final renumber; coordinator decision 2026-10-29, not implemented | Numeric separators cannot describe the generated domain; HAVE_ARGUMENT=41 already misclassifies WITH_EXCEPT_START. Existing hasarg/_opcode.has_arg and generated kinds express the properties | An approximate separator, silently changing its meaning or an old-ID compatibility fallback |
-| `_PyCode_Deinstrument` changes from byte-to-byte to `int(int)`; `_Py_Instrumentation_GetLine` takes `(data, index)` and gains private export visibility; monitoring LINE/INSTRUCTION storage changes layout | H3-1 stage2b.2b; coordinator decision 2026-10-29, implemented in unlanded candidateffc548603b8 | Validate original scalars before narrowing and return invalid/no-counterpart/canonical results explicitly. Fixed absolute int lines remove an invalid relative-line assumption; the decoder no longer needs a code argument. External private/JIT users rebuild | Truncating byte adapters, retaining an unused decoder argument or claiming stable ABI compatibility. All five production decoder calls and bounds must be updated together |
+| `_PyCode_Deinstrument` changes from byte-to-byte to `int(int)`; `_Py_Instrumentation_GetLine` takes `(data, index)` and gains private export visibility; monitoring LINE/INSTRUCTION storage changes layout | H3-1 stage2b.2b; qualified in runtime merge d6a23b9fe0c | Validate original scalars before narrowing and return invalid/no-counterpart/canonical results explicitly. Fixed absolute int lines remove an invalid relative-line assumption; the decoder no longer needs a code argument. External private/JIT users rebuild | Truncating byte adapters, retaining an unused decoder argument or claiming stable ABI compatibility. All five production decoder calls and bounds must be updated together |
+| Python GC debug writes run after the stop callback and collecting reset, before queued finalizers | S3 source design, isolated009fa successor; native validation underway | No Python writer may borrow dead or raw garbage snapshots. Text, flags, per-record exception behavior and within-pass order remain | Immediate Python writes over collector snapshots; global ordering across nested collections |
+| Private weakref table metadata uses libc allocation outside public RAW/tracemalloc hooks | S3 source design, isolated009fa successor; native validation underway | All table acquisitions retain the GIL. Fixed native allocation removes the RAW/tracemalloc lock dependency from holders | A partially converted lock protocol or replaceable allocator callbacks inside that private mutex |
+
 
 ### 0.3 Hand-off ledger
 
@@ -1010,3 +1013,16 @@ bounded native validation. Its finite lock audit identifies inherited weakref
 and range-registry detach/handoff hazards; changing one waiter alone is unsafe.
 Snapshot/debug safety and dependency completion need coherent separate fixes.
 Neither this source checkpoint nor the incremental GC merge closes that debt.
+
+Coordinator checkpoint, 2026-10-30 08:00 PDT: V2 sweep-OOM7f445 completes
+its bounded checks: release/debug-kill focus6 each and four affected modules
+1,561 tests each, zero fallback; copied old fallback fails exactly the named
+no-sweep assertion. Root independently checks12 receipt/cleanup/plan hashes
+and16 raw artifacts. Global qualification remains false pending the actual
+integration candidate. S3 release9/0 plus affected modules pass; its debug
+audit correctly rejects an unmarked new helper. Reviewed annotation-only
+009fa rebuilds both cohorts; old evidence/failure stays unchanged. Separate
+work-stack/MARKED-OOM source implementation is authorized from that clean
+successor, with no native grant yet. Completion lifecycle and buffer-release
+protocols remain design work. The finite repair sequence is in
+`design/work/gc-closure-plan.md`; no interpreter timing has resumed.

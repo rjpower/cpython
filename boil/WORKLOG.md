@@ -4543,3 +4543,60 @@ publish the detailed interpreter report and commission holistic design
 reflection for simple orthogonal improvements. Parameterized LOAD_ATTR
 families are an example to evaluate, not a preapproved new opcode list.
 README, PROCESS and the roadmap record this priority and softened target.
+
+### 08:05 PDT: sweep-OOM controls complete; snapshot successor rebuilds
+
+Sweep-OOM candidate7f4459bf259 completes bounded validation. Release and
+debug-kill focus each execute six cases without skips;123/132 collections,
+zero fallback/unpinned. Whole GC/pyexpat/XML/IO passes1,561 reported tests
+per build,52/37 skips,12,099/13,892 collections,zero fallback;2,093/3,252
+report-only unpinned. The copied original fallback at5ae1269 fails the one
+unchanged no-sweep test with native2/host1 and the intended
+`ordering OOM swept objects` assertion. It is not a crash or startup error.
+Terminal index78e685fd, positiveea715cc6 and negative audita091be06 bind
+the preserved evidence. Root verifies the11 terminal references,12 positive
+receipt/cleanup/plan hashes,16 positive raw artifacts and seven negative
+raw/plan artifacts. Global qualification remains false; no broad fulls or
+primary landing are claimed. The focused source branch is pushed.
+
+The first focused run's six cases/native0 remain preserved as harness
+INVALID: its old wrapper rejected regrtest's informational `-m platform`
+child. The existing narrow auxiliary protocol is reused after independent
+review; the corrected focus runs once without rebuild. Nonquiet H1/baseline
+combined logs share that header limitation; their case/root evidence stays
+separate from a clean transaction claim. Source/evidence review confirms
+all corrected GC full/stress and integration smoke commands use quiet mode,
+never invoke that header child and contain no such error. Their prior
+qualification stands; no full-suite rerun follows this header defect.
+
+S3 source5410cf3 passes independent source review, release focus9/0 and
+four affected modules594/25skips,13,320 collections,zero fallback/2,120
+report-only unpinned. Debug inline audit correctly fails on an outlined,
+collecting debug_flush helper without a precision marker. Its live values
+are only owned libc bytes/scalars; annotation-only successor009fa2dcbe8
+passes the function checker. Both configurations rebuild/refreeze and pass
+their audits; corrected runtime checks are active. Old5410 results and
+debug failure remain frozen. No unchanged-native bridge or audit exception
+is used. A later source check finds that six new S3 children use
+script_helper's default isolated mode, ignoring the inherited verifier
+environment. Their assertions pass off-mode; parent/worker kill results
+do not supply child-kill proof. A focused test-only helper correction
+passes parsed mode explicitly and asserts mode/extras/N0 in each child.
+Its corrected focused replacements, copied immediate-write negative and
+actual-child-kill ASan case remain due. Unchanged module evidence is retained
+with this limitation; no C rebuild follows a test-only correction.
+
+Separate work-stack/MARKED-OOM source is frozen for review: checked sticky
+push, successful journal before MARKED, complete error propagation through
+cycle/finalizer/resurrection walks, and safe next-collection recovery tests.
+It has no native/build result. Completion lifecycle review confirms ordinary
+dispatch must remain admitted during cooperative waits; latch admission only
+at the successful world-stopped zero-running readiness check. Foreign waiting
+nodes require an explicit adoption/metadata policy; fork cannot acknowledge
+a vanished callback as completed. Buffer readiness also shows why five local
+tp_finalize additions would miss Unpickler overrides/reacquisition and native
+release dependencies. These remain design obligations, not implemented fixes.
+
+Finite closure, snapshot, work-stack, lifecycle and buffer-readiness plans
+and their reviews are now in the repository. Interpreter timing remains
+parked. Next hourly documentation/status checkpoint about08:35 PDT.

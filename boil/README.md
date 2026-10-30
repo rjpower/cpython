@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 07:35 PDT. Last qualified runtime merge is d6a23b9fe0c,
+revised 2026-10-30 08:05 PDT. Last qualified runtime merge is d6a23b9fe0c,
 integrating frozen GC/IR candidate5a45f9bb6a7 after independent review,
 all seven qualification profiles, closure audits and post-merge smoke. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 07:35 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 08:05 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -90,8 +90,9 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering, sweep OOM, snapshot reentry and remaining precision/platform obligations |
+| Remaining GC repairs | Sweep-OOM7f445 passes release/debug-kill focus and affected modules; restored fallback fails the named no-sweep oracle. S3 builds/audits pass after a precise-helper annotation fix; its six child-mode checks are being corrected. Work-stack/MARKED patch is source-only | Actual union qualification and landing; completion/close/fork/adoption and buffer-release contracts. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; both matched Clang candidate builds pass audits/CFI,103 runtime cases each and strict6×100 stale controls each. Original audit/cleanup failures and separate corrections remain explicit. Static code changes are mixed | One matched elapsed comparison with goto/tail baseline, code/spill interpretation and independent review; no H1 speedup measured |
+| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
@@ -187,8 +188,9 @@ that is not missing user authorization and no native fix is claimed. A new
 source-only safety/dependency design pass is active. Its eager-order source
 patch is held: weakref-registry lock contention can release the GIL between
 preparation and sweep, invalidating its stable-edge proof. Independent review
-clears the revised late-boundary allocation-safety patch for bounded native
-validation; it is not yet built or landed.
+clears the revised late-boundary allocation-safety patch. Its bounded native
+checks and fail-old control now pass; global qualification and primary
+landing remain due.
 Snapshot safety needs coherent lock protocols and safe debug output; completion
 dependencies must preserve unrelated finalizer progress. Existing
 probe artifacts remain. Loom and GitHub use are authorized. Shared verifier/worker
@@ -256,9 +258,9 @@ and run the whole-project review at each step end.
   form with a measured limit (the 4,095-slot shape limit, the 12-bit
   field) is the pattern. A design that proposes a fallback is sent back.
 - Intermediate gates establish correctness and record performance with
-  attribution. Checkpoint I separately requires pre-JIT interpreter
-  parity; an unresolved deficit cannot simply be deferred to the JIT
-  (PROCESS.md §§0.4 and 3).
+  attribution. After GC fixes, checkpoint I reports interpreter status and
+  prompts design reflection on deficits. Roughly2× is soft guidance;
+  neither parity nor2× is a mandatory numerical gate (PROCESS §0.4).
 - Tests are the oracle: a safety test names its negative control and the
   record shows the control failing; evidence is recorded at the event,
   not at setup; the test asserts the invariant, not a symptom.

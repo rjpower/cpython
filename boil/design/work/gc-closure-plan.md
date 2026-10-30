@@ -77,28 +77,29 @@ separate support decisions; process exit does not excuse ordinary leaks.
    zero fallback; af128e61/all36refs checked. Callback payload/error roots,
    nonwaiting competing collectors and explicit busy shutdown/fork handling
    pass their focused controls. This is not release/ASan/full qualification.
-4. **Persistent buffer closure.** Source-reviewed627590 (PickleBuffer/SRE)
-   and48b021 (Unpickler managed owner) compose at dc7b. Native rebuild passes;
-   new12 focus remains FAIL11passes/one scanner test error. Match.group()
-   reacquires a separate buffer, so its callback closes the idle scanner.
-   Test-only772 uses span offsets, preserving all lifetime assertions; one
-   corrected case and original whole7 await execution on unchanged dc7 native
-   images. Old0ba6b395/all18refs is preserved and checked, never relabeled.
-   NDArray's original-metadata/export proof and same-owner XID's existing-MV
-   reuse are active source ports. The latter is a sixth persistent holder,
-   still used by supported same-interpreter queues/channels. Read the
-   [full inventory and removal cut](10a-buffer-safeguard-removal.md).
-   Remove memory_dealloc's export coercion and PyBuffer_Release's silent
-   swept-exporter suppression only after these owner proofs close; retain
-   checked zero-count and exporter DEAD/SWEPT invariants. A synthetic exact
-   MV export blocker will exercise unready retention/OOM mechanics honestly;
-   real ND acquisition/export tests remain separate. No universal resource-
-   chain depth guarantee or new collection loop is claimed.
-5. **Coherent supported GC union, coordinator.** Compose these reviewed
-   changes and complete the remaining consumer migrations. Resolve normal-
-   runtime lifetime failures on that union, using the existing relevant
-   regressions and qualification recipe. Process-exit retention requires
-   its own explicit boundary; it must not mask supported-run resource leaks.
+4. **Persistent buffer closure, source complete.** Reviewed P/SRE627590,
+   Unpickler48b021, ND baf8 and same-owner XID9d compose with main-only,
+   readiness and drainer work at3c6b8daa506. Safeguard424 removes export-count
+   coercion and silent DEAD/SWEPT release suppression, retaining checked
+   invariants. ND original metadata stays separate from transformed views;
+   its private constructor rejects repeated successful initialization. XID
+   reuses the original managed memoryview acquisition and existing disposal.
+   The [owner ledger](10a-buffer-safeguard-removal.md) and independent source
+   reviews state the finite support boundary and inherited limitations.
+   Corrected consumer evidence is a composite, never a relabeled whole pass:
+   eleven old focused cases plus fresh scanner; six old whole-module passes
+   plus fresh test_re172/3skips. Original failed profiles remain failed.
+5. **Coherent supported GC union, qualifying.** At11:20 PDT the initial final
+   make stopped before compilation at source-cleanliness check, caused by an
+   unknown-origin ambient in-source build. All588 owned debug products were
+   unchanged; preserve that build and failure. Clean existing worktree
+   boil-buffer-xid-main-only, new branch boil/gc-final-validation at3c6, owns
+   a fresh O1 out-of-source build. Next: new13, conditional whole9, four
+   reviewed causal omissions in one negative build, then actual-union release,
+   debug and ASan profiles plus closure. Reuse existing recipes/modes/locks;
+   stop unexpected failures, diagnose and keep original results. Independent
+   source/evidence review precedes primary merge and post-merge smoke. Process
+   exit does not excuse supported-run lifetime leaks.
 6. **Interpreter report and reflection.** Once the supported GC boundary is
    sound, refresh matched release timing with JITs off and publish the detailed
    IR/dispatch/value-flow/call/root cost report. Compare the preserved H1
@@ -106,8 +107,8 @@ separate support decisions; process exit does not excuse ordinary leaks.
    operation families and shared costs. Roughly2× on simple arithmetic guides
    design attention; it is neither a hard gate nor a reason for special cases.
 
-Safety qualification and bounded drainer feedback are complete. Compose the
-remaining reviewed ports before native feedback. Keep builds within the two
+Safety qualification and component feedback are complete. The remaining
+ports are composed; final supported-union qualification is active. Keep builds within the two
 existing slots; serialize full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
 for quiet native execution and the agreed GC correctness boundary.
 

@@ -19,15 +19,16 @@ during GC implementation. Preserve its existing builds and bounded runtime
 evidence. After GC, report the actual IR/handler/value/call/GC state and
 costs before commissioning the broader interpreter cleanup.
 
-Current GC checkpoint,2026-10-30 10:48 PDT: safetyff6 is landed. The first
-main-only/buffer/drainer candidate925d passes bounded O1 checks. Reviewed
-sealed consumers and Unpickler owners compose in dc7b; its new focus exposed
-one scanner test that conflated independent acquisitions. Test-only772 fixes
-the oracle; corrected-case/affected-module validation is pending, with the
-original failure preserved. NDArray and same-owner XID remain source ports;
-then remove the old count/callback bypasses and qualify the actual union.
+Current GC checkpoint,2026-10-30 11:20 PDT: safetyff6 is landed. Final
+main-only/drainer/buffer source3c6b8daa506 is complete, including ND and
+same-owner XID ports and the two safeguard removals. Component O1 evidence
+passes through explicit test-only corrected composites; final-union native
+qualification remains. An unknown ambient in-source build blocked its first
+make before compilation. Preserve it and qualify in a clean existing source
+worktree with a fresh owned O1 build. New/affected checks, four causal controls,
+release/ASan/full/closure and primary landing precede the interpreter report.
 The [closure plan](gc-closure-plan.md) and [owner ledger](10a-buffer-safeguard-removal.md)
-name the remaining boundary. No refreshed performance score exists yet.
+name the exact boundary. No refreshed performance score exists yet.
 
 **How we judge the result.** The primary score is the geometric mean of
 upstream elapsed time divided by fork elapsed time across the declared

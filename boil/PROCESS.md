@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 10:48 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 11:20 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -31,7 +31,7 @@ record and is updated at every landing.
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
 | 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
-| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Owner routing052 is landed. Safety9e/native168 lands as ff6ed9d6bfb after qualified profiles/composite, closure and both1,930-test integration smokes. Snapshot/debug output, sweep-order OOM and work-stack/MARKED rollback repairs are complete. Main-only dbb5 is source-reviewed and passes bounded O1 validation (new5; whole4 reports811/76skips). Buffer87b6 passes new5 and ordinary affected cases; whole479/23skips remains FAIL on one foreign-owner case. 925d main-only/buffer/drainer passes O1 focus17/0 and whole9 1518/146skips. Source-reviewed P/SRE627590 and Unpickler48b021 compose in dc7b; new12 has one confirmed scanner-oracle error, corrected test-only772 validation pending. NDArray and same-owner XID ports remain source work. Cross-interpreter adoption/retirement and owner63b integration are deferred under the revised scope |
+| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final supported-runtime union3c6b8daa506 composes main-only admission, one rooted drainer, all six concrete buffer owner families and checked safeguard removal; source reviews clear bounded validation. Final O1 qualification uses a clean existing worktree after an unknown in-source build blocked the original make before compilation. Preserve the old build and FAIL. New13/whole9, four causal controls, release/ASan/full/closure and landing remain; no final-union native pass claimed. Foreign/adoption machinery stays deferred |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
@@ -1005,29 +1005,42 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 10:48 PDT
+### Current coordinator ruling, 2026-10-30 11:20 PDT
 
-**Runtime checkpoint,2026-10-30 10:48 PDT.** Safetyff6 remains primary.
-Candidate925d passes O1 focus17/0 and whole9 1518/146skips, including60 declared
-unsupported creation skips. Root verified af128e61/all36refs. Candidate dc7b
-adds reviewed sealed627590 and owner48b021 source; its native rebuild passes.
-New12 focus remains FAIL11passes/one scanner-oracle error. Test-only772 switches
-.group() to .span(), avoiding a separate acquisition/release callback while
-preserving all lifecycle assertions. Original0ba6b395/all18refs stays failed.
-One corrected case and original not-yet-launched whole7 use the explicit
-native-dc7/test-772 bridge; no rebuild or repeated full focus is needed.
+Safetyff6 remains the landed runtime. Source-complete3c6b8daa506 includes
+main-only admission, one rooted drainer, persistent buffer closure and the
+removal of count coercion and silent release suppression. The independent
+[union source review](design/work/reviews/gc-simple-union-source-review.md)
+clears bounded validation and states authorship exclusions and support limits.
+NDArray retains original metadata separately from transformed views; private
+successful constructor reuse rejects. Same-owner XID uses an ordinary view
+of the existing managed acquisition, with no receiving wrapper finalizer.
 
-NDArray and same-owner XID source ports proceed in parallel. The private ND
-constructor will reject repeated successful initialization; existing producer
-push/pop remain its mutation API. This intentional test-API change avoids
-inventing active-operation ownership for replacement and needs unchanged-state
-controls. Same-owner XID will reuse an ordinary memoryview and remove its
-obsolete CrossInterpreterBufferView machinery; foreign restoration rejects.
-Both changes await source review/native validation. The final buffer ledger
-names the exact invariants for removing count coercion and callback suppression.
-One copied negative build can cover three disjoint named failure controls.
-Release/ASan/broad/closure gates then qualify the actual coherent supported
-union. No interpreter timing resumes before that GC boundary is sound.
+Consumer validation has an explicit composite: eleven original focused
+passes plus one corrected scanner case; six original whole-module passes
+plus fresh whole test_re172/3skips. The original focused and whole-module
+failures remain failed. Test-only772/e48/86 correct independent acquisition
+and post-callback collection assumptions without changing C products or
+weakening once-only assertions. No repeated full focus campaign was needed.
+
+The final make-only attempt stopped at check-clean-src before compilation:
+an unknown-origin ambient in-source build appeared in boil-gc-simple. All588
+owned debug products were unchanged. Preserve that ambient build, inventory
+and original failure. Reuse the clean existing boil-buffer-xid-main-only
+worktree on new branch boil/gc-final-validation at3c6;424 has the same tracked
+tree and its branch/packets remain. A fresh out-of-source O1 configure/build
+is required by the new path/configuration. Independent checks clear the
+mechanical reuse of the accepted build/target recipe and executable modes.
+
+After build, run new13 (ND4, XID8, retention/OOM1) then conditional affected9
+once, with actual kill/N0 and the declared unsupported-creation classification.
+Source-review four disjoint causal omissions before one copied negative build:
+drainer claim, SRE null-before-release, transactional Unpickler replacement,
+and ND closed-owner read guard. Each needs its named assertion, not a crash
+or timeout. Existing release/debug/ASan profiles and closure then qualify the
+actual union. No new framework, blanket filters or automatic20-pass campaign.
+Interpreter timings and new performance implementation remain parked until
+GC landing; subsequent detailed report/reflection follows the user's order.
 
 **Superseding scope checkpoint,2026-10-30 09:35 PDT.** The user asks whether
 subinterpreters and shutdown complexity can be deferred. Adopt the boundary

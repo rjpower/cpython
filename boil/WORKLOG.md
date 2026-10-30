@@ -4747,3 +4747,32 @@ Source task is active. Final safeguard-removal ledger is independently read;
 no coercion or silent callback suppression remains an acceptable final policy.
 Three disjoint causal controls can share one negative build after source closes.
 No release/ASan/full union or refreshed performance result is claimed.
+
+
+### 11:20 PDT: final GC source composed; qualify from a clean existing worktree
+
+Safetyff6 remains primary. Final3c6b8daa506 composes all main-only/drainer/
+readiness/consumer ports and safeguard424. Independent source review clears
+bounded validation, excluding approval of the reviewer's own P/SRE/ND code;
+those have separate source reviews. No final-union native pass yet.
+
+Consumer oracle corrections are test-only772/e48/86. Original failures
+0ba6b395 and7a496840 remain failed. The corrected scanner passes after actual
+callback return and later collection, with once-only assertions retained.
+Whole7 b6dc5a04 remains failed only on acquisition accounting in test_re;
+fresh whole test_re passes172/3skips at86, index0472ba31. Six original passed
+modules carry explicitly, yielding1783/103skip composite coverage. Root
+checked final indexes and references; C products remain native-dc7.
+
+Final make-only at3c6 stopped at check-clean-src before any compiler/test:
+unknown-origin in-source configure/build appeared in the source root. All588
+owned debug products remained byte-identical. Preserve the ambient686-file/
+446MB inventory and original failure9a545ccd; do not delete or attribute it.
+Root reuses source-only boil-buffer-xid-main-only, switching new branch
+boil/gc-final-validation at3c6 (same tree as424). Original branch and packets
+remain. Accepted fresh O1 recipe changes only HEAD/path/profile bindings;
+independent review checks all inputs and executable0755 worker modes.
+New13 and conditional whole9 follow build, not another repeated campaign.
+Four source-reviewed causal omissions share one later negative build; broad
+release/debug/ASan and closure follow. No performance timing yet. Next hourly
+summary around11:30 PDT, with material updates sooner.

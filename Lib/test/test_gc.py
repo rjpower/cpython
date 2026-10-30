@@ -7,7 +7,7 @@ from test.support import (verbose,
 from test.support.os_helper import temp_dir, TESTFN, unlink
 from test.support.script_helper import (assert_python_ok,
                                         assert_python_failure, make_script)
-from test.support import threading_helper, gc_threshold
+from test.support import threading_helper, gc_threshold, import_helper
 
 import gc
 import os
@@ -4024,6 +4024,285 @@ class InterpreterQueueTests(unittest.TestCase):
     reference's owner, a finalizer, legacy tp_del or destroy call on its
     object's owner, the interpreter whose heap holds the block, and only
     while that interpreter's queue is open."""
+
+    def test_foreign_watcher_registration(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            d = {}
+            class T:
+                pass
+            dw = _testcapi.add_dict_watcher(0)
+            tw = _testcapi.add_type_watcher(3)
+            _testcapi.watch_dict(dw, d)
+            _testcapi.watch_type(tw, T)
+            _testinternalcapi.stash_set((d, T, dw, tw))
+            sub = _interpreters.create("legacy")
+            try:
+                _interpreters.exec(sub, '''if 1:
+                    import _testcapi, _testinternalcapi
+                    d, T, owner_dw, owner_tw = _testinternalcapi.stash_get()
+                    dw = _testcapi.add_dict_watcher(1)
+                    tw = _testcapi.add_type_watcher(1)
+                    assert (dw, tw) == (owner_dw, owner_tw)
+                    try:
+                        for operation, obj, wid in (
+                            (_testcapi.watch_dict, d, dw),
+                            (_testcapi.unwatch_dict, d, dw),
+                            (_testcapi.watch_type, T, tw),
+                            (_testcapi.unwatch_type, T, tw),
+                        ):
+                            try:
+                                operation(wid, obj)
+                            except ValueError as error:
+                                assert "owned by another interpreter" in str(error)
+                            else:
+                                raise AssertionError("foreign watcher operation accepted")
+                    finally:
+                        _testcapi.clear_dict_watcher(dw)
+                        _testcapi.clear_type_watcher(tw)
+                ''')
+                # A rejected Unwatch must leave the owner's bit intact.
+                d["key"] = "value"
+                T.key = "value"
+                assert _testcapi.get_dict_watcher_events() == ["new:key:value"]
+                assert _testcapi.get_type_modified_events() == ["T"]
+                print("owner metadata intact")
+            finally:
+                _testcapi.unwatch_dict(dw, d)
+                _testcapi.unwatch_type(tw, T)
+                _testcapi.clear_dict_watcher(dw)
+                _testcapi.clear_type_watcher(tw)
+                _testinternalcapi.stash_set(None)
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["owner metadata intact"])
+
+    def test_isolated_metadata_registration(self):
+        out = _queue_child("""
+            sub = _interpreters.create()
+            try:
+                _interpreters.exec(sub, '''if 1:
+                    import _testcapi
+                    d = {}
+                    class T:
+                        pass
+                    dw = _testcapi.add_dict_watcher(0)
+                    tw = _testcapi.add_type_watcher(3)
+                    try:
+                        _testcapi.watch_dict(dw, d)
+                        _testcapi.watch_type(tw, T)
+                        d["key"] = "value"
+                        T.key = "value"
+                        assert _testcapi.get_dict_watcher_events() == ["new:key:value"]
+                        assert _testcapi.get_type_modified_events() == ["T"]
+                        _testcapi.unwatch_dict(dw, d)
+                        _testcapi.unwatch_type(tw, T)
+                        _testcapi.test_code_extra()
+                    finally:
+                        _testcapi.clear_dict_watcher(dw)
+                        _testcapi.clear_type_watcher(tw)
+                ''')
+                print("isolated metadata local")
+            finally:
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["isolated metadata local"])
+
+    def test_foreign_code_extra(self):
+        import_helper.import_module("ctypes")
+        out = _queue_child("""
+            import ctypes
+            from test.test_code import FREE_FUNC, FREE_INDEX, SetExtra, GetExtra
+            import test.test_code as code_test
+            code = compile("pass", "owner-extra", "exec")
+            SetExtra(code, FREE_INDEX, ctypes.c_voidp(271))
+            code_test.LAST_FREED = None
+            _testinternalcapi.stash_set((code, FREE_INDEX))
+            sub = _interpreters.create("legacy")
+            try:
+                _interpreters.exec(sub, '''if 1:
+                    import ctypes, _testinternalcapi
+                    from test.test_code import FREE_INDEX, SetExtra, GetExtra
+                    code, owner_index = _testinternalcapi.stash_get()
+                    assert FREE_INDEX == owner_index
+                    extra = ctypes.c_voidp(999)
+                    assert GetExtra(code, FREE_INDEX, extra) == 0
+                    assert extra.value is None, "foreign extra exposed"
+                    try:
+                        SetExtra(code, FREE_INDEX, ctypes.c_voidp(999))
+                    except SystemError as error:
+                        assert "owned by another interpreter" in str(error)
+                    else:
+                        raise AssertionError("foreign code extra write accepted")
+                ''')
+                extra = ctypes.c_voidp()
+                GetExtra(code, FREE_INDEX, extra)
+                assert extra.value == 271
+                assert code_test.LAST_FREED is None, "foreign write freed owner payload"
+                SetExtra(code, FREE_INDEX, None)
+                assert code_test.LAST_FREED == 271
+                print("owner extra intact")
+            finally:
+                _testinternalcapi.stash_set(None)
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["owner extra intact"])
+
+    def test_foreign_function_destroy_discovery(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            expected = set()
+            events = []
+            def watcher(event, func_id, new_value):
+                if event == _testcapi.PYFUNC_EVENT_DESTROY and func_id in expected:
+                    events.append((func_id, where()))
+            wid = _testcapi.add_func_watcher(watcher)
+            def make():
+                refs = []
+                for i in range(50):
+                    def target():
+                        pass
+                    target.cycle = target
+                    expected.add(id(target))
+                    refs.append(weakref.ref(target))
+                return refs
+            refs = make()
+            sub = _interpreters.create("legacy")
+            try:
+                # Sub has no function watcher; main owns both the garbage
+                # and the callback. Main's return safepoint delivers it.
+                _interpreters.exec(sub, "import gc; gc.collect()")
+                dead = expected - {id(obj) for ref in refs if (obj := ref()) is not None}
+                assert dead, "no function reclaimed"
+                assert {ident for ident, owner in events} == dead, events
+                assert len(events) == len(dead), events
+                assert all(owner == where() for ident, owner in events), events
+                print("function destroy on owner")
+            finally:
+                _testcapi.clear_func_watcher(wid)
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["function destroy on owner"])
+
+    def test_foreign_dict_type_destroy_discovery(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            sub = _interpreters.create("legacy")
+            dw = _testcapi.add_dict_watcher(1)
+            tw = _testcapi.add_type_watcher(1)
+            events = []
+            def on_error(error):
+                if error.err_msg.startswith("Exception ignored in PyDict_EVENT_DEALLOCATED"):
+                    events.append(("dict", where()))
+                elif error.err_msg.startswith("Exception ignored in type watcher callback"):
+                    events.append(("type", where()))
+                else:
+                    raise AssertionError(error.err_msg)
+            saved_hook = sys.unraisablehook
+            sys.unraisablehook = on_error
+            class D(dict):
+                pass
+            def make():
+                refs = []
+                for i in range(50):
+                    d = D()
+                    d["self"] = d
+                    _testcapi.watch_dict(dw, d)
+                    refs.append(("dict", weakref.ref(d)))
+                    t = type("Target", (), {})
+                    t.self = t
+                    _testcapi.watch_type(tw, t)
+                    refs.append(("type", weakref.ref(t)))
+                return refs
+            refs = make()
+            try:
+                # The collecting interpreter has neither callback table.
+                _interpreters.exec(sub, "import gc; gc.collect()")
+                for kind in ("dict", "type"):
+                    count = sum(ref() is None for tag, ref in refs if tag == kind)
+                    assert count, (kind, "no object reclaimed")
+                    assert events.count((kind, where())) == count, (kind, events, count)
+                assert all(owner == where() for kind, owner in events), events
+                print("dict and type destroy on owner")
+            finally:
+                _testcapi.clear_dict_watcher(dw)
+                _testcapi.clear_type_watcher(tw)
+                sys.unraisablehook = saved_hook
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["dict and type destroy on owner"])
+
+    def test_foreign_code_extra_destroy_discovery(self):
+        import_helper.import_module("ctypes")
+        out = _queue_child("""
+            from test.test_code import freefunc, PyUnstable_Eval_RequestCodeExtraIndex, SetExtra
+            from test.support import late_deletion
+            gc.disable()
+            sub = _interpreters.create("legacy")
+            events = []
+            def on_free(token):
+                events.append((token, where()))
+            callback = freefunc(on_free)
+            late_deletion(callback)
+            index = PyUnstable_Eval_RequestCodeExtraIndex(callback)
+            def make():
+                refs = []
+                for token in range(1, 51):
+                    code = compile("pass", "owner-extra", "exec")
+                    SetExtra(code, index, token)
+                    refs.append((token, weakref.ref(code)))
+                return refs
+            refs = make()
+            try:
+                # Sub has no free function for this index. Its table must
+                # not decide whether main's code needs a destroy hook.
+                _interpreters.exec(sub, "import gc; gc.collect()")
+                dead = {token for token, ref in refs if ref() is None}
+                assert dead, "no code reclaimed"
+                assert {token for token, owner in events} == dead, events
+                assert len(events) == len(dead), events
+                assert all(owner == where() for token, owner in events), events
+                print("code extras freed on owner")
+            finally:
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["code extras freed on owner"])
+
+    def test_foreign_code_watcher_destroy_discovery(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            sub = _interpreters.create("legacy")
+            events = []
+            def on_error(error):
+                if error.err_msg.startswith("Exception ignored in PY_CODE_EVENT_DESTROY"):
+                    if 'file "owner-code"' in error.err_msg:
+                        events.append(where())
+                else:
+                    assert error.err_msg.startswith("Exception ignored in PY_CODE_EVENT_CREATE")
+            saved_hook = sys.unraisablehook
+            sys.unraisablehook = on_error
+            wid = _testcapi.add_code_watcher(2)
+            def make():
+                return [weakref.ref(compile("pass", "owner-code", "exec"))
+                        for i in range(50)]
+            refs = make()
+            try:
+                _interpreters.exec(sub, "import gc; gc.collect()")
+                count = sum(ref() is None for ref in refs)
+                assert count, "no code reclaimed"
+                assert len(events) == count, (events, count)
+                assert all(owner == where() for owner in events), events
+                print("code destroy on owner")
+            finally:
+                _testcapi.clear_code_watcher(wid)
+                sys.unraisablehook = saved_hook
+                _interpreters.destroy(sub)
+        """)
+        self.assertEqual(out.splitlines(), ["code destroy on owner"])
 
     def test_child_verifier_mode(self):
         modes = [("retain:pymem,structs", (1, 3))]

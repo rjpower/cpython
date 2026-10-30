@@ -293,8 +293,9 @@ watcher id (`PyDict_Watch()`, `PyType_Watch()`), which only a shared
 heap allows; the bit or slot then means a different watcher or free
 function in B's table, and B's watcher with the colliding id hears of a
 dict it never watched. These three functions now look the object's
-owner up (`_PyGC_LiveOwnerOf(op)`, the segment lookup of section 2
-against the live interpreters, under the head lock) and refuse a
+owner up (`_PyGC_LiveOwnedBy(op, interp)`, the segment lookup of section 2
+compared with the attached interpreter under the head lock, without an
+unpinned foreign interpreter pointer escaping) and refuse a
 foreign object: `PyDict_Watch()` and `PyType_Watch()` raise
 `ValueError` ("cannot watch an object owned by another interpreter"),
 and `PyUnstable_Code_SetExtra()` raises `SystemError`, both documented
@@ -312,6 +313,21 @@ registering interpreter beside each bit or slot was the alternative;
 it costs a field per watched object and still leaves the question of
 which interpreter runs the foreign watcher when the object dies on its
 owner.
+
+Queue2b's first implementation also guards `PyDict_Unwatch()` and
+`PyType_Unwatch()` symmetrically. Public type Watch/Unwatch reject
+ownerless static types with ValueError: global `tp_watched` bits cannot
+represent interpreter-local callback IDs. Heap immortals keep their real
+allocator owner. This is an additional explicit compatibility break.
+
+This first slice covers registration/access and destruction discovery.
+Ordinary foreign mutation dispatch remains a required separate contract:
+dict events, type modification and function MODIFY_CODE/DEFAULTS/
+KWDEFAULTS/QUALNAME events still consult the mutator's tables. Function
+CREATE belongs to allocation; DESTROY is covered by owner discovery and
+delivery. Code exposes only CREATE and DESTROY events. No silent event
+drop or thread-state switch is introduced here; retirement/adoption and a
+complete owner-safety claim remain blocked on the remaining work.
 
 ### 3.5 Completion order for dependent calls
 

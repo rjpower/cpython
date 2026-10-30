@@ -32,7 +32,7 @@ extern PyStatus _PyCode_Init(PyInterpreterState *interp);
 /* The collector makes these calls of the dealloc's before the
    sweep, where they may run code (Python/gc_live.c): the code watchers'
    DESTROY event and the co_extra free functions.  The dealloc does not. */
-extern int _PyCode_HasExtraFree(PyObject *co);
+extern int _PyCode_HasExtraFree(PyInterpreterState *owner, PyObject *co);
 extern void _PyCode_Destroy(PyObject *co);
 extern void _PyCode_Fini(PyInterpreterState *interp);
 

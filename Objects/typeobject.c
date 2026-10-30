@@ -933,6 +933,15 @@ PyType_Watch(int watcher_id, PyObject* obj)
     if (validate_watcher_id(interp, watcher_id) < 0) {
         return -1;
     }
+    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        PyErr_SetString(PyExc_ValueError, "cannot watch a static type");
+        return -1;
+    }
+    if (!_PyGC_LiveOwnedBy(obj, interp)) {
+        PyErr_SetString(PyExc_ValueError,
+                        "cannot watch an object owned by another interpreter");
+        return -1;
+    }
     // ensure we will get a callback on the next modification
     BEGIN_TYPE_LOCK();
     assign_version_tag(interp, type);
@@ -951,6 +960,15 @@ PyType_Unwatch(int watcher_id, PyObject* obj)
     PyTypeObject *type = (PyTypeObject *)obj;
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (validate_watcher_id(interp, watcher_id)) {
+        return -1;
+    }
+    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        PyErr_SetString(PyExc_ValueError, "cannot unwatch a static type");
+        return -1;
+    }
+    if (!_PyGC_LiveOwnedBy(obj, interp)) {
+        PyErr_SetString(PyExc_ValueError,
+                        "cannot unwatch an object owned by another interpreter");
         return -1;
     }
     type->tp_watched &= ~(1 << watcher_id);

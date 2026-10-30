@@ -342,6 +342,8 @@ may change without deprecation warnings.
    If no data was set under the index, set *extra* to ``NULL`` and return
    0 without setting an exception.
 
+   A code object owned by another interpreter also reports no extra data.
+
    .. versionadded:: 3.6 as ``_PyCode_GetExtra``
 
    .. versionchanged:: 3.12
@@ -357,6 +359,10 @@ may change without deprecation warnings.
 
    Set the extra data stored under the given index to *extra*.
    Return 0 on success. Set an exception and return -1 on failure.
+
+   *code* must belong to the current interpreter. Otherwise, raise
+   :exc:`SystemError` without changing its extra data or calling a free
+   function.
 
    .. versionadded:: 3.6 as ``_PyCode_SetExtra``
 

@@ -116,6 +116,11 @@ Type Objects
 
    The callback is also invoked when a watched heap type is deallocated.
 
+   *type* must be a heap type owned by the current interpreter. Raise
+   :exc:`ValueError` for a static type or a type owned by another
+   interpreter. This also applies to immortal heap types: immortality
+   does not change their owner.
+
    An extension should never call ``PyType_Watch`` with a *watcher_id* that was
    not returned to it by a previous call to :c:func:`PyType_AddWatcher`.
 
@@ -129,6 +134,9 @@ Type Objects
 
    Mark *type* as not watched. This undoes a previous call to
    :c:func:`PyType_Watch`. *type* must not be ``NULL``.
+
+   The heap-type and ownership restrictions of :c:func:`PyType_Watch`
+   also apply here.
 
    An extension should never call this function with a *watcher_id* that was
    not returned to it by a previous call to :c:func:`PyType_AddWatcher`.

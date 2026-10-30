@@ -349,6 +349,15 @@ class TestTypeWatchers(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, r"Cannot watch non-type"):
                 self.watch(wid, 1)
 
+    def test_static_type_rejected(self):
+        with self.watcher() as wid:
+            for static_type in (int, object, type):
+                with self.subTest(type=static_type):
+                    with self.assertRaisesRegex(ValueError, "cannot watch a static type"):
+                        self.watch(wid, static_type)
+                    with self.assertRaisesRegex(ValueError, "cannot unwatch a static type"):
+                        self.unwatch(wid, static_type)
+
     def test_watch_out_of_range_watcher_id(self):
         class C: pass
         with self.assertRaisesRegex(ValueError, r"Invalid type watcher ID -1"):

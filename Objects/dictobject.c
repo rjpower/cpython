@@ -99,6 +99,7 @@ decremented.
 #define PyDict_MINSIZE 8
 
 #include "Python.h"
+#include "pycore_gc_trace.h"      // _PyGC_LiveOwnedBy()
 #include "pycore_shape.h"       // _PyObject_SetShape()
 #include "pycore_bitutils.h"      // _Py_bit_length
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -6236,6 +6237,13 @@ PyDict_Watch(int watcher_id, PyObject* dict)
     if (validate_watcher_id(interp, watcher_id)) {
         return -1;
     }
+    if (watcher_id >= FIRST_AVAILABLE_WATCHER
+        && !_PyGC_LiveOwnedBy(dict, interp))
+    {
+        PyErr_SetString(PyExc_ValueError,
+                        "cannot watch an object owned by another interpreter");
+        return -1;
+    }
     FT_ATOMIC_OR_UINT64(((PyDictObject*)dict)->_ma_watcher_tag,
                         1ULL << watcher_id);
     return 0;
@@ -6250,6 +6258,13 @@ PyDict_Unwatch(int watcher_id, PyObject* dict)
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (validate_watcher_id(interp, watcher_id)) {
+        return -1;
+    }
+    if (watcher_id >= FIRST_AVAILABLE_WATCHER
+        && !_PyGC_LiveOwnedBy(dict, interp))
+    {
+        PyErr_SetString(PyExc_ValueError,
+                        "cannot unwatch an object owned by another interpreter");
         return -1;
     }
     FT_ATOMIC_AND_UINT64(((PyDictObject*)dict)->_ma_watcher_tag,

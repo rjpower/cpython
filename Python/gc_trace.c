@@ -1719,6 +1719,29 @@ _PyGC_LiveOwner(const _PyGCMarkResult *res, PyObject *op)
     return NULL;
 }
 
+/* HEAD never detaches; this compares allocator metadata without running
+   Python or allocating, and retains no object pointer across the lock. */
+Py_GC_PRECISE int
+_PyGC_LiveOwnedBy(PyObject *op, PyInterpreterState *interp)
+{
+    int owned = 0;
+    assert(interp == _PyInterpreterState_GET());
+    HEAD_LOCK(&_PyRuntime);
+    mi_segment_t *seg = _mi_gc_segment_of((uintptr_t)op);
+    if (seg != NULL) {
+        for (PyInterpreterState *owner = PyInterpreterState_Head();
+             owner != NULL; owner = PyInterpreterState_Next(owner))
+        {
+            if (owner->mimalloc.subproc == seg->subproc) {
+                owned = owner == interp;
+                break;
+            }
+        }
+    }
+    HEAD_UNLOCK(&_PyRuntime);
+    return owned;
+}
+
 /* The object heap page of the domain that holds addr, through the segment
    map that mimalloc keeps for the collector (_mi_gc_segment_of()), or NULL.
    An address in a segment's metadata, in a free span or in a mem heap page
@@ -2035,6 +2058,7 @@ live_scan_words(trace_t *t, uintptr_t start, uintptr_t stop)
 
 struct live_walk {
     trace_t *t;
+    PyInterpreterState *owner;
     size_t offset;
     int pages;            // record the mem heaps' pages, not the blocks
     _PyGCMarkResult *res;
@@ -2069,7 +2093,8 @@ live_destroy_hook_of(const struct live_walk *w, PyInterpreterState *interp,
         return interp->active_func_watchers != 0;
     }
     if (tp == &PyCode_Type) {
-        return interp->active_code_watchers != 0 || _PyCode_HasExtraFree(op);
+        return interp->active_code_watchers != 0
+            || _PyCode_HasExtraFree(interp, op);
     }
     if (tp == &PyCapsule_Type) {
         return _PyCapsule_HasDestructor(op);
@@ -2187,7 +2212,7 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
            ? _PyGC_DEAD_FIRST : 0)
         | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
         | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0)
-        | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0)
+        | (live_has_destroy_hook(w, w->owner, op, tp) ? _PyGC_DEAD_HOOK : 0)
         | (t->killed.keys != NULL && addrset_has(&t->killed, (uintptr_t)op)
            ? _PyGC_DEAD_KILLED : 0);
     res->kinds |= kinds;
@@ -2210,6 +2235,20 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
     int ok = 1;
     for (int d = 0; ok && d < t->ndomain; d++) {
         PyInterpreterState *interp = t->domain[d];
+        w->owner = interp;
+        w->dict_watchers = 0;
+        w->type_watchers = 0;
+        // Reserved dict callbacks still run in dict_dealloc().
+        for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
+            if (interp->dict_state.watchers[i] != NULL) {
+                w->dict_watchers |= 1 << i;
+            }
+        }
+        for (int i = 0; i < TYPE_MAX_WATCHERS; i++) {
+            if (interp->type_watchers[i] != NULL) {
+                w->type_watchers |= 1 << i;
+            }
+        }
         _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
             struct _mimalloc_thread_state *m =
                 &((_PyThreadStateImpl *)p)->mimalloc;
@@ -3365,18 +3404,6 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     /* The walk clears every mark, also after a failure, when it lists
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
-    PyInterpreterState *interp = tstate->interp;
-    // CPython's own dict watchers hear of a deallocation in the sweep.
-    for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
-        if (interp->dict_state.watchers[i] != NULL) {
-            w.dict_watchers |= 1 << i;
-        }
-    }
-    for (int i = 0; i < TYPE_MAX_WATCHERS; i++) {
-        if (interp->type_watchers[i] != NULL) {
-            w.type_watchers |= 1 << i;
-        }
-    }
     int walked = live_walk_heaps(&t, &w);
     if (walked >= 0 && !w.failed) {
         live_clear_weak_caches(&t);

@@ -551,6 +551,10 @@ Dictionary objects
    :c:func:`PyDict_AddWatcher` will be called when *dict* is modified or
    deallocated. Return ``0`` on success or ``-1`` on error.
 
+   For non-reserved watcher IDs, *dict* must belong to the current
+   interpreter. Otherwise, raise :exc:`ValueError`. CPython's reserved
+   builtins/globals/module watcher IDs retain their internal exemption.
+
    .. versionadded:: 3.12
 
 .. c:function:: int PyDict_Unwatch(int watcher_id, PyObject *dict)
@@ -559,6 +563,8 @@ Dictionary objects
    *watcher_id* by :c:func:`PyDict_AddWatcher` will no longer be called when
    *dict* is modified or deallocated. The dict must previously have been
    watched by this watcher. Return ``0`` on success or ``-1`` on error.
+
+   The ownership restriction of :c:func:`PyDict_Watch` also applies here.
 
    .. versionadded:: 3.12
 

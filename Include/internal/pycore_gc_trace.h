@@ -335,6 +335,11 @@ extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 extern PyInterpreterState *_PyGC_LiveOwner(const _PyGCMarkResult *res,
                                            PyObject *op);
 
+/* Whether op's allocator owner is interp, which must be the attached
+ * interpreter. Compares under HEAD; no foreign interpreter pointer escapes.
+ * Static objects and heaps with no live owner do not belong to interp. */
+extern int _PyGC_LiveOwnedBy(PyObject *op, PyInterpreterState *interp);
+
 /* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
  * or NULL if the collector's state cannot be allocated. */
 extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);

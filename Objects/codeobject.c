@@ -3,6 +3,7 @@
 
 #include "pycore_code.h"          // _PyCodeConstructor
 #include "pycore_function.h"      // _PyFunction_ClearCodeByVersion()
+#include "pycore_gc_trace.h"      // _PyGC_LiveOwnedBy()
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // PyInterpreterState.co_extra_freefuncs
@@ -1571,6 +1572,10 @@ PyUnstable_Code_GetExtra(PyObject *code, Py_ssize_t index, void **extra)
         return 0;
     }
 
+    if (!_PyGC_LiveOwnedBy(code, _PyInterpreterState_GET())) {
+        return 0;
+    }
+
     // Lock-free read; pairs with release stores in SetExtra.
     _PyCodeObjectExtra *co_extra = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->co_extra);
     if (co_extra != NULL && index < co_extra->ce_size) {
@@ -1594,6 +1599,12 @@ PyUnstable_Code_SetExtra(PyObject *code, Py_ssize_t index, void *extra)
 
     if (!PyCode_Check(code) || index < 0 || index >= user_count) {
         PyErr_BadInternalCall();
+        return -1;
+    }
+
+    if (!_PyGC_LiveOwnedBy(code, interp)) {
+        PyErr_SetString(PyExc_SystemError,
+                        "cannot set code extras on an object owned by another interpreter");
         return -1;
     }
 
@@ -2349,13 +2360,12 @@ free_code_extras(PyCodeObject *co)
 }
 
 int
-_PyCode_HasExtraFree(PyObject *op)
+_PyCode_HasExtraFree(PyInterpreterState *interp, PyObject *op)
 {
     PyCodeObject *co = _PyCodeObject_CAST(op);
     if (co->co_extra == NULL) {
         return 0;
     }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyCodeObjectExtra *co_extra = co->co_extra;
     for (Py_ssize_t i = 0; i < co_extra->ce_size; i++) {
         if (interp->co_extra_freefuncs[i] != NULL) {

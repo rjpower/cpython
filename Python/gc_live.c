@@ -1373,6 +1373,11 @@ debug_write(debug_output *out, const char *format, ...)
     va_start(va, format);
     PyOS_vsnprintf(buf, sizeof(buf), format, va);
     va_end(va);
+    /* Copied causal control: restore the immediate Python write. */
+    if (!out->to_stderr) {
+        PySys_WriteStderr("%s", buf);
+        return;
+    }
     if (out->to_stderr) {
         fputs(buf, stderr);
         return;

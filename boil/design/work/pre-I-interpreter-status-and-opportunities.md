@@ -97,6 +97,39 @@ included in this candidate's implementation or performance claims.
 
 ## Ranked opportunities for the next review
 
+Three source examples make the distinction between cleaner operation families
+and faster execution concrete:
+
+- **`i += 1`.** Existing register passes fold eligible local loads and the
+  final store. Warm `BINARY_OP_ADD_INT` checks both compact integer operands,
+  decodes them and checks overflow. An ordinary int32 result allocates nothing;
+  overflow takes the boxing path. Constant `1` still uses the general operand
+  guard because its kind is not propagated into this consumer. Generated C
+  temporaries alone do not establish machine-level moves or their cost.
+- **`o.x + o.y`.** The existing attribute-sum test specifies four words: two
+  loads, add and return. A shape load guards owner/version and copies one
+  `PyValue`; it does not box the result. Shape slot kinds already promise I32,
+  F64 or any value, and generalization invalidates the version; these are
+  value promises rather than different layouts. There is no string slot kind.
+  A typed LOAD_ATTR name alone saves no payload work. A consumer would need
+  to use the promised result kind, with a valid path when the producer falls
+  back to generic behavior.
+- **`if i < n`.** The compiler already folds away the separate TO_BOOL for
+  comparisons used as conditions. An integer comparison still writes a
+  True/False singleton value and dispatches to a BOOL branch that checks and
+  consumes it. This creates no boolean allocation. Shared result contracts
+  may expose redundant work, but removing a guard requires proof for every
+  entry, including instrumentation and debugger control transfers.
+
+See [existing IR expectations](../../../Lib/test/test_ir.py),
+[shape kind promises](../../../Include/internal/pycore_shape.h),
+[specialization feedback](../../../Python/specialize.c),
+[truth folding](../../../Python/flowgraph.c) and the operation DSL above.
+An initial design experiment can ask whether existing producer facts can be
+reused by consumers without adding another type system or changing instruction
+boundaries. This is a feasibility question; matched attribution must establish
+whether the saved work is worth an implementation.
+
 This ranking weighs reuse, existing evidence and proof readiness. It is not a
 speedup forecast or approval to begin seven parallel implementations. Settle
 the supported GC boundary, then choose a small coherent source slice and

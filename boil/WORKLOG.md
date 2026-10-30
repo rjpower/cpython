@@ -4600,3 +4600,37 @@ release dependencies. These remain design obligations, not implemented fixes.
 Finite closure, snapshot, work-stack, lifecycle and buffer-readiness plans
 and their reviews are now in the repository. Interpreter timing remains
 parked. Next hourly documentation/status checkpoint about08:35 PDT.
+
+### 08:35 PDT: three bounded safety repairs complete; combined qualification starts
+
+Clean168f30a96ff composes sweep-OOM7f445, snapshot native009fa/test07af
+and work-stack repaira73f. All bounded positive jobs pass. Each copied old
+behavior fails its intended assertion: unsafe sweep after ordering OOM,
+debug writer before snapshot retirement, and missing finalizer on the very
+next collection after work-stack OOM. These are causal controls, not native
+crashes or startup failures. Earlier harness, precision-annotation and
+child-mode limitations remain preserved beside their corrected successors.
+
+S3 final indexccc94b63 binds29 references, checked by the coordinator. Its
+six corrected children assert actual mode; release/off and debug/kill focus
+pass9/0 each, and the actual-child-kill ASan case passes. Work-stack terminal
+index7c03b8d5 binds six positive jobs, both build capsules and negative
+audit49ca9676. Independent review checks65 positive artifacts and the named
+negative failure, raw modes, auxiliary records and cleanup. Whole GC passes
+154/17skips off and154/2 kill, zero fallback; unpinned2094/3254 remains
+report-only. No component native jobs remain.
+
+The coordinator grants fresh actual168 ASan configure/make/freeze/cleanup
+using the existing helper recipe: buildhelper56c6e1ae, plan06d68cb0 and
+launches77d39b1e. Owned release/O1-debug products remain588 each and are
+reused explicitly. Seven once-per-profile qualification vectors and closure
+are prepared; target launches await the actual ASan capsule binding and
+short coordinator check. No primary landing or whole-GC correctness claim.
+
+Queue2b's14-file owner-metadata draft is frozen for independent source review
+in its own worktree. It implements symmetric registration guards, rejects
+ownerless static types and selects destruction metadata from each object's
+owner. No build, native execution or commit is credited. Foreign mutation
+events, lifecycle/adoption/fork, completion dependencies and native buffer
+release remain separate contracts. Interpreter timing stays parked. The next
+hourly documentation/status checkpoint is about09:35 PDT.

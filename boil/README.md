@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 08:05 PDT. Last qualified runtime merge is d6a23b9fe0c,
+revised 2026-10-30 08:35 PDT. Last qualified runtime merge is d6a23b9fe0c,
 integrating frozen GC/IR candidate5a45f9bb6a7 after independent review,
 all seven qualification profiles, closure audits and post-merge smoke. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 08:05 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 08:35 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -89,8 +89,8 @@ This lands the increment, not final GC correctness or interpreter parity.
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering, sweep OOM, snapshot reentry and remaining precision/platform obligations |
-| Remaining GC repairs | Sweep-OOM7f445 passes release/debug-kill focus and affected modules; restored fallback fails the named no-sweep oracle. S3 builds/audits pass after a precise-helper annotation fix; its six child-mode checks are being corrected. Work-stack/MARKED patch is source-only | Actual union qualification and landing; completion/close/fork/adoption and buffer-release contracts. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering, qualification of the three safety repairs and remaining precision/platform obligations |
+| Remaining GC repairs | Sweep-OOM7f445, S3 snapshot07af and work-stack/MARKED repair compose at clean168f30a96ff. All bounded positive checks pass; each copied old behavior fails its intended assertion. Corrected S3 children execute actual kill mode; its ASan child case passes | Actual168 union ASan build active, then seven qualification profiles and closure before landing. Owner-metadata draft is frozen for independent review; completion/close/fork/adoption and buffer-release contracts remain. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |

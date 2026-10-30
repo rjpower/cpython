@@ -20,8 +20,28 @@ eligibility checks and passes over unrelated dead objects. Refine actual work
 eligibility and stage subsets before introducing generations or a numeric ABI.
 The existing-budget sensitivity below remains a diagnostic of amortization
 and memory cost, not the selected explanation or a forecasted fix.
+The [architecture plan](gc-architecture-next.md) separates the active first
+slice from native-only cleanup, allocator-aware reclamation and a common movable
+nursery with stable native space.
+Source 788695 passes independent review and its O1 debug build; an initial
+13-case run passed all 12 existing controls and failed the new resurrection
+oracle. Independent comparison with pinned upstream 321925 confirms that
+callback-free weakrefs intentionally survive finalizer resurrection. The
+test-only correction 69c34 asserts survivor identity and eventual clearing.
+Reusing unchanged native788 products, focused13 passes without skips and all
+four affected modules pass (599 tests,46 skips), with successful cleanup and
+zero fallback. The whole-module run has one report-only unpinned record;
+the original failed run is preserved. No runtime fix or speedup is established
+by correcting the test. Subsequent O3 candidate10d877 measurements now show
+1.309×/1.062×/1.078×/0.985× parent/candidate throughput on coroutines,
+comprehensions, generators and Richards. Only coroutine sample ranges are
+nonoverlapping; full qualification and landing review remain. The architecture
+plan includes the independent replay and finite13 native profiles.
+The [pinned upstream rationale](https://github.com/python/cpython/blob/321925c92c9e67864cafa1566840927f6f07e90a/Python/gc.c#L779-L787)
+explains why callback-free references remain usable during finalization.
+
 The finite NOARGS closure remains a candidate whose ABI cost needs a current
-conversion budget. H1 is selected for archival for the current GCC milestone;
+conversion budget. H1 is archived for the current GCC milestone;
 its matched comparison becomes relevant only if Clang tail dispatch is an
 active target. None is an automatic
 implementation or experiment grant.
@@ -63,9 +83,12 @@ bools; generic rich comparison can return another object. Existing conditional
 branches already combine truth conversion and branching, so a valid BOOL fact
 removes a guard, not automatically a dispatch.
 
-## Bounded next question: existing GC budget
+## Existing GC budget: completed diagnostic
 
-Source-only plan, not an execution grant. Reuse the existing
+The finite13 experiment is complete; the architecture plan contains the results.
+Keep32MiB: doubling the floor saves2–7% instructions on the slow rows for
+52–84% more peak RSS. The remaining paragraphs describe the bounded design
+used as input to that experiment, not pending work. Reuse the existing
 [four-row phase probe](pre-I-shared-cost-attribution.md): coroutines,
 comprehensions and generators, with Richards as the historical no-hot-GC
 control. Use the qualified fork O3 product unchanged. One paired comparison

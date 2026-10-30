@@ -18,8 +18,10 @@ branch.
 ## 0. The plan and where we are
 
 The programme turns CPython into a register-IR interpreter over NaN-boxed
-values with a tracing collector and no reference counting, then adds
-tiers 0 and 1 and a moving collector, then ports the packages. Steps are
+values with a tracing collector and no reference counting. Current performance
+work includes a common moving nursery and native contract fixtures; tiers 0
+and 1 follow the interpreter checkpoint, with broader package migration as the
+API settles. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
@@ -35,14 +37,30 @@ record and is updated at every landing.
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. Isolated H1 native62456/tool-test94ab passes four bounded runtime/root rows and independent review; no timing or landing. Matched Clang timing plan parked during GC. H2 inert decoder5df/test-only b3e completes bounded native validation,27 supported/126 unsupported; no active maps or clearing change. No opcode threshold |
-| 7 | nonmoving generations | Reviewed direction; allocator/frame/container/runtime ledgers bind current source. Types/shapes/native/iterator/root/port coverage and concrete barrier/constructor/promotion/reentry/young-index interfaces remain. No barrier/minor implemented |
+| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. H1 native62456/tool-test94ab and H2 inert decoder5df/test-only b3e remain unmerged; both checkouts retired with pushed source tags and local evidence. Reopen H1 only for an active Clang-tail target; H2 needs a scheduled usable liveness consumer. No active maps, clearing change or opcode threshold |
+| 7/10b | common nursery and stable native space | Revised GC performance plan supersedes mandatory nonmoving-generations-first. After selective death and native-only cleanup: space-aware region backend, writable roots/fields, core barriers, scanned stable native owners, pinning and independent minor oracle. No nursery/barrier/minor implemented |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
-| 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
-| P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
+| 10b, later | broader evacuation/compaction | Nursery contracts are in7/10b above; whole-heap movement remains separate |
+| P | representative ports: Cython, cffi, pyyaml, numpy | Small contract fixtures accompany barrier/handle/API design; broader package migration follows the settled API. No new port is implemented in this cycle |
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
+
+The supported GC milestone is complete. Selective-death candidate10d877 has
+an O3 build and independent paired-four replay: coroutine throughput improves
+30.9%; the other three ranges overlap. O1-debug focused13 and four affected
+modules pass599 tests/46 skips. Landing qualification/review and merge remain.
+The [revised architecture plan](design/work/gc-architecture-next.md) records
+all13 perf/counter/RSS conditions and exclusive phase costs. Keep32MiB: doubling
+headroom costs52–84% peak RSS on the three slow rows for only2–7% fewer
+instructions. Native-only generator cleanup is the next code slice; prepare
+its whole-pass eligibility/transaction before introducing a new allocator.
+Then develop common storage reclamation and a movable nursery with stable
+native space, using writable root slots, core barriers, scanned native owners
+and pinning. The old nonmoving-first sequence is superseded, while its source
+ledgers remain inputs. Current runtime precision and native lifetime contracts
+remain in force. The [worktree closure record](design/work/worktree-closure-plan.md)
+records actual retirement batches, source tags, local evidence and exceptions.
 
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug

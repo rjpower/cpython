@@ -5,6 +5,13 @@ Coordinator assessment,2026-10-30, after the qualified GC landing and matched
 source-based explanations and proposed changes. It does not reopen GC
 correctness qualification or implement a new collector.
 
+The following first cost study remains evidence at its original scope. The
+[revised forward plan](gc-architecture-next.md) adds completed paired-four
+selective-death timing and13 exact hot-window perf/counter/RSS conditions.
+It supersedes the pending-budget recommendation: retain32MiB, qualify the
+measured selective-death patch, then distinguish native-only cleanup before
+region reclamation and a common movable nursery with stable native space.
+
 ## Why the fork is slower
 
 The aggregate is0.8243 times upstream throughput, but the result is uneven:

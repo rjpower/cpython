@@ -1,5 +1,22 @@
 # Step 7: a nonmoving young/old collector
 
+Current status, 2026-10-30: generations remain a design proposal, with no
+minor collector or write barriers implemented. The supported GC milestone
+landed in `75e8a1e0c01`: main interpreter, ordinary threads and shared GIL;
+subinterpreters are explicitly rejected. The S3 no-Python dead-snapshot
+repair is qualified, so the historical references below to waiting for that
+repair are superseded, not outstanding activation prerequisites. Cross-owner
+routing in the older ledgers is outside this supported milestone.
+
+The remaining requirements are real: complete owner/store and root coverage,
+safe constructor/promotion evidence, young-index and resize/reuse identity,
+remembered-state commit before callback reentry, independent young-reachability
+verification, and finite minor/major cadence. Current profiles also identify
+substantial death processing outside mark/root closure; generations do not
+remove that work. See the [current GC policy and experiment decisions](pre-I-gc-policy-and-experiment-decisions.md).
+The source identities and ledger limitations below remain historical records;
+they must be reconciled with the actual supported source before activation.
+
 Source proposal, 2026-10-29; no implementation, build or additional native
 measurement. Inspected primary c466e047e00e and ROOTS c67954f336a9, whose
 collector C remains ce2ac. Rebase the design on the reviewed integration

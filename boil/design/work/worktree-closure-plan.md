@@ -1,19 +1,75 @@
-# Worktree closure plan
+# Worktree closure: execution record and initial inventory
 
-Read-only inventory,2026-10-30, against primary `ad69f335a262fb42a2e371a902cca24c0a6e566f`.
-No worktree/ref was changed, no archive or deletion was performed, and no
-compiler, target test or build ran. This document proposes closure; it does
-not authorize forced removal or integrate experiment code.
+Completed authorized housekeeping,2026-10-30. The initial read-only inventory
+below was against primary `ad69f335a262fb42a2e371a902cca24c0a6e566f`;
+the user then authorized archival and retirement. **32 worktrees were removed
+with ordinary `git worktree remove`;8 registered roots remain.** No force
+removal, branch deletion, runtime merge, compilation, target test or benchmark
+was performed by this lane. Topic branches remain intact.
 
-There are **39 worktrees**: 6 retained for current work/decisions
+The initial inventory had **39 worktrees**:6 retained for work/decisions
 (including the repository anchor), 22 landed historical copies,
 8 negative fixtures, 1 deferred unique topic and 2 dirty historical
-trees. The useful working set is **primary, current qualified serving tree
-and upstream comparator**, with H1/H2 physically retained pending evidence
-archival and selected for closure in this milestone.
-The repository anchor remains administrative. Everything else is a closure
-candidate after its evidence/dirty-state conditions are resolved, not work
-that needs another merge.
+trees. One new selective-death worktree was created by its owner and preserved:
+39+1−32=8. H1, H2, deferred Queue2b and all eight negative-fixture checkouts
+are now archived and retired, without merging their code.
+
+## Terminal cleanup checkpoint
+
+All32 exact tips have `archive/boil/2026-10-30/<worktree-name>` tags pushed to
+GitHub and verified by `ls-remote`. Source has remote protection; raw evidence
+has **LOCAL durability** in retained primary, as before cleanup. No offsite
+raw-data backup or new artifact service is claimed or required for this batch.
+
+The local archive preserves11,809 file/symlink entries,918.53MiB of regular-file
+bytes: raw receipts, logs, helper sources, manifests, configuration, disassembly
+and recipes. Retained regular bytes were SHA-verified and symlink text checked.
+Manifests explicitly list excluded closed ELF/static-library/object products
+and caches totaling22.13GiB of logical file sizes. This is not a claim of
+physical filesystem space reclaimed. Closed experimental binaries were not
+retained without an active consumer.
+
+The [locator](../../../build/worktree-archive/2026-10-30/locator.json),
+SHA374da3b3cca5c1d47a8c394e9108c752f31dadfb89c2632a235ca71a8b423668,
+maps each retired root to its archive/ref and per-file manifest. Existing
+finalGC12f1 (276 refs), quiet29e5b0 (393 refs) and postmergef56e (20 refs)
+remain byte-identical; every referenced artifact was rehashed after cleanup.
+
+| Registered root retained | Reason |
+| --- | --- |
+| `/home/power/code/cpython` | Repository/common-Git anchor |
+| `python-boil-the-ocean` | Primary development and local evidence archive; unrelated user reviews preserved |
+| `boil-buffer-xid-main-only` | Qualified serving4da, original three product cohorts, Lib/config/tools and frozen guards |
+| `boil-checkpoint-i-upstream` | Stock and matched eval-nogcse comparator products |
+| `boil-gc-selective-death` | New active implementation lane; untouched by housekeeping |
+| `boil-7a` | Three nonignored untracked evidence scripts await owner disposition |
+| `boil-gc-simple` | Unknown ambient in-source build and idle shell ownership remain unresolved |
+| `/tmp/boilreview2` | Uncommitted review rewrite retained |
+
+The old `boil-gc-simple-negative4` path is **not a worktree**. During an
+explicit operator guard pause, its worktree was removed and exactly55 original
+build-only dependency files (3,070,413 bytes) restored at their original paths.
+There is no `.git`, tracked source checkout or native runtime there. The
+[dependency locator](../../../build/worktree-archive/2026-10-30/batch-05-negative4/dependency-locator.json)
+labels this evidence-only directory and binds the archived copies. Unchanged
+serving `current_inputs_v2.loaded()` passed, including original config/tool/
+three-cohort product checks, before the operator pause was released. Only host
+tool identity queries ran; no compilation or target invocation was needed.
+
+## Executed batches
+
+| Batch | Worktrees retired | Archived entries | Regular-file MiB | Manifest |
+| --- | ---: | ---: | ---: | --- |
+| batch-01 | 6 | 1,559 | 78.12 | [manifest](../../../build/worktree-archive/2026-10-30/batch-01/manifest.json) |
+| batch-02 | 8 | 642 | 30.33 | [manifest](../../../build/worktree-archive/2026-10-30/batch-02/manifest.json) |
+| batch-03 | 8 | 1,178 | 65.76 | [manifest](../../../build/worktree-archive/2026-10-30/batch-03/manifest.json) |
+| batch-04 | 9 | 8,322 | 737.82 | [manifest](../../../build/worktree-archive/2026-10-30/batch-04/manifest.json) |
+| batch-05-negative4 | 1 | 108 | 6.49 | [manifest](../../../build/worktree-archive/2026-10-30/batch-05-negative4/manifest.json) |
+
+Each manifest binds the exact old root, tip/tag, retained file hashes and
+explicit closed-product/cache exclusions. Batch05 also records the guard-pause
+conversion and exact55-file evidence-only restoration. Local topic branches
+were checked after retirement and still point to their original tips.
 
 ## Interpretation and current dependencies
 
@@ -26,21 +82,31 @@ to empty the worktree list. Except primary itself, no complete tip tree equals
 current primary; that is expected for historical bases, not evidence of missing
 landings.
 
-The table records local remote-tracking refs at the **exact tip**, not a fresh
+The initial table records local remote-tracking refs at the **exact tip**, not a fresh
 remote-server verification. A branch without an upstream setting can still
-have a matching `origin/boil/...` ref. No experiment tip has a discovered
-archive tag/ref; no `refs/archive`, `refs/tags/boil` or `refs/tags/archive` exists.
+have a matching `origin/boil/...` ref. No experiment archive tag/ref existed
+at that snapshot. The completed batches above created
+and remotely verified32 source archive tags; local topic branches were kept.
 Ancestor tips remain reachable through pushed primary; unique local tips need
 an explicit preserved ref/bundle before branch retirement. All regular tracked
 and nonignored untracked changes were enumerated; ignored build/cache contents
 were deliberately excluded from dirty counts and were not sized recursively.
 
+The active `current_inputs_v2` guard reads serving source/config/tools and
+the original three product maps; its55 negative4 input paths required the
+evidence-only conversion above. Closure header roots are external SDK/vendor
+paths, including the existing `ports-imaging-native` libmpdec source, not the
+retired experiment checkouts. These were left untouched. The operator confirmed
+that the new selective lane consumes primary/new-topic/serving/upstream paths,
+with no active H1/H2/H3 or old compiler-copyprop/base-tree consumer. Historical
+selection-origin metadata is archived; it is not an active source import.
+
 Current direct receipt dependencies were read from existing indices:
 
 - [Final GC index12f1](../../../../boil-buffer-xid-main-only/build/gc-final-traversal-closure/final-completion.json)
   has276 absolute artifact refs:221 in the qualified serving XID tree and55
-  in `boil-gc-simple-negative4`. These are current closure dependencies, even
-  though negative code is not part of the landed runtime.
+  in the evidence-only `boil-gc-simple-negative4` directory. These exact files
+  remain readable after its checkout retirement; negative code is not landed.
 - [Postmerge indexf56e](../../../build/gc-main-only-integration/final-receipts.json)
   has20 absolute refs:19 in primary and one final index in the serving tree.
 - [Matched elapsed closuree5b0](../../../build/checkpoint-i-qualified-refresh/quiet29-closure.json)
@@ -51,7 +117,7 @@ Current direct receipt dependencies were read from existing indices:
   products/Lib must stay in place while reused. A path count is not a complete
   recursive archival manifest.
 
-No compiler/regrtest/gate argv was observed in the process snapshot. Accessible
+No compiler/regrtest/gate argv was observed in the initial process snapshot. Accessible
 `/proc` cwd/exe reads showed primary coordinator/tool processes and one idle
 `/bin/zsh`, PID2046633, in `boil-gc-simple`, with no children at inspection.
 499 process entries were unreadable or vanished; this is not a universal
@@ -59,12 +125,13 @@ no-user/no-process proof. Recheck owner activity and relevant build locks
 immediately before any later removal. Available filesystem space was203GiB;
 no claim is made about per-tree reclaimable sizes or archive capacity.
 
-## Per-tree disposition
+## Initial per-tree inventory
 
 Names below expand under `/home/power/code/cpython/.worktrees/`, except the
 explicit repository root and `/tmp/...` paths. Dirty counts exclude ignored
 build products. Branches are local; the remote column is the observed local
-remote-tracking snapshot. Proposed actions remain unexecuted.
+remote-tracking snapshot. These are pre-cleanup facts and proposed dispositions;
+the terminal checkpoint and executed batches record what actually happened.
 
 ### RETAIN ACTIVE
 
@@ -130,26 +197,25 @@ remote-tracking snapshot. Proposed actions remain unexecuted.
 | `boil-7a` / `052d8342e562` | `boil/7a` | ancestor;0 unique | `none at tip` | 0 tracked / 3 untracked | Three untracked evidence scripts; owner/archive decision first despite landed tip. |
 | `/tmp/boilreview2` / `a0338fd76348` | `detached` | ancestor;0 unique | `origin/boil/7a-rung1` | 1 tracked / 0 untracked | Uncommitted 7a landing-review rewrite (40+/34-); preserve/attribute first. |
 
-## Small active set and bounded decisions
+## Approved dispositions and remaining holds
 
 1. Keep primary, upstream and the qualified serving tree through the next
    measurement/code decision. Preserve both upstream stock/eval-nogcse images
    and the serving ordinary/ASan identities. Do not rebuild them to simplify
    labels or copy their runnable payloads to arbitrary paths.
-2. Close the H1/H2 active lanes **before assigning the next interpreter
-   implementation**, after evidence preservation. H1 is selected for archival
+2. H1/H2 active lanes are **closed after verified archival**. H1 was archived
    for this GCC milestone: its unmeasured tail-only convention does not affect
    the current interpreter. Reopen for one bounded comparison only when Clang
    tail dispatch is an active target. Its
    independent strrchr tool classification can be evaluated separately without
    importing the frame ABI. H2 is inert and has no immediate consumer or
-   independent correctness fix: archive its tested patch, design and validation,
-   then close the active tree. Reuse it for a scheduled usable liveness slice;
+   independent correctness fix: its tested patch, design and validation were
+   archived and its checkout removed. Reuse it for a scheduled usable liveness slice;
    do not merge unused code merely to close a branch. Keeping a branch/ref does
    not require keeping a checkout.
 3. Queue2b is deferred, not a queued merge: main-only support removes its
-   immediate foreign/adoption prerequisite. Archive the topic and its negative
-   companion after preserving evidence; reopen only with a declared change to
+   immediate foreign/adoption prerequisite. The topic and its negative
+   companion are archived and retired; reopen only with a declared change to
    support scope. Do not impose a GC integration campaign just to close it.
 4. Within the same closure pass, have the owners identify the three untracked
    old7a scripts and `/tmp/boilreview2` review changes. Preserve a reviewed
@@ -164,35 +230,35 @@ remote-tracking snapshot. Proposed actions remain unexecuted.
 Use existing commits and artifact indices rather than a new registry/service.
 For each approved batch, record tip/ref, disposition, retained evidence paths
 and the existing index hashes in this plan or one simple archive manifest.
-Create an archival tag/ref (for example `archive/boil/2026-10-30/<topic>`)
-for unique/equivalent tips before removing their branch; push the chosen refs
-or retain a Git bundle under the project's agreed backup policy. No such ref
-was created by this inventory. Keep negative refs explicitly named as controls.
+All retired tips have pushed archival tags
+`archive/boil/2026-10-30/<worktree-name>`; the original branches were not deleted.
+Negative fixtures remain identifiable as controls, not landed implementations.
 
 Git history does **not** preserve ignored receipts, stdout/stderr, copied helper
 sources, native binaries, disassembly or native/config/tool manifests. Copy
 required evidence into a project-owned archive outside the checkout selected
-for removal, verify against the existing hashes, and ensure it is backed up;
-an ignored primary `build/worktree-archive/` directory alone is not a remote
-backup. Use selective retention, not an unmeasured duplicate of every build
-object/cache. Preserve exact binaries and config/source inputs where a current
+for removal and verify against the existing hashes. The approved archive is
+local under retained primary `build/worktree-archive/2026-10-30/`; it is not a
+remote raw-data backup. Use selective retention, not an unmeasured duplicate
+of every build object/cache. Preserve exact binaries and config/source inputs where a current
 receipt or future comparison needs them. Keep original failed receipts and
 expected negative outcomes, not only successful summaries.
 
 Absolute historical paths identify where a run occurred. If evidence is moved,
 retain immutable originals and a small old-path-to-archive locator with the
 same byte hashes; do not rewrite a failed receipt or relabel a relocated image
-as runnable/qualified. Until the current221+55 refs and runnable consumers are
-accounted for, the serving and negative4 trees are not removable. Other
-historical transitive indices likewise need their archive check before closure.
+as runnable/qualified. The current221 serving refs remain in place; the55
+negative4 dependencies are preserved at both original evidence-only paths and
+archive locations. The qualified serving tree and upstream products stay
+runnable at their established paths. Other historical references resolve via
+the archive locator and source tags, not a claim of relocated runnable images.
 Unknown ambient output must be quarantined with its attribution limits.
 
 After owner release, preservation verification and explicit cleanup scope are
 approved, ordinary `git worktree remove` should refuse dirty cases; branch/ref
 retirement is a separate decision. The existing
 [`worktree.sh drop`](../../tools/worktree.sh) uses `--force` plus `branch -D`,
-so it must not be applied wholesale to this inventory. No forced cleanup,
-`git clean`, branch deletion, source merge, build or measurement is part of
-this plan's execution. Landed work needs no merge; rejected controls must not
-be landed; genuinely unique work needs a decision rather than indefinite
-checkout retention.
+so it was not used. No forced cleanup, `git clean`, branch deletion, source
+merge, build or measurement occurred in this housekeeping execution. Landed
+work needs no merge; rejected controls must not be landed; genuinely unique
+work needs a decision rather than indefinite checkout retention.

@@ -305,9 +305,13 @@ choose the next coherent change without an open-ended score-chasing loop.
 **Coordination.** The coordinator owns comparison policy, reservations and
 integration. GC qualification and post-merge smoke are complete. Current work
 interprets the [completed matched29 diagnostic](pre-I-post-GC-timing.md);
-fresh cost attribution prioritizes selective collector death processing, with
-existing-budget sensitivity retained as a diagnostic. Further quiet work
-requires review and reservation.
+the [revised measured plan](gc-architecture-next.md) records completed
+paired-four timing and13 native profiles. Selective-death coroutine throughput
+improves30.9% in the isolated candidate; landing qualification remains. Existing
+budget sensitivity is complete and favors retaining32MiB. Next distinguish
+native-only cleanup, then common reclamation and a movable nursery with stable
+native space. Nonmoving generations are an alternative rather than a mandatory
+intermediate. Further quiet work requires review and reservation.
 H1 frame passing has isolated native/runtime evidence but
 no elapsed benefit; it and H2 are selected for archival for this GCC milestone.
 H2 has no current consumer. A future usable liveness slice can reuse its patch;

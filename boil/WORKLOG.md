@@ -5103,3 +5103,131 @@ merge unused code. Target three operational checkouts plus the Git anchor;
 retain required receipts/refs first and handle the identified dirty/shell/
 ambient-build exceptions separately. No worktree/ref was removed or runtime
 experiment merged in this cycle. Unrelated user changes remain untouched.
+
+### 14:56 PDT: historical checkout retirement and GC architecture review
+
+The authorized housekeeping lane retired 32 historical worktrees through
+ordinary removal, with 32 exact source tags pushed and remotely verified.
+Eight registered roots remain: integration, serving runtime, comparator,
+active selective-death topic, Git anchor and three ownership/dirty-state
+exceptions. H1/H2 and deferred foreign-owner work are archived without merging
+unused code. Selected raw evidence totals 918.53 MiB locally; closed binaries
+and caches were excluded explicitly. This is not an offsite raw-data backup.
+The final GC, matched timing and postmerge indices are unchanged and all
+276/393/20 referenced artifact hashes still match. Negative4's 55 dependency
+files remain byte-identical at an explicitly labeled evidence-only path;
+the unchanged serving input guard passes. Unrelated reviews are preserved.
+
+The selective-death prototype 788695 has independent source approval and a
+successful O1/Py_DEBUG build, reusing the accepted native runner. Its initial
+13-case debug-kill run passed all 12 existing controls and failed only the
+new resurrection test. Wider affected modules did not run. Independent review
+and root inspection of pinned upstream321925 show callback-free weakrefs are
+intentionally retained through finalization for cache invalidation safety.
+The correction will assert survivor identity before eventual clearing, keeping
+callback/finalizer counts and usable data checks. Preserve the original failed
+run; no runtime policy change, speedup or primary landing is inferred.
+
+The independently reviewed [architecture plan](design/work/gc-architecture-next.md)
+describes the current full-heap nonmoving collector and recommends selective
+lifecycle work, GC-owned reclamation with explicit native cleanup contracts,
+then measured nonmoving generations. Copying needs writable reference/root
+locations, pinning and native API/ports contracts; it is a larger scope.
+The generations proposal now marks the qualified S3 repair complete and
+foreign lifecycle deferred, preserving the genuine young-index, mutator,
+constructor/promotion, root and independent-oracle obligations. No generations,
+barriers or movement were implemented in this cycle. Next hourly update is
+15:30 PDT if work remains active; material findings are reported sooner.
+
+### 14:59 PDT: selective-death affected behavior checks pass
+
+Test-only correction69c34 changes only the new weakref resurrection oracle.
+The focused13 pass with zero skips; the conditional four whole affected
+modules pass599 tests with46 declared skips. Both native/host return0 and
+post-command cleanup passes. They reuse O1 native788 unchanged, with explicit
+test-source/native identities. The original failed13 remains preserved in
+its14-reference index. No retry of unchanged code or new runtime fix occurred.
+Focused roots record219 collections/zero fallback/zero unpinned; whole records
+10,784/zero fallback/one report-only unpinned. Do not claim zero unpinned or
+global qualification from this finite check. Release measurements, remaining
+landing checks and primary runtime integration are still pending. Reuse the
+existing four-row paired harness and build recipe for the next bounded
+performance question; no new benchmark framework is needed.
+
+### 15:30 PDT: feedback33, first release win and comparative GC profiling
+
+The selective-death O3 build passes on source10d877 with unchanged runtime
+code788. One bounded parent/candidate four-row diagnostic passes both actual
+RUNS0 origins, retains all40 raw values, and passes cleanup. Independent replay
+confirms median parent/candidate ratios: coroutines1.308649,
+comprehensions1.062317, generators1.078140, Richards0.985113. Elapsed reductions
+are23.59%/5.87%/7.25%/−1.51%. Coroutine sample ranges do not overlap; the two
+other allocation-heavy ranges overlap substantially. Five serial calls per
+process are not independent trials or an overall29-row/upstream score.
+Paired completion34033f13 binds163 artifacts; no runtime merge occurred.
+
+Feedback33 requests measured phase costs, a fair reference-count comparison,
+concrete nursery/weakref/ordering decisions and allocation-budget evidence.
+The source reviews separate actual callbacks from broad no-op eligibility;
+the compact dead inventory is not an eagerly built full-heap callback graph.
+Referrer-first cyclic finalization is a fork policy beyond Python's general
+cyclic-order guarantee, while ordinary file/buffer lifetime remains required.
+NaN-boxed inline values are compatible with reference-counted pointer objects;
+restoring counts would require ownership and cycle/reuse work, not abandoning
+the value representation. No restoration is selected from an upstream/fork
+comparison that bundles other differences.
+
+One finite13 comparative profiling batch is active under launch2e95c27a:
+qualified32/64MiB on four existing rows, matched upstream defaults on those
+four, and candidate32MiB coroutines because its measured cost changed. Existing
+probe adapterf209 uses explicit runtime kinds, two bounded FIFO/ACK controls,
+199Hz CPU-clock/FP records and hardware cycles/instructions. GNU time records
+whole-process RSS; GC/root snapshots cover the hot interval. Actual setup
+sets the floor before loading/warmup, without an explicit collection. No
+instrumentation, runtime C edit, extra callback-heavy matrix or retry campaign.
+Quiet CPU0/sibling8 is reserved; heavy decoding waits until release. Original
+products and failed receipts remain intact. The revised architecture artifact
+will incorporate these results and both focused reviews. Next hourly update
+16:30 PDT if work remains active; material findings are reported sooner.
+
+
+### 2026-10-30 15:50 PDT — review33 measured GC plan complete
+
+The finite13 native comparison completed all13 processes with return0,
+per-run/final source/product/tool/cleanup checks passing and quiet reservation
+released. Completion9ef2649b binds97 references; the coordinator independently
+rehashed all97 and replayed hot intervals and GC/root deltas. Disjoint analysis
+5016ed98 reconciles all13 raw sample streams with zero loss/excluded samples;
+phase counts/percentages independently sum to100%. All hardware counts have
+100% running coverage. No additional native work or runtime edit followed.
+
+Paired-four completion34033f13 retains163 references and40 raw samples.
+Independent replay gives parent/candidate throughput1.30865/1.06232/1.07814/
+0.98511 for coroutines/comprehensions/generators/Richards. Only coroutine sample
+ranges do not overlap; this is no replacement29-row aggregate. Native candidate
+coroutines retain301 collections/RSS67.5MiB while timedGC falls6.022→3.302s
+and instructions85.275→79.338G. The32/64MiB experiment saves only3.24%/1.66%/
+6.98% instructions on the three slow rows, while RSS rises52.09%/72.62%/84.41%.
+Keep32MiB. Richards' identical instructions/nohotGC but17.76% wall variance
+limits causal budget timing claims.
+
+Exact comprehension preparation consumes24.36% sampledCPU (retention+ordering+
+eligibility), versus4.06% drainer. The next five-file implementation handoff
+separates existing proven native-only suspended-generator clear from Python
+finalization, with whole-pass observer/weakref/resource fallback and all fallible
+preparation before irreversible commit. It remains source-only. Selective-death
+qualification/landing remains first; topic doc-onlyd3331398c624 is pushed with
+all588 O3 products/aliases unchanged from measured source/native10d8773815c.
+
+Rewrote gc-architecture-next.md for review33: concrete measured recommendations,
+RC comparison, actual ordering/weakref semantics, sparse registry/dead-array
+costs, policy comparisons and common movable nursery with stable native space.
+The nonmoving-first prerequisite is superseded. Define space lookup/regions,
+writable actual root slots, core barriers, scanned native owners, complete pin
+discovery before evacuation and SHALLOW constructor/age publication.8MiB is
+an explicit half-LLC experimental capacity, not a production default. Root-only
+or readonly spans pin; interior aliases reload/recompute or pin their owners.
+Independent cost/contract and nursery reviewers clear the revised plan after
+these explicit proof clauses and a24.35→24.36 rounding correction. Entrypoint,
+PROCESS and affected decision docs updated; original failures and unrelated
+working files preserved. Next hourly checkpoint16:30PDT if work remains active.

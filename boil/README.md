@@ -12,9 +12,9 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 19:50 PDT. Last qualified runtime merge is 052d8342e56;
-local f2a5 GC predecessor is held; combined successor5a45f9bb6a7
-is undergoing fresh O3/O1-debug qualification in boil-pre-i-union. Shared
+revised 2026-10-30 07:35 PDT. Last qualified runtime merge is d6a23b9fe0c,
+integrating frozen GC/IR candidate5a45f9bb6a7 after independent review,
+all seven qualification profiles, closure audits and post-merge smoke. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,25 +71,27 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-29 19:50 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 07:35 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
-The last qualified runtime merge is queue owner-routing052d8342e56; the
-compiler reentrancy repair is landed99435658509. The primary branch also
-contains local, unqualified ROOTS/bytes mergef2a5. Its successor is frozen
-**5a45f9bb6a7**, branchboil/pre-i-union in `.worktrees/boil-pre-i-union`.
-That successor combines ROOTS2b, bytes and Unicode writer ownership, H3
-handler/storage/statistics work, the stack-hit diagnostic repair and the
-finalizer-order eligibility optimization. It has not landed or been pushed
-as a qualified runtime.
+The last qualified runtime merge is **d6a23b9fe0c**; the compiler reentrancy
+repair is landed99435658509. Its frozen candidate **5a45f9bb6a7**, branch
+boil/pre-i-union in `.worktrees/boil-pre-i-union`, combines ROOTS2b, bytes
+and Unicode writer ownership, H3 handler/storage/statistics work, the
+stack-hit diagnostic repair and finalizer-order eligibility optimization.
+Independent review approves this incremental landing under the retained GC
+exception. The integration differs from the candidate only in19 project
+Markdown documents. Release and O1-debug post-merge smoke each pass1,930
+reported tests, reusing the qualified code-identical products explicitly.
+This lands the increment, not final GC correctness or interpreter parity.
 
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 | All19 affected jobs and both ASan groups pass. Corrected release, O1-debug and debug-kill full suites pass, each reporting51,181 tests; zero observed fallback. Original invalid-environment full remains failed | Two stress11 sets, C-extension/regeneration/traversal/header audits, independent review and primary integration |
-| H3 handler domain, monitoring storage and statistics | Included in5a45. Actual Py_STATS producer/reader checks pass on predecessor e9; its11 bounded jobs pass. Fresh5a45 H3 checks pass1,376 cases in each of three modes | Actual combined broad qualification; later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Matched5a45 Clang goto/tail baselines pass bounded runtime/root checks. Candidate release compiles with293 precise handlers/CFI. O1-debug compilation completes but its inline audit fails on a missing strrchr classification; focused tool/test fix94ab98e plus fresh audit/CFI/cleanup checks pass on the unchanged image | Candidate runtime/root checks and matched elapsed/spill/code comparison; no H1 speedup measured |
+| GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering, sweep OOM, snapshot reentry and remaining precision/platform obligations |
+| H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
+| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; both matched Clang candidate builds pass audits/CFI,103 runtime cases each and strict6×100 stale controls each. Original audit/cleanup failures and separate corrections remain explicit. Static code changes are mixed | One matched elapsed comparison with goto/tail baseline, code/spill interpretation and independent review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
@@ -134,8 +136,11 @@ and generators0.592 were the largest regressions; float1.923, Richards1.897
 and nbody1.603 the strongest wins. [Raw results and limits](design/work/pre-I-first-quiet-timing-plan.md)
 include fork-only eval-fno-gcse, origin/SDK limits and unresolved correctness.
 Historical6d instruction ratios1.161/0.693/1.699 are not elapsed performance.
-The target remains roughly**2× upstream with all JITs off** on the declared
-application/kernel suite, with individual regressions, RSS and pauses visible.
+Roughly**2× is soft guidance**, especially for obvious arithmetic, not a
+required application aggregate or numerical gate. Finish GC fixes first, then
+publish the detailed interpreter report and commission independent reflection
+on clean general improvements, including parameterized operation families.
+Keep individual regressions, RSS and pauses visible with all JITs off.
 
 [Four profiles](design/work/pre-I-shared-cost-attribution.md) put collection
 at54%/47%/31% of coroutine/comprehension/generator hot time and zero in
@@ -150,12 +155,15 @@ score, upstream parity or the2x target.
 
 **Next work, in dependency order:**
 
-1. Qualify and review5a45 once, then land the incremental GC/H3 work if its
-   gates support it. Keep inherited HTTP/finalizer-completion and queue-progress
+1. Incremental GC/H3 integration is qualified and landed as d6a23. Next split
+   sweep allocation safety, snapshot/reentry safety and completion scheduling
+   into reviewable changes. Keep HTTP/finalizer-completion and queue-progress
    debt explicit: the accepted ROOTS2b exception does not finish GC correctness.
    Writers/PyMem residue, checker/readers, queued payloads and detached-state
    roots remain10a3a/3b/3c work; platform/SDK coverage remains10a4.
-2. Measure matched Clang dispatch and the uniform H1 frame argument; inspect
+2. After GC fixes, publish the interpreter status report, then reflect on
+   parameterized operations and common execution contracts. The prepared
+   matched Clang dispatch/H1 experiment stays parked meanwhile; later inspect
    moves/spills/code size and real root ownership. H3 categories use generated
    properties, never numeric opcode thresholds. Keep coherent operations and
    calling conventions; no benchmark-specific fusion target.
@@ -176,9 +184,13 @@ score, upstream parity or the2x target.
 
 Queue rung2's old probe/design handoff remains held by its automatic classifier;
 that is not missing user authorization and no native fix is claimed. A new
-source-only safety/dependency design pass is active: move ordering preparation
-before batching, prevent debug callbacks over dead/raw garbage state, and prove
-completion dependencies without serializing unrelated finalizers. Existing
+source-only safety/dependency design pass is active. Its eager-order source
+patch is held: weakref-registry lock contention can release the GIL between
+preparation and sweep, invalidating its stable-edge proof. Independent review
+clears the revised late-boundary allocation-safety patch for bounded native
+validation; it is not yet built or landed.
+Snapshot safety needs coherent lock protocols and safe debug output; completion
+dependencies must preserve unrelated finalizer progress. Existing
 probe artifacts remain. Loom and GitHub use are authorized. Shared verifier/worker
 components are landed; full profile/gate orchestration is still separate work
 in `boil/tools/verification.md`. All jobs retain real source/config/product,

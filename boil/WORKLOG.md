@@ -4495,3 +4495,51 @@ The finalizer graph must count every unfinished predecessor, not owners;
 unrelated calls retain concurrency. No native Queue2a fix or probe is claimed.
 The measured upstream diagnostic stays0.828243; no new speedup score exists.
 Next hourly documentation/status checkpoint about20:50 PDT.
+
+## 2026-10-30
+
+### 07:40 PDT: GC integration qualified; remaining safety work prioritized
+
+Frozen5a45f9bb6a7 clears independent LAND_INCREMENTAL review and lands as
+d6a23b9fe0c. All seven declared profiles complete: affected19, ASan16 kill,
+ASan Unicode7 kill, corrected release/debug/debug-kill fulls and both
+stress11 sets. The original environment-failed full, predecessor stress
+failures and retained exception stay explicit. Fulls report51,181 tests
+each with zero fallback; these are reported totals, including skips.
+Release stress11 reports3,065/100skips,44,771 collections/0fallback;
+debug stress11 reports3,065/64,49,107/0. Cext16/exact7skips, unchanged
+regeneration/Clinic, traversal and19 optional-header receipts pass.
+
+Final-receipts SHAe8f95745 binds the terminal packet. Independent review
+checks49 indexed/nested references; the coordinator rechecks its30 direct
+references and both integration smoke receipts. Merge runtime/test/tool
+source equals5a45 exactly; only19 project Markdown documents differ.
+Qualified owned binaries/source roots are explicitly reused under PROCESS's
+prose-only ruling, not relabeled as rebuilt integration products.
+Release smoke b5f08128 passes1,930 reported tests/50skips,1,191 collections,
+0fallback/221 report-only unpinned. O1-debug smoke d8152545 passes1,930/20,
+1,232/0/227. Cleanup9a9dd699/00d43729 passes. No full suite is repeated
+for documentation-only publication.
+
+H1 four bounded runtime/root jobs pass and independent review clears their
+source/evidence; actual native maps are release588/debug587. Its static
+code changes are mixed. The matched29-workload Clang goto/tail/H1 plan is
+prepared but parked without timing. H2 remains a bounded inert decoder,
+not active liveness/maps or a primary landing.
+
+Queue2a's eager-order proposal remains source HOLD and unexecuted: registry
+detachment invalidates the stable-edge premise. V2 instead preserves the
+baseline late graph boundary, aborts before deallocation on ordering OOM
+and retains honest partial delivery. Independent V2 review clears bounded
+native validation; the operator is freezing/committing the four-file
+candidate and reusing existing build/worker helpers. No native result is
+credited yet. Separate source owners are closing the coherent snapshot/
+debug/registry-lock design and dependency-completion scheduling readiness.
+The original held probes are preserved, without reruns.
+
+User guidance supersedes the hard aggregate target: roughly2× is soft,
+especially for simple arithmetic. Finish outstanding GC fixes first; then
+publish the detailed interpreter report and commission holistic design
+reflection for simple orthogonal improvements. Parameterized LOAD_ATTR
+families are an example to evaluate, not a preapproved new opcode list.
+README, PROCESS and the roadmap record this priority and softened target.

@@ -23,26 +23,26 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 19:50 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 07:35 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots, writers, checker and lifetime qualification | Rungs0/1/1b landed. ROOTS2b/bytes predecessorf2 remains held after its diagnostic stress failure; original stress100k lifecycle debt persists under the reviewed incremental exception. Combined successor5a45 includes source-reviewed reader/history repair and Unicode ownership plus H3/finalizer optimization. Fresh O3/O1-debug/ASan builds,19 affected jobs and both ASan groups pass. Original bytecode/cache environment failure is preserved. Corrected release/debug/debug-kill fulls each pass51,181 reported tests with zero fallback and64+2 previously skipped cases required. Two stress11 sets, closure/final review and primary integration remain. N0 fulls omit the truthy stress environment and require two previously skipped byte-trigger cases. Then remaining3a/3b/3c/platform closure; no20-repeat restart |
+| 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a original probes remain held by the historical classifier; a new source-only safety/dependency design pass is active, no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | generated handler domain and orthogonal dispatch | Stage1 landed6c724c29408; current H3 storage/names/statistics are in5a45, with actual predecessor Py_STATS producer/reader and bounded checks. New5a45 H3 affected checks pass across normal release/debug and actual debug kill. Matched Clang goto/tail baselines are built (goto wrapper parser failure accepted only via separate offline supplement); bounded runtime/root checks succeed on both, with tail ownership executed. H1 frame-argument62456 release compiles; O1-debug original auditFAIL is closed separately by source-cleared strrchr tool/test fix94ab and read-only audit/CFI/cleanup, without rebuilding C. No H1 target/timing result. H2 inert decoder5df plus test-only b3e correction completes bounded native validation (27 supported/126 unsupported), root readers/clears preserved; activation waits concrete reader/span contracts. No opcode threshold |
+| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. Isolated H1 native62456/tool-test94ab passes four bounded runtime/root rows and independent review; no timing or landing. Matched Clang timing plan parked during GC. H2 inert decoder5df/test-only b3e completes bounded native validation,27 supported/126 unsupported; no active maps or clearing change. No opcode threshold |
 | 7 | nonmoving generations | Reviewed direction; allocator/frame/container/runtime ledgers bind current source. Types/shapes/native/iterator/root/port coverage and concrete barrier/constructor/promotion/reentry/young-index interfaces remain. No barrier/minor implemented |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
 | P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
-| I | interpreter performance checkpoint, with all JITs off | new user requirement, 2026-10-29: after root/lifecycle correctness, 6e, H and generations; before tier 0. Matched release wall-time comparison against upstream, with instructions, allocations, boxes, RSS and pauses explaining the result. The target, revised2026-10-29, is roughly2× upstream interpreter throughput on the declared application/kernel suite, with individual regressions and memory/pause tradeoffs reported; it is not established by the existing microbenchmark instruction gains |
+| I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug
@@ -215,9 +215,9 @@ The first wave resumes completed code rather than rebuilding it:
 
 | Lane | First assignment | Next boundary |
 |---|---|---|
-| compiler | Correctness/copyprop landed99435658509; verification identity/result component9dd24bf42c4 cleared and landed; H1 bounded design readiness cleared subject to source/build handoff | H3 final evidence review and ROOTS landing-evidence inventory; separate pre-I string design/storage audit retained, with no H1/string implementation approved |
-| queues | Rung1 landed052d8342e56; round3 review and integration checks complete | Rung2a design/probes held by automatic classifier, including read-only handoff; preserve artifacts, do not retry stopped work elsewhere. Then2b owner metadata and2c retirement/adoption/fork; each gets a separate record and gate line |
-| roots | Reconcile integration tooling, finish rung-2b evidence and missing checks, prepare its landing review | Rung-2b landing. Then 10a-3a writers/PyMem first; 3b checker/precision residue; 3c buffer-release and swap paths after the relevant 7a changes. Removing conservative mitigations is a final proved step, not an assumption |
+| compiler | Reentrancy/copyprop99435658509 and shared verification components landed; H3 qualified in d6a23 | H1/H2 isolated with bounded evidence. Timing parked. Detailed interpreter report and holistic operation-family reflection follow GC fixes |
+| queues | Owner routing052 landed; historical classifier-held probes preserved | Revised late sweep-OOM source checkpoint under review; coherent snapshot/debug/lock safety and completion scheduling follow. Owner metadata, retirement/adoption/fork and buffer-release dependencies remain separate obligations |
+| roots | ROOTS2b plus bytes/Unicode ownership qualified in d6a23 under retained incremental exception | Close snapshot/completion and remaining10a3a writers/PyMem,3b checker/readers,3c releases, platform4 obligations. Removing conservative coverage requires proof; do not infer completion from passing fulls |
 
 Before changing code each owner supplies a short file list, current
 head, first failing control and checkpoint estimate. Report at least
@@ -228,9 +228,10 @@ step at a safe point before its next landing, never during a gate.
 
 In parallel the coordinator prepares one verification manifest, examines
 the faster debug configuration below, and commissions H3's dispatch
-inventory when an agent slot frees. H1's bounded frame-passing design is ready;
-implementation waits for an integrated baseline and explicit generator/build
-handoff from H3. It does not depend on H2 maps or a new frame-pointer policy.
+inventory when an agent slot frees. H1's bounded frame-passing implementation
+and runtime checkpoint are complete in isolation; measurement is parked
+during GC implementation. It does not depend on H2 maps or a new
+frame-pointer policy.
 Do not branch from an unlanded step branch or edit H3-owned generator files
 concurrently. H2 waits for 10a's spans and
 reader contract. H3 must account for the 8-bit handler-space assumptions
@@ -346,7 +347,7 @@ ASan16 plus Unicode consumers run before the four matched Clang baseline
 runtime/root checks. Five fresh broad profiles follow serially, then closure
 and final review. A failure stops its chain without a new skip or retry.
 The H1 source patch and inert H2 producer work proceed independently of those
-frozen runtime inputs. The roughly2x target is still unmet.
+frozen runtime inputs. The historical result remains below the soft2× guide; no numerical gate is imposed.
 
 A successful configure/make with a demonstrably defective post-build parser
 may use a separately reviewed host-only supplement over unchanged sealed
@@ -428,8 +429,12 @@ is the active fork worktree. Reusing that binary does not by itself prove
 an upstream standard-library environment. Establish that source binding
 before collecting checkpoint-I measurements; preserve historical records.
 Use instruction, allocation, box, memory and pause data for attribution.
-Do not drop difficult workloads to meet the target. Persistent deficits
-become bounded runtime/dispatch work before tier 0, with new measurements.
+Do not drop difficult workloads to meet the target. User clarification,
+2026-10-30: roughly2× is soft guidance, particularly for simple arithmetic,
+not a required aggregate or numerical gate before tier0. Finish GC fixes,
+then publish the interpreter status report. Deficits commission bounded
+independent design reflection for general, orthogonal improvements, including
+parameterized operation families; they do not mandate local score tuning.
 This checkpoint supersedes the older rule that every performance result
 is merely recorded; intermediate correctness landings still need no
 unrelated tuning. JIT tiers, movement and settled ports follow.
@@ -982,3 +987,26 @@ collection; a death in `PyErr_FormatUnraisable` during another
 interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
+
+### Current coordinator ruling, 2026-10-30 07:35 PDT
+
+The user makes2× a soft design guide, particularly for `i += 1`, and asks
+for all remaining GC fixes before the detailed interpreter report/reflection.
+Preserve H1/H2 candidates and park the matched timing experiment. After GC,
+commission design review of reusable parameterized operation families and
+common value/call/frame protocols where performance disappoints. This
+supersedes mandatory-score language in earlier chronological rulings.
+
+Qualified runtime merge d6a23b9fe0c has exactly the tested5a45 native/test/tool
+source; its original19 differing files are project Markdown prose. Both
+required post-merge smoke rows pass on the explicitly reused qualified images.
+No rebuild or repeated full suite is required for this documentation update.
+
+Queue2a eager preparation remains HOLD, not executed. The revised source-only
+late-preparation candidate keeps successful ordering at the baseline boundary
+and aborts before deallocation on ordering OOM. Already routed calls retain
+the existing partial-delivery contract. Independent source review precedes
+bounded native validation. Its finite lock audit identifies inherited weakref
+and range-registry detach/handoff hazards; changing one waiter alone is unsafe.
+Snapshot/debug safety and dependency completion need coherent separate fixes.
+Neither this source checkpoint nor the incremental GC merge closes that debt.

@@ -1,10 +1,23 @@
-# Pre-JIT roadmap: roughly twice upstream interpreter throughput
+# Pre-JIT roadmap: GC correctness and coherent interpreter design
 
-Coordinator plan, 2026-10-29. The user's new target supersedes the earlier
-parity target: aim for roughly 2× upstream CPython's interpreter performance
-before starting JIT implementation. Use structural, established techniques
-and a small set of coherent execution contracts. This is a target, not a
-prediction that the changes below will add up to 2×.
+Coordinator plan, revised2026-10-30. Roughly2× is a **soft design guide**,
+especially for obvious arithmetic such as `i += 1`, not a mandatory aggregate
+score or a numerical gate before JIT work. Finish the outstanding GC fixes
+first. Then publish a detailed interpreter status report and commission
+independent design reflection where performance disappoints. Prefer simple,
+established techniques and orthogonal operation families over local tuning.
+
+The user's example is a parameterized LOAD_ATTR family with int32/float/
+string/object modes, rather than unrelated one-off typed opcodes. Review
+which parameters describe stored representation, a result constraint or an
+observed specialization, including guards, fallback, boxing, monitoring and
+roots. This is a design question for the later reflection, not approval to
+duplicate handlers or introduce a second value representation now.
+
+The prepared matched Clang goto/tail/frame-passing timing plan is parked
+during GC implementation. Preserve its existing builds and bounded runtime
+evidence. After GC, report the actual IR/handler/value/call/GC state and
+costs before commissioning the broader interpreter cleanup.
 
 **How we judge the result.** The primary score is the geometric mean of
 upstream elapsed time divided by fork elapsed time across the declared
@@ -44,8 +57,9 @@ stress failures, fork-driver origin limits, fork-only -fno-gcse and incomplete
 consumed-SDK proof prevent correctness, parity or target qualification.
 Do not automatically rerun the suite or claim the ratio explains its causes.
 
-Reaching 2× upstream from this diagnostic requires about 2.41× current fork
-throughput. The [shared-cost record](pre-I-shared-cost-attribution.md) includes
+Reaching the illustrative2× from this historical diagnostic would require
+about2.41× that fork's throughput; this is not a required work quota. The
+[shared-cost record](pre-I-shared-cost-attribution.md) includes
 a conditional Amdahl calculation: even removing all measured GC work leaves
 the three slow rows around or below upstream parity if non-GC work is fixed.
 GC reduction and the common frame/call/value/interpreter changes must both
@@ -312,11 +326,12 @@ GC, representation, call and dispatch costs. Revert or omit inconclusive local
 optimizations; revise a structural design when measurements identify a larger
 problem. Do not chase tiny instruction wins while a larger runtime cost remains.
 
-Checkpoint I targets roughly 2× upstream on the declared application aggregate
-with defensible individual results and memory/pause tradeoffs. If the proposed
-techniques fall short, publish the shortfall and choose the next measured,
-principled intervention with the user. Do not redefine the workload, count JIT
-speedups toward the target or start JIT implementation to conceal a deficit.
+Checkpoint I reports defensible individual results and memory/pause tradeoffs.
+Roughly2× guides reflection, especially on simple arithmetic; it is not a
+required aggregate result. A shortfall commissions a subagent to inspect the
+design for clean general improvements. Preserve the workload and distinguish
+interpreter results from future JIT results. Report the design tradeoffs and
+choose the next coherent change without an open-ended score-chasing loop.
 
 **Coordination.** The coordinator owns this plan, measurement choices, shared
 interfaces and integration. The GC operator owns the current5a45 broad ladder

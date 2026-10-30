@@ -4976,6 +4976,38 @@ gc_fail_work_alloc(PyObject *self, PyObject *args)
 }
 
 static PyObject *
+gc_memoryview_export_blocker(PyObject *self, PyObject *args)
+{
+    PyObject *op, *blocked;
+    if (!PyArg_ParseTuple(args, "OO:gc_memoryview_export_blocker", &op, &blocked)) {
+        return NULL;
+    }
+    if (!Py_IS_TYPE(op, &PyMemoryView_Type) ||
+        (blocked != Py_True && blocked != Py_False))
+    {
+        PyErr_SetString(PyExc_TypeError, "an exact memoryview and bool required");
+        return NULL;
+    }
+    PyMemoryViewObject *view = (PyMemoryViewObject *)op;
+    if ((view->flags & _Py_MEMORYVIEW_RELEASED) || view->mbuf == NULL ||
+        (view->mbuf->flags & _Py_MANAGED_BUFFER_RELEASED))
+    {
+        PyErr_SetString(PyExc_ValueError, "an active memoryview required");
+        return NULL;
+    }
+    Py_ssize_t expected = blocked == Py_True ? 0 : 1;
+    if (view->exports != expected) {
+        PyErr_SetString(PyExc_ValueError, "unexpected outstanding export count");
+        return NULL;
+    }
+    /* A synthetic readiness blocker, not a Py_buffer acquisition or root.
+       Unblock checks only count==1; the caller must exclude real exports and
+       restore the synthetic count before releasing the real view. */
+    view->exports = 1 - expected;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 gc_fail_debug_alloc(PyObject *self, PyObject *args)
 {
     int n;
@@ -5062,6 +5094,7 @@ static PyMethodDef module_functions[] = {
     {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
     {"gc_fail_debug_alloc", gc_fail_debug_alloc, METH_VARARGS},
     {"gc_fail_work_alloc", gc_fail_work_alloc, METH_VARARGS},
+    {"gc_memoryview_export_blocker", gc_memoryview_export_blocker, METH_VARARGS},
     {"gc_fail_order_alloc", gc_fail_order_alloc, METH_VARARGS},
     {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
     {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},

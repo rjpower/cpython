@@ -4413,3 +4413,34 @@ temporary-slot effects are not complete semantics or a purity model.
 Boundary/property negatives and coherent native validation are next; no
 constructor, root reader or clearing changes are active. H1 native build
 preparation follows its validated baselines. No new performance score exists.
+
+### 19:19 PDT: broad launcher failure and bounded correction
+
+Original release full terminates native2 after6m4s:51,181 reported tests,
+3,533 skips;564 returned modules comprise460 passed,94 skipped,
+8 resource-denied and two failed. Result ee01b433 remains FAIL. The inherited
+focused-test environment wrongly sets PYTHONDONTWRITEBYTECODE and uses a
+project-filesystem bytecode cache. Pydoc cannot find its fresh imported os
+cache; compileall reports two cross-device renames and two hardlink-import
+assertions. The bytecode flag also suppresses10 import and54 importlib cases,
+independently checked by root from the skip journal. These passing modules
+therefore cannot be credited as ordinary bytecode-enabled coverage.
+
+The original exact-product host guard also fails: six generated sysconfig
+cache files were added, while every original588 release path/hash/alias
+remains intact. Debug/ASan originals stay unchanged. No later broad profile
+starts. Root chooses one corrected release full followed by the four unrun
+configurations, instead of building a retrospective partition of all
+environment-sensitive cases. The successor omits the bytecode-disable flag,
+uses a disposable /tmp cache on the same filesystem as test sources, and
+retains all original native/config/source/tool bindings. Only added regular
+in-build cache files may be recorded separately. No test exclusion or native
+repair is proposed. Corrected packets require source review before launch;
+the original helpers, plan, failure and journals remain immutable.
+
+H2 commits its inert scalar decoder and boundary/property controls as5df336.
+Its owned GCC O3 build completes with116 modules checked,67 shared and zero
+failed imports; cleanup verification precedes the granted O1-debug build.
+H1's matching release/assertion-enabled Clang tail builds are conditionally
+authorized after H2 releases the spare slot. No target/performance claim
+follows from those builds. Next hourly checkpoint remains19:50 PDT.

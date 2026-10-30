@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 19:07 PDT. Last qualified runtime merge is 052d8342e56;
+revised 2026-10-29 19:19 PDT. Last qualified runtime merge is 052d8342e56;
 local f2a5 GC predecessor is held; combined successor5a45f9bb6a7
 is undergoing fresh O3/O1-debug qualification in boil-pre-i-union. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-29 19:07 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-29 19:19 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -87,7 +87,7 @@ as a qualified runtime.
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 | Fresh GCC O3, O1 Py_DEBUG and ASan builds complete. All19 affected jobs pass. At19:07, ASan16 passes3,983/92skips and Unicode7 passes1,037/24skips; zero observed fallback, report-only unpinned counts retained | Three full suites (release now running), two stress11 sets, gate3 closure and independent final review |
+| GC/IR integration5a45 | Fresh GCC O3, O1 Py_DEBUG and ASan builds complete. All19 affected jobs pass. At19:07, ASan16 passes3,983/92skips and Unicode7 passes1,037/24skips; zero observed fallback, report-only unpinned counts retained | Correct broad bytecode/cache environment after failed release run, then three full suites, two stress11 sets, gate3 closure and final review |
 | H3 handler domain, monitoring storage and statistics | Included in5a45. Actual Py_STATS producer/reader checks pass on predecessor e9; its11 bounded jobs pass. Fresh5a45 H3 checks pass1,376 cases in each of three modes | Actual combined broad qualification; later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Matched Clang21 computed-goto and preserve_none tail baselines built on5a45; both bounded runtime selections and stale-root checks succeed. Tail ownership case executes. Frame-argument patch committed62456cc on isolatedboil/h1-frame | Matched elapsed comparison, H1 native/CFI/spill/semantic validation; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert scalar-effect decoder passes source review:27 pristine handlers supported,126 explicitly unsupported; current clearing and root readers unchanged | Native decoder validation, complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation |
@@ -110,6 +110,15 @@ The f2 predecessor's stress11 tuple/Probe diagnostic failure remains failed.
 The reader/test repair fixes confirmed lifetime assumptions; its one empty
 prefix diagnostic did not establish that failure's cause. The earlier
 stress100k interpreter/HTTP/trashcan failures also remain preserved.
+
+Update19:19: the first5a45 release full is **FAIL**, with two failed modules.
+The launcher disabled bytecode writes and placed its cache across a filesystem
+boundary from temporary test sources. This breaks pydoc/compileall and skips64
+bytecode-writing import cases. The other four profiles did not start. Preserve
+this run; prepare one corrected full environment rather than assembling its
+narrowed passing cohorts. Native products are unchanged; six added generated
+cache files are recorded separately. H2 source5df336 is committed and its
+owned GCC release build completes; O1-debug and native tests follow.
 
 **Performance.** The first29-row release elapsed diagnostic on unlanded ce2ac
 measured **0.828243× upstream throughput**, about21% more elapsed time;

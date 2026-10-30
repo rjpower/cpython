@@ -1,8 +1,18 @@
 # Main-only GC union: final landing evidence review
 
-**Verdict: HOLD — repair and explicit release/ASan composites clear; four fresh profiles and closure remain.**
+**Verdict: LAND — execution/evidence closure is clear for the declared Linux main-interpreter profile.**
 
-The operator reports `test.test_multiprocessing_fork.test_processes`
+Qualified source is `4da292b1294280da838eae8b886aca7103f2d014`, with runtime
+library/tests at dac6, ordinary native code at3c6 and ASan native code atf945
+explicitly separated. The final index is
+`build/gc-final-traversal-closure/final-completion.json`, SHA256
+`12f1ea31aaced9a55823fcc94da127e5639822932f1361d591935e9db24e8d3a`.
+Its276 absolute artifact digests independently match. The completed
+profiles, explicit release/ASan composites and corrected closure have no
+remaining execution blocker. Independent source approvals are attributed
+below; primary merge and post-merge smokes remain coordinator actions.
+
+The original release run reported `test.test_multiprocessing_fork.test_processes`
 ENV_CHANGED with `SharedMemory.__del__` calling `close()` / `_mmap.close()`
 and raising `BufferError` for exported pointers. Terminal failure index7736d428
 and all13 bound files are now independently checked. Native regrtest printed
@@ -10,13 +20,17 @@ SUCCESS/native0 with51236 tests/3795 skips, but qualification remains FAIL.
 This failure remains immutable. The reviewed dac6 library repair now has
 six positive runs and an intended old-policy failure. Its explicit release
 and ASan composites are independently clear below; neither rewrites the
-original run. No remaining profile or closure is credited yet.
+original run. The remaining profile and corrected closure evidence is
+checked below at its actual source identities.
 
 This is an independent review of the native operator's launch/evidence and
-source-to-native composition. The reviewer authored main-only admission,
-Unpickler, XID and safeguard changes. Independent source approval for those
-changes belongs to the coordinator/string reviews; this record does not
-self-clear them. The coordinator's source-clear dispositions remain a
+source-to-native composition. The reviewer authored the earlier H3 stats
+and S3 snapshot changes, main-only admission, Unpickler, XID and safeguards.
+Independent source approval for those changes belongs to the coordinator/
+string reviews; this record does not self-clear them. In particular, the
+existing H3 source reviews and 7a-2a-snapshot-source-review remain the source
+approval records for those components. The coordinator's source-clear
+dispositions remain a
 landing prerequisite. No native target, configure, make or compiler command
 was run by this reviewer. Raw terminal records and unchanged pure host
 validators were checked; active result files are not evidence.
@@ -44,7 +58,7 @@ qualification rather than relabeled older fulls.
 Reviewed repair source `0d2116c0573854989ced35dc3053fbcccd953207` additionally
 changes only `Lib/multiprocessing/shared_memory.py` and its four tests in
 `Lib/test/_test_multiprocessing.py`, exact diffde0f7576. No C/native rebuild
-is implied. Qualification of this Python-source successor is pending.
+is implied. That intermediate test placement is superseded below.
 
 The test placement in that intermediate repair is superseded by independently
 cleared movede73701fd/net7975929e: runtimefe19c47b is unchanged, the entire
@@ -52,8 +66,8 @@ cleared movede73701fd/net7975929e: runtimefe19c47b is unchanged, the entire
 `test_memoryview.SharedMemoryLifetimeTests`. They import shared_memory directly
 and use track=False/public unlink, avoiding both a tracker subprocess and the
 unrelated sanitizer multiprocessing import guard. The final source is dac6;
-its bindings and six bounded positive outcomes are checked below. Remaining
-full/stress/closure qualification is still pending.
+its bindings, six bounded positive outcomes and remaining full/stress
+qualification are checked below. Final source4da adds only audit metadata.
 
 | Cohort | Actual build source | Terminal capsule | Current product closure |
 | --- | --- | --- | --- |
@@ -124,11 +138,11 @@ Only terminal records are reviewed and credited.
 | ASan Unicode7 | kill/N0 | PASS:1037 tests/25 skips |
 | ASan owner15: Unpickler7/XID8 | kill/N0, exact15/0skip | PASS:15 tests/0 skips |
 | Release coverage | off/N0 | Composite PASS:51240 tests/3794 skips;557 retained +7 fresh; original full FAIL |
-| O1 debug full | off/N0 | PENDING |
-| O1 debug kill full | kill/N0 | PENDING |
-| Release stress11 | off/N1000 | PENDING |
-| O1 debug stress11 | off/N1000 | PENDING |
-| Closure: cext/regen/traversal/headers | after four fresh profiles, explicit composites and cleanup | PENDING |
+| O1 debug full | off/N0 | PASS:51240 tests/3739 skips |
+| O1 debug kill full | kill/N0 | PASS:51240 tests/3739 skips |
+| Release stress11 | off/N1000 | PASS:3104 tests/148 skips |
+| O1 debug stress11 | off/N1000 | PASS:3104 tests/113 skips |
+| Closure: cext/regen/traversal/headers | carried cext/regen; fresh corrected traversal/headers | PASS composite; original traversal batch FAIL retained |
 
 Original ASan16 result55d41bbf/cleanup25688a23 is terminal and independently checked:
 all artifact hashes and the unchanged raw validator replay agree on16 passed
@@ -155,7 +169,7 @@ RuntimeWarnings. They are retained, not described as clean stderr. The sole
 `sys.stderr = open(...)` without explicit close; this is source attribution,
 not proof of the exact warning instance. ASan16 has no reported ENV_CHANGED
 or HTTPResponse closed-fp unraisable. Coordinator disposition of those
-warnings remains explicit; they do not excuse the live release failure.
+warnings remains explicit; they do not excuse the original release failure.
 
 ### Historical HTTP and trashcan regression coverage
 
@@ -170,7 +184,8 @@ Normal full3 and stress11 select GC, and no declared filter matches this
 method. ASan16 and bounded whole9 already return GC PASSED176/21 with no
 trashcan/GCTests container skip. That supports execution through the actual
 loader/filter/returned-count/skip contract; there is no separate success-ID
-journal. Current full/stress outcomes remain pending.
+journal. Current full/stress outcomes and exact skip associations are
+checked below.
 
 Normal full3 selects `test_httpservers` unchanged, including
 `RequestHandlerLoggingTestCase.{test_get,test_err}` and
@@ -188,8 +203,8 @@ GC returns PASSED176/35 with no trashcan skip. Source selection/loader and
 skip accounting therefore support normal/off execution of these cases.
 There is no new HTTP closed-fp report in this module outcome. This is useful
 ordinary-mode regression coverage inside a failed whole profile, not a
-qualified full or a repeat of the failed100k run. Debug/kill/stress evidence
-for the successor still awaits execution.
+qualified full or a repeat of the failed100k run. Fresh debug/kill/stress
+evidence for the successor is checked below.
 
 ### Terminal release failure and bounded repair review
 
@@ -214,14 +229,16 @@ the mapping independently. Explicit `close()` is unchanged and still raises
 with an exported slice, then succeeds after release. Four external tests
 cover discarded views/no unraisable, surviving aliases/slices, strict explicit
 close and Linux `/proc` mapping/descriptor disappearance after final release.
-Public `sms.unlink()` immediately after creation also unregisters the
-resource tracker. There are no forced export counts or new GC loops/protocols.
+Public `sms.unlink()` immediately after creation makes named-resource cleanup
+explicit. Final local tests use track=False; the ordinary multiprocessing
+integration retains real tracker lifecycles. There are no forced export
+counts or new GC loops/protocols.
 
 Seven affected release modules are processes3, misc3 and memoryview (the
 latter uses SharedMemoryManager in RacingTest). The557-old-plus7-fresh
 assembly required exact original returned/skip/source eligibility reconciliation,
 now checked below; no original failed full is relabeled PASS. Debug normal/kill fulls
-will use fresh successor source. Unicode7/owner15 scopes remain separately
+use fresh successor source. Unicode7/owner15 scopes remain separately
 recorded.
 
 Correction to this review's initial ASan inference: the parent package names
@@ -302,8 +319,101 @@ build/gc-final-remaining-qualification: helper diff ad9d7cbf, ready vectors
 db7353d7 and closure plan a363bc6a. Only prerequisite digests/readiness and
 launch authorization metadata were rebound after the coordinator's source
 review. The native operator owns execution and outputs; this reviewer
-checked no active results. Final qualification still requires its four
-actual profile results, cleanup and unchanged closure batch.
+checked no active results. Its four actual profile results and cleanup are
+checked below; the later audit correction has its own closure bridge.
+
+The first fresh remaining profile is independently clear: debug-full
+result8d550cf2/cleanupe052976b and handoff61e60f19. Raw validator replay
+with all274 declared protections agrees on564 returned states,462 PASSED/
+94 SKIPPED/8 RESOURCE_DENIED,51240 tests/3739 skips and565 paired
+driver/workers. Actual mode is off/N0, ordinary native3c6/current source
+dac6;60794 recorded collections have zero fallback and3 report-only
+unpinned. Raw artifacts and cleanup links match. No matching unraisable,
+closed-buffer or closed-fp trace appears in this frozen log.
+
+HTTP returns PASSED103/8; its eight outer skips are exactly SSL cases.
+The previously implicated HTTP logging methods are neither filtered nor
+skipped. GC returns PASSED176/21; test_trashcan_threads has only its existing
+working-thread requirement and is neither filtered nor in the complete
+outer skip list. These are loader/selection plus module-result inferences,
+not a per-success-ID journal or a claim that old stress100k passed. The
+same raw records provide nine smoke modules1935/50 with an exact matching
+outer skip counter, including30 main-only capability skips.
+
+Debug-kill-full resultb1391e8f/cleanupc8ffa48e and handoffdc9972f4 also
+independently clear. The same274-protector raw replay agrees on51240/3739,
+564 returned states462 PASSED/94 SKIPPED/8 RESOURCE_DENIED and565 paired
+driver/workers. Actual kill/N0 has60771 recorded collections, zero fallback
+and3 report-only unpinned. Raw and cleanup hashes match. HTTP again passes
+103/8 with only its eight SSL skips, and GC passes176/21 without a
+trashcan_threads or debug scanner-hook skip. No matching unraisable or
+closed-buffer/fp trace appears. Both full modes therefore establish current
+normal/kill coverage at their declared resources; neither relabels the old
+stress100k run or supplies its missing per-success-case journal.
+
+Release stress11 resultf3b9c680/cleanup3803f212 and handoff9de6ff22 also
+independently clear. Raw replay agrees on11 PASSED modules,3104 tests/148
+skips,12 paired driver/workers and35801 collections, zero fallback and33
+report-only unpinned under actual off/N1000. GC returns174/36 without a
+trashcan_threads skip. The scanner interruption-hook case is visibly
+skipped for its existing Py_DEBUG requirement; only release must-run
+protection omits it. Debug stress retains that case protected. HTTP is not
+selected by stress11. Artifact/cleanup links match and no matching resource
+unraisable or closed-buffer/fp trace appears.
+
+Debug stress11 result8a7c8cbd/cleanup08457125 and handofff5db4bf8
+independently clear as well. Raw replay agrees on3104/113,11 PASSED
+modules,12 paired driver/workers and37982 collections with zero fallback
+and11 report-only unpinned under actual off/N1000. GC returns174/23. The
+debug scanner interruption case remains explicitly protected and unskipped,
+as does trashcan_threads under its existing loader/selection contract.
+HTTP is not selected. Raw and cleanup hashes match; no matching resource
+unraisable or closed-buffer/fp trace appears. All four fresh profiles are
+now independently clear.
+
+Closure stopped at the traversal audit, return1. Cext passed16 tests with
+the exact seven declared skips and regeneration passed; unbuilt/header
+checks were not run. The frozen traverse.log hash7227ee08 reports exactly
+two problems: ndarray's head->base.obj/staticbuf.base.obj no longer have a
+recognized direct release/traverse, and the removed XIBufferViewType_spec
+still has an allowance. The native window is released; no retry or source
+change is credited here.
+
+Source inspection supports a narrow metadata repair in the existing allow
+file: ND's producer buffers initialize base.obj=NULL; its consumer cache
+copies the original managed owner's master, ndarray_traverse visits owner,
+and mbuf_traverse visits master.obj. The two cached paths are borrowed,
+not independently owned references. The obsolete XI type is absent.
+Removing its stale row and documenting these exact ND paths does not
+require a generic checker exemption or runtime change. The corrected
+traversal/header results are checked below; the failed batch remains a
+failure.
+
+The independently reviewed metadata-only correction is clean source
+4da292b1294280da838eae8b886aca7103f2d014, exact diff548487a3. Its sole path
+is Tools/boil/traverse_allow.txt; the key is the C type variable NDArray_Type,
+while the checker diagnostic displays its Python name ndarray. All runtime,
+test and checker-algorithm bytes remain dac6. The successful broad and
+component evidence retains dac6 identity; corrected traversal and previously
+unrun header checks require an explicit source bridge rather than relabeling
+the failed closure or rerunning unchanged native/full work.
+
+Corrected continuation packet751dc211/source bridgec47d9604/plan6aa87735
+contains no profile jobs, only traversal then unbuilt. Its literal commands,
+worker0755 modes and unchanged lock/control bodies were independently
+cleared. The actual continuation returns0: traversal has its expected empty
+success log, and unbuilt emits exactly19 expected receipts, no warnings,
+and four declared unsupported modules (_tkinter, _dbm, _gdbm, readline).
+Raw result/plan/log/outer links match. Cext16/exact7 and unchanged regen
+remain carried at actual dac6; no successful stage was rerun.
+
+After terminal cleanup, this reviewer independently rehashed all original
+588 products per ordinary debug/release/ASan cohort, their configuration,
+resolved targets and aliases, each recorded tool file, all2915 borrowed
+headers and the current source/recipe inputs. All match. The only additional
+ordinary build files are six regular nonsymlink in-build cachepyc files per
+cohort; ASan has none. Serving source is clean4da. No compiler, target or
+guard helper was executed for these independent file checks.
 
 Source discovery remains564 modules; this is a source selection count, not
 runtime execution. The normal fulls retain the whole roster and existing
@@ -343,4 +453,5 @@ exceptions remain in the coordinator record. Process-exit retention is not
 permission to leak normal-runtime acquisitions or claim safe repeated
 `Py_FinalizeEx` in a live embedding host. Generations, moving collection,
 foreign lifecycle and new cleanup/completion frameworks are outside this
-landing. Final LAND/HOLD awaits the actual terminal chain above.
+landing. Final evidence indexing remains separate from the preserved
+individual run outcomes and source approvals above.

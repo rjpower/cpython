@@ -1,5 +1,52 @@
 # 13: Callbacks and finalizers run on the interpreter that owns them
 
+## Current supported policy
+
+As of 2026-10-30, the first milestone supports **one main interpreter, ordinary
+threads and a shared GIL**. Qualified source `4da292b1294` contains runtime/library
+source `dac6` and ordinary native images compiled from `3c6`. Final closure and
+independent LAND review pass, bound by final index `12f1ea31`. Primary integration
+and postmerge smoke are still pending; this block describes the qualified policy.
+
+- Unsupported interpreter creation rejects early, before creating interpreter
+  state. Interpreter handles, C thread states and shared native state are not
+  emulated with subprocesses. See the frozen
+  [main-only admission record](https://github.com/rjpower/cpython/blob/4da292b1294280da838eae8b886aca7103f2d014/boil/design/work/main-only-1.md).
+- One interpreter-wide drainer claim covers callback delivery, including GIL
+  release and error reporting. Nested and competing collectors may collect and
+  enqueue, then return without waiting. An existing value span roots the active
+  object, callback and saved raised exception before removing the queue node,
+  through unraisable reporting and exception restoration. A blocked callback
+  delays other callbacks, including unrelated ones; ordinary threads may still
+  progress. See the frozen
+  [single-drainer record](https://github.com/rjpower/cpython/blob/4da292b1294280da838eae8b886aca7103f2d014/boil/design/work/7a-single-drainer.md)
+  and [integration source review](work/reviews/gc-simple-union-source-review.md).
+- Buffer acquisition readiness is a separate lifetime condition. Ready native
+  and Python-backed registrations are selected before retention; every still
+  unready memoryview/managed owner is retained with its reachable closure.
+  Delivery rechecks readiness, and a skipped release is not notified as
+  complete. The finite consumer ports preserve original acquisition metadata
+  and use existing managed owners; no generic cleanup slot or completion DAG
+  is active. The [owner ledger](work/10a-buffer-safeguard-removal.md) records
+  this boundary and its remaining limits.
+- Busy host-returning finalization rejects before teardown can destroy an
+  active drainer's state; preparation may already have run exit callbacks.
+  Supported Python fork/preexec paths reject a busy
+  drainer and unwind preparation; immediate fork/exec without Python preexec
+  remains a separate supported route. Void shutdown/fork wrappers retain their
+  explicit fatal busy contracts. Actual process termination may leave
+  reasoned safe late state for OS reclamation; that does not authorize leaks
+  during normal execution or equate returning to an embedding host with exit.
+
+The [GC closure plan](work/gc-closure-plan.md) and
+[independent landing review](work/reviews/gc-main-only-final-landing.md) own the
+current validation/landing status. **Cross-owner adoption, interpreter
+retirement, parallel callback progress and graph scheduling below are historical
+or deferred designs, not obligations of this supported milestone.** Their text
+and prior rulings remain intact for any later decision to restore that scope.
+
+## Historical adopted design
+
 Status: adopted 2026-10-28 10:50 PDT after review rounds 1 and 2 (both
 revise; Review below) and three coordinator rulings (the last
 subsection of Review), for step 7a (boil/PROCESS.md section 0, moved ahead of step 7

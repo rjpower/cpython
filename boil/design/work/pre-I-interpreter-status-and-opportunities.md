@@ -145,6 +145,35 @@ measure it on matched nonstats release products.
 | 6. Make proven private string appends linear | Flat immutable strings plus no refcounts leave local repeated append without a refcount-based uniqueness test. | Use a certified nonescaping local append epoch and geometric capacity while preserving ordinary flat string representation. Publication/aliasing seals the epoch. Reuse the proposed code-owned proof/activation owner, not ropes or speculative universal uniqueness. | Complete escape/join/exception/overwrite/final-word admission and owner-generation proof; preserve lazy exec and all storage observers. Initial shared prefixes need a fresh private result; in-place continuation needs the same valid transaction, not any old pointer. Scaling and alias negatives decide value. [Design](pre-I-linear-string-concat.md), [proof/owner prerequisite](pre-I-linear-string-proof-owner.md). |
 | 7. Reduce shared allocation/GC work after correctness | Historical coroutine/comprehension/generator windows spend substantial time collecting and processing dead objects, while Richards has no hot collections. | Pursue a nonmoving generational/retained-set intervention only after real owner/store/barrier coverage; also scrutinize shared frame/allocation churn. Reuse existing queue/root contracts rather than add another resource scheduler. | Old→young barriers, partial constructors, opaque roots, promotion/reentry and an independent full-young oracle must close. Record candidates, survival, death work, RSS and pauses. Generations do not remove inevitable dead-object bookkeeping or C ABI boxes. [Generations design](7-nonmoving-generations-design.md) and its store ledgers remain prerequisites, not implementation. |
 
+## A cheaper GC question before generational barriers
+
+The current collector already scales its post-collection allocation budget:
+`max(configured_floor, live_object_bytes)`, with a default floor of32MiB.
+Automatic heap-triggered collections do not routinely run a second pass;
+the bounded extra pass concerns explicit collection/finalization progress.
+A fixed tiny threshold or automatic double collection is not established as
+our problem. See [trigger policy](../../../Python/gc_live.c) and
+[default budget](../../../Include/internal/pycore_interp_structs.h).
+
+There is a measurement question about accounting. Allocation pressure counts
+gross requested object and PyMem bytes before allocation; realloc charges the
+full new size, including requests that shrink in place or fail. Frees do not
+subtract from that counter. The live-byte budget counts object blocks rather
+than all retained PyMem payloads or RSS. These quantities serve different
+purposes; their difference is not itself a correctness bug or a measured
+performance problem. See [allocation accounting](../../../Objects/obmalloc.c)
+and [live object accounting](../../../Python/gc_trace.c).
+
+After correctness landing, test the existing budget control on unchanged
+qualified source before committing to barriers. Declare the sensitivity
+comparison and memory allowance in advance, and measure elapsed time,
+collection/root/death work, RSS and pauses. A policy that amortizes root and
+live-heap work may be a simpler improvement if that experiment supports it;
+larger budgets cannot remove inevitable per-object death work. Root-aware
+heap expansion has a well-known precedent in the
+[BDWGC allocation policy](https://hboehm.info/gc/gcdescr.html). This is a
+proposed controlled question, not a threshold recommendation or speedup claim.
+
 ## What the measurements actually establish
 
 The historical owned-upstream-versus-ce2ac diagnostic reported a29-kernel

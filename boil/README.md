@@ -21,7 +21,15 @@ component 9dd24bf42c4 and worker setup 093b9d2a1c3 are landed.
 Current focus is interpreter performance: the independently reviewed
 [matched baseline](design/work/pre-I-post-GC-timing.md) measures0.8243× upstream
 throughput. Fresh [cost attribution and experiment decisions](design/work/pre-I-gc-policy-and-experiment-decisions.md)
-prioritize selective death processing and archival of H1/H2 for this milestone.
+prioritize selective death processing. Its independently reviewed prototype
+788695 is in an isolated topic tree, with a successful O1 debug build.
+Test-only correction69c34 passes the focused13 and affected four modules
+(599 tests,46 skips); release measurements and landing review remain.
+Historical worktree retirement is complete: 32 checkouts removed, eight
+registered roots retained, including three ownership/dirty-state exceptions.
+H1/H2 source tags are pushed and selected evidence is retained locally.
+The [GC architecture plan](design/work/gc-architecture-next.md) explains the
+current collector, three broad improvements and the path to generations/movement.
 This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -132,8 +140,8 @@ This lands the increment, not final GC correctness or interpreter parity.
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Later75e8 closes supported completion/resource ordering; precision/platform work remains separate |
 | Three GC safety repairs and supported-runtime closure | Qualified4da/runtimeDAC6/native3c6+ASanf945 integrated75e8. Final index12f1 and postmergef56e bind all profiles/composites, closure and1,935-case smokes. Original release/traversal failures remain failed | Supported Linux/main-interpreter milestone complete. Keep foreign/adoption, platform and precision work distinct; see the [closure plan](design/work/gc-closure-plan.md) and [independent LAND review](design/work/reviews/gc-main-only-final-landing.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Selected for archival for current GCC milestone; affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
-| H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Selected for archival: no immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
+| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
+| H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
 
@@ -180,7 +188,7 @@ initial estimate; several fork rows have substantial spread. Keep all rows
 and raw values. Fresh counter windows put GC at47%/54%/30% of the three
 slow allocation/resume rows. A native profile points to heap classification,
 sweeping and repeated cleanup eligibility checks. Selective death processing
-is the first code candidate; budget sensitivity remains a diagnostic before
+is the first active code slice; budget sensitivity remains a diagnostic before
 new ABI or generational work.
 
 The historical first29-row release elapsed diagnostic on unlanded ce2ac
@@ -221,8 +229,10 @@ score, upstream parity or the2x target.
    18-module correctness and both29-row workload origin sets. The matched release
    diagnostic is complete; no proposed interpreter ABI is implemented. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
    selects by current shared cost; selective collector death processing now
-   precedes a numeric NOARGS ABI expansion. H1 and the inactive H2 patch are
-   selected for archival, with no runtime merge justified now. The prepared
+   precedes a numeric NOARGS ABI expansion. Source788695 passes independent
+   review and an O1 debug build; test-only69c34 passes focused13 and affected
+   four-module behavior checks. Release measurement is next. H1 and the inactive H2 patch are
+   archived, with no runtime merge justified now. The prepared
    matched Clang dispatch/H1 experiment can reopen for that backend; later inspect
    moves/spills/code size and real root ownership. H3 categories use generated
    properties, never numeric opcode thresholds. Keep coherent operations and

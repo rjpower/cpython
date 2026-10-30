@@ -35,14 +35,24 @@ record and is updated at every landing.
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. Isolated H1 native62456/tool-test94ab passes four bounded runtime/root rows and independent review; no timing or landing. Matched Clang timing plan parked during GC. H2 inert decoder5df/test-only b3e completes bounded native validation,27 supported/126 unsupported; no active maps or clearing change. No opcode threshold |
+| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. H1 native62456/tool-test94ab and H2 inert decoder5df/test-only b3e remain unmerged; both checkouts retired with pushed source tags and local evidence. Reopen H1 only for an active Clang-tail target; H2 needs a scheduled usable liveness consumer. No active maps, clearing change or opcode threshold |
 | 7 | nonmoving generations | Reviewed direction; allocator/frame/container/runtime ledgers bind current source. Types/shapes/native/iterator/root/port coverage and concrete barrier/constructor/promotion/reentry/young-index interfaces remain. No barrier/minor implemented |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
-| P | the ports phase: Cython, cffi, pyyaml, numpy on the settled API | open, after 10b |
+| P | representative ports: Cython, cffi, pyyaml, numpy | Small contract fixtures accompany barrier/handle/API design; broader package migration follows the settled API. No new port is implemented in this cycle |
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
+
+The supported GC milestone is complete. Current performance work starts with
+selective death processing: independently reviewed source788695 and its O1
+debug build pass. Test-only69c34 passes focused13 and four affected modules
+(599 tests,46 skips); release timing and landing remain. The [architecture plan](design/work/gc-architecture-next.md)
+separates this slice from later allocator-aware reclamation and nonmoving
+generations. Rare cleanup retains its lifetime rules. Copying adds writable
+root/heap references, pinning and native API contracts; it is a separate scope.
+The [worktree closure record](design/work/worktree-closure-plan.md) records
+actual retirement batches, source tags, local evidence and retained exceptions.
 
 Shared prerequisite `2155f16f45f` is integrated and independently checked:
 actual verifier state is exposed through a test accessor. Default/debug

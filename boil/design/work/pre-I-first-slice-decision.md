@@ -20,8 +20,23 @@ eligibility checks and passes over unrelated dead objects. Refine actual work
 eligibility and stage subsets before introducing generations or a numeric ABI.
 The existing-budget sensitivity below remains a diagnostic of amortization
 and memory cost, not the selected explanation or a forecasted fix.
+The [architecture plan](gc-architecture-next.md) separates the active first
+slice from later allocator-aware reclamation and nonmoving generations.
+Source 788695 passes independent review and its O1 debug build; an initial
+13-case run passed all 12 existing controls and failed the new resurrection
+oracle. Independent comparison with pinned upstream 321925 confirms that
+callback-free weakrefs intentionally survive finalizer resurrection. The
+test-only correction 69c34 asserts survivor identity and eventual clearing.
+Reusing unchanged native788 products, focused13 passes without skips and all
+four affected modules pass (599 tests,46 skips), with successful cleanup and
+zero fallback. The whole-module run has one report-only unpinned record;
+the original failed run is preserved. No runtime fix or speedup is established
+by correcting the test; release measurement and landing review remain.
+The [pinned upstream rationale](https://github.com/python/cpython/blob/321925c92c9e67864cafa1566840927f6f07e90a/Python/gc.c#L779-L787)
+explains why callback-free references remain usable during finalization.
+
 The finite NOARGS closure remains a candidate whose ABI cost needs a current
-conversion budget. H1 is selected for archival for the current GCC milestone;
+conversion budget. H1 is archived for the current GCC milestone;
 its matched comparison becomes relevant only if Clang tail dispatch is an
 active target. None is an automatic
 implementation or experiment grant.

@@ -5103,3 +5103,53 @@ merge unused code. Target three operational checkouts plus the Git anchor;
 retain required receipts/refs first and handle the identified dirty/shell/
 ambient-build exceptions separately. No worktree/ref was removed or runtime
 experiment merged in this cycle. Unrelated user changes remain untouched.
+
+### 14:56 PDT: historical checkout retirement and GC architecture review
+
+The authorized housekeeping lane retired 32 historical worktrees through
+ordinary removal, with 32 exact source tags pushed and remotely verified.
+Eight registered roots remain: integration, serving runtime, comparator,
+active selective-death topic, Git anchor and three ownership/dirty-state
+exceptions. H1/H2 and deferred foreign-owner work are archived without merging
+unused code. Selected raw evidence totals 918.53 MiB locally; closed binaries
+and caches were excluded explicitly. This is not an offsite raw-data backup.
+The final GC, matched timing and postmerge indices are unchanged and all
+276/393/20 referenced artifact hashes still match. Negative4's 55 dependency
+files remain byte-identical at an explicitly labeled evidence-only path;
+the unchanged serving input guard passes. Unrelated reviews are preserved.
+
+The selective-death prototype 788695 has independent source approval and a
+successful O1/Py_DEBUG build, reusing the accepted native runner. Its initial
+13-case debug-kill run passed all 12 existing controls and failed only the
+new resurrection test. Wider affected modules did not run. Independent review
+and root inspection of pinned upstream321925 show callback-free weakrefs are
+intentionally retained through finalization for cache invalidation safety.
+The correction will assert survivor identity before eventual clearing, keeping
+callback/finalizer counts and usable data checks. Preserve the original failed
+run; no runtime policy change, speedup or primary landing is inferred.
+
+The independently reviewed [architecture plan](design/work/gc-architecture-next.md)
+describes the current full-heap nonmoving collector and recommends selective
+lifecycle work, GC-owned reclamation with explicit native cleanup contracts,
+then measured nonmoving generations. Copying needs writable reference/root
+locations, pinning and native API/ports contracts; it is a larger scope.
+The generations proposal now marks the qualified S3 repair complete and
+foreign lifecycle deferred, preserving the genuine young-index, mutator,
+constructor/promotion, root and independent-oracle obligations. No generations,
+barriers or movement were implemented in this cycle. Next hourly update is
+15:30 PDT if work remains active; material findings are reported sooner.
+
+### 14:59 PDT: selective-death affected behavior checks pass
+
+Test-only correction69c34 changes only the new weakref resurrection oracle.
+The focused13 pass with zero skips; the conditional four whole affected
+modules pass599 tests with46 declared skips. Both native/host return0 and
+post-command cleanup passes. They reuse O1 native788 unchanged, with explicit
+test-source/native identities. The original failed13 remains preserved in
+its14-reference index. No retry of unchanged code or new runtime fix occurred.
+Focused roots record219 collections/zero fallback/zero unpinned; whole records
+10,784/zero fallback/one report-only unpinned. Do not claim zero unpinned or
+global qualification from this finite check. Release measurements, remaining
+landing checks and primary runtime integration are still pending. Reuse the
+existing four-row paired harness and build recipe for the next bounded
+performance question; no new benchmark framework is needed.

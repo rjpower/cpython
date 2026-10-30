@@ -1229,9 +1229,16 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis,
             ir_generator.build_handler_domain(analysis), out)
+        metadata = out.getvalue()
+        # Effects have their own rows with the same handler keys.
+        self.assertIn("[OP_FAMILY_CALLS] = { .flags = _PyIR_EFFECT_KNOWN",
+                      metadata)
+        formats = metadata.split("const _PyIRFormat _PyIR_Formats[", 1)[1]
+        formats = formats.split("};", 1)[0]
         lines = {line.split(" = ", 1)[0]: line
-                 for line in map(str.strip, out.getvalue().splitlines())
+                 for line in map(str.strip, formats.splitlines())
                  if line.startswith("[")}
+        self.assertNotIn("_PyIR_EFFECT_KNOWN", lines["[OP_FAMILY_CALLS]"])
         self.assertNotIn("_PyIR_RUNS_CODE", lines["[OP_QUIET]"])
         self.assertIn("_PyIR_RUNS_CODE", lines["[OP_FAMILY_CALLS]"])
         self.assertIn("_PyIR_RUNS_CODE", lines["[OP_TWIN]"])

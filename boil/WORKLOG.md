@@ -4845,3 +4845,38 @@ without touching the index/worktree or preserved unrelated drafts.
 Planning docs and the seven-opportunity interpreter source report are current;
 Loom handover is synchronized. Next hourly update about12:30 PDT, with
 material failures or completed gates reported sooner. No interpreter timing.
+
+
+### 12:08 PDT: sanitizer passes; full qualification finds Python wrapper ownership
+
+Atf945 ASan16 passes4022/141skips (13002collections/0fallback/1report-only
+unpinned), Unicode7 passes1037/25 (718/0/0), owner15 passes15/0 (162/0/0).
+All three clear independent raw/mode/config/cleanup review. Parent multiprocessing
+packages in ASan16 do not prove processes-leaf coverage: their module-wide
+HAVE_ASAN_FORK_BUG skips remain. Keep that source limit explicit.
+
+Release full returns nativeSUCCESS0,51236/3795, all564 modules; qualification
+is FAIL. Three processes modules report SharedMemory.__del__ BufferErrors.
+The validator first rejects a legitimate release skip of the debug-only
+scanner interruption unit; correct eligibility for release while retaining
+debug/stress/ASan protection. Failure7736d428/all13 refs and cleanup7d341b5b
+are checked; no later profile/closure starts. HTTP103/8 (SSL skips) and
+GC176/35 pass; trashcan eligibility/no-skip is inferred from source/roster,
+not a success-ID journal. Old100kFAIL stays failed.
+
+Source review finds dead temporary slices queued after user finalizers.
+Reviewed Python-only repair0d2116 drops automatic view/mapping ownership and
+closes the owned fd, leaving strict explicit close unchanged. No C rebuild.
+Four public behavior checks cover data/liveness, no unraisables, strict live
+exports and actual Linux mapping/fd retirement. First test cleanup draft used
+rawunlink without tracker unregister; fixed before execution with immediate
+public unlink. Move these local tests to test_memoryview with track=False to
+avoid the inherited ASan fork skip without disabling it. No new targets yet.
+
+Operator prepares new4 across modes, old-policy control and fresh affected7
+(processes3/misc3/memoryview); original release carry is557 (455PASSED/
+94SKIPPED/8RESOURCE). Ordinary MV getscpu; sanitizer respectsfork limitation.
+Remaining broad profiles and closure follow reviewed explicit assembly.
+Interpreter source report gains concrete arithmetic/attribute/branch examples
+and an existing-budget sensitivity question before generational complexity.
+No new performance measurement or implementation.

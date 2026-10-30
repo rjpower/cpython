@@ -147,3 +147,22 @@ One configured tree with successive tiny commits would also isolate them but
 adds three make/checkpoint phases without a demonstrated attribution need.
 Freeze the actual four-omission negative for review only after the positive union
 is fixed; none of these commands or patches is authorized by this note.
+
+
+## Python resource wrapper found by full qualification
+
+The f945 release full exposes SharedMemory.__del__: discarded native-only
+memoryview slices can remain queued when automatic destruction requests
+strict mmap.close. The six C acquisition-owner ports remain unchanged; this
+is an additional Python resource-wrapper lifetime assumption. Reviewed
+repair0d2116 drops SharedMemory's view/mapping references and closes its own
+POSIX descriptor, leaving the managed acquisition to keep mappings usable
+until their last views finish. Explicit close remains strict for live exports.
+No forced count, skipped release, nested collection or completion DAG is added.
+
+Validate discarded-view cleanup without unraisables, surviving live-view data,
+strict explicit close/retry and eventual Linux mapping/descriptor retirement.
+Use local track=False objects for sanitizer unit checks; actual tracked
+processes/misc modules and the ordinary memoryview manager race cover the
+integration. Do not bypass the existing ASan fork guard. Source-only repair
+is not yet native qualification; retain the original failed full profile.

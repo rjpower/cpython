@@ -24,7 +24,7 @@ bridges, common frame/call costs and dispatch by source evidence and expected
 breadth; identify what fresh measurements would confirm each proposal.
 Recommendations remain provisional until matched timing after GC landing.
 
-Current GC checkpoint,2026-10-30 11:35 PDT: safetyff6 is landed. Final
+Current GC checkpoint,2026-10-30 12:08 PDT: safetyff6 is landed. Final
 main-only/drainer/buffer source3c6b8daa506 is complete, including ND and
 same-owner XID ports and the two safeguard removals. Component O1 evidence
 passes through explicit test-only corrected composites; final-union native
@@ -35,6 +35,10 @@ worktree with a fresh owned O1 build. Four causal controls and the behavioral sc
 bounded checks; release/ASan/full/closure and landing precede fresh timing.
 The [provisional source report](pre-I-interpreter-status-and-opportunities.md)
 now inventories the implementation and seven ranked shared opportunities.
+All three sanitizer profiles pass onf945, but the release full is unqualified
+on SharedMemory cleanup. Its finite Python ownership port and local behavioral
+regressions are active; reuse unchanged C products and retain unaffected
+coverage explicitly. Fresh interpreter timing still waits for GC landing.
 The [closure plan](gc-closure-plan.md) and [owner ledger](10a-buffer-safeguard-removal.md)
 name the exact boundary. No refreshed performance score exists yet.
 

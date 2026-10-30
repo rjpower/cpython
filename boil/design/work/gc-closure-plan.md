@@ -33,6 +33,25 @@ both post-merge smoke rows pass. The landing is incremental under the
 explicit exception; historical failed profiles remain failed. It does
 not establish finalizer completion order or whole-GC safety.
 
+## Current qualification blocker,12:08 PDT
+
+The three ASan profiles pass onf945. Release full completes natively but fails
+qualification on SharedMemory destructor unraisables in all three processes
+modules; its incorrectly required debug-only scanner unit is a separate
+eligibility error. Keep failure7736d428 immutable. Reviewed Python-only
+repair0d2116 drops automatic ownership and closes only the owned descriptor,
+leaving the existing memoryview/managed-buffer/mmap chain to retire mappings.
+Strict explicit close is unchanged. This is a finite library port, not a
+new collector protocol. Four local behavior checks avoid a fork under ASan;
+processes/misc integration checks retain real resource tracking.
+
+Next evidence: new4 across the three relevant modes, old-disposal negative,
+affected seven release modules and appropriate sanitizer memoryview coverage.
+Carry557 original release cohorts explicitly; refresh all directly affected
+paths. Correct the debug-only protection per build while keeping selected
+skips visible. Remaining debug fulls/stress and closure precede primary merge
+and smoke. No C rebuild is needed for this Python-only source change.
+
 ## Repair sequence and concrete boundaries
 
 | Work | Current state | Next evidence / completion condition |
@@ -100,8 +119,9 @@ separate support decisions; process exit does not excuse ordinary leaks.
    build, indexe859/all54 refs checked. Test-onlyf945 replaces scanner
    traversal/count checks with liveness/data/resource checks; fresh wholeRe
    passes172/3skips on native3c6, carrying13/eight other modules explicitly.
-   O3 build/cleanup passes; next are eight release/debug/ASan profiles and
-   closure, then independent landing review and smoke. Reuse existing recipes/modes/locks;
+   O3 and three ASan profiles pass. Release qualification is blocked on the
+   Python SharedMemory wrapper; follow the current blocker section for its
+   affected coverage and remaining profiles/closure/landing sequence. Reuse existing recipes/modes/locks;
    stop unexpected failures, diagnose and keep original results. Independent
    source/evidence review precedes primary merge and post-merge smoke. Process
    exit does not excuse supported-run lifetime leaks.

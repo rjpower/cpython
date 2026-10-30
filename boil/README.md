@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 11:35 PDT. Latest runtime merge is ff6ed9d6bfb,
+revised 2026-10-30 12:08 PDT. Latest runtime merge is ff6ed9d6bfb,
 integrating qualified GC safety candidate9e223040 over prior runtime
 d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
 post-merge smoke pass. Shared
@@ -72,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 11:35 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 12:08 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -116,7 +116,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering and remaining precision/platform obligations |
-| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. Runtime3c6 plus behavioral test-only successorf945 completes the main-only/drainer/six-owner source and removes the two safeguards. Fresh O1 new13/whole9 pass; corrected wholeRe172/3skips passes on native3c6. O3 build passes; four copied causal omissions reach their intended assertions | Eight release/debug/ASan profiles, closure, independent landing review, primary merge and smoke remain. Bounded evidence is explicitly assembled at real source/native identities. The original unknown ambient build and make-precondition failure remain preserved. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. C3c6/testf945 bounded checks and all three ASan profiles pass. Release full returns native SUCCESS51236/3795 but qualification FAIL: three multiprocessing processes modules report SharedMemory cleanup unraisables; a debug-only scanner unit was also wrongly required on release. Python-only owner-disposal repair0d2116 is reviewed/committed; native products remain unchanged | Validate local lifetime regressions, affected processes/misc/memoryview and old-policy control; assemble release coverage with retained557 plus fresh7. Keep the original full failed. Correct per-build protection without hiding skips. Remaining debug fulls/stress, closure, landing review/merge/smoke follow. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
@@ -211,8 +211,7 @@ score, upstream parity or the2x target.
    improve call windows and linear string growth only under their root,
    initialization and alias/escape proofs. Re-measure each coherent change.
 
-**Active composition, source complete and not landed:** final candidate
-3c6b8daa506 combines main-only admission, one rooted drainer, unready-buffer
+**Active composition, not landed:** C candidate3c6b8daa506 combines main-only admission, one rooted drainer, unready-buffer
 retention, all six persistent consumer families and the two safeguard
 removals. Source reviews clear bounded validation. Its clean qualification
 worktree is boil-buffer-xid-main-only on branch boil/gc-final-validation.
@@ -237,23 +236,33 @@ records the checked zero-count and DEAD/SWEPT invariants. Inherited live
 Python-buffer-wrapper re-export limitations and private ND producer mutation
 reentry remain disclosed; cycle tests do not establish those separate paths.
 
-Remaining sequence: fresh O1 build, new13 and conditional affected9, four
-reviewed causal omissions in one copied negative build, release/debug/ASan
-qualification, closure, independent landing review and integration smoke.
+Remaining sequence: qualify the Python SharedMemory repair, assemble the
+release and affected sanitizer coverage explicitly, finish the pending debug
+fulls/stress, closure, independent landing review and integration smoke.
 Main-only creation, ordinary threads, normal resource lifetime and callbacks
 are the milestone; foreign adoption, generic cleanup APIs and a completion
 DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
 are authorized.
 
-**11:35 PDT update.** Final test source isf9457ef8494, with unchanged C/native
-source3c6b8daa506. Fresh O1 new13 passes13/0skips and whole affected9 passes
-1,863/120skips, zero fallback. The behavioral scanner revision then passes
-fresh whole test_re172/3skips; thirteen focused cases and eight other whole
-modules carry explicitly. O3 build/cleanup passes in115seconds. All four
-copied causal omissions reach their intended assertions, with no crash,
-timeout, retry or fallback; ordinary failed native results stay failed.
-Eight broader profiles plus closure have a reviewed recipe and an execution
-grant after final mechanical source/receipt binding. No primary landing yet.
+**12:08 PDT update: GC landing held on SharedMemory cleanup.** All three
+sanitizer profiles pass onf945. The release full finishes all564 modules,
+with51,236 reported tests and3,795skips, but qualification fails: the three
+multiprocessing processes modules report SharedMemory destructor BufferErrors.
+The source review identifies queued temporary views still owning a mapping
+when the destructor requests strict close. Reviewed Python-only repair0d2116
+lets automatic disposal drop its view/mapping references and close its owned
+POSIX descriptor; explicit close stays strict. No GC framework or C change.
+Four external lifetime/resource checks are being placed in the memoryview
+suite so their local, untracked-memory path can run under ASan without the
+multiprocessing helper's inherited fork limitation. No target has run yet.
+
+Refresh the seven affected release modules (processes3, misc3, memoryview)
+and retain the other557 explicitly. The memoryview race gets CPU exposure
+on ordinary release; sanitizer retains its existing fork/resource boundary.
+Fix the release-only must-run classification for the debug interruption unit,
+keeping its visible skip and protection on every Py_DEBUG configuration.
+The original full and predecessor profiles keep their actual outcomes.
+Remaining broad profiles, closure and merge/smoke are pending.
 
 The provisional [interpreter status and opportunities report](design/work/pre-I-interpreter-status-and-opportunities.md)
 now records the implemented architecture, isolated H1/H2 and seven ranked

@@ -2238,7 +2238,6 @@ unpackiter_release(unpackiterobject *self)
     self->releasing = 1;
     /* The exporter can reach this iterator while releasing its acquisition.
        Preserve the original view, but make every raw-data user inert first. */
-    Py_CLEAR(self->so);
     PyBuffer_Release(&self->buf);
     self->releasing = 0;
 }

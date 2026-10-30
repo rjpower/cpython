@@ -169,3 +169,10 @@ is not yet native qualification; retain the original failed full profile.
 Successor dac6 commits the four local tests in test_memoryview, restoring
 the multiprocessing test source. Independent launch review clears the six
 targeted positives; execution is active, with no new C build.
+
+At12:30 PDT, terminal58723869/all48 refs clears independent review: all six
+positives pass and old disposal fails the intended captured-BufferError
+assertion. Release557+7 and ASan15+memoryview are explicit accepted coverage
+assemblies, not rewritten uniform full results. Remaining normal/kill debug
+fulls, stress2, closure and primary landing are still pending; the first full
+is active. Native acquisition-owner source remains unchanged.

@@ -33,27 +33,29 @@ both post-merge smoke rows pass. The landing is incremental under the
 explicit exception; historical failed profiles remain failed. It does
 not establish finalizer completion order or whole-GC safety.
 
-## Current qualification blocker,12:15 PDT
+## Remaining qualification,12:30 PDT
 
-The three ASan profiles pass onf945. Release full completes natively but fails
-qualification on SharedMemory destructor unraisables in all three processes
-modules; its incorrectly required debug-only scanner unit is a separate
-eligibility error. Keep failure7736d428 immutable. Reviewed Python-only
-repair0d2116 drops automatic ownership and closes only the owned descriptor,
-leaving the existing memoryview/managed-buffer/mmap chain to retire mappings.
-Strict explicit close is unchanged. This is a finite library port, not a
-new collector protocol. Four local behavior checks avoid a fork under ASan;
-processes/misc integration checks retain real resource tracking. Successor
-dac6 places the four tests in test_memoryview and restores the multiprocessing
-test source to f945. Independent source and launch reviews clear the targeted
-packet; its six positive jobs are running on the unchanged native products.
+Final source dac6 adds the reviewed Python SharedMemory automatic-disposal
+port to C3c6/testf945. All six targeted positive jobs pass; the unchanged
+old-policy test reaches its named BufferError assertion. Terminal58723869
+and all48 references clear independent review. Strict explicit close stays
+unchanged, live-view data survives, and released mappings/descriptors retire.
+No C rebuild, forced count, nested collection loop or completion DAG is added.
 
-Next evidence: new4 across the three relevant modes, old-disposal negative,
-affected seven release modules and appropriate sanitizer memoryview coverage.
-Carry557 original release cohorts explicitly; refresh all directly affected
-paths. Correct the debug-only protection per build while keeping selected
-skips visible. Remaining debug fulls/stress and closure precede primary merge
-and smoke. No C rebuild is needed for this Python-only source change.
+Explicit release assemblyc13fdc23 retains557 exact original rows and adds
+fresh processes3/misc3/memoryview:564 modules,51240 tests/3794 skips. Its
+memoryview resource context differs and is stated. Original release failure
+7736d428 stays failed. ASan16 assembly2b81264e retains15 original rows plus
+fresh memoryview,4026/141; its parent multiprocessing skips do not prove leaf
+coverage. The separate local ASan4 executes the changed path without forks.
+Original Unicode7/owner15 evidence retains its actual source/native identity.
+
+Remaining ready vectorsdb7353d7/closure plana363bc6a run once: normal O1-debug
+full (active), debug-kill full, release/debug stress11, then closure on success.
+All564/11 rosters and inherited filters stay unchanged; the debug-only scanner
+hook stays protected in every debug mode. Final independent landing review,
+primary merge and code-identical release/debug postmerge smoke follow. The
+[independent review](reviews/gc-main-only-final-landing.md) remains HOLD.
 
 ## Repair sequence and concrete boundaries
 
@@ -122,9 +124,10 @@ separate support decisions; process exit does not excuse ordinary leaks.
    build, indexe859/all54 refs checked. Test-onlyf945 replaces scanner
    traversal/count checks with liveness/data/resource checks; fresh wholeRe
    passes172/3skips on native3c6, carrying13/eight other modules explicitly.
-   O3 and three ASan profiles pass. Release qualification is blocked on the
-   Python SharedMemory wrapper; follow the current blocker section for its
-   affected coverage and remaining profiles/closure/landing sequence. Reuse existing recipes/modes/locks;
+   O3 and three ASan profiles pass. The Python SharedMemory wrapper repair now
+   clears six targeted jobs and explicit release/ASan coverage assemblies;
+   follow the current qualification section for remaining profiles, closure
+   and landing. Reuse existing recipes/modes/locks;
    stop unexpected failures, diagnose and keep original results. Independent
    source/evidence review precedes primary merge and post-merge smoke. Process
    exit does not excuse supported-run lifetime leaks.

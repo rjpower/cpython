@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 12:15 PDT. Latest runtime merge is ff6ed9d6bfb,
+revised 2026-10-30 12:30 PDT. Latest runtime merge is ff6ed9d6bfb,
 integrating qualified GC safety candidate9e223040 over prior runtime
 d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
 post-merge smoke pass. Shared
@@ -72,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 12:15 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 12:30 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -116,7 +116,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering and remaining precision/platform obligations |
-| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. C3c6/testf945 bounded checks and all three ASan profiles pass. Release full returns native SUCCESS51236/3795 but qualification FAIL: three multiprocessing processes modules report SharedMemory cleanup unraisables; a debug-only scanner unit was also wrongly required on release. Reviewed Python-only successor dac6 includes owner-disposal repair0d2116 and four behavior tests in test_memoryview; targeted validation is running on unchanged native products | Validate local lifetime regressions, affected processes/misc/memoryview and old-policy control; assemble release coverage with retained557 plus fresh7. Keep the original full failed. Correct per-build protection without hiding skips. Remaining debug fulls/stress, closure, landing review/merge/smoke follow. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. Final C3c6/testf945 bounded checks and three ASan profiles pass. Python-only successor dac6 fixes SharedMemory automatic disposal; all six fresh targeted jobs and its old-policy causal control clear review. Explicit release557+7 and ASan15+memoryview coverage assemblies pass; the original release full stays failed | First O1-debug full is active. Debug-kill full, release/debug stress11, closure, final landing review, merge and postmerge smoke remain. See the [GC closure plan](design/work/gc-closure-plan.md) and [independent HOLD review](design/work/reviews/gc-main-only-final-landing.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
@@ -191,9 +191,10 @@ score, upstream parity or the2x target.
    coverage is explicitly assembled. Remaining root precision and platform
    obligations stay separate; passing suites do not authorize removing roots.
 2. The provisional [interpreter source report](design/work/pre-I-interpreter-status-and-opportunities.md)
-   inventories seven shared opportunities. A source-only first-slice comparison
-   runs alongside GC qualification; after landing, refresh matched timing and
-   choose a coherent implementation. The prepared
+   inventories seven shared opportunities. A source-only comparison is also
+   published; after landing, refresh matched timing and
+   choose a coherent implementation. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
+   makes current shared cost and benefit prerequisites for an ABI expansion. The prepared
    matched Clang dispatch/H1 experiment stays parked meanwhile; later inspect
    moves/spills/code size and real root ownership. H3 categories use generated
    properties, never numeric opcode thresholds. Keep coherent operations and
@@ -216,7 +217,9 @@ score, upstream parity or the2x target.
 **Active composition, not landed:** C candidate3c6b8daa506 combines main-only admission, one rooted drainer, unready-buffer
 retention, all six persistent consumer families and the two safeguard
 removals. Source reviews clear bounded validation. Its clean qualification
-worktree is boil-buffer-xid-main-only on branch boil/gc-final-validation.
+worktree is boil-buffer-xid-main-only on branch boil/gc-final-validation. Python-only
+successor dac6 adds the reviewed SharedMemory disposal repair and four local
+behavior tests; unchanged native images remain3c6 (ordinary) andf945 (ASan).
 The original boil-gc-simple checkout has an unknown ambient in-source build;
 preserve it. That checkout's final make stopped before compilation, with
 owned debug products unchanged and no final-union target launched.

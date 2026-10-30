@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 12:15 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 12:30 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -31,7 +31,7 @@ record and is updated at every landing.
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
 | 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
-| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final supported-runtime union3c6b8daa506 composes main-only admission, one rooted drainer, all six concrete buffer owner families and checked safeguard removal; source reviews clear bounded validation. Clean-tree final O1 new13 and whole9 pass (13/0 and1863/120skips), zero fallback. Preserve the prior make-precondition failure and unknown ambient build. O3 and causal4 pass; ASan3 pass atf945. Release qualification fails on SharedMemory cleanup; reviewed Python-only repair0d2116 is active. Affected coverage, remaining debug/stress/closure and landing remain. Foreign/adoption machinery stays deferred |
+| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final source dac6 combines C3c6 main-only/drainer/buffer ownership with the Python SharedMemory port. Final O1 bounded checks, three original ASan profiles, six fresh library checks, causal controls and explicit release/ASan coverage assemblies clear review. First normal O1-debug full is active; debug-kill full, stress2, closure and landing remain. Original failed profiles and ambient build stay preserved; foreign/adoption stays deferred |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
@@ -1005,37 +1005,32 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 12:15 PDT
+### Current coordinator ruling, 2026-10-30 12:30 PDT
 
-**Current blocker.** All three ASan profiles pass atf945. Release full has
-nativeSUCCESS0 but qualificationFAIL:51236 reported/3795skips,564 returned
-modules (459PASSED/94SKIPPED/8RESOURCE_DENIED/3ENV_CHANGED). Only the three
-multiprocessing processes modules report BufferError unraisables. Separately,
-the must-run list wrongly required a debug-only scanner hook on release.
-Preserve failure7736d428/all13refs and every original result.
+**Current stage.** The final source is dac6, using unchanged ordinary C3c6
+and ASan f945 images. All six SharedMemory positives pass: four new external
+behaviors in release/off, debug/kill and ASan/kill; six processes/misc modules;
+ordinary whole memoryview with cpu enabled; sanitizer whole memoryview with
+its inherited fork boundary. The old-policy worker fails exactly at the
+unchanged discarded-view assertion with captured BufferError, not a crash or
+import failure. Terminal58723869/all48 references clears independent review.
 
-Reviewed Python-only SharedMemory repair0d2116 separates automatic ownership
-disposal from strict explicit close. The destructor drops its view/mapping
-references and consumes its own POSIX fd; the existing managed owner keeps
-live mappings usable and eventually reclaims them. Four behavior tests cover
-discarded/live views, strict close and actual mapping/fd retirement. Place
-these local tests in test_memoryview with track=False and immediate public
-unlink so ASan runs them without bypassing the multiprocessing fork guard.
-This placement is committed at dac6; `_test_multiprocessing.py` is restored
-byte-for-byte to f945. Independent source/launch review clears the frozen
-successor packet, and the six targeted positive jobs have started. The complete
-set remains pending; no native rebuild or additional full run is implied.
-The real tracked integration remains in processes/misc tests. Source review
-caught raw-unlink tracker leakage in the first draft before execution.
+Release assemblyc13fdc23 explicitly retains557 exact original module rows
+and replaces seven affected rows:564 modules,51240 tests/3794 skips. The
+original full remains nativeSUCCESS0/qualificationFAIL. ASan16 assembly
+2b81264e retains15 rows plus fresh memoryview:4026/141. Parent multiprocessing
+sanitizer skips are not processes-leaf evidence; the separate local4 covers
+the changed path. No all-run root counters are assigned to carried modules.
+The debug-only scanner hook remains protected in every debug mode; release
+keeps its legitimate visible skip. No new selection exclusions are added.
 
-Reuse unchanged native products; qualify new4 in release/off, debug/kill and
-ASan/kill, the old-policy causal control, affected processes3/misc3 and
-memoryview. Release memoryview gets cpu exposure for its SharedMemoryManager
-race; ASan keeps the known fork boundary. An explicit557-old/fresh7 release
-assembly may replace the incomplete coverage claim, never the original failed
-profile. Retained ASan evidence and refreshed memoryview/new path checks keep
-their actual source identities. The remaining four broad profiles and closure
-then run on the successor; no default full-ladder restart or retry-to-green.
+The frozen remaining packet has ready vectorsdb7353d7 and closure plana363bc6a.
+First normal O1-debug full is active; then debug-kill full, release/debug
+stress11 and unchanged closure. Stop on unexpected failure. Final independent
+LAND review, primary merge and bounded release/debug smoke remain. The smoke
+template is prepared and held, with release1935/80 expectations derived from
+the nine retained module rows; debug expectations await the fresh normal full.
+There is no default full-ladder restart, repeat-to-green or new timing run.
 
 **User direction, 11:22 PDT: observable behavior first.** Integration tests
 should primarily check useful liveness and reclamation, readable live data,

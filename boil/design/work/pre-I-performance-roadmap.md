@@ -24,7 +24,7 @@ bridges, common frame/call costs and dispatch by source evidence and expected
 breadth; identify what fresh measurements would confirm each proposal.
 Recommendations remain provisional until matched timing after GC landing.
 
-Current GC checkpoint,2026-10-30 12:15 PDT: safetyff6 is landed. Final
+Current GC checkpoint,2026-10-30 12:30 PDT: safetyff6 is landed. Final
 main-only/drainer/buffer source3c6b8daa506 is complete, including ND and
 same-owner XID ports and the two safeguard removals. Component O1 evidence
 passes through explicit test-only corrected composites; final-union native
@@ -35,14 +35,16 @@ worktree with a fresh owned O1 build. Four causal controls and the behavioral sc
 bounded checks; release/ASan/full/closure and landing precede fresh timing.
 The [provisional source report](pre-I-interpreter-status-and-opportunities.md)
 now inventories the implementation and seven ranked shared opportunities.
-All three sanitizer profiles pass onf945, but the release full is unqualified
-on SharedMemory cleanup. Its finite Python ownership port and local behavioral
-regressions are active; reuse unchanged C products and retain unaffected
-coverage explicitly. Successor dac6 commits the four local behavior tests
-outside the sanitizer multiprocessing fork guard; its targeted validation is
-running after independent source/launch review. A parallel source-only
-comparison is narrowing the interpreter report to a coherent first slice.
-Fresh interpreter timing still waits for GC landing.
+All three original sanitizer profiles pass onf945. Successor dac6 fixes the
+SharedMemory wrapper exposed by the original failed release full; its six
+fresh targeted jobs and old-policy causal control now clear independent
+review. Explicit release557+7 and ASan15+memoryview assemblies pass with the
+source/resource limits preserved. First normal O1-debug full is active;
+kill full, stress2, closure and landing remain before fresh timing.
+The [first-slice comparison](pre-I-first-slice-decision.md) weighs value/native
+receiver closure, existing H1/frame work and producer/consumer facts. Current
+cost and matched benefit must justify an ABI expansion; no new code or speed
+claim follows from source review alone.
 The [closure plan](gc-closure-plan.md) and [owner ledger](10a-buffer-safeguard-removal.md)
 name the exact boundary. No refreshed performance score exists yet.
 

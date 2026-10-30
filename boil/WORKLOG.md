@@ -4900,3 +4900,36 @@ from f945 evidence. Prospective primary+dac6 merge-tree is clean; no merge
 is performed. Parallel interpreter source review now narrows the seven
 opportunities into a finite first-slice recommendation, without timing or
 implementation before GC landing. Next hourly checkpoint remains12:30 PDT.
+
+
+### 12:30 PDT: SharedMemory repair clears; remaining union gates run
+
+All six bounded positives pass: release/debug-kill/ASan-kill each4/0;
+processes3/misc3=814/79; ordinary memoryviewcpu=178/18; ASan memoryview=178/19.
+Each has actual declared mode/N0, zero fallback/unpinned and verified cleanup.
+Old-policy injection fails the unchanged discarded-view assertion with captured
+BufferError,1test/1failure/0skip,native2/host1,47collections/0fallback/unpinned.
+Root checks terminal58723869/all48 references; independent review replays all
+six raw validators and reconciles exact returned rows and causal witnesses.
+
+Release assemblyc13fdc23 retains557 original rows plus fresh7,564 modules,
+51240tests/3794skips,462PASSED/94SKIPPED/8RESOURCE_DENIED. ASan162b81264e
+retains15 plus fresh memoryview,4026/141. Root checks20/12 references and
+recomputes disjoint totals; reviewer also verifies original-row equality.
+Sources/resource contexts and parent ASan skip limits remain explicit.
+The original release full remains nativeSUCCESS0/qualificationFAIL.
+
+Remaining vectorsdb7353d7/closurea363bc6a bind only actual prior evidence;
+helpers/rosters/filters/protections unchanged. Session23907 starts normal
+O1-debug full, then kill full, release/debug stress11 and closure on success.
+At12:30:15 the active normal full has497/564 returned,405PASSED/89SKIPPED/
+3RESOURCE_DENIED and no observed FAILED/ENV_CHANGED. This live snapshot is
+not terminal evidence; later profiles/closure have not started. Final LAND,
+primary merge and postmerge smoke remain. Runtime primary is stillsafetyff6.
+
+Interim independent HOLD review is publishedc8c714638ab. Source report and
+conditional first-slice comparison118ca727d47 are committed/pushed; no
+interpreter implementation/timing. Held smoke prep derives release1935/80
+from the actual nine retained rows, with debug/final-qualification/merge
+bindings unavailable. All affected planning docs update at this hourly
+checkpoint. Next hourly13:30 PDT; material failure/landing reported sooner.

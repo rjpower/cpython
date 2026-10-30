@@ -5,6 +5,14 @@ GC fixes, then receive a detailed interpreter report and commission design
 reflection. Roughly2× is soft guidance, particularly on simple arithmetic.
 The prepared Clang dispatch/frame-passing timing plan is parked.
 
+Scope revision,2026-10-30 09:35 PDT: support the main interpreter and ordinary
+threads first. Defer subinterpreters; reject their creation explicitly in a
+focused follow-up rather than emulate their APIs with processes. This is
+not enforced by the landed baseline yet. Foreign ownership/adoption and
+interpreter-deletion support are no longer prerequisites for this milestone.
+The holistic reviews linked from README supersede the broader lifecycle and
+completion-scheduler requirements below where noted.
+
 ## Landed baseline
 
 Runtime merge `d6a23b9fe0c`, published through documentation commit
@@ -21,23 +29,22 @@ not establish finalizer completion order or whole-GC safety.
 | --- | --- | --- |
 | Unsafe heap-order fallback on sweep-order OOM | Revised late-boundary patch `7f4459bf259` passes release/debug-kill focus and four affected modules; restored fallback fails the named no-sweep assertion. Original header-wrapper failure preserved | Bounded controls complete. Included in actual168 combined qualification; no standalone primary landing |
 | Debug output and registry detachment over collector snapshots | Source-reviewed S3 native009fa passes rebuilt release/debug checks; test-only07af corrects six actual child verifier modes. Corrected focus, actual-child-kill ASan and copied immediate-write negative complete; earlier audit/mode limitations preserved | Coherent six-site non-detaching lock protocol with leaf holders; weakref metadata outside replaceable RAW hooks; deferred byte output; raw garbage rooted through publication. Phase oracle fails old immediate output without reproducing a native crash; included in actual168 combined qualification |
-| MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes three new focused cases, prior nine safety cases and whole GC in release/debug-kill; copied mark-before-journal negative fails exact next-collection recovery assertion | Checked sticky push and journal-before-MARKED rollback reviewed; bounded controls complete. Actual168 ASan build active, followed by seven qualification profiles and closure |
-| Dependent finalizer/resource completion | Readiness design in progress; invocation order alone is insufficient | Explicit pending/ready/running/completed lifetimes and roots; every unfinished predecessor counted; unrelated work progresses; callbacks/errors finish before release of dependents. Close and fork contracts reviewed before scheduler code |
-| Interpreter close, owner metadata, retirement/adoption and fork | Rung1 routes owners. Queue2b owner-guard/destruction-discovery draft is frozen for independent source review; no native execution or commit. Ordinary foreign mutation-event ownership and Queue2c lifecycle remain separate obligations | Freeze registration before retirement; preserve queued/running roots and heap ownership; no callback indexes another interpreter's watcher/extra tables. Quiesce while threads can still attach; never fabricate completion for a vanished fork thread |
-| Python buffer-release callbacks | Five consumer families recorded in PROCESS §0.3; queue prerequisite | Exactly-once release outside sweep, exporter retained through an allocating/collecting callback, owner routing and no Python under allocation-only operations; inspect PickleBuffer, Unpickler, SRE scanner, struct iterator and testbuffer ndarray together |
+| MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes bounded checks and causal negative. Combined union has six profiles passed; debug stress fails only a diagnostic snapshot test allowing intervening automatic collection | Exact test-only9e isolates snapshots with assertions unchanged; one whole-GC debug/off/N1000 successor carries ten original passed modules. Original FAIL stays failed. Closure and independent landing review remain |
+| Dependent finalizer/resource completion | Invocation order alone is insufficient. Generic completion DAG held after holistic review | Evaluate one drainer retaining the active callback through error reporting; competing/nested collectors enqueue without waiting. State loss of concurrent finalizer progress. Buffer release readiness still needs its own proof |
+| Interpreter close, owner metadata, retirement/adoption and fork | Owner63b bounded validation and causal negative complete; source pushed. Foreign mutation/lifecycle is not closed | Defer integration and broader lifecycle machinery under main-interpreter-only scope. Audit creation APIs for explicit rejection. Separate process exit from host-returning finalization; decide fork restrictions explicitly, without fabricating callback completion |
+| Python buffer-release callbacks | Five consumer families recorded in PROCESS §0.3; generic type capability held | Prefer existing per-acquisition managed owners. Prove exactly-once release, stable metadata and consumer raw-pointer/reentry checks for the concrete holder/view/exporter cycle and returned-view forwarding. Every blocked view must remain rooted with its dependencies; no forced zero export counts or skipping DEAD objects into sweep |
 | Remaining root/lifetime contracts and safe conservative coverage | Writers landed; compiler/PyMem carriers, reader operands, saved exception, detached/swap roots and raw inputs retain named debt | Resolve actual missing-lifetime cases with explicit owners/spans and causal controls. Keep conservative coverage until its replacement is proved; a clean run alone does not authorize removing it |
 | End-to-end lifecycle regressions and support boundary | Old HTTP/resource error and trashcan timeout remain historical failures; platform/SDK limits explicit | Run the relevant unchanged regressions once on the repaired union, inspect failures rather than retrying green; integration gates on the actual union. Publish supported configurations and unsupported ones honestly |
 
-The first three source boundaries can advance independently of the full
-completion scheduler. Snapshot ownership is a prerequisite for building
-dependency metadata over the marked dead graph. Close/fork is a scheduler
-design prerequisite, not a cleanup to append after normal dispatch works.
-
-The current sparse reachable-call proposal can still have quadratic edges.
-Before committing that representation, assess whether standard object-graph
-SCC condensation and completion tokens can preserve the required semantics
-without materializing transitive reachability. Do not introduce size cutoffs,
-owner-count shortcuts or whole-queue serialization to hide the problem.
+The first three safety repairs can land independently. Preserve their
+qualification rather than restart it for the narrower support policy.
+The old sparse-reachability/SCC scheduler proposals remain review artifacts,
+not implementation requirements. Serialization is now an explicit candidate
+policy with a stated progress tradeoff, rather than an implicit promise to
+preserve every concurrency guarantee. Actual process termination can reclaim
+retained late state after exit handlers and stream flushes, provided no active
+callback resumes into freed state. Host-returning finalization and fork need
+separate support decisions; process exit does not excuse ordinary leaks.
 
 ## Validation and integration
 

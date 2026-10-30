@@ -4634,3 +4634,31 @@ owner. No build, native execution or commit is credited. Foreign mutation
 events, lifecycle/adoption/fork, completion dependencies and native buffer
 release remain separate contracts. Interpreter timing stays parked. The next
 hourly documentation/status checkpoint is about09:35 PDT.
+
+### 09:35 PDT: narrow GC scope; preserve safety qualification
+
+The user questions subinterpreter and shutdown complexity. Adopt one main
+interpreter per process with ordinary threads for the first milestone.
+Subinterpreter creation must fail explicitly; that restriction is planned,
+not yet implemented. Explicit process workers are the alternative, with no
+transparent API emulation. Two holistic reviews favor the existing nonmoving
+collector/hybrid roots, one callback drainer and simpler actual process-exit
+handling. Defer generic cleanup slots, completion DAG, foreign ownership,
+adoption and borrow/lifecycle frameworks. Buffer lifetime during normal
+execution remains mandatory; evaluate existing managed owners before banning
+Python exporters. A source audit and finite buffer-readiness design are active.
+
+Native168 combined qualification passes both ASan groups, all three full
+suites and release stress11. Debug stress11 has ten passed modules and one
+failed GC diagnostic counter test: an automatic collection occurred between
+snapshots. Preserve the failure. Exact test-only9e223040 adds disable_gc and
+an intent comment, with all assertions and native products unchanged. Root
+reviewed the minimal source/native bridge and all16 successor plan inputs;
+one whole-GC debug/off/N1000 successor plus verification/cleanup is authorized.
+No rebuild/full/ASan repeat. Closure remains pending.
+
+Owner63b completes bounded release/debug-kill positives and copied owner-
+discovery negative, with earlier precision/audit build failures retained.
+Its topic is pushed; integration is deferred under the narrower scope.
+The primary runtime remains d6a23. Interpreter timing remains parked. Next
+hourly documentation/status checkpoint about10:35 PDT.

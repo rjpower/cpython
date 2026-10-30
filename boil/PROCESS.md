@@ -162,6 +162,18 @@ Owners, as of 2026-10-28:
 
 ### 0.2 Intentional compatibility breaks
 
+Coordinator decision,2026-10-30 09:35 PDT: the first GC/interpreter milestone
+supports one main interpreter per process, including ordinary threads.
+Subinterpreters are deferred. Creation entrypoints must reject unsupported
+use before creating interpreter state; source audit/implementation is pending.
+Process workers are an explicit alternative, not a transparent implementation
+of interpreter handles, C thread states or shared native state. Preserve the
+existing qualified baseline until this policy has its own focused change.
+Foreign-owner registration/adoption and repeated interpreter deletion no
+longer block this milestone. Actual process exit may retain safe late state
+for OS reclamation; returning from Py_FinalizeEx to a live embedding host is
+a separate support contract and cannot silently use that assumption.
+
 Each break is ruled before its rung starts, recorded here with its
 reason and the alternative that was rejected, and documented in the
 C API or library reference by the rung that makes it.
@@ -992,6 +1004,28 @@ a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
 ### Current coordinator ruling, 2026-10-30 07:35 PDT
+
+**Superseding scope checkpoint,2026-10-30 09:35 PDT.** The user asks whether
+subinterpreters and shutdown complexity can be deferred. Adopt the boundary
+in section0.2. Two holistic reviews agree on retaining nonmoving full-heap
+mark/sweep and hybrid roots while simplifying callback delivery and actual
+process-exit handling. Hold generic cleanup capabilities, completion DAG,
+adoption and borrow/lifecycle frameworks. Evaluate one nonrecursive drainer
+whose competitors enqueue and return; do not promise independent finalizer
+progress. Prove ordinary buffer acquisition ownership and export readiness
+using the existing managed-buffer machinery before considering a Python
+buffer restriction. Unready objects must be retained, never skipped into
+sweep. These are design choices, not source already landed.
+
+Safety168 has six passed combined profiles and one failed debug-stress
+profile. Its only failed test compares diagnostic counters across a window
+that allows automatic collection. Exact test-only9e223040 isolates that
+window without changing assertions or native products. A single whole-GC
+debug stress successor is authorized with an explicit native168/source9e
+bridge; the other ten passed modules carry forward, and the original FAIL
+remains immutable. Closure follows only after review. Owner63b bounded
+positive/negative validation is complete and pushed; defer its integration
+under the revised scope. No interpreter timing resumes yet.
 
 The user makes2× a soft design guide, particularly for `i += 1`, and asks
 for all remaining GC fixes before the detailed interpreter report/reflection.

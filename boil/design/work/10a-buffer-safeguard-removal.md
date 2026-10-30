@@ -4,7 +4,9 @@ Source-only assessment on clean composed candidate
 `dc7bd5c19f7563c04318edf0d1698352567f066f`, including sealed consumers
 `6275905c8c0` and Unpickler `48b02122321`. NDArray is still an in-progress
 source port from `db025699`; its implementation and qualification are not
-credited here. No native execution, source patch or new exclusion is granted.
+credited here. No native execution or new exclusion is granted by this assessment.
+Reviewed follow-ups now compose as3c6b8daa506: ND baf8, XID9d246659 and
+the two-invariant cut424b8a394c7. Actual-union native validation is pending.
 
 ## Recommendation
 
@@ -28,7 +30,10 @@ both DEAD and SWEPT flags. Remove that bypass; require that a non-NULL exporter
 is not already swept, checked before dereferencing its type/callback. A debug
 assertion is the smallest normal invariant check; a production violation, if a
 check is retained there, must fail loudly rather than clear the view and claim
-release. DEAD alone is not the violation. Do not add a blanket prohibition on
+release. Check the conjunction
+`(flags & (DEAD | SWEPT)) != (DEAD | SWEPT)`: SWEPT aliases the live MARKED bit,
+so neither SWEPT alone nor DEAD alone is the violation. Do not add a blanket
+prohibition on
 native release functions or classify them as harmless by name. On the supported
 ports, callback-bearing acquisitions are consumed before sweep, while transient
 views keep their exporters live throughout the explicit release.
@@ -120,22 +125,25 @@ needed. The inherited live PickleBuffer Python-wrapper re-export failure stays
 separate functional debt; new cycle tests do not prove raw()/memoryview works
 for that live wrapper.
 
-For the remaining union's three causal checks, prefer **one copied negative
-union, one build, three isolated case processes**, with disjoint source changes:
+For the remaining union's four causal checks, prefer **one copied negative
+union, one build, four isolated case processes**, with disjoint source changes:
 
 | Omission | Existing isolated case and required failure |
 | --- | --- |
 | Replace interpreter queue-draining admission with the former per-thread running_queue guard; keep active-call roots unchanged | `test_gc.SingleDrainerTests.test_worker_collect_returns_without_overtaking`: named "inner callback overtook outer callback" assertion, with bounded worker completion. |
 | Remove only scanner_finalize's pre-release start=NULL | `test_gc.BufferLifetimeTests.test_scanner_cycle_release`: named "release must observe an exhausted scanner" assertion. Existing global backing prevents stale-storage manufacture. |
 | Add `_Unpickler_ReleaseInput(self)` before preparing the new owner, leaving remaining code/tests unchanged | `test_pickle.CUnpicklerBufferOwnerTests.test_failed_replacement_keeps_old_acquisition`: original acquisition-failure ValueError is caught, then the external no-release assertion detects premature consumption. It never reads the invalid old cache. |
+| Remove only ndarray_tobytes' active-owner gate | `test_gc.BufferLifetimeTests.test_ndarray_cycle_release_and_resurrection`: named "released ndarray remained readable" assertion. Global backing stays live during the callback read; no stale-storage crash is needed. |
 
 These cases do not activate one another's defect: the drainer case uses ordinary
 Python finalizers, the scanner case has no Unpickler replacement/concurrent
-drainer, and the Unpickler case has no scanner or second collector thread.
+drainer, and the Unpickler case has no scanner or second collector thread. The ND
+case has no scanner/Unpickler/concurrent drainer; only its tobytes gate is
+omitted.
 Keep each exact native failure and structured named assertion separately;
 crash, timeout, import, compile, helper or unexpected error is no credit.
 Use the accepted wrapper and offline failure accounting, not a new runner.
 One configured tree with successive tiny commits would also isolate them but
 adds three make/checkpoint phases without a demonstrated attribution need.
-Freeze the actual three-hunk negative for review only after the positive union
+Freeze the actual four-omission negative for review only after the positive union
 is fixed; none of these commands or patches is authorized by this note.

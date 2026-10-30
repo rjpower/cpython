@@ -1,7 +1,12 @@
 /* C Extension module to test all aspects of PEP-3118.
    Written by Stefan Krah. */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+
 #include "Python.h"
+#include "pycore_memoryobject.h"  // _PyManagedBuffer_FromObject()
 
 
 /* struct module */
@@ -101,7 +106,22 @@ typedef struct {
     int flags;          /* ndarray flags */
     ndbuf_t staticbuf;  /* static buffer for re-exporting mode */
     ndbuf_t *head;      /* currently active base buffer */
+    _PyManagedBufferObject *owner;  /* original, unmodified acquisition */
+    int initializing;
 } NDArrayObject;
+
+static int
+ndarray_check_active(const NDArrayObject *nd)
+{
+    if (nd->head == NULL || nd->initializing ||
+        (nd->owner != NULL && _PyManagedBuffer_GetBuffer(nd->owner) == NULL))
+    {
+        PyErr_SetString(PyExc_ValueError,
+                        "operation forbidden on inactive ndarray object");
+        return -1;
+    }
+    return 0;
+}
 
 
 static ndbuf_t *
@@ -214,6 +234,8 @@ ndarray_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     nd->flags = 0;
     nd->head = NULL;
+    nd->owner = NULL;
+    nd->initializing = 0;
     return (PyObject *)nd;
 }
 
@@ -229,7 +251,9 @@ ndarray_dealloc(PyObject *op)
                 PyMem_XFree(base->strides);
                 PyMem_XFree(base->suboffsets);
             }
-            PyBuffer_Release(base);
+            /* Only the owner holds the original acquisition.  Cached metadata
+               may have been sliced or replaced, and is never released. */
+            Py_CLEAR(self->owner);
         }
         else {
             while (self->head)
@@ -239,16 +263,12 @@ ndarray_dealloc(PyObject *op)
     PyObject_Free(self);
 }
 
-/* A consumer holds its exporter in the base buffer.  Under the tracing
-   collector that reference must be visited, or a view such as nd[::-1]
-   outlives the array whose memory it reads. */
+/* The cached view borrows its exporter and metadata from this acquisition. */
 static int
 ndarray_traverse(PyObject *op, visitproc visit, void *arg)
 {
     NDArrayObject *self = (NDArrayObject *)op;
-    if (self->head && ND_IS_CONSUMER(self)) {
-        Py_VISIT(self->head->base.obj);
-    }
+    Py_VISIT(self->owner);
     return 0;
 }
 
@@ -257,9 +277,13 @@ ndarray_init_staticbuf(PyObject *exporter, NDArrayObject *nd, int flags)
 {
     Py_buffer *base = &nd->staticbuf.base;
 
-    if (PyObject_GetBuffer(exporter, base, flags) < 0)
+    _PyManagedBufferObject *owner = (_PyManagedBufferObject *)
+        _PyManagedBuffer_FromObject(exporter, flags);
+    if (owner == NULL)
         return -1;
 
+    nd->owner = owner;
+    *base = *_PyManagedBuffer_GetBuffer(owner);
     nd->head = &nd->staticbuf;
 
     nd->head->next = NULL;
@@ -670,6 +694,9 @@ unpack_rec(PyObject *unpack_from, char *ptr, PyObject *mview, char *item,
 static PyObject *
 ndarray_as_list(NDArrayObject *nd)
 {
+    if (ndarray_check_active(nd) < 0) {
+        return NULL;
+    }
     PyObject *structobj = NULL, *unpack_from = NULL;
     PyObject *lst = NULL, *mview = NULL;
     Py_buffer *base = &nd->head->base;
@@ -1290,7 +1317,7 @@ ndarray_push_base(NDArrayObject *nd, PyObject *items,
 
 #define PyBUF_UNUSED 0x10000
 static int
-ndarray_init(PyObject *self, PyObject *args, PyObject *kwds)
+ndarray_init_impl(PyObject *self, PyObject *args, PyObject *kwds)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
     static char *kwlist[] = {
@@ -1354,11 +1381,29 @@ ndarray_init(PyObject *self, PyObject *args, PyObject *kwds)
     return ndarray_push_base(nd, v, shape, strides, offset, format, flags);
 }
 
+static int
+ndarray_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    NDArrayObject *nd = (NDArrayObject *)self;
+    if (nd->initializing || nd->head != NULL) {
+        PyErr_SetString(PyExc_ValueError, "ndarray cannot be reinitialized");
+        return -1;
+    }
+    nd->initializing = 1;
+    nd->flags = 0;
+    int result = ndarray_init_impl(self, args, kwds);
+    nd->initializing = 0;
+    return result;
+}
+
 /* Push an additional base onto the linked list. */
 static PyObject *
 ndarray_push(PyObject *self, PyObject *args, PyObject *kwds)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return NULL;
+    }
     static char *kwlist[] = {
         "items", "shape", "strides", "offset", "format", "flags", NULL
     };
@@ -1401,6 +1446,9 @@ static PyObject *
 ndarray_pop(PyObject *self, PyObject *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return NULL;
+    }
     if (ND_IS_CONSUMER(nd)) {
         PyErr_SetString(PyExc_BufferError,
             "structure of re-exporting object is immutable");
@@ -1430,6 +1478,9 @@ static int
 ndarray_getbuf(PyObject *op, Py_buffer *view, int flags)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return -1;
+    }
     ndbuf_t *ndbuf = self->head;
     Py_buffer *base = &ndbuf->base;
     int baseflags = ndbuf->flags;
@@ -1538,8 +1589,17 @@ ndarray_getbuf(PyObject *op, Py_buffer *view, int flags)
             return -1;
     }
 
+    if (self->head->exports == PY_SSIZE_T_MAX ||
+        (self->owner != NULL && self->owner->exports == PY_SSIZE_T_MAX))
+    {
+        PyErr_SetString(PyExc_OverflowError, "too many exported ndarray buffers");
+        return -1;
+    }
     view->obj = Py_NewRef(self);
     self->head->exports++;
+    if (self->owner != NULL) {
+        self->owner->exports++;
+    }
 
     return 0;
 }
@@ -1548,7 +1608,13 @@ static void
 ndarray_releasebuf(PyObject *op, Py_buffer *view)
 {
     NDArrayObject *self = (NDArrayObject*)op;
-    if (!ND_IS_CONSUMER(self)) {
+    if (ND_IS_CONSUMER(self)) {
+        assert(self->head->exports > 0);
+        assert(self->owner != NULL && self->owner->exports > 0);
+        self->head->exports--;
+        self->owner->exports--;
+    }
+    else {
         ndbuf_t *ndbuf = view->internal;
         if (--ndbuf->exports == 0 && ndbuf != self->head)
             ndbuf_delete(self, ndbuf);
@@ -1602,6 +1668,9 @@ static PyObject *
 ndarray_item(PyObject *op, Py_ssize_t index)
 {
     NDArrayObject *self = (NDArrayObject *)op;
+    if (ndarray_check_active(self) < 0) {
+        return NULL;
+    }
     ndbuf_t *ndbuf = self->head;
     Py_buffer *base = &ndbuf->base;
     char *ptr;
@@ -1795,6 +1864,9 @@ static PyObject *
 ndarray_subscript(PyObject *op, PyObject *key)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return NULL;
+    }
     NDArrayObject *nd;
     ndbuf_t *ndbuf;
     Py_buffer *base = &self->head->base;
@@ -1879,6 +1951,9 @@ static int
 ndarray_ass_subscript(PyObject *op, PyObject *key, PyObject *value)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return -1;
+    }
     NDArrayObject *nd;
     Py_buffer *dest = &self->head->base;
     Py_buffer src;
@@ -2019,6 +2094,9 @@ static PyValue
 ndarray_get_flags(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     return PyValue_FromLongLong(self->head->flags);
 }
 
@@ -2026,6 +2104,9 @@ static PyValue
 ndarray_get_offset(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     ndbuf_t *ndbuf = self->head;
     return PyValue_FromLongLong(ndbuf->offset);
 }
@@ -2034,6 +2115,9 @@ static PyValue
 ndarray_get_obj(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
 
     if (base->obj == NULL) {
@@ -2046,6 +2130,9 @@ static PyValue
 ndarray_get_nbytes(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromLongLong(base->len);
 }
@@ -2054,6 +2141,9 @@ static PyValue
 ndarray_get_readonly(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromObject((base->readonly) ? Py_True : Py_False);
 }
@@ -2062,6 +2152,9 @@ static PyValue
 ndarray_get_itemsize(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromLongLong(base->itemsize);
 }
@@ -2070,6 +2163,9 @@ static PyValue
 ndarray_get_format(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     const char *fmt = base->format ? base->format : "";
     return PyValue_FromResult(PyUnicode_FromString(fmt));
@@ -2079,6 +2175,9 @@ static PyValue
 ndarray_get_ndim(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromLongLong(base->ndim);
 }
@@ -2087,6 +2186,9 @@ static PyValue
 ndarray_get_shape(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromResult(ssize_array_as_tuple(base->shape, base->ndim));
 }
@@ -2095,6 +2197,9 @@ static PyValue
 ndarray_get_strides(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromResult(ssize_array_as_tuple(base->strides, base->ndim));
 }
@@ -2103,6 +2208,9 @@ static PyValue
 ndarray_get_suboffsets(PyObject *op, void *closure)
 {
     NDArrayObject *self = (NDArrayObject*)op;
+    if (ndarray_check_active(self) < 0) {
+        return PyValue_NULL;
+    }
     Py_buffer *base = &self->head->base;
     return PyValue_FromResult(ssize_array_as_tuple(base->suboffsets, base->ndim));
 }
@@ -2111,6 +2219,9 @@ static PyValue
 ndarray_c_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return PyValue_NULL;
+    }
     int ret = PyBuffer_IsContiguous(&nd->head->base, 'C');
 
     if (ret != ND_C_CONTIGUOUS(nd->head->flags)) {
@@ -2125,6 +2236,9 @@ static PyValue
 ndarray_fortran_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return PyValue_NULL;
+    }
     int ret = PyBuffer_IsContiguous(&nd->head->base, 'F');
 
     if (ret != ND_FORTRAN_CONTIGUOUS(nd->head->flags)) {
@@ -2139,6 +2253,9 @@ static PyValue
 ndarray_contig(PyObject *self, void *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return PyValue_NULL;
+    }
     int ret = PyBuffer_IsContiguous(&nd->head->base, 'A');
 
     if (ret != ND_ANY_CONTIGUOUS(nd->head->flags)) {
@@ -2180,6 +2297,9 @@ ndarray_tolist(PyObject *self, PyObject *dummy)
 static PyObject *
 ndarray_tobytes(PyObject *self, PyObject *dummy)
 {
+    if (ndarray_check_active((NDArrayObject *)self) < 0) {
+        return NULL;
+    }
     ndbuf_t *ndbuf = ((NDArrayObject *)self)->head;
     Py_buffer *src = &ndbuf->base;
     Py_buffer dest;
@@ -2221,6 +2341,9 @@ static PyObject *
 ndarray_add_suboffsets(PyObject *self, PyObject *dummy)
 {
     NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return NULL;
+    }
     Py_buffer *base = &nd->head->base;
     Py_ssize_t i;
 
@@ -2235,6 +2358,12 @@ ndarray_add_suboffsets(PyObject *self, PyObject *dummy)
             return NULL;
     }
 
+    if (ND_IS_CONSUMER(nd) && !(nd->head->flags & ND_OWN_ARRAYS)) {
+        if (copy_structure(base) < 0) {
+            return NULL;
+        }
+        nd->head->flags |= ND_OWN_ARRAYS;
+    }
     base->suboffsets = PyMem_Malloc(base->ndim * (sizeof *base->suboffsets));
     if (base->suboffsets == NULL) {
         PyErr_NoMemory();
@@ -2257,6 +2386,9 @@ static PyObject *
 ndarray_memoryview_from_buffer(PyObject *self, PyObject *dummy)
 {
     const NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return NULL;
+    }
     const Py_buffer *view = &nd->head->base;
     const ndbuf_t *ndbuf;
     static char format[ND_MAX_NDIM+1];
@@ -2607,6 +2739,9 @@ is_contiguous(PyObject *self, PyObject *args)
 
     if (NDArray_Check(obj)) {
         /* Skip the buffer protocol to check simple etc. buffers directly. */
+        if (ndarray_check_active((NDArrayObject *)obj) < 0) {
+            return NULL;
+        }
         base = &((NDArrayObject *)obj)->head->base;
         ret = PyBuffer_IsContiguous(base, ord) ? Py_True : Py_False;
     }
@@ -2628,6 +2763,9 @@ static Py_hash_t
 ndarray_hash(PyObject *self)
 {
     const NDArrayObject *nd = (NDArrayObject *)self;
+    if (ndarray_check_active(nd) < 0) {
+        return -1;
+    }
     const Py_buffer *view = &nd->head->base;
     PyObject *bytes;
     Py_hash_t hash;

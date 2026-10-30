@@ -893,6 +893,15 @@ quick-test. Each rung goes through all of it.
 
 ## 3. The gate ladder
 
+Run the cheap host traversal audit on a frozen composition before broad
+native suites whenever types, traversal, acquisition ownership or its allow
+metadata changes. Resolve missing edges and stale allowances first. Use the
+existing checker through uv; do not wait for the final closure batch to find
+source-only failures. An exact-input early receipt may carry into closure;
+repeat it only if relevant source/checker/allow inputs change. An allowlist-
+only correction does not invalidate unchanged runtime profiles: preserve their
+actual source identities and bind the narrow successor explicitly.
+
 | Level | What | When |
 |---|---|---|
 | 0 | build the tree, `python -c pass`, a smoke set of test files (grammar, opcodes, builtin, dict, list, tuple, class, generators, capi) | after every change that builds; a minute |

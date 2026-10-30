@@ -4933,3 +4933,31 @@ interpreter implementation/timing. Held smoke prep derives release1935/80
 from the actual nine retained rows, with debug/final-qualification/merge
 bindings unavailable. All affected planning docs update at this hourly
 checkpoint. Next hourly13:30 PDT; material failure/landing reported sooner.
+
+
+### 12:57 PDT: broad profiles clear; source-only closure metadata repair
+
+Normal and kill O1-debug fulls each pass51240/3739,all564 modules,zero
+fallback and3 report-only unpinned. Release/debug stress11 pass3104/148 and
+3104/113,zero fallback and33/11 report-only unpinned. All four clear independent
+raw validator/cleanup review; their actual source remains dac6. HTTP103/8
+passes in both fulls; trashcan_threads is selected/unskipped under the unchanged
+loader/filter contract, without a separate success-ID journal.
+
+Closure cext16/7 and regeneration pass. Traversal stops on two metadata
+findings; unbuilt19 never starts. Failure1cca11e9/all36 refs and postterminal
+source/config/tools/3x588 product guards are independently checked. Source
+review proves ND cached base.obj aliases are borrowed from the visited managed
+owner→master.obj; producer nodes have NULL obj and released caches are inactive.
+The removed XID wrapper also leaves a stale allowance. Root and independent
+review clear exact metadata-only diff548487a3; successor4da292b1294 is committed
+and pushed, changing only Tools/boil/traverse_allow.txt. No runtime/checker logic,
+test or native product changes; the original closure remains failed.
+
+Continue with existing execution bodies/locks: explicit four-profile plus
+cext/regen carry, one corrected traversal and first unbuilt19 attempt. No
+rebuild or broad retry is justified. Final independent LAND, primary merge and
+postmerge smoke remain held. PROCESS now places this cheap source audit before
+broad suites on relevant frozen compositions; exact unchanged receipts may
+carry into closure. Matched timing preparationbdcef5daf0c is published, but
+no interpreter performance run or implementation has begun.

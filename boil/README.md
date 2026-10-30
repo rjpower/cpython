@@ -244,6 +244,17 @@ Main-only creation, ordinary threads, normal resource lifetime and callbacks
 are the milestone; foreign adoption, generic cleanup APIs and a completion
 DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
 are authorized.
+
+**11:22 PDT update.** The fresh final-union O1 build succeeds in98 seconds,
+with116 modules checked and no import failures. Its independently checked
+products/configuration now bind the new13/affected9 target plan; those results
+are still pending. Broader release/debug/ASan qualification preparation runs
+in parallel. A read-only interpreter quality review and prospective improvement
+list are also assigned now; performance changes and fresh timing follow GC
+landing. Tests should emphasize observable liveness, resource usability and
+bounded memory, with critical internal invariants checked in focused units
+(PROCESS, current coordinator ruling).
+
 Shared verifier/worker components are landed; full profile/gate orchestration
 is still separate work in `boil/tools/verification.md`. All jobs retain real source/config/product,
 actual mode/stress, skip and failure identities. Fulls and perf-sensitive walks

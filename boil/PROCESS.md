@@ -1007,6 +1007,25 @@ attribution without that evidence is not accepted.
 
 ### Current coordinator ruling, 2026-10-30 11:20 PDT
 
+**User direction, 11:22 PDT: observable behavior first.** Integration tests
+should primarily check useful liveness and reclamation, readable live data,
+safe resource reuse, callback effects and bounded memory over a declared
+workload interval. Do not prescribe an exact collection schedule, acquisition
+count or internal representation unless it is part of the public contract.
+Focused unit tests may check critical internal invariants, including rollback,
+root handoffs and once-only ownership; state why the invariant matters and
+keep those distinct from user-facing acceptance. Memory bounds need a defined
+workload, warmup and tolerance, not an arbitrary RSS threshold. Apply this
+principle to new or corrected tests; do not rewrite the active frozen candidate
+or weaken existing regressions merely to obtain a pass.
+
+Read-only interpreter implementation/design review now runs in parallel with
+GC qualification at the user's request. It will inventory current operations,
+value bridges, calls, dispatch and roots, and rank prospective general
+improvements. Its source-based recommendations are provisional until fresh
+matched timing after GC landing. Performance implementation stays behind that
+landing; no current speedup claim follows from historical diagnostics.
+
 Safetyff6 remains the landed runtime. Source-complete3c6b8daa506 includes
 main-only admission, one rooted drainer, persistent buffer closure and the
 removal of count coercion and silent release suppression. The independent

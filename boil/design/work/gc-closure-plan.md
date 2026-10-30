@@ -114,6 +114,14 @@ for quiet native execution and the agreed GC correctness boundary.
 
 ## Validation and integration
 
+User guidance,2026-10-30: acceptance should emphasize the live set before and
+after a workload, eventual reclamation, valid live data, usable resources and
+reasonable memory growth. Avoid exact internal counts or collection timing
+as integration requirements. Critical rollback, export ownership and root
+handoffs still warrant focused unit invariants and omission controls. Memory
+tests must define their interval and tolerance. This does not change frozen
+test bytes or authorize deleting failed assertions without understanding them.
+
 Use the existing owned release/O1-debug builds, workers, mode checks and
 validators. First exercise the new invariant and its meaningful copied
 negative; then affected modules once per relevant mode. Use ASan for the

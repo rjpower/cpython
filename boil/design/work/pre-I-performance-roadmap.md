@@ -17,7 +17,12 @@ duplicate handlers or introduce a second value representation now.
 The prepared matched Clang goto/tail/frame-passing timing plan is parked
 during GC implementation. Preserve its existing builds and bounded runtime
 evidence. After GC, report the actual IR/handler/value/call/GC state and
-costs before commissioning the broader interpreter cleanup.
+costs before implementing the broader interpreter cleanup. Read-only quality
+review and the prospective improvement list now proceed in parallel with GC
+qualification at the user's request. Rank clean operation families, value
+bridges, common frame/call costs and dispatch by source evidence and expected
+breadth; identify what fresh measurements would confirm each proposal.
+Recommendations remain provisional until matched timing after GC landing.
 
 Current GC checkpoint,2026-10-30 11:20 PDT: safetyff6 is landed. Final
 main-only/drainer/buffer source3c6b8daa506 is complete, including ND and

@@ -4776,3 +4776,22 @@ New13 and conditional whole9 follow build, not another repeated campaign.
 Four source-reviewed causal omissions share one later negative build; broad
 release/debug/ASan and closure follow. No performance timing yet. Next hourly
 summary around11:30 PDT, with material updates sooner.
+
+### 11:22 PDT: behavioral testing guidance and parallel interpreter review
+
+Fresh3c6 O1 configure/make and cleanup pass in98.03s,116module checks and
+zero import failures. Independent review verifies4503855f/f57d66aa/a4d0b35e,
+all588 products/aliases, source/config/tool bindings and executable worker.
+New13 then conditional affected9 retain their existing grant; no target
+result claimed yet. Broad preparation includes the seven existing profiles
+plus one ASan-focused15 for Unpickler7 and XID8 not in ASan16. The sole
+protection adjustment removes an explicitly unsupported subinterpreter case
+from must-run requirements while preserving its visible skip; no new filter.
+
+User asks for externally meaningful acceptance: liveness/reclamation, valid
+data, resource reuse and bounded memory, with focused critical internal unit
+invariants. Record this in PROCESS and the closure plan; leave the frozen
+candidate untouched. A read-only interpreter quality review/prospective list
+now runs alongside GC qualification, ahead of implementation and matched
+timing after landing. Existing H1/H2 remain isolated. Primary runtime remains
+safetyff6; final GC source is complete but not landed.

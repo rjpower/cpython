@@ -70,6 +70,7 @@
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_gc_walk.h"       // Py_GC_PRECISE, _PyGC_RegisterCodeRange()
+#include "pycore_genobject.h"     // _PyGen_FinalizerIsNoop()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_interpframe.h"   // _PyFrame_Traverse()
 #include "pycore_mimalloc.h"      // mi_heap_visit_blocks()
@@ -2182,14 +2183,21 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     }
     op->ob_flags = flags | _Py_GC_DEAD_FLAG;
     PyTypeObject *tp = Py_TYPE(op);
-    uint16_t kinds = (_PyType_SUPPORTS_WEAKREFS(tp) ? _PyGC_DEAD_WEAKREFS : 0)
-        | (tp->tp_finalize != NULL ? _PyGC_DEAD_FINALIZE : 0)
+    // Static builtin types use per-interpreter lists, not the header flag.
+    int has_weakrefs = (flags & _Py_HAS_WEAKREFS_FLAG)
+        || (PyType_Check(op)
+            && ((PyTypeObject *)op)->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN);
+    uint16_t kinds = (has_weakrefs ? _PyGC_DEAD_WEAKREFS : 0)
+        | (tp->tp_finalize != NULL && !(flags & _Py_GC_FINALIZED_FLAG)
+           && !_PyGen_FinalizerIsNoop(op) ? _PyGC_DEAD_FINALIZE : 0)
         | (tp->tp_del != NULL ? _PyGC_DEAD_DEL : 0)
         | (PyType_HasFeature(tp, Py_TPFLAGS_DEALLOC_READS_REFERENTS)
            ? _PyGC_DEAD_FIRST : 0)
         | (PyType_Check(op) ? _PyGC_DEAD_TYPE : 0)
         | (_PyObject_IS_GC(op) ? _PyGC_DEAD_GC : 0)
         | (live_has_destroy_hook(w, t->interp, op, tp) ? _PyGC_DEAD_HOOK : 0)
+        | (Py_IS_TYPE(op, &PyMemoryView_Type)
+           || Py_IS_TYPE(op, &_PyManagedBuffer_Type) ? _PyGC_DEAD_BUFFER : 0)
         | (t->killed.keys != NULL && addrset_has(&t->killed, (uintptr_t)op)
            ? _PyGC_DEAD_KILLED : 0);
     res->kinds |= kinds;

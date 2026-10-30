@@ -4488,6 +4488,10 @@ class BufferLifetimeTests(unittest.TestCase):
             scanner.__del__()
             assert scanner.search() is None
             assert events == [b"abc"], events
+            # The returned view stays rooted through the release callback.
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
             backing.extend(b"d")
         """)
 

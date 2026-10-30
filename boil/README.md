@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 16:50 PDT. Last qualified runtime merge is 052d8342e56;
+revised 2026-10-29 17:26 PDT. Last qualified runtime merge is 052d8342e56;
 local GC integration candidate f2a5b3ca33d awaits fresh gates. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
@@ -72,22 +72,24 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 PROCESS.md section 0 is the position of record and is updated at every
 landing and hourly during active work. This is the takeover audit as of
-2026-10-29 16:50 PDT; evidence is from local commits and retained logs.
+2026-10-29 17:26 PDT; evidence is from local commits and retained logs.
 
 The coordinator accepts the independently reviewed scoped ROOTS2b exception:
 the inherited HTTP/finalizer-progress failures stay explicit final GC and
 performance blockers. The successor tail/extras checks now pass. ROOTS2b and the reviewed
 bytes-writer3a compose as detached candidate f2a5; its O3/Og compilations
-complete and its fresh smoke/affected campaign is active. Mandatory merged
-full/kill/stress/ASan qualification still remains. The original stress100k full remains
+complete and all 16 early jobs pass. Release coverage is assembled from
+563 valid original module cohorts plus one corrected-environment whole
+test_cmd_line; the original full stays failed. Debug full/kill/stress/ASan
+qualification remains active. The original stress100k full remains
 failed; there is no all-seven-PASS claim. PROCESS records this scheduling ruling.
 
 | Done | In flight | Open |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b: the IR, the compiler passes, the handlers; 7a rung 1 owner routing merged as 052d8342e56 and integration-validated | | 7a rung 2a safety/completion order: design/probe artifacts preserved, agent held by automatic classifier; 2b owner metadata, 2c retirement/adoption/fork |
-| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b native branch remains ce2ac, executed source c679/docs handback837; local combined candidate f2a5 awaits qualification. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP/trashcan public controls establish inherited exposure; scoped incremental exception accepted with final GC/perf debt retained. Tail11/0, cext16/seven declared skips, unchanged regen/traversal and19 headers pass; exact union source review clears. Fresh union smoke/affected is active, broader ladder remains | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
+| 4, 5a, 5b, 5c: the collector; refcounts deleted | 10a rung 2b native branch remains ce2ac, executed source c679/docs handback837; local combined candidate f2a5 awaits qualification. The precise-Park repair and two raw-mutex classifications clear review and all three builds. Fresh affected24, three full normal/kill runs, both stress11 sets and ASan16 pass with zero fallback. Final stress100k fails with an interpreter assertion, GC timeout and HTTP unraisables; four focused diagnostics support trigger-dependent test eligibility. HTTP/trashcan public controls establish inherited exposure; scoped incremental exception accepted with final GC/perf debt retained. Tail11/0, cext16/seven declared skips, unchanged regen/traversal and19 headers pass; exact union source review clears. Fresh union early16 pass; release coverage is assembled563+1 with original env-failed full retained; debug/kill/stress/ASan and extras remain | 10a 3a remaining writers/PyMem, 3b checker/precision residue, 3c queued buffer release and detached-state roots; rung 4 measurements/platform support |
 | 6a, 6b: `PyValue` in the core and the value C API; compiler reentrancy fix merged as 99435658509 and integration-validated | | 6e: remaining slot families, inline numeric receivers, identity and pointer-bound contracts |
-| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation in isolated boil-h3-stats from81417 clears independent source review; owned build and bounded lifecycle/reader/generator checks pass, private controls pass. Actual H3+GC source union e9a1 clears composition review and its owned Py_STATS build passes; native target qualification remains due, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
+| 6c: the object protocol; 6d: its selected slot families on values (complete 2026-10-28); H3 generator stage1 merged as 6c724c29408 and integration-validated | H3 stage2a domain/pristine runtime changes pass bounded release/debug and actual-kill gates; frozen at 624c75f6455 and cleared for stage2a only; native landing follows ROOTS2b. Stage2b.1 names/inspection/NOFB frozen at c5cf6ba6d288 cleared independent review. Fixed-int/uint16 monitoring storage native76274/evidenceffc548603b8 is pushed and clears frozen-checkpoint review; actual primary union qualification follows ROOTS. Stats implementation in isolated boil-h3-stats from81417 clears independent source review; owned build and bounded lifecycle/reader/generator checks pass, private controls pass. Actual H3+GC source union e9a1 clears composition review and Py_STATS real producer/reader checks pass. Owned O3/Og builds and eight bounded smoke/H3/stale jobs pass; integration3 await shared perf-map serialization and full qualification remains, with transport later | H1 handler/build rules, H2 root maps after 10a rung 3, H3 typed operations and dispatch; 7 generations; I interpreter performance checkpoint before 8 tier 0; 9 tier 1; 10b moving collector; P ports |
 | 10a rungs 0, 1, 1b; audit-1, audit-2 (traverse completeness) | | audit-3 (coordinator, after 7a rung 2) |
 
 Shared validation prerequisite landed independently as `2155f16f45f`:
@@ -120,8 +122,9 @@ Micro instruction gains alone do not establish that result.
 now measure collection at54%/47%/31% of coroutine/comprehension/generator hot
 time, versus zero hot collections in Richards. This prioritizes shared GC
 work, without proving generation savings. A small finalizer-order eligibility
-patch is implemented in isolation at a285 and its O3 build passes; semantic
-controls and matched timing remain. Nonmoving generations has a reviewed
+patch is implemented in isolation at a285. Its [O3/Og semantic checks](design/work/pre-I-finalizer-order-checkpoint.md)
+and copied reversal negative pass their intended oracles; matched timing and
+actual integration remain. Nonmoving generations has a reviewed
 direction but needs the closed store/constructor/domain ledger before minors.
 The [revised roadmap](design/work/pre-I-performance-roadmap.md)
 sets the measurement contract, GC landing path and structural performance work.

@@ -49,6 +49,10 @@ with allocator block size/debug-offset checks. Merely filtering the existing
 domain/segment membership directory is an actual missing interface: bind it
 to `live_domain()`/segment ownership and exited-thread heaps, not guessed
 from the current thread. Major enumeration remains the existing heap walk.
+The [source ledger](7-generations-domain-ledger.md) now names the actual
+reserve/publication, free/reuse, resize and abandoned-heap boundaries. Its
+young-start index is a concrete interface proposal; representation and
+resident-memory cost remain to be decided before implementation.
 
 ## Collection and barrier contracts
 
@@ -75,6 +79,20 @@ from the current thread. Major enumeration remains the existing heap walk.
    if its conservative/opaque edge still reaches such a young survivor.
    Promotion and clearing remembered bits commit only after success;
    allocation/verification failure retains objects and remembered entries.
+
+Promotion evidence must be captured per object before `live_walk_block`
+clears MARKED/SHALLOW. The present aggregate `nshallow` also counts marks
+later upgraded by a precise visit, so it cannot determine survivor promotion.
+Specify staging storage and rollback together with the young index; neither
+cleared header bits nor a NULL `tp_traverse` alone prove safe promotion.
+
+The current collection unpins its domain and can call a Python debug writer
+before sweep, earlier than stop callbacks or queued Python. Thus a metadata
+commit placed only after sweep/before stop is insufficient. Activation waits
+for the existing no-Python-dead-snapshot repair or a reviewed staging proof
+covering that earlier reentry and allocation-failure boundary. Preserve every
+barrier write made after the commit; never clear it from an older snapshot.
+This records a source dependency, without authorizing Queue2/S3 changes.
 
 The proposed owner-aware store operation is new, not an existing API: under
 the owning domain's GIL, remember the old owner before publishing a strong

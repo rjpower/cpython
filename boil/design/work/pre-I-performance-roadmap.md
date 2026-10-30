@@ -44,6 +44,13 @@ stress failures, fork-driver origin limits, fork-only -fno-gcse and incomplete
 consumed-SDK proof prevent correctness, parity or target qualification.
 Do not automatically rerun the suite or claim the ratio explains its causes.
 
+Reaching 2× upstream from this diagnostic requires about 2.41× current fork
+throughput. The [shared-cost record](pre-I-shared-cost-attribution.md) includes
+a conditional Amdahl calculation: even removing all measured GC work leaves
+the three slow rows around or below upstream parity if non-GC work is fixed.
+GC reduction and the common frame/call/value/interpreter changes must both
+contribute. This is a planning model, not a speedup forecast.
+
 **Why twenty was not an optimal default.** Note 11, section 8.2, required 20
 passes both individually and in full-module order. The rule was carried into
 the newer five-selector/four-module campaign, without a measured failure
@@ -212,17 +219,24 @@ counting integration continues; H1 stays a bounded later experiment. A
 source-only generations design must first establish complete mutator/barrier,
 root, weakref and finalizer contracts. Known lifecycle defects remain blockers.
 
-As of16:50, GC candidate f2a5 includes ROOTS and bytes-writer roots; branch
-tail/extras and exact source review clear, native O3/Og compilations complete,
-and fresh smoke/affected qualification is active. H3 source union e9a1 has a
-fresh owned Py_STATS build, with actual runtime checks next. In parallel,
+As of 17:26, GC candidate f2a5 includes ROOTS and bytes-writer roots. Its
+16 early jobs pass; release coverage is assembled from 563 qualified original
+module cohorts plus one corrected-environment whole test_cmd_line. The original
+full remains failed from two launcher-environment effects. Debug full/kill,
+stress and ASan qualification continue. H3 union e9a1 has owned Py_STATS/O3/Og
+builds, real producer/reader checks and eight bounded smoke/H3/stale passes;
+three integration jobs await shared perf-map serialization. In parallel,
 [finalizer-order eligibility](pre-I-finalizer-order-proposal.md) is implemented
-and O3-built at a285 in isolation: avoid DFS roots/order entries for finalizers
-that cannot run, retaining dead transit traversal. Its semantic negative and
-matched timing remain due. This addresses avoidable death-pipeline work,
+and [semantically checked](pre-I-finalizer-order-checkpoint.md) on O3 and Og
+kill at a285 in isolation: avoid DFS roots/order entries for finalizers that
+cannot run, retaining dead transit traversal. The copied reversal negative
+fails its intended assertion. Matched timing remains due. This addresses avoidable death-pipeline work,
 separately from old-live scanning. The
 [generations direction](7-nonmoving-generations-design.md) clears review but
-requires the closed store/constructor/domain ledger before implementation.
+requires the closed store/constructor ledger and concrete promotion/commit
+interfaces before activation. Its allocator/domain ledger now identifies the
+young-only enumeration boundary, address reuse and abandoned heaps. The existing
+pre-sweep Python debug writer is an earlier reentry dependency than stop callbacks.
 
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32

@@ -4200,3 +4200,65 @@ policy. Minors remain unimplemented. H1 is a later bounded matched-tailcall
 experiment. The release application score remains the earlier0.828 diagnostic;
 the roughly2× target and final GC/lifecycle correctness are not achieved.
 Next hourly checkpoint about17:50 PDT; material failures are reported sooner.
+
+### 17:26 PDT: current release coverage, bounded GC and IR checks
+
+All16 early f2 integration jobs pass once across the three mode/build profiles:
+5,712 reported cases/398 skips and1,800 strict stale attempts,
+44,500 observed collections/zero fallback. Seven original successful jobs
+retain their original plan identity. The first stale host wrapper failed
+before the target because merged PYTHONPATH supplied incompatible encodings;
+its successor removes that host-only overlay, without rerunning the seven.
+
+The first actual-f2 release full completes all564 modules:51,134 reported
+cases/3,470 skips and two failures in test_cmd_line only. Source confirms the
+launcher's unnecessary PYTHONPATH defeats invalid-PYTHONHOME startup, while
+PYTHONNOUSERSITE differs under a child -E. Original full/native2 remains FAIL.
+Root accepts the explicit563+1 disposition in PROCESS: unchanged validation
+clears563 module cohorts, and a fresh whole corrected-environment cmd_line
+passes85/13. Assembly039eacec proves the disjoint564 roster with both real
+plan/environment identities. It is not a uniform full PASS; the original
+all-run63,544 collections/zero fallback include the failed module and are not
+apportioned. No successful module is repeated. Frozen successor82a07005/
+plandcc77606 runs the five unattempted broad profiles then unchanged extras,
+serially and stopping on failure. Og normal full is active; primary native
+candidate remains local and unqualified for push.
+
+H3 union e9a1 now has all three owned builds: Py_STATS, GCC O3 and default
+Og. Actual high-ID producer/reader checks pass; eight bounded target jobs
+also pass once: smoke1,926/50release and1,926/20debug, eleven H3 modules
+1,376/12 in each of normal release/debug and actual debug kill, and strict
+six-times100 stale controls per profile. Summary535edd88 retains all real
+counts/root witnesses/cleanup identities. Source-derived writer eligibility
+is43 protected integration IDs on release and53 on debug, with exact existing
+skips; the proposal's uniform53 claim was corrected before execution. The
+three integration jobs await f2's shared perf-map window. No H3 full or landing.
+
+Finalizer eligibility a285 passes whole GC and generator/coroutine/asyncgen
+companions on O3 off and Og kill:142/17 plus268/0, and142/2 plus268/0.
+All observed fallback counts are zero; whole-GC unpinned totals remain
+report-only. The separate copied omit-reversal source025d fails exactly the
+new event-order assertion, with no crash/import error; this proves that
+ordering oracle, not every transit omission. Root verifies all five result
+statuses and40 raw artifact hashes. The as-built checkpoint records shared
+post-pair debug cleanup honestly. Source/native identities stay frozen for
+one held four-row matched timing package; no benefit is claimed yet. A
+one-expression weakref-work classification follow-on remains proposed only.
+
+The generations allocator/domain ledger now binds ten byte-identical f2/e9
+sources and closes the current reserve/publication/free/resize/abandoned-heap
+boundaries. A young index must avoid enumerating all old blocks. Store and
+constructor closure remains; per-object safe-promotion evidence must survive
+mark clearing. Existing pre-sweep Python debug output is an earlier reentry
+boundary than stop callbacks, so after-sweep metadata commit alone is unsound.
+No minors/barriers or held Queue2 change is implemented. Frame/store ownership
+source audit continues on an isolated frozen tree.
+
+Offline source/assembly analysis reuses the four accepted profiles, without
+new sampling. It resolves SEND/YIELD dispatch/state transitions and feedback/
+shape guards; these GCC non-tail sites cannot be attributed to a tail-only
+frame reload. A matched same-Clang dispatch comparison is a later bounded
+question, separate from H1's frame-parameter experiment. Reaching2x upstream
+needs about2.41x current throughput; a conditional Amdahl model shows why GC
+and common frame/call/value/interpreter work both matter. The measured
+29-row score remains0.828. Next hourly report remains about17:50 PDT.

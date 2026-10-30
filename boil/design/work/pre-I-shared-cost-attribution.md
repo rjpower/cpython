@@ -211,3 +211,22 @@ H3 frame/box counters if that distinction would change the next intervention.
 No broad counter instrumentation or additional profile run is required to
 act on the present shared-cost finding. Known ce correctness failures,
 observer cost and the fork/upstream eval-flag difference remain unchanged.
+
+The scale of the remaining work matters. The aggregate diagnostic needs about
+2.41× improvement over today's fork to reach 2× upstream. In a conditional
+Amdahl model that holds non-GC work fixed and treats these profile fractions
+as representative, removing **all** measured collection time would move the
+three slow rows only to about 0.79×/1.00×/0.86× upstream. This combines separate
+timing/profile windows, so it is a planning model, not a measured speedup or a
+strict bound on a changed runtime. Real generations remove only part of GC
+work and add barriers. GC/churn reduction therefore needs the common frame,
+call/value-flow and interpreter work too; a small dispatch-convention change
+alone cannot carry the 2× target.
+
+The [offline source/assembly join](pre-I-evaluator-source-attribution.md)
+reuses these samples without another recording. It resolves generator
+SEND/YIELD dispatch and state transitions, and Richards' feedback addressing
+and shape guards. The measured baseline is GCC non-tail: those sites cannot
+be attributed to H1's tail-only frame reload. A later matched same-Clang
+dispatch comparison can separate topology from compiler effects. Interrupt
+sampling and source-line attribution do not establish branch costs or savings.

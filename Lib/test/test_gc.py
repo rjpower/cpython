@@ -4033,6 +4033,172 @@ def _queue_child(code, **env):
 
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 @unittest.skipIf(_testcapi is None, "requires _testcapi")
+class BufferLifetimeTests(unittest.TestCase):
+    def test_unready_memoryview_retains_closure_and_recovers_oom(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                _queue_child(f"fail = {fail!r}\n" + textwrap.dedent("""
+                    import pickle
+                    gc.disable()
+                    events = []
+                    class Exporter:
+                        def __buffer__(self, flags):
+                            return memoryview(b"abc")
+                        def __release_buffer__(self, view):
+                            events.append(view.tobytes())
+                    gc.collect()
+                    def make_cycle():
+                        obj = Exporter()
+                        obj.holder = pickle.PickleBuffer(memoryview(obj))
+                        return weakref.ref(obj)
+                    ref = make_cycle()
+                    if fail:
+                        _testinternalcapi.gc_fail_work_alloc(1)
+                        assert gc.collect() == 0, 'retention OOM swept objects'
+                        assert _testinternalcapi.gc_fail_work_alloc(0) == 0, (
+                            'retention OOM did not fire')
+                    gc.collect()
+                    obj = ref()
+                    assert obj is not None, 'unready exporter closure was lost'
+                    assert events == [], events
+                    # This unported holder deliberately needs explicit release.
+                    with obj.holder.raw() as raw:
+                        assert bytes(raw) == b"abc"
+                    obj.holder.release()
+                    del obj
+                    for _ in range(4):
+                        gc.collect()
+                    assert events == [b"abc"], events
+                """), PYTHON_GCSTRESS="")
+
+    def test_unpack_iterator_cycle_release(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    events.append((operator.length_hint(self.iterator),
+                                   next(self.iterator, None), view.tobytes()))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                view = memoryview(obj)
+                obj.iterator = struct.iter_unpack("B", view)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(0, None, b"abc")], (
+                "release must observe an exhausted iterator", events)
+            backing.extend(b"d")
+        """)
+
+    def test_memoryview_release_rechecks_exports(self):
+        _queue_child("""
+            import struct
+            gc.disable()
+            events, saved = [], []
+            admitted = False
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(b"abc")
+                def __release_buffer__(self, view):
+                    global admitted
+                    events.append(view.tobytes())
+                    if not admitted:
+                        admitted = True
+                        saved.append(struct.iter_unpack("B", self.peer))
+                    gc.collect()
+            def make_cycle():
+                left, right = Exporter(), Exporter()
+                a, b = memoryview(left), memoryview(right)
+                left.peer, right.peer = b, a
+            make_cycle()
+            gc.collect()
+            assert events == [b"abc"], events
+            assert len(saved) == 1, saved
+            assert list(saved.pop()) == [(97,), (98,), (99,)]
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc", b"abc"], (
+                "a deferred acquisition must remain eligible", events)
+        """)
+
+    def test_unpack_iterator_returned_view_forwarding(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            returned = memoryview(backing)
+            other = struct.iter_unpack("B", returned)
+            class Exporter:
+                def __buffer__(self, flags):
+                    return returned
+                def __release_buffer__(self, view):
+                    assert view is returned
+                    events.append((operator.length_hint(self.iterator),
+                                   next(self.iterator, None), view.tobytes()))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                obj.iterator = struct.iter_unpack("B", memoryview(obj))
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(0, None, b"abc")], events
+            try:
+                returned.release()
+            except BufferError:
+                pass
+            else:
+                raise AssertionError("the other acquisition must stay active")
+            assert list(other) == [(97,), (98,), (99,)]
+            returned.release()
+            returned.release()
+            backing.extend(b"d")
+        """)
+
+    def test_unpack_iterator_release_failure_and_exhaustion(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events, errors = [], []
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(b"abc")
+                def __release_buffer__(self, view):
+                    iterator = getattr(self, "iterator", None)
+                    if iterator is not None:
+                        events.append((operator.length_hint(iterator),
+                                       next(iterator, None)))
+                    else:
+                        events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError("release callback failed")
+            obj = Exporter()
+            try:
+                struct.iter_unpack("H", obj)
+            except struct.error:
+                pass
+            else:
+                raise AssertionError("invalid acquisition length accepted")
+            assert events == [b"abc"], events
+            obj.iterator = struct.iter_unpack("B", obj)
+            assert list(obj.iterator) == [(97,), (98,), (99,)]
+            assert events == [b"abc", (0, None)], events
+            assert errors == [ValueError, ValueError], errors
+            assert list(obj.iterator) == []
+            assert events == [b"abc", (0, None)], events
+        """)
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+@unittest.skipIf(_testcapi is None, "requires _testcapi")
 class InterpreterQueueTests(unittest.TestCase):
     """Note 13 section 9: a weak reference callback runs on the weak
     reference's owner, a finalizer, legacy tp_del or destroy call on its

@@ -1124,35 +1124,49 @@ _memory_release(PyMemoryViewObject *self)
 }
 
 int
-_PyMemoryView_DeallocReleasesWithCode(PyObject *op)
+_PyMemoryView_HasAcquisition(PyObject *op)
 {
-    _PyManagedBufferObject *mbuf;
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf = (_PyManagedBufferObject *)op;
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        return !(self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            && self->master.obj != NULL;
     }
-    else {
-        assert(PyMemoryView_Check(op));
-        PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-        if (self->flags & _Py_MEMORYVIEW_RELEASED) {
-            return 0;
-        }
-        mbuf = self->mbuf;
-    }
-    return !(mbuf->flags & _Py_MANAGED_BUFFER_RELEASED)
-        && mbuf->master.obj != NULL
-        && _PyBuffer_ReleaseRunsCode(mbuf->master.obj);
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    return !(self->flags & _Py_MEMORYVIEW_RELEASED) && self->mbuf != NULL;
 }
 
-void
-_PyMemoryView_ReleaseForDealloc(PyObject *op)
+int
+_PyMemoryView_ReleaseReady(PyObject *op)
 {
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        assert(self->exports >= 0);
+        return (self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            || self->exports == 0;
+    }
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    assert(get_exports(self) >= 0);
+    return (self->flags & _Py_MEMORYVIEW_RELEASED)
+        || get_exports(self) == 0;
+}
+
+int
+_PyMemoryView_ReleaseForDealloc(PyObject *op)
+{
+    if (!_PyMemoryView_HasAcquisition(op)
+        || !_PyMemoryView_ReleaseReady(op))
+    {
+        return 0;
+    }
+    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
         mbuf_release((_PyManagedBufferObject *)op);
-        return;
+        return 1;
     }
     PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-    self->exports = 0;  // as in memory_dealloc()
     _memory_release(self);
+    return 1;
 }
 
 /*[clinic input]

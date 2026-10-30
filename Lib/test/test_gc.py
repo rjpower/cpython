@@ -4700,11 +4700,16 @@ class BufferLifetimeTests(unittest.TestCase):
             else:
                 raise AssertionError('interruption hook did not run')
             assert interrupted == [True], interrupted
-            assert scanner.search().group() == b"a"
+            # group() would acquire another buffer and run its release callback.
+            assert scanner.search().span() == (0, 1)
             assert events == [], events
             scanner.__del__()
             scanner.__del__()
             assert scanner.search() is None
+            assert events == [b"abc"], events
+            # The returned view stays rooted through the release callback.
+            for _ in range(4):
+                gc.collect()
             assert events == [b"abc"], events
             backing.extend(b"d")
         """)

@@ -843,10 +843,10 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
             if (op->ob_flags & _Py_GC_MARKED_FLAG) {
                 continue;
             }
+            op->ob_flags |= _Py_GC_MARKED_FLAG;
             if (objstack_push(&visited, op) < 0) {
                 goto done;
             }
-            op->ob_flags |= _Py_GC_MARKED_FLAG;
             if (objstack_push(&stack, (PyObject *)((uintptr_t)op | 1)) < 0
                 || _PyGC_TraceTraverse(op, order_visit, &stack) != 0)
             {

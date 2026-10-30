@@ -9,6 +9,14 @@ counting, shapes behind a flag, the first tier 0), which are deleted;
 this note is the design, note 09 the object protocol, and step 8's
 design note will be written from section 5.
 
+GC implementation update, 2026-10-30: the approved
+[measured GC plan](work/gc-architecture-next.md) now selects selective death,
+native-only cleanup, region storage and a common moving nursery with stable
+native space. Nonmoving generations are not a required intermediate; whole-heap
+compaction remains separate. Its code-design section owns the new slot/space/
+publication/commit interfaces. Existing root lifetime and supported-platform
+contracts remain; PROCESS records actual implementation and landing status.
+
 ## 0. What Phase 1 got wrong, and the correction
 
 Phase 1 was built under one constraint: keep the stack bytecode, the

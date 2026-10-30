@@ -390,3 +390,147 @@ preemptively. After A refresh the current interpreter profile; after the next
 structural gain refresh the29-row result and commission design reflection on
 remaining call/value/dispatch costs. Roughly 2× remains guidance for simple work,
 with clean orthogonal changes deciding what we keep.
+
+## 7. Code design and the interfaces we will improve
+
+Implementation authorization, 2026-10-30: proceed with the framed design and
+land reviewed increments. The coordinator owns integration and documentation;
+parallel agents own selective-death qualification, native-only generator cleanup,
+and an independent code/root organization review. The [independent code review](reviews/gc-code-organization-review.md) verifies
+this source map and the interface direction. Performance is summarized after
+the broad improvements land. Existing measurements above remain at their actual
+source identities until then.
+
+### Roots today: a small mechanism with a lifetime-only contract
+
+`_PyValueRoot`, declared in `Include/internal/pycore_structs.h`, is a linked
+record containing an inline value/object union, a `PyValue *base`, initialized
+length `n`, and `next`. A thread's `gc_trace.value_roots` points to its LIFO
+chain. `Include/internal/pycore_value.h` supplies the push, append, rebase and
+pop helpers. Registration allocates no memory. `_PyGC_TraceVisitThreadState`
+in `Python/gc_trace.c` visits the object-valued entries of every active span.
+
+The normal recipe for a temporary C borrow is:
+
+1. Identify which object/value must survive a call that can allocate or run
+   Python. Reuse a real frame slot or traced owner when its lifetime already
+   covers the call; otherwise push a local span before the call.
+2. Append each initialized value, extending `n` only after storing it. Use
+   `_PyValueSpan_AppendObject` for a raw `PyObject *`, including a numeric box:
+   canonicalizing that box to an inline number would leave its storage unrooted.
+3. Keep the span linked through the last use. Pop it in reverse push order on
+   every success/error exit. If a backing array reallocates, rebase the span
+   before the next collecting call.
+4. Mark a function `Py_GC_PRECISE` only when all surviving references are
+   anchored. The C root checker runs at build time; the stack walker then skips
+   the function's opaque local words. Exercise collection/reentry at the actual
+   lifetime boundary, including kill mode when relevant.
+
+This is reasonably clean for nonmoving code, but manual cleanup paths and copied
+anchors need care. `Py_GC_PRECISE` means “safe to omit conservative scanning,”
+not “all pointer locations are writable by GC.” `_PyValueSpan_ObjectSlot` is an
+existing narrow way for an out-parameter to write a raw object pointer directly
+into an anchored slot. Prefer that existing facility to adding another root API.
+
+For longer-lived non-object storage, `_PyGCRoot` and `_PyGC_AddRoot/RemoveRoot`
+register an array of `PyObject *` in an interpreter's doubly linked list. The
+runtime head lock protects insertion/removal and collection; the caller owns
+the record and storage lifetime. Public `PyGC_AddRoot/RemoveRoot` wrap a single
+actual pointer variable with an allocated registration node. This is distinct
+from a thread-local span and does not make arbitrary mutation thread-safe.
+
+A **heap field is an edge, not a new root**. Add it to the owner's traversal
+using `Py_VISIT` or `_Py_VISIT_VALUE`, including separately allocated backing
+storage. `_PyGC_TraceTraverse` also supplies runtime-owned attribute/type edges.
+A persistent interpreter/thread field belongs in its corresponding root visitor;
+borrowed caches need an explicit weak/invalidation contract rather than accidental
+strong rooting. Tests check usable data while reachable and reclamation after the
+last real owner disappears.
+
+### Data structures and who owns them
+
+| Structure | Definition/use today | Consequence for the next work |
+| --- | --- | --- |
+| `_PyValueRoot` chain | Thread-owned LIFO records over initialized value slots; value helpers register, root visitors read. | Reuse storage and balanced lifetime rules. Add explicit writable-slot visitation for admitted relocation paths; legacy copies/aliases still pin or reload. |
+| `_PyGCRoot` list | Interpreter list of registered object-pointer arrays, protected by the runtime head lock. | Visit actual pointer locations where their alias contract permits relocation; retain pinning for legacy consumers. |
+| Object-start map | Two-level sparse bitmap in `pycore_gc_trace.h`, set on initialized-object publication and cleared before reuse; one bit per eight address bytes, 32 MiB chunks. | Keep authoritative object identity. Region lookup/enumeration must join this contract rather than introduce a conflicting object registry. |
+| `addrset`, `rangelist` | Local open-addressed sets (linear probing, at most half full) and sorted range vectors/binary search in `gc_trace.c`. | Useful scratch/diagnostic structures. The live collector also uses object-header mark/shallow bits; it does not require a hash node per ordinary marked object. |
+| `trace_t` | Per-mark context for roots, heap domain, scratch stacks, range maps and verification diagnostics. | Separate root/heap access from verifier-only policy as real nursery consumers appear; keep one mark engine. |
+| `_PyGCMarkResult` / `_PyGCDeadObject` | Contiguous dead inventory with sizes/kind bits and aggregate facts, plus live/root statistics and domain pin information. | Preserve connectors and actual-work facts. Reuse the inventory for native cleanup instead of adding another object worklist. |
+| `objstack` and ordering scratch | Growable libc arrays in `gc_live.c`; sticky OOM stops traversal and triggers retention/rollback. | Preserve failure semantics. Share a helper only when ownership, failure injection and rollback truly match; no generic container rewrite is required. |
+| `live_call` / `call_batch` | Singly linked libc callback nodes; head/tail batches splice without allocation, with queue roots published before delivery. | Keep the simple drainer. Separate native-only cleanup before objects reach this machinery. |
+| Weakref registry | Stable separately allocated hash entries; each entry owns the head slot of a per-referent doubly linked weakref list. | Stable head addresses matter across allocation. Keep the sparse representation and improve actual-work selection/bulk clearing where measured. |
+| `_PyGCWalkCache` | Per-interpreter open-addressed frame-descriptor cache, invalidated by loader/code-range generations. | Retain opaque-frame fallback and attribution; writable roots are an additional contract, not a reason to delete compatibility scanning. |
+
+Collector scratch uses libc allocation so it neither triggers collection nor
+appears as hidden strong references in scanned managed heaps. Each structure
+has an explicit owner and teardown point. OOM in discovery/preparation retains
+objects; irreversible cleanup begins only after the needed storage is ready.
+These are more important shared rules than a single universal vector/hash API.
+
+### Shared concepts to introduce with implementation
+
+**Reference locations and access.** Today `visitproc(PyObject *, void *)` reports
+child values. The nursery needs visitors over actual `PyValue *` and
+`PyObject **` slots, plus a pin path for readonly/ambiguous references. Implement
+that narrow interface when converting the first root/layout consumers. Reuse
+existing span/root chains and traced owners. Updating a copied anchor does not
+update its C alias; every alias surviving a safepoint must reload/recompute or
+pin the object. Discover all pin targets before rewriting any reference.
+The existing `Tools/cases_generator/call_effects.py` remains the authority for
+allocation versus Python reentry; reuse it in checker changes. Its current
+proof does not certify relocation/reload safety.
+
+**Heap-space access.** `live_page_of`, `live_lookup`, block walking and owner
+queries currently know mimalloc's segments/tags/debug offsets. Add a small
+space-aware lookup/enumeration boundary when admitting the first region layouts.
+It must answer initialized start, extent and owning space for exact/interior
+addresses and enumerate live allocation records. Preserve the current mimalloc
+fast path; region code supplies a second concrete backend, without fabricating
+mimalloc page structures or building a registry of unused allocator plugins.
+
+**Construction publication.** A published object start, a safely traversable
+object and a movable object are different states. Today initialized-start,
+TRACKED and SHALLOW checks encode parts of this distinction. Give allocation,
+constructor completion and promotion named entry points with stated invariants
+as the region backend needs them. Current object-map extension failure is fatal;
+new returnable metadata/evacuation reservation needs an earlier fallible boundary.
+A pinned page does not make a partially built object safely old.
+Metadata/remembered edges must be committed before reentry.
+
+**Lifecycle facts and effects.** Keep actual weakref/finalizer/hook/buffer facts
+in dead records rather than recomputing type capability in every stage. Share
+native cleanup eligibility with its existing operation (`gen_close` first).
+Separate pure eligibility, fallible preparation and nonfailing cleanup. This
+makes the proof local and avoids a second registry of type-specific exceptions.
+
+**Collection transaction.** Keep discovery/retention/preparation distinct from
+irreversible frame cleanup, pointer relocation and recycling. Name the commit
+boundary in the code at each new consumer. Reuse sticky failure/retention before
+commit; require a no-allocation/no-Python/no-detach interval afterward. Callback
+publication is already partly irreversible, so its existing partial-delivery
+contract must remain explicit rather than be called a universal rollback.
+
+### Code organization and landing sequence
+
+`gc_trace.c` currently combines root enumeration, mimalloc address interpretation,
+marking, the historical verifier, live verification/quarantine and diagnostics;
+`gc_live.c` combines scheduling, lifecycle graphs, queue delivery and sweep.
+The boundaries are understandable, but the names/header introduction still
+reflect the original verifier and obscure today's live collector.
+
+We will keep native-only cleanup small in its current files. During region work,
+extract heap-space access with its second implementation; during writable-root
+work, place root declarations/visitors together and keep platform unwind code in
+`gc_walk.c`. Move verifier/debug helpers only when that separation removes real
+dependencies from the hot mark path. Update obsolete comments at those boundaries.
+This avoids interleaving a large mechanical file split with lifecycle fixes.
+
+The active landing order is selective death → native-only cleanup → measured
+storage cleanup/region backend → writable slots/core barriers/stable-owner scans
+and oracle → copying minors. Independent review can examine the next slice while
+the preceding frozen source runs its gates. Runtime branches merge the landed
+integration head before final qualification; they do not consume one another's
+unlanded patches. Release measurements serialize after the broad runtime union
+lands. The resulting report will include the full interpreter comparison,
+allocation-heavy rows, actual nursery coverage/pinning, GC CPU, RSS and pauses.

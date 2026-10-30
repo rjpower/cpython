@@ -17,6 +17,15 @@ Supported callback/buffer lifetime is qualified for Linux/main interpreter/
 ordinary threads/shared GIL; foreign/adoption, platform and precision work
 remain separate. Original failed runs and measurement limits stay preserved.
 
+The [measured GC plan](gc-architecture-next.md) now has implementation/landing
+authorization and active parallel owners. Selective-death O3 coroutine throughput
+improves1.309× in the isolated topic; whole29 remains unchanged. Keep32MiB after
+the completed budget experiment. Native-only cleanup is the next code slice,
+then common storage/nursery interfaces. The code organization review explains
+current roots and the new writable-slot/space/publication/commit boundaries.
+These status updates supersede pending-budget and nonmoving-first sequencing
+below; the other interpreter opportunities remain conditional on attribution.
+
 The core architecture is coherent: compile once into register IR, carry one
 canonical value representation, generate handlers from one DSL, and keep
 feedback separate from immutable code. The largest design gaps are the

@@ -33,6 +33,12 @@ with stable native space. Nonmoving generations are not a required intermediate.
 Historical worktree retirement is complete:32 checkouts removed, eight
 registered roots retained, including three ownership/dirty-state exceptions.
 H1/H2 source tags are pushed and selected evidence is retained locally.
+Implementation of the framed plan is authorized. Active parallel lanes are
+selective-death landing qualification, native-only generator cleanup, and the
+[code/root organization review](design/work/gc-architecture-next.md#7-code-design-and-the-interfaces-we-will-improve).
+The plan now explains actual root APIs/data structures and the staged shared
+interfaces for regions and writable slots. Native cleanup is source-only until
+independent review; no nursery or new broad performance result is claimed.
 This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 

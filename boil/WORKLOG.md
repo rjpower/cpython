@@ -5231,3 +5231,41 @@ Independent cost/contract and nursery reviewers clear the revised plan after
 these explicit proof clauses and a24.35→24.36 rounding correction. Entrypoint,
 PROCESS and affected decision docs updated; original failures and unrelated
 working files preserved. Next hourly checkpoint16:30PDT if work remains active.
+
+
+### 2026-10-30 16:47 PDT — approved GC implementation starts
+
+The user authorizes landing the framed GC design and requests a code-level
+root/data-structure/organization review. AI policy and applicable instructions
+reread; unrelated dirty review files remain preserved. Three existing agents
+reactivated: roots_audit owns selective-death qualification in its current tree;
+string_design owns five-file native-only cleanup in new repository-managed
+boil-gc-native-cleanup from primary9c3c0d57424; stats_design_review owns the
+independent code/root review and subsequent patch review. No unlanded cross-lane
+merge; each runtime lane takes landed integration before final qualification.
+
+Selective topic merged primary as its next commit with documentation-only
+incoming changes. Existing O3/O1 images retain explicit native identities.
+Its finite required release/O1normal+kill fulls, stress, ASan and closure/control
+packet is being prepared from existing launchers; heavy work is coordinated by
+that owner. Native-cleanup implementation is source-only pending source review.
+No runtime optimization or nursery has newly landed at this checkpoint.
+
+Architecture plan now includes current root recipe and concrete structures:
+thread-local _PyValueRoot spans, interpreter _PyGCRoot lists, initialized-start
+bitmap, local address sets/range vectors, trace context, contiguous dead records,
+sticky-OOM stacks/order scratch, callback batches, stable weakref entries and
+frame descriptor cache. Writable slot versus lifetime anchor, space-aware object
+lookup, constructor publication, actual lifecycle facts and commit boundaries
+are the shared concepts introduced with their first real consumers. Large file
+splits and generic container/allocator frameworks are not prerequisites. Broad
+performance summary follows landed improvements; next hourly checkpoint17:44PDT.
+
+
+Independent code review `gc-code-organization-review.md` clears architecture§7
+against actual source9c3c: root recipes, ownership and structure descriptions
+are sound. It identifies existing call_effects as the shared allocation/reentry
+authority and distinguishes fatal current object-map extension from returnable
+future region reservation. First fresh selective release smoke passes1,935 tests/
+80 skips with source94ae/native10d and cleanup/root/state checks. Affected whole4
+and the fresh ASan build are active; full qualification is not yet complete.

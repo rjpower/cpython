@@ -46,6 +46,16 @@ record and is updated at every landing.
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
+The user authorizes implementation/landing of the revised GC design. Parallel
+owners: roots_audit qualifies selective death in its existing topic;
+string_design implements native-only generator cleanup in `boil/gc-native-cleanup`
+from integration; stats_design_review examines roots/data structures/code
+organization and independently reviews the next patch. The coordinator owns
+integration/documents and sequences region/writable-slot/minor work after these
+slices. Current native gates remain finite and source-frozen; later branches
+merge the landed integration before final qualification. Report broad performance
+after the runtime improvements land, with hourly documentation checkpoints.
+
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves
 30.9%; the other three ranges overlap. O1-debug focused13 and four affected

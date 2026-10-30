@@ -1719,11 +1719,16 @@ _PyGC_LiveOwner(const _PyGCMarkResult *res, PyObject *op)
     return NULL;
 }
 
-/* HEAD never detaches; this compares allocator metadata without running
-   Python or allocating, and retains no object pointer across the lock. */
+/* HEAD never detaches and these metadata readers do not run Python or
+   allocate. Keep the argument rooted through the ownership comparison. */
 Py_GC_PRECISE int
 _PyGC_LiveOwnedBy(PyObject *op, PyInterpreterState *interp)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, op);
     int owned = 0;
     assert(interp == _PyInterpreterState_GET());
     HEAD_LOCK(&_PyRuntime);
@@ -1739,6 +1744,7 @@ _PyGC_LiveOwnedBy(PyObject *op, PyInterpreterState *interp)
         }
     }
     HEAD_UNLOCK(&_PyRuntime);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return owned;
 }
 

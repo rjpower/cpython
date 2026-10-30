@@ -140,7 +140,7 @@ NON_COLLECTING = frozenset({
     "assert", "Py_UNREACHABLE", "Py_FatalError", "Py_UNUSED",
     "Py_ARRAY_LENGTH", "Py_MIN", "Py_MAX", "Py_ABS", "JUMP_TO_LABEL",
     "memcpy", "memmove", "memset", "memcmp", "strlen", "strcmp", "strncmp",
-    "strchr", "isnan", "isfinite", "pow",
+    "strchr", "strrchr", "isnan", "isfinite", "pow",
     # reads the stack pointer, with an intrinsic or an asm
     "_Py_get_machine_stack_pointer",
     "Py_BEGIN_CRITICAL_SECTION", "Py_END_CRITICAL_SECTION",

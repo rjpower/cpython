@@ -1346,7 +1346,7 @@ _PyGC_LiveFailDebugAlloc(int n)
     return left;
 }
 
-static void
+Py_GC_PRECISE static void
 debug_flush(debug_output *out, int python_ok)
 {
     for (size_t i = 0; i < out->used; ) {

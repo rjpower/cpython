@@ -12,7 +12,10 @@ canonical value representation, generate handlers from one DSL, and keep
 feedback separate from immutable code. The largest design gaps are the
 unfinished boundaries between those layers: native self/slot interfaces,
 frame transitions and initialized root spans, and complete final-word effects.
-Those deserve shared solutions before adding unrelated fast paths. Existing
+Those deserve shared solutions before adding unrelated fast paths. The
+[first-slice comparison](pre-I-first-slice-decision.md) narrows three choices
+and makes current conversion cost and measured benefit prerequisites for an
+ABI expansion. Existing
 typed handlers are useful implementation structure, but do not yet constitute
 one orthogonal parameterized operation model.
 

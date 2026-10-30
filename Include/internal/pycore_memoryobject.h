@@ -25,8 +25,13 @@ extern int _PyBuffer_ReleaseRunsCode(PyObject *exporter);
  * whose release runs code? */
 extern int _PyMemoryView_DeallocReleasesWithCode(PyObject *op);
 
-/* Make that release now: what the dealloc would do, apart from freeing. */
-extern void _PyMemoryView_ReleaseForDealloc(PyObject *op);
+/* Whether a memoryview can unregister, or a managed buffer release its master,
+ * without discarding outstanding exports.  This inspection runs no code. */
+extern int _PyMemoryView_ReleaseReady(PyObject *op);
+
+/* Recheck readiness and perform that release.  Return zero without consuming
+ * the acquisition if an outstanding export still prevents it. */
+extern int _PyMemoryView_ReleaseForDealloc(PyObject *op);
 
 #ifdef __cplusplus
 }

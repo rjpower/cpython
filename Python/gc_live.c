@@ -408,7 +408,11 @@ run_destroy_hook(PyThreadState *tstate, PyObject *op)
         _PyCapsule_Destroy(op);
     }
     else if (tp == &_PyManagedBuffer_Type || tp == &PyMemoryView_Type) {
-        _PyMemoryView_ReleaseForDealloc(op);
+        /* An earlier callback may have acquired another export since this
+           node was selected.  Only actual consumption acknowledges release. */
+        if (_PyMemoryView_ReleaseForDealloc(op)) {
+            op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
+        }
     }
     else {
         assert(PyModule_Check(op));
@@ -997,9 +1001,6 @@ error:
 static int
 queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
 {
-    if (!(res->kinds & _PyGC_DEAD_HOOK)) {
-        return 0;
-    }
     live_call *last = b->tail;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         _PyGCDeadObject *d = &res->dead[i];
@@ -1009,15 +1010,38 @@ queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
             d->kinds &= ~_PyGC_DEAD_HOOK;
             continue;
         }
+        int is_buffer = Py_IS_TYPE(d->op, &PyMemoryView_Type)
+                        || Py_IS_TYPE(d->op, &_PyManagedBuffer_Type);
+        if (is_buffer && !_PyMemoryView_ReleaseReady(d->op)) {
+            d->kinds &= ~_PyGC_DEAD_HOOK;
+            continue;
+        }
         if (queue_push(b, d->op, NULL, CALL_DESTROY) < 0) {
             return -1;
         }
-        d->op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
+        if (!is_buffer) {
+            d->op->ob_flags |= _Py_GC_NOTIFIED_FLAG;
+        }
     }
     // Queue every one first: resurrecting one can reach another.
     objstack s = {0};
     for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
         if (resurrect(&s, c->op) < 0) {
+            free(s.items);
+            return -1;
+        }
+    }
+    /* Select every ready hook before retention: an unready view can reach the
+       owner whose queued release will make progress.  Declining a hook alone
+       would leave the view and its native acquisition eligible for sweep. */
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        PyObject *op = res->dead[i].op;
+        if ((op->ob_flags & _Py_GC_DEAD_FLAG)
+            && (Py_IS_TYPE(op, &PyMemoryView_Type)
+                || Py_IS_TYPE(op, &_PyManagedBuffer_Type))
+            && !_PyMemoryView_ReleaseReady(op)
+            && resurrect(&s, op) < 0)
+        {
             free(s.items);
             return -1;
         }

@@ -4408,14 +4408,15 @@ gc_stack_hits(PyObject *self, PyObject *args)
     size_t n;
     int64_t dropped;
     const _PyGCStackHit *hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    size_t count = n;
     PyObject *list = PyList_New(0);
     if (list == NULL) {
         return NULL;
     }
+    hits = _PyGC_TraceStackHits(interp, &n, &dropped);
     // Building the list allocates, so a collection may list more hits and
     // move the array: each hit is copied first, the array read again, and
     // the hits listed meanwhile are not reported.
-    size_t count = n;
     for (size_t i = 0; i < count; i++) {
         _PyGCStackHit h = hits[i];
         if (addr != 0 && h.op != addr) {

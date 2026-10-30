@@ -261,6 +261,9 @@ struct _gc_runtime_state {
     /* Initialising, open or closed (gc_live.c); nothing runs from a queue
        that is not open. */
     int queue_phase;
+    /* One attached thread drains the queue, including while its callback
+       releases the GIL.  Read and written with this interpreter's GIL. */
+    int queue_draining;
     /* The main interpreter's count, by call kind, of the calls of
        never-opened isolated interpreters that their close discarded. */
     Py_ssize_t queue_discarded[4];

@@ -903,6 +903,11 @@ Py_RunMain(void)
         /* Value unlikely to be confused with a non-error exit status or
            other special meaning */
         exitcode = 120;
+        if (Py_IsInitialized()) {
+            /* A busy callback rejected finalization.  The embedding host
+               gets the still-live runtime, including its global state. */
+            return exitcode;
+        }
     }
 
     pymain_free();

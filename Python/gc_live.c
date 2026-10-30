@@ -62,6 +62,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_typeobject.h"    // _PyType_NotifyDestroy()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 #include "pycore_weakref.h"       // _PyWeakref_ClearRef()
 
 
@@ -473,16 +474,15 @@ live_python_ok(PyThreadState *tstate)
 }
 
 /* Run the queued callbacks and finalizers.  A collection that one of them
-   triggers queues more at the tail, and this loop runs those too.  Every
-   thread that collects joins the threads already here, so that threads
-   whose finalizers release the GIL cannot make garbage faster than the
-   queue drains: each waits for the queue before it goes on. */
+   triggers queues more at the tail, and this loop runs those too.  Other
+   collectors leave delivery to this drainer and return: a callback may
+   be waiting for one of those threads to finish collecting. */
 static int
 run_queue_ex(PyThreadState *tstate, int closing)
 {
     GCState *gc = &tstate->interp->gc;
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    if (ts->gc_trace.running_queue || gc->queue_head == NULL
+    if (gc->queue_draining || gc->queue_head == NULL
         || gc->queue_phase != QUEUE_OPEN)
     {
         return 0;
@@ -502,10 +502,20 @@ run_queue_ex(PyThreadState *tstate, int closing)
         return 0;
     }
     int ncompleted = 0;
+    gc->queue_draining = 1;
     ts->gc_trace.running_queue = 1;
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    PyObject **exc = _PyValueSpan_ObjectSlot(&span);
+    PyObject **op = _PyValueSpan_ObjectSlot(&span);
+    PyObject **callback = _PyValueSpan_ObjectSlot(&span);
+    *exc = _PyErr_GetRaisedException(tstate);
     live_call *node;
     while ((node = gc->queue_head) != NULL) {
+        // Publish the active call's roots before removing its queue roots.
+        *op = node->op;
+        *callback = node->callback;
         gc->queue_head = node->next;
         if (gc->queue_head == NULL) {
             gc->queue_tail = NULL;
@@ -513,7 +523,6 @@ run_queue_ex(PyThreadState *tstate, int closing)
         if (gc->queue_head == NULL) {
             _Py_atomic_store_int_relaxed(&gc->queue_ready, 0);
         }
-        // The call's objects stay reachable from this frame.
         live_call call = *node;
         free(node);
         assert_owner(tstate, call.op);
@@ -553,9 +562,15 @@ run_queue_ex(PyThreadState *tstate, int closing)
                                        "%R", call.op);
             }
         }
+        *op = *callback = NULL;
     }
+    _PyErr_SetRaisedException(tstate, *exc);
+    _PyThreadState_PopValueRoot(tstate, &span);
     ts->gc_trace.running_queue = 0;
-    _PyErr_SetRaisedException(tstate, exc);
+    gc->queue_draining = 0;
+    if (gc->queue_head != NULL) {
+        _Py_ScheduleGC(tstate);
+    }
     return ncompleted;
 }
 
@@ -2166,6 +2181,9 @@ static void
 live_close(PyInterpreterState *interp)
 {
     GCState *gc = &interp->gc;
+    if (gc->queue_draining) {
+        Py_FatalError("cannot close a collector while callbacks are running");
+    }
     PyThreadState *tstate = _PyThreadState_GET();
     /* The fork child clears the other interpreters from the main
        interpreter's thread (_PyInterpreterState_DeleteExceptMain()): their

@@ -715,16 +715,32 @@ run_at_forkers(PyObject *lst, int reverse)
     }
 }
 
-void
-PyOS_BeforeFork(void)
+int
+_PyOS_BeforeFork(void)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     run_at_forkers(interp->before_forkers, 1);
 
     _PyImport_AcquireLock(interp);
     _PyEval_StopTheWorldAll(&_PyRuntime);
+    if (interp->gc.queue_draining) {
+        _PyEval_StartTheWorldAll(&_PyRuntime);
+        _PyImport_ReleaseLock(interp);
+        PyErr_SetString(PyExc_RuntimeError,
+                        "cannot fork while GC callbacks are running");
+        return -1;
+    }
     HEAD_LOCK(&_PyRuntime);
     _PyWarnings_BeforeFork(interp);
+    return 0;
+}
+
+void
+PyOS_BeforeFork(void)
+{
+    if (_PyOS_BeforeFork() < 0) {
+        Py_FatalError("cannot fork while GC callbacks are running");
+    }
 }
 
 void
@@ -8637,7 +8653,9 @@ os_fork1_impl(PyObject *module)
         PyErr_SetString(PyExc_RuntimeError, "fork not supported for subinterpreters");
         return NULL;
     }
-    PyOS_BeforeFork();
+    if (_PyOS_BeforeFork() < 0) {
+        return NULL;
+    }
     pid = fork1();
     int saved_errno = errno;
     if (pid == 0) {
@@ -8690,7 +8708,9 @@ os_fork_impl(PyObject *module)
     if (PySys_Audit("os.fork", NULL) < 0) {
         return NULL;
     }
-    PyOS_BeforeFork();
+    if (_PyOS_BeforeFork() < 0) {
+        return NULL;
+    }
     pid = fork();
     int saved_errno = errno;
     if (pid == 0) {
@@ -9576,7 +9596,9 @@ os_forkpty_impl(PyObject *module)
     if (PySys_Audit("os.forkpty", NULL) < 0) {
         return NULL;
     }
-    PyOS_BeforeFork();
+    if (_PyOS_BeforeFork() < 0) {
+        return NULL;
+    }
     pid = forkpty(&master_fd, NULL, NULL, NULL);
     if (pid == 0) {
         /* child: this clobbers and resets the import lock. */

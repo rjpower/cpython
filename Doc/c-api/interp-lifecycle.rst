@@ -170,6 +170,19 @@ Initializing and finalizing the interpreter
    If there were errors during finalization (flushing buffered data),
    ``-1`` is returned.
 
+   For main-thread entry from the main interpreter, if a queued GC callback
+   is running, finalization is rejected with ``-1`` while
+   :c:func:`Py_IsInitialized` remains true.  The original thread-state
+   attachment, including an alternate main-interpreter state, and the
+   interpreter finalizing flag are restored.  Preparation may already have
+   run :mod:`atexit` handlers or other pending work; those effects are not
+   rolled back.  The host must let the callback finish before trying to
+   finalize again.  Busy rejection on non-main-thread entry terminates the
+   process with a fatal error.  A foreign-interpreter attachment on the
+   main thread can be restored on immediate rejection, but a busy rejection
+   after preparation is fatal: preparation may have destroyed that
+   interpreter.
+
    Note that Python will do a best effort at freeing all memory allocated by the Python
    interpreter.  Therefore, any C-Extension should make sure to correctly clean up all
    of the previously allocated PyObjects before using them in subsequent calls to
@@ -208,7 +221,9 @@ Initializing and finalizing the interpreter
 .. c:function:: void Py_Finalize()
 
    This is a backwards-compatible version of :c:func:`Py_FinalizeEx` that
-   disregards the return value.
+   disregards errors after teardown.  A busy callback that prevents teardown
+   terminates the process with a fatal error, since this void API cannot
+   report a still-initialized runtime to its caller.
 
 
 .. c:function:: int Py_BytesMain(int argc, char **argv)
@@ -330,7 +345,12 @@ Initializing and finalizing the interpreter
    then determined by the way the *REPL session* terminates: ``0``, ``1``, or
    the status of a :exc:`SystemExit`, as specified above.
 
-   This function always finalizes the Python interpreter before it returns.
+   This function finalizes the Python interpreter before it returns, except
+   when a running queued GC callback prevents finalization.  In that case
+   it returns ``120`` with the runtime still initialized, without clearing
+   its global configuration.  An embedding host must let the callback
+   finish before finalizing the runtime; preparation effects already run
+   are not rolled back.
 
    See :ref:`Python Configuration <init-python-config>` for an example of a
    customized Python that always runs in isolated mode using

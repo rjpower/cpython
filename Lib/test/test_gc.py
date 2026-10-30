@@ -1788,6 +1788,9 @@ class TracingCollectorTests(unittest.TestCase):
         class Probe:
             pass
         def func(addr):
+            # Earlier allocations may have used this address. Start the
+            # journal window while the current Probe is already alive.
+            _testinternalcapi.gc_stack_hits()
             gc.collect()
             return _testinternalcapi.gc_stack_hits(addr)
         hits, dropped = _testinternalcapi.call_with_c_local(Probe, func)

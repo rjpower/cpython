@@ -185,10 +185,18 @@ class SharedMemory:
         self._buf = memoryview(self._mmap)
 
     def __del__(self):
-        try:
-            self.close()
-        except OSError:
-            pass
+        # Views keep the mapping alive independently.  Automatic disposal
+        # drops our ownership; close() explicitly closes access and may fail
+        # while another view is still exported.
+        fd = self._fd
+        self._fd = -1
+        self._buf = None
+        self._mmap = None
+        if _USE_POSIX and fd >= 0:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
     def __reduce__(self):
         return (

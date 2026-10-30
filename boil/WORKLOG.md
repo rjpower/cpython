@@ -4303,3 +4303,36 @@ registration, rooted Finish, private-header placement and test-adapter migration
 Its isolated implementation is delegated; no native grant or new root fixture.
 The accepted performance score stays0.828x upstream; no new speedup is claimed.
 Next hourly documentation/status checkpoint about18:50 PDT.
+
+### 18:11 PDT: first GC timing benefit and coherent next candidate
+
+All three H3 integration jobs pass on e9, including actual debug kill:
+54 reported tests each, exact11/1/1 existing skips,43/53/53 eligible protected
+methods and528/612/612 collections, zero fallback and one report-only unpinned
+hit per row. Compact all-eleven summarydc7ae1e1 retains eight earlier jobs
+plus these three; native/source/cleanup guards hold.
+
+Minimal reader/history source7c703fda1b7 clears root and independent review.
+Unicode ownership2f37be1d059 also clears both source reviews: embedded stable
+root, balanced cleanup, rooted finalization, private-header move and mechanical
+public/private test-adapter migration. No native Unicode result exists yet.
+Root composes H3+reader+Unicode+finalizer eligibility in managed next union
+5a45f9bb6a7. Frozen f2/e9/a285 trees and results stay intact. One fresh actual
+combined O3/O1-debug ladder replaces completing f2 then repeating broad gates.
+
+The first matched four-row finalizer-eligibility timing completes in32s:
+coroutines1.2502, comprehensions1.0550, generators1.0697, Richards1.0331
+parent/candidate median elapsed ratios. Root independently checks all40 raw
+values, normalization/medians/ratios, both actual JSON-tail witnesses and
+cleanup flags. The earlier pre-admission host rejection is preserved; its
+successor changes only the measured duplicate PATH expectation, with no
+target retry. Score5d7ab61c and launch11990bcf bind planfc7ffab3.
+This is an encouraging unqualified patch diagnostic, not a new upstream or
+29-row score. Richards' earlier zero hot collections cautions against complete
+GC attribution; serial/process/layout/noise limits remain. The small patch
+proceeds to combined qualification. Native quiet reservation is released.
+
+Root delegates next owned O3/O1 build preparation to the GC operator, H1's
+uniform tail-call frame parameter source implementation to the handler owner,
+and the finite list/dict/set generations ledger to the Unicode owner. No H1
+native experiment, barrier or minor is implemented. Next hourly report18:50.

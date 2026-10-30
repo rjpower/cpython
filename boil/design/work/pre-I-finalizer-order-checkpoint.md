@@ -16,7 +16,7 @@ The regression constructs outer -> cleared generator -> code -> co_consts
 -> inner, checks the surviving code edge, outer-before-inner finalizer order,
 access to inner's name, and eventual weakref clearing. Reverse postorder
 still supplies the ordering argument; eligibility does not prune transit.
-This establishes a bounded implementation and regression, not a speedup.
+This establishes the semantic checkpoint. The separate timing diagnostic is below.
 
 Both owned GCC15 builds completed normally: O3 release and default Og
 Py_DEBUG with assertions/symbols, retained frame pointers and eval
@@ -58,8 +58,8 @@ Each result binds its raw run.log, JUnit, state/root journals and pre/post
 product maps. Final debug cleanup found no exact-runtime processes and a
 free build lock. The two debug cleanup paths hold the same post-pair
 observation, rather than two independent observations. Release companions
-completed before the debug build; no
-later release target has run.
+completed before the debug build. These receipts describe the semantic
+checkpoint before the later timing diagnostic.
 
 The separately managed negative tree boil-gc-finalizer-order-negative is
 clean at 025d549368a0fec22a755a7448987df0d27cbd77. It removes only the
@@ -73,14 +73,49 @@ negative-transit-order-off/result.json d70446b2; cleanup 01ca7b89.
 This proves the regression rejects broken reversal, not every possible
 transit-edge omission. No retries or C-memory fixtures were used.
 
-No broad candidate suite, timing, weakref-classification patch or integration
-has run. The original tracked source checkpoint remains historical and the
-positive tracked HEAD stays clean a285 for the held matched timing package.
-The coordinator may copy this ignored as-built record into primary docs;
-parent qualification/known lifecycle debt and actual-union requirements
-remain separate.
+No broad candidate suite or weakref-classification patch has run on a285.
+The positive tracked HEAD stays clean a285. Parent qualification and known
+lifecycle debt remain separate from the timing diagnostic and later union.
 
 Post-all-jobs release cleanup observation is additionally retained at
 release-companions/cleanup.json 8db84687: no exact release-runtime PIDs and
 a free release build lock. Its timestamp is later host evidence, not a
 retrospective original launch-time guard.
+
+## Four-row elapsed diagnostic, 18:07 PDT
+
+One matched GCC15/O3 parent-f2 versus candidate-a285 diagnostic completed
+under the existing dual-slot/build-lock supervisor, CPU0/sibling8 reservation
+and quietness checks. Both actual JSON-tail origin witnesses pass. Forty raw
+values are retained: four rows, two fresh processes per row, one warmup and
+five serial measured calls per process, with alternating role order. Root
+independently reconciled raw stdout, normalized values, medians and ratios.
+
+| Workload | Parent elapsed / candidate elapsed |
+| --- | ---: |
+| coroutines | 1.2502 |
+| comprehensions | 1.0550 |
+| generators | 1.0697 |
+| Richards | 1.0331 |
+
+This supports carrying the small eligibility refactor into broad qualification.
+It is an initial patch diagnostic, not a new29-row/upstream score or a causal
+decomposition. Richards had no hot collection in the earlier profile, so its
+gain warns that layout, process/order or machine effects may contribute.
+Serial samples share process state and some show collection variability;
+there is no independence or confidence-bound claim.
+
+The parent has assembled release coverage and passing normal/kill debug
+fulls, but unresolved stress11 stack-hit failure and inherited stress100k
+lifecycle debt; the candidate has only its named semantic qualification.
+Neither correctness, primary landing nor the2x target follows from timing.
+Source/config/native inventories remain unchanged through final cleanup.
+The next combined source5a45 includes H3, reader/test repair, Unicode ownership
+and this optimization; its fresh O3/O1-debug qualification remains due.
+
+Evidence: build/gc-finalizer-order/quiet-four-v2, planfc7ffab3,
+launch-result11990bcf, score5d7ab61c, parent/candidate origin2f9726a2/71ebd574.
+An earlier host-environment check rejected before admission or target launch
+because uv prepended a duplicate PATH element. That rejection and the old
+plan remain; only the observed host PATH expectation changed in the successor.
+No failed target or noisy timing was retried.

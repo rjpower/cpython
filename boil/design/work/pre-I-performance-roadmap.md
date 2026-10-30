@@ -231,12 +231,17 @@ Neither finding alone establishes the observed failure cause. Preserve the
 red run, diagnose once, repair the actual contract and qualify affected work;
 no retry-to-green or new exclusion follows. H3 union e9a1 has owned Py_STATS/O3/Og
 builds, real producer/reader checks and eight bounded smoke/H3/stale passes;
-three integration jobs await shared perf-map serialization. In parallel,
+three integration jobs subsequently pass on e9. The next combined source5a45
+adds the source-reviewed reader/test and Unicode ownership repairs plusa285;
+one fresh O3/O1-debug ladder will qualify that actual source. In parallel,
 [finalizer-order eligibility](pre-I-finalizer-order-proposal.md) is implemented
 and [semantically checked](pre-I-finalizer-order-checkpoint.md) on O3 and Og
 kill at a285 in isolation: avoid DFS roots/order entries for finalizers that
 cannot run, retaining dead transit traversal. The copied reversal negative
-fails its intended assertion. Matched timing remains due. This addresses avoidable death-pipeline work,
+fails its intended assertion. The later matched four-row diagnostic gives
+parent/candidate ratios1.250/1.055/1.070/1.033, with all40 values retained and
+known qualification/layout/sample limits. It supports carrying this small
+change into broad qualification; it does not refresh the upstream score. This addresses avoidable death-pipeline work,
 separately from old-live scanning. The
 [generations direction](7-nonmoving-generations-design.md) clears review but
 requires the closed store/constructor ledger and concrete promotion/commit

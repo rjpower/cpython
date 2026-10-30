@@ -96,11 +96,11 @@
 #   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
-#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_ARGS slots, tstate, frame, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
-#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_ARGS slots, tstate, frame, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
 #if _Py_TAIL_CALL_INTERP
@@ -121,10 +121,9 @@
     typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
 #   define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
-/* A handler finds the frame in the thread state, which is not one of the
- * registers that the handlers pass on. */
-#   define TAIL_CALL_LOAD_FRAME() \
-        _PyInterpreterFrame *frame = tstate->current_frame
+/* Direct label and predicted transfers also check the incoming frame,
+ * before the entry can publish an instruction position through it. */
+#   define TAIL_CALL_ASSERT_FRAME() assert(frame == tstate->current_frame)
 
 #   define DISPATCH_GOTO() \
         do { \
@@ -137,12 +136,12 @@
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, frame, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, frame, this_instr, TAIL_CALL_OPERAND_ARGS); \
             } while (0)
 #   endif
 #    define LABEL(name) TARGET(name)
@@ -152,14 +151,14 @@
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
-#  define TAIL_CALL_LOAD_FRAME() ((void)0)
+#  define TAIL_CALL_ASSERT_FRAME() ((void)0)
 #else
 #  define TARGET(op) case op: TARGET_##op:
 #  define DISPATCH_GOTO() goto dispatch_opcode
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
-#  define TAIL_CALL_LOAD_FRAME() ((void)0)
+#  define TAIL_CALL_ASSERT_FRAME() ((void)0)
 #endif
 
 /* Dispatch loads the word of the instruction into ir_word and takes the
@@ -217,7 +216,7 @@ ir_check_field(uintptr_t field, uint64_t expected)
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
 #ifdef Py_DEBUG
-/* The tail-call handlers find the frame in tstate->current_frame. */
+/* Dispatch must forward the frame published in the thread state. */
 #define PRE_DISPATCH_GOTO() \
     assert(frame == tstate->current_frame); \
     if (frame->lltrace >= 5) { \

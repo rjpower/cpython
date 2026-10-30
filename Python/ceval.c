@@ -1314,9 +1314,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         slots = _PyFrame_Slots(frame);
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_error(slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
+        return _TAIL_CALL_error(slots, tstate, frame, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
 #   else
-        return _TAIL_CALL_error(slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS);
+        return _TAIL_CALL_error(slots, tstate, frame, next_instr, TAIL_CALL_NO_OPERANDS);
 #   endif
 #else
         goto error;
@@ -1325,9 +1325,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
 #if _Py_TAIL_CALL_INTERP
 #   if Py_STATS
-        return _TAIL_CALL_start_frame(NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS, lastopcode);
+        return _TAIL_CALL_start_frame(NULL, tstate, frame, NULL, TAIL_CALL_NO_OPERANDS, lastopcode);
 #   else
-        return _TAIL_CALL_start_frame(NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS);
+        return _TAIL_CALL_start_frame(NULL, tstate, frame, NULL, TAIL_CALL_NO_OPERANDS);
 #   endif
 #else
     goto start_frame;

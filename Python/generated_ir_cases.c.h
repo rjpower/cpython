@@ -17,7 +17,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_ADD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -85,7 +85,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_ADD_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -135,7 +135,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_ADD_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -203,7 +203,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_ADD_UNICODE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -280,7 +280,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_AND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -348,7 +348,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_AND_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -408,7 +408,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_EXTEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -467,7 +467,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_FLOOR_DIVIDE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -535,7 +535,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -610,7 +610,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_ADD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -678,7 +678,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_ADD_UNICODE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -752,7 +752,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_AND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -820,7 +820,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_FLOOR_DIVIDE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -888,7 +888,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_LSHIFT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -956,7 +956,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_MATRIX_MULTIPLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1024,7 +1024,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_MULTIPLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1092,7 +1092,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_OR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1160,7 +1160,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_POWER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1228,7 +1228,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_REMAINDER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1296,7 +1296,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_RSHIFT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1364,7 +1364,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_SUBTRACT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1432,7 +1432,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_TRUE_DIVIDE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1500,7 +1500,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_INPLACE_XOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1568,7 +1568,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_LSHIFT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1636,7 +1636,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_LSHIFT_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1713,7 +1713,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_MATRIX_MULTIPLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1781,7 +1781,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_MULTIPLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1849,7 +1849,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_MULTIPLY_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1899,7 +1899,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_MULTIPLY_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1967,7 +1967,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_OR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2035,7 +2035,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_OR_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2095,7 +2095,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_POWER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2163,7 +2163,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_REMAINDER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2231,7 +2231,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_REMAINDER_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2304,7 +2304,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_RSHIFT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2372,7 +2372,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_RSHIFT_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2438,7 +2438,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2506,7 +2506,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_DICT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2571,7 +2571,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_GETITEM;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2650,7 +2650,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2725,7 +2725,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_LIST_SLICE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2803,7 +2803,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_STR_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2885,7 +2885,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_TUPLE_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2968,7 +2968,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBSCR_USTR_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3049,7 +3049,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBTRACT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3117,7 +3117,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBTRACT_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3167,7 +3167,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_SUBTRACT_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3235,7 +3235,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_TRUEDIV_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3289,7 +3289,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_TRUE_DIVIDE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3357,7 +3357,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_XOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3425,7 +3425,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_OP_XOR_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3485,7 +3485,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BINARY_SLICE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3527,7 +3527,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_INTERPOLATION;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3616,7 +3616,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3645,7 +3645,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_MAP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3675,7 +3675,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_SET;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3719,7 +3719,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_SLICE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3750,7 +3750,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_STRING;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3780,7 +3780,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_TEMPLATE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3856,7 +3856,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = BUILD_TUPLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3885,7 +3885,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CACHE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -3901,7 +3901,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -4047,7 +4047,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_ALLOC_AND_ENTER_INIT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4181,7 +4181,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BOUND_METHOD_EXACT_ARGS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4340,7 +4340,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BOUND_METHOD_GENERAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4485,7 +4485,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BUILTIN_CLASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4569,7 +4569,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BUILTIN_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4654,7 +4654,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BUILTIN_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4735,7 +4735,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_BUILTIN_O;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -4840,7 +4840,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_EX_NON_PY_GENERAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -5003,7 +5003,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_EX_PY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -5187,7 +5187,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_FUNCTION_EX;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -5590,7 +5590,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_INTRINSIC_1;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -5626,7 +5626,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_INTRINSIC_2;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -5721,7 +5721,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_ISINSTANCE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -5792,7 +5792,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -5970,7 +5970,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW_BOUND_METHOD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6138,7 +6138,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW_NON_PY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6216,7 +6216,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW_PY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6342,7 +6342,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_LEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6448,7 +6448,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_LIST_APPEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6551,7 +6551,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_METHOD_DESCRIPTOR_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6656,7 +6656,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6762,7 +6762,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_METHOD_DESCRIPTOR_NOARGS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -6882,7 +6882,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_METHOD_DESCRIPTOR_O;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7009,7 +7009,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_NON_PY_GENERAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7085,7 +7085,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_PY_EXACT_ARGS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7213,7 +7213,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_PY_GENERAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7315,7 +7315,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_STR_1;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7393,7 +7393,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_TUPLE_1;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7491,7 +7491,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_TYPE_1;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7556,7 +7556,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CHECK_EG_MATCH;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7682,7 +7682,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CHECK_EXC_MATCH;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7771,7 +7771,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CLEANUP_THROW;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7854,7 +7854,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COMPARE_OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -7915,7 +7915,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COMPARE_OP_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -7980,7 +7980,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COMPARE_OP_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8045,7 +8045,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COMPARE_OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8105,7 +8105,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COMPARE_OP_STR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8188,7 +8188,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CONTAINS_OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -8250,7 +8250,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CONTAINS_OP_DICT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8317,7 +8317,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CONTAINS_OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8378,7 +8378,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CONTAINS_OP_SET;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8445,7 +8445,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = CONVERT_VALUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8474,7 +8474,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COPY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8497,7 +8497,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = COPY_FREE_VARS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8522,7 +8522,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = DELETE_DEREF;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8544,7 +8544,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = DELETE_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8569,7 +8569,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = DELETE_SUBSCR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8595,7 +8595,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = DICT_MERGE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8701,7 +8701,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = DICT_UPDATE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8805,7 +8805,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = END_ASYNC_FOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8876,7 +8876,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = END_FOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8893,7 +8893,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = END_SEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8921,7 +8921,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = EXIT_INIT_CHECK;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8963,7 +8963,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = EXTENDED_ARG;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -8984,7 +8984,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FORMAT_SIMPLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9013,7 +9013,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FORMAT_WITH_SPEC;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9042,7 +9042,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -9097,7 +9097,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER_GEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9163,7 +9163,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9219,7 +9219,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER_RANGE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9280,7 +9280,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER_TUPLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9339,7 +9339,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = FOR_ITER_VIRTUAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9390,7 +9390,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_AITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9473,7 +9473,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_ANEXT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9515,7 +9515,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_AWAITABLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9561,7 +9561,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_ITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -9608,7 +9608,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_ITER_SELF;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9645,7 +9645,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_ITER_VIRTUAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9682,7 +9682,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = GET_LEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9735,7 +9735,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = IMPORT_FROM;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9795,7 +9795,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = IMPORT_NAME;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -9901,7 +9901,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_CALL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10129,7 +10129,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_CALL_FUNCTION_EX;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10515,7 +10515,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_CALL_KW;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10766,7 +10766,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_END_ASYNC_FOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10845,7 +10845,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_END_FOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10888,7 +10888,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_END_SEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -10967,7 +10967,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_FOR_ITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11005,7 +11005,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_INSTRUCTION;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11033,7 +11033,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11060,7 +11060,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_JUMP_FORWARD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11077,7 +11077,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11109,7 +11109,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11141,7 +11141,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_LINE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const prev_instr = frame->instr_ptr;
             _PyIRWord* const this_instr = next_instr;
@@ -11182,7 +11182,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11442,7 +11442,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11701,7 +11701,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_NOT_TAKEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const prev_instr = frame->instr_ptr;
             _PyIRWord* const this_instr = next_instr;
@@ -11718,7 +11718,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_POP_ITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const prev_instr = frame->instr_ptr;
             _PyIRWord* const this_instr = next_instr;
@@ -11742,7 +11742,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_POP_JUMP_IF_FALSE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11792,7 +11792,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11819,7 +11819,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11846,7 +11846,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_POP_JUMP_IF_TRUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11896,7 +11896,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_RESUME;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -11951,7 +11951,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_RETURN_VALUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12027,7 +12027,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INSTRUMENTED_YIELD_VALUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12123,7 +12123,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = INTERPRETER_EXIT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12148,7 +12148,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = IR_JUMP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12164,7 +12164,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = IS_OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12208,7 +12208,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12236,7 +12236,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = JUMP_BACKWARD_NO_INTERRUPT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12254,7 +12254,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = JUMP_FORWARD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12271,7 +12271,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12304,7 +12304,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12337,7 +12337,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LIST_APPEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12366,7 +12366,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LIST_EXTEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12443,7 +12443,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -12500,7 +12500,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_CLASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12558,7 +12558,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12627,7 +12627,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12718,7 +12718,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12789,7 +12789,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_METHOD_SHAPE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12850,7 +12850,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_MODULE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12918,7 +12918,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -12974,7 +12974,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_NONDESCRIPTOR_SHAPE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13030,7 +13030,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_PROPERTY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13122,7 +13122,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13194,7 +13194,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SHAPE_POLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13255,7 +13255,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_SLOT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13321,7 +13321,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13435,7 +13435,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_BUILD_CLASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13462,7 +13462,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_COMMON_CONSTANT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13482,7 +13482,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_CONST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -13502,7 +13502,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_CONST_INLINE_FLOAT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13522,7 +13522,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_CONST_INLINE_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13542,7 +13542,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_DEREF;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13567,7 +13567,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13587,7 +13587,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST_AND_CLEAR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13607,7 +13607,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST_BORROW;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13627,7 +13627,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13652,7 +13652,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST_CHECK;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13679,7 +13679,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FAST_LOAD_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13704,7 +13704,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FROM_DICT_OR_DEREF;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13756,7 +13756,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_FROM_DICT_OR_GLOBALS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13802,7 +13802,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_GLOBAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -13852,7 +13852,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_GLOBAL_BUILTIN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13922,7 +13922,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_GLOBAL_MODULE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -13976,7 +13976,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_GLOBAL_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14025,7 +14025,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_LOCALS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14048,7 +14048,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_NAME;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14071,7 +14071,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SMALL_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -14093,7 +14093,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SMALL_INT_INLINE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14116,7 +14116,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SPECIAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14167,7 +14167,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SUPER_ATTR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -14442,7 +14442,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SUPER_ATTR_ATTR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14574,7 +14574,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SUPER_ATTR_METHOD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14674,7 +14674,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = LOAD_SUPER_ATTR_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14948,7 +14948,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MAKE_CELL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -14971,7 +14971,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MAKE_FUNCTION;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15011,7 +15011,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MAP_ADD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15046,7 +15046,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MATCH_CLASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15193,7 +15193,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MATCH_KEYS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15264,7 +15264,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MATCH_MAPPING;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15284,7 +15284,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = MATCH_SEQUENCE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15304,7 +15304,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = NOP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15318,7 +15318,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = NOT_TAKEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15332,7 +15332,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_EXCEPT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15364,7 +15364,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_ITER;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15386,7 +15386,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -15453,7 +15453,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15517,7 +15517,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_BOOL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15560,7 +15560,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15622,7 +15622,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15687,7 +15687,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15732,7 +15732,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_FALSE_STR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15794,7 +15794,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15838,7 +15838,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -15882,7 +15882,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -15949,7 +15949,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16013,7 +16013,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_BOOL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16056,7 +16056,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16118,7 +16118,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16183,7 +16183,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16228,7 +16228,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_JUMP_IF_TRUE_STR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16290,7 +16290,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = POP_TOP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16308,7 +16308,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = PUSH_EXC_INFO;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16352,7 +16352,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = PUSH_NULL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16369,7 +16369,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RAISE_VARARGS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16411,7 +16411,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RERAISE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16467,7 +16467,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RESERVED;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16483,7 +16483,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RESUME;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16525,7 +16525,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RETURN_GENERATOR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16566,7 +16566,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = RETURN_VALUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16609,7 +16609,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SEND;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -16754,7 +16754,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SEND_ASYNC_GEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16834,7 +16834,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SEND_GEN;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16913,7 +16913,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SEND_VIRTUAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -16996,7 +16996,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SETUP_ANNOTATIONS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17035,7 +17035,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SET_ADD;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17064,7 +17064,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SET_FUNCTION_ATTRIBUTE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17099,7 +17099,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SET_UPDATE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17158,7 +17158,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -17208,7 +17208,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17257,7 +17257,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_SHAPE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17329,7 +17329,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_SHAPE_POLY;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17395,7 +17395,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_SHAPE_TRANSITION;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17469,7 +17469,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_SLOT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17526,7 +17526,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17637,7 +17637,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_DEREF;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17658,7 +17658,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17689,7 +17689,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_FAST_LOAD_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17714,7 +17714,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_FAST_STORE_FAST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17740,7 +17740,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_GLOBAL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17777,7 +17777,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_NAME;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17807,7 +17807,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_SLICE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17850,7 +17850,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_SUBSCR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -17898,7 +17898,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_SUBSCR_DICT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -17962,7 +17962,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = STORE_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18050,7 +18050,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = SWAP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18077,7 +18077,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -18129,7 +18129,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_ALWAYS_TRUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18178,7 +18178,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_BOOL;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18200,7 +18200,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_INT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18246,7 +18246,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18295,7 +18295,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_NONE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18321,7 +18321,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = TO_BOOL_STR;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18367,7 +18367,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNARY_INVERT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18400,7 +18400,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNARY_NEGATIVE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18450,7 +18450,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNARY_NOT;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18475,7 +18475,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNPACK_EX;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18523,7 +18523,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNPACK_SEQUENCE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -18591,7 +18591,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNPACK_SEQUENCE_LIST;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18654,7 +18654,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNPACK_SEQUENCE_TUPLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18708,7 +18708,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18762,7 +18762,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = WITH_EXCEPT_START;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18877,7 +18877,7 @@
             #if _Py_TAIL_CALL_INTERP
             int opcode = YIELD_VALUE;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -18956,7 +18956,7 @@ JUMP_TO_LABEL(error);
 
         LABEL(error)
         {
-            TAIL_CALL_LOAD_FRAME();
+            TAIL_CALL_ASSERT_FRAME();
             {
                 #ifdef NDEBUG
                 if (!_PyErr_Occurred(tstate)) {
@@ -18980,7 +18980,7 @@ JUMP_TO_LABEL(error);
 
         LABEL(exception_unwind)
         {
-            TAIL_CALL_LOAD_FRAME();
+            TAIL_CALL_ASSERT_FRAME();
             {
                 int offset = _PyFrame_InstrOffset(frame, next_instr - 1);
                 int exc_slot, handler, lasti;
@@ -19020,7 +19020,7 @@ JUMP_TO_LABEL(error);
 
         LABEL(exit_unwind)
         {
-            TAIL_CALL_LOAD_FRAME();
+            TAIL_CALL_ASSERT_FRAME();
             {
                 assert(_PyErr_Occurred(tstate));
                 DTRACE_FUNCTION_RETURN();
@@ -19029,7 +19029,7 @@ JUMP_TO_LABEL(error);
 
         LABEL(exit_unwind_notrace)
         {
-            TAIL_CALL_LOAD_FRAME();
+            TAIL_CALL_ASSERT_FRAME();
             {
                 assert(_PyErr_Occurred(tstate));
                 _Py_LeaveRecursiveCallPy(tstate);
@@ -19050,7 +19050,7 @@ JUMP_TO_LABEL(error);
 
         LABEL(start_frame)
         {
-            TAIL_CALL_LOAD_FRAME();
+            TAIL_CALL_ASSERT_FRAME();
             {
                 int too_deep = _Py_EnterRecursivePy(tstate);
                 if (too_deep) {

@@ -1809,7 +1809,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
-    out.emit("_PyInterpreterFrame *frame = tstate->current_frame;\n")
+    out.emit("TAIL_CALL_ASSERT_FRAME();\n")
     out.emit(f"#endif\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -1901,7 +1901,7 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
     for name, label in analysis.labels.items():
         emitter.emit(f"LABEL({name})\n")
         emitter.emit("{\n")
-        emitter.emit("TAIL_CALL_LOAD_FRAME();\n")
+        emitter.emit("TAIL_CALL_ASSERT_FRAME();\n")
         storage = Storage(IRStack(), [], [], 0, False)
         if label.spilled:
             storage.spilled = 1
@@ -1985,7 +1985,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("\n")
     out.emit(function_proto("UNKNOWN_OPCODE"))
     out.emit(" {\n")
-    out.emit("TAIL_CALL_LOAD_FRAME();\n")
+    out.emit("TAIL_CALL_ASSERT_FRAME();\n")
     out.emit("int opcode = IR_HANDLER(*next_instr);\n")
     out.emit(UNKNOWN_OPCODE_HANDLER)
     out.emit("}\n")

@@ -442,6 +442,39 @@ class TestIRCases(unittest.TestCase):
                     if inst.is_target and name == inst.name:
                         self.assertLess(body.index(counter), body.index(f"IR_PREDICTED({name});"))
 
+    def test_tail_call_frame_entries(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        out = io.StringIO()
+        ir_generator.generate_ir(
+            [ir_generator.DEFAULT_INPUT], analysis, domain, out, False)
+        instructions = out.getvalue().split(ir_generator.INSTRUCTION_END_MARKER)[0]
+        for name in ir_generator.handler_instructions(analysis, domain):
+            with self.subTest(handler=name):
+                body = self.handler(instructions, name)
+                self.assertEqual(body.count("TAIL_CALL_ASSERT_FRAME();"), 1)
+                self.assertNotIn("_PyInterpreterFrame *frame = tstate->current_frame", body)
+                first_deref = body.find("frame->")
+                if first_deref >= 0:
+                    self.assertLess(body.index("TAIL_CALL_ASSERT_FRAME();"), first_deref)
+
+        labels = out.getvalue().split(ir_generator.LABEL_START_MARKER)[1]
+        lines = [line.strip() for line in labels.splitlines() if line.strip()]
+        for name in analysis.labels:
+            with self.subTest(label=name):
+                index = lines.index(f"LABEL({name})")
+                self.assertEqual(lines[index + 1:index + 3],
+                                 ["{", "TAIL_CALL_ASSERT_FRAME();"])
+
+        targets = io.StringIO()
+        ir_generator.generate_ir_targets(
+            [ir_generator.DEFAULT_INPUT], analysis, domain, targets)
+        unknown = targets.getvalue().split(
+            ir_generator.function_proto("UNKNOWN_OPCODE"), 1)[1]
+        lines = [line.strip() for line in unknown.splitlines() if line.strip()]
+        self.assertEqual(lines[:2], ["{", "TAIL_CALL_ASSERT_FRAME();"])
+        self.assertNotIn("TAIL_CALL_LOAD_FRAME", targets.getvalue())
+
     def test_register_style(self):
         # Inputs that are only used as objects are read through their
         # fields.  They stay in their slots until the handler leaves, so the
@@ -463,7 +496,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -691,7 +724,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -843,7 +876,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
@@ -889,7 +922,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -934,7 +967,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -993,7 +1026,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1023,7 +1056,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -1101,7 +1134,7 @@ class TestIRCases(unittest.TestCase):
             #if _Py_TAIL_CALL_INTERP
             int opcode = IR_PASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
+            TAIL_CALL_ASSERT_FRAME();
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;

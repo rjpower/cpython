@@ -1212,10 +1212,6 @@ static void
 memory_dealloc(PyObject *_self)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    /* A consumer that holds an export refers to the view, so if the view
-       is dead the consumer is too.  The sweep may reach the view first;
-       the consumer's release then skips the swept view. */
-    self->exports = 0;
     assert(get_exports(self) == 0);
     _PyObject_GC_UNTRACK(self);
     _memory_release(self);

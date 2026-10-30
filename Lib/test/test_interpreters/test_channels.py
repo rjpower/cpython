@@ -1,3 +1,4 @@
+import gc
 import pickle
 import threading
 from textwrap import dedent
@@ -443,6 +444,99 @@ class TestSendRecv(TestBase):
         self.assertEqual(obj, b'spamspamspam')
         del obj
         support.gc_collect()
+
+    def test_buffer_metadata_and_independent_release(self):
+        rch, sch = channels.create()
+        for readonly in (False, True):
+            for first in ('sent', 'received'):
+                with self.subTest(readonly=readonly, first=first):
+                    backing = bytearray(range(12))
+                    with memoryview(backing) as base, base[1::2] as sliced:
+                        sent = sliced.toreadonly() if readonly else sliced[:]
+                        with sent:
+                            sch.send_buffer_nowait(sent)
+                            with rch.recv_nowait() as received:
+                                self.assertIsNot(received, sent)
+                                self.assertIs(received.obj, backing)
+                                for attr in ('format', 'shape', 'strides',
+                                             'itemsize', 'ndim', 'nbytes',
+                                             'readonly'):
+                                    self.assertEqual(getattr(received, attr),
+                                                     getattr(sent, attr))
+                                if first == 'sent':
+                                    sent.release()
+                                    backing[3] = 42
+                                    self.assertEqual(received[1], 42)
+                                else:
+                                    received.release()
+                                    backing[3] = 42
+                                    self.assertEqual(sent[1], 42)
+                    # send_buffer made its own temporary view, now garbage.
+                    support.gc_collect()
+                    backing.extend(b'x')
+
+    @support.nomemtest
+    def test_buffer_receive_failure_disposes_acquisition(self):
+        import _testcapi
+        rch, sch = channels.create()
+        # Associate this receiver before arming the allocation failure. The
+        # native ChannelID converter reads its field without integer boxing.
+        cid = rch._id
+        with self.assertRaises(channels.ChannelEmptyError):
+            rch.recv_nowait()
+        backing = bytearray(b'abc')
+        with memoryview(backing) as sent:
+            sch.send_buffer_nowait(sent)
+            with support.disable_gc(), self.assertRaises(MemoryError):
+                _testcapi.call_with_nomemory(0, 1, _channels.recv, cid)
+        with self.assertRaises(channels.ChannelEmptyError):
+            rch.recv_nowait()
+        support.gc_collect()
+        backing.extend(b'd')
+
+    def test_buffer_resurrection_preserves_acquisition(self):
+        rch, sch = channels.create()
+        saved, released = [], []
+
+        class Exporter:
+            def __init__(self):
+                self.data = bytearray(b'channel payload')
+            def __buffer__(self, flags):
+                return memoryview(self.data)
+            def __release_buffer__(self, view):
+                released.append(view.tobytes())
+
+        class Holder:
+            def __del__(self):
+                saved.append(self.view)
+
+        def make_cycle():
+            with memoryview(Exporter()) as sent:
+                sch.send_buffer_nowait(sent)
+                holder = Holder()
+                holder.view = rch.recv_nowait()
+                holder.cycle = holder
+
+        with support.disable_gc():
+            make_cycle()
+            support.gc_collect()
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(released, [])
+            self.assertEqual(saved[0].tobytes(), b'channel payload')
+            gc.collect()
+            self.assertEqual(released, [])
+            saved.pop().release()
+            support.gc_collect()
+            self.assertEqual(released, [b'channel payload'])
+
+    def test_buffer_discard_releases_acquisition(self):
+        rch, sch = channels.create()
+        backing = bytearray(b'abc')
+        with memoryview(backing) as sent:
+            sch.send_buffer_nowait(sent)
+            _channels.destroy(rch._id)
+        support.gc_collect()
+        backing.extend(b'd')
 
     @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter(self):

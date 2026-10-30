@@ -4279,12 +4279,44 @@ class SingleDrainerTests(unittest.TestCase):
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 @unittest.skipIf(_testcapi is None, "requires _testcapi")
 class BufferLifetimeTests(unittest.TestCase):
+    def test_memoryview_export_blocker_contract(self):
+        _queue_child("""
+            block = _testinternalcapi.gc_memoryview_export_blocker
+            view = memoryview(b"abc")
+            for args, error in (((b"abc", True), TypeError),
+                                ((view, 1), TypeError),
+                                ((view, False), ValueError)):
+                try:
+                    block(*args)
+                except error:
+                    pass
+                else:
+                    raise AssertionError(('invalid blocker request', args))
+            block(view, True)
+            try:
+                for operation, error in ((lambda: block(view, True), ValueError),
+                                         (view.release, BufferError)):
+                    try:
+                        operation()
+                    except error:
+                        pass
+                    else:
+                        raise AssertionError('outstanding export ignored')
+            finally:
+                block(view, False)
+            view.release()
+            try:
+                block(view, True)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('released view accepted a blocker')
+        """)
+
     def test_unready_memoryview_retains_closure_and_recovers_oom(self):
-        import_helper.import_module('_testbuffer')
         for fail in (False, True):
             with self.subTest(fail=fail):
                 _queue_child(f"fail = {fail!r}\n" + textwrap.dedent("""
-                    from _testbuffer import ndarray
                     gc.disable()
                     events = []
                     class Exporter:
@@ -4295,27 +4327,214 @@ class BufferLifetimeTests(unittest.TestCase):
                     gc.collect()
                     def make_cycle():
                         obj = Exporter()
-                        obj.holder = ndarray(memoryview(obj))
+                        obj.view = memoryview(obj)
+                        _testinternalcapi.gc_memoryview_export_blocker(
+                            obj.view, True)
                         return weakref.ref(obj)
                     ref = make_cycle()
-                    if fail:
-                        _testinternalcapi.gc_fail_work_alloc(1)
-                        assert gc.collect() == 0, 'retention OOM swept objects'
-                        assert _testinternalcapi.gc_fail_work_alloc(0) == 0, (
-                            'retention OOM did not fire')
-                    gc.collect()
-                    obj = ref()
-                    assert obj is not None, 'unready exporter closure was lost'
-                    assert events == [], events
-                    # This unported native holder has no outward exports or
-                    # transformed metadata.  Drop its reverse edge explicitly.
-                    assert obj.holder[0] == ord('a')
-                    obj.holder = None
-                    del obj
+                    try:
+                        if fail:
+                            _testinternalcapi.gc_fail_work_alloc(1)
+                            assert gc.collect() == 0, 'retention OOM swept objects'
+                            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, (
+                                'retention OOM did not fire')
+                        gc.collect()
+                        obj = ref()
+                        assert obj is not None, 'unready exporter closure was lost'
+                        assert events == [], events
+                        assert obj.view.tobytes() == b"abc"
+                        try:
+                            obj.view.release()
+                        except BufferError:
+                            pass
+                        else:
+                            raise AssertionError('outstanding export ignored')
+                    finally:
+                        _testinternalcapi.gc_fail_work_alloc(0)
+                        retained = ref()
+                        view = retained.view if retained is not None else None
+                        if view is not None:
+                            _testinternalcapi.gc_memoryview_export_blocker(
+                                view, False)
+                    # The seam is not a real acquisition/root.  With its one
+                    # synthetic count restored, release the actual view normally.
+                    assert view is not None, 'unready view was lost'
+                    view.release()
+                    del obj, view, retained
                     for _ in range(4):
                         gc.collect()
                     assert events == [b"abc"], events
                 """), PYTHON_GCSTRESS="")
+
+    def test_ndarray_cycle_release_and_resurrection(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            import _testbuffer
+            gc.disable()
+            events, errors, saved = [], [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    nd = self.holder
+                    readers = [lambda: nd[0], lambda: nd[:], nd.tolist,
+                               nd.tobytes, lambda: memoryview(nd),
+                               nd.memoryview_from_buffer, lambda: hash(nd),
+                               lambda: _testbuffer.is_contiguous(nd, 'C'),
+                               lambda: nd.push([1], [1]), nd.pop,
+                               nd.add_suboffsets]
+                    readers += [lambda name=name: getattr(nd, name) for name in
+                                ('flags', 'offset', 'obj', 'nbytes', 'readonly',
+                                 'itemsize', 'format', 'ndim', 'shape', 'strides',
+                                 'suboffsets', 'c_contiguous', 'f_contiguous',
+                                 'contiguous')]
+                    readable = []
+                    for index, read in enumerate(readers):
+                        try:
+                            read()
+                        except ValueError as exc:
+                            assert 'inactive ndarray' in str(exc), str(exc)
+                        else:
+                            readable.append(index)
+                    events.append((view.tobytes(), readable))
+                    saved.append(nd)
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            def make_cycle():
+                obj = Exporter()
+                obj.holder = _testbuffer.ndarray(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(b"abc", [])], (
+                'released ndarray remained readable', events)
+            assert errors == [ValueError], errors
+            assert len(saved) == 1
+            try:
+                saved[0].tobytes()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('resurrected ndarray regained acquisition')
+            for _ in range(4):
+                gc.collect()
+            assert events == [(b"abc", [])], events
+            backing.extend(b"d")
+        """)
+
+    def test_ndarray_transformed_exports_and_original_view(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            import _testbuffer
+            gc.disable()
+            events = []
+            backing = bytearray(range(6))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing).cast('B', shape=[2, 3])
+                def __release_buffer__(self, view):
+                    try:
+                        self.out.tobytes()
+                    except ValueError:
+                        closed = True
+                    else:
+                        closed = False
+                    events.append((closed, view.tobytes(), view.shape,
+                                   view.strides))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                base = _testbuffer.ndarray(obj)
+                obj.holder = base[:, ::2]
+                obj.holder.add_suboffsets()
+                obj.out = memoryview(obj.holder)
+                assert obj.out.tobytes() == bytes([0, 2, 3, 5])
+                assert obj.out.shape == (2, 2)
+                assert obj.holder[1].tobytes() == bytes([3, 5])
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(True, bytes(range(6)), (2, 3), (3, 1))], events
+            backing.extend(b"d")
+            backing = bytearray(range(6))
+
+            # Releasing several outward leases balances the consumer's counts;
+            # a still-live lease continues to own both data and transformed arrays.
+            obj = Exporter()
+            obj.holder = _testbuffer.ndarray(obj)[:, ::2]
+            obj.out = memoryview(obj.holder)
+            other = memoryview(obj.holder)
+            assert other.tobytes() == bytes([0, 2, 3, 5])
+            obj.out.release()
+            del obj
+            gc.collect()
+            assert len(events) == 1, events
+            assert other.tobytes() == bytes([0, 2, 3, 5])
+            other.release()
+            del other
+            for _ in range(4):
+                gc.collect()
+            assert events == [(True, bytes(range(6)), (2, 3), (3, 1))] * 2, events
+        """)
+
+    def test_ndarray_one_shot_and_failed_initialization(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            from _testbuffer import ndarray
+            gc.disable()
+            for nd in (ndarray(b"abc"), ndarray([97, 98, 99], [3])):
+                for exported in (False, True):
+                    view = memoryview(nd) if exported else None
+                    try:
+                        nd.__init__(b"replacement")
+                    except ValueError as exc:
+                        assert 'cannot be reinitialized' in str(exc)
+                    else:
+                        raise AssertionError('ndarray reinitialization accepted')
+                    assert nd.tobytes() == b"abc"
+                    if view is not None:
+                        assert view.tobytes() == b"abc"
+                        view.release()
+            nd = ndarray.__new__(ndarray)
+            class Failed(Exception):
+                pass
+            class BadExporter:
+                def __buffer__(self, flags):
+                    raise Failed
+            try:
+                nd.__init__(BadExporter())
+            except Failed:
+                pass
+            else:
+                raise AssertionError('failed acquisition accepted')
+            try:
+                nd.tobytes()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('uninitialized ndarray readable')
+            calls = []
+            class Exporter:
+                def __buffer__(self, flags):
+                    try:
+                        nd.__init__(b"nested")
+                    except ValueError:
+                        calls.append('init blocked')
+                    else:
+                        raise AssertionError('recursive initialization accepted')
+                    try:
+                        nd.tobytes()
+                    except ValueError:
+                        calls.append('read blocked')
+                    else:
+                        raise AssertionError('partial ndarray readable')
+                    return memoryview(b"abc")
+            nd.__init__(Exporter())
+            assert calls == ['init blocked', 'read blocked'], calls
+            assert nd.tobytes() == b"abc"
+        """)
 
     def test_picklebuffer_cycle_release(self):
         _queue_child("""

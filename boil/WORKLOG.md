@@ -4386,3 +4386,30 @@ validated and remaining work; detailed historical receipts stay in WORKLOG
 and linked records. The measured upstream diagnostic remains0.828243; four-row
 patch timings remain1.250/1.055/1.070/1.033 with their stated limits. No new
 upstream score or target claim. Next hourly documentation/status19:50 PDT.
+
+### 19:07 PDT: sanitizer and Clang baseline checks complete
+
+Both actual5a45 ASan transactions pass and verify after cleanup. ASan16
+reports3,983 tests/92 skips,25,373 collections, zero fallback and6,651
+report-only unpinned hits; result2ca504c8. Unicode7 reports1,037/24,
+1,176 collections, zero fallback and6report-only unpinned; resulte8e8188e.
+Root independently verifies both result/cleanup records and artifact hashes.
+ASan16 finishes within the original600-second module deadline; no timeout
+extension or target retry occurs. Existing allocator/remote filters remain.
+
+Clang goto and tail each complete the103-case bounded selection and existing
+stale6x100 checks. Goto has the exact one tail-only skip; tail has none and
+executes precise handler ownership. Actual modeoff/N0 and post-cleanup guards
+pass, with zero fallback; combined rows report one unpinned hit each and
+strict stale rows zero. These are bounded successes, not full qualification.
+The direct native-window handoff starts release-full, then debug-full,
+debug-kill-full and the two stress11 profiles, once each and stop on failure.
+The existing final closure helper is reviewed and conditionally authorized
+only after all seven current broad/ASan profiles pass and clean up.
+
+H2's inert scalar decoder clears independent source review and coordinator
+inspection. It covers27 pristine handlers with126 explicitly unsupported;
+temporary-slot effects are not complete semantics or a purity model.
+Boundary/property negatives and coherent native validation are next; no
+constructor, root reader or clearing changes are active. H1 native build
+preparation follows its validated baselines. No new performance score exists.

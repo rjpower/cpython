@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 18:50 PDT. Last qualified runtime merge is 052d8342e56;
+revised 2026-10-29 19:07 PDT. Last qualified runtime merge is 052d8342e56;
 local f2a5 GC predecessor is held; combined successor5a45f9bb6a7
 is undergoing fresh O3/O1-debug qualification in boil-pre-i-union. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-29 18:50 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-29 19:07 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -87,10 +87,10 @@ as a qualified runtime.
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 | Fresh GCC O3, O1 Py_DEBUG and ASan builds complete. All19 affected jobs pass with zero observed fallback; skip and report-only unpinned counts remain explicit | ASan16 plus Unicode consumers, three full suites, two stress11 sets, gate3 closure and independent final review |
+| GC/IR integration5a45 | Fresh GCC O3, O1 Py_DEBUG and ASan builds complete. All19 affected jobs pass. At19:07, ASan16 passes3,983/92skips and Unicode7 passes1,037/24skips; zero observed fallback, report-only unpinned counts retained | Three full suites (release now running), two stress11 sets, gate3 closure and independent final review |
 | H3 handler domain, monitoring storage and statistics | Included in5a45. Actual Py_STATS producer/reader checks pass on predecessor e9; its11 bounded jobs pass. Fresh5a45 H3 checks pass1,376 cases in each of three modes | Actual combined broad qualification; later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Matched Clang21 computed-goto and preserve_none tail baselines built on5a45. Frame-argument patch committed62456cc on isolatedboil/h1-frame | Baseline runtime/root validation, matched elapsed comparison, H1 native/CFI/spill/semantic validation; no H1 speedup measured |
-| H2 physical liveness/root maps | Inert effect/decoder producer work started inboil/h2-root-effects, preserving current clearing and root readers | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation |
+| H1 dispatch/frame passing | Matched Clang21 computed-goto and preserve_none tail baselines built on5a45; both bounded runtime selections and stale-root checks succeed. Tail ownership case executes. Frame-argument patch committed62456cc on isolatedboil/h1-frame | Matched elapsed comparison, H1 native/CFI/spill/semantic validation; no H1 speedup measured |
+| H2 physical liveness/root maps | Inert scalar-effect decoder passes source review:27 pristine handlers supported,126 explicitly unsupported; current clearing and root readers unchanged | Native decoder validation, complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
 

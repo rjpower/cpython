@@ -233,7 +233,13 @@ no retry-to-green or new exclusion follows. H3 union e9a1 has owned Py_STATS/O3/
 builds, real producer/reader checks and eight bounded smoke/H3/stale passes;
 three integration jobs subsequently pass on e9. The next combined source5a45
 adds the source-reviewed reader/test and Unicode ownership repairs plusa285;
-one fresh O3/O1-debug ladder will qualify that actual source. In parallel,
+one fresh O3/O1-debug ladder qualifies that actual source. At19:07, all19
+affected jobs and both ASan groups pass, with zero observed fallback.
+Matched Clang goto/tail bounded runtime and stale-root checks also succeed;
+tail ownership executes. Release full starts the five-profile serial ladder,
+followed conditionally by the final C-extension/regeneration/traversal/header
+audits and independent landing review. This source is not yet qualified or
+landed. In parallel,
 [finalizer-order eligibility](pre-I-finalizer-order-proposal.md) is implemented
 and [semantically checked](pre-I-finalizer-order-checkpoint.md) on O3 and Og
 kill at a285 in isolation: avoid DFS roots/order entries for finalizers that
@@ -312,18 +318,19 @@ principled intervention with the user. Do not redefine the workload, count JIT
 speedups toward the target or start JIT implementation to conceal a deficit.
 
 **Coordination.** The coordinator owns this plan, measurement choices, shared
-interfaces and integration. Subagents own bounded implementation and independent
-review. Current assignments are the remaining ROOTS landing gates and as-built
-record,
-independent final-gate/origin review plus source-only GC3a readiness, and actual
-benchmark-driver origins followed by the quiet measurement plan.
-To avoid a scheduling-only dependency, root now permits isolated H3 statistics
-development from reviewed81417 in a separate managed worktree. Frozen H3 and
-ROOTS products stay intact; actual union qualification and primary landing
-still follow GC disposition. Complete current independent reviews before the
-reviewer changes roles to implementation; another reviewer assesses that code.
-Native builds wait for the first quiet timing window to finish or be declined.
-Next integration ownership is H3 union/statistics, then bounded H1, with 6e and GC 3
-parallel where interfaces permit. Full root maps and call-window changes follow
-their actual dependencies. Report evidence and blockers hourly, with clear
-distinctions between implemented, validated and landed work.
+interfaces and integration. The GC operator owns the current5a45 broad ladder
+and final audits. The handler owner has completed Clang baseline validation
+and is preparing H1's native comparison with the existing build helper.
+The H2 owner is finishing the independently reviewed inert scalar decoder,
+then preparing coherent builds and bounded native tests. No current H2
+consumer uses these partial effects as complete semantics or root maps.
+
+Full suites and perf-sensitive walks serialize because they share perf-map
+files. Other admitted builds may use the second normal machine slot; quiet
+timing waits for native validation and a reserved window. Preserve frozen
+predecessor failures rather than relabeling them as successor passes. Finish
+independent reviews before a reviewer changes roles to implementation, and
+have another reviewer assess that implementation. Queue completion and
+generations remain separate correctness/design obligations; the current
+incremental GC landing does not close them. Report evidence and blockers
+hourly, with implemented, validated and landed work distinguished.

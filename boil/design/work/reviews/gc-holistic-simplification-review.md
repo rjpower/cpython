@@ -232,3 +232,163 @@ stress/ASan policy, with exclusions limited to explicitly unsupported APIs.
 This review made no runtime changes and ran no native process. Source inference
 is identified above; new support restrictions and scheduling semantics are
 recommendations requiring a policy decision, not retroactive qualification.
+
+## Follow-up: finite acquisition ownership before a new cleanup protocol
+
+The user accepts skipping subinterpreters for now. After the independent
+second look (`5ee5a992`), I revise the buffer recommendation: **prefer a finite
+owner/readiness repair; retain the Python-buffer restriction as a fallback
+policy, not the default next patch.** An extra type capability, completion DAG
+and global lease registry remain unnecessary for this first experiment.
+This follow-up is source-only and supplies no universal buffer-safety claim.
+
+### Smallest coherent slice
+
+Start with the sealed, non-reacquiring struct unpack iterator and the existing
+memoryview/managed-buffer readiness boundary. Its `buf` is already stable
+per-acquisition storage in `unpackiterobject`; it need not allocate another
+owner merely to add a finalizer. Ordinary `tp_finalize` cannot be overridden
+on this non-subclassable type. This is narrower than migrating all five families.
+
+Use one idempotent exhausted/release helper for exhaustion, finalization,
+deallocation and acquisition-validation failure. Establish `so=NULL` before
+calling release; keep the original Py_buffer, exporter and metadata anchored
+until release returns. `next()` and `__length_hint__()` then observe the inert
+state if the exporter reaches the iterator during a release callback. A local
+releasing guard prevents recursive release; do not clear `view.obj` prematurely
+because the Python buffer wrapper uses it during the callback. The iterator
+cannot reinitialize, so no acquisition-generation token or user-finalizer
+rearming is needed. Partial construction starts with an empty acquisition and
+must release a successful but subsequently rejected acquisition explicitly.
+
+The next consumer that *does* reacquire can hold a sealed per-acquisition
+`_PyManagedBufferObject` owning the stable master view. Acquire directly into
+that owner with the original flags, not into a temporary view copied afterward.
+Its existing `master.obj` traversal and RELEASED state are useful. That is not
+authorization to make every managed buffer release from `tp_finalize`: some
+still serve views, and the raw consumer must stop using the storage first.
+Nor should an existing memoryview lease be wrapped redundantly without a real
+additional acquisition. H→A→M below describes an explicit acquisition owner;
+the first sealed struct slice can instead use H's existing embedded view as A.
+
+### Pure readiness, real retention, then delivery-time recheck
+
+Use a small internal inspection of the two *existing* memory types:
+
+| Existing state | Safe action |
+| --- | --- |
+| Memoryview already RELEASED | No acquisition left to consume |
+| Active memoryview with `exports==0` | May unregister its one mbuf registration |
+| Active memoryview with `exports>0` | Retain it and its reachable closure |
+| Managed buffer already RELEASED | No master acquisition left to consume |
+| Active managed buffer with `exports==0` | May release its master acquisition |
+| Active managed buffer with `exports>0` | Retain it and its reachable closure |
+
+Negative counts are corruption, not readiness. These counts represent different
+edges: MV.exports is outward Py_buffer borrowing; mbuf.exports counts registered
+memoryviews. They are not interchangeable, and neither may be forced to zero.
+
+In `collect()` keep the existing finalizer-selection/resurrection phase first.
+Within `queue_destroy_hooks()`, first select all actually ready hooks without
+running Python, then resurrect queued closures as today. After ready selection,
+retain/resurrect every remaining DEAD unready MV/mbuf, even if its exporter has
+no Python release hook. This is before sweep and remaining weakref clearing.
+Reuse checked resurrection worklists and their full OOM rollback; a boolean
+predicate that merely declines hook admission would leave the object sweepable.
+This is a finite additional collection pass, not a graph scheduler.
+
+The order matters: retaining B→wrapper→E→H→A *before* selecting A's ready
+finalization could make A appear live and prevent the release needed for
+progress. Queue ready work first, preserve all unready closures second. Selection
+must not depend on the order of dead objects in the allocator walk.
+
+Readiness must be checked again immediately before a queued release. Another
+callback may have published a new export since selection. If unready, leave the
+acquisition intact, do not acknowledge release, and leave it eligible for a later
+pass. In particular, current queue-time NOTIFIED cannot permanently suppress a
+memory hook whose release never ran. Delay that bit for these two native types
+until actual consumption (or explicitly undo it on the unconsumed path); do not
+rearm general watcher notifications. Queued/running roots cover the current
+call, and subsequent collection's unready-retention rule covers deferred work.
+Already explicitly released views are idempotent no-ops.
+
+### Concrete cycle and returned-view forwarding
+
+Let H own acquisition A of M; M owns mbuf B whose master exporter is wrapper W;
+W retains E and the exact returned memoryview U; E retains H. The concrete
+strong cycle is H→A→M→B→W→E→H. W→U is an additional real edge, not decoration.
+
+1. H's ordinary finalizer is queued while H is intact; resurrection retains
+   A/M/B/W/E/U and their closures before destroy discovery. Thus a zero-ready
+   M or B is not independently destroyed underneath this release.
+2. H becomes inert, then releases A's acquisition. For the M case this invokes
+   `memory_releasebuf` and decrements M.exports once. It does not blindly release
+   M's upstream master. Reentry through E.h sees an exhausted H.
+3. On a later collection, M can unregister from B only with M.exports==0.
+   B's master cannot be independently released while its registrations remain.
+   When the last M registration goes, existing `_memory_release()` performs the
+   B release transaction. Full queued/running closure roots cover its callback.
+4. W's existing release first decrements its export of U, then invokes E's
+   Python release method when required. Preserve the exact U identity and
+   original view metadata. E may explicitly release U; that succeeds only if
+   U's other outward exports allow it. U's own mbuf is a separate acquisition.
+   If other holders remain, retaining U and its closure is mandatory. Never
+   forward the zero count of M or B to U, or infer that U is otherwise unused.
+
+This is a finite progress argument for the stated chain, not an acquisition-DAG
+theorem. Shared/cast/sliced views of B can postpone its release; a live holder is
+a valid reason. An unported dead holder in a cycle may postpone it indefinitely.
+Such a cycle is remaining migration debt, not a successfully collected object.
+
+### Legacy holders and raw reentry limit the claim
+
+Persistent native consumers still own distinct Py_buffer acquisitions. A count
+alone does not tell the collector whether such a holder will release or whether
+its raw data/shape pointers are safe. Keeping an unready M→E closure may also keep
+an unported H alive through E.h, so ordinary deallocation will never release H's
+export. This first slice establishes progress for struct, not all five families.
+
+The remaining finite migrations are PickleBuffer, Unpickler, SRE scanner and
+testbuffer ndarray, plus external importers such as NumPy. Their acquisitions
+must be traversed, and their raw users must check the acquisition's live state.
+Unpickler's Python-subclass finalizer/reinit requires a per-acquisition owner;
+scanner cached bounds/data must become inert before release; ndarray must keep
+ND_OWN_ARRAYS through the release callback instead of freeing arrays first.
+Do not remove swept-exporter safeguards globally until the relevant ordinary
+native-release paths are closed. A native C callback may allocate or call Python
+indirectly; this patch does not classify all C exporters as leaves.
+
+### Focused source and validation proposal
+
+Production scope: `Modules/_struct.c` (one release transaction and finalizer),
+`Objects/memoryobject.c` and `Include/internal/pycore_memoryobject.h` (pure
+readiness/internal release contracts; remove forced-zero from queued release),
+and `Python/gc_live.c` (ready admission, unready closure retention, actual-release
+notification). Keep mark metadata/graph types unchanged unless code review finds
+an exact missing status; do not add a public type slot. Tests belong in existing
+struct/memoryview/buffer or GC modules, using ordinary Python exporters.
+
+Protect these cases before calling the slice correct:
+
+- H/E/M cycle with a release method that collects and observes H exhausted;
+  exactly one release and eventual reclamation without forced-zero exports.
+- E returns preexisting U; retain a second outward export of U, verify it stays
+  usable and release is balanced after that holder explicitly finishes.
+- Shared/cast views, explicit release before queued delivery, and another
+  callback acquiring an export before delivery; a deferred hook must remain
+  eligible and must not sweep its closure.
+- A release callback raises, recursively releases and calls `next(H)`;
+  preserve the incoming exception, original metadata and exactly-once release.
+- Constructor failure after successful acquisition, normal exhaustion and
+  repeated cleanup; no stale acquisition or extra owner allocation is needed.
+- One meaningful copied negative: remove H's pre-release inert transition and
+  require the callback's named exhausted-iterator assertion to fail. Separately
+  the wait-retention control must observe live readable U until its last export,
+  rather than intentionally provoking a native use-after-free.
+
+Only then run the affected modules in ordinary/debug-kill modes and a focused
+ASan lifetime case, followed by the normal actual-union qualification. No new
+native execution is proposed by this source note. Open review decision: whether
+the finite H/readiness patch is useful to land incrementally with other consumers
+explicitly outstanding, or whether to batch all five migrations before removing
+the current memoryview sweep shortcuts. The latter removal is not implied here.

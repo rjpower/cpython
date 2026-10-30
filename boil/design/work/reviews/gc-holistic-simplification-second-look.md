@@ -141,3 +141,86 @@ that proof finds a concrete unavoidable cost. If it fails, choose and
 document a narrower port profile; do not call forcing export counts or
 skipping callbacks a completed collector. General cleanup slots, adoption,
 borrow leases and dependency scheduling remain held.
+
+## Main-interpreter-only admission: source audit and implementation cut
+
+Policy follow-up at primary `7cd98794c981`: PROCESS now selects one main
+interpreter, including ordinary threads. **This policy is not enforced in
+the inspected source.** No source, test selection or qualification receipt
+was changed by this audit. Process workers remain an explicit application
+choice; interpreter IDs, thread states and shared native state must never
+be silently replaced with subprocess handles.
+
+| Creation entry | Actual route and required failure |
+|---|---|
+| `Py_NewInterpreterFromConfig` | `pylifecycle.c:2692` calls `new_interpreter:2564`. Return an error `PyStatus` containing the unsupported explanation and set `*tstate_p=NULL`; no Python exception is required, since the caller may have no attached state. Reject before disabling `gilstate.check_enabled`, detaching a thread or creating interpreter state. |
+| `Py_NewInterpreter` | `pylifecycle.c:2700` uses the same helper, but currently calls `Py_ExitStatusException` on error. For this deliberate unsupported operation, return NULL nonfatally instead. Preserve the caller's current-thread state; callers cannot assume a Python exception exists. Merely adding a failing status to the common helper would terminate legacy callers. |
+| `PyInterpreterState_New` | `pystate.c:663` directly calls the state allocator, bypassing full initialization, and also exits on error today. Explicitly return NULL for unsupported creation, including callers without an attached state; do not unconditionally call `PyErr_SetString`. Its documented precondition is that Python is initialized (`Doc/c-api/subinterpreters.rst:430–445`). |
+| `_interpreters.create` | `Modules/_interpretersmodule.c:901` → `_PyXI_NewInterpreter` (`crossinterp.c:3266`) → configured C API. Existing XI code restores the saved thread state and converts the failing status to a chained `InterpreterError`; the module chains it again. This already supplies a nonfatal Python rejection with the unsupported cause. No new Python creation backend is necessary. |
+| `concurrent.interpreters.create` / `InterpreterPoolExecutor` | The first delegates directly to `_interpreters.create` (`__init__.py:63`). Pool workers call it in `WorkerContext.initialize` (`futures/interpreter.py:59–61`); unsupported creation therefore breaks worker initialization, rather than spawning a process. Document this consequence; importing these modules need not fail. |
+
+The smallest runtime cut is **two files**, `Python/pylifecycle.c` and
+`Python/pystate.c`: reject full creation before its state changes, handle
+the two legacy pointer-returning APIs nonfatally, and enforce a second
+admission check inside `_PyInterpreterState_New:579`. That internal check
+must hold `HEAD_LOCK` and reject an already-existing main interpreter
+**before** incrementing `next_id`, allocating or publishing another state.
+It must inspect runtime interpreter membership, not `tstate!=NULL`: XI
+deliberately swaps the current thread state to NULL before calling the
+configured API, and the low-level public API permits unattached callers.
+Keep audit-attempt behavior/error documentation explicit; do not hold the
+head lock while invoking an audit hook or raising a Python exception.
+
+Main bootstrap remains `_PyInterpreterState_New(NULL, &interp)` in
+`pycore_create_interpreter` (`pylifecycle.c:665–675`), installing the static
+`runtime->_main_interpreter` when no main exists. Do not reject that call
+or use a blanket ban on the shared allocator. The public low-level API is
+not an alternative bootstrap path. This change does not decide whether
+reinitialization after `Py_FinalizeEx` is supported; that remains a separate
+embedding contract.
+
+Ordinary threads use different machinery: `_thread` creates a thread state
+for the current interpreter (`_threadmodule.c:462–464`);
+`PyThreadState_New`/`_PyThreadState_New` allocate thread states
+(`pystate.c:1546–1570`), and `PyGILState_Ensure` obtains the main interpreter
+guard and creates a thread state (`pystate.c:2606–2637`). Leave these paths,
+the GIL, interpreter guards and main initialization intact. Main startup
+also calls `_PyXI_InitTypes` and `_PyXI_Init` (`pylifecycle.c:819,1012`);
+removing all cross-interpreter support code would break more than creation.
+
+The repository-wide C call search found no other production interpreter
+allocator: the full lifecycle helper, bare public state API and XI route
+above cover it. Remaining direct callers are `_testcapi`,
+`_testinternalcapi` and `_testembed`. Some testing helpers assume creation
+succeeds and immediately dereference/end the returned state, for example
+`_testcapi.test_current_tstate_matches:1075` and `_testembed:160,1382`.
+Do not run those blindly against a rejection-only patch. A focused follow-up
+must test the public rejection contracts and explicitly classify existing
+subinterpreter-only tests as unsupported; no current protected selection or
+historical result is modified here. `_testinternalcapi.create_interpreter`
+already covers XI, bare-state, legacy and configured origins (`:2337–2436`).
+Use those existing seams where their failure handling is sound, repairing
+only unsafe test helpers needed for the rejection tests.
+
+No creation dependency was found in `ThreadPoolExecutor`,
+`ProcessPoolExecutor` or multiprocessing's spawn/forkserver paths. Spawn
+forms a fresh executable command (`multiprocessing/spawn.py:93–96`), and
+forkserver likewise starts an executable (`forkserver.py:204–210`), each
+with its own main interpreter. This audit neither qualifies fork safety
+nor changes those APIs. Keep ordinary buffer release, main-interpreter
+finalizer delivery and process-exit versus live-host teardown separate.
+
+Before implementation is accepted, bounded controls should check all three
+C entries (including no attached thread), both Python creation routes,
+unchanged main identity/list and caller thread attachment after rejection,
+and working ordinary threads/GIL-state attachment. An explicit status/NULL
+or Python error is the oracle, not a crash or process exit. The planned
+documentation cut is the existing C subinterpreter reference and Python
+interpreter/pool references; no subprocess wrapper or lifecycle framework
+belongs in this increment.
+
+Inspected runtime SHA256 identities at that HEAD:
+`pystate.c=e5c5634e9719406f1dd43aae8be0eb317b35dbf482f7b12d4307884f229b572e`,
+`pylifecycle.c=47dc4c6bcf869b0fb9d769c93e689f43bbabff4a349f29b8f678ed3285e60093`,
+`crossinterp.c=64b273b88b0a86d71048eab504d41bda321d991909e3318655d51e816a0f9f17`,
+`_interpretersmodule.c=5c7443a3130664d53636d4c972231f9439365a5e27dee0d1fc10bffe06f8de9e`.

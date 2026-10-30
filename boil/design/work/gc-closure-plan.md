@@ -46,6 +46,53 @@ retained late state after exit handlers and stream flushes, provided no active
 callback resumes into freed state. Host-returning finalization and fork need
 separate support decisions; process exit does not excuse ordinary leaks.
 
+## Active landing order after review
+
+1. **Safety union, coordinator + roots audit.** Finish closure for native168
+   with test-only9e: the corrected whole-GC debug stress module now passes
+   152 tests/4 skips, zero fallback. Ten original passed stress modules carry
+   forward explicitly; the original profile stays failed. Review the actual
+   six-file source delta and all final receipts, then merge without reverting
+   primary documentation. Reuse code-identical qualified builds explicitly
+   for post-merge smoke. This landing fixes the three safety defects; it does
+   not complete ordinary buffer release or callback-completion safety.
+2. **Main-only admission, stats/design reviewer.** Implement the audited
+   two-runtime-file rejection boundary in its own worktree, with focused
+   public C/Python failure contracts and normal-thread controls. Preserve
+   bootstrap and report unsupported subinterpreter tests honestly. No broad
+   exclusions or process shim. Source review precedes native validation.
+3. **One drainer, roots audit after closure.** Serialize callback execution
+   under a GIL-protected claim, with active payload/error roots through full
+   reporting. Other/nested collectors enqueue and return. Validate blocked
+   callback plus worker collection without introducing a collector wait;
+   preserve signal precedence and state the finalizer-progress limitation.
+   Review active-shutdown/fork boundaries before any extra machinery.
+4. **Finite buffer slice, resource reviewer.** Implement struct's existing
+   acquisition as an inert-before-release transaction plus memoryview/mbuf
+   readiness, retention and delivery recheck. Ready finalization is selected
+   before retaining unready closures. No forced-zero export counts, premature
+   NOTIFIED acknowledgement or allocator-order dependency. Freeze for source
+   review; then relevant modes and one focused lifetime sanitizer check.
+   Remaining consumers are PickleBuffer, Unpickler, SRE scanner and testbuffer
+   ndarray; reacquiring consumers may need existing managed-buffer owners.
+   An incremental struct pass is not a complete five-family repair.
+5. **Coherent supported GC union, coordinator.** Compose these reviewed
+   changes and complete the remaining consumer migrations. Resolve normal-
+   runtime lifetime failures on that union, using the existing relevant
+   regressions and qualification recipe. Process-exit retention requires
+   its own explicit boundary; it must not mask supported-run resource leaks.
+6. **Interpreter report and reflection.** Once the supported GC boundary is
+   sound, refresh matched release timing with JITs off and publish the detailed
+   IR/dispatch/value-flow/call/root cost report. Compare the preserved H1
+   candidate, then commission independent reflection on clean parameterized
+   operation families and shared costs. Roughly2× on simple arithmetic guides
+   design attention; it is neither a hard gate nor a reason for special cases.
+
+Source work for admission and the finite buffer slice can proceed while the
+safety union closes. Keep builds within the existing two slots; serialize
+full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
+for quiet native execution and the agreed GC correctness boundary.
+
 ## Validation and integration
 
 Use the existing owned release/O1-debug builds, workers, mode checks and

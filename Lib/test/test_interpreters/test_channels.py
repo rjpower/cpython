@@ -1,3 +1,4 @@
+import gc
 import pickle
 import threading
 from textwrap import dedent
@@ -26,6 +27,7 @@ class LowLevelTests(TestBase):
     # XXX Those should be either moved to LowLevelTests or eliminated
     # in favor of high-level tests in this file.
 
+    @support.requires_subinterpreters
     def test_highlevel_reloaded(self):
         # See gh-115490 (https://github.com/python/cpython/issues/115490).
         interp = interpreters.create()
@@ -35,6 +37,7 @@ class LowLevelTests(TestBase):
             importlib.reload(channels)
             """));
 
+    @support.requires_subinterpreters
     @force_not_colorized
     def test_channel_id_types(self):
         # See https://github.com/python/cpython/issues/143376.
@@ -95,6 +98,7 @@ class TestChannels(TestBase):
         rch.close()
         self.assertEqual(set(channels.list_all()), set(created))
 
+    @support.requires_subinterpreters
     def test_shareable(self):
         interp = interpreters.create()
         rch, sch = channels.create()
@@ -220,6 +224,7 @@ class TestSendRecv(TestBase):
         self.assertEqual(obj, orig)
         self.assertIsNot(obj, orig)
 
+    @support.requires_subinterpreters
     def test_send_recv_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -232,6 +237,7 @@ class TestSendRecv(TestBase):
             assert obj is not orig, 'expected: obj is not orig'
             """))
 
+    @support.requires_subinterpreters
     @unittest.skip('broken (see BPO-...)')
     def test_send_recv_different_interpreters(self):
         r1, s1 = channels.create()
@@ -293,6 +299,7 @@ class TestSendRecv(TestBase):
 
         self.assertIsNone(obj)
 
+    @support.requires_subinterpreters
     def test_send_recv_nowait_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -306,6 +313,7 @@ class TestSendRecv(TestBase):
             assert obj is not orig, 'expected: obj is not orig'
             """))
 
+    @support.requires_subinterpreters
     @unittest.skip('broken (see BPO-...)')
     def test_send_recv_nowait_different_interpreters(self):
         r1, s1 = channels.create()
@@ -437,6 +445,100 @@ class TestSendRecv(TestBase):
         del obj
         support.gc_collect()
 
+    def test_buffer_metadata_and_independent_release(self):
+        rch, sch = channels.create()
+        for readonly in (False, True):
+            for first in ('sent', 'received'):
+                with self.subTest(readonly=readonly, first=first):
+                    backing = bytearray(range(12))
+                    with memoryview(backing) as base, base[1::2] as sliced:
+                        sent = sliced.toreadonly() if readonly else sliced[:]
+                        with sent:
+                            sch.send_buffer_nowait(sent)
+                            with rch.recv_nowait() as received:
+                                self.assertIsNot(received, sent)
+                                self.assertIs(received.obj, backing)
+                                for attr in ('format', 'shape', 'strides',
+                                             'itemsize', 'ndim', 'nbytes',
+                                             'readonly'):
+                                    self.assertEqual(getattr(received, attr),
+                                                     getattr(sent, attr))
+                                if first == 'sent':
+                                    sent.release()
+                                    backing[3] = 42
+                                    self.assertEqual(received[1], 42)
+                                else:
+                                    received.release()
+                                    backing[3] = 42
+                                    self.assertEqual(sent[1], 42)
+                    # send_buffer made its own temporary view, now garbage.
+                    support.gc_collect()
+                    backing.extend(b'x')
+
+    @support.nomemtest
+    def test_buffer_receive_failure_disposes_acquisition(self):
+        import _testcapi
+        rch, sch = channels.create()
+        # Associate this receiver before arming the allocation failure. The
+        # native ChannelID converter reads its field without integer boxing.
+        cid = rch._id
+        with self.assertRaises(channels.ChannelEmptyError):
+            rch.recv_nowait()
+        backing = bytearray(b'abc')
+        with memoryview(backing) as sent:
+            sch.send_buffer_nowait(sent)
+            with support.disable_gc(), self.assertRaises(MemoryError):
+                _testcapi.call_with_nomemory(0, 1, _channels.recv, cid)
+        with self.assertRaises(channels.ChannelEmptyError):
+            rch.recv_nowait()
+        support.gc_collect()
+        backing.extend(b'd')
+
+    def test_buffer_resurrection_preserves_acquisition(self):
+        rch, sch = channels.create()
+        saved, released = [], []
+
+        class Exporter:
+            def __init__(self):
+                self.data = bytearray(b'channel payload')
+            def __buffer__(self, flags):
+                return memoryview(self.data)
+            def __release_buffer__(self, view):
+                released.append(view.tobytes())
+
+        class Holder:
+            def __del__(self):
+                saved.append(self.view)
+
+        def make_cycle():
+            with memoryview(Exporter()) as sent:
+                sch.send_buffer_nowait(sent)
+                holder = Holder()
+                holder.view = rch.recv_nowait()
+                holder.cycle = holder
+
+        with support.disable_gc():
+            make_cycle()
+            support.gc_collect()
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(released, [])
+            self.assertEqual(saved[0].tobytes(), b'channel payload')
+            gc.collect()
+            self.assertEqual(released, [])
+            saved.pop().release()
+            support.gc_collect()
+            self.assertEqual(released, [b'channel payload'])
+
+    def test_buffer_discard_releases_acquisition(self):
+        rch, sch = channels.create()
+        backing = bytearray(b'abc')
+        with memoryview(backing) as sent:
+            sch.send_buffer_nowait(sent)
+            _channels.destroy(rch._id)
+        support.gc_collect()
+        backing.extend(b'd')
+
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter(self):
         def common(rch, sch, unbound=None, presize=0):
             if not unbound:
@@ -540,6 +642,7 @@ class TestSendRecv(TestBase):
             with self.assertRaises(channels.ChannelEmptyError):
                 rch.recv_nowait()
 
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter_mixed(self):
         rch, sch = channels.create()
         interp = interpreters.create()
@@ -582,6 +685,7 @@ class TestSendRecv(TestBase):
         self.assertIs(obj3, channels.UNBOUND)
         self.assertEqual(_channels.get_count(rch.id), 0)
 
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter_multiple(self):
         rch, sch = channels.create()
         interp1 = interpreters.create()

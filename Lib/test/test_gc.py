@@ -7,7 +7,7 @@ from test.support import (verbose,
 from test.support.os_helper import temp_dir, TESTFN, unlink
 from test.support.script_helper import (assert_python_ok,
                                         assert_python_failure, make_script)
-from test.support import threading_helper, gc_threshold
+from test.support import threading_helper, gc_threshold, import_helper
 
 import gc
 import os
@@ -3431,6 +3431,7 @@ def make_garbage(n):
                                              PYTHON_GCSTRESS="often")
         self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_stress_shared_heap_callbacks(self):
@@ -3565,18 +3566,28 @@ def make_garbage(n):
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     @support.requires_fork()
     def test_root_stats_dump(self):
+        self.check_root_stats_dump(subinterpreter=False)
+
+    @support.requires_subinterpreters
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.requires_fork()
+    def test_root_stats_dump_subinterpreter(self):
+        self.check_root_stats_dump(subinterpreter=True)
+
+    def check_root_stats_dump(self, *, subinterpreter):
         # PYTHON_GCROOTSTATS appends one line per finalized interpreter; a
         # forked child counts only its own collections.
         import json
         import os
-        code = textwrap.dedent("""
+        code = textwrap.dedent(f"""
             import gc, os, sys
-            import _interpreters
             for _ in range(20):
                 gc.collect()
-            interp = _interpreters.create()
-            _interpreters.run_string(interp, "import gc; gc.collect()")
-            _interpreters.destroy(interp)
+            if {subinterpreter!r}:
+                import _interpreters
+                interp = _interpreters.create()
+                _interpreters.run_string(interp, "import gc; gc.collect()")
+                _interpreters.destroy(interp)
             pid = os.fork()
             if pid == 0:
                 gc.collect()
@@ -3597,11 +3608,12 @@ def make_garbage(n):
         self.assertEqual(len(by_pid), 2, records)
         parent = [r for p, rs in by_pid.items() if p != child for r in rs]
         self.assertEqual(sorted(r["interp"] != 0 for r in parent),
-                         [False, True])
+                         [False, True] if subinterpreter else [False])
         main = next(r for r in parent if r["interp"] == 0)
-        sub = next(r for r in parent if r["interp"] != 0)
         self.assertGreaterEqual(main["collections"], 20)
-        self.assertGreaterEqual(sub["collections"], 1)
+        if subinterpreter:
+            sub = next(r for r in parent if r["interp"] != 0)
+            self.assertGreaterEqual(sub["collections"], 1)
         [forked] = by_pid[child]
         self.assertEqual(forked["interp"], 0)
         self.assertGreaterEqual(forked["collections"], 1)
@@ -4020,6 +4032,815 @@ def _queue_child(code, **env):
 
 
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+@threading_helper.requires_working_threading()
+class SingleDrainerTests(unittest.TestCase):
+    def test_worker_collect_returns_without_overtaking(self):
+        _queue_child("""
+            import threading
+            from test import support
+            gc.disable()
+            ready = threading.Event()
+            collected = threading.Event()
+            order = []
+            errors = []
+            class Inner:
+                def __del__(self):
+                    order.append("inner")
+            class Outer:
+                def __del__(self):
+                    if ready.is_set():
+                        return
+                    order.append("outer-enter")
+                    ready.set()
+                    if not collected.wait(support.SHORT_TIMEOUT):
+                        errors.append("worker collection did not return")
+                    if "inner" in order:
+                        errors.append("inner callback overtook outer callback")
+                    order.append("outer-exit")
+            def make(cls):
+                for _ in range(20):
+                    obj = cls()
+                    obj.cycle = obj
+            def worker():
+                try:
+                    if not ready.wait(support.SHORT_TIMEOUT):
+                        errors.append("outer callback did not start")
+                        return
+                    make(Inner)
+                    gc.collect()
+                    order.append("worker-return")
+                finally:
+                    collected.set()
+            thread = threading.Thread(target=worker, daemon=True)
+            thread.start()
+            try:
+                make(Outer)
+                gc.collect()
+            finally:
+                ready.set()
+                thread.join(support.SHORT_TIMEOUT)
+            assert not thread.is_alive(), "collector worker did not finish"
+            assert not errors, errors
+            assert order[:3] == ["outer-enter", "worker-return", "outer-exit"], order
+            assert order[3:] and set(order[3:]) == {"inner"}, order
+        """, PYTHON_GCSTRESS="")
+
+    def test_nested_collection_and_unraisable(self):
+        _queue_child("""
+            gc.disable()
+            order = []
+            errors = []
+            refs = []
+            class Item:
+                pass
+            def inner(ref):
+                order.append("inner")
+            def make(callback):
+                for _ in range(20):
+                    obj = Item()
+                    obj.cycle = obj
+                    refs.append(weakref.ref(obj, callback))
+            def outer(ref):
+                if order:
+                    return
+                order.append("outer-enter")
+                make(inner)
+                gc.collect()
+                assert order == ["outer-enter"], order
+                order.append("outer-exit")
+                raise ValueError("queued callback error")
+            def unraisable(info):
+                gc.collect()
+                errors.append((info.exc_type, str(info.exc_value)))
+                order.append("unraisable")
+            sys.unraisablehook = unraisable
+            saved = LookupError("interrupted context")
+            try:
+                raise saved
+            except LookupError:
+                make(outer)
+                gc.collect()
+                assert sys.exception() is saved
+            assert order[:3] == ["outer-enter", "outer-exit", "unraisable"], order
+            assert order[3:] and set(order[3:]) == {"inner"}, order
+            assert errors == [(ValueError, "queued callback error")], errors
+        """, PYTHON_GCSTRESS="")
+
+    def check_busy(self, code):
+        # A daemon callback releases the GIL.  It must remain intact after
+        # a rejected lifecycle operation, and cleanup must always release it.
+        setup = textwrap.dedent("""
+            import threading
+            from test import support
+            gc.disable()
+            entered = threading.Event()
+            release = threading.Event()
+            errors = []
+            workers = []
+            class Blocked:
+                def __del__(self):
+                    if entered.is_set():
+                        return
+                    entered.set()
+                    if not release.wait(support.LONG_TIMEOUT):
+                        errors.append("callback was not released")
+            def collect():
+                def make():
+                    for _ in range(20):
+                        obj = Blocked()
+                        obj.cycle = obj
+                make()
+                gc.collect()
+            def start():
+                thread = threading.Thread(target=collect, daemon=True)
+                workers.append(thread)
+                thread.start()
+                assert entered.wait(support.SHORT_TIMEOUT), "callback did not start"
+        """)
+        cleanup = textwrap.dedent("""
+            finally:
+                release.set()
+                for thread in workers:
+                    thread.join(support.SHORT_TIMEOUT)
+                    assert not thread.is_alive(), "drainer did not finish"
+            assert not errors, errors
+        """)
+        _queue_child(setup + "try:\n" + textwrap.indent(textwrap.dedent(code), "    ")
+                     + cleanup, PYTHON_GCSTRESS="")
+
+    def test_finalize_busy(self):
+        import_helper.import_module("ctypes")
+        self.check_busy("""
+            import ctypes
+            finalize = ctypes.pythonapi.Py_FinalizeEx
+            finalize.restype = ctypes.c_int
+            current = ctypes.pythonapi.PyThreadState_Get
+            current.restype = ctypes.c_void_p
+            start()
+            before = current()
+            assert finalize() == -1
+            assert current() == before
+            assert ctypes.pythonapi.Py_IsInitialized() == 1
+            assert not sys.is_finalizing()
+        """)
+
+    def test_finalize_busy_after_atexit(self):
+        import_helper.import_module("ctypes")
+        self.check_busy("""
+            import atexit, ctypes
+            effects = []
+            def prepare():
+                effects.append("atexit")
+                try:
+                    start()
+                except BaseException:
+                    # A failed setup must not let finalization continue
+                    # into the Python frame that called it through ctypes.
+                    os._exit(1)
+            atexit.register(prepare)
+            finalize = ctypes.pythonapi.Py_FinalizeEx
+            finalize.restype = ctypes.c_int
+            assert finalize() == -1
+            assert effects == ["atexit"], effects
+            assert entered.is_set()
+            assert ctypes.pythonapi.Py_IsInitialized() == 1
+            assert not sys.is_finalizing()
+        """)
+
+    @support.requires_fork()
+    def test_fork_busy(self):
+        self.check_busy("""
+            import _imp, warnings
+            start()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                try:
+                    pid = os.fork()
+                except RuntimeError as exc:
+                    assert str(exc) == "cannot fork while GC callbacks are running", exc
+                    assert not _imp.lock_held(), "fork rejection leaked the import lock"
+                else:
+                    if pid == 0:
+                        os._exit(0)
+                    os.waitpid(pid, 0)
+                    raise AssertionError("fork admitted an active drainer")
+        """)
+
+    @support.requires_fork()
+    def test_fork_busy_after_hook(self):
+        self.check_busy("""
+            import _imp, warnings
+            os.register_at_fork(before=start)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                try:
+                    pid = os.fork()
+                except RuntimeError as exc:
+                    assert str(exc) == "cannot fork while GC callbacks are running", exc
+                    assert not _imp.lock_held(), "fork rejection leaked the import lock"
+                else:
+                    if pid == 0:
+                        os._exit(0)
+                    os.waitpid(pid, 0)
+                    raise AssertionError("fork admitted a drainer started by its hook")
+        """)
+
+    @support.requires_fork()
+    def test_subprocess_preexec_busy(self):
+        self.check_busy("""
+            import _imp, subprocess
+            from test.support.os_helper import fd_count
+            start()
+            before = fd_count()
+            gc.enable()
+            try:
+                child = subprocess.Popen(
+                    [sys.executable, "-c", "pass"], preexec_fn=lambda: None,
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            except RuntimeError as exc:
+                assert str(exc) == "cannot fork while GC callbacks are running", exc
+            else:
+                with child:
+                    child.communicate(timeout=support.SHORT_TIMEOUT)
+                raise AssertionError("preexec admitted an active drainer")
+            assert fd_count() == before, "rejected preexec leaked descriptors"
+            assert not _imp.lock_held(), "preexec rejection leaked the import lock"
+            assert gc.isenabled(), "preexec rejection did not restore enabled GC"
+            gc.disable()
+            # cwd forces the fork/exec path rather than posix_spawn.  No
+            # Python callback runs between fork and exec in this case.
+            with subprocess.Popen([sys.executable, "-c", "pass"],
+                                  cwd=os.curdir) as child:
+                assert child.wait(timeout=support.SHORT_TIMEOUT) == 0
+        """)
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+@unittest.skipIf(_testcapi is None, "requires _testcapi")
+class BufferLifetimeTests(unittest.TestCase):
+    def test_memoryview_export_blocker_contract(self):
+        _queue_child("""
+            block = _testinternalcapi.gc_memoryview_export_blocker
+            view = memoryview(b"abc")
+            for args, error in (((b"abc", True), TypeError),
+                                ((view, 1), TypeError),
+                                ((view, False), ValueError)):
+                try:
+                    block(*args)
+                except error:
+                    pass
+                else:
+                    raise AssertionError(('invalid blocker request', args))
+            block(view, True)
+            try:
+                for operation, error in ((lambda: block(view, True), ValueError),
+                                         (view.release, BufferError)):
+                    try:
+                        operation()
+                    except error:
+                        pass
+                    else:
+                        raise AssertionError('outstanding export ignored')
+            finally:
+                block(view, False)
+            view.release()
+            try:
+                block(view, True)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('released view accepted a blocker')
+        """)
+
+    def test_unready_memoryview_retains_closure_and_recovers_oom(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                _queue_child(f"fail = {fail!r}\n" + textwrap.dedent("""
+                    gc.disable()
+                    events = []
+                    class Exporter:
+                        def __buffer__(self, flags):
+                            return memoryview(b"abc")
+                        def __release_buffer__(self, view):
+                            events.append(view.tobytes())
+                    gc.collect()
+                    def make_cycle():
+                        obj = Exporter()
+                        obj.view = memoryview(obj)
+                        _testinternalcapi.gc_memoryview_export_blocker(
+                            obj.view, True)
+                        return weakref.ref(obj)
+                    ref = make_cycle()
+                    try:
+                        if fail:
+                            _testinternalcapi.gc_fail_work_alloc(1)
+                            assert gc.collect() == 0, 'retention OOM swept objects'
+                            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, (
+                                'retention OOM did not fire')
+                        gc.collect()
+                        obj = ref()
+                        assert obj is not None, 'unready exporter closure was lost'
+                        assert events == [], events
+                        assert obj.view.tobytes() == b"abc"
+                        try:
+                            obj.view.release()
+                        except BufferError:
+                            pass
+                        else:
+                            raise AssertionError('outstanding export ignored')
+                    finally:
+                        _testinternalcapi.gc_fail_work_alloc(0)
+                        retained = ref()
+                        view = retained.view if retained is not None else None
+                        if view is not None:
+                            _testinternalcapi.gc_memoryview_export_blocker(
+                                view, False)
+                    # The seam is not a real acquisition/root.  With its one
+                    # synthetic count restored, release the actual view normally.
+                    assert view is not None, 'unready view was lost'
+                    view.release()
+                    del obj, view, retained
+                    for _ in range(4):
+                        gc.collect()
+                    assert events == [b"abc"], events
+                """), PYTHON_GCSTRESS="")
+
+    def test_ndarray_cycle_release_and_resurrection(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            import _testbuffer
+            gc.disable()
+            events, errors, saved = [], [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    nd = self.holder
+                    readers = [lambda: nd[0], lambda: nd[:], nd.tolist,
+                               nd.tobytes, lambda: memoryview(nd),
+                               nd.memoryview_from_buffer, lambda: hash(nd),
+                               lambda: _testbuffer.is_contiguous(nd, 'C'),
+                               lambda: nd.push([1], [1]), nd.pop,
+                               nd.add_suboffsets]
+                    readers += [lambda name=name: getattr(nd, name) for name in
+                                ('flags', 'offset', 'obj', 'nbytes', 'readonly',
+                                 'itemsize', 'format', 'ndim', 'shape', 'strides',
+                                 'suboffsets', 'c_contiguous', 'f_contiguous',
+                                 'contiguous')]
+                    readable = []
+                    for index, read in enumerate(readers):
+                        try:
+                            read()
+                        except ValueError as exc:
+                            assert 'inactive ndarray' in str(exc), str(exc)
+                        else:
+                            readable.append(index)
+                    events.append((view.tobytes(), readable))
+                    saved.append(nd)
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            def make_cycle():
+                obj = Exporter()
+                obj.holder = _testbuffer.ndarray(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(b"abc", [])], (
+                'released ndarray remained readable', events)
+            assert errors == [ValueError], errors
+            assert len(saved) == 1
+            try:
+                saved[0].tobytes()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('resurrected ndarray regained acquisition')
+            for _ in range(4):
+                gc.collect()
+            assert events == [(b"abc", [])], events
+            backing.extend(b"d")
+        """)
+
+    def test_ndarray_transformed_exports_and_original_view(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            import _testbuffer
+            gc.disable()
+            events = []
+            backing = bytearray(range(6))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing).cast('B', shape=[2, 3])
+                def __release_buffer__(self, view):
+                    try:
+                        self.out.tobytes()
+                    except ValueError:
+                        closed = True
+                    else:
+                        closed = False
+                    events.append((closed, view.tobytes(), view.shape,
+                                   view.strides))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                base = _testbuffer.ndarray(obj)
+                obj.holder = base[:, ::2]
+                obj.holder.add_suboffsets()
+                obj.out = memoryview(obj.holder)
+                assert obj.out.tobytes() == bytes([0, 2, 3, 5])
+                assert obj.out.shape == (2, 2)
+                assert obj.holder[1].tobytes() == bytes([3, 5])
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(True, bytes(range(6)), (2, 3), (3, 1))], events
+            backing.extend(b"d")
+            backing = bytearray(range(6))
+
+            # Releasing several outward leases balances the consumer's counts;
+            # a still-live lease continues to own both data and transformed arrays.
+            obj = Exporter()
+            obj.holder = _testbuffer.ndarray(obj)[:, ::2]
+            obj.out = memoryview(obj.holder)
+            other = memoryview(obj.holder)
+            assert other.tobytes() == bytes([0, 2, 3, 5])
+            obj.out.release()
+            del obj
+            gc.collect()
+            assert len(events) == 1, events
+            assert other.tobytes() == bytes([0, 2, 3, 5])
+            other.release()
+            del other
+            for _ in range(4):
+                gc.collect()
+            assert events == [(True, bytes(range(6)), (2, 3), (3, 1))] * 2, events
+        """)
+
+    def test_ndarray_one_shot_and_failed_initialization(self):
+        import_helper.import_module('_testbuffer')
+        _queue_child("""
+            from _testbuffer import ndarray
+            gc.disable()
+            for nd in (ndarray(b"abc"), ndarray([97, 98, 99], [3])):
+                for exported in (False, True):
+                    view = memoryview(nd) if exported else None
+                    try:
+                        nd.__init__(b"replacement")
+                    except ValueError as exc:
+                        assert 'cannot be reinitialized' in str(exc)
+                    else:
+                        raise AssertionError('ndarray reinitialization accepted')
+                    assert nd.tobytes() == b"abc"
+                    if view is not None:
+                        assert view.tobytes() == b"abc"
+                        view.release()
+            nd = ndarray.__new__(ndarray)
+            class Failed(Exception):
+                pass
+            class BadExporter:
+                def __buffer__(self, flags):
+                    raise Failed
+            try:
+                nd.__init__(BadExporter())
+            except Failed:
+                pass
+            else:
+                raise AssertionError('failed acquisition accepted')
+            try:
+                nd.tobytes()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('uninitialized ndarray readable')
+            calls = []
+            class Exporter:
+                def __buffer__(self, flags):
+                    try:
+                        nd.__init__(b"nested")
+                    except ValueError:
+                        calls.append('init blocked')
+                    else:
+                        raise AssertionError('recursive initialization accepted')
+                    try:
+                        nd.tobytes()
+                    except ValueError:
+                        calls.append('read blocked')
+                    else:
+                        raise AssertionError('partial ndarray readable')
+                    return memoryview(b"abc")
+            nd.__init__(Exporter())
+            assert calls == ['init blocked', 'read blocked'], calls
+            assert nd.tobytes() == b"abc"
+        """)
+
+    def test_picklebuffer_cycle_release(self):
+        _queue_child("""
+            import pickle
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    for read in (self.holder.raw,
+                                 lambda: memoryview(self.holder)):
+                        try:
+                            read()
+                        except ValueError:
+                            pass
+                        else:
+                            raise AssertionError(
+                                'release must observe a closed PickleBuffer')
+                    self.holder.release()
+                    self.holder.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                obj.holder = pickle.PickleBuffer(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            backing.extend(b"d")
+        """)
+
+    def test_picklebuffer_explicit_release_reentry_and_failure(self):
+        _queue_child("""
+            import pickle
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    try:
+                        self.holder.raw()
+                    except ValueError:
+                        pass
+                    else:
+                        raise AssertionError('releasing PickleBuffer is readable')
+                    self.holder.release()
+                    self.holder.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            obj = Exporter()
+            obj.holder = pickle.PickleBuffer(obj)
+            obj.holder.release()
+            obj.holder.release()
+            obj.holder.__del__()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            del obj
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    def test_scanner_cycle_release(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    observed = (self.scanner.search(),
+                                self.scanner.prefixmatch(),
+                                self.scanner.match())
+                    self.scanner.__del__()
+                    events.append((observed, view.tobytes()))
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            def make_cycle():
+                obj = Exporter()
+                obj.scanner = re.compile(rb"(a)").scanner(obj)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [((None, None, None), b"abc")], (
+                'release must observe an exhausted scanner', events)
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    def test_scanner_constructor_release_failure(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, errors = [], []
+            backing = bytearray(b"abc")
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError('release callback failed')
+            try:
+                re.compile('(a)').scanner(Exporter())
+            except TypeError as exc:
+                assert 'string pattern on a bytes-like object' in str(exc)
+            else:
+                raise AssertionError('incompatible scanner input accepted')
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            assert errors == [ValueError], errors
+            backing.extend(b"d")
+        """)
+
+    @unittest.skipUnless(support.Py_DEBUG, 'requires debug interruption hook')
+    def test_scanner_explicit_finalize_while_executing(self):
+        _queue_child("""
+            import re
+            gc.disable()
+            events, interrupted = [], []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    assert scanner.search() is None
+                    scanner.__del__()
+                    events.append(view.tobytes())
+                    gc.collect()
+            class Interrupt(Exception):
+                def __init__(self):
+                    scanner.__del__()
+                    assert events == [], 'active scanner acquisition released'
+                    try:
+                        scanner.search()
+                    except ValueError:
+                        pass
+                    else:
+                        raise AssertionError('active scanner allowed reentry')
+                    interrupted.append(True)
+                    gc.collect()
+            pattern = re.compile(rb"(a)")
+            pattern._fail_after(0, Interrupt)
+            scanner = pattern.scanner(Exporter())
+            try:
+                scanner.search()
+            except Interrupt:
+                pass
+            else:
+                raise AssertionError('interruption hook did not run')
+            assert interrupted == [True], interrupted
+            # group() would acquire another buffer and run its release callback.
+            assert scanner.search().span() == (0, 1)
+            assert events == [], events
+            scanner.__del__()
+            scanner.__del__()
+            assert scanner.search() is None
+            assert events == [b"abc"], events
+            # The returned view stays rooted through the release callback.
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc"], events
+            backing.extend(b"d")
+        """)
+
+    def test_unpack_iterator_cycle_release(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(backing)
+                def __release_buffer__(self, view):
+                    events.append((operator.length_hint(self.iterator),
+                                   next(self.iterator, None), view.tobytes()))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                view = memoryview(obj)
+                obj.iterator = struct.iter_unpack("B", view)
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(0, None, b"abc")], (
+                "release must observe an exhausted iterator", events)
+            backing.extend(b"d")
+        """)
+
+    def test_memoryview_release_rechecks_exports(self):
+        _queue_child("""
+            import struct
+            gc.disable()
+            events, saved = [], []
+            admitted = False
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(b"abc")
+                def __release_buffer__(self, view):
+                    global admitted
+                    events.append(view.tobytes())
+                    if not admitted:
+                        admitted = True
+                        saved.append(struct.iter_unpack("B", self.peer))
+                    gc.collect()
+            def make_cycle():
+                left, right = Exporter(), Exporter()
+                a, b = memoryview(left), memoryview(right)
+                left.peer, right.peer = b, a
+            make_cycle()
+            gc.collect()
+            assert events == [b"abc"], events
+            assert len(saved) == 1, saved
+            assert list(saved.pop()) == [(97,), (98,), (99,)]
+            for _ in range(4):
+                gc.collect()
+            assert events == [b"abc", b"abc"], (
+                "a deferred acquisition must remain eligible", events)
+        """)
+
+    def test_unpack_iterator_returned_view_forwarding(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events = []
+            backing = bytearray(b"abc")
+            returned = memoryview(backing)
+            other = struct.iter_unpack("B", returned)
+            class Exporter:
+                def __buffer__(self, flags):
+                    return returned
+                def __release_buffer__(self, view):
+                    assert view is returned
+                    events.append((operator.length_hint(self.iterator),
+                                   next(self.iterator, None), view.tobytes()))
+                    gc.collect()
+            def make_cycle():
+                obj = Exporter()
+                obj.iterator = struct.iter_unpack("B", memoryview(obj))
+            make_cycle()
+            for _ in range(4):
+                gc.collect()
+            assert events == [(0, None, b"abc")], events
+            try:
+                returned.release()
+            except BufferError:
+                pass
+            else:
+                raise AssertionError("the other acquisition must stay active")
+            assert list(other) == [(97,), (98,), (99,)]
+            returned.release()
+            returned.release()
+            backing.extend(b"d")
+        """)
+
+    def test_unpack_iterator_release_failure_and_exhaustion(self):
+        _queue_child("""
+            import operator, struct
+            gc.disable()
+            events, errors = [], []
+            sys.unraisablehook = lambda exc: errors.append(type(exc.exc_value))
+            class Exporter:
+                def __buffer__(self, flags):
+                    return memoryview(b"abc")
+                def __release_buffer__(self, view):
+                    iterator = getattr(self, "iterator", None)
+                    if iterator is not None:
+                        events.append((operator.length_hint(iterator),
+                                       next(iterator, None)))
+                    else:
+                        events.append(view.tobytes())
+                    gc.collect()
+                    raise ValueError("release callback failed")
+            obj = Exporter()
+            try:
+                struct.iter_unpack("H", obj)
+            except struct.error:
+                pass
+            else:
+                raise AssertionError("invalid acquisition length accepted")
+            assert events == [b"abc"], events
+            obj.iterator = struct.iter_unpack("B", obj)
+            assert list(obj.iterator) == [(97,), (98,), (99,)]
+            assert events == [b"abc", (0, None)], events
+            assert errors == [ValueError, ValueError], errors
+            assert list(obj.iterator) == []
+            assert events == [b"abc", (0, None)], events
+        """)
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 @unittest.skipIf(_testcapi is None, "requires _testcapi")
 class InterpreterQueueTests(unittest.TestCase):
     """Note 13 section 9: a weak reference callback runs on the weak
@@ -4050,6 +4871,7 @@ class InterpreterQueueTests(unittest.TestCase):
                          "_testinternalcapi.gc_get_stress()",
                          PYTHON_GCSTRESS="")
 
+    @support.requires_subinterpreters
     def test_creator_paths_under_stress(self):
         # 9.1: the B class of note 11 section 8.2.
         _queue_child("""
@@ -4080,16 +4902,19 @@ class InterpreterQueueTests(unittest.TestCase):
         """, **env)
         self.assertEqual(out.split(), ["200", "200", "[0]"])
 
+    @support.requires_subinterpreters
     def test_main_garbage_while_subinterpreters_start(self):
         # 9.2
         self.check_main_garbage_while_subinterpreters_start(
             PYTHON_GCSTRESS="1000")
 
+    @support.requires_subinterpreters
     @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
     def test_main_garbage_while_subinterpreters_start_kill(self):
         self.check_main_garbage_while_subinterpreters_start(
             PYTHON_GCSTRESS="1000", PYTHON_GCVERIFY="kill")
 
+    @support.requires_subinterpreters
     def test_collect_in_subinterpreter(self):
         # 9.3: the subinterpreter's gc.collect() runs its own callback and
         # none of the main interpreter's, which run on the main interpreter
@@ -4145,6 +4970,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.splitlines(), ["['1'] 50 [0]", "[]", "True"])
 
+    @support.requires_subinterpreters
     def test_teardown_with_nonempty_queue(self):
         # 9.4
         out = _queue_child("""
@@ -4167,6 +4993,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["[]", "True", "True"])
 
+    @support.requires_subinterpreters
     @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
     def test_teardown_with_nonempty_queue_kill(self):
         _queue_child("""
@@ -4190,6 +5017,7 @@ class InterpreterQueueTests(unittest.TestCase):
             assert drain_pipe(r) == ["x" * 100], "lost a finalizer"
         """, PYTHON_GCVERIFY="kill")
 
+    @support.requires_subinterpreters
     def test_close_drains_calls_routed_after_the_last_collection(self):
         # 9.5 (a): a shutdown finalizer of the closing interpreter releases
         # the GIL while a main-interpreter thread collects the closing
@@ -4233,6 +5061,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["50", "True"])
 
+    @support.requires_subinterpreters
     def test_never_opened(self):
         # 9.5 (b)
         out = _queue_child("""
@@ -4252,6 +5081,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["1", "[0]"])
 
+    @support.requires_subinterpreters
     def test_reentrancy(self):
         # 9.6
         out = _queue_child("""
@@ -4281,6 +5111,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """, PYTHON_GCSTRESS="1000")
         self.assertEqual(out.split(), ["20", "[0]"])
 
+    @support.requires_subinterpreters
     def test_allocation_failure(self):
         # 9.11: fail each of the 18 node allocations for three owners.
         # Tokens distinguish every delivery; payloads are read after another
@@ -4372,6 +5203,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "ok")
 
+    @support.requires_subinterpreters
     def test_progress_without_collection(self):
         # 9.12: calls spliced to the main interpreter run at its next breaker
         # and in a C loop of PyErr_CheckSignals(), with collection off.
@@ -4401,6 +5233,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["True", "0", "20", "0", "20", "[0]"])
 
+    @support.requires_subinterpreters
     def test_progress_during_finalization(self):
         # 9.12, during the main interpreter's finalisation.
         out = _queue_child("""
@@ -4487,6 +5320,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "ok")
 
+    @support.requires_subinterpreters
     def test_collect_after_close(self):
         # After the close (_PyGC_Fini()) every entry to the collector does
         # nothing: no collection, no live state allocated again, nothing
@@ -4508,6 +5342,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "(0, 0, 0, 0, 0, 0) []")
 
+    @support.requires_subinterpreters
     def test_legacy_delivery_marker(self):
         # 9.15: a legacy tp_del waiting in an idle queue runs once.
         out = _queue_child("""
@@ -4533,6 +5368,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["['x']"])
 
+    @support.requires_subinterpreters
     def test_pin(self):
         # 9.16: a deletion waits for a collection between its mark and its
         # routing that names the interpreter being deleted.  The closing
@@ -4608,6 +5444,7 @@ class InterpreterQueueTests(unittest.TestCase):
             + str(sorted((kind, token, 0) for kind in ("cb", "del")
                          for token in range(5))))
 
+    @support.requires_subinterpreters
     def test_every_kind_routed(self):
         # 9.17: each kind of call, in each direction separately, waits for
         # its owner and runs there once.  Each call records the interpreter
@@ -4689,6 +5526,7 @@ class InterpreterQueueTests(unittest.TestCase):
         self.assertEqual(lines[2], "reverse subdone " + str(sorted(f"{t}:0" for t in
             ("cb", "fin", "legacy", "capsule", "release"))))
 
+    @support.requires_subinterpreters
     def test_weakref_owner_runs_callback(self):
         # 9.17: a weak reference owned by the main interpreter to an object
         # owned by a legacy subinterpreter, and the reverse: the callback

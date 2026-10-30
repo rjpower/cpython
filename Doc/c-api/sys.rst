@@ -37,6 +37,13 @@ Operating System Utilities
    that clones the current process.
    Only available on systems where :c:func:`fork` is defined.
 
+   A running queued GC callback prevents forking, including one started by
+   a before-fork hook.  This void API reports that unsupported precondition
+   with a fatal error.  The Python functions :func:`os.fork` and
+   :func:`os.forkpty` instead raise :exc:`RuntimeError` after releasing the
+   preparation locks and resuming other threads.  Before-fork hook effects
+   are not rolled back.
+
    .. warning::
       The C :c:func:`fork` call should only be made from the
       :ref:`"main" thread <fork-and-threads>` (of the

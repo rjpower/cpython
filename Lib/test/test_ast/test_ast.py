@@ -3576,6 +3576,7 @@ class ModuleStateTests(unittest.TestCase):
                 import _ast
                 self.assertIs(_ast, lazy_mod)
 
+    @support.requires_subinterpreters
     def test_subinterpreter(self):
         # bpo-41631: Importing and using the _ast module in a subinterpreter
         # must not crash.

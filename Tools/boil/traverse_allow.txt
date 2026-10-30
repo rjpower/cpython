@@ -4,7 +4,7 @@
 # variable is the type's PyTypeObject or PyType_Spec and the members are the
 # paths as the report prints them.  Triage: boil/design/work/audit-1.md and
 # audit-2.md.
-Modules/_interpretersmodule.c XIBufferViewType_spec shared->view.obj: runtime-managed: the exporting interpreter roots shared->view.obj with PyGC_AddRoot(); the receiver must not trace it
+Modules/_testbuffer.c NDArray_Type head->base.obj staticbuf.base.obj: borrowed: consumer cached views copy obj from the visited owner acquisition, whose mbuf_traverse visits master.obj; after owner release cached metadata is inactive and must not be traversed; producer ndbuf_new sets base.obj to NULL
 Modules/_testcapi/heaptype.c HeapCTypeWithDict_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector
 Modules/_testcapi/heaptype.c HeapCTypeWithDict2_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector
 Modules/_testcapi/heaptype.c HeapCTypeWithNegativeDict_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector

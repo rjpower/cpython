@@ -1,3 +1,4 @@
+from test import support
 import gc
 import os
 import textwrap
@@ -97,6 +98,7 @@ class TestLocalGCStats(unittest.TestCase):
             os.getpid(), all_interpreters=False)
         check_gc_stats_fields(self, stats)
 
+    @support.requires_subinterpreters
     def test_all_interpreters_filter_for_local_process(self):
         interpreters = import_helper.import_module("concurrent.interpreters")
         source = """
@@ -330,6 +332,7 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
+    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_main_interpreter_if_subinterpreter_exists(self):
         script = textwrap.dedent(self._script.format(True))
@@ -337,6 +340,7 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
+    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_all_interpreters(self):
         script = textwrap.dedent(self._script.format(True))

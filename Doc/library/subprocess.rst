@@ -521,6 +521,10 @@ functions.
    child process just before the child is executed.
    (POSIX only)
 
+   If a queued GC callback is running, supplying *preexec_fn* raises
+   :exc:`RuntimeError` before creating the child.  With *preexec_fn* left
+   as ``None``, this restriction does not apply to immediate fork/exec.
+
    .. warning::
 
       The *preexec_fn* parameter is NOT SAFE to use in the presence of threads

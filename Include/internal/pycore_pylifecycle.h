@@ -102,6 +102,12 @@ PyAPI_FUNC(int) _PyOS_URandom(void *buffer, Py_ssize_t size);
 // Export for '_random' shared extension
 PyAPI_FUNC(int) _PyOS_URandomNonblock(void *buffer, Py_ssize_t size);
 
+#ifdef HAVE_FORK
+// Export for '_posixsubprocess' shared extension.  On error, preparation
+// locks are already released; do not call PyOS_AfterFork_Parent().
+PyAPI_FUNC(int) _PyOS_BeforeFork(void);
+#endif
+
 /* Legacy locale support */
 extern int _Py_CoerceLegacyLocale(int warn);
 extern int _Py_LegacyLocaleDetected(int warn);

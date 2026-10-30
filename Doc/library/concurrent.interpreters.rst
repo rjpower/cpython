@@ -18,6 +18,15 @@ interpreters (AKA "subinterpreters") and running things in them.
 Running mostly involves switching to an interpreter (in the current
 thread) and calling a function in that execution context.
 
+.. warning::
+
+   This experimental runtime supports only its main interpreter, including
+   ordinary threads.  :func:`create` raises :exc:`InterpreterError`, with
+   an exception context explaining that subinterpreters are unsupported.
+   Main-interpreter inspection remains available.  Use process workers
+   explicitly when separate execution contexts are needed; interpreter
+   operations are not translated into subprocess operations.
+
 For concurrency, interpreters themselves (and this module) don't
 provide much more than isolation, which on its own isn't useful.
 Actual concurrency is available separately through

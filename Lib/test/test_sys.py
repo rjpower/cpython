@@ -32,10 +32,6 @@ import unittest
 import warnings
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 DICT_KEY_STRUCT_FORMAT = 'n2BI2n'
@@ -552,8 +548,9 @@ class SysModuleTest(unittest.TestCase):
             leave_g.set()
             t.join()
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     def test_current_frames_other_interpreters(self):
         # gh-158364: sys._current_frames() would access frames of another
@@ -650,8 +647,9 @@ class SysModuleTest(unittest.TestCase):
             leave_g.set()
             t.join()
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     def test_current_exceptions_other_interpreters(self):
         # gh-158364: sys._current_exceptions() would hand out exceptions of
@@ -860,8 +858,9 @@ class SysModuleTest(unittest.TestCase):
         if has_is_interned:
             self.assertIs(sys._is_interned(S("abc")), False)
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_dynamically_allocated(self):
         # Implementation detail: Dynamically allocated strings
         # are distinct between interpreters
@@ -883,8 +882,9 @@ class SysModuleTest(unittest.TestCase):
             assert id(t) != {id(t)}, (id(t), {id(t)})
             '''))
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_statically_allocated(self):
         # Implementation detail: Statically allocated strings are shared
         # between interpreters.
@@ -908,8 +908,9 @@ class SysModuleTest(unittest.TestCase):
                     assert id(t) == {id(t)}, (id(t), {id(t)})
                     '''))
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_singleton(self):
         # Implementation detail: singletons are used for 0- and 1-character
         # latin1 strings.
@@ -1180,10 +1181,7 @@ class SysModuleTest(unittest.TestCase):
         sii = sys.implementation.supports_isolated_interpreters
         self.assertIsInstance(sii, bool)
         if test.support.check_impl_detail(cpython=True):
-            if test.support.is_emscripten or test.support.is_wasi:
-                self.assertFalse(sii)
-            else:
-                self.assertTrue(sii)
+            self.assertFalse(sii)
 
     @test.support.cpython_only
     def test_debugmallocstats(self):

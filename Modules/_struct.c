@@ -2224,9 +2224,30 @@ typedef struct {
     PyStructObject *so;
     Py_buffer buf;
     Py_ssize_t index;
+    int releasing;
 } unpackiterobject;
 
 #define unpackiterobject_CAST(op)   ((unpackiterobject *)(op))
+
+static void
+unpackiter_release(unpackiterobject *self)
+{
+    if (self->releasing) {
+        return;
+    }
+    self->releasing = 1;
+    /* The exporter can reach this iterator while releasing its acquisition.
+       Preserve the original view, but make every raw-data user inert first. */
+    Py_CLEAR(self->so);
+    PyBuffer_Release(&self->buf);
+    self->releasing = 0;
+}
+
+static void
+unpackiter_finalize(PyObject *op)
+{
+    unpackiter_release(unpackiterobject_CAST(op));
+}
 
 static void
 unpackiter_dealloc(PyObject *op)
@@ -2235,8 +2256,7 @@ unpackiter_dealloc(PyObject *op)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    Py_XDECREF(self->so);
-    PyBuffer_Release(&self->buf);
+    unpackiter_release(self);
     PyObject_GC_Del(self);
     Py_DECREF(tp);
 }
@@ -2281,8 +2301,7 @@ unpackiter_iternext(PyObject *op)
     }
     if (self->index >= self->buf.len) {
         /* Iterator exhausted */
-        Py_CLEAR(self->so);
-        PyBuffer_Release(&self->buf);
+        unpackiter_release(self);
         return PyValue_NULL;
     }
     assert(self->index + self->so->s_size <= self->buf.len);
@@ -2295,6 +2314,7 @@ unpackiter_iternext(PyObject *op)
 
 static PyType_Slot unpackiter_type_slots[] = {
     {Py_tp_dealloc, unpackiter_dealloc},
+    {Py_tp_finalize, unpackiter_finalize},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, unpackiter_traverse},
     {Py_tp_iter, PyObject_SelfIter},
@@ -2352,6 +2372,7 @@ Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer)
                      "iterative unpacking requires a buffer of "
                      "a multiple of %zd bytes",
                      self->s_size);
+        unpackiter_release(iter);
         Py_DECREF(iter);
         return NULL;
     }

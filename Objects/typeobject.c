@@ -11387,15 +11387,6 @@ bufferwrapper_releasebuf(PyObject *self, Py_buffer *view)
     Py_CLEAR(bw->obj);
 }
 
-int
-_PyBuffer_ReleaseRunsCode(PyObject *exporter)
-{
-    PyTypeObject *tp = Py_TYPE(exporter);
-    return tp == &_PyBufferWrapper_Type
-        || (tp->tp_as_buffer != NULL
-            && tp->tp_as_buffer->bf_releasebuffer == slot_bf_releasebuffer);
-}
-
 static PyBufferProcs bufferwrapper_as_buffer = {
     .bf_releasebuffer = bufferwrapper_releasebuf,
 };

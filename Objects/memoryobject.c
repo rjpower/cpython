@@ -85,7 +85,7 @@ mbuf_alloc(void)
     return mbuf;
 }
 
-static PyObject *
+PyObject *
 _PyManagedBuffer_FromObject(PyObject *base, int flags)
 {
     _PyManagedBufferObject *mbuf;
@@ -103,9 +103,20 @@ _PyManagedBuffer_FromObject(PyObject *base, int flags)
     return (PyObject *)mbuf;
 }
 
-static void
-mbuf_release(_PyManagedBufferObject *self)
+const Py_buffer *
+_PyManagedBuffer_GetBuffer(_PyManagedBufferObject *self)
 {
+    assert(Py_IS_TYPE(self, &_PyManagedBuffer_Type));
+    if (self->flags & _Py_MANAGED_BUFFER_RELEASED) {
+        return NULL;
+    }
+    return &self->master;
+}
+
+void
+_PyManagedBuffer_Release(_PyManagedBufferObject *self)
+{
+    assert(Py_IS_TYPE(self, &_PyManagedBuffer_Type));
     if (self->flags&_Py_MANAGED_BUFFER_RELEASED)
         return;
 
@@ -120,7 +131,7 @@ static void
 mbuf_dealloc(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
-    mbuf_release(self);
+    _PyManagedBuffer_Release(self);
     if (self->flags&_Py_MANAGED_BUFFER_FREE_FORMAT)
         PyMem_Free(self->master.format);
     PyObject_GC_Del(self);
@@ -139,7 +150,7 @@ mbuf_clear(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
     assert(self->exports >= 0);
-    mbuf_release(self);
+    _PyManagedBuffer_Release(self);
     return 0;
 }
 
@@ -176,7 +187,7 @@ PyTypeObject _PyManagedBuffer_Type = {
 /*                             MemoryView Object                            */
 /****************************************************************************/
 
-/* In the process of breaking reference cycles mbuf_release() can be
+/* In the process of breaking reference cycles _PyManagedBuffer_Release() can be
    called before memory_release(). */
 #define BASE_INACCESSIBLE(mv) \
     (((PyMemoryViewObject *)mv)->flags&_Py_MEMORYVIEW_RELEASED || \
@@ -890,7 +901,7 @@ mbuf_copy_format(_PyManagedBufferObject *mbuf, const char *fmt)
         of src->shape, src->strides and src->suboffsets.
      2) src->format is copied to the master buffer and released
         in mbuf_dealloc(). The releasebufferproc of the bytes
-        object is NULL, so it does not matter that mbuf_release()
+        object is NULL, so it does not matter that _PyManagedBuffer_Release()
         passes the altered format pointer to PyBuffer_Release().
 */
 static PyObject *
@@ -1119,40 +1130,54 @@ _memory_release(PyMemoryViewObject *self)
     self->flags |= _Py_MEMORYVIEW_RELEASED;
     assert(self->mbuf->exports > 0);
     if (--self->mbuf->exports == 0) {
-        mbuf_release(self->mbuf);
+        _PyManagedBuffer_Release(self->mbuf);
     }
 }
 
 int
-_PyMemoryView_DeallocReleasesWithCode(PyObject *op)
+_PyMemoryView_HasAcquisition(PyObject *op)
 {
-    _PyManagedBufferObject *mbuf;
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf = (_PyManagedBufferObject *)op;
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        return !(self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            && self->master.obj != NULL;
     }
-    else {
-        assert(PyMemoryView_Check(op));
-        PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-        if (self->flags & _Py_MEMORYVIEW_RELEASED) {
-            return 0;
-        }
-        mbuf = self->mbuf;
-    }
-    return !(mbuf->flags & _Py_MANAGED_BUFFER_RELEASED)
-        && mbuf->master.obj != NULL
-        && _PyBuffer_ReleaseRunsCode(mbuf->master.obj);
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    return !(self->flags & _Py_MEMORYVIEW_RELEASED) && self->mbuf != NULL;
 }
 
-void
-_PyMemoryView_ReleaseForDealloc(PyObject *op)
+int
+_PyMemoryView_ReleaseReady(PyObject *op)
 {
     if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf_release((_PyManagedBufferObject *)op);
-        return;
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        assert(self->exports >= 0);
+        return (self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            || self->exports == 0;
+    }
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    assert(get_exports(self) >= 0);
+    return (self->flags & _Py_MEMORYVIEW_RELEASED)
+        || get_exports(self) == 0;
+}
+
+int
+_PyMemoryView_ReleaseForDealloc(PyObject *op)
+{
+    if (!_PyMemoryView_HasAcquisition(op)
+        || !_PyMemoryView_ReleaseReady(op))
+    {
+        return 0;
+    }
+    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
+        _PyManagedBuffer_Release((_PyManagedBufferObject *)op);
+        return 1;
     }
     PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-    self->exports = 0;  // as in memory_dealloc()
     _memory_release(self);
+    return 1;
 }
 
 /*[clinic input]
@@ -1187,10 +1212,6 @@ static void
 memory_dealloc(PyObject *_self)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    /* A consumer that holds an export refers to the view, so if the view
-       is dead the consumer is too.  The sweep may reach the view first;
-       the consumer's release then skips the swept view. */
-    self->exports = 0;
     assert(get_exports(self) == 0);
     _PyObject_GC_UNTRACK(self);
     _memory_release(self);

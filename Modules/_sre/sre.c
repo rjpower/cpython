@@ -3041,11 +3041,28 @@ scanner_clear(PyObject *op)
 }
 
 static void
+scanner_finalize(PyObject *op)
+{
+    ScannerObject *self = _ScannerObject_CAST(op);
+    /* Explicit __del__ calls must not invalidate an executing scan.  A running
+       scanner is rooted, so ordinary collection does not select it here. */
+    if (self->executing || self->releasing) {
+        return;
+    }
+    self->releasing = 1;
+    self->state.start = NULL;
+    PyBuffer_Release(&self->state.buffer);
+    self->state.buffer.buf = NULL;
+    self->releasing = 0;
+}
+
+static void
 scanner_dealloc(PyObject *self)
 {
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
     ScannerObject *scanner = _ScannerObject_CAST(self);
+    scanner_finalize(self);
     state_fini(&scanner->state);
     (void)scanner_clear(self);
     tp->tp_free(self);
@@ -3186,6 +3203,7 @@ pattern_scanner(_sremodulestate *module_state,
         return NULL;
     scanner->pattern = NULL;
     scanner->executing = 0;
+    scanner->releasing = 0;
 
     /* create search state object */
     if (!state_init(&scanner->state, self, string, pos, endpos)) {
@@ -3532,6 +3550,7 @@ static PyMemberDef scanner_members[] = {
 
 static PyType_Slot scanner_slots[] = {
     {Py_tp_dealloc, scanner_dealloc},
+    {Py_tp_finalize, scanner_finalize},
     {Py_tp_methods, scanner_methods},
     {Py_tp_members, scanner_members},
     {Py_tp_traverse, scanner_traverse},

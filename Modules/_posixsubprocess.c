@@ -6,6 +6,7 @@
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_set_inheritable_async_safe()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
+#include "pycore_pylifecycle.h"   // _PyOS_BeforeFork()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_signal.h"        // _Py_RestoreSignals()
 
@@ -1231,14 +1232,16 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
         goto cleanup;
     }
 
-    /* This must be the last thing done before fork() because we do not
-     * want to call PyOS_BeforeFork() if there is any chance of another
-     * error leading to the cleanup: code without calling fork(). */
+    /* Complete fallible setup before acquiring fork-preparation locks.
+     * A rejected preparation has already unwound them, so cleanup must
+     * not call PyOS_AfterFork_Parent() in that case. */
     if (preexec_fn != Py_None) {
         preexec_fn_args_tuple = PyTuple_New(0);
         if (!preexec_fn_args_tuple)
             goto cleanup;
-        PyOS_BeforeFork();
+        if (_PyOS_BeforeFork() < 0) {
+            goto cleanup;
+        }
         need_after_fork = 1;
     }
 

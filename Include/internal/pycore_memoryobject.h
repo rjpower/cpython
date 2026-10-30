@@ -10,23 +10,28 @@ extern "C" {
 
 extern PyTypeObject _PyManagedBuffer_Type;
 
+/* Sealed per-acquisition storage for internal buffer consumers.  The master
+ * address is stable; NULL from GetBuffer means that acquisition was released. */
+PyAPI_FUNC(PyObject *) _PyManagedBuffer_FromObject(PyObject *base, int flags);
+PyAPI_FUNC(const Py_buffer *) _PyManagedBuffer_GetBuffer(
+    _PyManagedBufferObject *self);
+PyAPI_FUNC(void) _PyManagedBuffer_Release(_PyManagedBufferObject *self);
+
 PyObject *
 _PyMemoryView_FromBufferProc(PyObject *v, int flags,
                              getbufferproc bufferproc);
 
-/* Would releasing a buffer that exporter exported run Python code: does the
- * exporter's class define __release_buffer__, or is it the wrapper of a
- * buffer that __buffer__ returned?  Then the collector releases a dead
- * memoryview or managed buffer of it before the sweep, which may not run
- * code (Python/gc_live.c). */
-extern int _PyBuffer_ReleaseRunsCode(PyObject *exporter);
+/* An active memoryview registration or managed-buffer master acquisition,
+ * regardless of whether the exporter has a release callback. */
+extern int _PyMemoryView_HasAcquisition(PyObject *op);
 
-/* Would the dealloc of a memoryview or managed buffer release a buffer
- * whose release runs code? */
-extern int _PyMemoryView_DeallocReleasesWithCode(PyObject *op);
+/* Whether a memoryview can unregister, or a managed buffer release its master,
+ * without discarding outstanding exports.  This inspection runs no code. */
+extern int _PyMemoryView_ReleaseReady(PyObject *op);
 
-/* Make that release now: what the dealloc would do, apart from freeing. */
-extern void _PyMemoryView_ReleaseForDealloc(PyObject *op);
+/* Recheck readiness and perform that release.  Return one only for actual
+ * consumption, zero for an already consumed or still unready acquisition. */
+extern int _PyMemoryView_ReleaseForDealloc(PyObject *op);
 
 #ifdef __cplusplus
 }

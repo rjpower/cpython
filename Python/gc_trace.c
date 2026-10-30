@@ -2051,10 +2051,12 @@ struct live_walk {
 /* Would op's dealloc, under reference counting, make a call that may run
    code or allocate: a dealloc watcher's DESTROY event, a code object's
    co_extra free functions, a module's m_free, a capsule's destructor, or
-   the release of a buffer whose exporter defines __release_buffer__?  The
-   sweep forbids both, so gc_live.c makes these calls before it
-   (queue_destroy_hooks()).  Each runs once per object.  Only the types with
-   _Py_TPFLAGS_DESTROY_HOOK have such instances. */
+   an active memoryview registration or managed-buffer acquisition?  The
+   sweep forbids code/allocation, so gc_live.c makes these calls before it
+   (queue_destroy_hooks()).  Memory registrations must also be selected when
+   release runs no code, before retaining unready owners can reach them.
+   Each runs once per object.  Only the types with _Py_TPFLAGS_DESTROY_HOOK
+   have such instances. */
 static inline int
 live_destroy_hook_of(const struct live_walk *w, PyInterpreterState *interp,
                      PyObject *op, PyTypeObject *tp)
@@ -2075,7 +2077,7 @@ live_destroy_hook_of(const struct live_walk *w, PyInterpreterState *interp,
         return _PyCapsule_HasDestructor(op);
     }
     if (tp == &_PyManagedBuffer_Type || tp == &PyMemoryView_Type) {
-        return _PyMemoryView_DeallocReleasesWithCode(op);
+        return _PyMemoryView_HasAcquisition(op);
     }
     // Only a heap type can subclass module, so most types skip the MRO walk.
     if (tp == &PyModule_Type

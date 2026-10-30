@@ -41,6 +41,7 @@ __all__ = [
     "requires_IEEE_754", "requires_zlib",
     "has_fork_support", "requires_fork",
     "has_subprocess_support", "requires_subprocess",
+    "requires_subinterpreters",
     "has_socket_support", "requires_working_socket",
     "has_remote_subprocess_debugging", "requires_remote_subprocess_debugging",
     "anticipate_failure", "load_package_tests", "detect_api_mismatch",
@@ -677,6 +678,12 @@ has_subprocess_support = not (
 def requires_subprocess():
     """Used for subprocess, os.spawn calls, fd inheritance"""
     return unittest.skipUnless(has_subprocess_support, "requires subprocess support")
+
+def requires_subinterpreters(func):
+    """Require the implementation's declared interpreter-creation support."""
+    return unittest.skipUnless(
+        sys.implementation.supports_isolated_interpreters,
+        "subinterpreters are not supported")(func)
 
 # Emscripten's socket emulation and WASI sockets have limitations.
 has_socket_support = not (

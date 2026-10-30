@@ -1866,16 +1866,19 @@ def make_garbage(n):
                 return weakref.ref(obj), weakref.ref(obj, callbacks.append)
             plain, first = build()
             gc.collect()
-            assert plain() is None and first() is None
+            assert first() is None
             assert callbacks == [first], callbacks
             assert finalized == [b"still usable"], finalized
+            # Callback-free weakrefs stay usable through finalization and
+            # are cleared only if the object remains unreachable afterward.
+            assert plain() is survivors[0]
             assert survivors[0].data == b"still usable"
             # A new weakref on the resurrected object must be processed at
             # its next death, even though its finalizer will not run again.
             second = weakref.ref(survivors[0], callbacks.append)
             survivors.clear()
             gc.collect()
-            assert second() is None
+            assert plain() is None and second() is None
             assert callbacks == [first, second], callbacks
             assert finalized == [b"still usable"], finalized
             assert survivors == [], survivors

@@ -5215,6 +5215,9 @@ module_exec(PyObject *module)
     if (_PyTestInternalCapi_Init_GCWalk(module) < 0) {
         return 1;
     }
+    if (_PyTestInternalCapi_Init_UnicodeWriter(module) < 0) {
+        return 1;
+    }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {
         return 1;
     }

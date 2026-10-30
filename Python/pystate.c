@@ -591,13 +591,15 @@ _PyInterpreterState_New(PyThreadState *tstate, PyInterpreterState **pinterp)
         }
     }
 
-    /* We completely serialize creation of multiple interpreters, since
-       it simplifies things here and blocking concurrent calls isn't a problem.
-       Regardless, we must fully block subinterpreter creation until
-       after the main interpreter is created. */
+    /* Main bootstrap uses this allocator too.  Check membership under the
+       lock, not tstate: subinterpreter callers may have no attached state. */
     HEAD_LOCK(runtime);
 
     struct pyinterpreters *interpreters = &runtime->interpreters;
+    if (interpreters->main != NULL) {
+        HEAD_UNLOCK(runtime);
+        return _PyStatus_ERR("subinterpreters are not supported");
+    }
     int64_t id = interpreters->next_id;
     interpreters->next_id += 1;
 
@@ -668,7 +670,8 @@ PyInterpreterState_New(void)
     PyInterpreterState *interp;
     PyStatus status = _PyInterpreterState_New(tstate, &interp);
     if (_PyStatus_EXCEPTION(status)) {
-        Py_ExitStatusException(status);
+        // There may be no attached thread state in which to set an exception.
+        return NULL;
     }
     assert(interp != NULL);
     return interp;

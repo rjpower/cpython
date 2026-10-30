@@ -665,6 +665,7 @@ class MagicNumberTests(unittest.TestCase):
         self.assertEqual(EXPECTED_MAGIC_NUMBER, actual, msg)
 
 
+@support.requires_subinterpreters
 @unittest.skipIf(_interpreters is None, 'subinterpreters required')
 class IncompatibleExtensionModuleRestrictionsTests(unittest.TestCase):
 

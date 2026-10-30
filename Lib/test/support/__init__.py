@@ -678,6 +678,12 @@ def requires_subprocess():
     """Used for subprocess, os.spawn calls, fd inheritance"""
     return unittest.skipUnless(has_subprocess_support, "requires subprocess support")
 
+def requires_subinterpreters(func):
+    """Require the implementation's declared interpreter-creation support."""
+    return unittest.skipUnless(
+        sys.implementation.supports_isolated_interpreters,
+        "subinterpreters are not supported")(func)
+
 # Emscripten's socket emulation and WASI sockets have limitations.
 has_socket_support = not (
     is_emscripten

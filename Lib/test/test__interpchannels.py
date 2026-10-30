@@ -1,3 +1,4 @@
+from test import support
 from collections import namedtuple
 import contextlib
 import sys
@@ -414,6 +415,7 @@ class ChannelTests(TestBase):
         self.assertEqual(set(after), set(before))
         self.assertEqual(len(after), len(before))
 
+    @support.requires_subinterpreters
     def test_ids_global(self):
         id1 = _interpreters.create()
         out = _run_output(id1, dedent("""
@@ -442,6 +444,7 @@ class ChannelTests(TestBase):
         self.assertEqual(send_interps, [])
         self.assertEqual(recv_interps, [])
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_basic(self):
         """Test basic listing channel _interpreters."""
         interp0, *_ = _interpreters.get_main()
@@ -464,6 +467,7 @@ class ChannelTests(TestBase):
         self.assertEqual(send_interps, [interp0])
         self.assertEqual(recv_interps, [interp1])
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_multiple(self):
         """Test listing interpreters for a channel with many associations."""
         interp0, *_ = _interpreters.get_main()
@@ -490,6 +494,7 @@ class ChannelTests(TestBase):
         self.assertEqual(set(send_interps), {interp0, interp1})
         self.assertEqual(set(recv_interps), {interp2, interp3})
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_destroyed(self):
         """Test listing channel interpreters with a destroyed interpreter."""
         interp0, *_ = _interpreters.get_main()
@@ -513,6 +518,7 @@ class ChannelTests(TestBase):
         self.assertEqual(send_interps, [interp0])
         self.assertEqual(recv_interps, [])
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_released(self):
         """Test listing channel interpreters with a released channel."""
         # Set up one channel with main interpreter on the send end and two
@@ -556,6 +562,7 @@ class ChannelTests(TestBase):
         self.assertEqual(len(send_interps), 0)
         self.assertEqual(recv_interps, [interp1])
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_closed(self):
         """Test listing channel interpreters with a closed channel."""
         interp0, *_ = _interpreters.get_main()
@@ -578,6 +585,7 @@ class ChannelTests(TestBase):
         with self.assertRaises(_channels.ChannelClosedError):
             _channels.list_interpreters(cid, send=False)
 
+    @support.requires_subinterpreters
     def test_channel_list_interpreters_closed_send_end(self):
         """Test listing channel interpreters with a channel's send end closed."""
         interp0, *_ = _interpreters.get_main()
@@ -632,6 +640,7 @@ class ChannelTests(TestBase):
                 #self.assertIsNot(got, obj)
                 # XXX What about between interpreters?
 
+    @support.requires_subinterpreters
     def test_run_string_arg_unresolved(self):
         cid = _channels.create(REPLACE)
         interp = _interpreters.create()
@@ -650,6 +659,7 @@ class ChannelTests(TestBase):
     # XXX For now there is no high-level channel into which the
     # sent channel ID can be converted...
     # Note: this test caused crashes on some buildbots (bpo-33615).
+    @support.requires_subinterpreters
     @unittest.skip('disabled until high-level channels exist')
     def test_run_string_arg_resolved(self):
         cid = _channels.create(REPLACE)
@@ -679,6 +689,7 @@ class ChannelTests(TestBase):
         self.assertEqual(obj, orig)
         self.assertIsNot(obj, orig)
 
+    @support.requires_subinterpreters
     def test_send_recv_same_interpreter(self):
         id1 = _interpreters.create()
         out = _run_output(id1, dedent("""
@@ -691,6 +702,7 @@ class ChannelTests(TestBase):
             assert obj == orig
             """))
 
+    @support.requires_subinterpreters
     def test_send_recv_different_interpreters(self):
         cid = _channels.create(REPLACE)
         id1 = _interpreters.create()
@@ -717,6 +729,7 @@ class ChannelTests(TestBase):
 
         self.assertEqual(obj, b'spam')
 
+    @support.requires_subinterpreters
     def test_send_recv_different_interpreters_and_threads(self):
         cid = _channels.create(REPLACE)
         id1 = _interpreters.create()
@@ -779,6 +792,7 @@ class ChannelTests(TestBase):
         self.assertEqual(obj5, b'eggs')
         self.assertIs(obj6, default)
 
+    @support.requires_subinterpreters
     def test_recv_sending_interp_destroyed(self):
         with self.subTest('closed'):
             cid1 = _channels.create(REPLACE)
@@ -1054,6 +1068,7 @@ class ChannelTests(TestBase):
         with self.assertRaises(_channels.ChannelClosedError):
             _channels.recv(cid)
 
+    @support.requires_subinterpreters
     def test_close_multiple_users(self):
         cid = _channels.create(REPLACE)
         id1 = _interpreters.create()
@@ -1197,6 +1212,7 @@ class ChannelTests(TestBase):
         with self.assertRaises(_channels.ChannelClosedError):
             _channels.recv(cid)
 
+    @support.requires_subinterpreters
     def test_close_by_unassociated_interp(self):
         cid = _channels.create(REPLACE)
         _channels.send(cid, b'spam', blocking=False)
@@ -1295,6 +1311,7 @@ class ChannelReleaseTests(TestBase):
         with self.assertRaises(_channels.ChannelClosedError):
             _channels.recv(cid)
 
+    @support.requires_subinterpreters
     def test_multiple_users(self):
         cid = _channels.create(REPLACE)
         id1 = _interpreters.create()
@@ -1353,6 +1370,7 @@ class ChannelReleaseTests(TestBase):
         with self.assertRaises(_channels.ChannelClosedError):
             _channels.recv(cid)
 
+    @support.requires_subinterpreters
     def test_by_unassociated_interp(self):
         cid = _channels.create(REPLACE)
         _channels.send(cid, b'spam', blocking=False)
@@ -1368,6 +1386,7 @@ class ChannelReleaseTests(TestBase):
             _channels.send(cid, b'eggs')
         self.assertEqual(obj, b'spam')
 
+    @support.requires_subinterpreters
     def test_close_if_unassociated(self):
         # XXX Something's not right with this test...
         cid = _channels.create(REPLACE)

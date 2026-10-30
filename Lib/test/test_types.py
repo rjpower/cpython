@@ -1,5 +1,6 @@
 # Python test set -- part 6, built-in types
 
+from test import support
 from test.support import (
     run_with_locale, cpython_only, no_rerun,
     MISSING_C_DOCSTRINGS, EqualToForwardRef, check_disallow_instantiation,
@@ -2650,6 +2651,7 @@ class FunctionTests(unittest.TestCase):
             )
 
 
+@support.requires_subinterpreters
 class SubinterpreterTests(unittest.TestCase):
 
     NUMERIC_METHODS = {

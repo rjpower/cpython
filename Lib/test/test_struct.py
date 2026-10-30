@@ -1041,6 +1041,7 @@ class StructTest(ComplexesAreIdenticalMixin, unittest.TestCase):
                     round_trip = struct.unpack(fmt, b)[0]
                 self.assertComplexesAreIdentical(z, round_trip)
 
+    @support.requires_subinterpreters
     @unittest.skipIf(
         support.is_android or support.is_apple_mobile,
         "Subinterpreters are not supported on Android and iOS"

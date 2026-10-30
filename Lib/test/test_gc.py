@@ -3431,6 +3431,7 @@ def make_garbage(n):
                                              PYTHON_GCSTRESS="often")
         self.assertIn(b"PYTHON_GCSTRESS must be a count", err)
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_stress_shared_heap_callbacks(self):
@@ -3565,18 +3566,28 @@ def make_garbage(n):
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     @support.requires_fork()
     def test_root_stats_dump(self):
+        self.check_root_stats_dump(subinterpreter=False)
+
+    @support.requires_subinterpreters
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.requires_fork()
+    def test_root_stats_dump_subinterpreter(self):
+        self.check_root_stats_dump(subinterpreter=True)
+
+    def check_root_stats_dump(self, *, subinterpreter):
         # PYTHON_GCROOTSTATS appends one line per finalized interpreter; a
         # forked child counts only its own collections.
         import json
         import os
-        code = textwrap.dedent("""
+        code = textwrap.dedent(f"""
             import gc, os, sys
-            import _interpreters
             for _ in range(20):
                 gc.collect()
-            interp = _interpreters.create()
-            _interpreters.run_string(interp, "import gc; gc.collect()")
-            _interpreters.destroy(interp)
+            if {subinterpreter!r}:
+                import _interpreters
+                interp = _interpreters.create()
+                _interpreters.run_string(interp, "import gc; gc.collect()")
+                _interpreters.destroy(interp)
             pid = os.fork()
             if pid == 0:
                 gc.collect()
@@ -3597,11 +3608,12 @@ def make_garbage(n):
         self.assertEqual(len(by_pid), 2, records)
         parent = [r for p, rs in by_pid.items() if p != child for r in rs]
         self.assertEqual(sorted(r["interp"] != 0 for r in parent),
-                         [False, True])
+                         [False, True] if subinterpreter else [False])
         main = next(r for r in parent if r["interp"] == 0)
-        sub = next(r for r in parent if r["interp"] != 0)
         self.assertGreaterEqual(main["collections"], 20)
-        self.assertGreaterEqual(sub["collections"], 1)
+        if subinterpreter:
+            sub = next(r for r in parent if r["interp"] != 0)
+            self.assertGreaterEqual(sub["collections"], 1)
         [forked] = by_pid[child]
         self.assertEqual(forked["interp"], 0)
         self.assertGreaterEqual(forked["collections"], 1)
@@ -4050,6 +4062,7 @@ class InterpreterQueueTests(unittest.TestCase):
                          "_testinternalcapi.gc_get_stress()",
                          PYTHON_GCSTRESS="")
 
+    @support.requires_subinterpreters
     def test_creator_paths_under_stress(self):
         # 9.1: the B class of note 11 section 8.2.
         _queue_child("""
@@ -4080,16 +4093,19 @@ class InterpreterQueueTests(unittest.TestCase):
         """, **env)
         self.assertEqual(out.split(), ["200", "200", "[0]"])
 
+    @support.requires_subinterpreters
     def test_main_garbage_while_subinterpreters_start(self):
         # 9.2
         self.check_main_garbage_while_subinterpreters_start(
             PYTHON_GCSTRESS="1000")
 
+    @support.requires_subinterpreters
     @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
     def test_main_garbage_while_subinterpreters_start_kill(self):
         self.check_main_garbage_while_subinterpreters_start(
             PYTHON_GCSTRESS="1000", PYTHON_GCVERIFY="kill")
 
+    @support.requires_subinterpreters
     def test_collect_in_subinterpreter(self):
         # 9.3: the subinterpreter's gc.collect() runs its own callback and
         # none of the main interpreter's, which run on the main interpreter
@@ -4145,6 +4161,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.splitlines(), ["['1'] 50 [0]", "[]", "True"])
 
+    @support.requires_subinterpreters
     def test_teardown_with_nonempty_queue(self):
         # 9.4
         out = _queue_child("""
@@ -4167,6 +4184,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["[]", "True", "True"])
 
+    @support.requires_subinterpreters
     @unittest.skipUnless(support.Py_DEBUG, "kill needs a debug build")
     def test_teardown_with_nonempty_queue_kill(self):
         _queue_child("""
@@ -4190,6 +4208,7 @@ class InterpreterQueueTests(unittest.TestCase):
             assert drain_pipe(r) == ["x" * 100], "lost a finalizer"
         """, PYTHON_GCVERIFY="kill")
 
+    @support.requires_subinterpreters
     def test_close_drains_calls_routed_after_the_last_collection(self):
         # 9.5 (a): a shutdown finalizer of the closing interpreter releases
         # the GIL while a main-interpreter thread collects the closing
@@ -4233,6 +4252,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["50", "True"])
 
+    @support.requires_subinterpreters
     def test_never_opened(self):
         # 9.5 (b)
         out = _queue_child("""
@@ -4252,6 +4272,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["1", "[0]"])
 
+    @support.requires_subinterpreters
     def test_reentrancy(self):
         # 9.6
         out = _queue_child("""
@@ -4281,6 +4302,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """, PYTHON_GCSTRESS="1000")
         self.assertEqual(out.split(), ["20", "[0]"])
 
+    @support.requires_subinterpreters
     def test_allocation_failure(self):
         # 9.11: fail each of the 18 node allocations for three owners.
         # Tokens distinguish every delivery; payloads are read after another
@@ -4372,6 +4394,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "ok")
 
+    @support.requires_subinterpreters
     def test_progress_without_collection(self):
         # 9.12: calls spliced to the main interpreter run at its next breaker
         # and in a C loop of PyErr_CheckSignals(), with collection off.
@@ -4401,6 +4424,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["True", "0", "20", "0", "20", "[0]"])
 
+    @support.requires_subinterpreters
     def test_progress_during_finalization(self):
         # 9.12, during the main interpreter's finalisation.
         out = _queue_child("""
@@ -4487,6 +4511,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "ok")
 
+    @support.requires_subinterpreters
     def test_collect_after_close(self):
         # After the close (_PyGC_Fini()) every entry to the collector does
         # nothing: no collection, no live state allocated again, nothing
@@ -4508,6 +4533,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.strip(), "(0, 0, 0, 0, 0, 0) []")
 
+    @support.requires_subinterpreters
     def test_legacy_delivery_marker(self):
         # 9.15: a legacy tp_del waiting in an idle queue runs once.
         out = _queue_child("""
@@ -4533,6 +4559,7 @@ class InterpreterQueueTests(unittest.TestCase):
         """)
         self.assertEqual(out.split(), ["['x']"])
 
+    @support.requires_subinterpreters
     def test_pin(self):
         # 9.16: a deletion waits for a collection between its mark and its
         # routing that names the interpreter being deleted.  The closing
@@ -4608,6 +4635,7 @@ class InterpreterQueueTests(unittest.TestCase):
             + str(sorted((kind, token, 0) for kind in ("cb", "del")
                          for token in range(5))))
 
+    @support.requires_subinterpreters
     def test_every_kind_routed(self):
         # 9.17: each kind of call, in each direction separately, waits for
         # its owner and runs there once.  Each call records the interpreter
@@ -4689,6 +4717,7 @@ class InterpreterQueueTests(unittest.TestCase):
         self.assertEqual(lines[2], "reverse subdone " + str(sorted(f"{t}:0" for t in
             ("cb", "fin", "legacy", "capsule", "release"))))
 
+    @support.requires_subinterpreters
     def test_weakref_owner_runs_callback(self):
         # 9.17: a weak reference owned by the main interpreter to an object
         # owned by a legacy subinterpreter, and the reverse: the callback

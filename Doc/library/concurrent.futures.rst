@@ -276,6 +276,15 @@ InterpreterPoolExecutor
 
 .. versionadded:: 3.14
 
+.. warning::
+
+   Subinterpreter creation is unsupported in this experimental runtime.
+   Importing or constructing an :class:`InterpreterPoolExecutor` does not
+   create an interpreter, but worker initialization fails when work is
+   submitted, raising :exc:`BrokenInterpreterPool` in the submitted future.
+   :class:`ThreadPoolExecutor` and :class:`ProcessPoolExecutor` remain
+   separate choices; no automatic process fallback is provided.
+
 The :class:`InterpreterPoolExecutor` class uses a pool of interpreters
 to execute calls asynchronously.  It is a :class:`ThreadPoolExecutor`
 subclass, which means each worker is running in its own thread.

@@ -61,10 +61,6 @@ def decode_stderr(err):
     return err.decode('utf-8', 'replace').replace('\r', '')
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(_interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 def testfunction(self):
@@ -1495,7 +1491,8 @@ class TestPendingCalls(unittest.TestCase):
                 self.assertNotEqual(task.requester_tid, task.runner_tid)
                 self.assertNotIn(task.requester_tid, runner_tids)
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     @support.skip_if_sanitizer("gh-129824: race on assign_version_tag", thread=True)
     def test_isolated_subinterpreter(self):
         # We exercise the most important permutations.
@@ -1753,6 +1750,7 @@ class TestPendingCalls(unittest.TestCase):
         self.assertEqual(stderr, b"")
 
 
+@support.requires_subinterpreters
 class SubinterpreterTest(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
@@ -1825,7 +1823,8 @@ class SubinterpreterTest(unittest.TestCase):
         # test fails, assume that the environment in this process may
         # be altered and suspect.
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
     def test_configured_settings(self):
         """
@@ -2061,9 +2060,10 @@ class SubinterpreterTest(unittest.TestCase):
         subinterp_attr_id = os.read(r, 100)
         self.assertEqual(main_attr_id, subinterp_attr_id)
 
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
     @threading_helper.requires_working_threading()
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_pending_call_creates_thread_subinterpreter(self):
         interpreters = import_helper.import_module("concurrent.interpreters")
         r, w = os.pipe()
@@ -2099,7 +2099,7 @@ class SubinterpreterTest(unittest.TestCase):
         os.close(r)
 
 
-@requires_subinterpreters
+@unittest.skipIf(_interpreters is None, 'requires _interpreters')
 class InterpreterConfigTests(unittest.TestCase):
 
     supported = {
@@ -2249,6 +2249,7 @@ class InterpreterConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     _interpreters.new_config(gil=value)
 
+    @support.requires_subinterpreters
     def test_interp_init(self):
         questionable = [
             # strange
@@ -2310,6 +2311,7 @@ class InterpreterConfigTests(unittest.TestCase):
                 with self.subTest(f'valid: {config}'):
                     check(config)
 
+    @support.requires_subinterpreters
     def test_get_config(self):
         @contextlib.contextmanager
         def new_interp(config):
@@ -2355,7 +2357,7 @@ class InterpreterConfigTests(unittest.TestCase):
             self.assert_ns_equal(config, orig)
 
 
-@requires_subinterpreters
+@unittest.skipIf(_interpreters is None, 'requires _interpreters')
 class InterpreterIDTests(unittest.TestCase):
 
     def add_interp_cleanup(self, interpid):
@@ -2384,6 +2386,7 @@ class InterpreterIDTests(unittest.TestCase):
         interpid = convert(MyInt())
         self.assertEqual(interpid, 10)
 
+    @support.requires_subinterpreters
     def test_conversion_from_interpreter(self):
         convert = _testinternalcapi.normalize_interp_id
         interpid = self.new_interpreter()
@@ -2413,6 +2416,7 @@ class InterpreterIDTests(unittest.TestCase):
             with self.assertRaises(OverflowError):
                 convert(badid)
 
+    @support.requires_subinterpreters
     def test_lookup_exists(self):
         interpid = self.new_interpreter()
         self.assertTrue(
@@ -2423,6 +2427,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             _testinternalcapi.interpreter_exists(interpid))
 
+    @support.requires_subinterpreters
     def test_lookup_destroyed(self):
         interpid = _interpreters.create()
         _interpreters.destroy(interpid)
@@ -2436,6 +2441,7 @@ class InterpreterIDTests(unittest.TestCase):
             _interpreters.decref,
         )
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_does_not_exist(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2478,6 +2484,7 @@ class InterpreterIDTests(unittest.TestCase):
             with self.assertRaises(_interpreters.InterpreterNotFoundError):
                 decref(interpid)
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_initial(self):
         is_linked = _testinternalcapi.interpreter_refcount_linked
         get_refcount, _, _ = self.get_refcount_helpers()
@@ -2490,6 +2497,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(linked)
         self.assertEqual(refcount, 0)
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_never_linked(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2513,6 +2521,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertEqual(
             0, get_refcount(interpid))
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_link_unlink(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2535,6 +2544,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             is_linked(interpid))
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_link_incref_decref(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2560,6 +2570,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             exists(interpid))
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_incref_link(self):
         is_linked = _testinternalcapi.interpreter_refcount_linked
         link = _testinternalcapi.link_interpreter_refcount
@@ -2578,6 +2589,7 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertEqual(
             1, get_refcount(interpid))
 
+    @support.requires_subinterpreters
     def test_linked_lifecycle_link_incref_unlink_decref(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2645,6 +2657,83 @@ class TestStaticTypes(unittest.TestCase):
             self.assertIs(type(cls), type(object));
 
 
+class MainInterpreterOnlyTests(unittest.TestCase):
+
+    def test_c_creation_rejected_without_side_effects(self):
+        # Configured, legacy, bare-state and internal allocator entrypoints.
+        for api in range(4):
+            for detached in (False, True):
+                with self.subTest(api=api, detached=detached):
+                    _testinternalcapi.check_interpreter_creation_rejected(
+                        api, detached)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    def test_python_creation_rejected(self):
+        from concurrent import interpreters
+
+        self.assertIs(sys.implementation.supports_isolated_interpreters, False)
+        main = interpreters.get_main()
+        self.assertEqual(interpreters.get_current(), main)
+        before = _interpreters.list_all()
+        for create in (_interpreters.create, interpreters.create):
+            with self.subTest(create=create):
+                with self.assertRaises(interpreters.InterpreterError) as cm:
+                    create()
+                messages = []
+                exc = cm.exception
+                while exc is not None:
+                    messages.append(str(exc))
+                    exc = exc.__context__
+                self.assertIn('subinterpreters are not supported',
+                              '\n'.join(messages))
+                self.assertEqual(_interpreters.list_all(), before)
+                self.assertEqual(interpreters.get_current(), main)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    def test_existing_c_creation_seams_rejected(self):
+        for whence in (_interpreters.WHENCE_UNKNOWN,
+                       _interpreters.WHENCE_LEGACY_CAPI,
+                       _interpreters.WHENCE_CAPI,
+                       _interpreters.WHENCE_XI):
+            with self.subTest(whence=whence):
+                with self.assertRaisesRegex(_interpreters.InterpreterError,
+                                            'creation failed'):
+                    _testinternalcapi.create_interpreter(whence=whence)
+
+    @threading_helper.reap_threads
+    @threading_helper.requires_working_threading()
+    def test_main_interpreter_threads(self):
+        main_thread = threading.get_ident()
+        seen = []
+
+        def callback():
+            # This helper calls back through PyGILState_Ensure on native
+            # threads as well as on this Python-created thread.
+            seen.append(threading.get_ident())
+
+        def target():
+            _testcapi._test_thread_state(callback)
+
+        thread = threading.Thread(target=target)
+        thread.start()
+        threading_helper.join_thread(thread)
+        self.assertEqual(len(seen), 5)
+        self.assertNotIn(main_thread, seen)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    @threading_helper.reap_threads
+    @threading_helper.requires_working_threading()
+    def test_interpreter_pool_rejected(self):
+        from concurrent.futures import InterpreterPoolExecutor
+        from concurrent.futures.interpreter import BrokenInterpreterPool
+
+        with self.assertLogs('concurrent.futures', level='CRITICAL'):
+            with InterpreterPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(abs, -1)
+                with self.assertRaises(BrokenInterpreterPool):
+                    future.result(timeout=support.SHORT_TIMEOUT)
+
+
 class TestThreadState(unittest.TestCase):
 
     @threading_helper.reap_threads
@@ -2700,6 +2789,7 @@ class TestThreadState(unittest.TestCase):
         ret = assert_python_ok('-X', 'tracemalloc', '-c', code)
         self.assertIn(b'callback called', ret.out)
 
+    @support.requires_subinterpreters
     def test_gilstate_matches_current(self):
         _testcapi.test_current_tstate_matches()
 
@@ -2714,6 +2804,16 @@ C_TESTS_OBSERVING_PROMPT_DEATH = {
     'test_weakref_capi',
 }
 
+C_TESTS_REQUIRING_SUBINTERPRETERS = {
+    '_testcapi.test_current_tstate_matches',
+    '_testcapi.test_atexit',
+    '_testcapi.test_interpreter_guards',
+    '_testcapi.test_thread_state_ensure_crossinterp',
+    '_testcapi.test_interp_view_after_shutdown',
+    '_testcapi.test_thread_state_ensure_view',
+    '_testinternalcapi.test_interp_guard_countdown',
+}
+
 
 def get_test_funcs(mod, exclude_prefix=None):
     funcs = {}
@@ -2724,7 +2824,10 @@ def get_test_funcs(mod, exclude_prefix=None):
             continue
         if name in C_TESTS_OBSERVING_PROMPT_DEATH:
             continue
-        funcs[name] = getattr(mod, name)
+        func = getattr(mod, name)
+        if f'{mod.__name__}.{name}' in C_TESTS_REQUIRING_SUBINTERPRETERS:
+            func = support.requires_subinterpreters(func)
+        funcs[name] = func
     return funcs
 
 

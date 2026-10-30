@@ -3649,13 +3649,8 @@ make_impl_info(PyObject *version_info)
         goto error;
 #endif
 
-    // PEP-734
-#if defined(__wasi__) || defined(__EMSCRIPTEN__)
-    // It is not enabled on WASM builds just yet
+    // The experimental collector supports only the main interpreter.
     value = Py_False;
-#else
-    value = Py_True;
-#endif
     res = PyDict_SetItemString(impl_info, "supports_isolated_interpreters", value);
     if (res < 0) {
         goto error;

@@ -226,12 +226,14 @@ class EmbeddingTestsMixin:
 class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
     maxDiff = 100 * 50
 
+    @support.requires_subinterpreters
     def test_subinterps_main(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main = run[0]
 
             self.assertEqual(main.id, '0')
 
+    @support.requires_subinterpreters
     def test_subinterps_different_ids(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main, *subs, _ = run
@@ -240,6 +242,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
             for i, sub in enumerate(subs):
                 self.assertEqual(sub.id, str(mainid + i + 1))
 
+    @support.requires_subinterpreters
     def test_subinterps_distinct_state(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main, *subs, _ = run
@@ -2069,6 +2072,7 @@ class AuditingTests(EmbeddingTestsMixin, unittest.TestCase):
     def test_audit_tuple(self):
         self.run_embedded_interpreter("test_audit_tuple")
 
+    @support.requires_subinterpreters
     def test_audit_subinterpreter(self):
         self.run_embedded_interpreter("test_audit_subinterpreter")
 

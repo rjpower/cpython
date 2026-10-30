@@ -1279,8 +1279,10 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    *supports_isolated_interpreters* is a boolean value, whether
    this implementation supports multiple isolated interpreters.
-   It is ``True`` for CPython on most platforms.  Platforms with
-   this support implement the low-level :mod:`!_interpreters` module.
+   It is ``False`` in this experimental runtime, which supports only
+   the main interpreter.  The low-level :mod:`!_interpreters` module
+   remains available for main-interpreter inspection; successful import
+   does not imply support for creating another interpreter.
 
    .. seealso::
 

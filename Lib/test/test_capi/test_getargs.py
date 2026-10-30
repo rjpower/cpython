@@ -1423,6 +1423,7 @@ class ParseTupleAndKeywords_Test(unittest.TestCase):
                     "argument 1 must be sequence of length 1, not 0"):
                 parse(([],), {}, '(' + f + ')', ['a'])
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testinternalcapi is None, 'needs _testinternalcapi')
     def test_gh_119213(self):
         rc, out, err = script_helper.assert_python_ok("-c", """if True:

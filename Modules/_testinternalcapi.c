@@ -38,6 +38,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_shape.h"         // _PyShape_Index()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
@@ -2331,6 +2332,89 @@ _init_interp_config_from_object(PyInterpreterConfig *config, PyObject *obj)
         return -1;
     }
     return 0;
+}
+
+static PyObject *
+check_interpreter_creation_rejected(PyObject *self, PyObject *args)
+{
+    int api, detached;
+    if (!PyArg_ParseTuple(args, "ip:check_interpreter_creation_rejected",
+                          &api, &detached)) {
+        return NULL;
+    }
+    if (api < 0 || api > 3) {
+        PyErr_SetString(PyExc_ValueError, "unknown creation API");
+        return NULL;
+    }
+
+    PyThreadState *saved = PyThreadState_Get();
+    PyInterpreterState *main = PyInterpreterState_Main();
+    PyInterpreterState *head = _PyRuntime.interpreters.head;
+    int64_t next_id = _PyRuntime.interpreters.next_id;
+    int check_enabled = _Py_atomic_load_int_relaxed(
+        &_PyRuntime.gilstate.check_enabled);
+    if (detached) {
+        PyThreadState_Swap(NULL);
+    }
+
+    PyThreadState *created_thread = NULL;
+    PyInterpreterState *created_interp = NULL;
+    int rejected;
+    if (api == 0 || api == 3) {
+        PyStatus status;
+        if (api == 0) {
+            const PyInterpreterConfig config = _PyInterpreterConfig_INIT;
+            // A failing call must clear even a non-NULL output argument.
+            created_thread = saved;
+            status = Py_NewInterpreterFromConfig(&created_thread, &config);
+        }
+        else {
+            created_interp = main;
+            status = _PyInterpreterState_New(
+                _PyThreadState_GET(), &created_interp);
+        }
+        rejected = (PyStatus_IsError(status)
+                    && status.err_msg != NULL
+                    && strcmp(status.err_msg,
+                              "subinterpreters are not supported") == 0
+                    && created_thread == NULL && created_interp == NULL);
+    }
+    else if (api == 1) {
+        created_thread = Py_NewInterpreter();
+        rejected = (created_thread == NULL);
+    }
+    else {
+        created_interp = PyInterpreterState_New();
+        rejected = (created_interp == NULL);
+    }
+    int attachment_unchanged = (
+        _PyThreadState_GET() == (detached ? NULL : saved));
+
+    // Keep an accidentally successful creation from leaking into later tests.
+    if (created_thread != NULL && created_thread != saved) {
+        Py_EndInterpreter(created_thread);
+    }
+    if (created_interp != NULL && created_interp != main) {
+        // A bare state has not been initialized and cannot be cleared.
+        PyInterpreterState_Delete(created_interp);
+    }
+    PyThreadState_Swap(saved);
+
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (!rejected || !attachment_unchanged
+        || PyInterpreterState_Main() != main
+        || _PyRuntime.interpreters.head != head
+        || _PyRuntime.interpreters.next_id != next_id
+        || _Py_atomic_load_int_relaxed(
+               &_PyRuntime.gilstate.check_enabled) != check_enabled)
+    {
+        PyErr_SetString(PyExc_AssertionError,
+                        "interpreter creation was not rejected without side effects");
+        return NULL;
+    }
+    Py_RETURN_NONE;
 }
 
 static PyInterpreterState *
@@ -5171,6 +5255,8 @@ static PyMethodDef module_functions[] = {
     {"get_type_shape_count", _PyCFunction_CAST(get_type_shape_count), METH_O},
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
+    {"check_interpreter_creation_rejected", check_interpreter_creation_rejected,
+     METH_VARARGS, NULL},
     {"create_interpreter", _PyCFunction_CAST(create_interpreter),
      METH_VARARGS | METH_KEYWORDS},
     {"destroy_interpreter", _PyCFunction_CAST(destroy_interpreter),

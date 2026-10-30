@@ -4,9 +4,9 @@ A performance fork of CPython (upstream base `321925c92c9`, main of
 2026-10-23) that replaces the execution substrate wholesale: a
 fixed-width register IR produced by the compiler, one NaN-boxed value
 type in every frame and container, shapes in the object header, and a
-tracing collector with no reference counting. Tiers 0 and 1, a moving
-collector and a ports tree of rebuilt packages follow once the C API has
-settled. The user's goal statement is the Loom artifact `goal`; the
+tracing collector with no reference counting. Current work targets GC and
+interpreter performance, including a common moving nursery and small native
+contract fixtures; tiers 0 and 1 and broader package ports follow. The user's goal statement is the Loom artifact `goal`; the
 first analysis and plan is the artifact `plan`.
 
 This file is the hand-over point. It says what the design is, where the
@@ -20,16 +20,19 @@ tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4 and worker setup 093b9d2a1c3 are landed.
 Current focus is interpreter performance: the independently reviewed
 [matched baseline](design/work/pre-I-post-GC-timing.md) measures0.8243× upstream
-throughput. Fresh [cost attribution and experiment decisions](design/work/pre-I-gc-policy-and-experiment-decisions.md)
-prioritize selective death processing. Its independently reviewed prototype
-788695 is in an isolated topic tree, with a successful O1 debug build.
-Test-only correction69c34 passes the focused13 and affected four modules
-(599 tests,46 skips); release measurements and landing review remain.
-Historical worktree retirement is complete: 32 checkouts removed, eight
+throughput. The selective-death candidate `10d8773815c` has an O3 build and a
+paired four-row comparison: coroutine throughput improves30.9%; smaller changes
+on comprehensions/generators and a1.5% Richards elapsed regression have overlapping
+sample ranges. Its focused13 and four O1-debug modules pass599 tests/46 skips;
+full landing qualification and merge remain. No new runtime optimization has
+landed on primary. The [revised GC performance plan](design/work/gc-architecture-next.md)
+contains13 hot-window perf profiles, cycles/instructions, phase costs and32/64MiB
+memory tradeoffs. Keep32MiB; next separate native-only suspended-generator cleanup
+from Python finalization, then common-region reclamation and a movable nursery
+with stable native space. Nonmoving generations are not a required intermediate.
+Historical worktree retirement is complete:32 checkouts removed, eight
 registered roots retained, including three ownership/dirty-state exceptions.
 H1/H2 source tags are pushed and selected evidence is retained locally.
-The [GC architecture plan](design/work/gc-architecture-next.md) explains the
-current collector, three broad improvements and the path to generations/movement.
 This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -142,8 +145,9 @@ This lands the increment, not final GC correctness or interpreter parity.
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
-| Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
-| JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
+| Selective death processing | Candidate10d877, doc-only successor d333139; O3 paired-four coroutine throughput1.309×, independent native13 analysis and599/46skip affected modules | Existing broad landing qualification and independent review; no primary runtime merge yet |
+| Common nursery and stable native space | Revised measured plan plus allocator, frame, container and runtime-store ledgers | First qualify selective death, then native-only cleanup; region storage, writable slots/pinning, core barriers, scanned native owners and independent minor oracle follow. No nursery/minors/barriers implemented; nonmoving generations are an alternative |
+| JIT, broad movement and package ports | JIT and whole-heap movement deferred; nursery and small native contract fixtures are in the current performance plan | Interpreter checkpointI before JIT; extend package migration as native root/barrier/pinning contracts settle |
 
 The19 affected jobs are a declared coverage set, **not19 repeated full
 suites**: four stack-hit checks, two Unicode/consumer runs, two smoke runs,

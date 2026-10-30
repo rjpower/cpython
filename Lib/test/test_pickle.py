@@ -3,6 +3,8 @@ from _compat_pickle import (IMPORT_MAPPING, REVERSE_IMPORT_MAPPING,
 import builtins
 import collections
 import contextlib
+import gc
+import inspect
 import io
 import pickle
 import struct
@@ -35,6 +37,46 @@ try:
     has_c_implementation = True
 except ImportError:
     has_c_implementation = False
+
+
+class UnpicklerBuffer:
+    def __init__(self, data, events, tag, *, acquire=None, release=None):
+        self.data = data
+        self.events = events
+        self.tag = tag
+        self.acquire = acquire
+        self.release = release
+
+    def __buffer__(self, flags):
+        self.events.append(('acquire', self.tag, flags))
+        if self.acquire is not None:
+            self.acquire()
+        return memoryview(self.data)
+
+    def __release_buffer__(self, view):
+        self.events.append(('release', self.tag))
+        if self.release is not None:
+            self.release(view)
+
+
+class UnpicklerBufferStream:
+    def __init__(self, *chunks):
+        self.chunks = collections.deque(chunks)
+
+    def read(self, size):
+        return self.chunks.popleft() if self.chunks else b''
+
+    def readline(self):
+        return self.read(-1)
+
+
+class UnpicklerPeekStream(io.BytesIO):
+    def __init__(self, data, buffer):
+        super().__init__(data)
+        self.buffer = buffer
+
+    def peek(self, size):
+        return self.buffer
 
 
 class LazyImportTest(unittest.TestCase):
@@ -450,6 +492,164 @@ if has_c_implementation:
             unpickled = unpickler.load()  # should not crash
             self.assertEqual(unpickled, [42])
 
+    class CUnpicklerBufferOwnerTests(unittest.TestCase):
+        def test_acquisition_flags_and_collection(self):
+            for source in ('loads', 'read', 'peek', 'readline'):
+                with self.subTest(source=source):
+                    events = []
+                    data = b'I42\n.'
+                    # A separate first chunk makes load_int call readline().
+                    chunk = b'42\n' if source == 'readline' else data
+                    buffer = UnpicklerBuffer(chunk, events, source,
+                                             acquire=gc.collect,
+                                             release=lambda view: gc.collect())
+                    if source == 'loads':
+                        self.assertEqual(_pickle.loads(buffer), 42)
+                    else:
+                        if source == 'peek':
+                            stream = UnpicklerPeekStream(data, buffer)
+                        elif source == 'readline':
+                            stream = UnpicklerBufferStream(b'I', buffer, b'.')
+                        else:
+                            stream = UnpicklerBufferStream(buffer)
+                        unpickler = _pickle.Unpickler(stream)
+                        self.assertEqual(unpickler.load(), 42)
+                        unpickler.__init__(io.BytesIO())
+                    self.assertEqual(events, [
+                        ('acquire', source, inspect.BufferFlags.CONTIG_RO),
+                        ('release', source),
+                    ])
+
+        def test_owner_is_sealed_and_traversed(self):
+            data = bytearray(b'I42\n.')
+            unpickler = _pickle.Unpickler(UnpicklerBufferStream(data))
+            self.assertEqual(unpickler.load(), 42)
+            owners = [obj for obj in gc.get_referents(unpickler)
+                      if type(obj).__name__ == 'managedbuffer']
+            self.assertEqual(len(owners), 1)
+            owner = owners[0]
+            self.assertIn(data, gc.get_referents(owner))
+            with self.assertRaises(AttributeError):
+                owner.release
+            with self.assertRaises(TypeError):
+                memoryview(owner)
+            with self.assertRaises(BufferError):
+                data.extend(b'x')
+            unpickler.__init__(io.BytesIO())
+            data.extend(b'x')
+            # Keeping the old owner alive cannot retain an active acquisition.
+            self.assertEqual(gc.get_referents(owner), [])
+
+        def test_replacement_release_reentry(self):
+            events = []
+            unpickler = None
+
+            def release(view):
+                gc.collect()
+                self.assertEqual(bytes(view), b'I')
+                with self.assertRaisesRegex(RuntimeError, 'already used'):
+                    unpickler.load()
+                with self.assertRaisesRegex(RuntimeError, 'already used'):
+                    unpickler.__init__(io.BytesIO())
+                with self.assertRaisesRegex(RuntimeError, 'already used'):
+                    unpickler.memo.clear()
+                with self.assertRaisesRegex(RuntimeError, 'already used'):
+                    unpickler.memo = {}
+
+            first = UnpicklerBuffer(b'I', events, 'first', release=release)
+            second = UnpicklerBuffer(b'42\n', events, 'second')
+            unpickler = _pickle.Unpickler(
+                UnpicklerBufferStream(first, second, b'.'))
+            with support.catch_unraisable_exception() as caught:
+                self.assertEqual(unpickler.load(), 42)
+                unpickler.__init__(io.BytesIO())
+                self.assertIsNone(caught.unraisable)
+            self.assertEqual(events, [
+                ('acquire', 'first', inspect.BufferFlags.CONTIG_RO),
+                ('acquire', 'second', inspect.BufferFlags.CONTIG_RO),
+                ('release', 'first'), ('release', 'second'),
+            ])
+
+        def test_failed_replacement_keeps_old_acquisition(self):
+            events = []
+
+            def fail():
+                gc.collect()
+                raise ValueError('acquisition failed')
+
+            first = UnpicklerBuffer(b'I', events, 'first')
+            second = UnpicklerBuffer(b'42\n', events, 'second', acquire=fail)
+            unpickler = _pickle.Unpickler(UnpicklerBufferStream(first, second))
+            with self.assertRaisesRegex(ValueError, 'acquisition failed'):
+                unpickler.load()
+            self.assertNotIn(('release', 'first'), events)
+            unpickler.__init__(io.BytesIO(b'I7\n.'))
+            self.assertEqual(unpickler.load(), 7)
+            self.assertEqual(events.count(('release', 'first')), 1)
+            self.assertNotIn(('release', 'second'), events)
+
+        def test_release_exception_preserves_load_error(self):
+            events = []
+
+            def release(view):
+                gc.collect()
+                raise ValueError('release failed')
+
+            buffer = UnpicklerBuffer(b'?', events, 'bad', release=release)
+            with support.catch_unraisable_exception() as caught:
+                with self.assertRaises(_pickle.UnpicklingError):
+                    _pickle.loads(buffer)
+                self.assertIs(caught.unraisable.exc_type, ValueError)
+                self.assertEqual(str(caught.unraisable.exc_value),
+                                 'release failed')
+            self.assertEqual(events.count(('release', 'bad')), 1)
+
+        def test_constructor_failure_and_reinitialization(self):
+            events = []
+            buffer = UnpicklerBuffer(b'(I1\nl.', events, 'old')
+            unpickler = _pickle.Unpickler(UnpicklerBufferStream(buffer))
+            self.assertEqual(unpickler.load(), [1])
+            with self.assertRaises(TypeError):
+                unpickler.__init__(io.BytesIO(), buffers=42)
+            self.assertEqual(events.count(('release', 'old')), 1)
+            with self.assertRaises(_pickle.UnpicklingError):
+                unpickler.load()
+            # Exercise a previously allocated mark stack after reinitializing.
+            unpickler.__init__(io.BytesIO(b'(I2\nl.'))
+            self.assertEqual(unpickler.load(), [2])
+            new = UnpicklerBuffer(b'I3\n.', events, 'new')
+            with self.assertRaises(TypeError):
+                _pickle.loads(new, buffers=42)
+            self.assertEqual(events.count(('release', 'new')), 1)
+
+        def test_subclass_finalizer_resurrection_and_reacquisition(self):
+            events = []
+            resurrected = []
+
+            class Unpickler(_pickle.Unpickler):
+                def __del__(self):
+                    # Deliberately do not call a base cleanup method.
+                    resurrected.append(self)
+
+            first = UnpicklerBuffer(b'I1\n.', events, 'first')
+            unpickler = Unpickler(UnpicklerBufferStream(first))
+            first.unpickler = unpickler
+            self.assertEqual(unpickler.load(), 1)
+            del unpickler, first
+            support.gc_collect()
+            self.assertEqual(len(resurrected), 1)
+            self.assertNotIn(('release', 'first'), events)
+            unpickler = resurrected.pop()
+            second = UnpicklerBuffer(b'I2\n.', events, 'second')
+            unpickler.__init__(UnpicklerBufferStream(second))
+            second.unpickler = unpickler
+            self.assertEqual(unpickler.load(), 2)
+            self.assertEqual(events.count(('release', 'first')), 1)
+            del unpickler, second
+            support.gc_collect()
+            self.assertEqual(resurrected, [])
+            self.assertEqual(events.count(('release', 'second')), 1)
+
     class CDispatchTableTests(AbstractDispatchTableTests, unittest.TestCase):
         pickler_class = pickle.Pickler
         def get_dispatch_table(self):
@@ -515,7 +715,7 @@ if has_c_implementation:
                 0)  # Write buffer is cleared after every dump().
 
         def test_unpickler(self):
-            basesize = support.calcobjsize('2P2n3P 2P2n2i5P 2P5n8P2n3i')
+            basesize = support.calcobjsize('2P2n3P P 2P5n8P2n3i')
             unpickler = _pickle.Unpickler
             P = struct.calcsize('P')  # Size of memo table entry.
             n = struct.calcsize('n')  # Size of mark table entry.

@@ -15,6 +15,7 @@
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
 #include "pycore_list.h"          // _PyList_FromValues()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
+#include "pycore_memoryobject.h"  // _PyManagedBuffer_FromObject()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyNone_Type
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
@@ -706,7 +707,7 @@ typedef struct UnpicklerObject {
     PyObject *persistent_load;  /* persistent_load() method, can be NULL. */
     PyObject *persistent_load_attr;  /* instance attribute, can be NULL. */
 
-    Py_buffer buffer;
+    _PyManagedBufferObject *input_owner; /* Sealed owner of one acquisition. */
     char *input_buffer;
     char *input_line;
     Py_ssize_t input_len;
@@ -1288,20 +1289,59 @@ _Pickler_SetBufferCallback(PicklerObject *self, PyObject *buffer_callback)
     return 0;
 }
 
+static _PyManagedBufferObject *
+_Unpickler_DetachInput(UnpicklerObject *self)
+{
+    _PyManagedBufferObject *owner = self->input_owner;
+    self->input_owner = NULL;
+    self->input_buffer = NULL;
+    self->input_len = self->next_read_idx = self->prefetched_idx = 0;
+    self->frame_end = -1;
+    self->saved_input_len = 0;
+    return owner;
+}
+
+/* Consume an acquisition at an explicit live operation boundary.  GC clear
+ * only drops the owner; its existing managed-buffer hook does the release. */
+static void
+_Unpickler_ReleaseInput(UnpicklerObject *self)
+{
+    assert(self->running);
+    _PyManagedBufferObject *owner = _Unpickler_DetachInput(self);
+    if (owner != NULL) {
+        _PyManagedBuffer_Release(owner);
+        Py_DECREF(owner);
+    }
+}
+
 /* Returns the size of the input on success, -1 on failure. This takes its
    own reference to `input`. */
 static Py_ssize_t
 _Unpickler_SetStringInput(UnpicklerObject *self, PyObject *input)
 {
-    if (self->buffer.buf != NULL)
-        PyBuffer_Release(&self->buffer);
-    if (PyObject_GetBuffer(input, &self->buffer, PyBUF_CONTIG_RO) < 0)
+    assert(self->running);
+    _PyManagedBufferObject *owner = (_PyManagedBufferObject *)
+        _PyManagedBuffer_FromObject(input, PyBUF_CONTIG_RO);
+    if (owner == NULL) {
         return -1;
-    self->input_buffer = self->buffer.buf;
-    self->input_len = self->buffer.len;
-    self->next_read_idx = 0;
+    }
+    const Py_buffer *view = _PyManagedBuffer_GetBuffer(owner);
+    if (view == NULL) {
+        Py_DECREF(owner);
+        PyErr_SetString(PyExc_ValueError, "Unpickler input buffer was released");
+        return -1;
+    }
+
+    // Publish coherent input before the old release can call back into Python.
+    _PyManagedBufferObject *old_owner = _Unpickler_DetachInput(self);
+    self->input_owner = owner;
+    self->input_buffer = view->buf;
+    self->input_len = view->len;
     self->prefetched_idx = self->input_len;
-    self->frame_end = -1;
+    if (old_owner != NULL) {
+        _PyManagedBuffer_Release(old_owner);
+        Py_DECREF(old_owner);
+    }
     return self->input_len;
 }
 
@@ -1621,7 +1661,11 @@ _Unpickler_ReadInto(PickleState *state, UnpicklerObject *self, char *buf,
    consume.
 
    Returns -1 (with an exception set) on failure. On success, return the
-   number of chars read. */
+   number of chars read.
+
+   load() has checked input_owner before entering the opcode loop.  The owner
+   is sealed, traversed by self, and replaced only while self->running excludes
+   reentrant load/__init__; callbacks cannot release this acquisition. */
 #define _Unpickler_Read(self, state, s, n) \
     (((n) <= (self)->input_len - (self)->next_read_idx)      \
      ? (*(s) = (self)->input_buffer + (self)->next_read_idx, \
@@ -1840,7 +1884,7 @@ _Unpickler_New(PyObject *module)
     self->memo_dict = NULL;
     self->persistent_load = NULL;
     self->persistent_load_attr = NULL;
-    memset(&self->buffer, 0, sizeof(Py_buffer));
+    self->input_owner = NULL;
     self->input_buffer = NULL;
     self->input_line = NULL;
     self->input_len = 0;
@@ -7504,6 +7548,14 @@ load_frame(PickleState *state, UnpicklerObject *self)
 static PyObject *
 load(PickleState *st, UnpicklerObject *self)
 {
+    assert(self->running);
+    if (self->input_owner != NULL &&
+        _PyManagedBuffer_GetBuffer(self->input_owner) == NULL)
+    {
+        PyErr_SetString(st->UnpicklingError,
+                        "Unpickler input buffer was released");
+        return NULL;
+    }
     PyObject *value = NULL;
     PyObject *tmp;
     char *s = NULL;
@@ -7683,6 +7735,7 @@ _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls)
 /*[clinic end generated code: output=cc88168f608e3007 input=f5d2f87e61d5f07f]*/
 {
     PickleState *st = _Pickle_GetStateByClass(cls);
+    BEGIN_USING_UNPICKLER(self, NULL);
 
     /* Check whether the Unpickler was initialized correctly. This prevents
        segfaulting if a subclass overridden __init__ with a function that does
@@ -7692,9 +7745,9 @@ _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls)
         PyErr_Format(st->UnpicklingError,
                      "Unpickler.__init__() was not called by %s.__init__()",
                      Py_TYPE(self)->tp_name);
+        END_USING_UNPICKLER(self);
         return NULL;
     }
-    BEGIN_USING_UNPICKLER(self, NULL);
     PyObject *res = load(st, self);
     END_USING_UNPICKLER(self);
     return res;
@@ -7861,6 +7914,9 @@ static int
 Unpickler_clear(PyObject *op)
 {
     UnpicklerObject *self = UnpicklerObject_CAST(op);
+    int running = self->running;
+    self->running = 1;
+    _PyManagedBufferObject *owner = _Unpickler_DetachInput(self);
     Py_CLEAR(self->readline);
     Py_CLEAR(self->readinto);
     Py_CLEAR(self->read);
@@ -7869,15 +7925,12 @@ Unpickler_clear(PyObject *op)
     Py_CLEAR(self->persistent_load);
     Py_CLEAR(self->persistent_load_attr);
     Py_CLEAR(self->buffers);
-    if (self->buffer.buf != NULL) {
-        PyBuffer_Release(&self->buffer);
-        self->buffer.buf = NULL;
-    }
-
     Py_CLEAR(self->memo_dict);
     _Unpickler_MemoCleanup(self, NULL);
+    self->memo_size = self->memo_len = 0;
     PyMem_Free(self->marks);
     self->marks = NULL;
+    self->num_marks = self->marks_size = 0;
     PyMem_Free(self->input_line);
     self->input_line = NULL;
     PyMem_Free(self->encoding);
@@ -7885,6 +7938,9 @@ Unpickler_clear(PyObject *op)
     PyMem_Free(self->errors);
     self->errors = NULL;
 
+    // Do not run an owner's queued release from a consumer's GC clear/sweep.
+    Py_XDECREF(owner);
+    self->running = running;
     return 0;
 }
 
@@ -7912,7 +7968,7 @@ Unpickler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->persistent_load_attr);
     Py_VISIT(self->buffers);
     Py_VISIT(self->memo_dict);
-    Py_VISIT(self->buffer.obj);
+    Py_VISIT(self->input_owner);
     PyObject **memo = self->memo;
     if (memo) {
         Py_ssize_t i = self->memo_size;
@@ -7964,8 +8020,8 @@ _pickle_Unpickler___init___impl(UnpicklerObject *self, PyObject *file,
 {
     BEGIN_USING_UNPICKLER(self, -1);
     /* In case of multiple __init__() calls, clear previous content. */
-    if (self->read != NULL)
-        (void)Unpickler_clear((PyObject *)self);
+    _Unpickler_ReleaseInput(self);
+    (void)Unpickler_clear((PyObject *)self);
 
     if (_Unpickler_SetInputStream(self, file) < 0) {
         goto error;
@@ -7995,6 +8051,7 @@ _pickle_Unpickler___init___impl(UnpicklerObject *self, PyObject *file,
     return 0;
 
 error:
+    (void)Unpickler_clear((PyObject *)self);
     END_USING_UNPICKLER(self);
     return -1;
 }
@@ -8024,6 +8081,10 @@ _pickle_UnpicklerMemoProxy_clear_impl(UnpicklerMemoProxyObject *self)
 /*[clinic end generated code: output=d20cd43f4ba1fb1f input=b1df7c52e7afd9bd]*/
 {
     UnpicklerObject *unpickler = self->unpickler;
+    if (unpickler->running) {
+        PyErr_SetString(PyExc_RuntimeError, "Unpickler object is already used");
+        return NULL;
+    }
     PyObject **memo = _Unpickler_NewMemo(unpickler->memo_size);
     if (memo == NULL) {
         return NULL;
@@ -8185,6 +8246,11 @@ Unpickler_set_memo(PyObject *op, PyValue obj_v, void *Py_UNUSED(closure))
     PyObject **new_memo;
     UnpicklerObject *self = UnpicklerObject_CAST(op);
     size_t new_memo_size = 0;
+
+    if (self->running) {
+        PyErr_SetString(PyExc_RuntimeError, "Unpickler object is already used");
+        return -1;
+    }
 
     if (obj == NULL) {
         PyErr_SetString(PyExc_TypeError,
@@ -8507,6 +8573,7 @@ _pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
     if (unpickler == NULL)
         return NULL;
 
+    BEGIN_USING_UNPICKLER(unpickler, NULL);
     if (_Unpickler_SetInputStream(unpickler, file) < 0)
         goto error;
 
@@ -8520,10 +8587,16 @@ _pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
 
     PickleState *state = _Pickle_GetState(module);
     result = load(state, unpickler);
+    _Unpickler_ReleaseInput(unpickler);
+    (void)Unpickler_clear((PyObject *)unpickler);
+    END_USING_UNPICKLER(unpickler);
     Py_DECREF(unpickler);
     return result;
 
   error:
+    _Unpickler_ReleaseInput(unpickler);
+    (void)Unpickler_clear((PyObject *)unpickler);
+    END_USING_UNPICKLER(unpickler);
     Py_XDECREF(unpickler);
     return NULL;
 }
@@ -8568,6 +8641,7 @@ _pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
     if (unpickler == NULL)
         return NULL;
 
+    BEGIN_USING_UNPICKLER(unpickler, NULL);
     if (_Unpickler_SetStringInput(unpickler, data) < 0)
         goto error;
 
@@ -8581,10 +8655,16 @@ _pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
 
     PickleState *state = _Pickle_GetState(module);
     result = load(state, unpickler);
+    _Unpickler_ReleaseInput(unpickler);
+    (void)Unpickler_clear((PyObject *)unpickler);
+    END_USING_UNPICKLER(unpickler);
     Py_DECREF(unpickler);
     return result;
 
   error:
+    _Unpickler_ReleaseInput(unpickler);
+    (void)Unpickler_clear((PyObject *)unpickler);
+    END_USING_UNPICKLER(unpickler);
     Py_XDECREF(unpickler);
     return NULL;
 }

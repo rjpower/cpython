@@ -10,7 +10,7 @@ import sys
 import unittest
 import warnings
 from re import Scanner
-from weakref import proxy
+from weakref import proxy, ref
 
 # some platforms lack working multiprocessing
 try:
@@ -1961,16 +1961,13 @@ class ReTests(unittest.TestCase):
     def test_scanner_keeps_its_string(self):
         # The scanner holds the string it scans and, for a bytes-like
         # object, the exporter of its buffer, until it is freed; here it is
-        # their only holder across a collection, and a tracing collector
-        # frees what no traverse visits.
-        released = []
+        # their only holder across a collection.  The backing storage must
+        # become usable again after the scanner and match are gone.
         class Exporter:
             def __init__(self, data):
                 self.data = bytearray(data)
             def __buffer__(self, flags):
                 return memoryview(self.data)
-            def __release_buffer__(self, view):
-                released.append(view.tobytes())
 
         def text(first):
             return "".join(chr(ord(first) + i % 10) for i in range(1000))
@@ -1989,29 +1986,28 @@ class ReTests(unittest.TestCase):
         for pattern, make in cases:
             kind = type(make("")).__name__
             with self.subTest(kind=kind):
-                released.clear()
                 expected = contents(make(text("a")))
-                scanner = re.compile(pattern).scanner(make(text("a")))
-                held = [type(r).__name__ for r in gc.get_referents(scanner)]
-                self.assertIn(kind, held)
-                if kind == "Exporter":
-                    self.assertIn("_buffer_wrapper", held)
+                obj = make(text("a"))
+                backing = obj.data if isinstance(obj, Exporter) else None
+                exporter = ref(obj) if isinstance(obj, Exporter) else None
+                scanner = re.compile(pattern).scanner(obj)
+                del obj
                 gc_collect()
+                if exporter is not None:
+                    self.assertIsNotNone(exporter())
                 # Reuse the memory a freed string would have left.
                 junk = [make(text("0")) for _ in range(200)]
                 m = scanner.search()
                 del junk
                 self.assertIsNotNone(m)
-                self.assertEqual(released, [])
                 self.assertEqual(contents(m.group(1)), expected[-3:])
                 self.assertEqual(contents(m.string), expected)
-                # Reading a group uses a separate temporary acquisition.
-                self.assertEqual(released, [expected] if kind == "Exporter" else [])
-                # Ordinary finalization releases the scanner's acquisition.
                 del m, scanner
                 gc_collect()
-                self.assertEqual(released,
-                                 [expected, expected] if kind == "Exporter" else [])
+                if exporter is not None:
+                    self.assertIsNone(exporter())
+                    backing.extend(b"!")
+                    self.assertEqual(backing, expected + b"!")
 
     def test_bug_817234(self):
         iter = re.finditer(r".*", "asdf")

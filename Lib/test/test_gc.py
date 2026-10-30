@@ -1532,6 +1532,206 @@ class TracingCollectorTests(unittest.TestCase):
         for ref in refs:
             self.assertIsNone(ref())
 
+    DEBUG_OUTPUT_SETUP = """
+import gc, sys, weakref, _testinternalcapi
+gc.disable()
+gc.set_debug(0)
+gc.collect()
+stops = 0
+def callback(phase, info):
+    global stops
+    if phase == 'stop':
+        stops += 1
+gc.callbacks.append(callback)
+def make_garbage(n):
+    for _ in range(n):
+        value = []
+        value.append(value)
+"""
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_after_snapshot(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            phases = []
+            lines = []
+            class Writer:
+                def write(self, text):
+                    phases.append(stops)
+                    lines.append(text)
+            make_garbage(100)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            # PySys_WriteStderr swallows writer exceptions: assert outside it.
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+            assert any('collectable' in line for line in lines), lines
+            assert any('bytes freed' in line for line in lines), lines
+        """)
+        assert_python_ok("-c", code)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_after_garbage_publication(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            class Item:
+                pass
+            def make():
+                item = Item()
+                item.loop = item
+                return weakref.ref(item)
+            ref = make()
+            published = []
+            lines = []
+            class Writer:
+                def write(self, text):
+                    lines.append(text)
+                    published.append(ref() is not None and
+                                     any(item is ref() for item in gc.garbage))
+            gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_SAVEALL | gc.DEBUG_UNCOLLECTABLE)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert published and all(published), 'debug writer before garbage publication'
+            assert any('bytes freed' in line for line in lines), lines
+            assert any('uncollectable' in line for line in lines), lines
+            gc.garbage.clear()
+            gc.collect()
+        """)
+        assert_python_ok("-c", code)
+
+    @threading_helper.requires_working_threading()
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_writer_yields_and_collects(self):
+        code = "import threading\n" + self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            request = threading.Event()
+            done = threading.Event()
+            errors = []
+            def worker():
+                if not request.wait(10):
+                    errors.append('writer never entered')
+                else:
+                    try:
+                        gc.collect()
+                    except BaseException as exc:
+                        errors.append(repr(exc))
+                done.set()
+            thread = threading.Thread(target=worker)
+            thread.start()
+            phases = []
+            class Writer:
+                entered = False
+                def write(self, text):
+                    if self.entered:
+                        return
+                    self.entered = True
+                    phases.append(stops)
+                    gc.set_debug(0)
+                    request.set()
+                    if not done.wait(10):
+                        errors.append('writer could not yield to collecting thread')
+                    gc.collect()
+            make_garbage(100)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+                request.set()
+                thread.join(15)
+            assert not thread.is_alive(), 'collecting thread stuck'
+            assert not errors, errors
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+        """)
+        assert_python_ok("-c", code)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_buffer_oom(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            calls = []
+            class Writer:
+                def write(self, text):
+                    calls.append(text)
+            make_garbage(200)
+            # Growth two has a real retained prefix; no queue/order hook is armed.
+            _testinternalcapi.gc_fail_debug_alloc(2)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert _testinternalcapi.gc_fail_debug_alloc(0) == 0, 'buffer OOM did not fire'
+            assert not calls, 'buffer OOM called Python writer'
+        """)
+        _, _, err = assert_python_ok("-c", code)
+        lines = err.splitlines()
+        objects = [line for line in lines if b"gc: collectable" in line]
+        self.assertGreater(len(objects), 20)
+        self.assertEqual(len(objects), len(set(objects)))
+        stats = [i for i, line in enumerate(lines) if b"bytes freed" in line]
+        self.assertEqual(len(stats), 1)
+        self.assertTrue(all(i < stats[0] for i, line in enumerate(lines)
+                            if b"gc: collectable" in line))
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_writer_exception_preserves_exception(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            phases = []
+            class Writer:
+                def write(self, text):
+                    phases.append(stops)
+                    raise ValueError('writer failure')
+            gc.set_debug(gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                try:
+                    raise LookupError('interrupted exception')
+                except LookupError as exc:
+                    gc.collect()
+                    assert sys.exception() is exc
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+        """)
+        _, _, err = assert_python_ok("-c", code)
+        self.assertIn(b"bytes freed", err)
+        self.assertNotIn(b"writer failure", err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_inline_uses_c_stderr(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            calls = []
+            class Writer:
+                def write(self, text):
+                    calls.append(text)
+            old_stress = _testinternalcapi.gc_get_stress()
+            gc.enable()
+            sys.stderr = Writer()
+            try:
+                gc.set_debug(gc.DEBUG_STATS)
+                _testinternalcapi.gc_set_stress(1)
+                for _ in range(8):
+                    value = [None]
+            finally:
+                gc.set_debug(0)
+                _testinternalcapi.gc_set_stress(old_stress)
+                sys.stderr = sys.__stderr__
+                gc.disable()
+            assert not calls, 'inline collection called Python writer'
+        """)
+        _, _, err = assert_python_ok("-c", code)
+        self.assertIn(b"bytes freed", err)
+
     def test_weakref_callback_runs_after_collection(self):
         class A:
             pass

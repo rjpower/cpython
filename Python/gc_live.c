@@ -1326,28 +1326,99 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     return ncollected;
 }
 
-/* sys.stderr, unless Python code cannot run here. */
+/* Bytes only: collect_pass owns this batch across the collection.  No
+   Python writer may run while collect still borrows dead/garbage arrays. */
+typedef struct {
+    char *data;
+    size_t used;
+    size_t capacity;
+    int to_stderr;
+} debug_output;
+
+/* Fail one buffer growth, independently of queue/order allocations. */
+static int fail_debug_alloc_countdown;
+
+int
+_PyGC_LiveFailDebugAlloc(int n)
+{
+    int left = fail_debug_alloc_countdown;
+    fail_debug_alloc_countdown = n;
+    return left;
+}
+
 static void
-debug_write(struct _gc_live_state *ls, const char *format, ...)
+debug_flush(debug_output *out, int python_ok)
+{
+    for (size_t i = 0; i < out->used; ) {
+        const char *line = out->data + i;
+        size_t length = strlen(line) + 1;
+        if (python_ok) {
+            PySys_WriteStderr("%s", line);
+        }
+        else {
+            fputs(line, stderr);
+        }
+        i += length;
+    }
+    free(out->data);
+    out->data = NULL;
+    out->used = out->capacity = 0;
+}
+
+static void
+debug_write(debug_output *out, const char *format, ...)
 {
     char buf[1000];
     va_list va;
     va_start(va, format);
     PyOS_vsnprintf(buf, sizeof(buf), format, va);
     va_end(va);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (ls->no_python || tstate == NULL || !live_python_ok(tstate)) {
+    if (out->to_stderr) {
         fputs(buf, stderr);
+        return;
     }
-    else {
-        PySys_WriteStderr("%s", buf);
+    size_t length = strlen(buf) + 1;
+    if (out->used > (size_t)PY_SSIZE_T_MAX - length) {
+        goto fallback;
     }
+    size_t needed = out->used + length;
+    if (needed > out->capacity) {
+        size_t capacity = out->capacity ? out->capacity : 1024;
+        while (capacity < needed) {
+            if (capacity > (size_t)PY_SSIZE_T_MAX / 2) {
+                capacity = needed;
+                break;
+            }
+            capacity *= 2;
+        }
+        if (fail_debug_alloc_countdown > 0
+            && --fail_debug_alloc_countdown == 0)
+        {
+            goto fallback;
+        }
+        char *data = realloc(out->data, capacity);
+        if (data == NULL) {
+            goto fallback;
+        }
+        out->data = data;
+        out->capacity = capacity;
+    }
+    memcpy(out->data + out->used, buf, length);
+    out->used = needed;
+    return;
+
+fallback:
+    /* Preserve the prefix and this record without a Python/OOM callback.
+       Native stdio may block, but never releases this domain's GIL. */
+    debug_flush(out, 0);
+    fputs(buf, stderr);
+    out->to_stderr = 1;
 }
 
 static void
-debug_cycle(struct _gc_live_state *ls, const char *msg, PyObject *op)
+debug_cycle(debug_output *out, const char *msg, PyObject *op)
 {
-    debug_write(ls, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
+    debug_write(out, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
 }
 
 /* Add a collection to the totals in the ring of generation 2's stats, which
@@ -1549,7 +1620,7 @@ static int stress_every = 0;
    a collection from the queue's code walks. */
 static Py_NO_INLINE Py_ssize_t
 collect(PyThreadState *tstate, struct _gc_live_state *ls,
-        _PyGC_Reason reason)
+        _PyGC_Reason reason, debug_output *out)
 {
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
@@ -1570,6 +1641,8 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     (void)PyTime_PerfCounterRaw(&t0);
     _PyGCMarkResult res;
     objstack garbage = {0};
+    _PyGCRoot garbage_root;
+    int garbage_rooted = 0;
     Py_ssize_t ncollected = 0, bytes_freed = 0;
     if (_PyGC_TraceLiveMark(tstate, &res) < 0) {
         unpin_domain(&res);
@@ -1600,12 +1673,11 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
             }
         }
         if (gc->debug & _PyGC_DEBUG_COLLECTABLE) {
-            // Only the names and addresses: Python code that the write runs
-            // cannot reach the dead objects, whose weak references are clear.
+            // Copy text now; the eventual writer must not borrow objects.
             for (Py_ssize_t i = 0; i < res.ndead; i++) {
                 PyObject *op = res.dead[i].op;
                 if ((op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
-                    debug_cycle(ls, "collectable", op);
+                    debug_cycle(out, "collectable", op);
                 }
             }
         }
@@ -1645,8 +1717,13 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     free(res.dead);
 
+    if (garbage.n != 0) {
+        assert(garbage.n <= (size_t)res.ndead);
+        _PyGC_AddRoot(&garbage_root, garbage.items, (Py_ssize_t)garbage.n);
+        garbage_rooted = 1;
+    }
     if (gc->debug & _PyGC_DEBUG_STATS) {
-        debug_write(ls, "gc: %zd objects, %zd collected, %zd bytes freed, "
+        debug_write(out, "gc: %zd objects, %zd collected, %zd bytes freed, "
                     "%zd live bytes, %.4fs elapsed\n",
                     res.nobjects, ncollected, bytes_freed,
                     res.live_bytes, cur.duration);
@@ -1657,7 +1734,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     for (size_t i = 0; i < garbage.n; i++) {
         if (gc->debug & _PyGC_DEBUG_UNCOLLECTABLE) {
-            debug_cycle(ls, "uncollectable", garbage.items[i]);
+            debug_cycle(out, "uncollectable", garbage.items[i]);
         }
     }
     for (size_t i = 0; gc->garbage != NULL && i < garbage.n; i++) {
@@ -1668,6 +1745,9 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
 done:
     assert(res.ndomain == 0);  // unpinned on every path
+    if (garbage_rooted) {
+        _PyGC_RemoveRoot(&garbage_root);
+    }
     free(garbage.items);
     invoke_gc_callback(tstate, "stop", &cur);
     gc->frame = NULL;
@@ -1692,10 +1772,13 @@ collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
     if (heap != NULL) {
         m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
     }
-    Py_ssize_t n = collect(tstate, ls, reason);
+    debug_output out = {.to_stderr = ls->no_python || !live_python_ok(tstate)};
+    Py_ssize_t n = collect(tstate, ls, reason, &out);
     // A collection that the queue's code triggers records its own entry.
     ts->gc_trace.entry.sp = 0;
-    *nfinalized = ls->no_python ? 0 : run_queue(tstate);
+    int python_ok = !ls->no_python && live_python_ok(tstate);
+    debug_flush(&out, python_ok);
+    *nfinalized = python_ok ? run_queue(tstate) : 0;
     if (heap != NULL) {
         m->current_object_heap = heap;
     }

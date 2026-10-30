@@ -35,7 +35,10 @@ class weakref "PyWeakReference *" "&_PyWeakref_RefType"
 
    The table is the process's: interpreters with their own GIL share it
    under weakref_table_mutex.  A list itself belongs to its object, whose
-   interpreter's GIL protects it. */
+   interpreter's GIL protects it.  Every table acquisition keeps the GIL:
+   GC borrows its dead snapshot across lookups and removals.  The private
+   metadata uses libc storage, not replaceable RAW/tracemalloc hooks, so
+   no table holder can reenter Python or acquire a dependent Python lock. */
 
 static _Py_hashtable_t *weakref_table = NULL;
 static PyMutex weakref_table_mutex = {0};
@@ -43,13 +46,16 @@ static PyMutex weakref_table_mutex = {0};
 static void *
 weakref_table_malloc(size_t size)
 {
-    return PyMem_RawMalloc(size);
+    if (size > (size_t)PY_SSIZE_T_MAX) {
+        return NULL;
+    }
+    return malloc(size ? size : 1);
 }
 
 static void
 weakref_table_free(void *ptr)
 {
-    PyMem_RawFree(ptr);
+    free(ptr);
 }
 
 PyWeakReference **
@@ -67,7 +73,16 @@ _PyWeakref_ListPtr(PyObject *obj, int create)
         return NULL;
     }
     PyWeakReference **list = NULL;
-    PyMutex_Lock(&weakref_table_mutex);
+    PyMutex_LockFlags(&weakref_table_mutex, _Py_LOCK_DONT_DETACH);
+    if (!create) {
+        _Py_hashtable_entry_t *entry = weakref_table == NULL ? NULL
+            : _Py_hashtable_get_entry(weakref_table, obj);
+        if (entry == NULL) {
+            Py_FatalError("weakref flag without registry entry");
+        }
+        list = (PyWeakReference **)&entry->value;
+        goto done;
+    }
     if (weakref_table == NULL) {
         _Py_hashtable_allocator_t alloc = {
             weakref_table_malloc, weakref_table_free};
@@ -100,7 +115,7 @@ void
 _PyWeakref_DropList(PyObject *obj)
 {
     assert(obj->ob_flags & _Py_HAS_WEAKREFS_FLAG);
-    PyMutex_Lock(&weakref_table_mutex);
+    PyMutex_LockFlags(&weakref_table_mutex, _Py_LOCK_DONT_DETACH);
     PyWeakReference *head = _Py_hashtable_steal(weakref_table, obj);
     PyMutex_Unlock(&weakref_table_mutex);
     obj->ob_flags &= ~_Py_HAS_WEAKREFS_FLAG;

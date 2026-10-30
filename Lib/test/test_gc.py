@@ -3535,7 +3535,9 @@ def make_garbage(n):
         assert_python_ok("-c", "pass", PYTHON_GCVERIFY="retain:structs,pymem")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.disable_gc()
     def test_root_stats(self):
+        # Isolate snapshots from allocation-driven collections.
         # The root phase's counters: one schema for the total and the last
         # collection, which a collection moves.
         before = _testinternalcapi.gc_root_stats()

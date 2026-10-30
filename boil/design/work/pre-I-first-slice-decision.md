@@ -1,10 +1,10 @@
-# First shared interpreter slice after GC
+# Choosing the next shared interpreter slice
 
 Author recommendation for review, updated2026-10-30. Supported GC source4da
 is integrated75e8 after final12f1 and postmergef56e qualification; runtimeDAC6,
 ordinary native3c6 and ASanf945 retain their actual identities. Current work
-qualifies the matched upstream eval-nogcse cohort: configure/make passed
-(23c9/c518), while bounded correctness/origins precede later release timing.
+qualifies the matched cohorts: upstream eval-nogcse configure/make,
+18-module correctness and29 workload origins passed; fork29 origins also pass.
 There is no refreshed score or interpreter ABI implementation. This packet
 uses the [status report](pre-I-interpreter-status-and-opportunities.md),
 [receiver audit](pre-I-inline-receiver-audit.md) and
@@ -12,30 +12,52 @@ uses the [status report](pre-I-interpreter-status-and-opportunities.md),
 conditional on current shared-cost evidence and measured benefit; roughly2×
 is soft guidance, not an acceptance threshold.
 
-**Conditional first new code candidate: the finite numeric NOARGS receiver
-closure.** First [refresh the matched interpreter baseline](pre-I-qualified-timing-refresh.md)
-and shared-cost attribution on the landed GC source; use those results to
-choose the work.
-This candidate removes a concrete representation round trip through an
-existing common interface. Compare its measured value against its ABI and
-maintenance cost before accepting it. Running the already-prepared matched
-H1 experiment can precede that decision; it is a measurement, not another
-required implementation. No current measurement establishes which choice
-will improve the suite most.
+**No implementation is automatically first.** The finite numeric NOARGS
+closure removes a concrete representation round trip, but its ABI cost needs
+a current conversion budget. Existing GC-budget sensitivity or the prepared
+matched H1 comparison can precede it. First [refresh the matched interpreter
+baseline](pre-I-qualified-timing-refresh.md), then resolve only the attribution
+needed to choose one shared intervention. Origin checks establish which code
+ran; they do not rank performance. No current measurement establishes which
+choice will improve the suite most.
 
 ## Three choices
 
 | Choice | Source-backed opportunity | Smallest coherent boundary | Why choose or defer |
 | --- | --- | --- | --- |
-| Numeric NOARGS value receiver/result | Generic descriptor calls box inline self in `method_check_args`; specialized NOARGS calls explicitly root a new object box, then canonicalize the object result. Stored bound methods have a separate object-self storage box. | One declared value-self/value-result NOARGS callback convention, all18 int/float instance entries, generic/unbound/specialized/escaped call routes, Clinic and shared implementation adapters. Getsets, classmethods, other argument conventions and bound-method storage stay separate. | Recommended: the conversion is visible and attributable without speculative type propagation. Eighteen is the actual finite entry set, not a numeric optimization quota. The ABI closure is still substantial and must earn its cost. |
+| Numeric NOARGS value receiver/result | Generic descriptor calls box inline self in `method_check_args`; specialized NOARGS calls explicitly root a new object box, then canonicalize the object result. Stored bound methods have a separate object-self storage box. | One declared value-self/value-result NOARGS callback convention, all18 int/float instance entries, generic/unbound/specialized/escaped call routes, Clinic and shared implementation adapters. Getsets, classmethods, other argument conventions and bound-method storage stay separate. | Choose only if current receiver conversions materially contribute. Eighteen is the actual finite entry set, not an optimization quota; the ABI closure must earn its cost. |
 | Shared frame/call/resume transitions | Historical generator/coroutine samples expose dispatch, return-slot movement, traversal and frame transitions. Direct Python frame entry already exists. | The already-isolated H1 passed-frame experiment is finite; broader create/enter/resume/return/unwind consolidation is not yet one bounded patch. | Use H1's matched result first. Do not redesign transitions or delete required IP/exception/root stores from source-line samples. Larger frame/allocation work needs a current shared-cost attribution before choosing its slice. |
-| Generated producer/consumer facts | A shape load already copies one64-bit value. Slot kinds promise I32/F64/any-value, but following numeric guards do not consume that promise. Compare already produces a canonical bool yet its separate branch rechecks it. | First prove a one-use canonical-BOOL producer/consumer contract with unchanged two-word/IP/monitoring boundaries; no general typed IR or H2 activation. | Worth a bounded source experiment, but not the first runtime change: all entries, generic fallback, exceptions, debugger jumps and instrumentation must establish the fact. Typed LOAD_ATTR alone saves no payload load or boxing. Avoid introducing dependent unchecked consumers before that proof. |
+| Generated producer/consumer facts | A shape load already copies one64-bit value. Slot kinds promise I32/F64/any-value, but following numeric guards do not consume that promise. Specialized int/float comparisons produce canonical bools; generic rich comparison need not. | First prove a one-use canonical-BOOL producer/consumer contract with unchanged two-word/IP/monitoring boundaries; no general typed IR or H2 activation. | Choose if repeated guard work is material and all entries, generic fallback, exceptions, debugger jumps and instrumentation establish the fact. Typed LOAD_ATTR alone saves no payload load or boxing. Avoid dependent unchecked consumers before that proof. |
 
 The first column identifies mechanisms; any elapsed benefit remains a
 hypothesis. ABI, canonical-value, root and entry-state contracts are mandatory
 correctness requirements rather than optional performance assumptions.
 
-## Recommended slice and exact caller closure
+## Evidence-based decision tree
+
+| Current matched evidence | Smallest next question | Minimum attribution |
+| --- | --- | --- |
+| Collection remains a large shared cost | Existing allocation-budget sensitivity on unchanged qualified source, before new barriers or ABI work | Collection/root/death work, elapsed time, RSS and pauses within a declared memory allowance. The current budget is already `max(configured_floor, live_object_bytes)`, with a32MiB default floor; larger budgets cannot remove required death processing. |
+| A non-GC generator/coroutine deficit remains | Existing matched dispatch/H1 comparison before broader frame/resume redesign | Separate frame creation/allocation from hot resume/dispatch. Required exception, return-slot and IP stores are not redundant merely because they appear in samples. |
+| Numeric receiver conversions materially contribute across workloads | Closed18-method NOARGS convention | Current receiver-box/site counts separated from legitimate results and escaped bound-method storage, followed by matched release benefit and code-cost review. |
+| Repeated guard work remains material | One canonical-BOOL producer/consumer proof | Eligible producer/consumer pairs and emitted guard instructions, preserving alternate entries and monitoring. |
+
+The inspected [generator](../../bench/internal/kernels/generators.py) and
+[coroutine](../../bench/internal/kernels/coroutines.py) kernels do not directly
+call the18 numeric methods. Known chaos `bit_length()` traffic is transitive
+through `random`; its historical count does not explain the resume-heavy
+regressions. Use the already-identified discriminating rows rather than another
+broad attribution campaign.
+
+In [the current handlers](../../../Python/bytecodes.c), warmed `i += 1` with
+compact operands uses allocation-free int32 addition with checked overflow. Proving constant RHS1
+can remove its admission check, but does not prove the loop-carried LHS remains
+compact after overflow. Specialized int/float comparisons return canonical
+bools; generic rich comparison can return another object. Existing conditional
+branches already combine truth conversion and branching, so a valid BOOL fact
+removes a guard, not automatically a dispatch.
+
+## Numeric NOARGS candidate and exact caller closure
 
 The proposed logical callback is `PyValue callback(PyValue self)` for a
 method with no explicit arguments. It does **not exist yet**. Encode its

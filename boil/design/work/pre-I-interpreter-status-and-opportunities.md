@@ -8,8 +8,9 @@ new timing result, performance implementation grant or refreshed score.
 H3 is landed; H1 frame passing and inert H2 remain isolated.
 
 The owned upstream eval-nogcse comparator has passed configure/make and
-independent build review (23c9/c518). Bounded correctness/origins remain
-pending before a matched release timing refresh. No numeric NOARGS ABI or
+independent build review (23c9/c518),18-module correctness and29 workload
+origins. Fork29 origins also pass before a matched release timing refresh.
+No numeric NOARGS ABI or
 other proposed interpreter change is implemented here. Roughly2× remains soft guidance.
 Supported callback/buffer lifetime is qualified for Linux/main interpreter/
 ordinary threads/shared GIL; foreign/adoption, platform and precision work
@@ -21,9 +22,10 @@ feedback separate from immutable code. The largest design gaps are the
 unfinished boundaries between those layers: native self/slot interfaces,
 frame transitions and initialized root spans, and complete final-word effects.
 Those deserve shared solutions before adding unrelated fast paths. The
-[first-slice comparison](pre-I-first-slice-decision.md) narrows three choices
-and makes current conversion cost and measured benefit prerequisites for an
-ABI expansion. Existing
+[first-slice decision tree](pre-I-first-slice-decision.md#evidence-based-decision-tree)
+chooses among existing GC-budget sensitivity, matched dispatch/H1, numeric
+NOARGS and producer facts using current shared cost. NOARGS is not automatically
+first; an ABI expansion needs conversion attribution and measured benefit. Existing
 typed handlers are useful implementation structure, but do not yet constitute
 one orthogonal parameterized operation model.
 
@@ -146,7 +148,7 @@ speedup forecast or approval to begin seven parallel implementations. With
 supported GC qualified, choose a small coherent source slice and measure it
 on matched nonstats release products.
 
-| Priority | Current symptom | Clean shared direction | Required proof or falsifying evidence |
+| Area | Current symptom | Clean shared direction | Required proof or falsifying evidence |
 | --- | --- | --- | --- |
 | 1. Close value/native boundaries | `binaryfunc` remains object/object→object; native self boxes in generic and specialized numeric methods/getsets. Other slot wrappers, Clinic residue and native fields add distinct conversions. | Extend declared callback/slot conventions in place, with matching wrappers, Clinic generation and specialized dispatch. Preserve values until an actual object consumer requires a box. A numeric NOARGS receiver slice is finite; bound-method storage/getsets remain explicit separate closures. | All generic/specialized/escaped routes must agree on ABI, wrong-receiver/error order and roots. Preserve raw box roots when the callback actually needs the box. Recount actual box sites/allocations, then elapsed work; no bit_length-only intrinsic. [Receiver audit](pre-I-inline-receiver-audit.md), [value ingress](pre-I-value-ingress-audit.md), [note12](../12-object-slots-on-values.md). |
 | 2. Simplify frame/call/resume transitions | Historical generator samples concentrate in SEND/YIELD/dispatch; coroutine work includes frame traversal and return-slot movement. Python calls, native calls, throw/close and suspended frames have related but distinct handoffs. | Treat create/enter/resume/return/unwind as one explicit initialized-state protocol, then remove redundant adaptation or allocation only where that protocol proves it unnecessary. Keep specialized direct frame entry and generic fallback coherent. | Current frame/exception/IP publication, escaped frame introspection, PEP523, monitoring, recursion and error spans must remain correct. Measure frame creation versus hot resume separately. Do not optimize a required state store away because a source sample landed there. [Handler contract](../14-handler-contract.md), [attribution](pre-I-evaluator-source-attribution.md). |

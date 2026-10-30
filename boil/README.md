@@ -200,10 +200,11 @@ score, upstream parity or the2x target.
    passing suites do not authorize removing roots or claiming arbitrary ports.
 2. The provisional [interpreter source report](design/work/pre-I-interpreter-status-and-opportunities.md)
    inventories seven shared opportunities. A source-only comparison is also
-   published. The matched upstream eval-nogcse comparator has passed its build
-   review; bounded correctness/origins precede a release timing refresh. No new
+   published. The matched upstream eval-nogcse comparator has passed its build,
+   18-module correctness and29 workload origins; fork29 origins also pass. No new
    performance score or interpreter ABI implementation exists. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
-   makes current shared cost and benefit prerequisites for an ABI expansion. The prepared
+   selects by current shared cost; existing GC-budget sensitivity or H1 can
+   precede a numeric NOARGS ABI expansion. The prepared
    matched Clang dispatch/H1 experiment stays parked meanwhile; later inspect
    moves/spills/code size and real root ownership. H3 categories use generated
    properties, never numeric opcode thresholds. Keep coherent operations and
@@ -241,8 +242,9 @@ arbitrary external native holders.
 
 The [interpreter report](design/work/pre-I-interpreter-status-and-opportunities.md)
 records the implemented architecture, isolated H1/H2 and seven shared
-opportunities. The matched upstream eval-nogcse build is complete; bounded
-correctness/origins precede a quiet release refresh. No new score or
+opportunities. The matched upstream eval-nogcse build,18-module correctness
+and29 workload origins pass; fork29 origins also pass before quiet release
+timing. No new score or
 numeric NOARGS ABI is implemented. Acceptance favors liveness, valid data,
 resource reuse and bounded memory; critical unit invariants remain separate.
 

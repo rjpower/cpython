@@ -5011,3 +5011,26 @@ No refreshed score or interpreter ABI implementation is claimed. Preserve
 stock upstream and qualified fork products. Next hourly report13:30 PDT if
 work is still active; material configuration, failure or measurement updates
 are reported when they occur.
+
+### 13:30 PDT: matched comparator checks pass; next slice follows shared cost
+
+The owned upstream eval-nogcse configure/make, positive own-origin diagnostic,
+18-module correctness and29 workload origins pass. Correctness reports5,145
+tests/109 transcript skips; JUnit records5,044 executed cases/101 skips and
+zero failures/errors. Those representations remain distinct. Fork29 origins
+also pass with cleanup; no refreshed elapsed score or new interpreter ABI is claimed.
+Qualified75e8 and both upstream images remain unchanged.
+
+The first-slice recommendation now uses an evidence-based decision tree.
+Numeric NOARGS has a finite18-method closure and a real receiver-boxing cost,
+but is not automatically first. The inspected generator/coroutine kernels
+have no direct calls to those methods; chaos's transitive bit_length traffic
+does not explain their historical regressions. Current shared cost may favor
+existing GC-budget sensitivity or the prepared matched dispatch/H1 comparison
+before an ABI expansion. Distinguish creation from resume and receiver boxes
+from result/storage allocations. A producer-fact slice must prove canonical
+BOOL at all entries; checked int32 addition and its overflow path stay intact.
+Origins admit the intended implementations, not performance conclusions.
+Resolve only the attribution needed to choose one coherent change; roughly2×
+remains soft guidance. No native work or historical outcome changed in this
+documentation update.

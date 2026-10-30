@@ -10,6 +10,13 @@ extern "C" {
 
 extern PyTypeObject _PyManagedBuffer_Type;
 
+/* Sealed per-acquisition storage for internal buffer consumers.  The master
+ * address is stable; NULL from GetBuffer means that acquisition was released. */
+PyAPI_FUNC(PyObject *) _PyManagedBuffer_FromObject(PyObject *base, int flags);
+PyAPI_FUNC(const Py_buffer *) _PyManagedBuffer_GetBuffer(
+    _PyManagedBufferObject *self);
+PyAPI_FUNC(void) _PyManagedBuffer_Release(_PyManagedBufferObject *self);
+
 PyObject *
 _PyMemoryView_FromBufferProc(PyObject *v, int flags,
                              getbufferproc bufferproc);

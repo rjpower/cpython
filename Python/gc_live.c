@@ -1283,7 +1283,7 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
         {
             continue;
         }
-        if (phase == 0) {
+        if (phase == 0 && first != NULL) {
             for (Py_ssize_t j = 0; j < nfirst; j++) {
                 sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
             }
@@ -1609,10 +1609,8 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
                 }
             }
         }
-        failed = order_dead_first(&res, &first, &nfirst) < 0;
-        if (!failed) {
-            ncollected = sweep(tstate, gc, &res, first, nfirst, &bytes_freed);
-        }
+        (void)order_dead_first(&res, &first, &nfirst);
+        ncollected = sweep(tstate, gc, &res, first, nfirst, &bytes_freed);
     }
     if (failed) {
         // Out of memory: keep everything.  What was queued runs.

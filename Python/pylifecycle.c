@@ -2564,6 +2564,7 @@ static PyStatus
 new_interpreter(PyThreadState **tstate_p,
                 const PyInterpreterConfig *config, long whence)
 {
+    *tstate_p = NULL;
     PyStatus status;
 
     status = _PyRuntime_Initialize();
@@ -2574,6 +2575,11 @@ new_interpreter(PyThreadState **tstate_p,
 
     if (!_PyRuntimeState_GetInitialized(runtime)) {
         return _PyStatus_ERR("Py_Initialize must be called first");
+    }
+
+    if (_PyInterpreterState_Main() != NULL) {
+        // Reject before changing GIL-state checks or the caller's attachment.
+        return _PyStatus_ERR("subinterpreters are not supported");
     }
 
     /* Issue #10915, #15751: The GIL API doesn't work with multiple
@@ -2704,7 +2710,7 @@ Py_NewInterpreter(void)
     const PyInterpreterConfig config = _PyInterpreterConfig_LEGACY_INIT;
     PyStatus status = new_interpreter(&tstate, &config, whence);
     if (_PyStatus_EXCEPTION(status)) {
-        Py_ExitStatusException(status);
+        return NULL;
     }
     return tstate;
 }

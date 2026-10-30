@@ -2645,6 +2645,82 @@ class TestStaticTypes(unittest.TestCase):
             self.assertIs(type(cls), type(object));
 
 
+class MainInterpreterOnlyTests(unittest.TestCase):
+
+    def test_c_creation_rejected_without_side_effects(self):
+        # Configured, legacy, bare-state and internal allocator entrypoints.
+        for api in range(4):
+            for detached in (False, True):
+                with self.subTest(api=api, detached=detached):
+                    _testinternalcapi.check_interpreter_creation_rejected(
+                        api, detached)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    def test_python_creation_rejected(self):
+        from concurrent import interpreters
+
+        main = interpreters.get_main()
+        self.assertEqual(interpreters.get_current(), main)
+        before = _interpreters.list_all()
+        for create in (_interpreters.create, interpreters.create):
+            with self.subTest(create=create):
+                with self.assertRaises(interpreters.InterpreterError) as cm:
+                    create()
+                messages = []
+                exc = cm.exception
+                while exc is not None:
+                    messages.append(str(exc))
+                    exc = exc.__context__
+                self.assertIn('subinterpreters are not supported',
+                              '\n'.join(messages))
+                self.assertEqual(_interpreters.list_all(), before)
+                self.assertEqual(interpreters.get_current(), main)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    def test_existing_c_creation_seams_rejected(self):
+        for whence in (_interpreters.WHENCE_UNKNOWN,
+                       _interpreters.WHENCE_LEGACY_CAPI,
+                       _interpreters.WHENCE_CAPI,
+                       _interpreters.WHENCE_XI):
+            with self.subTest(whence=whence):
+                with self.assertRaisesRegex(_interpreters.InterpreterError,
+                                            'creation failed'):
+                    _testinternalcapi.create_interpreter(whence=whence)
+
+    @threading_helper.reap_threads
+    @threading_helper.requires_working_threading()
+    def test_main_interpreter_threads(self):
+        main_thread = threading.get_ident()
+        seen = []
+
+        def callback():
+            # This helper calls back through PyGILState_Ensure on native
+            # threads as well as on this Python-created thread.
+            seen.append(threading.get_ident())
+
+        def target():
+            _testcapi._test_thread_state(callback)
+
+        thread = threading.Thread(target=target)
+        thread.start()
+        threading_helper.join_thread(thread)
+        self.assertEqual(len(seen), 5)
+        self.assertNotIn(main_thread, seen)
+
+    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
+    @threading_helper.reap_threads
+    @threading_helper.requires_working_threading()
+    def test_interpreter_pool_rejected(self):
+        from concurrent.futures import InterpreterPoolExecutor
+        from concurrent.futures.interpreter import BrokenInterpreterPool
+
+        with self.assertLogs('concurrent.futures', level='CRITICAL'):
+            with InterpreterPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(abs, -1)
+                with self.assertRaises(BrokenInterpreterPool):
+                    future.result(timeout=support.SHORT_TIMEOUT)
+
+
 class TestThreadState(unittest.TestCase):
 
     @threading_helper.reap_threads

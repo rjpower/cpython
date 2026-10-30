@@ -41,6 +41,7 @@ __all__ = [
     "requires_IEEE_754", "requires_zlib",
     "has_fork_support", "requires_fork",
     "has_subprocess_support", "requires_subprocess",
+    "requires_subinterpreters",
     "has_socket_support", "requires_working_socket",
     "has_remote_subprocess_debugging", "requires_remote_subprocess_debugging",
     "anticipate_failure", "load_package_tests", "detect_api_mismatch",

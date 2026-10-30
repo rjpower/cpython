@@ -4444,3 +4444,54 @@ failed imports; cleanup verification precedes the granted O1-debug build.
 H1's matching release/assertion-enabled Clang tail builds are conditionally
 authorized after H2 releases the spare slot. No target/performance claim
 follows from those builds. Next hourly checkpoint remains19:50 PDT.
+
+### 19:50 PDT: three full suites pass; inert H2 validates
+
+All three corrected5a45 full suites pass and verify after cleanup. Release
+reports51,181 tests/3,469 skips,63,643 collections, zero fallback and2,832
+report-only unpinned hits (28cf749d). O1-debug reports51,181/3,412,
+67,079 collections, zero fallback and4,013 report-only unpinned (6d822e0b).
+Actual debug-kill reports51,181/3,412,67,061 collections, zero fallback and
+4,009 report-only unpinned (2a2f5b85). Each564-module roster returns
+462 passed,94 skipped and8 resource-denied;565 driver/worker cohorts.
+All64 previously bytecode-suppressed cases and both byte-trigger cases
+are protected and execute. Original invalid-environment failure remains
+ee01b433; old helpers/plans/results stay immutable. Original native/config/
+source/tool products remain unchanged, with generated caches recorded.
+
+Stress11 release is active with10/11 returned passed at the last safe
+boundary; stress debug and the conditional C-extension/regeneration/
+traversal/header closure follow. Independent final GC review is underway,
+explicitly excluding its reviewer's H3 authorship and using the prior
+independent H3 source reviews. No primary runtime landing or push occurs yet.
+
+H2 inert scalar decoder5df336 compiles in owned GCC O3/O1-debug cohorts.
+The original release selection fails an existing test's table parser; its
+seven successful modules remain explicitly carried evidence. Test-only
+b3e6847 scopes the parser and passes27 host controls plus its old-parser
+negative. No C or native product rebuild occurs. Corrected whole release
+generator module passes79 cases/zero skips/one expected failure; debug
+actual-kill runs all eight modules,748/10/one expected failure. All seven
+new tests execute. Coordinator independently verifies both raw artifact
+sets, cleanup links, cache removal and exact one-file source bridge.
+This completes bounded inert-decoder validation, not maps or activation.
+
+H1 release compile/293 precise symbols/CFI complete. A concurrent foreign
+test scratch directory trips its cleanup guard; unchanged products are
+accepted through a separate read-only supplement, retaining the failure.
+O1 Clang debug then compiles all native modules but fails inline audit:
+strrchr is missing from the noncollecting leaf table. Source-reviewed
+tool/test-only94ab98e fixes that leaf and proves scanner propagation,
+while unknown/allocating substitutes remain conservative. Fresh inline
+audit/config/293-symbol/CFI/native postchecks b7be93b8 and cleanup093ca866
+pass on the unchanged image; original make2 at audit remains failed.
+No compiler/configure/relink or release rebuild follows. Candidate runtime
+checks, spill/code analysis and matched quiet timing remain.
+
+Queue2a source-only design resumes in parallel. Current findings require
+ordering preparation before batching, distinct prebatch/postbatch failure
+handling, and no Python debug callbacks before raw garbage state is rooted.
+The finalizer graph must count every unfinished predecessor, not owners;
+unrelated calls retain concurrency. No native Queue2a fix or probe is claimed.
+The measured upstream diagnostic stays0.828243; no new speedup score exists.
+Next hourly documentation/status checkpoint about20:50 PDT.

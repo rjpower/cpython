@@ -60,3 +60,37 @@ handler, and exact upper slot/output boundaries. They would exercise the
 explicit property/default branches beyond the present out-of-domain65535
 case. These are decoder inputs, not malformed executable code. They do not
 require a new framework or expanding this slice into CFG/map activation.
+
+## Subsequent native-test handoff
+
+The owner later reported the first eight-module release run stopped with
+748 tests/10 skips and a failure in the existing
+`test_generated_cases.test_runs_code`: its metadata parser keys every
+initializer by opcode, so the new second table replaces the property row.
+The source review above missed that existing test-consumer interaction.
+It needs a focused table-scoped parser repair before qualification can
+close. This does not establish a runtime decoder failure. The original
+failed run remains failed; debug did not run. This reviewer has executed
+no native tests or retry.
+
+## Coordinator disposition, 2026-10-29 19:49 PDT
+
+The focused test-only correction b3e6847348d scopes the existing parser to
+the actual formats table and asserts that a colliding effect row remains
+separate. Coordinator read the exact one-file diff. The owner's host
+TestIRCases controls pass27; the copied old parser fails the intended
+separation assertion. No decoder/C/generated change or native rebuild occurs.
+
+The corrected whole release generator module reports79 cases, zero skips
+and one expected failure; debug actual-kill runs all eight modules,
+748 cases/10 skips/one expected failure. All seven new decoder/generator
+tests execute successfully. Coordinator independently verifies both result
+artifact hashes, cleanup links, cache removal and exact one-file source
+bridge. Original releaseFAIL remains; its seven successful modules are
+carried forward explicitly rather than relabeled as current runs. Both new
+results report zero fallback and zero report-only unpinned hits.
+
+This closes bounded native validation for the inert scalar decoder. It does
+not establish complete effects/CFG/liveness, root-reader activation,
+performance or primary landing. The independent reviewer's source conclusions
+above retain their original scope and execution limits.

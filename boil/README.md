@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-29 19:19 PDT. Last qualified runtime merge is 052d8342e56;
+revised 2026-10-29 19:50 PDT. Last qualified runtime merge is 052d8342e56;
 local f2a5 GC predecessor is held; combined successor5a45f9bb6a7
 is undergoing fresh O3/O1-debug qualification in boil-pre-i-union. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
@@ -71,7 +71,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-29 19:19 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-29 19:50 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -87,10 +87,10 @@ as a qualified runtime.
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 | Fresh GCC O3, O1 Py_DEBUG and ASan builds complete. All19 affected jobs pass. At19:07, ASan16 passes3,983/92skips and Unicode7 passes1,037/24skips; zero observed fallback, report-only unpinned counts retained | Correct broad bytecode/cache environment after failed release run, then three full suites, two stress11 sets, gate3 closure and final review |
+| GC/IR integration5a45 | All19 affected jobs and both ASan groups pass. Corrected release, O1-debug and debug-kill full suites pass, each reporting51,181 tests; zero observed fallback. Original invalid-environment full remains failed | Two stress11 sets, C-extension/regeneration/traversal/header audits, independent review and primary integration |
 | H3 handler domain, monitoring storage and statistics | Included in5a45. Actual Py_STATS producer/reader checks pass on predecessor e9; its11 bounded jobs pass. Fresh5a45 H3 checks pass1,376 cases in each of three modes | Actual combined broad qualification; later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Matched Clang21 computed-goto and preserve_none tail baselines built on5a45; both bounded runtime selections and stale-root checks succeed. Tail ownership case executes. Frame-argument patch committed62456cc on isolatedboil/h1-frame | Matched elapsed comparison, H1 native/CFI/spill/semantic validation; no H1 speedup measured |
-| H2 physical liveness/root maps | Inert scalar-effect decoder passes source review:27 pristine handlers supported,126 explicitly unsupported; current clearing and root readers unchanged | Native decoder validation, complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation |
+| H1 dispatch/frame passing | Matched5a45 Clang goto/tail baselines pass bounded runtime/root checks. Candidate release compiles with293 precise handlers/CFI. O1-debug compilation completes but its inline audit fails on a missing strrchr classification; focused tool/test fix94ab98e plus fresh audit/CFI/cleanup checks pass on the unchanged image | Candidate runtime/root checks and matched elapsed/spill/code comparison; no H1 speedup measured |
+| H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
 
@@ -104,21 +104,28 @@ repetition now requires a named hypothesis, exposure and stopping rule.
 
 Both whole-GC runs skipped two byte-trigger tests because the launcher set
 truthy string `PYTHON_GCSTRESS=0`, although the actual getter reported0.
-Those skips are retained as gaps. Future normal jobs omit the variable,
-assert actualN0 and require both tests unskipped in the fresh full suites.
+Those original skips remain recorded. Corrected normal fulls omit the variable,
+assert actualN0 and require both tests unskipped; all three fulls recover them.
 The f2 predecessor's stress11 tuple/Probe diagnostic failure remains failed.
 The reader/test repair fixes confirmed lifetime assumptions; its one empty
 prefix diagnostic did not establish that failure's cause. The earlier
 stress100k interpreter/HTTP/trashcan failures also remain preserved.
 
-Update19:19: the first5a45 release full is **FAIL**, with two failed modules.
+The first5a45 release full remains **FAIL**, with two failed modules.
 The launcher disabled bytecode writes and placed its cache across a filesystem
 boundary from temporary test sources. This breaks pydoc/compileall and skips64
-bytecode-writing import cases. The other four profiles did not start. Preserve
-this run; prepare one corrected full environment rather than assembling its
-narrowed passing cohorts. Native products are unchanged; six added generated
-cache files are recorded separately. H2 source5df336 is committed and its
-owned GCC release build completes; O1-debug and native tests follow.
+bytecode-writing import cases. Its later four profiles did not start.
+The corrected environment permits bytecode writes and uses a disposable /tmp
+cache. All three fresh fulls pass, requiring all64 previously suppressed
+cases and both byte-trigger cases to execute. Original native products remain
+unchanged; generated cache additions are recorded separately.
+
+H2's original release selection also remains failed: an existing test parsed
+two generated tables into one dictionary. The focused test-only correction
+passes its old-parser negative control. Seven unaffected release modules are
+carried forward explicitly, with the corrected whole generator module; debug
+runs all eight modules. Native binaries are unchanged. These bounded results
+qualify the inert slice, not complete liveness semantics or activation.
 
 **Performance.** The first29-row release elapsed diagnostic on unlanded ce2ac
 measured **0.828243× upstream throughput**, about21% more elapsed time;
@@ -168,8 +175,11 @@ score, upstream parity or the2x target.
    initialization and alias/escape proofs. Re-measure each coherent change.
 
 Queue rung2's old probe/design handoff remains held by its automatic classifier;
-that is not missing user authorization and no native fix is claimed. Existing
-artifacts remain. Loom and GitHub use are authorized. Shared verifier/worker
+that is not missing user authorization and no native fix is claimed. A new
+source-only safety/dependency design pass is active: move ordering preparation
+before batching, prevent debug callbacks over dead/raw garbage state, and prove
+completion dependencies without serializing unrelated finalizers. Existing
+probe artifacts remain. Loom and GitHub use are authorized. Shared verifier/worker
 components are landed; full profile/gate orchestration is still separate work
 in `boil/tools/verification.md`. All jobs retain real source/config/product,
 actual mode/stress, skip and failure identities. Fulls and perf-sensitive walks

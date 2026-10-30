@@ -80,8 +80,9 @@ argument, while current-candidate correctness gates stay fresh. Never rename
 old tests as new-head passes. This revises future repetition policy, not past
 receipts or test outcomes.
 
-**1. Finish and land the current precise-root repair.** ROOTS 2b's current
-source is `ce2ac8991ee`. Its substantive repairs cover PyMem-origin attribution,
+**1. Finish and land the current precise-root repair.** ROOTS 2b originates
+at `ce2ac8991ee`; the current combined successor is5a45 (README tracks its
+qualification). Its substantive repairs cover PyMem-origin attribution,
 list-to-tuple temporary lifetimes, multiprocessing cleanup and Park retention.
 The two latest raw-mutex annotations clear source review and actual linked
 audits on release/O1-debug/ASan. Both completed 120-transaction campaigns remain
@@ -320,10 +321,14 @@ speedups toward the target or start JIT implementation to conceal a deficit.
 **Coordination.** The coordinator owns this plan, measurement choices, shared
 interfaces and integration. The GC operator owns the current5a45 broad ladder
 and final audits. The handler owner has completed Clang baseline validation
-and is preparing H1's native comparison with the existing build helper.
-The H2 owner is finishing the independently reviewed inert scalar decoder,
-then preparing coherent builds and bounded native tests. No current H2
-consumer uses these partial effects as complete semantics or root maps.
+and has compiled H1 release/debug code; its debug classifier correction passes
+a fresh audit on unchanged native products. Candidate runtime/root checks
+and matched elapsed comparison follow. The inert H2 scalar decoder completes
+its bounded native validation,
+including the test-only generated-table parser correction. Its owner has moved
+to a source-only Queue2a safety/dependency design pass. The handler owner now
+reviews GC evidence independently outside their H3 authorship. No current H2 consumer
+uses these partial effects as complete semantics or root maps.
 
 Full suites and perf-sensitive walks serialize because they share perf-map
 files. Other admitted builds may use the second normal machine slot; quiet

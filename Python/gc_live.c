@@ -2635,3 +2635,4 @@ _PyGC_LiveGetStats(PyInterpreterState *interp, Py_ssize_t *bytes_freed,
     *live_bytes = ls ? ls->live_bytes : 0;
     *pause_max = ls ? PyTime_AsSecondsDouble(ls->pause_max_ns) : 0.0;
 }
+

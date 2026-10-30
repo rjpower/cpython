@@ -12,13 +12,13 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 12:30 PDT. Latest runtime merge is ff6ed9d6bfb,
-integrating qualified GC safety candidate9e223040 over prior runtime
-d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
-post-merge smoke pass. Shared
+revised 2026-10-30 after the main-only GC integration. Latest runtime merge
+is **75e8a1e0c01**, integrating qualified source4da292b1294 over safetyff6.
+Qualification, closure and both post-merge smokes pass; final12f1ea31 and
+postmergef56e0b6b retain the exact evidence and source/native bridges. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
-component 9dd24bf42c4, worker setup 093b9d2a1c3 and
-the active step worktrees. This update separates implemented work
+component 9dd24bf42c4 and worker setup 093b9d2a1c3 are landed.
+This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
 ## 1. The design in one page
@@ -57,7 +57,9 @@ and 3):
    referrer-first sweep for deallocators that read their referents;
    weak references in a side table; finalizers and destroy hooks queued
    and drained at permitted execution points. Owner-correct routing is
-   landed as 052d8342e56 (note 13); dependent-call completion remains open.
+   landed as 052d8342e56 (note 13). The supported main interpreter now uses
+   one rooted drainer and acquisition readiness for ordinary buffer release;
+   foreign-owner adoption and parallel callback progress are deferred.
    Roots are precise
    where frames
    are marked `Py_GC_PRECISE` and checked by the C-mode checker, and
@@ -72,15 +74,15 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 12:30 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30, integrated75e8**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
 **Revised GC scope.** The first milestone supports one main interpreter per
 process, with ordinary threads and the GIL. Subinterpreters are deferred;
 their creation must fail explicitly before allocating interpreter state.
-The implementation and bounded O1-debug validation are complete in a topic
-branch; the landed runtime does not enforce the restriction yet. Use explicit
+The landed runtime enforces early rejection, declares its capability and
+keeps unsupported creation tests visibly skipped. Use explicit
 process workers for isolation;
 do not replace interpreter APIs transparently with subprocesses. Defer foreign
 owner/adoption and interpreter-deletion machinery from this milestone.
@@ -89,17 +91,25 @@ and [independent second look](design/work/reviews/gc-holistic-simplification-sec
 favor retaining the nonmoving collector and hybrid roots, simplifying callback
 delivery, and separating actual process exit from embedding finalization.
 Ordinary buffer lifetime remains a correctness obligation. Generic native
-cleanup slots and a completion DAG are held while existing managed-buffer
-owners and export readiness receive a finite proof.
+cleanup slots and a completion DAG are not required by the qualified finite
+managed-owner/readiness policy; broader lifecycle machinery remains deferred.
 
-The latest runtime merge is **ff6ed9d6bfb**, integrating the reviewed sweep-OOM,
-snapshot/debug-output and work-stack/MARKED rollback repairs. Native168 plus
-test-only9e has six original passed profiles and an explicit corrected debug
-stress composite; closure passes. Primary differs from9e only in38 project
-Markdown paths. Release/debug integration smoke each passes1,930 reported
-tests, exact50/20 skips and zero fallback. The
-[landing review](design/work/reviews/gc-safety-union-landing.md) records the
-incremental scope and retained failures; this is not final GC correctness.
+The latest runtime merge is **75e8a1e0c01**, integrating qualified4da:
+runtime library/tests dac6, ordinary native3c6 and ASan nativef945 retain
+their actual identities. The merge differs from4da only in15 declared
+project Markdown paths. Both O1-debug normal/kill fulls pass51,240 tests;
+release/debug stress11, sanitizer coverage, explicit release/ASan assemblies
+and closure clear independent review. Post-merge release/debug smokes pass
+1,935 tests with exact80/50 skips and zero fallback. The
+[landing review](design/work/reviews/gc-main-only-final-landing.md) records
+the finite support boundary, original failures and historical ASan limits.
+Supported callback/buffer lifetime is closed for this milestone; precision,
+foreign lifecycle and additional platforms remain separate obligations.
+
+Predecessor safetyff6 integrated the sweep-OOM, snapshot/debug-output and
+work-stack/MARKED rollback repairs. Its six original passes, corrected debug
+stress composite, closure and1,930-case smokes remain at their true
+native168/test9e identities in the [safety review](design/work/reviews/gc-safety-union-landing.md).
 
 The previous qualified runtime merge is **d6a23b9fe0c**; the compiler reentrancy
 repair is landed99435658509. Its frozen candidate **5a45f9bb6a7**, branch
@@ -115,10 +125,10 @@ This lands the increment, not final GC correctness or interpreter parity.
 | Work | Current evidence | Remaining |
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
-| GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering and remaining precision/platform obligations |
-| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. Final C3c6/testf945 bounded checks and three ASan profiles pass. Python-only successor dac6 fixes SharedMemory automatic disposal; all six fresh targeted jobs and its old-policy causal control clear review. Explicit release557+7 and ASan15+memoryview coverage assemblies pass; the original release full stays failed | First O1-debug full is active. Debug-kill full, release/debug stress11, closure, final landing review, merge and postmerge smoke remain. See the [GC closure plan](design/work/gc-closure-plan.md) and [independent HOLD review](design/work/reviews/gc-main-only-final-landing.md) |
+| GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Later75e8 closes supported completion/resource ordering; precision/platform work remains separate |
+| Three GC safety repairs and supported-runtime closure | Qualified4da/runtimeDAC6/native3c6+ASanf945 integrated75e8. Final index12f1 and postmergef56e bind all profiles/composites, closure and1,935-case smokes. Original release/traversal failures remain failed | Supported Linux/main-interpreter milestone complete. Keep foreign/adoption, platform and precision work distinct; see the [closure plan](design/work/gc-closure-plan.md) and [independent LAND review](design/work/reviews/gc-main-only-final-landing.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
-| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
+| H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Still isolated; correct the header wrapper before future clean qualification and compare after the matched baseline refresh. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
 | Nonmoving generations | Reviewed direction plus allocator, frame, container and runtime-store ledgers | Remaining type/shape/native/iterator/root coverage, concrete barrier/promotion/young-index/reentry interfaces and independent oracle; no minors or barriers implemented |
 | JIT, movement and ports | Deferred under the current plan | Interpreter checkpointI first; subsequent API/handle/ABI and package migration work |
@@ -182,18 +192,17 @@ score, upstream parity or the2x target.
 
 **Next work, in dependency order:**
 
-1. Safety repairs are qualified and landed as ff6 over d6a23. The final
-   supported GC source is composed at3c6b8daa506, with early main-only
-   admission, one rooted drainer, retained unready acquisitions and sealed
-   managed-buffer consumers, including same-owner queue/channel transfer.
-   Qualify that actual union and land it before interpreter performance work.
-   Original oracle/environment failures stay failed; corrected consumer
-   coverage is explicitly assembled. Remaining root precision and platform
-   obligations stay separate; passing suites do not authorize removing roots.
+1. The supported GC union is qualified and integrated75e8, including early
+   main-only admission, one rooted drainer, retained unready acquisitions,
+   sealed consumers, same-owner queue/channel views and ordinary SharedMemory
+   disposal. Preserve its products and explicit composite evidence. Remaining
+   root precision, foreign/adoption and platform obligations stay separate;
+   passing suites do not authorize removing roots or claiming arbitrary ports.
 2. The provisional [interpreter source report](design/work/pre-I-interpreter-status-and-opportunities.md)
    inventories seven shared opportunities. A source-only comparison is also
-   published; after landing, refresh matched timing and
-   choose a coherent implementation. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
+   published. The matched upstream eval-nogcse comparator has passed its build
+   review; bounded correctness/origins precede a release timing refresh. No new
+   performance score or interpreter ABI implementation exists. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
    makes current shared cost and benefit prerequisites for an ABI expansion. The prepared
    matched Clang dispatch/H1 experiment stays parked meanwhile; later inspect
    moves/spills/code size and real root ownership. H3 categories use generated
@@ -214,69 +223,28 @@ score, upstream parity or the2x target.
    improve call windows and linear string growth only under their root,
    initialization and alias/escape proofs. Re-measure each coherent change.
 
-**Active composition, not landed:** C candidate3c6b8daa506 combines main-only admission, one rooted drainer, unready-buffer
-retention, all six persistent consumer families and the two safeguard
-removals. Source reviews clear bounded validation. Its clean qualification
-worktree is boil-buffer-xid-main-only on branch boil/gc-final-validation. Python-only
-successor dac6 adds the reviewed SharedMemory disposal repair and four local
-behavior tests; unchanged native images remain3c6 (ordinary) andf945 (ASan).
-The original boil-gc-simple checkout has an unknown ambient in-source build;
-preserve it. That checkout's final make stopped before compilation, with
-owned debug products unchanged and no final-union target launched.
+**Integrated supported GC:** source4da/runtimeDAC6/native3c6+ASanf945 is
+qualified and integrated75e8. Main-only admission, the rooted drainer, unready
+buffer retention and the finite consumer/resource ports are no longer a
+pending composition. ND keeps original metadata separate from transforms;
+same-owner queue/channel receipt uses an ordinary managed memoryview.
+SharedMemory automatic disposal preserves outstanding views while explicit
+close stays strict. Final12f1 and postmergef56e retain exact product and source
+identities, both51,240-case debug fulls and all actual composite scopes.
 
-Earlier925d's O1 focus17/0 and whole9 1,518/146skips pass, zero fallback;
-60 skips declare unsupported creation. Consumer dc7's corrected coverage is
-explicitly assembled: eleven original focus passes plus fresh scanner, and
-six original whole-module passes plus fresh test_re172/3skips. Test-only
-772/e48/86 correct independent acquisition and post-callback collection
-assumptions, retaining once-only lifecycle assertions. The original failed
-profiles remain failed; this is not fresh final-union qualification.
+The unknown ambient in-source build remains preserved in the old checkout;
+no payload from it is used. Original scanner, release, traversal and launcher
+failures remain failed. The [owner ledger](design/work/10a-buffer-safeguard-removal.md)
+names private ND reinit policy, live Python-buffer-wrapper re-export debt and
+platform limits. Passing cycle tests do not qualify unrelated routes or
+arbitrary external native holders.
 
-NDArray keeps original acquisition metadata separate from transformed views,
-mirrors actual outward exports and rejects successful private constructor
-reuse. Same-owner queue/channel receipt registers an ordinary memoryview on
-the existing managed buffer and disposes the temporary XID acquisition.
-The [safeguard-removal ledger](design/work/10a-buffer-safeguard-removal.md)
-records the checked zero-count and DEAD/SWEPT invariants. Inherited live
-Python-buffer-wrapper re-export limitations and private ND producer mutation
-reentry remain disclosed; cycle tests do not establish those separate paths.
-
-Remaining sequence: qualify the Python SharedMemory repair, assemble the
-release and affected sanitizer coverage explicitly, finish the pending debug
-fulls/stress, closure, independent landing review and integration smoke.
-Main-only creation, ordinary threads, normal resource lifetime and callbacks
-are the milestone; foreign adoption, generic cleanup APIs and a completion
-DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
-are authorized.
-
-**12:08 PDT update: GC landing held on SharedMemory cleanup.** All three
-sanitizer profiles pass onf945. The release full finishes all564 modules,
-with51,236 reported tests and3,795skips, but qualification fails: the three
-multiprocessing processes modules report SharedMemory destructor BufferErrors.
-The source review identifies queued temporary views still owning a mapping
-when the destructor requests strict close. Reviewed Python-only repair0d2116
-lets automatic disposal drop its view/mapping references and close its owned
-POSIX descriptor; explicit close stays strict. No GC framework or C change.
-Four external lifetime/resource checks are being placed in the memoryview
-suite so their local, untracked-memory path can run under ASan without the
-multiprocessing helper's inherited fork limitation. No target has run yet.
-
-Refresh the seven affected release modules (processes3, misc3, memoryview)
-and retain the other557 explicitly. The memoryview race gets CPU exposure
-on ordinary release; sanitizer retains its existing fork/resource boundary.
-Fix the release-only must-run classification for the debug interruption unit,
-keeping its visible skip and protection on every Py_DEBUG configuration.
-The original full and predecessor profiles keep their actual outcomes.
-Remaining broad profiles, closure and merge/smoke are pending.
-
-The provisional [interpreter status and opportunities report](design/work/pre-I-interpreter-status-and-opportunities.md)
-now records the implemented architecture, isolated H1/H2 and seven ranked
-shared improvements. It covers value/native boundaries, frame/call/resume,
-orthogonal operation families, H2 liveness, dispatch/feedback, alias-safe
-linear string growth and later generations. Recommendations are source-based;
-implementation and matched timing follow GC landing. There is no refreshed
-performance score. Tests should emphasize liveness, valid data, resource reuse
-and bounded memory, with critical internal invariants in focused units.
+The [interpreter report](design/work/pre-I-interpreter-status-and-opportunities.md)
+records the implemented architecture, isolated H1/H2 and seven shared
+opportunities. The matched upstream eval-nogcse build is complete; bounded
+correctness/origins precede a quiet release refresh. No new score or
+numeric NOARGS ABI is implemented. Acceptance favors liveness, valid data,
+resource reuse and bounded memory; critical unit invariants remain separate.
 
 Shared verifier/worker components are landed; full profile/gate orchestration
 is still separate work in `boil/tools/verification.md`. All jobs retain real source/config/product,

@@ -1,11 +1,19 @@
 # Interpreter status and prospective improvements
 
-Source review, 2026-10-30. GC safety is landed through runtime `ff6ed9d6bfb`;
-the main-only/drainer/buffer candidate `3c6b8daa506` is **not yet landed or
-fully qualified**. This report inspects that candidate and existing records.
-It adds no native run, timing, implementation grant or current speed score.
-The user requested this provisional quality review in parallel with the
-remaining GC validation; GC correctness remains the implementation priority.
+Source review, updated2026-10-30 after supported GC integration **75e8a1e0c01**.
+Qualified4da/runtimeDAC6/ordinary native3c6/ASan nativef945 is integrated;
+final12f1ea31 and postmergef56e0b6b bind all qualification and both1,935-case
+smokes. This report's interpreter analysis remains source evidence, not a
+new timing result, performance implementation grant or refreshed score.
+H3 is landed; H1 frame passing and inert H2 remain isolated.
+
+The owned upstream eval-nogcse comparator has passed configure/make and
+independent build review (23c9/c518). Bounded correctness/origins remain
+pending before a matched release timing refresh. No numeric NOARGS ABI or
+other proposed interpreter change is implemented here. Roughly2× remains soft guidance.
+Supported callback/buffer lifetime is qualified for Linux/main interpreter/
+ordinary threads/shared GIL; foreign/adoption, platform and precision work
+remain separate. Original failed runs and measurement limits stay preserved.
 
 The core architecture is coherent: compile once into register IR, carry one
 canonical value representation, generate handlers from one DSL, and keep
@@ -38,7 +46,7 @@ Source anchors: [register pass driver](../../../Python/regcfg.c),
 [native method conventions](../../../Include/methodobject.h),
 [dispatch macros](../../../Python/ceval_macros.h), and
 [root contract](../11-precise-roots.md). These common interpreter sources
-are shared with the inspected candidate; the pending GC composition is
+are shared with the integrated candidate; the GC composition is
 separately reviewed in [the union source review](reviews/gc-simple-union-source-review.md).
 
 ## Existing common and typed families
@@ -134,9 +142,9 @@ boundaries. This is a feasibility question; matched attribution must establish
 whether the saved work is worth an implementation.
 
 This ranking weighs reuse, existing evidence and proof readiness. It is not a
-speedup forecast or approval to begin seven parallel implementations. Settle
-the supported GC boundary, then choose a small coherent source slice and
-measure it on matched nonstats release products.
+speedup forecast or approval to begin seven parallel implementations. With
+supported GC qualified, choose a small coherent source slice and measure it
+on matched nonstats release products.
 
 | Priority | Current symptom | Clean shared direction | Required proof or falsifying evidence |
 | --- | --- | --- | --- |
@@ -146,7 +154,7 @@ measure it on matched nonstats release products.
 | 4. Complete H2 before retiring clearing | Scalar effects are partial; frame clearing/root scans still cover live state. Removing stores based on virtual registers or ordinary CFG alone would miss physical rewrites and transition windows. | Finish the generated final-word effects/CFG/liveness producer first, validate independently against compiler projection, then migrate readers and publication one contract at a time. | Exception edges, aliased physical slots, relaxed SEND/FOR_ITER, replacement handlers, created/suspended/escaped frames and raw call windows must all be covered. No all-slots "map" success, unsupported-opcode acceptance or activation of incomplete maps. Only then compare clearing/scanning cost and RSS retention. [H2 review](reviews/H2-root-effects-source-review.md), [note14](../14-handler-contract.md). |
 | 5. Test dispatch and feedback costs coherently | Historical generator evaluator samples include dispatch; Richards includes feedback addressing/shape matches. Current tail handlers reload frame. | Use the existing same-Clang goto/tail and H1 passed-frame comparisons, then inspect shared feedback/addressing and call boundaries if a measured deficit remains. Prefer one convention over permanent dual machinery. | Match compiler/flags/backend/root contracts, retain diagnostic IP publication, inspect spills/code size and elapsed distributions. GCC non-tail versus Clang tail confounds compiler and topology. A sample on a landing pad is not its exact instruction cost. No local fusion solely to improve one row. [H1](H1-1.md), [offline join](pre-I-evaluator-source-attribution.md). |
 | 6. Make proven private string appends linear | Flat immutable strings plus no refcounts leave local repeated append without a refcount-based uniqueness test. | Use a certified nonescaping local append epoch and geometric capacity while preserving ordinary flat string representation. Publication/aliasing seals the epoch. Reuse the proposed code-owned proof/activation owner, not ropes or speculative universal uniqueness. | Complete escape/join/exception/overwrite/final-word admission and owner-generation proof; preserve lazy exec and all storage observers. Initial shared prefixes need a fresh private result; in-place continuation needs the same valid transaction, not any old pointer. Scaling and alias negatives decide value. [Design](pre-I-linear-string-concat.md), [proof/owner prerequisite](pre-I-linear-string-proof-owner.md). |
-| 7. Reduce shared allocation/GC work after correctness | Historical coroutine/comprehension/generator windows spend substantial time collecting and processing dead objects, while Richards has no hot collections. | Pursue a nonmoving generational/retained-set intervention only after real owner/store/barrier coverage; also scrutinize shared frame/allocation churn. Reuse existing queue/root contracts rather than add another resource scheduler. | Old→young barriers, partial constructors, opaque roots, promotion/reentry and an independent full-young oracle must close. Record candidates, survival, death work, RSS and pauses. Generations do not remove inevitable dead-object bookkeeping or C ABI boxes. [Generations design](7-nonmoving-generations-design.md) and its store ledgers remain prerequisites, not implementation. |
+| 7. Reduce shared allocation/GC work | Historical coroutine/comprehension/generator windows spend substantial time collecting and processing dead objects, while Richards has no hot collections. | First test the existing allocation-budget control on unchanged qualified source with a declared memory allowance; also scrutinize shared frame/allocation churn. Consider nonmoving generations only after real owner/store/barrier coverage. Reuse existing queue/root contracts rather than add another resource scheduler. | Old→young barriers, partial constructors, opaque roots, promotion/reentry and an independent full-young oracle must close. Record candidates, survival, death work, RSS and pauses. Generations do not remove inevitable dead-object bookkeeping or C ABI boxes. [Generations design](7-nonmoving-generations-design.md) and its store ledgers remain prerequisites, not implementation. |
 
 ## A cheaper GC question before generational barriers
 
@@ -167,8 +175,8 @@ purposes; their difference is not itself a correctness bug or a measured
 performance problem. See [allocation accounting](../../../Objects/obmalloc.c)
 and [live object accounting](../../../Python/gc_trace.c).
 
-After correctness landing, test the existing budget control on unchanged
-qualified source before committing to barriers. Declare the sensitivity
+On the qualified source, test the existing budget control before committing
+to barriers. Declare the sensitivity
 comparison and memory allowance in advance, and measure elapsed time,
 collection/root/death work, RSS and pauses. A policy that amortizes root and
 live-heap work may be a simpler improvement if that experiment supports it;
@@ -199,9 +207,8 @@ skid, inlining and compiler line attribution prevent exact instruction-cost
 claims. See [shared costs](pre-I-shared-cost-attribution.md) and
 [source join](pre-I-evaluator-source-attribution.md).
 
-After GC lands, the detailed report should replace the pending boundary with
-the exact qualified source, refresh only the agreed matched performance
-cohort, and publish regressions and uncertainty alongside the implemented
-interfaces. Roughly2× remains a soft guide. Keep a proposed change only when
+With GC integrated75e8, refresh only the agreed matched eval-nogcse upstream
+and qualified fork cohort, then publish regressions and uncertainty alongside
+the implemented interfaces. Roughly2× remains a soft guide. Keep a proposed change only when
 its shared design is simpler or its measured benefit pays for its complexity;
 preserve a clean negative result instead of adding exceptions until it wins.

@@ -455,3 +455,35 @@ permission to leak normal-runtime acquisitions or claim safe repeated
 foreign lifecycle and new cleanup/completion frameworks are outside this
 landing. Final evidence indexing remains separate from the preserved
 individual run outcomes and source approvals above.
+
+## Post-merge addendum: integrated75e8
+
+The coordinator integrated qualified4da as
+`75e8a1e0c01a69b0e34f667c4dac0ad837da4c68`, tree
+`8a309fd40dd0fcf5ac0d7e8b1242050da73b5e6d`. Independent Git inspection
+confirms exactly15 declared project Markdown paths differ; every other
+tracked byte equals4da. This does not claim native images built from primary:
+runtime library/tests remain dac6, ordinary native code3c6 and ASan f945.
+
+The final smoke packet changes only actual merge/qualification-index bindings
+from its reviewed held template; helper, two literal vectors, jobs and exact
+skip expectations are unchanged. The21 input hashes and final12f1 index
+match. Expectations were derived from actual qualified nine-module returned
+rows and outer skip counters: release1,935/80 and debug1,935/50.
+
+Both once-only off/N0 smokes and cleanup independently clear. Release result
+ed2fc200/cleanup174c3bff replays to nine PASSED modules,1,935/80, ten paired
+driver/workers and773 collections, zero fallback/unpinned. Debug result
+4a1ec4a9/cleanupc99b16ef replays to nine PASSED modules,1,935/50, ten paired
+driver/workers and812 collections, zero fallback/unpinned. Exact skip counters,
+source/configuration/native/integration bindings and raw artifact hashes
+agree. No active result was credited and no target was run by this reviewer.
+
+`build/gc-main-only-integration/final-receipts.json`, SHA256
+`f56e0b6b85c2bd07e06687a0ce1957f28011ecca5d48547e6dcd30bde843f49b`,
+binds20 absolute references, all independently rehashed. All run/verify
+return codes are0 and no native job remains. The coordinator pushed75e8
+after this independent integration clearance. Original failed runs, composite
+source/resource identities, authorship exclusions and support limits above
+are unchanged. This addendum closes primary integration; it supplies no
+refreshed performance result or broader platform/lifecycle claim.

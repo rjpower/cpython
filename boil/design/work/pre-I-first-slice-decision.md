@@ -1,11 +1,16 @@
 # First shared interpreter slice after GC
 
-Author recommendation for review, 2026-10-30. Finish GC qualification first;
-the serving candidate's recent SharedMemory test move has not established a
-new performance result. This packet uses the [status report](pre-I-interpreter-status-and-opportunities.md),
+Author recommendation for review, updated2026-10-30. Supported GC source4da
+is integrated75e8 after final12f1 and postmergef56e qualification; runtimeDAC6,
+ordinary native3c6 and ASanf945 retain their actual identities. Current work
+qualifies the matched upstream eval-nogcse cohort: configure/make passed
+(23c9/c518), while bounded correctness/origins precede later release timing.
+There is no refreshed score or interpreter ABI implementation. This packet
+uses the [status report](pre-I-interpreter-status-and-opportunities.md),
 [receiver audit](pre-I-inline-receiver-audit.md) and
-[value-ingress audit](pre-I-value-ingress-audit.md). No implementation, native
-run, timing, serving-tree edit or commit is part of this decision.
+[value-ingress audit](pre-I-value-ingress-audit.md). Its recommendations remain
+conditional on current shared-cost evidence and measured benefit; roughly2×
+is soft guidance, not an acceptance threshold.
 
 **Conditional first new code candidate: the finite numeric NOARGS receiver
 closure.** First [refresh the matched interpreter baseline](pre-I-qualified-timing-refresh.md)

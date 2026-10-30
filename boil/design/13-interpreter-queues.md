@@ -5,13 +5,17 @@
 As of 2026-10-30, the first milestone supports **one main interpreter, ordinary
 threads and a shared GIL**. Qualified source `4da292b1294` contains runtime/library
 source `dac6` and ordinary native images compiled from `3c6`. Final closure and
-independent LAND review pass, bound by final index `12f1ea31`. Primary integration
-and postmerge smoke are still pending; this block describes the qualified policy.
+independent LAND review pass, bound by final index `12f1ea31`. It is integrated
+as `75e8a1e0c01`, tree `8a309fd40dd`, with exactly15 declared project Markdown
+paths different from4da and all other tracked bytes equal. Postmerge index
+`f56e0b6b` binds both off/N0 smokes:1,935 tests each, exact80/50 skips, zero
+fallback/unpinned and verified cleanup. ASan native images remain f945; no
+new-head build or foreign-lifecycle support is implied.
 
 - Unsupported interpreter creation rejects early, before creating interpreter
   state. Interpreter handles, C thread states and shared native state are not
   emulated with subprocesses. See the frozen
-  [main-only admission record](https://github.com/rjpower/cpython/blob/4da292b1294280da838eae8b886aca7103f2d014/boil/design/work/main-only-1.md).
+  [main-only admission record](work/main-only-1.md).
 - One interpreter-wide drainer claim covers callback delivery, including GIL
   release and error reporting. Nested and competing collectors may collect and
   enqueue, then return without waiting. An existing value span roots the active
@@ -19,7 +23,7 @@ and postmerge smoke are still pending; this block describes the qualified policy
   through unraisable reporting and exception restoration. A blocked callback
   delays other callbacks, including unrelated ones; ordinary threads may still
   progress. See the frozen
-  [single-drainer record](https://github.com/rjpower/cpython/blob/4da292b1294280da838eae8b886aca7103f2d014/boil/design/work/7a-single-drainer.md)
+  [single-drainer record](work/7a-single-drainer.md)
   and [integration source review](work/reviews/gc-simple-union-source-review.md).
 - Buffer acquisition readiness is a separate lifetime condition. Ready native
   and Python-backed registrations are selected before retention; every still

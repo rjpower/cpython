@@ -1,22 +1,30 @@
 # Qualified post-GC timing refresh
 
-Source-only preparation, 2026-10-30. GC final qualification, primary integration
-and its smoke are still pending. No build, native execution, timing or serving
-source change is authorized here. **Use one new upstream eval-nogcse build for
-the primary comparison; reuse the final qualified ordinary fork O3 products.**
-Preserve the existing upstream product. An extra stock-policy comparison is
-optional for a named question, not an automatic second29-row campaign.
+Preparation updated2026-10-30 after qualified4da is integrated as75e8.
+Final12f1ea31 and postmergef56e0b6b close GC qualification/integration; runtime
+library/tests remain dac6, ordinary native3c6 and ASanf945. No refreshed
+performance score or interpreter ABI implementation is claimed.
 
-## Comparison and finite build gap
+**Current phase: one owned upstream eval-nogcse comparator.** Concrete accepted
+configure/make have passed (closure23c9ab25, independent actual-build review
+c51871cb). Bounded18-module correctness/29 scored-driver origin packets
+remain separate pending checks. This document itself grants no native
+execution or timing. Reuse the
+qualified fork O3 products and preserve the existing upstream stock image.
+An extra stock-policy comparison is optional for a named question, not an
+automatic second29-row campaign.
+
+## Comparison and remaining qualification
 
 | Input | Established source/configuration facts | Required before measurement |
 | --- | --- | --- |
-| Owned upstream | Detached `321925c92c9e67864cafa1566840927f6f07e90a`, own `build/default`, clean tracked source at this audit. Existing make closure `dddcf24d`,18-module correctness and50-row actual-driver origin evidence remain separate accepted receipts. | Preserve it unchanged. A new `build/eval-nogcse` in the same owned source tree needs its own configure/build/product receipts and bounded upstream correctness/origin checks. No new source checkout is needed. |
-| Fork | Serving `boil-buffer-xid-main-only` at dac6; ordinary O3 images compiled from3c6. Stdlib/test-only successors have explicit bridges. Eventual primary integration may change only declared project Markdown. | Final actual qualification/index, reviewed source/native bridge, primary merge/smoke and owner handoff. Keep executable, Lib and extensions in their qualified serving tree; no primary overlay or rebuild. |
+| Owned upstream | Detached `321925c92c9e67864cafa1566840927f6f07e90a`, own `build/default`, clean tracked source at this audit. Existing make closure `dddcf24d`,18-module correctness and50-row actual-driver origin evidence remain separate accepted receipts. | Preserve it unchanged. The separate `build/eval-nogcse` has configure/make/product closure23c9ab25 and independent build reviewc51871cb. Its bounded correctness/origin checks and transaction bindings remain pending. No new source checkout or stock rebuild is needed. |
+| Fork | Serving `boil-buffer-xid-main-only` at4da (runtime library/tests dac6); O3 images compiled from3c6. Actual primary75e8 differs only in15 declared project Markdown paths; final12f1/postmergef56e clear review. | Bind the final qualification/source/native and owner handoff in the new transaction. Keep executable, Lib and extensions in their qualified serving tree; no primary overlay or rebuild. |
 | Compiler policy | Both current Makefiles use O3, retained frame pointers, zero-initialized automatic variables, computed-goto/non-tail dispatch, static libpython, shared GIL, nondebug/nonstats, no PGO/LTO/BOLT; all JITs are off/absent. | Assert actual configuration and compiler commands in the new upstream receipt and final fork binding; directory labels alone do not establish these facts. |
-| Remaining eval difference | Upstream `CFLAGS_CEVAL` is empty; fork uses `-fno-gcse`. Upstream configure.ac only appends the separate Clang22 stack-size workaround; its GCC path does not overwrite an incoming `CFLAGS_CEVAL`. | New upstream configuration supplies `CFLAGS_CEVAL=-fno-gcse`. Verify the generated Makefile and actual ceval compilation, not just the environment request. |
+| Eval policy | Stock upstream `CFLAGS_CEVAL` is empty; fork uses `-fno-gcse`. The separate eval-nogcse cohort matches that flag in its actual configuration/ceval compilation, accepted in23c9/c518. | Bind that built cohort into correctness/origins and the timing transaction. Do not substitute the stock image or infer an actual flag from the directory label. |
 
-The existing upstream Makefile hash is `38a4eb03`; fork release is `c62c2650`.
+The preserved stock upstream Makefile hash is `38a4eb03`; fork release is
+`c62c2650`. The new cohort uses its own23c9 receipt, not the stock hash.
 Both have `-DNDEBUG -g -O3 -Wall`, `-fno-omit-frame-pointer`,
 `-mno-omit-leaf-frame-pointer` and `-ftrivial-auto-var-init=zero`.
 The build receipts agree on GCC, cc1, collect2, assembler, linker, ar,
@@ -33,8 +41,8 @@ path/label and `CFLAGS_CEVAL=-fno-gcse` added. Configure then make-j4 under
 normal admission and owned build locking; capture config, tools, compile
 log, products and cleanup using the accepted helpers. Do not edit upstream
 source or the old configured Makefile, copy old extensions, or run make in
-an active fork build. Execution stays held until GC integration completes
-and the concrete build inputs and owned slot are bound.
+an active fork build. Execution requires the concrete phase inputs, receipts, review and owned slot;
+GC integration is complete.
 
 This matches compiler policy, not Python implementations: allocator, object
 model, GC, interpreter and supported main-only scope remain architectural

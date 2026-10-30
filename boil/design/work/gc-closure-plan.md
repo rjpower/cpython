@@ -1,183 +1,115 @@
-# GC correctness before interpreter reflection
+# Supported GC closure and the next interpreter checkpoint
 
-Coordinator checkpoint,2026-10-30. The user asks to finish the outstanding
-GC fixes, then receive a detailed interpreter report and commission design
-reflection. Roughly2× is soft guidance, particularly on simple arithmetic.
-The prepared Clang dispatch/frame-passing timing plan is parked.
+Coordinator checkpoint,2026-10-30 after integration75e8. The declared Linux
+main-interpreter GC milestone is qualified, integrated and checked after
+merge. Roughly2× interpreter speed remains soft design guidance, especially
+on simple arithmetic; it is not a numerical gate. Current work prepares the
+matched upstream eval-nogcse comparator and later release timing. No refreshed
+performance score or interpreter ABI implementation is claimed.
 
-Scope revision,2026-10-30 09:35 PDT: support the main interpreter and ordinary
-threads first. Defer subinterpreters; reject their creation explicitly in a
-focused follow-up rather than emulate their APIs with processes. This is
-not enforced by the landed baseline yet. Foreign ownership/adoption and
-interpreter-deletion support are no longer prerequisites for this milestone.
-The holistic reviews linked from README supersede the broader lifecycle and
-completion-scheduler requirements below where noted.
+## Integrated identity and evidence
 
-## Landed baseline
+Qualified source **4da292b1294280da838eae8b886aca7103f2d014** is integrated as
+**75e8a1e0c01a69b0e34f667c4dac0ad837da4c68**, tree8a309fd40dd. The exact
+integration delta is15 declared project Markdown paths. All other tracked
+bytes match4da. Runtime library/tests remain **dac6**; ordinary GCC O3 and
+O1/Py_DEBUG native products were built at **3c6**; ASan/Py_DEBUG Og was built
+at **f945**. The one-file4da traversal metadata correction changes no C,
+Python runtime/test or checker algorithm. These are explicit source bridges,
+not a claim of new-head builds or relocated runnable payloads.
 
-Safety candidate9e223040 is now merged as ff6ed9d6bfb over the baseline
-below. Six original profile passes plus the explicit debug stress composite
-and all closure checks clear independent integration review. Final receipt
-index9bacd190 binds43 fresh references and the retained86-reference packet;
-both were independently checked. Post-merge release/debug smoke each passes
-1,930 reported tests, exact50/20 skips and zero fallback, using qualified
-native168 products and the explicit test-only source9e bridge. Smoke index
-68b4bba0 and its15 references/raw/cleanup were checked independently. Primary
-differs only in38 project Markdown paths. This safety increment is complete.
+- Final qualification index **12f1ea31** binds276 absolute artifact hashes.
+  The [independent LAND review](reviews/gc-main-only-final-landing.md) checks
+  raw outcomes, source/native associations and the bounded support limits.
+- Both fresh normal/kill O1-debug fulls pass **51,240 tests/3,739 skips**,
+  all564 module outcomes accounted for, with zero fallback.
+- Release/debug stress11 pass **3,104/148** and **3,104/113** at actualN1000,
+  zero fallback. Report-only unpinned counts are not recast as zero.
+- Release coverage is the declared **557 retained +7 fresh** assembly,
+  51,240/3,794,462 PASSED/94 SKIPPED/8 RESOURCE_DENIED. The fresh memoryview
+  row enables cpu and protects its manager race. Original uniform release
+  remains nativeSUCCESS0/qualificationFAIL.
+- ASan16 is **15 retained +fresh memoryview**,4,026/141, plus separate local4
+  changed-path checks. Parent multiprocessing sanitizer skips do not prove
+  processes-leaf execution. Unicode7/owner15 retain their actual f945 scope.
+- Cext16/exact7 skips and unchanged regeneration pass at dac6. The original
+  traversal batch stays failed. Corrected traversal and the previously unrun
+  **19 borrowed-header receipts** pass at4da, with _tkinter/_dbm/_gdbm/readline
+  explicitly unsupported. All three original588-product maps, config/tool/
+  alias bindings and2,915 borrowed headers match after cleanup.
+- Post-merge index **f56e0b6b** binds20 references. Release/debug off/N0 smokes
+  each pass **1,935 tests**, exact80/50 skips, zero fallback/unpinned and
+  verified cleanup. Their qualified code and own Lib/extensions remain in
+  the serving tree; there is no primary runtime overlay.
 
-Runtime merge `d6a23b9fe0c`, published through documentation commit
-`b238276108a`, integrates qualified `5a45f9bb6a7`: ROOTS2b, bytes/Unicode
-writer ownership, reader lifetime/history repair, H3 handler/storage/stats
-and finalizer eligibility. All seven qualification profiles, closure and
-both post-merge smoke rows pass. The landing is incremental under the
-explicit exception; historical failed profiles remain failed. It does
-not establish finalizer completion order or whole-GC safety.
+Historical stress100k, scanner oracle, environment/cache/helper and unknown
+ambient-build failures remain failures. Current normal/kill HTTP passes103/8
+with SSL-only skips; GC and stress select trashcan_threads without filtering
+or skipping it. This is loader/selection/module-result evidence, not a separate
+success-ID journal or a passed rerun of the old100k profile. No current
+ENV_CHANGED or resource unraisable was waived.
 
-## Remaining qualification,12:30 PDT
+## Completed repair boundaries
 
-Final source dac6 adds the reviewed Python SharedMemory automatic-disposal
-port to C3c6/testf945. All six targeted positive jobs pass; the unchanged
-old-policy test reaches its named BufferError assertion. Terminal58723869
-and all48 references clear independent review. Strict explicit close stays
-unchanged, live-view data survives, and released mappings/descriptors retire.
-No C rebuild, forced count, nested collection loop or completion DAG is added.
+| Repair | Closure |
+| --- | --- |
+| Sweep-order OOM | No unsafe heap-order fallback; no-sweep causal assertion and ordinary qualification preserved from safetyff6 |
+| Snapshot/debug/registry safety | Six-site non-detaching lock protocol, noncreating GC lookup, libc private metadata, deferred byte-owned output and rooted raw garbage; source/control and actual union evidence retained |
+| MARKED/work-stack OOM | Fallible preflight and rollback before publication, including journal growth; named copied failure and corrected diagnostic test bridge preserved |
+| Main-only admission | Three public C creation entries reject nonfatally before allocation; existing capability flag and finite success-only test classification preserve main inspection, rejection and ordinary threads |
+| Callback delivery | One interpreter-wide drainer; active payload/callback/raised-exception roots span reporting; nested/competing collectors enqueue and return without waiting |
+| Persistent acquisitions | Readiness and full unready-closure retention; sealed struct/PickleBuffer/scanner, managed-owner Unpickler/ND, ordinary same-owner XID views and real release/count invariants |
+| Ordinary SharedMemory | Automatic disposal drops references and consumes its owned fd; explicit close remains strict. Local4 in ordinary/debug/ASan and real multiprocessing/memoryview integration cover data, reclamation and resource reuse |
 
-Explicit release assemblyc13fdc23 retains557 exact original rows and adds
-fresh processes3/misc3/memoryview:564 modules,51240 tests/3794 skips. Its
-memoryview resource context differs and is stated. Original release failure
-7736d428 stays failed. ASan16 assembly2b81264e retains15 original rows plus
-fresh memoryview,4026/141; its parent multiprocessing skips do not prove leaf
-coverage. The separate local ASan4 executes the changed path without forks.
-Original Unicode7/owner15 evidence retains its actual source/native identity.
+The [owner ledger](10a-buffer-safeguard-removal.md),
+[note13 policy](../13-interpreter-queues.md) and independent source reviews
+state the exact contracts. Four disjoint copied C omissions reach their named
+assertions in one negative build; an old-policy SharedMemory worker reaches
+its captured BufferError assertion. Those native failures remain failures,
+not positive qualification outcomes. No generic cleanup slot, completion DAG,
+forced export-count zero or silent DEAD/SWEPT callback suppression is needed.
 
-Remaining ready vectorsdb7353d7/closure plana363bc6a run once: normal O1-debug
-full (active), debug-kill full, release/debug stress11, then closure on success.
-All564/11 rosters and inherited filters stay unchanged; the debug-only scanner
-hook stays protected in every debug mode. Final independent landing review,
-primary merge and code-identical release/debug postmerge smoke follow. The
-[independent review](reviews/gc-main-only-final-landing.md) remains HOLD.
+## Support and separate obligations
 
-## Repair sequence and concrete boundaries
+This milestone supports Linux x86-64, one main interpreter, ordinary threads
+and the shared GIL. Subinterpreters reject explicitly, not through a process
+shim. Foreign/adoption, repeated interpreter deletion, parallel callback
+progress and Windows persistent holders are deferred. A blocked callback
+can delay other callbacks; ordinary threads may progress. Busy shutdown/fork
+contracts stay explicit. Actual process exit may leave safe late state for OS
+reclamation; it does not authorize normal-runtime leaks or imply safe repeated
+host-returning Py_FinalizeEx.
 
-| Work | Current state | Next evidence / completion condition |
-| --- | --- | --- |
-| Unsafe heap-order fallback on sweep-order OOM | Revised late-boundary patch `7f4459bf259` passes release/debug-kill focus and four affected modules; restored fallback fails the named no-sweep assertion. Original header-wrapper failure preserved | Bounded controls complete. Included in actual168 combined qualification; no standalone primary landing |
-| Debug output and registry detachment over collector snapshots | Source-reviewed S3 native009fa passes rebuilt release/debug checks; test-only07af corrects six actual child verifier modes. Corrected focus, actual-child-kill ASan and copied immediate-write negative complete; earlier audit/mode limitations preserved | Coherent six-site non-detaching lock protocol with leaf holders; weakref metadata outside replaceable RAW hooks; deferred byte output; raw garbage rooted through publication. Phase oracle fails old immediate output without reproducing a native crash; included in actual168 combined qualification |
-| MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes bounded checks and causal negative. Combined union has six profiles passed; debug stress fails only a diagnostic snapshot test allowing intervening automatic collection | Exact test-only9e isolates snapshots with assertions unchanged; one whole-GC debug/off/N1000 successor carries ten original passed modules. Original FAIL stays failed. Closure and independent landing review complete; integrated as ff6 |
-| Dependent finalizer/resource completion | Invocation order alone is insufficient. Generic completion DAG held after holistic review | Evaluate one drainer retaining the active callback through error reporting; competing/nested collectors enqueue without waiting. State loss of concurrent finalizer progress. Buffer release readiness still needs its own proof |
-| Interpreter close, owner metadata, retirement/adoption and fork | Owner63b bounded validation and causal negative complete; source pushed. Foreign mutation/lifecycle is not closed | Defer integration and broader lifecycle machinery under main-interpreter-only scope. Audit creation APIs for explicit rejection. Separate process exit from host-returning finalization; decide fork restrictions explicitly, without fabricating callback completion |
-| Python buffer-release callbacks | Five ordinary consumer families plus same-owner XID are recorded in the closure ledger; generic type capability held | Prefer existing per-acquisition managed owners. Prove exactly-once release, stable metadata and consumer raw-pointer/reentry checks for the concrete holder/view/exporter cycle and returned-view forwarding. Every blocked view must remain rooted with its dependencies; no forced zero export counts or skipping DEAD objects into sweep |
-| Remaining root/lifetime contracts and safe conservative coverage | Writers landed; compiler/PyMem carriers, reader operands, saved exception, detached/swap roots and raw inputs retain named debt | Resolve actual missing-lifetime cases with explicit owners/spans and causal controls. Keep conservative coverage until its replacement is proved; a clean run alone does not authorize removing it |
-| End-to-end lifecycle regressions and support boundary | Old HTTP/resource error and trashcan timeout remain historical failures; platform/SDK limits explicit | Run the relevant unchanged regressions once on the repaired union, inspect failures rather than retrying green; integration gates on the actual union. Publish supported configurations and unsupported ones honestly |
+There is no remaining supported callback/buffer-completion landing blocker.
+Precision/checker/readers, PyMem carriers, detached roots and additional
+platform coverage remain separately named obligations. Preserve hybrid root
+coverage until its replacement has a proof and oracle. Live PickleBuffer
+Python-wrapper re-export remains separate functional debt. The finite ports
+do not qualify arbitrary external acquisition graphs or future NumPy ports.
+Historical ASan SDK/source-path and borrowed-header limits remain explicit;
+this is not exhaustive system-header or leak-sanitizer proof.
 
-The first three safety repairs can land independently. Preserve their
-qualification rather than restart it for the narrower support policy.
-The old sparse-reachability/SCC scheduler proposals remain review artifacts,
-not implementation requirements. Serialization is now an explicit candidate
-policy with a stated progress tradeoff, rather than an implicit promise to
-preserve every concurrency guarantee. Actual process termination can reclaim
-retained late state after exit handlers and stream flushes, provided no active
-callback resumes into freed state. Host-returning finalization and fork need
-separate support decisions; process exit does not excuse ordinary leaks.
+## Current work and acceptance policy
 
-## Active landing order after review
+The separate owned upstream321925 build/eval-nogcse has passed configure/make
+and independent build review (23c9/c518), with the accepted GCC/O3/frame-pointer,
+zero-init, nondebug/nonstats/non-tail/JIT-off policy and CFLAGS_CEVAL=-fno-gcse.
+The stock upstream image is preserved. Bounded correctness/origin checks remain
+pending; reuse the qualified ordinary fork products with their true source
+bindings. Only a reviewed quiet transaction can produce a refreshed29-row score.
 
-1. **Safety union, complete.** Closure and integration smoke pass;9e lands
-   as ff6ed9d6bfb, using native168
-   with test-only9e: the corrected whole-GC debug stress module now passes
-   152 tests/4 skips, zero fallback. Ten original passed stress modules carry
-   forward explicitly; the original profile stays failed. The actual
-   six-file source delta and all final receipts were reviewed; primary
-   documentation is preserved. The code-identical qualified builds were reused
-   explicitly for post-merge smoke. This landing fixes the three safety defects; it does
-   not complete ordinary buffer release or callback-completion safety.
-2. **Main-only admission, bounded complete.** Source dbb5 includes early
-   creation rejection, the existing capability declaration and finite test
-   classification. O1-debug new5 and whole4 pass; whole4 reports811/76skips,
-   including59 unsupported creation cases. Root reviewed source and all38
-   final receipt references. Candidate925d includes it and passes bounded validation, not primary yet.
-3. **One drainer, bounded complete.** Reviewed44a5 is composed with main-only
-   and buffer readiness at925d. O1 focus17/0 and affected9 1518/146skips pass,
-   zero fallback; af128e61/all36refs checked. Callback payload/error roots,
-   nonwaiting competing collectors and explicit busy shutdown/fork handling
-   pass their focused controls. This is not release/ASan/full qualification.
-4. **Persistent buffer closure, source complete.** Reviewed P/SRE627590,
-   Unpickler48b021, ND baf8 and same-owner XID9d compose with main-only,
-   readiness and drainer work at3c6b8daa506. Safeguard424 removes export-count
-   coercion and silent DEAD/SWEPT release suppression, retaining checked
-   invariants. ND original metadata stays separate from transformed views;
-   its private constructor rejects repeated successful initialization. XID
-   reuses the original managed memoryview acquisition and existing disposal.
-   The [owner ledger](10a-buffer-safeguard-removal.md) and independent source
-   reviews state the finite support boundary and inherited limitations.
-   Corrected consumer evidence is a composite, never a relabeled whole pass:
-   eleven old focused cases plus fresh scanner; six old whole-module passes
-   plus fresh test_re172/3skips. Original failed profiles remain failed.
-5. **Coherent supported GC union, qualifying.** At11:20 PDT the initial final
-   make stopped before compilation at source-cleanliness check, caused by an
-   unknown-origin ambient in-source build. All588 owned debug products were
-   unchanged; preserve that build and failure. Clean existing worktree
-   boil-buffer-xid-main-only, new branch boil/gc-final-validation at3c6, owns
-   a fresh O1 out-of-source build. Build/cleanup pass98s; new13 passes13/0
-   and whole9 passes1863/120skips, zero fallback, completion95d56f4c checked.
-   Four causal omissions now reach their named assertions in one copied
-   build, indexe859/all54 refs checked. Test-onlyf945 replaces scanner
-   traversal/count checks with liveness/data/resource checks; fresh wholeRe
-   passes172/3skips on native3c6, carrying13/eight other modules explicitly.
-   O3 and three ASan profiles pass. The Python SharedMemory wrapper repair now
-   clears six targeted jobs and explicit release/ASan coverage assemblies;
-   follow the current qualification section for remaining profiles, closure
-   and landing. Reuse existing recipes/modes/locks;
-   stop unexpected failures, diagnose and keep original results. Independent
-   source/evidence review precedes primary merge and post-merge smoke. Process
-   exit does not excuse supported-run lifetime leaks.
-6. **Interpreter report and reflection.** Once the supported GC boundary is
-   sound, refresh matched release timing with JITs off and publish the detailed
-   IR/dispatch/value-flow/call/root cost report. Compare the preserved H1
-   candidate, then commission independent reflection on clean parameterized
-   operation families and shared costs. Roughly2× on simple arithmetic guides
-   design attention; it is neither a hard gate nor a reason for special cases.
+The [interpreter report](pre-I-interpreter-status-and-opportunities.md) and
+[first-slice comparison](pre-I-first-slice-decision.md) provide source evidence
+for clean shared improvements. H3 is landed; H1 and inert H2 remain isolated.
+No numeric NOARGS ABI or other interpreter performance change is implemented
+by these documents. Compare operation families, value/call/frame costs and
+measured attribution before choosing the next coherent slice. Roughly2× is
+soft guidance, not permission for benchmark-specific tuning.
 
-Safety qualification and component feedback are complete. The remaining
-ports are composed; final supported-union qualification is active. Keep builds within the two
-existing slots; serialize full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
-for quiet native execution and the agreed GC correctness boundary.
-
-## Validation and integration
-
-User guidance,2026-10-30: acceptance should emphasize the live set before and
-after a workload, eventual reclamation, valid live data, usable resources and
-reasonable memory growth. Avoid exact internal counts or collection timing
-as integration requirements. Critical rollback, export ownership and root
-handoffs still warrant focused unit invariants and omission controls. Memory
-tests must define their interval and tolerance. This does not change frozen
-test bytes or authorize deleting failed assertions without understanding them.
-
-Use the existing owned release/O1-debug builds, workers, mode checks and
-validators. First exercise the new invariant and its meaningful copied
-negative; then affected modules once per relevant mode. Use ASan for the
-actual native lifetime boundary. Stop at unexpected failure. Broad suites
-and closure gates qualify the resulting integration candidate, rather than
-repeating them after every small source checkpoint. Existing cheap stale
-loops remain hazard controls; there is no default20-pass campaign.
-
-Each owner freezes source and evidence before review; no source edits in a
-worktree serving an active gate. The coordinator checks composition and
-receipts, integrates reviewed changes, runs required integration checks and
-updates README/PROCESS/WORKLOG. Hourly status reports distinguish source,
-executed validation and landing. No source-only proposal gets native credit.
-
-## Boundary with subsequent interpreter work
-
-Nonmoving generations, active IR liveness, removal of conservative scans,
-zero-initialization retirement and moving collection are distinct changes.
-They are not automatic consequences of fixing a lifetime bug. Preserve safe
-coverage while resolving the correctness list above; later retire each
-mechanism only with its own proof and oracle.
-
-After these repairs, the interpreter report should state what executes
-today, what remains isolated, and which costs are actually measured. Then
-commission design reflection on operation families, representation guards,
-value flow, calls and dispatch. The user's parameterized LOAD_ATTR example
-belongs in that reflection, including generic fallback, monitoring and
-root semantics. Neither parity nor2× is a mandatory numerical gate.
+Acceptance emphasizes live data, eventual reclamation, usable resources,
+callback effects and memory growth over a declared interval. Critical rollback,
+root handoff and ownership tests still need unit invariants and causal controls.
+Unexpected failures stop a campaign; do not retry green, relabel old receipts,
+add broad exclusions or restart unchanged ladders. Existing cheap stale loops
+remain hazard controls. Full/perf-map work serializes; normal admission remains
+two slots, and timing needs its own quiet reservation.

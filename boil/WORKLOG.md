@@ -4961,3 +4961,53 @@ postmerge smoke remain held. PROCESS now places this cheap source audit before
 broad suites on relevant frozen compositions; exact unchanged receipts may
 carry into closure. Matched timing preparationbdcef5daf0c is published, but
 no interpreter performance run or implementation has begun.
+
+
+### 13:18 PDT: supported GC integrated and post-merge checks clear
+
+Qualified source4da292b1294 is integrated and pushed as75e8a1e0c01,
+tree8a309fd40dd. Independent Git checks confirm exactly15 declared project
+Markdown differences and code identity to4da. Runtime library/tests remain
+dac6, ordinary O3/O1-debug native products3c6 and ASan/Py_DEBUG nativef945.
+Final12f1ea31 binds276 references; all match independent review. LAND record
+499b9 retains source authorship exclusions, mixed-source/resource composites,
+platform/SDK limits and every original failed run.
+
+Normal/kill O1-debug fulls each pass51,240 tests/3,739 skips, all564 modules
+accounted for, zero fallback. Release/debug stress11 pass3,104/148 and
+3,104/113 at N1000, zero fallback; unpinned counts remain report-only.
+Release557+fresh7 gives51,240/3,794 and ASan15+fresh memoryview gives4,026/141,
+with local4 ASan changed-path coverage separate. The original release
+nativeSUCCESS/qualificationFAIL and sanitizer parent skip limits remain
+explicit. HTTP103/8 passes both full modes; trashcan_threads is selected and
+unskipped in normal/kill/stress under its existing loader contract. No old
+stress100k pass or separate per-success journal is invented.
+
+Original closure passed cext16/exact7 and regeneration, then failed traversal
+metadata; unbuilt did not run. Exact one-file4da fixes only the stale XI
+allowance and ND borrowed-owner metadata. Carried successful stages retain
+dac6 identity; fresh corrected traversal and first19 header receipts pass,
+with four unsupported modules explicit. Current source/config/tool/header
+and all three original588-product maps verify after cleanup.
+
+Post-merge smokes run release then debug once, actual off/N0, with1,935 tests
+and exact80/50 skips. Both have nine PASSED modules, ten paired driver/workers,
+zero fallback/unpinned and run/verify0; collections773/812. Independent raw
+replay and exact skip counters agree. Final smoke indexf56e0b6b/all20 references
+matches, then root pushes the actual merge. No native job remains from this
+qualification. The LAND review receives a post-merge addendum; failed records
+are not rewritten.
+
+README, PROCESS, closure/owner ledgers, note13 and interpreter planning headers
+now describe the enforced Linux/main-interpreter/ordinary-thread/shared-GIL
+milestone. Supported callback/buffer completion is not a stale blocker;
+foreign/adoption, extra platforms and precision/root-retirement work remain
+separate. H3 is landed; H1/H2 remain isolated. Roughly2× is soft guidance.
+The owned upstream eval-nogcse configure and make now pass, with independently
+reviewed closure23c9ab25 and actual ceval flags. Stock products are unchanged.
+One positive origin diagnostic and the bounded18-module correctness job are
+active;29-row origins and quiet matched timing remain held until their checks.
+No refreshed score or interpreter ABI implementation is claimed. Preserve
+stock upstream and qualified fork products. Next hourly report13:30 PDT if
+work is still active; material configuration, failure or measurement updates
+are reported when they occur.

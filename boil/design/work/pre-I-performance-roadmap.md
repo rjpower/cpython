@@ -2,8 +2,8 @@
 
 Coordinator plan, revised2026-10-30. Roughly2× is a **soft design guide**,
 especially for obvious arithmetic such as `i += 1`, not a mandatory aggregate
-score or a numerical gate before JIT work. Finish the outstanding GC fixes
-first. Then publish a detailed interpreter status report and commission
+score or a numerical gate before JIT work. The declared GC milestone below
+is complete. Publish the detailed interpreter status report and commission
 independent design reflection where performance disappoints. Prefer simple,
 established techniques and orthogonal operation families over local tuning.
 
@@ -14,39 +14,32 @@ observed specialization, including guards, fallback, boxing, monitoring and
 roots. This is a design question for the later reflection, not approval to
 duplicate handlers or introduce a second value representation now.
 
-The prepared matched Clang goto/tail/frame-passing timing plan is parked
-during GC implementation. Preserve its existing builds and bounded runtime
-evidence. After GC, report the actual IR/handler/value/call/GC state and
-costs before implementing the broader interpreter cleanup. Read-only quality
-review and the prospective improvement list now proceed in parallel with GC
-qualification at the user's request. Rank clean operation families, value
-bridges, common frame/call costs and dispatch by source evidence and expected
-breadth; identify what fresh measurements would confirm each proposal.
-Recommendations remain provisional until matched timing after GC landing.
+The prepared matched Clang goto/tail/frame-passing experiment remains isolated
+and unmeasured. Preserve its builds and bounded runtime evidence; H1/H2 are
+not landed, while H3 is landed. Choose subsequent implementation from the
+shared-cost evidence and the [source report](pre-I-interpreter-status-and-opportunities.md),
+not a guessed gain or a new ABI by implication.
 
-Current GC checkpoint,2026-10-30 12:30 PDT: safetyff6 is landed. Final
-main-only/drainer/buffer source3c6b8daa506 is complete, including ND and
-same-owner XID ports and the two safeguard removals. Component O1 evidence
-passes through explicit test-only corrected composites; final-union native
-qualification remains: fresh O1 new13/whole9 pass, but broader profiles and
-closure are pending. An unknown ambient in-source build blocked its first
-make before compilation. Preserve it and qualify in a clean existing source
-worktree with a fresh owned O1 build. Four causal controls and the behavioral scanner successor now pass their
-bounded checks; release/ASan/full/closure and landing precede fresh timing.
-The [provisional source report](pre-I-interpreter-status-and-opportunities.md)
-now inventories the implementation and seven ranked shared opportunities.
-All three original sanitizer profiles pass onf945. Successor dac6 fixes the
-SharedMemory wrapper exposed by the original failed release full; its six
-fresh targeted jobs and old-policy causal control now clear independent
-review. Explicit release557+7 and ASan15+memoryview assemblies pass with the
-source/resource limits preserved. First normal O1-debug full is active;
-kill full, stress2, closure and landing remain before fresh timing.
-The [first-slice comparison](pre-I-first-slice-decision.md) weighs value/native
-receiver closure, existing H1/frame work and producer/consumer facts. Current
-cost and matched benefit must justify an ABI expansion; no new code or speed
-claim follows from source review alone.
-The [closure plan](gc-closure-plan.md) and [owner ledger](10a-buffer-safeguard-removal.md)
-name the exact boundary. No refreshed performance score exists yet.
+**Current checkpoint,2026-10-30: supported GC integrated75e8.** Qualified4da
+contains runtime library/tests dac6, ordinary native3c6 and ASan nativef945.
+Final12f1ea31 and postmergef56e0b6b bind the complete qualification and both
+1,935-case smokes. The actual merge differs only in15 project Markdown files.
+Normal/kill debug fulls each pass51,240 tests; stress2, ASan, explicit
+release557+7/ASan15+memoryview assemblies and closure clear independent review.
+The original release and traversal failures remain failed; supported callback
+and buffer-completion work is no longer a landing blocker. Foreign/adoption,
+platform and precision obligations remain separate from this profile.
+
+**Current phase: matched upstream eval-nogcse qualification.** The owned
+stock321925 image is preserved. The separate build/eval-nogcse has passed
+configure/make/product closure23c9ab25 and independent reviewc51871cb, with
+the declared GCC/O3/FP/zero-init policy and CFLAGS_CEVAL=-fno-gcse. Bounded
+correctness/origin checks remain pending before any quiet29 refresh. Reuse
+the qualified fork O3 image with its actual library/native bindings. No
+refreshed performance score or new interpreter ABI implementation is claimed.
+The [timing plan](pre-I-qualified-timing-refresh.md)
+and [first-slice comparison](pre-I-first-slice-decision.md) keep measurement
+and implementation decisions distinct. Roughly2× remains soft guidance.
 
 **How we judge the result.** The primary score is the geometric mean of
 upstream elapsed time divided by fork elapsed time across the declared
@@ -123,94 +116,34 @@ argument, while current-candidate correctness gates stay fresh. Never rename
 old tests as new-head passes. This revises future repetition policy, not past
 receipts or test outcomes.
 
-**1. Finish and land the current precise-root repair.** ROOTS 2b originates
-at `ce2ac8991ee`; the current combined successor is5a45 (README tracks its
-qualification). Its substantive repairs cover PyMem-origin attribution,
-list-to-tuple temporary lifetimes, multiprocessing cleanup and Park retention.
-The two latest raw-mutex annotations clear source review and actual linked
-audits on release/O1-debug/ASan. Both completed 120-transaction campaigns remain
-historical evidence on `1bfe`, with zero fallback. All pre-change products and
-journals are preserved.
+**1. Preserve the completed supported GC boundary.** ROOTS/writers/H3 landed
+through d6a23; safetyff6 and supported75e8 then close sweep/snapshot/work-stack,
+main-only admission, one rooted drainer, acquisition readiness and finite
+consumer/resource lifetime. The [closure plan](gc-closure-plan.md) and
+[independent LAND review](reviews/gc-main-only-final-landing.md) retain the
+actual source/native/resource composites and causal controls. Do not restart
+old120/20 matrices or relabel failed stress100k, release or traversal runs.
+Current HTTP normal/kill and trashcan normal/kill/N1000 coverage have their
+actual skip/source contracts; no passed100k rerun is claimed.
 
-The completed bounded comparison covers emitted root classifications, unwind
-rules and root locations, including the four actual semaphore helpers.
-Default/debug function membership and ranges match; ASan intentionally moves
-only two raw wrappers into the precise section. Selected relocation/string
-and root/unwind equivalence do not imply whole-image byte equality. Root
-accepted historical carry-forward under that bridge.
+**2. Keep separate correctness and support obligations explicit.** Linux,
+one main interpreter, ordinary threads and the shared GIL define the current
+milestone. Foreign/adoption and repeated interpreter deletion, Windows
+persistent holders and parallel callback progress are deferred. Further
+checker/readers/PyMem/detached-root precision work does not authorize removal
+of safe conservative coverage. Live PickleBuffer Python-wrapper re-export is
+separate functional debt. No generic cleanup slot or dependency DAG is an
+unfinished requirement of the supported profile. Generations, moving
+collection and package ports retain their own source/proof/qualification
+boundaries; a soft performance goal does not authorize them automatically.
 
-The fresh affected campaign now passes once per relevant configuration:
-release off, O1-debug off and actual debug kill. Its24 transactions cover
-strict stale-root probes, complete compiled stack walks and Park caller-slot
-controls, the three thread regressions, both eval-root cases and the complete
-changed generated-cases module. They are not another20 iterations. The cheap
-internal stale100 probe remains this landing's existing hazard check. Fresh
-tail build and six strict stale100 cases also pass; bounded tail StackWalk
-waits for fulls because perf-map cleanup interferes. No new test exclusion
-or root-policy fallback is introduced.
-
-Current-source full release, full debug normal and full debug kill now pass
-51,132 tests each with zero fallback. Both11-module stress sets pass3,062;
-ASan16 kill passes3,976 under the exact existing allocator filter/options.
-The final filtered release full at interval100,000 is terminal FAIL: an
-interpreter assertion, a20-minute trashcan-thread timeout and HTTP unraisables.
-The timed-out worker prevents a qualified aggregate root-counter result.
-The [triage](10a-2b-stress100k-triage.md) separates threshold scheduling from
-actual collection/retention and HTTP lifecycle causes. No new exclusion or
-retry is introduced. Four reviewed once-only interpreter diagnostics now
-separate stress-trigger semantics from collection/retention. The resulting
-two-line threshold-test eligibility annotation passes its normal case and
-declared stress skip; the scheduler is unchanged. Existing public HTTP cases
-reproduce the closed-fp error on primary052 and ce, and the unchanged trashcan
-case times out on both at the bounded diagnostic deadline. These establish
-inherited exposure, not mechanism equality or absence of interactions.
-Independent review supports a scoped incremental-landing exception, accepted
-by the coordinator16:09. The failed full stays failed with no aggregate.
-HTTP/finalizer ordering and queue progress block final GC/performance
-qualification. A successor bound to the actual test/docs source and unchanged
-ce native bytes may now finish tail StackWalk, cext, unchanged regeneration/
-traversal and declared optional-header checks. Old frozen plans stay intact.
-
-Exact candidate review and primary integration smoke follow. Bytes3a's
-registered owner-slot patch and focused positive/causal-negative/stress/ASan
-results clear coordinator review. Compose it with ROOTS2b into one detached
-candidate and run one fresh mandatory union ladder, including normal and kill
-fulls and applicable verification checks. Two consecutive near-identical
-integration ladders would add little attribution beyond the retained focused
-receipts and frozen parents. This changes scheduling, not coverage. Full
-suites serialize where shared host state requires it; independent bounded
-work can use the other normal machine slot. O1 keeps debug assertions and
-symbols and remains a candidate until its required normal/kill gates finish.
-The old 20-iteration matrices are not automatically restarted.
-
-**2. Separate the remaining correctness debt from performance development.**
-Landing 2b does not finish all GC work. Track writers/PyMem corruption (3a),
-checker/precision residue (3b), active queue payload/saved-exception and
-detached/swapped thread-state roots (3c), and dependent-finalizer completion
-ordering. Fix actual crashes and missing-root hazards before calling the
-runtime ready for its performance checkpoint. The queue-completion lane has
-an existing automatic-classifier hold; do not route around that hold or
-describe it as missing user authorization.
-
-H3 integration and performance analysis can proceed after this checkpoint while independent
-GC fixes continue. H2's removal of clearing stores waits for the complete
-reader/span contract from rung 3. Generations and finalizer delivery must use
-the resulting stable root/lifecycle semantics. Moving collection and package
-ports are separate work; the 2× target does not silently authorize a moving
-nursery or a broad ABI rewrite.
-
-**3. Integrate the ready IR work and obtain trustworthy attribution.**
-After ROOTS lands, compose the frozen H3 monitoring/domain/storage candidate
-with primary. Review the five shared files semantically and regenerate the
-handler body; a textual merge is insufficient. Run affected monitoring,
-exception, compiler and root controls on the actual union, then its required
-landing checks. Use the existing
-[handoff](H3-post-ROOTS-handoff.md) rather than reopening the whole design.
-
-Fix handler statistics to cover the complete generated domain, including
-prediction paths. Distinguish physical handler entries from semantic operation
-events. Remove inherited numeric category exports through generated semantic
-properties, not arbitrary opcode thresholds. Existing register CFG passes
+**3. Use landed IR work and obtain trustworthy attribution.** H3 monitoring,
+domain/storage and statistics are landed and qualified. Its generated domain
+includes prediction paths, and readers distinguish physical handler entries
+from semantic events. Categories use generated properties rather than numeric
+thresholds. Preserve those interfaces and the existing
+[handoff](H3-post-ROOTS-handoff.md); no H3 reimplementation is needed.
+Existing register CFG passes
 already perform copying/folding/compaction; this is not a plan to rebuild that
 compiler. Audit remaining effect metadata and output copies against observed
 hot code, especially operations that can invoke Python.
@@ -224,14 +157,12 @@ opcode classifications or a separate optimizer for each consumer.
 Readiness includes the actual benchmark driver's setup/run import and native
 dependency closure in the [baseline plan](pre-I-baseline-postbuild-plan.md);
 the startup diagnostic and correctness suite alone do not establish it.
-As soon as that environment and an immutable fork candidate are ready, take
-a bounded quiet release measurement window. The coordinator may use ce2ac's
-normal-full-qualified release as an early diagnostic before landing, with its
-unresolved stress failures explicit. This provides no correctness, parity or
-target qualification. Focused diagnosis and ready GC fixes take priority;
-a noisy window must not block source work. Do not wait for
-every proposed optimization before obtaining the first honest wall-time
-baseline. Rank recurring costs using elapsed profiles plus boxes/allocated
+The historical ce2ac window was an early diagnostic with unresolved failures,
+not correctness or parity qualification. The next quiet release window uses
+the qualified75e8 code and the separately built/qualified eval-nogcse upstream
+cohort. It does not wait for every proposed optimization or reuse old upstream
+origins as proof for a new binary. Rank recurring costs using elapsed profiles
+plus boxes/allocated
 bytes, GC root/mark/sweep time, survival, dispatch mix, spills and code size.
 Historical ROOTS2b instruction records also show keyword-call (+7.1% and
 +14.0% on two rows) and attribute-span (+2.8–13.1%) costs. Preserve their old
@@ -246,22 +177,27 @@ call/value movement the immediate attribution priorities. Profile the shared
 mechanisms in coroutines, generators and comprehensions, with a fast numeric
 or object workload as a control. Separate setup from timed work and distinguish
 whole-process root counters from the hot window; reuse the existing root/pause
-and native profiling tools before adding instrumentation. Full-domain handler
-statistics will improve dispatch attribution, but existing native symbols
-and collector counters need not wait for that landing. A result on one row
+and native profiling tools before adding instrumentation. Landed full-domain handler statistics support dispatch attribution alongside
+the existing native symbols and collector counters. A result on one row
 does not authorize a row-specific opcode or a custom loop optimizer.
 
-The [first shared-cost attribution](pre-I-shared-cost-attribution.md) now
-completes all four once-only windows on unchanged ce release. GC consumes
+**Historical attribution and qualification checkpoints.** The following
+records explain earlier priorities; their source identities and failures remain
+historical. Supported GC qualification is now complete at75e8. Refresh the
+allocation budget and live-set attribution before choosing collector complexity.
+
+The [first shared-cost attribution](pre-I-shared-cost-attribution.md)
+completed all four once-only windows on unchanged ce release. GC consumed
 54.0% of coroutine hot time, 47.0% for comprehensions and 30.8% for generators;
 Richards has no hot collections. Native software samples corroborate collector/
 traversal work, with zero lost events but incomplete ancestry/unresolved
 symbols. This prioritizes a sound nonmoving-generations/remembered-set design
 and allocation churn over optional dispatch-convention tuning. It does not
 prove a generation implementation or predict its gain. H3 correctness and
-counting integration continues; H1 stays a bounded later experiment. A
+counting integration was then in progress and has since landed; H1 remains isolated. A
 source-only generations design must first establish complete mutator/barrier,
-root, weakref and finalizer contracts. Known lifecycle defects remain blockers.
+root, weakref and finalizer contracts. Lifecycle defects blocked that checkpoint;
+the declared main-interpreter profile is now qualified.
 
 As of 17:50, GC candidate f2a5 includes ROOTS and bytes-writer roots. Its
 16 early jobs pass; release coverage is assembled from 563 qualified original
@@ -300,7 +236,8 @@ now identifies pre-link send, yield/return/throw detach and escaped-frame owners
 it is a future-minor obligation, not evidence of a current full-GC defect.
 Its allocator/domain ledger now identifies the
 young-only enumeration boundary, address reuse and abandoned heaps. The existing
-pre-sweep Python debug writer is an earlier reentry dependency than stop callbacks.
+pre-sweep Python debug writer was an earlier reentry dependency than stop callbacks;
+the landed deferred-output repair closes that supported-profile hazard.
 
 **4. Simplify representation and value flow.** Advance 6e canonical ingress,
 inline numeric receivers and remaining slot/Clinic bridges. Keep exact int32
@@ -330,8 +267,9 @@ arguments directly in initialized windows and eliminate copies safely. Typed
 float truth reuses the existing branch semantics. New operations must express
 reusable semantics and remove broad costs; no fused-pair or handler-count goal.
 
-**6. Reduce collection and copying costs structurally.** Introduce nonmoving
-generations using a coherent age/mark policy, a remembered set for old-to-young
+**6. Reduce collection and copying costs structurally.** First measure the
+existing allocation budget against throughput, memory and pause requirements.
+If fresh evidence justifies generations, use a coherent age/mark policy, a remembered set for old-to-young
 heap edges and an explicit root-scanning contract. Cover all value/container
 APIs that can create those edges. This targets repeated full-heap work
 without requiring movement. Barrier-omission negatives must fail; demonstrate
@@ -362,24 +300,19 @@ design for clean general improvements. Preserve the workload and distinguish
 interpreter results from future JIT results. Report the design tradeoffs and
 choose the next coherent change without an open-ended score-chasing loop.
 
-**Coordination.** The coordinator owns this plan, measurement choices, shared
-interfaces and integration. The GC operator owns the current5a45 broad ladder
-and final audits. The handler owner has completed Clang baseline validation
-and has compiled H1 release/debug code; its debug classifier correction passes
-a fresh audit on unchanged native products. Candidate runtime/root checks
-and matched elapsed comparison follow. The inert H2 scalar decoder completes
-its bounded native validation,
-including the test-only generated-table parser correction. Its owner has moved
-to a source-only Queue2a safety/dependency design pass. The handler owner now
-reviews GC evidence independently outside their H3 authorship. No current H2 consumer
-uses these partial effects as complete semantics or root maps.
+**Coordination.** The coordinator owns comparison policy, reservations and
+integration. GC qualification and post-merge smoke are complete. Current work
+prepares the matched upstream cohort with accepted configure/make and bounded
+correctness/origin protocols; a new quiet transaction requires its own review
+and reservation. H1 frame passing has isolated native/runtime evidence but
+no elapsed benefit; the informational header-harness limitation stays named.
+H2 remains an inert partial decoder, not active maps or clearing. H3 is landed.
+No numeric NOARGS ABI or other prospective source recommendation is implemented.
 
 Full suites and perf-sensitive walks serialize because they share perf-map
-files. Other admitted builds may use the second normal machine slot; quiet
-timing waits for native validation and a reserved window. Preserve frozen
-predecessor failures rather than relabeling them as successor passes. Finish
-independent reviews before a reviewer changes roles to implementation, and
-have another reviewer assess that implementation. Queue completion and
-generations remain separate correctness/design obligations; the current
-incremental GC landing does not close them. Report evidence and blockers
-hourly, with implemented, validated and landed work distinguished.
+files; normal admission remains two slots. Preserve predecessor failures and
+actual mixed-source evidence identities. Another reviewer assesses code after
+an evidence reviewer changes to implementation. Foreign lifecycle, additional
+platforms, precision and generations remain separate obligations; there is no
+stale supported callback/buffer-completion blocker. Report implemented,
+validated and integrated work separately, with hourly and material updates.

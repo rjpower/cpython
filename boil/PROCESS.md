@@ -23,15 +23,15 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 12:30 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 after integration75e8; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
-| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Safety9e/native168 is qualified and landed as ff6. Final source dac6 combines C3c6 main-only/drainer/buffer ownership with the Python SharedMemory port. Final O1 bounded checks, three original ASan profiles, six fresh library checks, causal controls and explicit release/ASan coverage assemblies clear review. First normal O1-debug full is active; debug-kill full, stress2, closure and landing remain. Original failed profiles and ambient build stay preserved; foreign/adoption stays deferred |
+| 10a | precise roots, writers, checker and lifetime qualification | Qualified5a45 landed as d6a23; later safetyff6 and supported main-only75e8 close the reviewed snapshot, drainer and finite consumer lifetime repairs. Hybrid roots, reader/checker precision and platform obligations remain explicit; no conservative coverage is removed by passing suites |
+| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Supported main-interpreter union qualified4da/runtimeDAC6/native3c6+ASanf945 is integrated75e8. Normal/kill O1 fulls each51240 tests, stress2, ASan/composites, closure and postmerge1935-case smokes clear independent review. Final12f1/postmergef56e retain source/resource/skip limits and original FAILs. Foreign/adoption and extra platforms are deferred, not supported-profile completion blockers |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
@@ -66,7 +66,7 @@ tracker stop. The actual-helper regression and old-order negative verify
 tracker and forkserver/tempdir dependencies. Visible natural-case off/kill
 reruns pass without the semaphore diagnostics.
 The8ce matrices are completed historical evidence; full debug then exposed
-Park retention. Current source is ce2ac8991ee with the precise-Park repair and
+Park retention. This historical checkpoint used ce2ac8991ee with the precise-Park repair and
 two raw-mutex annotations. Fresh affected24 and six of seven profiles pass under plan7d40. The final
 stress100k is terminal FAIL64448666: interpreter assertion, test_gc trashcan
 timeout and HTTPENV_CHANGED. Missing terminal worker evidence prevents a
@@ -78,11 +78,12 @@ eligibility mismatch; its test-only annotation passes normal/stress checks,
 while the scheduler stays unchanged. A partial observer does not establish
 the buffer closer. Public primary/current comparisons establish inherited
 HTTP exposure and trashcan noncompletion, with causes/interactions unresolved.
-The scoped incremental exception below preserves those final GC/performance
-blockers. See the triage and independent landing-readiness records. O1 is allowed
+At that checkpoint these findings blocked final GC/performance readiness.
+The current75e8 normal/kill/stress coverage is recorded below; it does not
+relabel the old failed stress100k run. See the triage and independent landing-readiness records. O1 is allowed
 for the isolated bytes-writer qualification; no global replacement is claimed;
-current frozen integration debug uses Og. The next coherent candidate uses O1
-subject to the qualification ruling below. Bounded tail make/stale checks may
+that historical integration used Og. The supported75e8 qualification uses
+O1/Py_DEBUG, with assertions, frame pointers and actual mode witnesses. Bounded tail make/stale checks may
 run in parallel,
 but its complete StackWalk waits for all fulls under their serialization lock
 because perf-map cleanup otherwise interferes. Extras and landing review follow.
@@ -151,11 +152,11 @@ Owners, as of 2026-10-28:
 | 7a ahead of further collector features; handle discipline before movement (10b) | as planned | as planned |
 | linear str += with alias-safe behavior and linear-growth acceptance evidence | coordinator commissions a pre-I string/compiler design; uniqueness/escape proof is required | before I; no automatic tier1 deferral |
 | review 2 §5.1: copy propagation crossed reentrant operations and observed rebound locals | compiler correction99435658509; semantic controls and full integration checks recorded in WORKLOG | closed; no pending compiler correctness work from this finding |
-| review 2 §5.2, confirmed: `order_dead_first()` returns NULL when its table fails to allocate and `sweep()` then frees in heap order, abandoning the referent-reading order | 7a rung 2, its first commit (same file as the queue; same rule as its node table: one failure path, undo the dead, free nothing); test fails the ordering allocation and then collects | 2026-10-29 |
+| review 2 §5.2: unsafe heap-order fallback on sweep-order OOM | no-sweep repair and named copied fallback failure; safetyff6 and supported75e8 qualification | closed for the supported profile; original failed controls preserved |
 | review 2 §5.4 and §5.5, confirmed checker holes: argument evaluation order assumed left to right (`FunctionChecker.eval`); `_Py_hashtable_\w+` exempted as a family though `foreach`, destruction and lookup run callbacks | 10a rung 2b before its landing branch; negative fixtures for both textual orders and for a collecting foreach callback; any precise function the rules now reject fixed in the same series | 2026-10-29 |
 | review 2 §5.7: gate 3's regen check compared status, not content; `root_stats.py check` passed on a missing file | coordinator | done 2026-10-28 (this commit); the manifest row above carries the rest |
-| review 2 S1 (several threads of one owner drain the queue; a referrer's finalizer that releases the GIL can be overtaken by its referent's) and S3 (`debug_write()` runs a Python writer between mark and sweep; the pin covers interpreter storage, not the dead set) | 7a rung 2: probe each as the review describes; the completion rule for dependent calls goes into the cross-owner order; no Python call while a dead snapshot is held | with rung 2's design, before its code |
-| review 2 S2: type and shape versions are allocated per interpreter while objects, shapes and executing code can be shared across the domain | step 7's domain design, before tiers 0 and 1 trust the guards; probe with the native stash fixture | step 7 |
+| review 2 S1/S3: competing drainers and Python output over an unrooted dead snapshot | rooted interpreter-wide drainer, deferred byte output, raw-garbage span and registry-lock repair; independent source/causal/union evidence | closed in supported75e8; parallel callback progress and foreign lifecycle remain deferred |
+| review 2 S2: type and shape versions are allocated per interpreter while objects, shapes and executing code can be shared across the domain | deferred with foreign-interpreter support; restore a domain-wide guard contract and native stash control before allowing foreign sharing | future foreign-interpreter milestone |
 | review 2 §4: the traverse audit credits a member that is merely mentioned (`MEMBER_RE.findall`); a null check is not a visit | coordinator, audit-3 (the 0.3 row widened) | after 7a rung 2 |
 | review 2 §4: dead verifier residue in `gc_trace.c` (`remove_garbage`, `find_holes`, the `(void)` casts in `verify()`); stale header prose at `Include/object.h` line 19 and `Include/refcount.h` line 76; `_uuid`'s weaklist field and `tp_weaklist` | coordinator, one cleanup commit after the 7a rung 1 landing (no gate runs from integration then) | 2026-10-29 |
 | review 2 §6: the whole-workload record (6d over the upstream baseline: kernels 1.161, micro 0.693, memory 1.699 instructions) stands as the honest position; wall time, RSS and pause distributions against upstream at step 7's start | coordinator, with the documentation row | step 7 |
@@ -165,11 +166,11 @@ Owners, as of 2026-10-28:
 Coordinator decision,2026-10-30 09:35 PDT: the first GC/interpreter milestone
 supports one main interpreter per process, including ordinary threads.
 Subinterpreters are deferred. Creation entrypoints must reject unsupported
-use before creating interpreter state. Topic dbb5 implements this and passes
-bounded validation; primary integration is pending.
+use before creating interpreter state. The early rejection, existing capability flag and finite success-only test
+classification are integrated and qualified as75e8 (source4da).
 Process workers are an explicit alternative, not a transparent implementation
-of interpreter handles, C thread states or shared native state. Preserve the
-existing qualified baseline until this policy has its own focused change.
+of interpreter handles, C thread states or shared native state. The supported boundary preserves main bootstrap, inspection, rejection and
+normal-thread tests; unsupported creation remains visible through explicit skips.
 Foreign-owner registration/adoption and repeated interpreter deletion no
 longer block this milestone. Actual process exit may retain safe late state
 for OS reclamation; returning from Py_FinalizeEx to a live embedding host is
@@ -187,8 +188,8 @@ C API or library reference by the rung that makes it.
 | Sampling records use a new format generation, 32-bit opcode with UINT32_MAX for None and verified target handler-schema identity. Remote debug offsets use a new cookie/layout protocol and size-checked prefix; incompatible layouts, target schemas and files are rejected | H3-1 design decision, 2026-10-29; not implemented | IDs above 254 are already lost. Same Python version can hide different numbering; identity must come from the target, be checked before interpretation and retained by the writer | Byte/sentinel fallback, sampler-local identity without target proof, cross-schema remapping or old-layout decoding |
 | Remove C HAVE_ARGUMENT/MIN_SPECIALIZED_OPCODE/MIN_INSTRUMENTED_OPCODE/IR_FIRST_ONLY_HANDLER and their existing Python exports/re-exports inventoried in H3-1 section 5; preserve unrelated EXTENDED_ARG/name APIs | H3-1 final renumber; coordinator decision 2026-10-29, not implemented | Numeric separators cannot describe the generated domain; HAVE_ARGUMENT=41 already misclassifies WITH_EXCEPT_START. Existing hasarg/_opcode.has_arg and generated kinds express the properties | An approximate separator, silently changing its meaning or an old-ID compatibility fallback |
 | `_PyCode_Deinstrument` changes from byte-to-byte to `int(int)`; `_Py_Instrumentation_GetLine` takes `(data, index)` and gains private export visibility; monitoring LINE/INSTRUCTION storage changes layout | H3-1 stage2b.2b; qualified in runtime merge d6a23b9fe0c | Validate original scalars before narrowing and return invalid/no-counterpart/canonical results explicitly. Fixed absolute int lines remove an invalid relative-line assumption; the decoder no longer needs a code argument. External private/JIT users rebuild | Truncating byte adapters, retaining an unused decoder argument or claiming stable ABI compatibility. All five production decoder calls and bounds must be updated together |
-| Python GC debug writes run after the stop callback and collecting reset, before queued finalizers | S3 source design, isolated009fa successor; native validation underway | No Python writer may borrow dead or raw garbage snapshots. Text, flags, per-record exception behavior and within-pass order remain | Immediate Python writes over collector snapshots; global ordering across nested collections |
-| Private weakref table metadata uses libc allocation outside public RAW/tracemalloc hooks | S3 source design, isolated009fa successor; native validation underway | All table acquisitions retain the GIL. Fixed native allocation removes the RAW/tracemalloc lock dependency from holders | A partially converted lock protocol or replaceable allocator callbacks inside that private mutex |
+| Python GC debug writes run after the stop callback and collecting reset, before queued finalizers | S3 repair, qualified through safetyff6 and supported75e8 | No Python writer may borrow dead or raw garbage snapshots. Text, flags, per-record exception behavior and within-pass order remain | Immediate Python writes over collector snapshots; global ordering across nested collections |
+| Private weakref table metadata uses libc allocation outside public RAW/tracemalloc hooks | S3 repair, qualified through safetyff6 and supported75e8 | All table acquisitions retain the GIL. Fixed native allocation removes the RAW/tracemalloc lock dependency from holders | A partially converted lock protocol or replaceable allocator callbacks inside that private mutex |
 
 
 ### 0.3 Hand-off ledger
@@ -200,25 +201,21 @@ day travelled through messages and work-doc paragraphs.
 
 | Item | From | To | Closes when |
 |---|---|---|---|
-| Py_buffer consumers (PickleBuffer, _pickle.Unpickler, SRE scanner, _struct.unpack_iterator, _testbuffer.ndarray) release in the sweep, so a Python exporter's `__release_buffer__` is skipped or runs in the sweep | audit-2 review | 10a rung 3, after 7a rung 2 (the release runs Python code, so it is a queued call on the owner) | a test shows exactly-once release per consumer with a retained exporter and an allocating and a collecting callback, on both builds and under kill; and no Python code runs under an allocation-only op (the compiler's copy-propagation rule relies on it: an allocating op does not kill a pending local load) |
-| Same-interpreter queue/channel memoryview transfer can resurrect a receiving view after its wrapper finalizer consumed the original acquisition | Persistent-owner closure audit,2026-10-30 | Main-only GC milestone, existing MV registration plus existing XID disposal | Independent received/original release, metadata and resurrected-view lifetime controls pass; no foreign-wrapper finalizer remains reachable |
 | the symtable entry's PyMem roots | audit-2 | 10a rung 3 | the span lands and the allow entry goes |
 | the traverse audit's remaining limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values, a mention credited as a visit) | audit-2, review 2 | coordinator, audit-3 after 7a rung 2 | audit-3 lands |
 | the rung 1 fork-child hang (6d-1.md's hazard record: where the parent waited, not why the child hung) | 6d | 7a rung 2 (the fork path) | on recurrence, the hung child's native and Python stacks; otherwise carried as not recurred |
 | test_gc's test_verify_kill under stress: the compiler unit's u_metadata dicts held only through a PyMem_Calloc block (kill:pymem finds the holder by design; the live collector is unaffected) | 7a | 10a rung 3 | the compiler unit's metadata has a root or a span; the stress exclusion row goes |
 | the bytes and unicode writer buffers under stress: exclusions `*test_resize*`, `*Writer*` (widened from `*WriterTest*` on 2026-10-28: PyUnicodeWriterFormatTest's test_recover_error segfaults and test_from_format corrupts an argument under stress, on the pre-item-6 build as on the head, so the class is the writers, not 10a items 5 or 6) and test_capi.test_unicode's test_from_format | 10a rung 1 (note 11 6.2), counts from 7a and 10a rung 2b | 10a rung 3 | the writer buffers are rooted; the exclusions go |
 | a conservative word under a thread state detached by `PyThreadState_Swap()` in `new_interpreter()` (an unpinned record; the walk attributes the main thread's frames to `_start`); seen as a stale argument tuple in `_PyObject_MakeTpCall`'s frame retaining one object | 7a rung 1 review | 10a rung 3 (ruled 2026-10-28: the fix is in pystate.c's swap path, 7a's file; the effect is retention, which the conservative scan keeps safe) | test_progress_during_finalization gives 20 of 20 at its first check on ASan; the swap path pins the C frame extent as a detach does |
-| test_stress_shared_heap_callbacks skipped (the B class) | 7a design | 10a rung 2b item 7, after 7a rung 1 lands | the skip is removed with the manifest and the test passes under stress |
+| test_stress_shared_heap_callbacks requires successful subinterpreter creation | historical ROOTS control | any future restoration of foreign-interpreter support | main-only policy keeps the explicit source capability skip; it is not a supported-profile blocker or a new selection filter |
 | the SLOT macro family (`slot_mp_ass_subscript`, `slot_nb_power`, `slot_nb_bool`, `slot_nb_inplace_power`, `slot_tp_repr`, `slot_tp_hash`) the C mode cannot parse; `slot_inherited` with `update_one_slot` | 10a item 5 | 10a rung 3 | the checker parses the family or the functions are written out, and they are precise |
 | the C mode's block-local false positive (an object local declared in one branch reported as held across the sibling branch's call when results go to a frame pointer); expected failure test_block_local_beside_frame_result | 10a item 3 | 10a rung 3 | the expected failure passes |
 | comprehensions +2.19% instructions at 7a rung 1, unexplained | 7a | checkpoint I attribution | refreshed matched measurements explain the delta; a persistent interpreter deficit gets bounded pre-JIT work |
 | the Py_NO_INLINE boundaries of 10a item 6 (the dict insertion core under `_PyDict_FromItems`, `update_slot_after_setattr`, `object_set_class_world_stopped`, `PyType_Ready`, `_PyType_Modified_Unlocked`) | 10a rung 2b | 10a rung 3 | the callees are precise and the boundaries go |
-| a saved exception surviving a collecting `__del__` has no test (Python code cannot leave one pending; a C fixture is needed) | 10a rung 2b test reread | 10a rung 3 | the fixture lands |
-| the sweep-order fallback on allocation failure (review 2 §5.2); finalizer completion order across threads (S1); Python output between mark and sweep (S3) | review 2 | 7a rung 2 | §5.2: the single failure path and its test; S1 and S3: a probe each, and a fix or a written negative result in the record |
+| historical requested precision fixture for a saved exception surviving a collecting __del__ | 10a rung2b reread | separate10a precise-frame/control coverage | preserve the remaining fixture question separately from the now-qualified active drainer raised-exception span |
 | the checker's argument-order and hashtable-family holes (review 2 §5.4, §5.5) | review 2 | 10a rung 2b | both negative fixtures fail before the fix and pass after; the hazard list names the commits |
 | the contract "a specializer runs no Python code" (specialize_dict_hint() ran a colliding key's `__eq__` and the re-dispatched word reread a rebound local; the guard is the compiler fix's commit) enforced by the checker | compiler fix review | 10a tooling | a checker fixture with a reentrant `_Py_Specialize_*` callee fails; the specializers pass |
 | a reader's folded operand (a local read in place by the op) needs an anchor across the reader's own collecting calls once the eval loop frame is precise (`x + o` where `X.__add__` rebinds x, collects and returns NotImplemented; today the conservative C frame holds the original) | compiler fix review | 10a rung 3 | an oracle that injects a collection at a point where only the reader's precise frame holds the operand, and fails with that root omitted; the compiler fix's test 10 (`x + o`) is a semantic regression only, since `self` and the opaque C frames below hold the operand today |
-| standalone forkserver/spawn test_finalize returns SUCCESS but reports a leaked semaphore followed by SemLock._cleanup FileNotFoundError | coordinator/ROOTS feedback matrix1 logs08/10 at0b130; cause confirmed after queue merge | ROOTS before final2b matrix | actual _cleanup_tests helper runs finalizers after forkserver stop and before tracker stop; deterministic old-order negative, active forkserver/tempdir control and clean standalone cases; no exclusion |
 | note11's once-only tailcall and release-retain 8.2 recommendations | ROOTS2b qualification | 10a rung4 build support / H1 compiler convention handoff | qualify the actual builds and use a retain-specific reclamation oracle; pair tailcall qualification with the H1 convention experiment. These recommendations do not add two new ROOTS2b landing blockers or reuse the off-mode oracle |
 
 ### 0.4 Execution plan from the takeover
@@ -233,8 +230,8 @@ The first wave resumes completed code rather than rebuilding it:
 | Lane | First assignment | Next boundary |
 |---|---|---|
 | compiler | Reentrancy/copyprop99435658509 and shared verification components landed; H3 qualified in d6a23 | H1/H2 isolated with bounded evidence. Timing parked. Detailed interpreter report and holistic operation-family reflection follow GC fixes |
-| queues | Owner routing052 landed; historical classifier-held probes preserved | Revised late sweep-OOM source checkpoint under review; coherent snapshot/debug/lock safety and completion scheduling follow. Owner metadata, retirement/adoption/fork and buffer-release dependencies remain separate obligations |
-| roots | ROOTS2b plus bytes/Unicode ownership qualified in d6a23 under retained incremental exception | Close snapshot/completion and remaining10a3a writers/PyMem,3b checker/readers,3c releases, platform4 obligations. Removing conservative coverage requires proof; do not infer completion from passing fulls |
+| queues | Supported single-drainer/readiness policy is qualified and integrated75e8; old failure and causal controls retained | No supported callback-completion blocker remains. Foreign/adoption, parallel callback progress and repeated interpreter lifecycle remain deferred; no generic completion DAG |
+| roots | ROOTS/writers and supported snapshot/buffer repairs are integrated through75e8 | Preserve hybrid coverage. Complete separately named reader/checker/PyMem precision and platform work before removing conservative roots; no full-suite pass substitutes for that proof |
 
 Before changing code each owner supplies a short file list, current
 head, first failing control and checkpoint estimate. Report at least
@@ -291,9 +288,10 @@ profiles, the preserved failed stress100k profile and its bounded disposition
 may support a successor tail-WALK/extras plan. The old all-seven-PASS condition
 was not met; neither that plan nor its failed validator/result is rewritten.
 The test-only eligibility successor must bind its actual source separately
-from unchanged ce2ac native products. Inherited HTTP resource/finalizer ordering
-and queue progress remain unresolved correctness debt blocking final GC and
-interpreter-performance qualification. This ruling grants no held Queue2 work.
+from unchanged ce2ac native products. At this historical checkpoint, inherited HTTP resource/finalizer ordering
+and queue progress blocked final GC/performance readiness. Their later supported
+profile closure is recorded in the current75e8 ruling; the old failures remain
+failed. This historical ruling grants no new work.
 
 ROOTS2b and the independently coordinator-reviewed bytes3a may compose into
 one detached integration candidate after required tail/extras and exact source
@@ -1014,137 +1012,89 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 12:30 PDT
+### Current coordinator ruling, 2026-10-30 after integration75e8
 
-**Current stage.** The final source is dac6, using unchanged ordinary C3c6
-and ASan f945 images. All six SharedMemory positives pass: four new external
-behaviors in release/off, debug/kill and ASan/kill; six processes/misc modules;
-ordinary whole memoryview with cpu enabled; sanitizer whole memoryview with
-its inherited fork boundary. The old-policy worker fails exactly at the
-unchanged discarded-view assertion with captured BufferError, not a crash or
-import failure. Terminal58723869/all48 references clears independent review.
+**Supported GC milestone complete.** Qualified source4da292b1294 is integrated
+as75e8a1e0c01, tree8a309fd40dd. Runtime library/tests remain dac6; ordinary
+native images are3c6 and ASan images f945. The actual integration differs
+from4da only in15 declared project Markdown files. Final index12f1ea31 binds
+276 references; postmergef56e0b6b binds20. Independent source/evidence LAND
+review and both release/debug off/N0 smokes clear:1,935 tests each, exact80/50
+skips, zero fallback/unpinned and verified cleanup. No image is called built
+from primary or relocated from its qualified serving tree.
 
-Release assemblyc13fdc23 explicitly retains557 exact original module rows
-and replaces seven affected rows:564 modules,51240 tests/3794 skips. The
-original full remains nativeSUCCESS0/qualificationFAIL. ASan16 assembly
-2b81264e retains15 rows plus fresh memoryview:4026/141. Parent multiprocessing
-sanitizer skips are not processes-leaf evidence; the separate local4 covers
-the changed path. No all-run root counters are assigned to carried modules.
-The debug-only scanner hook remains protected in every debug mode; release
-keeps its legitimate visible skip. No new selection exclusions are added.
+Both fresh O1-debug normal/kill fulls pass51,240 tests/3,739 skips,564 modules,
+zero fallback. Release/debug stress11 pass3,104/148 and3,104/113 at actual
+N1000, zero fallback. Unpinned counts remain report-only. Release coverage is
+an explicit557+fresh7 assembly (51,240/3,794), not a rewritten uniform full;
+ASan16 is15+fresh memoryview (4,026/141), plus separate local4 changed-path
+coverage. Original Unicode7/owner15 retain their true f945 scope. Parent
+multiprocessing sanitizer skips do not prove processes-leaf execution.
+No root aggregate is apportioned to carried module rows.
 
-The frozen remaining packet has ready vectorsdb7353d7 and closure plana363bc6a.
-First normal O1-debug full is active; then debug-kill full, release/debug
-stress11 and unchanged closure. Stop on unexpected failure. Final independent
-LAND review, primary merge and bounded release/debug smoke remain. The smoke
-template is prepared and held, with release1935/80 expectations derived from
-the nine retained module rows; debug expectations await the fresh normal full.
-There is no default full-ladder restart, repeat-to-green or new timing run.
+Cext16/exact7 skips and unchanged regeneration pass at dac6. The original
+traversal batch failed on stale ownership metadata and stays failed. Exact
+one-file correction4da changes no runtime/test/checker algorithm; corrected
+traversal and first19 borrowed-header checks pass with four unsupported
+modules explicit. The original release nativeSUCCESS/qualificationFAIL,
+scanner oracle failures, ambient source build and all earlier invalid
+launches remain preserved. Source4da and all three original588-product maps,
+configuration/tool/alias bindings and2,915 borrowed headers are checked.
 
-**User direction, 11:22 PDT: observable behavior first.** Integration tests
-should primarily check useful liveness and reclamation, readable live data,
-safe resource reuse, callback effects and bounded memory over a declared
-workload interval. Do not prescribe an exact collection schedule, acquisition
-count or internal representation unless it is part of the public contract.
-Focused unit tests may check critical internal invariants, including rollback,
-root handoffs and once-only ownership; state why the invariant matters and
-keep those distinct from user-facing acceptance. Memory bounds need a defined
-workload, warmup and tolerance, not an arbitrary RSS threshold. Apply this
-principle to new or corrected tests; do not rewrite the active frozen candidate
-or weaken existing regressions merely to obtain a pass.
+The declared scope is Linux x86-64, one main interpreter, ordinary threads
+and the shared GIL. Main-only admission, rooted active callback/error state,
+one nonwaiting drainer, acquisition readiness/retention, sealed consumers,
+same-owner XID and ordinary SharedMemory disposal are supported. No stale
+callback/buffer-completion blocker remains for this profile. Generic cleanup
+slots, dependency DAGs, foreign/adoption, parallel callback progress and
+Windows persistent holders are not implicitly promised. Host-returning
+finalization is distinct from actual process exit. Further root precision,
+reader/checker coverage and platform work remain separate; hybrid coverage
+cannot be removed by implication. The [owner ledger](design/work/10a-buffer-safeguard-removal.md)
+and [landing review](design/work/reviews/gc-main-only-final-landing.md) name the limits.
 
-Read-only interpreter implementation/design review now runs in parallel with
-GC qualification at the user's request. The provisional [report](design/work/pre-I-interpreter-status-and-opportunities.md)
-inventories operations, value bridges, calls, dispatch and roots and ranks
-seven prospective shared improvements. Its source-based recommendations are provisional until fresh
-matched timing after GC landing. Performance implementation stays behind that
-landing; no current speedup claim follows from historical diagnostics.
+**Current work: matched upstream eval-nogcse qualification.** The pinned
+owned upstream321925 source and its stock products are preserved. The separate
+O3 upstream cohort with CFLAGS_CEVAL=-fno-gcse has passed configure/make and
+independent build review. Bounded correctness/origin checks precede any quiet29 refresh.
+The ordinary fork O3 products are reused with their actual native/runtime
+bindings. No refreshed performance score, ABI implementation or new H1/H2
+landing is claimed. H3 is landed; H1 frame passing and the inert H2 decoder
+remain isolated. The [status report](design/work/pre-I-interpreter-status-and-opportunities.md),
+[first-slice decision](design/work/pre-I-first-slice-decision.md) and
+[timing plan](design/work/pre-I-qualified-timing-refresh.md) precede new shared
+interpreter work. Roughly2× remains soft guidance, not a numerical gate.
 
-Safetyff6 remains the landed runtime. Source-complete3c6b8daa506 includes
-main-only admission, one rooted drainer, persistent buffer closure and the
-removal of count coercion and silent release suppression. The independent
-[union source review](design/work/reviews/gc-simple-union-source-review.md)
-clears bounded validation and states authorship exclusions and support limits.
-NDArray retains original metadata separately from transformed views; private
-successful constructor reuse rejects. Same-owner XID uses an ordinary view
-of the existing managed acquisition, with no receiving wrapper finalizer.
+**Observable behavior first.** Integration tests primarily check useful
+liveness/reclamation, readable data, usable resources, callback effects and
+memory growth over a declared interval. Critical rollback, root handoff and
+ownership unit invariants remain appropriate. Do not prescribe accidental
+collection timing or internal layout, weaken an unexplained regression,
+relabel a failed run, or restart whole ladders for unchanged source. New
+costly repetitions require a named hypothesis, exposure budget and stopping
+rule. Full/perf-map work serializes; normal admission remains two slots.
 
-Consumer validation has an explicit composite: eleven original focused
-passes plus one corrected scanner case; six original whole-module passes
-plus fresh whole test_re172/3skips. The original focused and whole-module
-failures remain failed. Test-only772/e48/86 correct independent acquisition
-and post-callback collection assumptions without changing C products or
-weakening once-only assertions. No repeated full focus campaign was needed.
+### Historical predecessor qualification rulings
 
-The final make-only attempt stopped at check-clean-src before compilation:
-an unknown-origin ambient in-source build appeared in boil-gc-simple. All588
-owned debug products were unchanged. Preserve that ambient build, inventory
-and original failure. Reuse the clean existing boil-buffer-xid-main-only
-worktree on new branch boil/gc-final-validation at3c6;424 has the same tracked
-tree and its branch/packets remain. A fresh out-of-source O1 configure/build
-is required by the new path/configuration. Independent checks clear the
-mechanical reuse of the accepted build/target recipe and executable modes.
-
-Fresh build/cleanup now pass in98s. New13 (ND4, XID8, retention/OOM1)
-passes13/0skips, then affected9 passes1863/120skips, actual kill/N0 and zero
-fallback. Completion95d56f4c/all37 references are independently checked.
-O3 build/cleanup now passes; copied negative4 reaches all four intended
-assertions with guards intact. Test-onlyf945 replaces scanner traversal/count
-checks with live/dead exporter, actual match data and reusable backing checks.
-Fresh whole test_re passes172/3skips on unchanged native3c6; carry13 and eight
-old whole modules explicitly, completion4bd06285/all19 refs checked. Negative
-indexe859dd0f/all54 refs checked. Broad eight-profile and closure execution
-is granted after independent final mechanical binding; stop unexpected failure.
-The four reviewed causal omissions use one copied negative build:
-drainer claim, SRE null-before-release, transactional Unpickler replacement,
-and ND closed-owner read guard. Each needs its named assertion, not a crash
-or timeout. Existing release/debug/ASan profiles and closure then qualify the
-actual union. No new framework, blanket filters or automatic20-pass campaign.
-Interpreter timings and new performance implementation remain parked until
-GC landing; subsequent detailed report/reflection follows the user's order.
-
-**Superseding scope checkpoint,2026-10-30 09:35 PDT.** The user asks whether
-subinterpreters and shutdown complexity can be deferred. Adopt the boundary
-in section0.2. Two holistic reviews agree on retaining nonmoving full-heap
-mark/sweep and hybrid roots while simplifying callback delivery and actual
-process-exit handling. Hold generic cleanup capabilities, completion DAG,
-adoption and borrow/lifecycle frameworks. Evaluate one nonrecursive drainer
-whose competitors enqueue and return; do not promise independent finalizer
-progress. Prove ordinary buffer acquisition ownership and export readiness
-using the existing managed-buffer machinery before considering a Python
-buffer restriction. Unready objects must be retained, never skipped into
-sweep. These are design choices, not source already landed.
-
-Safety168 has six passed combined profiles and one failed debug-stress
-profile. Its only failed test compares diagnostic counters across a window
-that allows automatic collection. Exact test-only9e223040 isolates that
-window without changing assertions or native products. The single whole-GC
-debug stress successor passes with the explicit native168/source9e bridge;
-the other ten passed modules carry forward, and the original FAIL remains
-immutable. Closure and integration smoke are complete. Owner63b bounded
-positive/negative validation is complete and pushed; defer its integration
-under the revised scope. No interpreter timing resumes yet.
-
-The user makes2× a soft design guide, particularly for `i += 1`, and asks
-for all remaining GC fixes before the detailed interpreter report/reflection.
-Preserve H1/H2 candidates and park the matched timing experiment. After GC,
-commission design review of reusable parameterized operation families and
-common value/call/frame protocols where performance disappoints. This
-supersedes mandatory-score language in earlier chronological rulings.
+The following records retain their actual source/configuration and exception
+scope; they do not add supported callback/buffer blockers to the completed75e8
+milestone.
 
 Qualified runtime merge d6a23b9fe0c has exactly the tested5a45 native/test/tool
 source; its original19 differing files are project Markdown prose. Both
 required post-merge smoke rows pass on the explicitly reused qualified images.
 No rebuild or repeated full suite is required for this documentation update.
 
-Queue2a eager preparation remains HOLD, not executed. The revised source-only
+At the historical pre-safety checkpoint, Queue2a eager preparation remained
+HOLD and unexecuted. The then-revised source-only
 late-preparation candidate keeps successful ordering at the baseline boundary
 and aborts before deallocation on ordering OOM. Already routed calls retain
 the existing partial-delivery contract. Independent source review precedes
 bounded native validation. Its finite lock audit identifies inherited weakref
 and range-registry detach/handoff hazards; changing one waiter alone is unsafe.
-Snapshot/debug safety and dependency completion need coherent separate fixes.
-Neither this source checkpoint nor the incremental GC merge closes that debt.
+Those snapshot/debug and completion concerns required separate fixes; later
+safetyff6 and supported75e8 qualification close the declared profile. This
+earlier checkpoint itself earned no such credit.
 
 Coordinator checkpoint, 2026-10-30 08:00 PDT: V2 sweep-OOM7f445 completes
 its bounded checks: release/debug-kill focus6 each and four affected modules

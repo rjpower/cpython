@@ -4662,3 +4662,29 @@ discovery negative, with earlier precision/audit build failures retained.
 Its topic is pushed; integration is deferred under the narrower scope.
 The primary runtime remains d6a23. Interpreter timing remains parked. Next
 hourly documentation/status checkpoint about10:35 PDT.
+
+### 09:46 PDT: three GC safety repairs merge
+
+Qualified test-source9e223040/native168 integrates as ff6ed9d6bfb after
+independent source/evidence review. The merge changes six source/test files;
+all38 differing primary paths versus9e are project Markdown. Closure passes
+Cext16/exact7skips, unchanged regeneration/Clinic, traversal and19 borrowed-
+header receipts/four unsupported modules. Final index9bacd190 binds43 fresh
+references, checked independently, plus the previously checked86 held refs.
+Six original profiles and the explicit corrected debug-stress composite
+remain distinct; the original diagnostic failure is not relabeled.
+
+Bounded release/debug integration smoke preparation reuses the accepted
+recipe and qualified native products explicitly, with no rebuild/full repeat.
+Main-only admission and finite struct/memoryview release safety proceed in
+separate source worktrees. The one-drainer slice follows this handback.
+Buffer and callback completion remain open; interpreter timing stays parked.
+
+Post-merge closure: release/debug smoke each passes1,930 reported tests,
+exact50/20skips,1196/1234collections and zero fallback. Index68b4bba0 and
+all15 references/raw/cleanup are independently checked. Qualified native168,
+source9e and actual primaryff6 identities stay explicit. This safety increment
+is complete. Main-only runtime683a407 and bufferd6bf312 clear source review;
+buffer's first O1-debug build is active. Reuse the existing public capability
+sys.implementation.supports_isolated_interpreters for honest unsupported-test
+classification; no additional capability constant or creation probe is needed.

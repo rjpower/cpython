@@ -19,6 +19,16 @@ during GC implementation. Preserve its existing builds and bounded runtime
 evidence. After GC, report the actual IR/handler/value/call/GC state and
 costs before commissioning the broader interpreter cleanup.
 
+Current GC checkpoint,2026-10-30 09:46 PDT: three qualified safety repairs
+land as ff6ed9d6bfb with both post-merge smoke rows passed. The revised first
+support profile is one main interpreter with ordinary threads. Admission
+rejection and the finite struct/buffer-readiness slice are in parallel source
+implementation; one-drainer delivery follows the safety integration handback.
+Foreign ownership/adoption and generic cleanup/DAG machinery are deferred.
+The [closure plan](gc-closure-plan.md) defines the remaining ordinary resource
+and callback work before timing/report/reflection. Historical measurements
+below remain historical; there is no refreshed performance score yet.
+
 **How we judge the result.** The primary score is the geometric mean of
 upstream elapsed time divided by fork elapsed time across the declared
 application/kernel suite, currently 29 workloads. Roughly 2× means roughly

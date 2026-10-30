@@ -1,8 +1,8 @@
 # The plan, our position in it, and how a change is made
 
-Status: revised 2026-10-29 after the takeover audit and the user's
-direction to resume parallel implementation, shorten feedback gates
-where justified, and establish interpreter performance before the JIT.
+Status: revised 2026-10-30 after the holistic GC review and the user's
+direction to defer subinterpreters, land the focused GC repairs and then
+establish interpreter performance before the JIT.
 This file is the
 working record of the plan and the procedure; `boil/README.md` is the
 starting point for a successor and maps the documents. Documents that
@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 07:35 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 09:52 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -31,7 +31,7 @@ record and is updated at every landing.
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
 | 10a | precise roots, writers, checker and lifetime qualification | Qualified incremental GC union5a45 landed as d6a23b9fe0c after19 affected jobs, two ASan groups, three fulls, two stress11 sets, closure audits and independent LAND_INCREMENTAL review. Both integration smokes pass. Failed predecessor/invalid-environment receipts remain failed. Remaining writers/PyMem, checker/readers, queued/detached roots, buffer release, platform and snapshot/completion debt stay explicit; no20-repeat restart |
-| 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a original probes remain held by the historical classifier; a new source-only safety/dependency design pass is active, no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
+| 7a | queues, snapshot/allocation safety and callback delivery (note 13) | Owner routing052 is landed. Safety9e/native168 lands as ff6ed9d6bfb after qualified profiles/composite, closure and both1,930-test integration smokes. Snapshot/debug output, sweep-order OOM and work-stack/MARKED rollback repairs are complete. Main-only admission683a407 is source-reviewed with capability/test classification in progress; bufferd6bf312 is source-reviewed and building O1-debug; one-drainer design is active. Cross-interpreter adoption/retirement and owner63b integration are deferred under the revised scope |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
@@ -1004,6 +1004,19 @@ a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
 ### Current coordinator ruling, 2026-10-30 07:35 PDT
+
+**Runtime checkpoint,2026-10-30 09:46 PDT.** Safety9e/native168 merges as
+ff6ed9d6bfb after complete source/evidence review and passing closure. Six
+original profile passes and the corrected debug-stress composite retain
+their actual identities; final index9bacd190 and all43 fresh references
+were checked independently. Primary differs only in38 project Markdown
+paths. Bounded release/debug integration smoke uses those qualified images
+explicitly; there is no rebuild or repeated full suite for prose publication.
+Main-only rejection and finite buffer readiness are separate source worktrees.
+For fast component feedback, first use O1/Py_DEBUG plus the relevant focused
+checks; release and lifetime ASan coverage belong to the coherent GC union
+unless a specific failure requires an earlier configuration. Preserve all
+required union coverage, and do not build every configuration per small slice.
 
 **Superseding scope checkpoint,2026-10-30 09:35 PDT.** The user asks whether
 subinterpreters and shutdown complexity can be deferred. Adopt the boundary

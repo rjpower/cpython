@@ -12,9 +12,10 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 09:35 PDT. Last qualified runtime merge is d6a23b9fe0c,
-integrating frozen GC/IR candidate5a45f9bb6a7 after independent review,
-all seven qualification profiles, closure audits and post-merge smoke. Shared
+revised 2026-10-30 09:52 PDT. Latest runtime merge is ff6ed9d6bfb,
+integrating qualified GC safety candidate9e223040 over prior runtime
+d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
+post-merge smoke pass. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4, worker setup 093b9d2a1c3 and
 the active step worktrees. This update separates implemented work
@@ -71,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 09:35 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 09:52 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -90,7 +91,16 @@ Ordinary buffer lifetime remains a correctness obligation. Generic native
 cleanup slots and a completion DAG are held while existing managed-buffer
 owners and export readiness receive a finite proof.
 
-The last qualified runtime merge is **d6a23b9fe0c**; the compiler reentrancy
+The latest runtime merge is **ff6ed9d6bfb**, integrating the reviewed sweep-OOM,
+snapshot/debug-output and work-stack/MARKED rollback repairs. Native168 plus
+test-only9e has six original passed profiles and an explicit corrected debug
+stress composite; closure passes. Primary differs from9e only in38 project
+Markdown paths. Release/debug integration smoke each passes1,930 reported
+tests, exact50/20 skips and zero fallback. The
+[landing review](design/work/reviews/gc-safety-union-landing.md) records the
+incremental scope and retained failures; this is not final GC correctness.
+
+The previous qualified runtime merge is **d6a23b9fe0c**; the compiler reentrancy
 repair is landed99435658509. Its frozen candidate **5a45f9bb6a7**, branch
 boil/pre-i-union in `.worktrees/boil-pre-i-union`, combines ROOTS2b, bytes
 and Unicode writer ownership, H3 handler/storage/statistics work, the
@@ -105,7 +115,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering, qualification of the three safety repairs and remaining precision/platform obligations |
-| Remaining GC repairs | Sweep-OOM7f445, S3 snapshot07af and work-stack/MARKED repair compose at168f30a96ff. Six union profiles pass: both ASan groups, three full suites and release stress11. Test-only9e223040 isolates the failed diagnostic snapshot test with assertions unchanged; fresh whole-GC debug stress passes152/4skips and carries ten original passed modules explicitly | Final closure active, then independent landing review. Original failed profile stays failed. Owner63b bounded validation is complete but integration is deferred. Main-only admission and finite buffer slice are in parallel source implementation; one-drainer slice follows closure. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| Three GC safety repairs | Qualified9e lands as ff6ed9d6bfb. Six original profiles pass, plus an explicit ten-old-modules/one-fresh-GC debug stress composite. Cext16/exact7 skips, unchanged regeneration/Clinic, traversal and19 header receipts pass. Both post-merge smoke rows pass1,930 reported tests, exact50/20 skips and zero fallback | Safety increment complete. Original failed stress profile stays failed; corrected GC reports152/4skips. Main-only admission and finite buffer slice are independently source-reviewed; buffer O1-debug build is active. One-drainer design is active. Owner63b integration is deferred. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |

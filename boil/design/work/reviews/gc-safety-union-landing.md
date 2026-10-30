@@ -64,10 +64,12 @@ binds43 fresh references plus the retained86-reference held packet. All43
 fresh files were independently checked by the coordinator. Closure has zero
 fallback, and post-gate source/configuration/product checks pass.
 
-Next: merge the unchanged candidate,
-verify only project prose differs from qualified source, then run the existing
-bounded release/debug integration smoke with explicitly reused code-identical
-products. Do not repeat the full qualification for Markdown-only differences.
+Candidate9e merges unchanged as ff6ed9d6bfb. Only38 project Markdown paths
+differ from qualified source. Existing bounded release/debug integration smoke
+each passes1,930 reported tests, exact50/20 skips,1196/1234 collections and zero
+fallback. Code-identical qualified products were reused explicitly. Final smoke
+index68b4bba0 and all15 indexed references/raw/cleanup were independently checked.
+No full qualification was repeated for Markdown-only publication differences.
 
 This increment does not fix concurrent callback completion, ordinary native
 buffer release, all remaining root/port contracts or unsupported lifecycle

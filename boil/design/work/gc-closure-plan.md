@@ -15,6 +15,16 @@ completion-scheduler requirements below where noted.
 
 ## Landed baseline
 
+Safety candidate9e223040 is now merged as ff6ed9d6bfb over the baseline
+below. Six original profile passes plus the explicit debug stress composite
+and all closure checks clear independent integration review. Final receipt
+index9bacd190 binds43 fresh references and the retained86-reference packet;
+both were independently checked. Post-merge release/debug smoke each passes
+1,930 reported tests, exact50/20 skips and zero fallback, using qualified
+native168 products and the explicit test-only source9e bridge. Smoke index
+68b4bba0 and its15 references/raw/cleanup were checked independently. Primary
+differs only in38 project Markdown paths. This safety increment is complete.
+
 Runtime merge `d6a23b9fe0c`, published through documentation commit
 `b238276108a`, integrates qualified `5a45f9bb6a7`: ROOTS2b, bytes/Unicode
 writer ownership, reader lifetime/history repair, H3 handler/storage/stats
@@ -48,16 +58,19 @@ separate support decisions; process exit does not excuse ordinary leaks.
 
 ## Active landing order after review
 
-1. **Safety union, coordinator + roots audit.** Finish closure for native168
+1. **Safety union, complete.** Closure and integration smoke pass;9e lands
+   as ff6ed9d6bfb, using native168
    with test-only9e: the corrected whole-GC debug stress module now passes
    152 tests/4 skips, zero fallback. Ten original passed stress modules carry
-   forward explicitly; the original profile stays failed. Review the actual
-   six-file source delta and all final receipts, then merge without reverting
-   primary documentation. Reuse code-identical qualified builds explicitly
-   for post-merge smoke. This landing fixes the three safety defects; it does
+   forward explicitly; the original profile stays failed. The actual
+   six-file source delta and all final receipts were reviewed; primary
+   documentation is preserved. The code-identical qualified builds were reused
+   explicitly for post-merge smoke. This landing fixes the three safety defects; it does
    not complete ordinary buffer release or callback-completion safety.
-2. **Main-only admission, stats/design reviewer.** Implement the audited
-   two-runtime-file rejection boundary in its own worktree, with focused
+2. **Main-only admission, stats/design reviewer.** Runtime/API tests and docs
+   at683a407 pass independent source review. Complete the existing
+   sys.implementation.supports_isolated_interpreters declaration and finite
+   unsupported-test classification, then validate with focused
    public C/Python failure contracts and normal-thread controls. Preserve
    bootstrap and report unsupported subinterpreter tests honestly. No broad
    exclusions or process shim. Source review precedes native validation.
@@ -67,7 +80,8 @@ separate support decisions; process exit does not excuse ordinary leaks.
    callback plus worker collection without introducing a collector wait;
    preserve signal precedence and state the finalizer-progress limitation.
    Review active-shutdown/fork boundaries before any extra machinery.
-4. **Finite buffer slice, resource reviewer.** Implement struct's existing
+4. **Finite buffer slice, resource reviewer.** Independently source-reviewed
+   d6bf312 is in its first O1-debug build. It implements struct's existing
    acquisition as an inert-before-release transaction plus memoryview/mbuf
    readiness, retention and delivery recheck. Ready finalization is selected
    before retaining unready closures. No forced-zero export counts, premature

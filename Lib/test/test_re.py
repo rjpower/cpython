@@ -2002,12 +2002,16 @@ class ReTests(unittest.TestCase):
                 m = scanner.search()
                 del junk
                 self.assertIsNotNone(m)
+                self.assertEqual(released, [])
                 self.assertEqual(contents(m.group(1)), expected[-3:])
                 self.assertEqual(contents(m.string), expected)
-                # Ordinary finalization releases the acquisition before sweep.
+                # Reading a group uses a separate temporary acquisition.
+                self.assertEqual(released, [expected] if kind == "Exporter" else [])
+                # Ordinary finalization releases the scanner's acquisition.
                 del m, scanner
                 gc_collect()
-                self.assertEqual(released, [expected] if kind == "Exporter" else [])
+                self.assertEqual(released,
+                                 [expected, expected] if kind == "Exporter" else [])
 
     def test_bug_817234(self):
         iter = re.finditer(r".*", "asdf")

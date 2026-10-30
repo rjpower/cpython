@@ -8,8 +8,9 @@ new performance result. This packet uses the [status report](pre-I-interpreter-s
 run, timing, serving-tree edit or commit is part of this decision.
 
 **Conditional first new code candidate: the finite numeric NOARGS receiver
-closure.** First refresh the matched interpreter baseline and shared-cost
-attribution on the landed GC source; use those results to choose the work.
+closure.** First [refresh the matched interpreter baseline](pre-I-qualified-timing-refresh.md)
+and shared-cost attribution on the landed GC source; use those results to
+choose the work.
 This candidate removes a concrete representation round trip through an
 existing common interface. Compare its measured value against its ABI and
 maintenance cost before accepting it. Running the already-prepared matched

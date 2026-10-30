@@ -4336,3 +4336,53 @@ Root delegates next owned O3/O1 build preparation to the GC operator, H1's
 uniform tail-call frame parameter source implementation to the handler owner,
 and the finite list/dict/set generations ledger to the Unicode owner. No H1
 native experiment, barrier or minor is implemented. Next hourly report18:50.
+
+### 18:50 PDT: affected GC completion, dispatch baselines and IR work
+
+Frozen combined5a45 builds and post-cleanup checks complete on GCC O3,
+O1 Py_DEBUG and ASan. Effective O1 follows Og in actual commands; assertions,
+frame pointers and zero initialization remain. All builds check116 modules,
+67 shared and zero failed imports. ASan retains its declared fake-stack/leak
+limits. No broad or primary-landing result is inferred from compilation.
+
+All19 affected transactions pass and clean up, indexf77aebb0: stack-hit1/0
+four times (normal andN1000 per build), Unicode consumers1,037 twice,
+smoke1,930 twice, H3 modules1,376 three modes, GC142 twice, integration54
+three modes, and three strict stale6x100 jobs. All observed fallback is zero;
+unpinned counts remain report-only except strict stale's requiredzero.
+Whole-GC142/19release and142/4kill include two unexecuted byte-trigger tests:
+truthy stringPYTHON_GCSTRESS='0' activates existing decorators despite getter0.
+FutureN0 jobs omit the variable and require both cases in fresh normal fulls.
+Those old skip outcomes remain unchanged; no whole-GC retry hides the gap.
+
+Both matched Clang21.1.8 baselines now exist on5a45. Goto configure/make and
+module checks pass, but the wrapper's CIE substring guard rejects a newline.
+Independent retained-report review finds1CIE/8,389FDEs and exact eval-frame
+coverage. OriginalFAIL54a91b2a remains; offline supplement5b3f968e closes actual
+config/tool/source/native cleanup without rebuilding. Tail4c743dda and
+cleanupf118a88d pass, including293 emitted precise handlers/labels/UNKNOWN.
+CFI presence/membership is compile evidence, not dynamic ownership. Four
+bounded runtime/root checks are reviewed and wait for current ASan checks.
+The ASan16+Unicode7 then Clang4 then five-broad sequence keeps shared perf-map
+cleanup serialized. Each chain stops on failure; no full100k/20-repeat redo.
+
+H1 source78ac84e5709 merged the current baseline without history rewriting;
+clean candidate62456cc differs from5a45 in only six frame-argument files.
+Host generation/limited controls pass; there is no native H1 result or gain.
+H2 now has an isolated inert effect/decoder implementation underway from5a45;
+its initial scalar coverage is explicitly partial, complex edges unsupported,
+and runtime constructors/readers/clearing remain unchanged. Final-word maps
+must follow layout/exception emission and check_words normalization, with
+virtual-liveness projection independently checked before activation.
+
+Root reviewed/copied the13-file container and33-file runtime generations
+ledgers, verifying their exact5a45 source hashes. Corrected the latter's
+function-field total to14 after checking header/traversal; its listed fields
+were already correct. Types/shapes/native/iterator/root/port and concrete
+promotion/barrier/reentry obligations remain. No minor or barrier exists.
+
+README's current-state section is shortened to separate landed, implemented,
+validated and remaining work; detailed historical receipts stay in WORKLOG
+and linked records. The measured upstream diagnostic remains0.828243; four-row
+patch timings remain1.250/1.055/1.070/1.033 with their stated limits. No new
+upstream score or target claim. Next hourly documentation/status19:50 PDT.

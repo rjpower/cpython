@@ -23,20 +23,20 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 18:11 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 18:50 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b native ce2ac/test-source c679/docs837; f2a5 predecessor is held; combined H3/GC successor5a45 awaits fresh qualification. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k is terminal FAIL: interpreter assertion, GC timeout and HTTPENV_CHANGED; no retry/newfilter. Four diagnostics support trigger-dependent eligibility; test-only annotation validated normal/stress. Public primary/current HTTP errors and trashcan noncompletion establish inherited exposure. Scoped incremental exception accepted; final GC/perf debt stays. Bytes3a f5e818 source/results clear coordinator review; compose one merged ladder. Tail11/0, cext16/seven skips, unchanged regen/traverse and19 headers pass. Exact union source review clear; O3/Og compilations and early16 pass. Release coverage is assembled563+1 (original env-failed full retained); debug normal/kill fulls pass51,134 each with zero fallback; release stress11 fails its stack-hit type assertion. Debug stress/ASan/extras stop pending diagnosis and final review. Old1bfe120 stays historical, no automatic20 redo; next coherent candidate selects O1 debug subject to fresh qualification. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
+| 10a | precise roots, writers, checker and lifetime qualification | Rungs0/1/1b landed. ROOTS2b/bytes predecessorf2 remains held after its diagnostic stress failure; original stress100k lifecycle debt persists under the reviewed incremental exception. Combined successor5a45 includes source-reviewed reader/history repair and Unicode ownership plus H3/finalizer optimization. Fresh O3/O1-debug/ASan builds and19 affected jobs pass; ASan2, three normal/kill fulls, two stress11 sets, closure and final review remain. N0 fulls omit the truthy stress environment and require two previously skipped byte-trigger cases. Then remaining3a/3b/3c/platform closure; no20-repeat restart |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | handler contract (note 14), generated handler domain and orthogonal interpreter dispatch | Stage1 landed6c724c29408. Stage2a624c75f6455, names/NOFBc5cf6ba6d288 and immutable-linedc02f76c0ccf clear bounded review. Monitoring storage native76274/evidenceffc548603b8 clears frozen-checkpoint source/evidence review: release/Og smoke1,924 and affected1,370 each, actual-kill1,370, controls and audits pass. It predates queue052; actual queue/ROOTS/H3 union qualification and primary landing remain pending. Stats implementation from81417 clears independent source review in isolated boil-h3-stats; owned build, targeted lifecycle/reader/generator checks pass across exact receipts. Private counter controls pass. Actual H3+GC source union e9a1 clears source review; owned Py_STATS producer/reader checks and O3/Og builds pass. Eight bounded smoke/H3/stale jobs pass; integration3 also pass; combined successor5a45 awaits fresh qualification. H1 frame-passing design617bea5 is ready after generator/build handoff, independent of H2 maps. H2 waits for10a3. Transport/final renumbering precede typed truth operations; no opcode-count threshold |
-| 7 | generational collection over the precise root set | reviewed source direction and allocator/domain ledger; store/constructor, safe-promotion and reentry/commit proofs remain; minors off |
+| H | generated handler domain and orthogonal dispatch | Stage1 landed6c724c29408; current H3 storage/names/statistics are in5a45, with actual predecessor Py_STATS producer/reader and bounded checks. New5a45 H3 affected checks pass across normal release/debug and actual debug kill. Matched Clang goto/tail baselines are built (goto wrapper parser failure accepted only via separate offline supplement); runtime checks pending. H1 uniform frame-argument source committed62456; no native H1 result. H2 inert generated-effect/decoder work started, preserving root readers/clears; activation waits concrete reader/span contracts. No opcode threshold |
+| 7 | nonmoving generations | Reviewed direction; allocator/frame/container/runtime ledgers bind current source. Types/shapes/native/iterator/root/port coverage and concrete barrier/constructor/promotion/reentry/young-index interfaces remain. No barrier/minor implemented |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
 | 10b | moving collector: nursery, evacuation, compaction, handle discipline | open |
@@ -336,6 +336,25 @@ reconcile; the timing record states process/layout/noise limits. No blanket
 repeat or additional profile is commissioned. H1 source preparation may
 proceed independently, with actual matched compiler/dispatch experiments
 following the coherent baseline; no H1 native result exists yet.
+
+Coordinator checkpoint, 2026-10-29 18:50 PDT: frozen5a45 builds on GCC O3,
+O1 Py_DEBUG and ASan; all19 affected jobs pass. Their whole-GC receipts retain
+two extra skips caused by truthy PYTHON_GCSTRESS='0', not actual stress.
+FutureN0 target environments omit that variable while asserting getter0;
+normal fulls protect both byte-trigger tests. Do not rewrite old skip counts.
+ASan16 plus Unicode consumers run before the four matched Clang baseline
+runtime/root checks. Five fresh broad profiles follow serially, then closure
+and final review. A failure stops its chain without a new skip or retry.
+The H1 source patch and inert H2 producer work proceed independently of those
+frozen runtime inputs. The roughly2x target is still unmet.
+
+A successful configure/make with a demonstrably defective post-build parser
+may use a separately reviewed host-only supplement over unchanged sealed
+products, original successful command statuses, actual config/tool/source and
+retained reports. Preserve the original wrapper failure. Complete the missing
+checks and cleanup; do not relabel it a passed build receipt or rerun make
+merely to remove red history. This covers Clang goto's line-ended CIE token,
+not absent CFI or an actual compile/runtime failure.
 
 The first dispatch inventory is complete. H3-1 designs the handler domain:
 IR fields are 16-bit but numbering, deopt metadata, instrumentation and

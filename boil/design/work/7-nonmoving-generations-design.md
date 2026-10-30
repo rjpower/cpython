@@ -126,6 +126,14 @@ handlers independently.
 
 ## Store inventory and current coverage gaps
 
+The bounded source inventories now include the [frame ledger](7-generations-frame-store-ledger.md),
+[list/dict/set ledger](7-generations-container-store-ledger.md) and
+[tuple/cell/function/code/exception ledger](7-generations-runtime-store-ledger.md).
+Their inspected files bind the combined5a45 source. They identify actual
+publication/constructor boundaries, not implemented barriers or complete
+repository coverage. Types/shapes, native modules, iterators/descriptors,
+root domains and external raw writers remain open.
+
 This is the complete set of coverage obligations, with concrete current
 bypasses. It is **not** a completed assignment-by-assignment audit. Before
 activation, one owner/field/store ledger must close every tp_traverse edge,
@@ -134,7 +142,7 @@ extra type/dict/shape edge, raw backing-store publisher and root-only field.
 | Family / existing source | Required owner boundary and bypasses |
 | --- | --- |
 | Lists/tuples: cpython headers, listobject.c/tupleobject.c | SET_VALUE/SET_ITEM, append-resize, slice/extend/repeat, raw ob_item writes and memcpy/memmove; remember the list for external item arrays. Tuple construction/resize needs the same promotion rule. |
-| Dicts/sets: dictobject.c/setobject.c | Insert/replace, split values, merges, resize/table swaps and bulk copies. STORE_KEY/STORE_VALUE currently lack owner; a low-level table address alone is insufficient. Shared keys need the type/dict owners whose traversal exposes them. |
+| Dicts/sets: dictobject.c/setobject.c | Insert/replace, merges, resize/table swaps and bulk copies. Current dictionaries are combined-only with privately owned mutable tables; split values/shared mutable keys are absent. STORE_KEY/STORE_VALUE currently lack owner; a low-level table address alone is insufficient. Type/shape owners are separate. |
 | Instances/types: shapeobject.c/typeobject.c/object.c/structmember.c | Shape slots/transitions/dict-mode conversion, managed/offset dicts, member stores, __class__/Py_SET_TYPE, type attributes/MRO/bases and shape-owned references. Preserve flags when changing the header shape. |
 | Fast handlers: bytecodes.c and generators | Raw STORE_SUBSCR_LIST_INT, STORE_ATTR_SHAPE/TRANSITION/POLY/WITH_HINT/SLOT bypass central setters. STORE_GLOBAL/NAME must reach barriered dict paths; STORE_DEREF must reach the cell barrier. Regenerate all emitted variants. |
 | Cells/functions/code/descriptors | PyCell_SET_VALUE; function defaults/closure/annotations/typeparams; cached code fields, monitoring/feedback references, methods/properties and descriptors. Audit funcobject.c/codeobject.c/methodobject.c/descrobject.c, not only Python attribute assignment. H3 pure-data arrays contain no hidden Python roots by assertion, not by name. |

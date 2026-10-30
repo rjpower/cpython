@@ -1,6 +1,6 @@
 # Three GC safety repairs: integration review
 
-Coordinator review,2026-10-30. **Source clear; landing awaits closure.**
+Coordinator review,2026-10-30. **LAND_INCREMENTAL: source and closure clear.**
 Reviewed native candidate `168f30a96ffdb5516fe94e9ed13b0e60dcb9fae6`
 and test-only successor `9e223040a2070c75f88be10366e0f0a7b35f6ed3`
 against common ancestor `5a45f9bb6a73e7351c861faf05624ae4810f6d87`.
@@ -56,10 +56,15 @@ Native168 and source9e identities remain explicit throughout this composite.
 The reviewed closure helper49b05232/plan dcd98f03 preserves C-extension,
 regeneration, traversal and borrowed-header checks. It checks the normal
 source/test bridge and the separate native168 ASan capsule; it neither fakes
-the old source HEAD nor reruns full profiles. Closure was authorized after
-reviewing its exact prerequisite adaptation. Final receipts remain due.
+the old source HEAD nor reruns full profiles. Closure passes: C-extension16
+tests/exact7 declared skips, unchanged regen-cases/Clinic, traversal and all19
+borrowed-header receipts/four explicit unsupported modules. Final index
+9bacd1901e16ace8fe72fd03ef7e4a968eceb5429a071ec7becaf9dd1d096362
+binds43 fresh references plus the retained86-reference held packet. All43
+fresh files were independently checked by the coordinator. Closure has zero
+fallback, and post-gate source/configuration/product checks pass.
 
-After closure passes: record its actual outcomes, merge the unchanged candidate,
+Next: merge the unchanged candidate,
 verify only project prose differs from qualified source, then run the existing
 bounded release/debug integration smoke with explicitly reused code-identical
 products. Do not repeat the full qualification for Markdown-only differences.

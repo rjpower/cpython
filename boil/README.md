@@ -211,45 +211,39 @@ score, upstream parity or the2x target.
    improve call windows and linear string growth only under their root,
    initialization and alias/escape proofs. Re-measure each coherent change.
 
-**Active composition, not landed:** candidate925d16c8bbf combined main-only,
-buffer readiness and the reviewed single drainer. O1-debug focus17/0skips and
-whole affected9 (1,518 reported/146skips) pass, zero fallback;60 skips declare
-unsupported creation. Root checked completion af128e61 and all36 references.
-Other/nested collectors enqueue and return; the active callback and saved
-exception stay rooted through reporting. Busy shutdown/fork boundaries pass
-the focused controls. Concurrent finalizer progress is explicitly given up.
-The earlier buffer-only foreign-owner failure remains failed, not relabeled.
+**Active composition, source complete and not landed:** final candidate
+3c6b8daa506 combines main-only admission, one rooted drainer, unready-buffer
+retention, all six persistent consumer families and the two safeguard
+removals. Source reviews clear bounded validation. Its clean qualification
+worktree is boil-buffer-xid-main-only on branch boil/gc-final-validation.
+The original boil-gc-simple checkout has an unknown ambient in-source build;
+preserve it. That checkout's final make stopped before compilation, with
+owned debug products unchanged and no final-union target launched.
 
-Candidate dc7bd5c19f7 then composed source-reviewed PickleBuffer/SRE627590 and
-Unpickler48b021. Its O1 make-only rebuild passes; new12 focus has11 passes and
-one scanner test failure. The test called Match.group(), creating another
-exporter acquisition whose callback legitimately finalized the idle scanner.
-Two independent source reviews confirm that mechanism. Test-only772835f27ab
-uses stored span offsets to prove scanning still works, retaining the active-
-scan/no-release and eventual exactly-once assertions. One corrected case and
-the not-yet-started affected7 are authorized using unchanged dc7 native images.
-Original FAIL capsule0ba6b395 and all18 references are checked and preserved.
-There is no corrected native result yet.
+Earlier925d's O1 focus17/0 and whole9 1,518/146skips pass, zero fallback;
+60 skips declare unsupported creation. Consumer dc7's corrected coverage is
+explicitly assembled: eleven original focus passes plus fresh scanner, and
+six original whole-module passes plus fresh test_re172/3skips. Test-only
+772/e48/86 correct independent acquisition and post-callback collection
+assumptions, retaining once-only lifecycle assertions. The original failed
+profiles remain failed; this is not fresh final-union qualification.
 
-NDArray's source port separates original managed acquisition metadata from
-transformed views and balances outward exports. Review also found a sixth
-persistent holder: same-interpreter queue/channel buffer transfer still uses
-an unsafe receiving-wrapper finalizer. Its source task reuses an ordinary
-memoryview registration and the existing XID disposal path instead. Foreign
-creation remains disabled by the candidate; no wrapper lifecycle framework is
-needed. The [safeguard-removal ledger](design/work/10a-buffer-safeguard-removal.md)
-tracks both remaining proofs before deleting forced-zero export counts and
-silent swept-exporter release suppression. These are source tasks, not landed
-fixes. The inherited live PickleBuffer re-export limitation for Python-defined
-exporters is separate functional debt; cycle tests do not establish that path.
+NDArray keeps original acquisition metadata separate from transformed views,
+mirrors actual outward exports and rejects successful private constructor
+reuse. Same-owner queue/channel receipt registers an ordinary memoryview on
+the existing managed buffer and disposes the temporary XID acquisition.
+The [safeguard-removal ledger](design/work/10a-buffer-safeguard-removal.md)
+records the checked zero-count and DEAD/SWEPT invariants. Inherited live
+Python-buffer-wrapper re-export limitations and private ND producer mutation
+reentry remain disclosed; cycle tests do not establish those separate paths.
 
-Remaining sequence: close NDArray and same-owner XID, remove the obsolete
-safeguards under checked invariants, run the three disjoint causal controls
-with one copied negative build, then qualify the actual supported union before
-landing. Main-only creation, ordinary threads, normal resource lifetime and
-callbacks are the milestone; foreign adoption, generic cleanup APIs and a
-completion DAG stay deferred. Interpreter timing remains parked. Loom and
-GitHub use are authorized.
+Remaining sequence: fresh O1 build, new13 and conditional affected9, four
+reviewed causal omissions in one copied negative build, release/debug/ASan
+qualification, closure, independent landing review and integration smoke.
+Main-only creation, ordinary threads, normal resource lifetime and callbacks
+are the milestone; foreign adoption, generic cleanup APIs and a completion
+DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
+are authorized.
 Shared verifier/worker components are landed; full profile/gate orchestration
 is still separate work in `boil/tools/verification.md`. All jobs retain real source/config/product,
 actual mode/stress, skip and failure identities. Fulls and perf-sensitive walks

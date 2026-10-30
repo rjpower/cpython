@@ -569,20 +569,47 @@ typedef struct {
     int oom;
 } objstack;
 
-static void
+/* Fail one scratch-stack growth, independently of queue/order/debug storage. */
+static int fail_work_alloc_countdown;
+
+int
+_PyGC_LiveFailWorkAlloc(int n)
+{
+    int left = fail_work_alloc_countdown;
+    fail_work_alloc_countdown = n;
+    return left;
+}
+
+static int
 objstack_push(objstack *s, PyObject *op)
 {
+    if (s->oom) {
+        return -1;
+    }
     if (s->n == s->cap) {
-        size_t cap = s->cap ? s->cap * 2 : 1024;
+        size_t limit = (size_t)PY_SSIZE_T_MAX / sizeof(PyObject *);
+        if (s->cap == limit) {
+            s->oom = 1;
+            return -1;
+        }
+        size_t cap = s->cap ? (s->cap > limit / 2 ? limit : s->cap * 2)
+                            : 1024;
+        if (fail_work_alloc_countdown > 0
+            && --fail_work_alloc_countdown == 0)
+        {
+            s->oom = 1;
+            return -1;
+        }
         PyObject **items = realloc(s->items, cap * sizeof(PyObject *));
         if (items == NULL) {
             s->oom = 1;
-            return;
+            return -1;
         }
         s->items = items;
         s->cap = cap;
     }
     s->items[s->n++] = op;
+    return 0;
 }
 
 static inline int
@@ -594,23 +621,36 @@ is_dead(PyObject *op)
 static int
 resurrect_visit(PyObject *op, void *arg)
 {
+    objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op)) {
+        if (objstack_push(s, op) < 0) {
+            return -1;
+        }
         op->ob_flags &= ~_Py_GC_DEAD_FLAG;
-        objstack_push((objstack *)arg, op);
     }
     return 0;
 }
 
 /* Keep op, which is dead, and every dead object it reaches. */
-static void
+static int
 resurrect(objstack *s, PyObject *op)
 {
-    (void)resurrect_visit(op, s);
+    if (resurrect_visit(op, s) < 0) {
+        return -1;
+    }
     while (s->n > 0) {
         PyObject *o = s->items[--s->n];
-        (void)resurrect_visit((PyObject *)Py_TYPE(o), s);
-        (void)_PyGC_TraceTraverse(o, resurrect_visit, s);
+        if (resurrect_visit((PyObject *)Py_TYPE(o), s) < 0
+            || _PyGC_TraceTraverse(o, resurrect_visit, s) != 0)
+        {
+            s->oom = 1;
+            return -1;
+        }
     }
+    return 0;
 }
 
 
@@ -698,21 +738,30 @@ static int
 cycle_visit(PyObject *op, void *arg)
 {
     objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
+        // Every temporary mark must have a successful cleanup-journal entry.
+        if (objstack_push(s, op) < 0) {
+            return -1;
+        }
         op->ob_flags |= _Py_GC_MARKED_FLAG;
-        objstack_push(s, op);
     }
     return 0;
 }
 
 /* Does op reach itself through dead objects?  Only for the rare objects with
    a legacy tp_del.  The mark flag, clear on every dead object, records the
-   objects visited; it is cleared again before returning. */
+   objects visited; it is cleared again before returning.  Return -1 on an
+   incomplete traversal, otherwise whether a cycle was found. */
 static int
 in_dead_cycle(PyObject *op, objstack *seen)
 {
     seen->n = 0;
-    (void)_PyGC_TraceTraverse(op, cycle_visit, seen);
+    if (_PyGC_TraceTraverse(op, cycle_visit, seen) != 0) {
+        seen->oom = 1;
+    }
     int found = 0;
     for (size_t i = 0; i < seen->n && !found && !seen->oom; i++) {
         PyObject *o = seen->items[i];
@@ -720,19 +769,25 @@ in_dead_cycle(PyObject *op, objstack *seen)
             found = 1;
             break;
         }
-        (void)_PyGC_TraceTraverse(o, cycle_visit, seen);
+        if (_PyGC_TraceTraverse(o, cycle_visit, seen) != 0) {
+            seen->oom = 1;
+        }
     }
     for (size_t i = 0; i < seen->n; i++) {
         seen->items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
     }
-    return found || seen->oom;
+    return seen->oom ? -1 : found;
 }
 
 static int
 order_visit(PyObject *op, void *arg)
 {
+    objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
-        objstack_push((objstack *)arg, op);
+        return objstack_push(s, op);
     }
     return 0;
 }
@@ -757,6 +812,7 @@ finalizer_eligible(PyObject *op)
 static int
 finalizer_order(_PyGCMarkResult *res, objstack *order)
 {
+    int status = -1;
     objstack stack = {0};
     objstack visited = {0};
     for (Py_ssize_t i = 0;
@@ -771,39 +827,47 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
         {
             continue;
         }
-        objstack_push(&stack, root);
-        while (stack.n > 0 && !stack.oom) {
+        if (objstack_push(&stack, root) < 0) {
+            goto done;
+        }
+        while (stack.n > 0) {
             // An entry with bit 0 set is an object whose children are done.
             uintptr_t top = (uintptr_t)stack.items[--stack.n];
             PyObject *op = (PyObject *)(top & ~(uintptr_t)1);
             if (top & 1) {
-                if (finalizer_eligible(op)) {
-                    objstack_push(order, op);
+                if (finalizer_eligible(op) && objstack_push(order, op) < 0) {
+                    goto done;
                 }
                 continue;
             }
             if (op->ob_flags & _Py_GC_MARKED_FLAG) {
                 continue;
             }
+            if (objstack_push(&visited, op) < 0) {
+                goto done;
+            }
             op->ob_flags |= _Py_GC_MARKED_FLAG;
-            objstack_push(&visited, op);
-            objstack_push(&stack, (PyObject *)((uintptr_t)op | 1));
-            (void)_PyGC_TraceTraverse(op, order_visit, &stack);
+            if (objstack_push(&stack, (PyObject *)((uintptr_t)op | 1)) < 0
+                || _PyGC_TraceTraverse(op, order_visit, &stack) != 0)
+            {
+                goto done;
+            }
         }
     }
+    status = 0;
+done:
     for (size_t i = 0; i < visited.n; i++) {
         visited.items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
     }
-    int oom = stack.oom || visited.oom || order->oom;
     free(stack.items);
     free(visited.items);
     // Reverse the postorder
-    for (size_t i = 0, j = order->n; !oom && i + 1 < j; i++, j--) {
+    for (size_t i = 0, j = order->n; status == 0 && i + 1 < j; i++, j--) {
         PyObject *tmp = order->items[i];
         order->items[i] = order->items[j - 1];
         order->items[j - 1] = tmp;
     }
-    return oom ? -1 : 0;
+    return status;
 }
 
 /* The delivery marker, _Py_GC_DEL_CALLED_FLAG, is set when the call runs
@@ -839,30 +903,28 @@ handle_finalizers(GCState *gc, call_batch *b,
         if (op->ob_flags & _Py_GC_DEL_CALLED_FLAG) {
             continue;
         }
-        if (_PyObject_IS_GC(op) && in_dead_cycle(op, &s)) {
-            objstack_push(garbage, op);
+        int cycle = _PyObject_IS_GC(op) ? in_dead_cycle(op, &s) : 0;
+        if (cycle < 0
+            || objstack_push(cycle ? garbage : &legacy, op) < 0)
+        {
+            goto error;
         }
-        else {
-            objstack_push(&legacy, op);
-        }
-    }
-    if (garbage->oom || legacy.oom) {
-        goto error;
     }
     s.n = 0;
     for (size_t i = 0; i < garbage->n; i++) {
-        resurrect(&s, garbage->items[i]);
+        if (resurrect(&s, garbage->items[i]) < 0) {
+            goto error;
+        }
     }
     // A tp_del that a cycle in gc.garbage reaches does not run either: its
     // object goes to gc.garbage too.
     for (size_t i = 0; i < legacy.n; i++) {
         PyObject *op = legacy.items[i];
-        if (!(op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
-            objstack_push(garbage, op);
+        if (!(op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)
+            && objstack_push(garbage, op) < 0)
+        {
+            goto error;
         }
-    }
-    if (garbage->oom) {
-        goto error;
     }
     live_call *last = b->tail;
     // Queue every finalizer first: a resurrected object needs its own.
@@ -886,11 +948,10 @@ handle_finalizers(GCState *gc, call_batch *b,
         if (!(op->ob_flags & _Py_GC_DEAD_FLAG)) {
             continue;  // reached from a legacy cycle
         }
-        if (res->dead[i].kinds & _PyGC_DEAD_GC) {
-            objstack_push(garbage, op);
-            if (garbage->oom) {
-                goto error;
-            }
+        if ((res->dead[i].kinds & _PyGC_DEAD_GC)
+            && objstack_push(garbage, op) < 0)
+        {
+            goto error;
         }
     }
     // tp_del after tp_finalize, as subtype_dealloc() calls them
@@ -902,10 +963,14 @@ handle_finalizers(GCState *gc, call_batch *b,
         }
     }
     for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
-        resurrect(&s, c->op);
+        if (resurrect(&s, c->op) < 0) {
+            goto error;
+        }
     }
     for (size_t i = 0; i < garbage->n; i++) {
-        resurrect(&s, garbage->items[i]);
+        if (resurrect(&s, garbage->items[i]) < 0) {
+            goto error;
+        }
     }
     if (saveall) {
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
@@ -914,7 +979,7 @@ handle_finalizers(GCState *gc, call_batch *b,
     }
     free(s.items);
     free(legacy.items);
-    return s.oom ? -1 : 0;
+    return 0;
 
 error:
     free(s.items);
@@ -952,10 +1017,13 @@ queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
     // Queue every one first: resurrecting one can reach another.
     objstack s = {0};
     for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
-        resurrect(&s, c->op);
+        if (resurrect(&s, c->op) < 0) {
+            free(s.items);
+            return -1;
+        }
     }
     free(s.items);
-    return s.oom ? -1 : 0;
+    return 0;
 }
 
 static void

@@ -1532,6 +1532,94 @@ class TracingCollectorTests(unittest.TestCase):
         for ref in refs:
             self.assertIsNone(ref())
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_work_oom_recovers_next_collection(self):
+        # The root stack, cleanup journal and output each grow once.  In
+        # particular, failure of the journal must leave no unrecorded MARKED.
+        for stage in (1, 2, 3):
+            with self.subTest(stage=stage):
+                _queue_child(f"stage = {stage}\n" + textwrap.dedent("""
+                    gc.disable()
+                    calls = []
+                    class Finalized:
+                        __slots__ = ()
+                        def __del__(self):
+                            calls.append('finalized')
+                    def make():
+                        Finalized()
+                    gc.collect()
+                    make()
+                    _testinternalcapi.gc_fail_work_alloc(stage)
+                    assert gc.collect() == 0, 'work OOM swept objects'
+                    assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'work OOM did not fire'
+                    assert calls == [], 'work OOM delivered a finalizer'
+                    gc.collect()
+                    assert calls == ['finalized'], 'finalizer missing after work OOM recovery'
+                    gc.collect()
+                    assert calls == ['finalized'], 'work OOM duplicated a finalizer'
+                """), PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None or _testcapi is None,
+                     "requires _testinternalcapi and _testcapi")
+    def test_legacy_cycle_work_oom_recovers_next_collection(self):
+        _queue_child("""
+            from _testcapi import with_tp_del
+            gc.disable()
+            calls = []
+            @with_tp_del
+            class Legacy:
+                __slots__ = ('link',)
+                def __tp_del__(self):
+                    calls.append('legacy')
+            def make():
+                obj = Legacy()
+                obj.link = obj
+            gc.collect()
+            make()
+            _testinternalcapi.gc_fail_work_alloc(1)
+            assert gc.collect() == 0, 'cycle work OOM swept objects'
+            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'cycle work OOM did not fire'
+            assert not any(type(obj) is Legacy for obj in gc.garbage), 'incomplete cycle published garbage'
+            assert calls == [], 'incomplete cycle delivered tp_del'
+            gc.collect()
+            held = [obj for obj in gc.garbage if type(obj) is Legacy]
+            assert len(held) == 1, 'legacy cycle missing after work OOM recovery'
+            assert held[0].link is held[0]
+            assert calls == [], 'cycle recovery delivered tp_del'
+            held[0].link = None
+            gc.garbage.remove(held[0])
+            held.clear()
+            gc.collect()
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_journal_growth_oom_recovers_next_collection(self):
+        _queue_child("""
+            gc.disable()
+            calls = []
+            count = 1050
+            class Finalized:
+                __slots__ = ()
+                def __del__(self):
+                    calls.append('finalized')
+            def make():
+                for _ in range(count):
+                    Finalized()
+            gc.collect()
+            make()
+            # Independent roots reuse the DFS stack.  After its allocation,
+            # the first journal and output allocations, growth four extends
+            # the journal that already holds 1024 marked objects.
+            _testinternalcapi.gc_fail_work_alloc(4)
+            assert gc.collect() == 0, 'journal growth OOM swept objects'
+            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'journal growth OOM did not fire'
+            assert calls == [], 'journal growth OOM delivered a finalizer'
+            gc.collect()
+            assert len(calls) == count, 'finalizers missing after journal growth OOM recovery'
+            gc.collect()
+            assert len(calls) == count, 'journal growth OOM duplicated finalizers'
+        """, PYTHON_GCSTRESS="")
+
     DEBUG_OUTPUT_SETUP = """
 import gc, sys, weakref, _testinternalcapi
 gc.disable()

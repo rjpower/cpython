@@ -207,6 +207,8 @@ PyAPI_FUNC(int) _PyGC_LiveFailAlloc(int n);
 PyAPI_FUNC(int) _PyGC_LiveFailOrderAlloc(int n);
 /* Test hook: fail only the nth debug-output buffer growth, once. */
 PyAPI_FUNC(int) _PyGC_LiveFailDebugAlloc(int n);
+/* Test hook: fail only the nth collector work-stack growth, once. */
+PyAPI_FUNC(int) _PyGC_LiveFailWorkAlloc(int n);
 /* Test hook: close tstate's interpreter as _PyGC_Fini() does, then enter
    the collector by each of its entries.  out[]: what _PyGC_Collect() and
    PyGC_Collect() returned, whether the inline entry collected, whether a

@@ -4962,6 +4962,20 @@ gc_fail_order_alloc(PyObject *self, PyObject *args)
 }
 
 static PyObject *
+gc_fail_work_alloc(PyObject *self, PyObject *args)
+{
+    int n;
+    if (!PyArg_ParseTuple(args, "i:gc_fail_work_alloc", &n)) {
+        return NULL;
+    }
+    if (n < 0) {
+        PyErr_SetString(PyExc_ValueError, "a nonnegative allocation count");
+        return NULL;
+    }
+    return PyLong_FromLong(_PyGC_LiveFailWorkAlloc(n));
+}
+
+static PyObject *
 gc_fail_debug_alloc(PyObject *self, PyObject *args)
 {
     int n;
@@ -5047,6 +5061,7 @@ static PyMethodDef module_functions[] = {
     {"gc_queue_info", gc_queue_info, METH_VARARGS},
     {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
     {"gc_fail_debug_alloc", gc_fail_debug_alloc, METH_VARARGS},
+    {"gc_fail_work_alloc", gc_fail_work_alloc, METH_VARARGS},
     {"gc_fail_order_alloc", gc_fail_order_alloc, METH_VARARGS},
     {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
     {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},

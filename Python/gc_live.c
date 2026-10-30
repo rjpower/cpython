@@ -482,7 +482,7 @@ run_queue_ex(PyThreadState *tstate, int closing)
 {
     GCState *gc = &tstate->interp->gc;
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    if (gc->queue_draining || gc->queue_head == NULL
+    if (ts->gc_trace.running_queue || gc->queue_head == NULL
         || gc->queue_phase != QUEUE_OPEN)
     {
         return 0;

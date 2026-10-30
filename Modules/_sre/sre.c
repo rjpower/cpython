@@ -3050,7 +3050,6 @@ scanner_finalize(PyObject *op)
         return;
     }
     self->releasing = 1;
-    self->state.start = NULL;
     PyBuffer_Release(&self->state.buffer);
     self->state.buffer.buf = NULL;
     self->releasing = 0;

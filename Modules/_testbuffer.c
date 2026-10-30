@@ -2297,9 +2297,6 @@ ndarray_tolist(PyObject *self, PyObject *dummy)
 static PyObject *
 ndarray_tobytes(PyObject *self, PyObject *dummy)
 {
-    if (ndarray_check_active((NDArrayObject *)self) < 0) {
-        return NULL;
-    }
     ndbuf_t *ndbuf = ((NDArrayObject *)self)->head;
     Py_buffer *src = &ndbuf->base;
     Py_buffer dest;

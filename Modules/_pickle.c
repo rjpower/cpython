@@ -1320,6 +1320,7 @@ static Py_ssize_t
 _Unpickler_SetStringInput(UnpicklerObject *self, PyObject *input)
 {
     assert(self->running);
+    _Unpickler_ReleaseInput(self);
     _PyManagedBufferObject *owner = (_PyManagedBufferObject *)
         _PyManagedBuffer_FromObject(input, PyBUF_CONTIG_RO);
     if (owner == NULL) {

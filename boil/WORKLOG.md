@@ -4880,3 +4880,23 @@ Remaining broad profiles and closure follow reviewed explicit assembly.
 Interpreter source report gains concrete arithmetic/attribute/branch examples
 and an existing-budget sensitivity question before generational complexity.
 No new performance measurement or implementation.
+
+
+### 12:15 PDT: SharedMemory successor frozen; targeted validation starts
+
+Candidate dac6f98f953 moves the four local lifetime tests to test_memoryview,
+restores the multiprocessing test source byte-for-byte to f945, and leaves
+the reviewed destructor repair unchanged. No C/native products change.
+Root and independent reviewer clear source, literal launches, actual mode/
+resource/protection maps and the exact old-policy worker injection. Six
+targeted positives start: new4 in release/debug-kill/ASan-kill, affected six
+processes/misc modules, ordinary whole memoryview with cpu enabled, and
+sanitizer whole memoryview with its existing fork boundary. First release4
+passes4/0skips,62collections/0fallback/0unpinned; verify and cleanup pass.
+Old-policy causal failure is separate; the original full remains failed.
+
+README/PROCESS/closure/owner/performance docs now distinguish this successor
+from f945 evidence. Prospective primary+dac6 merge-tree is clean; no merge
+is performed. Parallel interpreter source review now narrows the seven
+opportunities into a finite first-slice recommendation, without timing or
+implementation before GC landing. Next hourly checkpoint remains12:30 PDT.

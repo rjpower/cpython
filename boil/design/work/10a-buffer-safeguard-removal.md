@@ -166,3 +166,6 @@ Use local track=False objects for sanitizer unit checks; actual tracked
 processes/misc modules and the ordinary memoryview manager race cover the
 integration. Do not bypass the existing ASan fork guard. Source-only repair
 is not yet native qualification; retain the original failed full profile.
+Successor dac6 commits the four local tests in test_memoryview, restoring
+the multiprocessing test source. Independent launch review clears the six
+targeted positives; execution is active, with no new C build.

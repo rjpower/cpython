@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 12:08 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 12:15 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -1005,7 +1005,7 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 12:08 PDT
+### Current coordinator ruling, 2026-10-30 12:15 PDT
 
 **Current blocker.** All three ASan profiles pass atf945. Release full has
 nativeSUCCESS0 but qualificationFAIL:51236 reported/3795skips,564 returned
@@ -1021,6 +1021,10 @@ live mappings usable and eventually reclaims them. Four behavior tests cover
 discarded/live views, strict close and actual mapping/fd retirement. Place
 these local tests in test_memoryview with track=False and immediate public
 unlink so ASan runs them without bypassing the multiprocessing fork guard.
+This placement is committed at dac6; `_test_multiprocessing.py` is restored
+byte-for-byte to f945. Independent source/launch review clears the frozen
+successor packet, and the six targeted positive jobs have started. The complete
+set remains pending; no native rebuild or additional full run is implied.
 The real tracked integration remains in processes/misc tests. Source review
 caught raw-unlink tracker leakage in the first draft before execution.
 

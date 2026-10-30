@@ -33,7 +33,7 @@ both post-merge smoke rows pass. The landing is incremental under the
 explicit exception; historical failed profiles remain failed. It does
 not establish finalizer completion order or whole-GC safety.
 
-## Current qualification blocker,12:08 PDT
+## Current qualification blocker,12:15 PDT
 
 The three ASan profiles pass onf945. Release full completes natively but fails
 qualification on SharedMemory destructor unraisables in all three processes
@@ -43,7 +43,10 @@ repair0d2116 drops automatic ownership and closes only the owned descriptor,
 leaving the existing memoryview/managed-buffer/mmap chain to retire mappings.
 Strict explicit close is unchanged. This is a finite library port, not a
 new collector protocol. Four local behavior checks avoid a fork under ASan;
-processes/misc integration checks retain real resource tracking.
+processes/misc integration checks retain real resource tracking. Successor
+dac6 places the four tests in test_memoryview and restores the multiprocessing
+test source to f945. Independent source and launch reviews clear the targeted
+packet; its six positive jobs are running on the unchanged native products.
 
 Next evidence: new4 across the three relevant modes, old-disposal negative,
 affected seven release modules and appropriate sanitizer memoryview coverage.

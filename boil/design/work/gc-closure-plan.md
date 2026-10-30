@@ -39,7 +39,7 @@ not establish finalizer completion order or whole-GC safety.
 | --- | --- | --- |
 | Unsafe heap-order fallback on sweep-order OOM | Revised late-boundary patch `7f4459bf259` passes release/debug-kill focus and four affected modules; restored fallback fails the named no-sweep assertion. Original header-wrapper failure preserved | Bounded controls complete. Included in actual168 combined qualification; no standalone primary landing |
 | Debug output and registry detachment over collector snapshots | Source-reviewed S3 native009fa passes rebuilt release/debug checks; test-only07af corrects six actual child verifier modes. Corrected focus, actual-child-kill ASan and copied immediate-write negative complete; earlier audit/mode limitations preserved | Coherent six-site non-detaching lock protocol with leaf holders; weakref metadata outside replaceable RAW hooks; deferred byte output; raw garbage rooted through publication. Phase oracle fails old immediate output without reproducing a native crash; included in actual168 combined qualification |
-| MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes bounded checks and causal negative. Combined union has six profiles passed; debug stress fails only a diagnostic snapshot test allowing intervening automatic collection | Exact test-only9e isolates snapshots with assertions unchanged; one whole-GC debug/off/N1000 successor carries ten original passed modules. Original FAIL stays failed. Closure and independent landing review remain |
+| MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes bounded checks and causal negative. Combined union has six profiles passed; debug stress fails only a diagnostic snapshot test allowing intervening automatic collection | Exact test-only9e isolates snapshots with assertions unchanged; one whole-GC debug/off/N1000 successor carries ten original passed modules. Original FAIL stays failed. Closure and independent landing review complete; integrated as ff6 |
 | Dependent finalizer/resource completion | Invocation order alone is insufficient. Generic completion DAG held after holistic review | Evaluate one drainer retaining the active callback through error reporting; competing/nested collectors enqueue without waiting. State loss of concurrent finalizer progress. Buffer release readiness still needs its own proof |
 | Interpreter close, owner metadata, retirement/adoption and fork | Owner63b bounded validation and causal negative complete; source pushed. Foreign mutation/lifecycle is not closed | Defer integration and broader lifecycle machinery under main-interpreter-only scope. Audit creation APIs for explicit rejection. Separate process exit from host-returning finalization; decide fork restrictions explicitly, without fabricating callback completion |
 | Python buffer-release callbacks | Five consumer families recorded in PROCESS §0.3; generic type capability held | Prefer existing per-acquisition managed owners. Prove exactly-once release, stable metadata and consumer raw-pointer/reentry checks for the concrete holder/view/exporter cycle and returned-view forwarding. Every blocked view must remain rooted with its dependencies; no forced zero export counts or skipping DEAD objects into sweep |
@@ -67,29 +67,33 @@ separate support decisions; process exit does not excuse ordinary leaks.
    documentation is preserved. The code-identical qualified builds were reused
    explicitly for post-merge smoke. This landing fixes the three safety defects; it does
    not complete ordinary buffer release or callback-completion safety.
-2. **Main-only admission, stats/design reviewer.** Runtime/API tests and docs
-   at683a407 pass independent source review. Complete the existing
-   sys.implementation.supports_isolated_interpreters declaration and finite
-   unsupported-test classification, then validate with focused
-   public C/Python failure contracts and normal-thread controls. Preserve
-   bootstrap and report unsupported subinterpreter tests honestly. No broad
-   exclusions or process shim. Source review precedes native validation.
-3. **One drainer, roots audit after closure.** Serialize callback execution
-   under a GIL-protected claim, with active payload/error roots through full
-   reporting. Other/nested collectors enqueue and return. Validate blocked
-   callback plus worker collection without introducing a collector wait;
-   preserve signal precedence and state the finalizer-progress limitation.
-   Review active-shutdown/fork boundaries before any extra machinery.
-4. **Finite buffer slice, resource reviewer.** Independently source-reviewed
-   d6bf312 is in its first O1-debug build. It implements struct's existing
-   acquisition as an inert-before-release transaction plus memoryview/mbuf
-   readiness, retention and delivery recheck. Ready finalization is selected
-   before retaining unready closures. No forced-zero export counts, premature
-   NOTIFIED acknowledgement or allocator-order dependency. Freeze for source
-   review; then relevant modes and one focused lifetime sanitizer check.
-   Remaining consumers are PickleBuffer, Unpickler, SRE scanner and testbuffer
-   ndarray; reacquiring consumers may need existing managed-buffer owners.
-   An incremental struct pass is not a complete five-family repair.
+2. **Main-only admission, bounded complete.** Source dbb5 includes early
+   creation rejection, the existing capability declaration and finite test
+   classification. O1-debug new5 and whole4 pass; whole4 reports811/76skips,
+   including59 unsupported creation cases. Root reviewed source and all38
+   final receipt references. Candidate c958 includes it, not primary yet.
+3. **One drainer, source review.** The GIL-protected claim keeps active payload
+   and saved-error roots through full reporting; other/nested collectors
+   enqueue and return without waiting. Preserve signal precedence and state
+   the finalizer-progress limitation. Busy main-thread Py_FinalizeEx returns-1
+   without freeing the live runtime; void/non-main busy paths are fatal.
+   Fork rejection unwinds its world/import locks. Source review found Popen's
+   preexec caller must use the recoverable private fork helper too. Correct
+   and review that before committing/composing and one coherent O1 build.
+4. **Buffer readiness and remaining consumers.** Source87b6 selects every
+   active view/managed acquisition, including native-only registrations,
+   before retaining unready closures. Actual memory consumption contributes
+   to the existing bounded explicit-collection second pass. No new loop or
+   universal chain-depth guarantee. New5 pass. Whole4 remains FAIL479/23skips
+   on the unchanged foreign-owner case; ordinary release and all three native
+   cycle regressions pass. Original five-failure profile remains failed.
+   The copied missing-inert-transition negative fails its named assertion;
+   causal receipt e53f67f9 and10 references were checked independently.
+   Source is composed in c958; no coherent native result yet. Unpickler's
+   existing managed-owner port and sealed PickleBuffer/SRE transactions are
+   source-only parallel tasks. Testbuffer ndarray still needs stable original
+   acquisition metadata and outward-export accounting proved. Old general
+   sweep safeguards stay until all concrete consumers are migrated.
 5. **Coherent supported GC union, coordinator.** Compose these reviewed
    changes and complete the remaining consumer migrations. Resolve normal-
    runtime lifetime failures on that union, using the existing relevant
@@ -102,8 +106,9 @@ separate support decisions; process exit does not excuse ordinary leaks.
    operation families and shared costs. Roughly2× on simple arithmetic guides
    design attention; it is neither a hard gate nor a reason for special cases.
 
-Source work for admission and the finite buffer slice can proceed while the
-safety union closes. Keep builds within the existing two slots; serialize
+Safety qualification is complete. Source ports proceed while drainer review
+closes; compose reviewed pieces before native feedback. Keep builds within
+the existing two slots; serialize
 full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
 for quiet native execution and the agreed GC correctness boundary.
 

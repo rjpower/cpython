@@ -19,15 +19,17 @@ during GC implementation. Preserve its existing builds and bounded runtime
 evidence. After GC, report the actual IR/handler/value/call/GC state and
 costs before commissioning the broader interpreter cleanup.
 
-Current GC checkpoint,2026-10-30 09:46 PDT: three qualified safety repairs
-land as ff6ed9d6bfb with both post-merge smoke rows passed. The revised first
-support profile is one main interpreter with ordinary threads. Admission
-rejection and the finite struct/buffer-readiness slice are in parallel source
-implementation; one-drainer delivery follows the safety integration handback.
+Current GC checkpoint,2026-10-30 10:30 PDT: the three safety repairs are
+landed as ff6ed9d6bfb with both integration smokes passed. Main-only dbb5 and
+buffer87b6 have bounded native feedback and are composed in unbuilt c958.
+Single-drainer source review is closing the Popen preexec fork caller.
+Unpickler and sealed PickleBuffer/SRE ports proceed source-only in parallel;
+ndarray's acquisition metadata/export accounting remains. The isolated buffer
+whole profile still fails the unchanged foreign-owner case; supported union
+validation must demonstrate the declared capability boundary honestly.
 Foreign ownership/adoption and generic cleanup/DAG machinery are deferred.
-The [closure plan](gc-closure-plan.md) defines the remaining ordinary resource
-and callback work before timing/report/reflection. Historical measurements
-below remain historical; there is no refreshed performance score yet.
+The [closure plan](gc-closure-plan.md) defines ordinary resource/callback work
+before timing/report/reflection. No refreshed performance score exists yet.
 
 **How we judge the result.** The primary score is the geometric mean of
 upstream elapsed time divided by fork elapsed time across the declared

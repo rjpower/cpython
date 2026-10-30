@@ -4688,3 +4688,33 @@ is complete. Main-only runtime683a407 and bufferd6bf312 clear source review;
 buffer's first O1-debug build is active. Reuse the existing public capability
 sys.implementation.supports_isolated_interpreters for honest unsupported-test
 classification; no additional capability constant or creation probe is needed.
+
+
+### 10:30 PDT: bounded main-only/buffer feedback; compose before further builds
+
+Primary remains safety merge ff6ed9d6bfb. Main-only dbb5 passes O1-debug new5
+and whole4:811 reported/76skips, including59 declared unsupported creation
+cases,10660collections/0fallback. Root checked completion ce21d7d7 and all38
+references. Existing main inspection and ordinary thread coverage remain.
+
+Buffer d6bf's original five-failure profile remains failed. Source successor
+87b6 selects all active memory acquisitions, including native-only ones, and
+counts actual completion toward the existing second explicit pass. New5 pass;
+unchanged whole4 remains FAIL479/23skips, only foreign-owner every_kind_routed
+fails. Ordinary Python release and all three native cycle failures clear.
+No new collection loop, universal depth guarantee or test assertion change.
+Copied negative8d41 deletes only pre-release Py_CLEAR(so); one case fails the
+named exhausted-iterator assertion, observing(3,(97,),b'abc') with live backing.
+Root checks causal index e53f67f9/all10refs and raw failure. No retry or native
+crash credited. Positive AS-BUILT6f34db41 retains all component limits.
+
+Root composes main-only and buffer in managed boil/gc-simple c9587ad064b,
+including a one-line support.__all__ export correction. Candidate is unbuilt.
+Single-drainer source review identifies Popen(preexec_fn) as another fork
+caller needing recoverable busy rejection, rather than the fatal public void
+wrapper. Correct/review this, then compose and build once for O1-debug feedback.
+Unpickler owner and sealed PickleBuffer/SRE source ports run in parallel;
+ndarray's acquisition metadata/export accounting proof remains. No new native
+grant for those ports. Final supported union needs release/ASan/broad coverage
+and closure before landing. Interpreter timing remains parked. Next hourly
+status checkpoint about11:30 PDT, with earlier material updates as needed.

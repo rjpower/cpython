@@ -30,13 +30,14 @@ The original release and traversal failures remain failed; supported callback
 and buffer-completion work is no longer a landing blocker. Foreign/adoption,
 platform and precision obligations remain separate from this profile.
 
-**Current phase: matched upstream eval-nogcse qualification.** The owned
+**Current phase: interpreting the completed matched29 diagnostic.** The owned
 stock321925 image is preserved. The separate build/eval-nogcse has passed
 configure/make/product closure23c9ab25 and independent reviewc51871cb, with
 the declared GCC/O3/FP/zero-init policy and CFLAGS_CEVAL=-fno-gcse. Bounded
-correctness/origin checks remain pending before any quiet29 refresh. Reuse
-the qualified fork O3 image with its actual library/native bindings. No
-refreshed performance score or new interpreter ABI implementation is claimed.
+correctness and both29 origin checks pass. The [elapsed record](pre-I-post-GC-timing.md)
+reports0.824299 upstream/fork after independent review, reusing the
+qualified fork O3 image with its actual library/native bindings. No new
+interpreter ABI implementation is claimed.
 The [timing plan](pre-I-qualified-timing-refresh.md)
 and [first-slice comparison](pre-I-first-slice-decision.md) keep measurement
 and implementation decisions distinct. Roughly2× remains soft guidance.
@@ -302,9 +303,10 @@ choose the next coherent change without an open-ended score-chasing loop.
 
 **Coordination.** The coordinator owns comparison policy, reservations and
 integration. GC qualification and post-merge smoke are complete. Current work
-prepares the matched upstream cohort with accepted configure/make and bounded
-correctness/origin protocols; a new quiet transaction requires its own review
-and reservation. H1 frame passing has isolated native/runtime evidence but
+interprets the [completed matched29 diagnostic](pre-I-post-GC-timing.md);
+the next proposed question is bounded existing-budget sensitivity, not an
+automatic experiment. Further quiet work requires review and reservation.
+H1 frame passing has isolated native/runtime evidence but
 no elapsed benefit; the informational header-harness limitation stays named.
 H2 remains an inert partial decoder, not active maps or clearing. H3 is landed.
 No numeric NOARGS ABI or other prospective source recommendation is implemented.

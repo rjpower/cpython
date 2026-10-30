@@ -1,14 +1,15 @@
 # Qualified post-GC timing refresh
 
-Preparation updated2026-10-30 after qualified4da is integrated as75e8.
+Transaction updated2026-10-30 after qualified4da is integrated as75e8.
 Final12f1ea31 and postmergef56e0b6b close GC qualification/integration; runtime
-library/tests remain dac6, ordinary native3c6 and ASanf945. No refreshed
-performance score or interpreter ABI implementation is claimed.
+library/tests remain dac6, ordinary native3c6 and ASanf945. The [completed
+matched29 diagnostic](pre-I-post-GC-timing.md) reports0.824299 upstream/fork;
+independent review passed. No new interpreter ABI is implemented.
 
-**Current phase: one owned upstream eval-nogcse comparator.** Concrete accepted
+**Current phase: interpreting the completed matched29 diagnostic.** Concrete accepted
 configure/make have passed (closure23c9ab25, independent actual-build review
-c51871cb). Bounded18-module correctness/29 scored-driver origin packets
-remain separate pending checks. This document itself grants no native
+c51871cb). Bounded18-module correctness and both29 scored-driver origin checks
+pass. The recipe below records the completed transaction; it grants no new native
 execution or timing. Reuse the
 qualified fork O3 products and preserve the existing upstream stock image.
 An extra stock-policy comparison is optional for a named question, not an
@@ -16,9 +17,9 @@ automatic second29-row campaign.
 
 ## Comparison and remaining qualification
 
-| Input | Established source/configuration facts | Required before measurement |
+| Input | Established source/configuration facts | Completion / retained obligation |
 | --- | --- | --- |
-| Owned upstream | Detached `321925c92c9e67864cafa1566840927f6f07e90a`, own `build/default`, clean tracked source at this audit. Existing make closure `dddcf24d`,18-module correctness and50-row actual-driver origin evidence remain separate accepted receipts. | Preserve it unchanged. The separate `build/eval-nogcse` has configure/make/product closure23c9ab25 and independent build reviewc51871cb. Its bounded correctness/origin checks and transaction bindings remain pending. No new source checkout or stock rebuild is needed. |
+| Owned upstream | Detached `321925c92c9e67864cafa1566840927f6f07e90a`, own `build/default`, clean tracked source at this audit. Existing make closure `dddcf24d`,18-module correctness and50-row actual-driver origin evidence remain separate accepted receipts. | Stock preserved unchanged. The separate `build/eval-nogcse` has configure/make/product closure23c9ab25 and independent build reviewc51871cb; positive18 and29 origins pass and its actual products are bound into elapsed closuree5b0a9b2. |
 | Fork | Serving `boil-buffer-xid-main-only` at4da (runtime library/tests dac6); O3 images compiled from3c6. Actual primary75e8 differs only in15 declared project Markdown paths; final12f1/postmergef56e clear review. | Bind the final qualification/source/native and owner handoff in the new transaction. Keep executable, Lib and extensions in their qualified serving tree; no primary overlay or rebuild. |
 | Compiler policy | Both current Makefiles use O3, retained frame pointers, zero-initialized automatic variables, computed-goto/non-tail dispatch, static libpython, shared GIL, nondebug/nonstats, no PGO/LTO/BOLT; all JITs are off/absent. | Assert actual configuration and compiler commands in the new upstream receipt and final fork binding; directory labels alone do not establish these facts. |
 | Eval policy | Stock upstream `CFLAGS_CEVAL` is empty; fork uses `-fno-gcse`. The separate eval-nogcse cohort matches that flag in its actual configuration/ceval compilation, accepted in23c9/c518. | Bind that built cohort into correctness/origins and the timing transaction. Do not substitute the stock image or infer an actual flag from the directory label. |
@@ -68,7 +69,7 @@ match their old hashes. Rebind the current registry byte identity rather
 than ignoring the stale manifest. Py_STATS code is not executed in this
 elapsed transaction.
 
-The held measured command, constructed by unchanged Context.command, is:
+The measured command, constructed by unchanged Context.command, was:
 
 ```
 BUILD/python -S -X pycache_prefix=Q/ROW/BUILD/pycache \
@@ -97,7 +98,8 @@ idle sibling, record affinity/load/readable power policy before/after,
 and retain the established quietness rejection. Do not change governor or
 compete with a gate. Keep raw output and rejected vectors; no automatic
 retry, partial denominator, source retargeting or extension of the window.
-Exact final source/product/origin/reservation/launch hashes remain held.
+Actual final source/product/origin/reservation/launch hashes are bound in
+[closuree5b0a9b2](../../../build/checkpoint-i-qualified-refresh/quiet29-closure.json).
 
 Each row has one fresh process per runtime, alternating first runtime across
 registry order, then five serial timed calls inside each process. Five is an
@@ -110,7 +112,10 @@ bounded extra cost. Do not measure until a desired score appears.
 ## Decide the next shared cost from the refreshed result
 
 The old ce2ac score0.828243 and GC-heavy profiles are historical hypotheses,
-not current ratios or promised generation savings. After the refresh, reuse
+not current ratios or promised generation savings. The [new result](pre-I-post-GC-timing.md)
+supports the bounded32/64MiB existing-budget question in the
+[first-slice proposal](pre-I-first-slice-decision.md#bounded-next-question-existing-gc-budget).
+Reuse
 [setup/warmup/hot-window attribution](pre-I-shared-cost-attribution.md) on
 three persistent regressions and one object/allocation control. Separate
 elapsed timing from profiling. Existing release GC time/candidates/bytes,
@@ -119,8 +124,7 @@ bookkeeping from frame/resume/call/value movement; queued callback time is
 not fully included in GC duration. Do not add root time to GC time or infer
 object ages from collected counts.
 
-Use that evidence to accept or reject the conditional
-[first-slice decision](pre-I-first-slice-decision.md): finite numeric receiver
-closure versus shared frame/call work or generated producer/consumer facts.
+Use that evidence to choose among simple allocation policy, finite numeric
+receiver closure, shared frame/call work or generated producer/consumer facts.
 No ABI rewrite, generational barrier rollout, typed LOAD_ATTR family or
 speedup claim follows automatically from this plan.

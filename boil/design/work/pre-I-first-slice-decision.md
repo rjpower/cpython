@@ -4,22 +4,23 @@ Author recommendation for review, updated2026-10-30. Supported GC source4da
 is integrated75e8 after final12f1 and postmergef56e qualification; runtimeDAC6,
 ordinary native3c6 and ASanf945 retain their actual identities. Current work
 qualifies the matched cohorts: upstream eval-nogcse configure/make,
-18-module correctness and29 workload origins passed; fork29 origins also pass.
-There is no refreshed score or interpreter ABI implementation. This packet
+18-module correctness and both29 workload origins passed. The [post-GC elapsed
+diagnostic](pre-I-post-GC-timing.md) completed at0.824299 upstream/fork;
+independent review passed. No new interpreter ABI is implemented. This packet
 uses the [status report](pre-I-interpreter-status-and-opportunities.md),
 [receiver audit](pre-I-inline-receiver-audit.md) and
 [value-ingress audit](pre-I-value-ingress-audit.md). Its recommendations remain
 conditional on current shared-cost evidence and measured benefit; roughly2×
 is soft guidance, not an acceptance threshold.
 
-**No implementation is automatically first.** The finite numeric NOARGS
-closure removes a concrete representation round trip, but its ABI cost needs
-a current conversion budget. Existing GC-budget sensitivity or the prepared
-matched H1 comparison can precede it. First [refresh the matched interpreter
-baseline](pre-I-qualified-timing-refresh.md), then resolve only the attribution
-needed to choose one shared intervention. Origin checks establish which code
-ran; they do not rank performance. No current measurement establishes which
-choice will improve the suite most.
+**Next proposed question: existing GC-budget sensitivity.** The new elapsed
+diagnostic retains large generator/coroutine/comprehension deficits, but does
+not attribute their current cost. Compare one larger allocation budget on
+unchanged qualified products before introducing generations or a numeric ABI.
+The finite NOARGS closure remains a candidate whose ABI cost needs a current
+conversion budget. The prepared matched H1 comparison follows if non-GC
+resume/dispatch cost remains the discriminating question. None is an automatic
+implementation or experiment grant.
 
 ## Three choices
 
@@ -56,6 +57,53 @@ compact after overflow. Specialized int/float comparisons return canonical
 bools; generic rich comparison can return another object. Existing conditional
 branches already combine truth conversion and branching, so a valid BOOL fact
 removes a guard, not automatically a dispatch.
+
+## Bounded next question: existing GC budget
+
+Source-only plan, not an execution grant. Reuse the existing
+[four-row phase probe](pre-I-shared-cost-attribution.md): coroutines,
+comprehensions and generators, with Richards as the historical no-hot-GC
+control. Use the qualified fork O3 product unchanged. One paired comparison
+per row is enough for this initial sensitivity question; balance which setting
+runs first, retain every result, and stop rather than extend until a win appears.
+
+The only setting change is32MiB versus64MiB through existing
+[`gc.set_threshold(threshold0)`](../../../Modules/gcmodule.c), whose first
+argument here is allocated bytes. There is no budget environment variable.
+Apply the setter to **both** arms at the same point before setup, retain the
+other threshold tuple fields and restore the original tuple in `finally`.
+Keep GC enabled, actual verifier off/extras0/stress0, and no forced collection.
+The setter initially sets `alloc_limit = alloc_bytes + threshold0`; after a
+collection [the collector](../../../Python/gc_live.c) uses
+`max(threshold0, live_object_bytes)`. Thus a large live set can make the two
+floors equivalent; a null result would not refute every GC-cost hypothesis.
+
+Reuse the probe's counter-only setup/warm/hot boundaries and existing collector/root
+snapshots, with `/usr/bin/time` peak RSS outside the child. Report elapsed,
+collection count/time, candidates/collected/freed bytes, root work and pause
+observations. Root time is included in GC time; a lifetime maximum pause or
+RSS high-water mark is not a hot-window distribution. Preserve callback/drainer
+delivery limits. Allocation pressure counts gross requested object/PyMem bytes,
+including full realloc requests; frees do not subtract, while live-object bytes
+exclude retained PyMem payloads and RSS. Inspect those quantities before
+concluding repeated old-live scanning is the cost.
+
+Propose eight fresh processes total, existing registered workloads and probe
+hot-call budget,150s per process and10min total under normal admission/quiet
+coordination. A provisional post-pair comparison allowance is baseline peak
+RSS plus128MiB per row; report any excess. It cannot stop a64MiB-first arm
+before baseline RSS is known. Declare any absolute process ceiling separately
+before launch, using existing resource controls if needed. These are diagnostic
+resource bounds for review, not a new correctness gate or default-heap change.
+No perf-event campaign, collector instrumentation, new runner or build is
+needed. Any helper adaptation and literal vectors still require review.
+
+Fewer collections alone is not success: assess elapsed benefit against RSS,
+pause and delayed-reclamation costs. If collection amortization is material
+within the allowance, consider the simple policy before barriers. If it is
+immaterial, retain the result and resolve creation/resume/dispatch or measured
+receiver conversions next. No generation, NOARGS ABI or H1 implementation is
+selected by the29-row aggregate alone.
 
 ## Numeric NOARGS candidate and exact caller closure
 

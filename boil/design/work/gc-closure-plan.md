@@ -3,9 +3,9 @@
 Coordinator checkpoint,2026-10-30 after integration75e8. The declared Linux
 main-interpreter GC milestone is qualified, integrated and checked after
 merge. Roughly2× interpreter speed remains soft design guidance, especially
-on simple arithmetic; it is not a numerical gate. Current work prepares the
-matched upstream eval-nogcse comparator and later release timing. No refreshed
-performance score or interpreter ABI implementation is claimed.
+on simple arithmetic; it is not a numerical gate. The [matched29 elapsed
+diagnostic](pre-I-post-GC-timing.md) completed at0.824299 upstream/fork;
+independent review passed. No new interpreter ABI is implemented.
 
 ## Integrated identity and evidence
 
@@ -94,9 +94,10 @@ this is not exhaustive system-header or leak-sanitizer proof.
 The separate owned upstream321925 build/eval-nogcse has passed configure/make
 and independent build review (23c9/c518), with the accepted GCC/O3/frame-pointer,
 zero-init, nondebug/nonstats/non-tail/JIT-off policy and CFLAGS_CEVAL=-fno-gcse.
-The stock upstream image is preserved. Bounded correctness/origin checks remain
-pending; reuse the qualified ordinary fork products with their true source
-bindings. Only a reviewed quiet transaction can produce a refreshed29-row score.
+The stock upstream image is preserved. Bounded correctness and both29 origin
+checks pass; the completed matched29 diagnostic reuses the qualified ordinary
+fork products with their true source bindings. Its uncertainty and raw vectors
+are recorded separately from GC correctness qualification.
 
 The [interpreter report](pre-I-interpreter-status-and-opportunities.md) and
 [first-slice comparison](pre-I-first-slice-decision.md) provide source evidence

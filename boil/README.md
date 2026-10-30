@@ -18,6 +18,10 @@ Qualification, closure and both post-merge smokes pass; final12f1ea31 and
 postmergef56e0b6b retain the exact evidence and source/native bridges. Shared
 tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
 component 9dd24bf42c4 and worker setup 093b9d2a1c3 are landed.
+Current focus is interpreter performance: the independently reviewed
+[matched baseline](design/work/pre-I-post-GC-timing.md) measures0.8243× upstream
+throughput. The [next question](design/work/pre-I-first-slice-decision.md#bounded-next-question-existing-gc-budget)
+is existing GC-budget sensitivity before further runtime changes.
 This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 
@@ -166,7 +170,17 @@ carried forward explicitly, with the corrected whole generator module; debug
 runs all eight modules. Native binaries are unchanged. These bounded results
 qualify the inert slice, not complete liveness semantics or activation.
 
-**Performance.** The first29-row release elapsed diagnostic on unlanded ce2ac
+**Performance.** The [post-GC matched29-row diagnostic](design/work/pre-I-post-GC-timing.md)
+measures **0.824299× upstream throughput**, equivalent to about21% more elapsed
+time. Twenty-one rows are slower and eight faster. Coroutines0.449,
+comprehensions0.510 and generators0.574 remain large deficits; float2.039,
+Richards1.865 and nbody1.668 are strong wins. Both runtimes have matched
+GCC/O3/eval flags and checked workload origins. Five serial samples give an
+initial estimate; several fork rows have substantial spread. Keep all rows
+and raw values. The next question is current collection-cost attribution and
+existing allocation-budget sensitivity, before new ABI or generational work.
+
+The historical first29-row release elapsed diagnostic on unlanded ce2ac
 measured **0.828243× upstream throughput**, about21% more elapsed time;
 22 rows were slower and seven faster. Coroutines0.365, comprehensions0.528
 and generators0.592 were the largest regressions; float1.923, Richards1.897
@@ -174,20 +188,20 @@ and nbody1.603 the strongest wins. [Raw results and limits](design/work/pre-I-fi
 include fork-only eval-fno-gcse, origin/SDK limits and unresolved correctness.
 Historical6d instruction ratios1.161/0.693/1.699 are not elapsed performance.
 Roughly**2× is soft guidance**, especially for obvious arithmetic, not a
-required application aggregate or numerical gate. Finish GC fixes first, then
-publish the detailed interpreter report and commission independent reflection
-on clean general improvements, including parameterized operation families.
+required application aggregate or numerical gate. Supported GC is landed;
+the detailed interpreter report and independent reflection now guide clean
+general improvements, including parameterized operation families.
 Keep individual regressions, RSS and pauses visible with all JITs off.
 
-[Four profiles](design/work/pre-I-shared-cost-attribution.md) put collection
+Historical [four profiles](design/work/pre-I-shared-cost-attribution.md) put collection
 at54%/47%/31% of coroutine/comprehension/generator hot time and zero in
-Richards. That prioritizes shared GC work, including death processing;
+Richards. That motivates refreshing shared GC costs, including death processing;
 it does not predict generations savings. The small finalizer-eligibility
 patch passes semantic and ordering-negative controls. Its [first matched
 four-row diagnostic](design/work/pre-I-finalizer-order-checkpoint.md) gives
 parent/candidate elapsed ratios1.250/1.055/1.070/1.033. All40 values remain;
 process/layout/sample limits and Richards' no-hot-GC control prevent complete
-causal attribution. This supports broad qualification, not a refreshed29-row
+causal attribution. This supported its earlier broad qualification, not a refreshed29-row
 score, upstream parity or the2x target.
 
 **Next work, in dependency order:**
@@ -201,8 +215,8 @@ score, upstream parity or the2x target.
 2. The provisional [interpreter source report](design/work/pre-I-interpreter-status-and-opportunities.md)
    inventories seven shared opportunities. A source-only comparison is also
    published. The matched upstream eval-nogcse comparator has passed its build,
-   18-module correctness and29 workload origins; fork29 origins also pass. No new
-   performance score or interpreter ABI implementation exists. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
+   18-module correctness and both29-row workload origin sets. The matched release
+   diagnostic is complete; no proposed interpreter ABI is implemented. The [first-slice comparison](design/work/pre-I-first-slice-decision.md)
    selects by current shared cost; existing GC-budget sensitivity or H1 can
    precede a numeric NOARGS ABI expansion. The prepared
    matched Clang dispatch/H1 experiment stays parked meanwhile; later inspect
@@ -242,10 +256,10 @@ arbitrary external native holders.
 
 The [interpreter report](design/work/pre-I-interpreter-status-and-opportunities.md)
 records the implemented architecture, isolated H1/H2 and seven shared
-opportunities. The matched upstream eval-nogcse build,18-module correctness
-and29 workload origins pass; fork29 origins also pass before quiet release
-timing. No new score or
-numeric NOARGS ABI is implemented. Acceptance favors liveness, valid data,
+opportunities. The matched upstream eval-nogcse build,18-module correctness,
+both29-row origin sets and matched release timing are complete. The current
+diagnostic is0.824299× upstream throughput; no numeric NOARGS ABI is implemented.
+Acceptance favors liveness, valid data,
 resource reuse and bounded memory; critical unit invariants remain separate.
 
 Shared verifier/worker components are landed; full profile/gate orchestration

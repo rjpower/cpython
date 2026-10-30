@@ -3,13 +3,14 @@
 Source review, updated2026-10-30 after supported GC integration **75e8a1e0c01**.
 Qualified4da/runtimeDAC6/ordinary native3c6/ASan nativef945 is integrated;
 final12f1ea31 and postmergef56e0b6b bind all qualification and both1,935-case
-smokes. This report's interpreter analysis remains source evidence, not a
-new timing result, performance implementation grant or refreshed score.
+smokes. The analysis below separates source evidence from the new elapsed
+diagnostic; neither is a performance implementation grant.
 H3 is landed; H1 frame passing and inert H2 remain isolated.
 
 The owned upstream eval-nogcse comparator has passed configure/make and
 independent build review (23c9/c518),18-module correctness and29 workload
-origins. Fork29 origins also pass before a matched release timing refresh.
+origins. Fork29 origins also pass. The [post-GC elapsed diagnostic](pre-I-post-GC-timing.md)
+completed at0.824299 upstream/fork; independent review passed.
 No numeric NOARGS ABI or
 other proposed interpreter change is implemented here. Roughly2× remains soft guidance.
 Supported callback/buffer lifetime is qualified for Linux/main interpreter/
@@ -189,6 +190,18 @@ proposed controlled question, not a threshold recommendation or speedup claim.
 
 ## What the measurements actually establish
 
+The new matched eval-nogcse [29-row diagnostic](pre-I-post-GC-timing.md) reports
+**0.8242992363 upstream/fork**,21 slower rows and eight faster. Coroutines0.4489,
+comprehensions0.5097 and generators0.5737 remain large deficits; float2.0394,
+Richards1.8655 and nbody1.6681 favor fork. All290 values, actual source/native
+identities and terminal cleanup are retained; independent review passed.
+Five serial calls in one fresh process per runtime/row are correlated samples,
+not independent trials or formal confidence intervals. Fork spreads are often
+10–40% using `100 × (max/min − 1)`, including84.26% for logging_silent and51.14%
+for float. Near1 rows and float's proximity to2 do not establish stable ranks
+or a threshold win. The broad deficits are a planning issue; the elapsed score
+alone does not identify the mechanism. Current RSS/pauses were not measured.
+
 The historical owned-upstream-versus-ce2ac diagnostic reported a29-kernel
 geomean of0.828243 for upstream/fork elapsed time:22 slower rows and seven
 faster. Coroutines0.365, comprehensions0.528 and generators0.592 contrasted
@@ -209,8 +222,12 @@ skid, inlining and compiler line attribution prevent exact instruction-cost
 claims. See [shared costs](pre-I-shared-cost-attribution.md) and
 [source join](pre-I-evaluator-source-attribution.md).
 
-With GC integrated75e8, refresh only the agreed matched eval-nogcse upstream
-and qualified fork cohort, then publish regressions and uncertainty alongside
-the implemented interfaces. Roughly2× remains a soft guide. Keep a proposed change only when
+Do not attribute the aggregate difference from historical ce2ac to GC: both
+fork source and the upstream ceval-flag cohort changed, and the old fork was
+unqualified. The [next bounded proposal](pre-I-first-slice-decision.md#bounded-next-question-existing-gc-budget)
+compares existing32/64MiB allocation budgets on unchanged qualified products,
+with collection/death/root work, RSS and pauses, before generations or numeric
+ABI work. This document authorizes no experiment. Roughly2× remains a soft
+guide. Keep a proposed change only when
 its shared design is simpler or its measured benefit pays for its complexity;
 preserve a clean negative result instead of adding exceptions until it wins.

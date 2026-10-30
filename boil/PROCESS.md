@@ -1053,13 +1053,14 @@ reader/checker coverage and platform work remain separate; hybrid coverage
 cannot be removed by implication. The [owner ledger](design/work/10a-buffer-safeguard-removal.md)
 and [landing review](design/work/reviews/gc-main-only-final-landing.md) name the limits.
 
-**Current work: matched upstream eval-nogcse qualification.** The pinned
+**Current work: interpreting the completed matched29 diagnostic.** The pinned
 owned upstream321925 source and its stock products are preserved. The separate
 O3 upstream cohort with CFLAGS_CEVAL=-fno-gcse has passed configure/make and
-independent build review. Bounded correctness/origin checks precede any quiet29 refresh.
+independent build review; bounded correctness and both29 origin checks pass.
 The ordinary fork O3 products are reused with their actual native/runtime
-bindings. No refreshed performance score, ABI implementation or new H1/H2
-landing is claimed. H3 is landed; H1 frame passing and the inert H2 decoder
+bindings. The [elapsed record](design/work/pre-I-post-GC-timing.md) reports
+0.824299 upstream/fork; independent review passed; no ABI implementation
+or new H1/H2 landing is claimed. H3 is landed; H1 frame passing and the inert H2 decoder
 remain isolated. The [status report](design/work/pre-I-interpreter-status-and-opportunities.md),
 [first-slice decision](design/work/pre-I-first-slice-decision.md) and
 [timing plan](design/work/pre-I-qualified-timing-refresh.md) precede new shared

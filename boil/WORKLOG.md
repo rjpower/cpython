@@ -5034,3 +5034,35 @@ Origins admit the intended implementations, not performance conclusions.
 Resolve only the attribution needed to choose one coherent change; roughly2×
 remains soft guidance. No native work or historical outcome changed in this
 documentation update.
+
+### 13:44 PDT: first matched post-GC elapsed baseline complete
+
+The once-only matched29 workload transaction completed in77.043 seconds,
+with58 measured processes and290 timed values. Both RUNS0 JSON-tail origin
+witnesses pass; native/outer return codes and final cleanup pass. No rejection,
+retry, trimmed row or repeated timing campaign occurred. Quiet/native work is
+finished. Closuree5b0a9b2 binds393 artifacts; root independently rehashed all
+and recomputed the complete medians/ratios/geomean from retained raw vectors.
+Independent review0f88e376 then clears normalization, all60 command/environment
+records,58 paired load checks, both raw RUNS0 origin witnesses and actual
+source/product/cleanup bindings. No native job remains.
+
+Upstream/fork geometric mean is0.8242992363, equivalent to1.21315× elapsed
+time:21 slower rows and eight faster. Coroutines0.4489, comprehensions0.5097
+and generators0.5737 remain large deficits; float2.0394, Richards1.8655 and
+nbody1.6681 favor fork. Several fork sample ranges are wide. These are five
+correlated serial calls per fresh runtime/row, with no formal confidence
+interval; the new [measurement record](design/work/pre-I-post-GC-timing.md)
+retains all29 rows, raw vectors and explicit spread definitions. This is not
+a before/after measurement of the GC landing: source and comparator policy
+changed from the historical ce2 diagnostic.
+
+The source/design reflection recommends current collection-cost attribution
+and a bounded32/64MiB existing-budget comparison before new generational or
+numeric ABI work. Use unchanged products and the existing four-row phase
+probe, reporting RSS, pause and reclamation costs alongside elapsed time.
+That follow-up is planned, not executed in this cycle. H1/H2 remain isolated;
+the status report inventories seven shared directions. Tests continue to
+favor observable lifetime, data and resource behavior, with focused critical
+invariant units. Qualified GC is landed and unchanged; no new runtime patch
+is part of this performance/documentation checkpoint.

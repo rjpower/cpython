@@ -39,6 +39,7 @@ class LowLevelTests(TestBase):
     # encountered by the high-level module, thus they
     # mostly shouldn't matter as much.
 
+    @support.requires_subinterpreters
     def test_highlevel_reloaded(self):
         # See gh-115490 (https://github.com/python/cpython/issues/115490).
         interp = interpreters.create()
@@ -128,6 +129,7 @@ class QueueTests(TestBase):
             with self.assertRaises(TypeError):
                 queues.create('1')
 
+    @support.requires_subinterpreters
     def test_shareable(self):
         queue1 = queues.create()
 
@@ -401,6 +403,7 @@ class TestQueueOps(TestBase):
                 self.assertEqual(obj, obj2)
                 self.assertIsNot(obj, obj2)
 
+    @support.requires_subinterpreters
     def test_put_get_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -417,6 +420,7 @@ class TestQueueOps(TestBase):
                     assert obj is not orig, 'expected: obj is not orig'
                     """))
 
+    @support.requires_subinterpreters
     def test_put_get_different_interpreters(self):
         interp = interpreters.create()
         queue1 = queues.create()
@@ -455,6 +459,7 @@ class TestQueueOps(TestBase):
                 self.assertEqual(obj2, b'eggs')
                 self.assertNotEqual(id(obj2), int(out))
 
+    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter(self):
         def common(queue, unbound=None, presize=0):
             if not unbound:
@@ -549,6 +554,7 @@ class TestQueueOps(TestBase):
             with self.assertRaises(queues.QueueEmpty):
                 queue.get_nowait()
 
+    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter_mixed(self):
         queue = queues.create()
         interp = interpreters.create()
@@ -583,6 +589,7 @@ class TestQueueOps(TestBase):
         self.assertIs(obj3, queues.UNBOUND)
         self.assertEqual(queue.qsize(), 0)
 
+    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter_multiple(self):
         queue = queues.create()
         interp1 = interpreters.create()

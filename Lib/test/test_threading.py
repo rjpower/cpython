@@ -53,10 +53,6 @@ def skip_unless_reliable_fork(test):
     return test
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 def restore_default_excepthook(testcase):
@@ -1697,6 +1693,7 @@ class ThreadJoinOnShutdown(BaseTestCase):
                 t.join()
 
 
+@support.requires_subinterpreters
 class SubinterpThreadingTests(BaseTestCase):
     def pipe(self):
         r, w = os.pipe()
@@ -1771,7 +1768,8 @@ class SubinterpThreadingTests(BaseTestCase):
         # The thread was joined properly.
         self.assertEqual(os.read(r, 1), b"x")
 
-    @requires_subinterpreters
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     def test_threads_join_with_no_main(self):
         r_interp, w_interp = self.pipe()
 

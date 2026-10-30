@@ -233,6 +233,7 @@ class Test_IncrementalEncoder(unittest.TestCase):
         self.assertEqual(encoder.encode('\xff'), b'\\xff')
         self.assertEqual(encoder.encode('\n'), b'\n')
 
+    @support.requires_subinterpreters
     @support.cpython_only
     def test_subinterp(self):
         # bpo-42846: Test a CJK codec in a subinterpreter

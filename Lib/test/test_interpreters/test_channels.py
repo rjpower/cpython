@@ -26,6 +26,7 @@ class LowLevelTests(TestBase):
     # XXX Those should be either moved to LowLevelTests or eliminated
     # in favor of high-level tests in this file.
 
+    @support.requires_subinterpreters
     def test_highlevel_reloaded(self):
         # See gh-115490 (https://github.com/python/cpython/issues/115490).
         interp = interpreters.create()
@@ -35,6 +36,7 @@ class LowLevelTests(TestBase):
             importlib.reload(channels)
             """));
 
+    @support.requires_subinterpreters
     @force_not_colorized
     def test_channel_id_types(self):
         # See https://github.com/python/cpython/issues/143376.
@@ -95,6 +97,7 @@ class TestChannels(TestBase):
         rch.close()
         self.assertEqual(set(channels.list_all()), set(created))
 
+    @support.requires_subinterpreters
     def test_shareable(self):
         interp = interpreters.create()
         rch, sch = channels.create()
@@ -220,6 +223,7 @@ class TestSendRecv(TestBase):
         self.assertEqual(obj, orig)
         self.assertIsNot(obj, orig)
 
+    @support.requires_subinterpreters
     def test_send_recv_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -232,6 +236,7 @@ class TestSendRecv(TestBase):
             assert obj is not orig, 'expected: obj is not orig'
             """))
 
+    @support.requires_subinterpreters
     @unittest.skip('broken (see BPO-...)')
     def test_send_recv_different_interpreters(self):
         r1, s1 = channels.create()
@@ -293,6 +298,7 @@ class TestSendRecv(TestBase):
 
         self.assertIsNone(obj)
 
+    @support.requires_subinterpreters
     def test_send_recv_nowait_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -306,6 +312,7 @@ class TestSendRecv(TestBase):
             assert obj is not orig, 'expected: obj is not orig'
             """))
 
+    @support.requires_subinterpreters
     @unittest.skip('broken (see BPO-...)')
     def test_send_recv_nowait_different_interpreters(self):
         r1, s1 = channels.create()
@@ -437,6 +444,7 @@ class TestSendRecv(TestBase):
         del obj
         support.gc_collect()
 
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter(self):
         def common(rch, sch, unbound=None, presize=0):
             if not unbound:
@@ -540,6 +548,7 @@ class TestSendRecv(TestBase):
             with self.assertRaises(channels.ChannelEmptyError):
                 rch.recv_nowait()
 
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter_mixed(self):
         rch, sch = channels.create()
         interp = interpreters.create()
@@ -582,6 +591,7 @@ class TestSendRecv(TestBase):
         self.assertIs(obj3, channels.UNBOUND)
         self.assertEqual(_channels.get_count(rch.id), 0)
 
+    @support.requires_subinterpreters
     def test_send_cleared_with_subinterpreter_multiple(self):
         rch, sch = channels.create()
         interp1 = interpreters.create()

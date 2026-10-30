@@ -1967,6 +1967,7 @@ class ExceptionTests(unittest.TestCase):
 
             gc_collect()
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_memory_error_in_subinterp(self):
         # gh-109894: subinterpreters shouldn't count on last resort memory error

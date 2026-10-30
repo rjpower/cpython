@@ -109,6 +109,7 @@ class ModuleTests(TestBase):
 
 class CreateTests(TestBase):
 
+    @support.requires_subinterpreters
     def test_in_main(self):
         interp = interpreters.create()
         self.assertIsInstance(interp, interpreters.Interpreter)
@@ -117,6 +118,7 @@ class CreateTests(TestBase):
         # GH-126221: Passing an invalid Unicode character used to cause a SystemError
         self.assertRaises(UnicodeEncodeError, _interpreters.create, '\udc80')
 
+    @support.requires_subinterpreters
     def test_in_thread(self):
         lock = threading.Lock()
         interp = None
@@ -131,6 +133,7 @@ class CreateTests(TestBase):
         t.join()
         self.assertIn(interp, interpreters.list_all())
 
+    @support.requires_subinterpreters
     def test_in_subinterpreter(self):
         main, = interpreters.list_all()
         interp = interpreters.create()
@@ -142,6 +145,7 @@ class CreateTests(TestBase):
         interp2 = interpreters.Interpreter(int(out))
         self.assertEqual(interpreters.list_all(), [main, interp, interp2])
 
+    @support.requires_subinterpreters
     def test_after_destroy_all(self):
         before = set(interpreters.list_all())
         # Create 3 subinterpreters.
@@ -156,6 +160,7 @@ class CreateTests(TestBase):
         interp = interpreters.create()
         self.assertEqual(set(interpreters.list_all()), before | {interp})
 
+    @support.requires_subinterpreters
     def test_after_destroy_some(self):
         before = set(interpreters.list_all())
         # Create 3 subinterpreters.
@@ -194,6 +199,7 @@ class GetCurrentTests(TestBase):
         current = interpreters.get_current()
         self.assertEqual(current, main)
 
+    @support.requires_subinterpreters
     def test_subinterpreter(self):
         main = interpreters.get_main()
         interp = interpreters.create()
@@ -206,6 +212,7 @@ class GetCurrentTests(TestBase):
         self.assertEqual(current, interp)
         self.assertNotEqual(current, main)
 
+    @support.requires_subinterpreters
     def test_idempotent(self):
         with self.subTest('main'):
             cur1 = interpreters.get_current()
@@ -235,6 +242,7 @@ class GetCurrentTests(TestBase):
             id2 = id(interp)
             self.assertNotEqual(id1, id2)
 
+    @support.requires_subinterpreters
     @requires_test_modules
     def test_created_with_capi(self):
         expected = _testinternalcapi.next_interpreter_id()
@@ -254,6 +262,7 @@ class ListAllTests(TestBase):
         interps = interpreters.list_all()
         self.assertEqual(1, len(interps))
 
+    @support.requires_subinterpreters
     def test_after_creating(self):
         main = interpreters.get_current()
         first = interpreters.create()
@@ -265,6 +274,7 @@ class ListAllTests(TestBase):
 
         self.assertEqual(ids, [main.id, first.id, second.id])
 
+    @support.requires_subinterpreters
     def test_after_destroying(self):
         main = interpreters.get_current()
         first = interpreters.create()
@@ -277,6 +287,7 @@ class ListAllTests(TestBase):
 
         self.assertEqual(ids, [main.id, second.id])
 
+    @support.requires_subinterpreters
     def test_idempotent(self):
         main = interpreters.get_current()
         first = interpreters.create()
@@ -289,6 +300,7 @@ class ListAllTests(TestBase):
         for interp1, interp2 in zip(actual, expected):
             self.assertIs(interp1, interp2)
 
+    @support.requires_subinterpreters
     @unittest.skipIf(os.environ.get("PYTHON_GCSTRESS"),
                      "PYTHON_GCSTRESS replaces the byte trigger")
     def test_destroyed_by_gc(self):
@@ -306,6 +318,7 @@ class ListAllTests(TestBase):
             ids = [i.id for i in interpreters.list_all()]
         self.assertNotIn(interpid, ids)
 
+    @support.requires_subinterpreters
     def test_created_with_capi(self):
         mainid, *_ = _interpreters.get_main()
         interpid1 = _interpreters.create()
@@ -372,6 +385,7 @@ class InterpreterObjectTests(TestBase):
         with self.assertRaises(ValueError):
             interpreters.Interpreter(-1)
 
+    @support.requires_subinterpreters
     def test_id_type(self):
         main = interpreters.get_main()
         current = interpreters.get_current()
@@ -380,11 +394,13 @@ class InterpreterObjectTests(TestBase):
         self.assertIsInstance(current.id, int)
         self.assertIsInstance(interp.id, int)
 
+    @support.requires_subinterpreters
     def test_id_readonly(self):
         interp = interpreters.create()
         with self.assertRaises(AttributeError):
             interp.id = 1_000_000
 
+    @support.requires_subinterpreters
     def test_whence(self):
         main = interpreters.get_main()
         interp = interpreters.create()
@@ -417,18 +433,21 @@ class InterpreterObjectTests(TestBase):
                 with self.assertRaises(AttributeError):
                     main.whence = value
 
+    @support.requires_subinterpreters
     def test_hashable(self):
         interp = interpreters.create()
         expected = hash(interp.id)
         actual = hash(interp)
         self.assertEqual(actual, expected)
 
+    @support.requires_subinterpreters
     def test_equality(self):
         interp1 = interpreters.create()
         interp2 = interpreters.create()
         self.assertEqual(interp1, interp1)
         self.assertNotEqual(interp1, interp2)
 
+    @support.requires_subinterpreters
     def test_pickle(self):
         interp = interpreters.create()
         for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
@@ -437,6 +456,7 @@ class InterpreterObjectTests(TestBase):
                 unpickled = pickle.loads(data)
                 self.assertEqual(unpickled, interp)
 
+    @support.requires_subinterpreters
     @support.requires_subprocess()
     @force_not_colorized
     def test_cleanup_in_repl(self):
@@ -452,6 +472,7 @@ class InterpreterObjectTests(TestBase):
         self.assertIn(b"Interpreter.close()", stdout)
         self.assertNotIn(b"Traceback", stdout)
 
+    @support.requires_subinterpreters
     @support.requires_subprocess()
     @unittest.skipIf(os.name == 'nt', "signals don't work well on windows")
     def test_keyboard_interrupt_in_thread_running_interp(self):
@@ -491,6 +512,7 @@ class TestInterpreterIsRunning(TestBase):
         self.assertTrue(main.is_running())
 
     # XXX Is this still true?
+    @support.requires_subinterpreters
     @unittest.skip('Fails on FreeBSD')
     def test_subinterpreter(self):
         interp = interpreters.create()
@@ -500,6 +522,7 @@ class TestInterpreterIsRunning(TestBase):
             self.assertTrue(interp.is_running())
         self.assertFalse(interp.is_running())
 
+    @support.requires_subinterpreters
     def test_finished(self):
         r, w = self.pipe()
         interp = interpreters.create()
@@ -510,6 +533,7 @@ class TestInterpreterIsRunning(TestBase):
         self.assertFalse(interp.is_running())
         self.assertEqual(os.read(r, 1), b'x')
 
+    @support.requires_subinterpreters
     def test_from_subinterpreter(self):
         interp = interpreters.create()
         out = _run_output(interp, dedent(f"""
@@ -521,12 +545,14 @@ class TestInterpreterIsRunning(TestBase):
             """))
         self.assertEqual(out.strip(), 'True')
 
+    @support.requires_subinterpreters
     def test_already_destroyed(self):
         interp = interpreters.create()
         interp.close()
         with self.assertRaises(InterpreterNotFoundError):
             interp.is_running()
 
+    @support.requires_subinterpreters
     def test_with_only_background_threads(self):
         r_interp, w_interp = self.pipe()
         r_thread, w_thread = self.pipe()
@@ -552,6 +578,7 @@ class TestInterpreterIsRunning(TestBase):
         interp.exec('t.join()')
         self.assertEqual(os.read(r_interp, 1), FINISHED)
 
+    @support.requires_subinterpreters
     def test_created_with_capi(self):
         script = dedent(f"""
             import {interpreters.__name__} as interpreters
@@ -604,6 +631,7 @@ class TestInterpreterIsRunning(TestBase):
 
 class TestInterpreterClose(TestBase):
 
+    @support.requires_subinterpreters
     def test_basic(self):
         main = interpreters.get_main()
         interp1 = interpreters.create()
@@ -615,6 +643,7 @@ class TestInterpreterClose(TestBase):
         self.assertEqual(set(interpreters.list_all()),
                          {main, interp1, interp3})
 
+    @support.requires_subinterpreters
     def test_all(self):
         before = set(interpreters.list_all())
         interps = set()
@@ -639,12 +668,14 @@ class TestInterpreterClose(TestBase):
         t.start()
         t.join()
 
+    @support.requires_subinterpreters
     def test_already_destroyed(self):
         interp = interpreters.create()
         interp.close()
         with self.assertRaises(InterpreterNotFoundError):
             interp.close()
 
+    @support.requires_subinterpreters
     def test_from_current(self):
         main, = interpreters.list_all()
         interp = interpreters.create()
@@ -659,6 +690,7 @@ class TestInterpreterClose(TestBase):
         self.assertEqual(out.strip(), 'failed')
         self.assertEqual(set(interpreters.list_all()), {main, interp})
 
+    @support.requires_subinterpreters
     def test_from_sibling(self):
         main, = interpreters.list_all()
         interp1 = interpreters.create()
@@ -674,6 +706,7 @@ class TestInterpreterClose(TestBase):
             """))
         self.assertEqual(set(interpreters.list_all()), {main, interp1})
 
+    @support.requires_subinterpreters
     def test_from_other_thread(self):
         interp = interpreters.create()
         def f():
@@ -684,6 +717,7 @@ class TestInterpreterClose(TestBase):
         t.join()
 
     # XXX Is this still true?
+    @support.requires_subinterpreters
     @unittest.skip('Fails on FreeBSD')
     def test_still_running(self):
         main, = interpreters.list_all()
@@ -693,6 +727,7 @@ class TestInterpreterClose(TestBase):
                 interp.close()
             self.assertTrue(interp.is_running())
 
+    @support.requires_subinterpreters
     def test_subthreads_still_running(self):
         r_interp, w_interp = self.pipe()
         r_thread, w_thread = self.pipe()
@@ -724,6 +759,7 @@ class TestInterpreterClose(TestBase):
 
         self.assertEqual(os.read(r_interp, 1), FINISHED)
 
+    @support.requires_subinterpreters
     def test_created_with_capi(self):
         script = dedent(f"""
             import {interpreters.__name__} as interpreters
@@ -772,6 +808,7 @@ class TestInterpreterClose(TestBase):
                     self.interp_exists(interpid))
 
 
+    @support.requires_subinterpreters
     def test_remaining_threads(self):
         r_interp, w_interp = self.pipe()
 
@@ -799,6 +836,7 @@ class TestInterpreterClose(TestBase):
 
         self.assertEqual(os.read(r_interp, 1), FINISHED)
 
+    @support.requires_subinterpreters
     def test_remaining_daemon_threads(self):
         # Daemon threads leak reference by nature, because they hang threads
         # without allowing them to do cleanup (i.e., release refs).
@@ -836,6 +874,7 @@ class TestInterpreterClose(TestBase):
 
 class TestInterpreterContextManager(TestBase):
 
+    @support.requires_subinterpreters
     def test_basic(self):
         main, = interpreters.list_all()
         with interpreters.create() as interp:
@@ -845,6 +884,7 @@ class TestInterpreterContextManager(TestBase):
         with self.assertRaises(InterpreterNotFoundError):
             interp.exec('pass')
 
+    @support.requires_subinterpreters
     def test_exception(self):
         main, = interpreters.list_all()
         with self.assertRaises(ZeroDivisionError):
@@ -861,11 +901,13 @@ class TestInterpreterContextManager(TestBase):
 
 class TestInterpreterPrepareMain(TestBase):
 
+    @support.requires_subinterpreters
     def test_empty(self):
         interp = interpreters.create()
         with self.assertRaises(ValueError):
             interp.prepare_main()
 
+    @support.requires_subinterpreters
     def test_dict(self):
         values = {'spam': 42, 'eggs': 'ham'}
         interp = interpreters.create()
@@ -875,6 +917,7 @@ class TestInterpreterPrepareMain(TestBase):
             """))
         self.assertEqual(out.strip(), '42 ham')
 
+    @support.requires_subinterpreters
     def test_tuple(self):
         values = {'spam': 42, 'eggs': 'ham'}
         values = tuple(values.items())
@@ -885,6 +928,7 @@ class TestInterpreterPrepareMain(TestBase):
             """))
         self.assertEqual(out.strip(), '42 ham')
 
+    @support.requires_subinterpreters
     def test_kwargs(self):
         values = {'spam': 42, 'eggs': 'ham'}
         interp = interpreters.create()
@@ -894,6 +938,7 @@ class TestInterpreterPrepareMain(TestBase):
             """))
         self.assertEqual(out.strip(), '42 ham')
 
+    @support.requires_subinterpreters
     def test_dict_and_kwargs(self):
         values = {'spam': 42, 'eggs': 'ham'}
         interp = interpreters.create()
@@ -903,6 +948,7 @@ class TestInterpreterPrepareMain(TestBase):
             """))
         self.assertEqual(out.strip(), '42 ham bar')
 
+    @support.requires_subinterpreters
     def test_not_shareable(self):
         interp = interpreters.create()
         with self.assertRaises(interpreters.NotShareableError):
@@ -914,6 +960,7 @@ class TestInterpreterPrepareMain(TestBase):
         with self.assertRaises(ExecutionFailed):
             interp.exec('print(spam)')
 
+    @support.requires_subinterpreters
     def test_running(self):
         interp = interpreters.create()
         interp.prepare_main({'spam': True})
@@ -922,6 +969,7 @@ class TestInterpreterPrepareMain(TestBase):
                 interp.prepare_main({'spam': False})
         interp.exec('assert spam is True')
 
+    @support.requires_subinterpreters
     @requires_test_modules
     def test_created_with_capi(self):
         with self.interpreter_obj_from_capi() as (interp, interpid):
@@ -933,6 +981,7 @@ class TestInterpreterPrepareMain(TestBase):
 
 class TestInterpreterExec(TestBase):
 
+    @support.requires_subinterpreters
     def test_success(self):
         interp = interpreters.create()
         script, results = _captured_script('print("it worked!", end="")')
@@ -944,11 +993,13 @@ class TestInterpreterExec(TestBase):
 
         self.assertEqual(out, 'it worked!')
 
+    @support.requires_subinterpreters
     def test_failure(self):
         interp = interpreters.create()
         with self.assertRaises(ExecutionFailed):
             interp.exec('raise Exception')
 
+    @support.requires_subinterpreters
     @force_not_colorized
     def test_display_preserved_exception(self):
         tempdir = self.temp_dir()
@@ -1001,6 +1052,7 @@ class TestInterpreterExec(TestBase):
             """))
         self.assertEqual(stdout, '')
 
+    @support.requires_subinterpreters
     def test_in_thread(self):
         interp = interpreters.create()
         script, results = _captured_script('print("it worked!", end="")')
@@ -1017,6 +1069,7 @@ class TestInterpreterExec(TestBase):
 
         self.assertEqual(out, 'it worked!')
 
+    @support.requires_subinterpreters
     @support.requires_fork()
     def test_fork(self):
         interp = interpreters.create()
@@ -1041,6 +1094,7 @@ class TestInterpreterExec(TestBase):
             self.assertEqual(content, expected)
 
     # XXX Is this still true?
+    @support.requires_subinterpreters
     @unittest.skip('Fails on FreeBSD')
     def test_already_running(self):
         interp = interpreters.create()
@@ -1048,11 +1102,13 @@ class TestInterpreterExec(TestBase):
             with self.assertRaises(RuntimeError):
                 interp.exec('print("spam")')
 
+    @support.requires_subinterpreters
     def test_bad_script(self):
         interp = interpreters.create()
         with self.assertRaises(TypeError):
             interp.exec(10)
 
+    @support.requires_subinterpreters
     def test_bytes_for_script(self):
         r, w = self.pipe()
         RAN = b'R'
@@ -1065,6 +1121,7 @@ class TestInterpreterExec(TestBase):
         os.write(w, DONE)
         self.assertEqual(os.read(r, 1), RAN)
 
+    @support.requires_subinterpreters
     def test_with_background_threads_still_running(self):
         r_interp, w_interp = self.pipe()
         r_thread, w_thread = self.pipe()
@@ -1096,11 +1153,13 @@ class TestInterpreterExec(TestBase):
         self.assertEqual(os.read(r_interp, 1), RAN)
         self.assertEqual(os.read(r_interp, 1), FINISHED)
 
+    @support.requires_subinterpreters
     def test_created_with_capi(self):
         with self.interpreter_obj_from_capi() as (interp, _):
             with self.assertRaisesRegex(InterpreterError, 'unrecognized'):
                 interp.exec('raise Exception("it worked!")')
 
+    @support.requires_subinterpreters
     def test_list_comprehension(self):
         # gh-135450: List comprehensions caused an assertion failure
         # in _PyCode_CheckNoExternalState()
@@ -1298,6 +1357,7 @@ class TestInterpreterCall(TestBase):
         self.assertIs(type(exc1), type(exc2))
         self.assertEqual(exc1.args, exc2.args)
 
+    @support.requires_subinterpreters
     def test_stateless_funcs(self):
         interp = interpreters.create()
 
@@ -1327,6 +1387,7 @@ class TestInterpreterCall(TestBase):
             with self.assertRaises(interpreters.NotShareableError):
                 interp.call(func)
 
+    @support.requires_subinterpreters
     def test_stateless_func_returns_arg(self):
         interp = interpreters.create()
 
@@ -1401,6 +1462,7 @@ class TestInterpreterCall(TestBase):
                 with self.assertRaises(interpreters.NotShareableError):
                     interp.call(defs.spam_returns_arg, arg)
 
+    @support.requires_subinterpreters
     def test_full_args(self):
         interp = interpreters.create()
         expected = (1, 2, 3, 4, 5, 6, ('?',), {'g': 7, 'h': 8})
@@ -1408,6 +1470,7 @@ class TestInterpreterCall(TestBase):
         res = interp.call(func, 1, 2, 3, 4, '?', e=5, f=6, g=7, h=8)
         self.assertEqual(res, expected)
 
+    @support.requires_subinterpreters
     def test_full_defaults(self):
         # pickleable, but not stateless
         interp = interpreters.create()
@@ -1415,6 +1478,7 @@ class TestInterpreterCall(TestBase):
         res = interp.call(defs.spam_full_args_with_defaults, g=8, h=9)
         self.assertEqual(res, expected)
 
+    @support.requires_subinterpreters
     def test_modified_arg(self):
         interp = interpreters.create()
         script = dedent("""
@@ -1433,6 +1497,7 @@ class TestInterpreterCall(TestBase):
         self.assertNotEqual(resid, id(ns))
         self.assertNotEqual(resid, id(resns))
 
+    @support.requires_subinterpreters
     def test_func_in___main___valid(self):
         # pickleable, already there'
 
@@ -1509,6 +1574,7 @@ class TestInterpreterCall(TestBase):
                     """)
                 self.assertEqual(text, '<fake __main__>')
 
+    @support.requires_subinterpreters
     def test_func_in___main___invalid(self):
         interp = interpreters.create()
 
@@ -1529,6 +1595,7 @@ class TestInterpreterCall(TestBase):
                 with self.assertRaises(interpreters.NotShareableError):
                     interp.call(defs.spam_returns_arg, arg)
 
+    @support.requires_subinterpreters
     def test_func_in___main___hidden(self):
         # When a top-level function that uses global variables is called
         # through Interpreter.call(), it will be pickled, sent over,
@@ -1636,6 +1703,7 @@ class TestInterpreterCall(TestBase):
         self.assertNotEqual(nsid2, nsid1)
         self.assertNotEqual(funcid2, funcid1)
 
+    @support.requires_subinterpreters
     def test_func_in___main___uses_globals(self):
         # See the note in test_func_in___main___hidden about pickle
         # and the __main__ module.
@@ -1710,6 +1778,7 @@ class TestInterpreterCall(TestBase):
         self.assertEqual(after, 0)
         self.assertEqual(counts, [0, 1, 4])
 
+    @support.requires_subinterpreters
     def test_raises(self):
         interp = interpreters.create()
         with self.assertRaises(ExecutionFailed):
@@ -1718,6 +1787,7 @@ class TestInterpreterCall(TestBase):
         with self.assert_fails(ValueError):
             interp.call(call_func_complex, '???', exc=ValueError('spam'))
 
+    @support.requires_subinterpreters
     def test_call_valid(self):
         interp = interpreters.create()
 
@@ -1744,6 +1814,7 @@ class TestInterpreterCall(TestBase):
                 res = interp.call(callable, *args, **kwargs)
                 self.assertEqual(res, expected)
 
+    @support.requires_subinterpreters
     def test_call_invalid(self):
         interp = interpreters.create()
 
@@ -1768,6 +1839,7 @@ class TestInterpreterCall(TestBase):
             with self.assertRaises(interpreters.NotShareableError):
                 interp.call(func, op, 'eggs!')
 
+    @support.requires_subinterpreters
     def test_callable_requires_frame(self):
         # There are various functions that require a current frame.
         interp = interpreters.create()
@@ -1803,6 +1875,7 @@ class TestInterpreterCall(TestBase):
                     self.assertIsInstance(res, expectedtype)
                     self.assertIn('__builtins__', res)
 
+    @support.requires_subinterpreters
     def test_globals_from_builtins(self):
         # The builtins  exec(), eval(), globals(), locals(), vars(),
         # and dir() each runs relative to the target interpreter's
@@ -1848,6 +1921,7 @@ class TestInterpreterCall(TestBase):
 
         interp.call(exec, f'assert dir() == {expected}, dir()')
 
+    @support.requires_subinterpreters
     def test_globals_from_stateless_func(self):
         # A stateless func, which doesn't depend on any globals,
         # doesn't go through pickle, so it runs in __main__.
@@ -1875,6 +1949,7 @@ class TestInterpreterCall(TestBase):
 
         interp.exec('assert spam == 42, repr(spam)')
 
+    @support.requires_subinterpreters
     def test_call_in_thread(self):
         interp = interpreters.create()
 
@@ -2107,6 +2182,7 @@ class LowLevelTests(TestBase):
             _interpreters.whence(interpid),
             _interpreters.WHENCE_RUNTIME)
 
+    @support.requires_subinterpreters
     def test_get_current(self):
         with self.subTest('main'):
             main, *_ = _interpreters.get_main()
@@ -2140,6 +2216,7 @@ class LowLevelTests(TestBase):
             self.assertEqual(interpid, expected)
             self.assertEqual(whence, _interpreters.WHENCE_CAPI)
 
+    @support.requires_subinterpreters
     def test_list_all(self):
         mainid, *_ = _interpreters.get_main()
         interpid1 = _interpreters.create()
@@ -2187,6 +2264,7 @@ class LowLevelTests(TestBase):
             self.assertEqual(res2, expected2)
             self.assertEqual(res3, expected3)
 
+    @support.requires_subinterpreters
     def test_create(self):
         isolated = _interpreters.new_config('isolated')
         legacy = _interpreters.new_config('legacy')
@@ -2245,6 +2323,7 @@ class LowLevelTests(TestBase):
                 _interpreters.whence(interpid),
                 _interpreters.WHENCE_STDLIB)
 
+    @support.requires_subinterpreters
     @requires_test_modules
     def test_destroy(self):
         with self.subTest('from _interpreters'):
@@ -2282,6 +2361,7 @@ class LowLevelTests(TestBase):
             self.assertFalse(
                 self.interp_exists(interpid))
 
+    @support.requires_subinterpreters
     def test_get_config(self):
         # This test overlaps with
         # test.test_capi.test_misc.InterpreterConfigTests.
@@ -2315,6 +2395,7 @@ class LowLevelTests(TestBase):
                 config = _interpreters.get_config(interpid)
             self.assert_ns_equal(config, orig)
 
+    @support.requires_subinterpreters
     @requires_test_modules
     def test_whence(self):
         with self.subTest('main'):
@@ -2359,6 +2440,7 @@ class LowLevelTests(TestBase):
             whence = eval(text)
             self.assertEqual(whence, _interpreters.WHENCE_LEGACY_CAPI)
 
+    @support.requires_subinterpreters
     def test_contextvars_missing(self):
         script = f"""
             import contextvars
@@ -2369,6 +2451,7 @@ class LowLevelTests(TestBase):
         text = self.run_and_capture(orig, script)
         self.assertEqual(text.strip(), "<Token.MISSING>")
 
+    @support.requires_subinterpreters
     def test_is_running(self):
         def check(interpid, expected):
             with self.assertRaisesRegex(InterpreterError, 'unrecognized'):
@@ -2405,6 +2488,7 @@ class LowLevelTests(TestBase):
             with self.interpreter_from_capi() as interpid:
                 check(interpid, False)
 
+    @support.requires_subinterpreters
     def test_exec(self):
         with self.subTest('run script'):
             interpid = _interpreters.create()
@@ -2443,6 +2527,7 @@ class LowLevelTests(TestBase):
             self.assertIsNot(exc, None)
             self.assertEqual(exc.msg, 'it worked!')
 
+    @support.requires_subinterpreters
     def test_call(self):
         interpid = _interpreters.create()
 
@@ -2489,6 +2574,7 @@ class LowLevelTests(TestBase):
             self.assertIsNone(res)
             self.assertEqual(exc, expected)
 
+    @support.requires_subinterpreters
     @requires_test_modules
     def test_set___main___attrs(self):
         with self.subTest('from _interpreters'):

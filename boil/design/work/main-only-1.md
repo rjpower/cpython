@@ -94,3 +94,43 @@ and pending Queue2b owner evidence remain unchanged and distinct.
 Shutdown, repeated embedding teardown, fork policy, same-interpreter buffer
 release and finalizer delivery are outside this increment. Rejecting creation
 does not solve any of those resource-lifetime obligations.
+
+## Capability and classification successor
+
+The reviewed runtime/docs checkpoint is committed as683a407eb15; its normal
+thread control now uses `threading_helper.join_thread`. The coordinator then
+approved reusing `sys.implementation.supports_isolated_interpreters=False`
+instead of adding a new constant. `support.requires_subinterpreters` reads
+that existing boolean directly. It neither probes creation nor hides module
+imports; genuine import-availability guards remain separate.
+
+The finite source classification uses that decorator for success-creating
+methods or unconditional creation fixtures, not whole mixed modules. The
+existing import-only local predicates are replaced. Mixed C-API configuration
+and interpreter-ID classes keep configuration validation and ID conversion;
+main/current/initial-list inspection, pure cross-interpreter data conversion,
+same-interpreter queue/channel tests and normal threads remain eligible.
+The seven success-only auto-injected C tests remain collected with visible
+skips. Interpreter-pool worker cases are marked through their existing mixin;
+eligible import/constructor tests move to InterpreterPoolAvailabilityTests.
+
+The original root_stats_dump ID now checks the main/fork records alone, with
+all original main collection bounds, two-process grouping, fork interpreter ID
+and fork collection bounds retained. A separately decorated subinterpreter
+method calls the same helper with the original additional-interpreter branch
+and record assertions enabled. Neither branch fabricates journal records.
+
+The explicit affected/preserved source-ID inventory is retained at
+`build/main-only-source/capability/final-id-inventory.json`, alongside the
+classification diff and initial reviewed scope. Its counts are source
+declarations, not executed tests, inherited/generated test discovery or skips.
+Both generated root-stats child scripts parse with host Python; changed test
+files parse and the extracted capability decorator passes False/True controls.
+No native assertion or compatibility result follows from those host checks.
+
+Native feedback is narrowed to **one fresh O1/Py_DEBUG cohort** first, reusing
+the accepted workstack build helper/guards. The first five rejection/thread
+methods will run in actual kill/N0 only after source/build binding review,
+then explicit eligible main/thread checks once. Isolated O3, ASan and full
+runs wait for a coherent GC union; historical qualified results and unsupported
+test eligibility remain distinct. No new lifecycle support is implied.

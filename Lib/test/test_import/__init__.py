@@ -1,3 +1,4 @@
+from test import support
 import builtins
 import errno
 import glob
@@ -181,10 +182,6 @@ def requires_singlephase_init(meth):
                            'test requires _testsinglephase module')(meth)
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(_interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 class ModuleSnapshot(types.SimpleNamespace):
@@ -2179,6 +2176,7 @@ class CircularImportTests(unittest.TestCase):
             unwritable.x = 42
 
 
+@support.requires_subinterpreters
 class SubinterpImportTests(unittest.TestCase):
 
     RUN_KWARGS = dict(
@@ -2534,7 +2532,8 @@ class SubinterpImportTests(unittest.TestCase):
         with self.subTest(f'{module}: strict, fresh'):
             self.check_compatible_fresh(module, strict=True, isolated=True)
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     @requires_singlephase_init
     def test_disallowed_reimport(self):
         # See https://github.com/python/cpython/issues/104621.
@@ -2551,8 +2550,9 @@ class SubinterpImportTests(unittest.TestCase):
         excsnap = _interpreters.run_string(interpid, script)
         self.assertIsNot(excsnap, None)
 
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
     @cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_pyinit_function_raises_exception(self):
         # gh-144601: PyInit functions that raised exceptions would cause a
         # crash when imported from a subinterpreter.
@@ -3195,8 +3195,9 @@ class SinglephaseInitTests(unittest.TestCase):
     # Also, we test with a single-phase module that has global state,
     # which is shared by all interpreters.
 
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
     @no_rerun(reason="module state is not cleared (see gh-140657)")
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_basic_multiple_interpreters_main_no_reset(self):
         # without resetting; already loaded in main interpreter
 
@@ -3264,9 +3265,10 @@ class SinglephaseInitTests(unittest.TestCase):
         #  * m_copy was copied from interp2 (was from interp1)
         #  * module's global state was updated, not reset
 
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
     @unittest.skip("gh-131229: This is suddenly very flaky")
     @no_rerun(reason="rerun not possible; module state is never cleared (see gh-102251)")
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_basic_multiple_interpreters_deleted_no_reset(self):
         # without resetting; already loaded in a deleted interpreter
 
@@ -3341,7 +3343,8 @@ class SinglephaseInitTests(unittest.TestCase):
         #  * m_copy was not changed
         #  * module's global state was not touched
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     def test_basic_multiple_interpreters_reset_each(self):
         # resetting between each interpreter
 
@@ -3410,7 +3413,8 @@ class ModexportTests(unittest.TestCase):
 
         self.assertEqual(module.__name__, modname)
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     def test_from_modexport_gil_used(self):
         # Test that a module with Py_MOD_GIL_USED (re-)enables the GIL.
         # Do this in a new interpreter to avoid interfering with global state.
@@ -3464,7 +3468,8 @@ class ModexportTests(unittest.TestCase):
                                             put_in_sys_modules=False)
         self.assertIsInstance(module, str)
 
-    @requires_subinterpreters
+    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     def test_from_modexport_create_nonmodule_gil_used(self):
         # Test that a module with Py_MOD_GIL_USED (re-)enables the GIL.
         # Do this in a new interpreter to avoid interfering with global state.

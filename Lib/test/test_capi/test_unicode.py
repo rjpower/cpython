@@ -1957,7 +1957,13 @@ class CAPITest(unittest.TestCase):
 class PyUnicodeWriterTest(unittest.TestCase):
     def create_writer(self, size):
         # Test PyUnicodeWriter_Create()
-        return _testcapi.PyUnicodeWriter(size)
+        return _testinternalcapi.PyUnicodeWriter(size)
+
+    def test_opaque_public_api(self):
+        _testcapi.test_unicode_writer()
+
+    def test_private_lifecycle(self):
+        _testinternalcapi.test_unicode_writer_lifecycle()
 
     def test_basic(self):
         writer = self.create_writer(100)
@@ -2476,7 +2482,7 @@ class PyUnicodeWriterTest(unittest.TestCase):
 @unittest.skipIf(ctypes is None, 'need ctypes')
 class PyUnicodeWriterFormatTest(unittest.TestCase):
     def create_writer(self, size):
-        return _testcapi.PyUnicodeWriter(size)
+        return _testinternalcapi.PyUnicodeWriter(size)
 
     def writer_format(self, writer, *args):
         from ctypes import c_char_p, pythonapi, c_int, c_void_p

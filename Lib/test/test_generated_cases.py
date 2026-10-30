@@ -389,6 +389,66 @@ class TestIRCases(unittest.TestCase):
     def formats(self, input: str):
         return ir_generator.compute_formats(self.analyze(input))
 
+    def test_scalar_effect_linear(self):
+        analysis = self.analyze("""
+            inst(OP, (a, b -- res)) {
+                res = a;
+                DEAD(a);
+                DEAD(b);
+            }
+        """)
+        inst = analysis.instructions["OP"]
+        fmt = ir_generator.compute_formats(analysis)["OP"]
+        effect = ir_metadata_generator.scalar_effect(inst, fmt)
+        self.assertEqual(effect.unresolved, ())
+        self.assertEqual(effect.input_mask, 3)
+        self.assertEqual(effect.outputs, 1)
+
+    def test_scalar_effect_family_alignment_and_output_span(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        formats = ir_generator.compute_formats(analysis)
+        effect = ir_metadata_generator.scalar_effect(
+            analysis.instructions["END_FOR"], formats["END_FOR"])
+        self.assertEqual((effect.unresolved, effect.input_mask, effect.outputs),
+                         ((), 4, 0))
+        effect = ir_metadata_generator.scalar_effect(
+            analysis.instructions["LOAD_FAST_LOAD_FAST"],
+            formats["LOAD_FAST_LOAD_FAST"])
+        self.assertEqual((effect.unresolved, effect.input_mask, effect.outputs),
+                         ((), 0, 2))
+
+    def test_scalar_effect_does_not_infer_complex_edges(self):
+        cases = [
+            ("inst(OP, (a -- b)) { ERROR_IF(true); b = a; }", "EXCEPTION"),
+            ("inst(OP, (--)) { JUMPTO(oparg); }", "CONTROL"),
+            ("inst(OP, (--)) { Py_FatalError(\"trap\"); }", "CONTROL"),
+            ("window inst(OP, (a[oparg] --)) { DEAD(a); }", "WINDOW"),
+            ("returns inst(OP, (a -- b)) { b = a; }", "FRAME"),
+        ]
+        for source, reason in cases:
+            with self.subTest(reason=reason, source=source):
+                analysis = self.analyze("\n" + source + "\n")
+                inst = analysis.instructions["OP"]
+                fmt = ir_generator.compute_formats(analysis)["OP"]
+                effect = ir_metadata_generator.scalar_effect(inst, fmt)
+                self.assertIn(reason, effect.unresolved)
+                self.assertEqual((effect.input_mask, effect.outputs), (0, 0))
+
+    def test_scalar_effect_every_pristine_handler_classified(self):
+        analysis = analyzer.analyze_files([ir_generator.DEFAULT_INPUT])
+        domain = ir_generator.build_handler_domain(analysis)
+        formats = ir_generator.compute_formats(analysis)
+        insts = ir_generator.handler_instructions(analysis, domain)
+        for name in domain.handlers:
+            if not domain.kinds[name] & ir_generator.HandlerKind.PRISTINE:
+                continue
+            with self.subTest(handler=name):
+                effect = ir_metadata_generator.scalar_effect(insts[name], formats[name])
+                self.assertLess(effect.input_mask, 1 << formats[name].n_inputs)
+                if name in ("FOR_ITER", "SEND", "RERAISE", "YIELD_VALUE",
+                            "JUMP_IF_FALSE_OR_POP", "CACHE", "RESERVED"):
+                    self.assertTrue(effect.unresolved)
+
     def ir_output(self, input: str) -> str:
         analysis = self.analyze(input)
         out = io.StringIO()

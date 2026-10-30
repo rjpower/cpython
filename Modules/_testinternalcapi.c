@@ -5012,7 +5012,34 @@ ir_scalar_boundary(PyObject *self, PyObject *args)
                          (unsigned long long)before, (unsigned long long)word);
 }
 
+static PyObject *
+ir_scalar_effects(PyObject *self, PyObject *args)
+{
+    unsigned long long word;
+    int nslots;
+    if (!PyArg_ParseTuple(args, "Ki:ir_scalar_effects", &word, &nslots)) {
+        return NULL;
+    }
+    _PyIRScalarEffects effects;
+    int status = _PyIR_DecodeScalarEffects((_PyIRWord)word, nslots, &effects);
+    PyObject *inputs = PyTuple_New(effects.ninputs);
+    if (inputs == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < effects.ninputs; i++) {
+        PyObject *slot = PyLong_FromLong(effects.inputs[i]);
+        if (slot == NULL) {
+            Py_DECREF(inputs);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(inputs, i, slot);
+    }
+    return Py_BuildValue("(iNiii)", status, inputs, effects.first_output,
+                         effects.noutputs, effects.unresolved);
+}
+
 static PyMethodDef module_functions[] = {
+    {"ir_scalar_effects", ir_scalar_effects, METH_VARARGS},
     {"ir_scalar_boundary", ir_scalar_boundary, METH_VARARGS},
     {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},

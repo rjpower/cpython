@@ -16,8 +16,9 @@ format, without _PyIR_VALID.
 """
 
 import argparse
+from dataclasses import dataclass
 
-from analyzer import Analysis, analyze_files
+from analyzer import Analysis, Instruction, Uop, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
@@ -31,11 +32,58 @@ from ir_generator import (
     binary_op_handlers,
     binary_ops,
     compute_formats,
+    external_io,
+    handler_instructions,
     nofb_bases,
 )
 from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
+
+
+@dataclass(frozen=True)
+class ScalarEffect:
+    """Declared scalar effects, or explicit unresolved edge requirements.
+
+    This first H2 slice deliberately does not infer exceptional, window or
+    frame-transition effects from a normal stack effect. Its decoder is inert.
+    """
+    unresolved: tuple[str, ...]
+    input_mask: int
+    outputs: int
+
+
+def scalar_effect(inst: Instruction, fmt: IRFormat) -> ScalarEffect:
+    unresolved = []
+    if not inst.properties.infallible:
+        unresolved.append("EXCEPTION")
+    tokens = {token.text for part in inst.parts if isinstance(part, Uop)
+              for token in part.body.tokens()}
+    if (inst.properties.jumps or inst.properties.always_exits
+            or tokens & {"goto", "DISPATCH", "DISPATCH_INLINED",
+                         "DISPATCH_GOTO", "JUMP_TO_LABEL", "LOAD_IP",
+                         "Py_FatalError", "Py_UNREACHABLE"}):
+        unresolved.append("CONTROL")
+    if (inst.properties.switches_frame or inst.properties.returns
+            or inst.properties.stores_early):
+        unresolved.append("FRAME")
+    if fmt.window:
+        unresolved.append("WINDOW")
+    inputs, outputs = external_io(inst)
+    first = next((i for i, entry in enumerate(outputs)
+                  if entry.external < 0), len(outputs))
+    if (any(item.is_array() for item in inputs)
+            or any(entry.item.is_array() for entry in outputs)
+            or any(entry.external >= 0 for entry in outputs[first:])
+            or len(inputs) > fmt.n_inputs
+            or (first < len(outputs) and fmt.dst_offset is None)):
+        unresolved.append("STACK_SHAPE")
+    if unresolved:
+        return ScalarEffect(tuple(unresolved), 0, 0)
+    # Family formats align their inputs at the top; a member can read fewer
+    # than the deepest member for which the physical fields were allocated.
+    mask = ((1 << len(inputs)) - 1) << (fmt.n_inputs - len(inputs))
+    return ScalarEffect((), mask, len(outputs) - first)
 
 
 def format_initializer(fmt: IRFormat, nofb: str) -> str:
@@ -136,6 +184,19 @@ def generate_ir_metadata(
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
+
+        out.emit(f"PyAPI_DATA(const _PyIRScalarEffect) _PyIR_ScalarEffects[{n}];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit(f"const _PyIRScalarEffect _PyIR_ScalarEffects[{n}] = {{\n")
+        insts = handler_instructions(analysis, domain)
+        for name in sorted(ids, key=ids.__getitem__):
+            effect = scalar_effect(insts[name], formats[name])
+            flags = ["_PyIR_EFFECT_KNOWN"]
+            flags.extend("_PyIR_EFFECT_" + reason for reason in effect.unresolved)
+            out.emit(f"[{name}] = {{ .flags = {' | '.join(flags)}, "
+                     f".input_mask = {effect.input_mask:#x}, "
+                     f".outputs = {effect.outputs} }},\n")
+        out.emit("};\n#endif\n\n")
 
 arg_parser = argparse.ArgumentParser(
     description="Generate the metadata of the register IR.",

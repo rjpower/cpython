@@ -56,6 +56,80 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 
 /* Decoding */
 
+_PyIREffectStatus
+_PyIR_DecodeScalarEffects(_PyIRWord word, int nslots,
+                          _PyIRScalarEffects *effects)
+{
+    memset(effects, 0, sizeof(*effects));
+    int handler = IR_HANDLER(word);
+    if (nslots < 0 || nslots > IR_MAX_SLOTS || handler >= IR_NUM_HANDLERS
+        || !_PyIR_HasProperty(handler, _PyIR_H_PRISTINE))
+    {
+        return _PyIR_EFFECT_INVALID;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    const _PyIRScalarEffect *effect = &_PyIR_ScalarEffects[handler];
+    if (!(fmt->flags & _PyIR_VALID) || !(effect->flags & _PyIR_EFFECT_KNOWN)) {
+        return _PyIR_EFFECT_INVALID;
+    }
+    for (int i = 0; i < 4; i++) {
+        int role = fmt->roles[i];
+        uint32_t slot = (uint32_t)(word >> (16 + 12 * i)) & IR_FIELD_MAX;
+        if ((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
+             || role >= _PyIR_ROLE_IN0) && slot >= (uint32_t)nslots)
+        {
+            return _PyIR_EFFECT_INVALID;
+        }
+    }
+    effects->unresolved = effect->flags & ~_PyIR_EFFECT_KNOWN;
+    if (effects->unresolved) {
+        return _PyIR_EFFECT_UNSUPPORTED;
+    }
+    _PyIRScalarEffects result = {0};
+    if (fmt->ninputs > Py_ARRAY_LENGTH(result.inputs)
+        || effect->input_mask >> fmt->ninputs)
+    {
+        return _PyIR_EFFECT_INVALID;
+    }
+    for (int k = 0; k < fmt->ninputs; k++) {
+        if (!(effect->input_mask & (1 << k))) {
+            continue;
+        }
+        int field = -1;
+        for (int i = 0; i < 4; i++) {
+            if (fmt->roles[i] == _PyIR_ROLE_IN0 + k) {
+                field = i;
+                break;
+            }
+        }
+        if (field < 0) {
+            return _PyIR_EFFECT_INVALID;
+        }
+        result.inputs[result.ninputs++] =
+            (uint16_t)((word >> (16 + 12 * field)) & IR_FIELD_MAX);
+    }
+    if (effect->outputs) {
+        int dst_field = -1;
+        for (int i = 0; i < 4; i++) {
+            if (fmt->roles[i] == _PyIR_ROLE_DST) {
+                dst_field = i;
+                break;
+            }
+        }
+        if (dst_field < 0) {
+            return _PyIR_EFFECT_INVALID;
+        }
+        uint32_t dst = (uint32_t)(word >> (16 + 12 * dst_field)) & IR_FIELD_MAX;
+        if (dst + effect->outputs > (uint32_t)nslots) {
+            return _PyIR_EFFECT_INVALID;
+        }
+        result.first_output = (uint16_t)dst;
+        result.noutputs = effect->outputs;
+    }
+    *effects = result;
+    return _PyIR_EFFECT_OK;
+}
+
 int
 _PyIR_BaseOpcode(int handler)
 {

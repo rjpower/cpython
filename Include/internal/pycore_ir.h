@@ -134,6 +134,41 @@ typedef struct _PyIRFormat {
                             // its oparg in its entry, or 0
 } _PyIRFormat;
 
+/* H2's inert scalar-effect decoder. Unresolved edge classes are explicit:
+ * these records are not frame root maps and no runtime reader uses them. */
+#define _PyIR_EFFECT_KNOWN       1
+#define _PyIR_EFFECT_EXCEPTION   2
+#define _PyIR_EFFECT_CONTROL     4
+#define _PyIR_EFFECT_FRAME       8
+#define _PyIR_EFFECT_WINDOW      16
+#define _PyIR_EFFECT_STACK_SHAPE 32
+
+typedef struct {
+    uint8_t flags;
+    uint8_t input_mask;   // bits of the format's scalar inputs
+    uint16_t outputs;     // consecutive new outputs starting at dst
+} _PyIRScalarEffect;
+
+typedef enum {
+    _PyIR_EFFECT_INVALID = -1,
+    _PyIR_EFFECT_UNSUPPORTED = 0,
+    _PyIR_EFFECT_OK = 1,
+} _PyIREffectStatus;
+
+typedef struct {
+    uint16_t inputs[4];
+    uint16_t first_output;
+    uint8_t ninputs;
+    uint16_t noutputs;
+    uint8_t unresolved;   // _PyIR_EFFECT_* requirements, zero on success
+} _PyIRScalarEffects;
+
+/* Decode only pristine scalar fallthrough effects. Does not validate CFG,
+ * oparg/local/constant/feedback indices or code construction. Unsupported
+ * effects have no usable sets; callers must test for EFFECT_OK explicitly. */
+PyAPI_FUNC(_PyIREffectStatus) _PyIR_DecodeScalarEffects(
+    _PyIRWord word, int nslots, _PyIRScalarEffects *effects);
+
 #include "pycore_ir_metadata.h"
 
 static_assert(IR_NUM_HANDLERS <= UINT16_MAX + 1u, "16-bit handler domain");

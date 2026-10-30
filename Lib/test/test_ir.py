@@ -61,6 +61,72 @@ class C:
 
 
 class HandlerScalarBoundaryTest(unittest.TestCase):
+    def test_scalar_effect_decoder(self):
+        from opcode import opmap
+
+        # LOAD_FAST's first field is its destination; its local operand is
+        # always traced and is not a scalar temporary input of this decoder.
+        word = opmap["LOAD_FAST"] | (2 << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(word, 3),
+                         (1, (), 2, 1, 0))
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(word, 2),
+                         (-1, (), 0, 0, 0))
+        alias = opmap["IS_OP"] | (3 << 16) | (1 << 28) | (1 << 40)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(alias, 4),
+                         (1, (1, 1), 3, 1, 0))
+        pair = opmap["LOAD_FAST_LOAD_FAST"] | (2 << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(pair, 3),
+                         (-1, (), 0, 0, 0))
+        # END_FOR's family reserves three input fields for its instrumented
+        # twin. The pristine instruction reads only the top input field.
+        end = opmap["END_FOR"] | (1 << 28) | (2 << 40)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(end, 3),
+                         (1, (2,), 0, 0, 0))
+        for nslots in (-1, IR_MAX_SLOTS + 1):
+            with self.subTest(nslots=nslots):
+                self.assertEqual(_testinternalcapi.ir_scalar_effects(word, nslots),
+                                 (-1, (), 0, 0, 0))
+        for name in ("FOR_ITER", "SEND", "RERAISE", "YIELD_VALUE",
+                     "JUMP_IF_FALSE_OR_POP", "CACHE", "RESERVED"):
+            with self.subTest(handler=name):
+                status, inputs, first, count, unresolved = (
+                    _testinternalcapi.ir_scalar_effects(opmap[name], 4))
+                self.assertEqual((status, inputs, first, count), (0, (), 0, 0))
+                self.assertNotEqual(unresolved, 0)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(65535, 4),
+                         (-1, (), 0, 0, 0))
+
+    def test_scalar_effect_rejects_holes_and_runtime_state(self):
+        from opcode import opmap, opname, _specialized_opmap
+
+        hole = next(i for i, name in enumerate(opname) if name == f"<{i}>")
+        for handler in (hole, opmap["INSTRUMENTED_RESUME"],
+                        _specialized_opmap["LOAD_ATTR_SLOT"]):
+            with self.subTest(handler=handler):
+                self.assertEqual(_testinternalcapi.ir_scalar_effects(handler, 4),
+                                 (-1, (), 0, 0, 0))
+
+    def test_scalar_effect_zero_and_last_slots(self):
+        from opcode import opmap
+
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(opmap["NOP"], 0),
+                         (1, (), 0, 0, 0))
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(opmap["POP_TOP"], 0),
+                         (-1, (), 0, 0, 0))
+        last = IR_MAX_SLOTS - 1
+        item = opmap["POP_TOP"] | (last << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(item, IR_MAX_SLOTS),
+                         (1, (last,), 0, 0, 0))
+        word = opmap["LOAD_FAST"] | (last << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(word, IR_MAX_SLOTS),
+                         (1, (), last, 1, 0))
+        pair = opmap["LOAD_FAST_LOAD_FAST"] | ((last - 1) << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(pair, IR_MAX_SLOTS),
+                         (1, (), last - 1, 2, 0))
+        pair = opmap["LOAD_FAST_LOAD_FAST"] | (last << 16)
+        self.assertEqual(_testinternalcapi.ir_scalar_effects(pair, IR_MAX_SLOTS),
+                         (-1, (), 0, 0, 0))
+
     def test_precast_handler_boundaries(self):
         from opcode import opmap
         nop = opmap["NOP"]

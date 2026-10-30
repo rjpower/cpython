@@ -31,6 +31,10 @@
 
 /* --- registered code ranges ----------------------------------------------- */
 
+/* All holders only inspect/copy native records.  Keep the GIL at every
+   acquisition, including registration: a detached handed-off owner could
+   otherwise wait for the GIL while a collector waits for this mutex. */
+
 #define MAX_RANGES 64
 
 static struct {
@@ -51,7 +55,7 @@ int
 _PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end, int cls, int flags,
                         const _PyGCFrameDesc *desc)
 {
-    PyMutex_Lock(&ranges.mutex);
+    PyMutex_LockFlags(&ranges.mutex, _Py_LOCK_DONT_DETACH);
     int rc = -1;
     if (ranges.n < MAX_RANGES) {
         ranges.r[ranges.n].start = start;
@@ -73,7 +77,7 @@ _PyGC_RegisterCodeRange(uintptr_t start, uintptr_t end, int cls, int flags,
 void
 _PyGC_UnregisterCodeRange(uintptr_t start)
 {
-    PyMutex_Lock(&ranges.mutex);
+    PyMutex_LockFlags(&ranges.mutex, _Py_LOCK_DONT_DETACH);
     for (int i = 0; i < ranges.n; i++) {
         if (ranges.r[i].start == start) {
             ranges.r[i] = ranges.r[--ranges.n];
@@ -93,7 +97,7 @@ range_desc(uintptr_t pc, _PyGCFrameDesc *out)
     if (_Py_atomic_load_int_relaxed(&ranges.n) == 0) {
         return 0;
     }
-    PyMutex_Lock(&ranges.mutex);
+    PyMutex_LockFlags(&ranges.mutex, _Py_LOCK_DONT_DETACH);
     for (int i = 0; i < ranges.n; i++) {
         if (ranges.r[i].start <= pc && pc < ranges.r[i].end) {
             if (ranges.r[i].has_desc) {
@@ -118,7 +122,7 @@ range_class(uintptr_t pc, int *flags)
     if (_Py_atomic_load_int_relaxed(&ranges.n) == 0) {
         return 0;
     }
-    PyMutex_Lock(&ranges.mutex);
+    PyMutex_LockFlags(&ranges.mutex, _Py_LOCK_DONT_DETACH);
     for (int i = 0; i < ranges.n; i++) {
         if (ranges.r[i].start <= pc && pc < ranges.r[i].end) {
             cls = ranges.r[i].cls;

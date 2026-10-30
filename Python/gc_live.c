@@ -569,20 +569,47 @@ typedef struct {
     int oom;
 } objstack;
 
-static void
+/* Fail one scratch-stack growth, independently of queue/order/debug storage. */
+static int fail_work_alloc_countdown;
+
+int
+_PyGC_LiveFailWorkAlloc(int n)
+{
+    int left = fail_work_alloc_countdown;
+    fail_work_alloc_countdown = n;
+    return left;
+}
+
+static int
 objstack_push(objstack *s, PyObject *op)
 {
+    if (s->oom) {
+        return -1;
+    }
     if (s->n == s->cap) {
-        size_t cap = s->cap ? s->cap * 2 : 1024;
+        size_t limit = (size_t)PY_SSIZE_T_MAX / sizeof(PyObject *);
+        if (s->cap == limit) {
+            s->oom = 1;
+            return -1;
+        }
+        size_t cap = s->cap ? (s->cap > limit / 2 ? limit : s->cap * 2)
+                            : 1024;
+        if (fail_work_alloc_countdown > 0
+            && --fail_work_alloc_countdown == 0)
+        {
+            s->oom = 1;
+            return -1;
+        }
         PyObject **items = realloc(s->items, cap * sizeof(PyObject *));
         if (items == NULL) {
             s->oom = 1;
-            return;
+            return -1;
         }
         s->items = items;
         s->cap = cap;
     }
     s->items[s->n++] = op;
+    return 0;
 }
 
 static inline int
@@ -594,23 +621,36 @@ is_dead(PyObject *op)
 static int
 resurrect_visit(PyObject *op, void *arg)
 {
+    objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op)) {
+        if (objstack_push(s, op) < 0) {
+            return -1;
+        }
         op->ob_flags &= ~_Py_GC_DEAD_FLAG;
-        objstack_push((objstack *)arg, op);
     }
     return 0;
 }
 
 /* Keep op, which is dead, and every dead object it reaches. */
-static void
+static int
 resurrect(objstack *s, PyObject *op)
 {
-    (void)resurrect_visit(op, s);
+    if (resurrect_visit(op, s) < 0) {
+        return -1;
+    }
     while (s->n > 0) {
         PyObject *o = s->items[--s->n];
-        (void)resurrect_visit((PyObject *)Py_TYPE(o), s);
-        (void)_PyGC_TraceTraverse(o, resurrect_visit, s);
+        if (resurrect_visit((PyObject *)Py_TYPE(o), s) < 0
+            || _PyGC_TraceTraverse(o, resurrect_visit, s) != 0)
+        {
+            s->oom = 1;
+            return -1;
+        }
     }
+    return 0;
 }
 
 
@@ -698,21 +738,30 @@ static int
 cycle_visit(PyObject *op, void *arg)
 {
     objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
+        // Every temporary mark must have a successful cleanup-journal entry.
+        if (objstack_push(s, op) < 0) {
+            return -1;
+        }
         op->ob_flags |= _Py_GC_MARKED_FLAG;
-        objstack_push(s, op);
     }
     return 0;
 }
 
 /* Does op reach itself through dead objects?  Only for the rare objects with
    a legacy tp_del.  The mark flag, clear on every dead object, records the
-   objects visited; it is cleared again before returning. */
+   objects visited; it is cleared again before returning.  Return -1 on an
+   incomplete traversal, otherwise whether a cycle was found. */
 static int
 in_dead_cycle(PyObject *op, objstack *seen)
 {
     seen->n = 0;
-    (void)_PyGC_TraceTraverse(op, cycle_visit, seen);
+    if (_PyGC_TraceTraverse(op, cycle_visit, seen) != 0) {
+        seen->oom = 1;
+    }
     int found = 0;
     for (size_t i = 0; i < seen->n && !found && !seen->oom; i++) {
         PyObject *o = seen->items[i];
@@ -720,19 +769,25 @@ in_dead_cycle(PyObject *op, objstack *seen)
             found = 1;
             break;
         }
-        (void)_PyGC_TraceTraverse(o, cycle_visit, seen);
+        if (_PyGC_TraceTraverse(o, cycle_visit, seen) != 0) {
+            seen->oom = 1;
+        }
     }
     for (size_t i = 0; i < seen->n; i++) {
         seen->items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
     }
-    return found || seen->oom;
+    return seen->oom ? -1 : found;
 }
 
 static int
 order_visit(PyObject *op, void *arg)
 {
+    objstack *s = arg;
+    if (s->oom) {
+        return -1;
+    }
     if (op != NULL && is_dead(op) && !(op->ob_flags & _Py_GC_MARKED_FLAG)) {
-        objstack_push((objstack *)arg, op);
+        return objstack_push(s, op);
     }
     return 0;
 }
@@ -757,6 +812,7 @@ finalizer_eligible(PyObject *op)
 static int
 finalizer_order(_PyGCMarkResult *res, objstack *order)
 {
+    int status = -1;
     objstack stack = {0};
     objstack visited = {0};
     for (Py_ssize_t i = 0;
@@ -771,39 +827,47 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
         {
             continue;
         }
-        objstack_push(&stack, root);
-        while (stack.n > 0 && !stack.oom) {
+        if (objstack_push(&stack, root) < 0) {
+            goto done;
+        }
+        while (stack.n > 0) {
             // An entry with bit 0 set is an object whose children are done.
             uintptr_t top = (uintptr_t)stack.items[--stack.n];
             PyObject *op = (PyObject *)(top & ~(uintptr_t)1);
             if (top & 1) {
-                if (finalizer_eligible(op)) {
-                    objstack_push(order, op);
+                if (finalizer_eligible(op) && objstack_push(order, op) < 0) {
+                    goto done;
                 }
                 continue;
             }
             if (op->ob_flags & _Py_GC_MARKED_FLAG) {
                 continue;
             }
+            if (objstack_push(&visited, op) < 0) {
+                goto done;
+            }
             op->ob_flags |= _Py_GC_MARKED_FLAG;
-            objstack_push(&visited, op);
-            objstack_push(&stack, (PyObject *)((uintptr_t)op | 1));
-            (void)_PyGC_TraceTraverse(op, order_visit, &stack);
+            if (objstack_push(&stack, (PyObject *)((uintptr_t)op | 1)) < 0
+                || _PyGC_TraceTraverse(op, order_visit, &stack) != 0)
+            {
+                goto done;
+            }
         }
     }
+    status = 0;
+done:
     for (size_t i = 0; i < visited.n; i++) {
         visited.items[i]->ob_flags &= ~_Py_GC_MARKED_FLAG;
     }
-    int oom = stack.oom || visited.oom || order->oom;
     free(stack.items);
     free(visited.items);
     // Reverse the postorder
-    for (size_t i = 0, j = order->n; !oom && i + 1 < j; i++, j--) {
+    for (size_t i = 0, j = order->n; status == 0 && i + 1 < j; i++, j--) {
         PyObject *tmp = order->items[i];
         order->items[i] = order->items[j - 1];
         order->items[j - 1] = tmp;
     }
-    return oom ? -1 : 0;
+    return status;
 }
 
 /* The delivery marker, _Py_GC_DEL_CALLED_FLAG, is set when the call runs
@@ -839,30 +903,28 @@ handle_finalizers(GCState *gc, call_batch *b,
         if (op->ob_flags & _Py_GC_DEL_CALLED_FLAG) {
             continue;
         }
-        if (_PyObject_IS_GC(op) && in_dead_cycle(op, &s)) {
-            objstack_push(garbage, op);
+        int cycle = _PyObject_IS_GC(op) ? in_dead_cycle(op, &s) : 0;
+        if (cycle < 0
+            || objstack_push(cycle ? garbage : &legacy, op) < 0)
+        {
+            goto error;
         }
-        else {
-            objstack_push(&legacy, op);
-        }
-    }
-    if (garbage->oom || legacy.oom) {
-        goto error;
     }
     s.n = 0;
     for (size_t i = 0; i < garbage->n; i++) {
-        resurrect(&s, garbage->items[i]);
+        if (resurrect(&s, garbage->items[i]) < 0) {
+            goto error;
+        }
     }
     // A tp_del that a cycle in gc.garbage reaches does not run either: its
     // object goes to gc.garbage too.
     for (size_t i = 0; i < legacy.n; i++) {
         PyObject *op = legacy.items[i];
-        if (!(op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
-            objstack_push(garbage, op);
+        if (!(op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)
+            && objstack_push(garbage, op) < 0)
+        {
+            goto error;
         }
-    }
-    if (garbage->oom) {
-        goto error;
     }
     live_call *last = b->tail;
     // Queue every finalizer first: a resurrected object needs its own.
@@ -886,11 +948,10 @@ handle_finalizers(GCState *gc, call_batch *b,
         if (!(op->ob_flags & _Py_GC_DEAD_FLAG)) {
             continue;  // reached from a legacy cycle
         }
-        if (res->dead[i].kinds & _PyGC_DEAD_GC) {
-            objstack_push(garbage, op);
-            if (garbage->oom) {
-                goto error;
-            }
+        if ((res->dead[i].kinds & _PyGC_DEAD_GC)
+            && objstack_push(garbage, op) < 0)
+        {
+            goto error;
         }
     }
     // tp_del after tp_finalize, as subtype_dealloc() calls them
@@ -902,10 +963,14 @@ handle_finalizers(GCState *gc, call_batch *b,
         }
     }
     for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
-        resurrect(&s, c->op);
+        if (resurrect(&s, c->op) < 0) {
+            goto error;
+        }
     }
     for (size_t i = 0; i < garbage->n; i++) {
-        resurrect(&s, garbage->items[i]);
+        if (resurrect(&s, garbage->items[i]) < 0) {
+            goto error;
+        }
     }
     if (saveall) {
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
@@ -914,7 +979,7 @@ handle_finalizers(GCState *gc, call_batch *b,
     }
     free(s.items);
     free(legacy.items);
-    return s.oom ? -1 : 0;
+    return 0;
 
 error:
     free(s.items);
@@ -952,10 +1017,13 @@ queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
     // Queue every one first: resurrecting one can reach another.
     objstack s = {0};
     for (live_call *c = batch_after(b, last); c != NULL; c = c->next) {
-        resurrect(&s, c->op);
+        if (resurrect(&s, c->op) < 0) {
+            free(s.items);
+            return -1;
+        }
     }
     free(s.items);
-    return s.oom ? -1 : 0;
+    return 0;
 }
 
 static void
@@ -963,6 +1031,7 @@ undo_dead(_PyGCMarkResult *res)
 {
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         res->dead[i].op->ob_flags &= ~_Py_GC_DEAD_FLAG;
+        res->live_bytes += res->dead[i].block_size;
     }
 }
 
@@ -1013,6 +1082,32 @@ typedef struct {
     int oom;
 } first_edges;
 
+/* Separate from the node-only failure hook: fail sweep-order allocations
+   without changing the queue's partial-delivery contract. */
+static int fail_order_alloc_countdown = 0;
+
+int
+_PyGC_LiveFailOrderAlloc(int n)
+{
+    int left = fail_order_alloc_countdown;
+    fail_order_alloc_countdown = n;
+    return left;
+}
+
+static void *
+order_alloc(void *items, size_t count, size_t item_size)
+{
+    if (count > (size_t)PY_SSIZE_T_MAX / item_size) {
+        return NULL;
+    }
+    if (fail_order_alloc_countdown > 0
+        && --fail_order_alloc_countdown == 0)
+    {
+        return NULL;
+    }
+    return realloc(items, count * item_size);
+}
+
 static int
 first_key_cmp(const void *a, const void *b)
 {
@@ -1029,8 +1124,13 @@ first_edge_visit(PyObject *op, void *arg)
         return 0;
     }
     if (g->nedges == g->cap) {
+        if (g->cap > PY_SSIZE_T_MAX / 2) {
+            g->oom = 1;
+            return 0;
+        }
         Py_ssize_t cap = g->cap ? 2 * g->cap : 64;
-        first_key *edges = realloc(g->edges, cap * sizeof(first_key));
+        first_key *edges = order_alloc(g->edges, (size_t)cap,
+                                      sizeof(first_key));
         if (edges == NULL) {
             g->oom = 1;
             return 0;
@@ -1049,19 +1149,23 @@ order_by_edges(_PyGCMarkResult *res, Py_ssize_t *node, Py_ssize_t n,
                first_key *edges, Py_ssize_t nedges)
 {
     int status = -1;
-    first_key *keys = malloc((n + 1) * sizeof(first_key));
-    Py_ssize_t *start = calloc(n + 1, sizeof(Py_ssize_t));
-    Py_ssize_t *cursor = malloc((n + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *target = malloc((nedges + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *succ = malloc((nedges + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *stack = malloc((n + 1) * sizeof(Py_ssize_t));
-    Py_ssize_t *order = malloc((n + 1) * sizeof(Py_ssize_t));
-    char *seen = calloc(n + 1, 1);
+    size_t nodes = (size_t)n + 1;
+    size_t refs = (size_t)nedges + 1;
+    first_key *keys = order_alloc(NULL, nodes, sizeof(first_key));
+    Py_ssize_t *start = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *cursor = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *target = order_alloc(NULL, refs, sizeof(Py_ssize_t));
+    Py_ssize_t *succ = order_alloc(NULL, refs, sizeof(Py_ssize_t));
+    Py_ssize_t *stack = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    Py_ssize_t *order = order_alloc(NULL, nodes, sizeof(Py_ssize_t));
+    char *seen = order_alloc(NULL, nodes, 1);
     if (keys == NULL || start == NULL || cursor == NULL || target == NULL
         || succ == NULL || stack == NULL || order == NULL || seen == NULL)
     {
         goto done;
     }
+    memset(start, 0, nodes * sizeof(Py_ssize_t));
+    memset(seen, 0, nodes);
     for (Py_ssize_t u = 0; u < n; u++) {
         keys[u] = (first_key){res->dead[node[u]].op, u};
     }
@@ -1132,12 +1236,16 @@ done:
     return status;
 }
 
-/* The indices into res->dead of the dead objects swept first, in sweep
-   order, and their number in *pn.  NULL if memory runs out, after which
-   they are swept in heap order. */
-static Py_ssize_t *
-order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
+/* Prepare the remaining dead objects' first-pass order after batching and
+   debug output, before the sweep starts any deallocation. */
+static int
+order_dead_first(_PyGCMarkResult *res, Py_ssize_t **pnode, Py_ssize_t *pn)
 {
+    *pnode = NULL;
+    *pn = 0;
+    if (!(res->kinds & _PyGC_DEAD_FIRST)) {
+        return 0;
+    }
     Py_ssize_t n = 0;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         int kinds = res->dead[i].kinds;
@@ -1147,9 +1255,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
             n++;
         }
     }
-    Py_ssize_t *node = malloc((n + 1) * sizeof(Py_ssize_t));
+    if (n == 0) {
+        return 0;
+    }
+    Py_ssize_t *node = order_alloc(NULL, (size_t)n, sizeof(Py_ssize_t));
     if (node == NULL) {
-        return NULL;
+        return -1;
     }
     n = 0;
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
@@ -1162,8 +1273,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
     }
     first_edges g = {0};
     for (g.from = 0; g.from < n; g.from++) {
-        (void)_PyGC_TraceTraverse(res->dead[node[g.from]].op,
-                                  first_edge_visit, &g);
+        if (_PyGC_TraceTraverse(res->dead[node[g.from]].op,
+                               first_edge_visit, &g) != 0 || g.oom)
+        {
+            g.oom = 1;
+            break;
+        }
     }
     if (g.oom
         || (g.nedges > 0 && order_by_edges(res, node, n, g.edges, g.nedges) < 0))
@@ -1172,8 +1287,12 @@ order_dead_first(_PyGCMarkResult *res, Py_ssize_t *pn)
         node = NULL;
     }
     free(g.edges);
+    if (node == NULL) {
+        return -1;
+    }
+    *pnode = node;
     *pn = n;
-    return node;
+    return 0;
 }
 
 /* Inlined: the sweep calls it for every dead object, and the call alone
@@ -1221,7 +1340,7 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
    that a dealloc can read its type. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
-      Py_ssize_t *bytes_freed)
+      const Py_ssize_t *first, Py_ssize_t nfirst, Py_ssize_t *bytes_freed)
 {
     Py_ssize_t ncollected = 0;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
@@ -1233,15 +1352,10 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
             continue;
         }
         if (phase == 0) {
-            Py_ssize_t nfirst;
-            Py_ssize_t *first = order_dead_first(res, &nfirst);
-            if (first != NULL) {
-                for (Py_ssize_t j = 0; j < nfirst; j++) {
-                    sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
-                }
-                free(first);
-                continue;
+            for (Py_ssize_t j = 0; j < nfirst; j++) {
+                sweep_one(tstate, gc, &res->dead[first[j]], &ncollected);
             }
+            continue;
         }
         for (Py_ssize_t i = 0; i < res->ndead; i++) {
             int kinds = res->dead[i].kinds;
@@ -1280,28 +1394,99 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     return ncollected;
 }
 
-/* sys.stderr, unless Python code cannot run here. */
+/* Bytes only: collect_pass owns this batch across the collection.  No
+   Python writer may run while collect still borrows dead/garbage arrays. */
+typedef struct {
+    char *data;
+    size_t used;
+    size_t capacity;
+    int to_stderr;
+} debug_output;
+
+/* Fail one buffer growth, independently of queue/order allocations. */
+static int fail_debug_alloc_countdown;
+
+int
+_PyGC_LiveFailDebugAlloc(int n)
+{
+    int left = fail_debug_alloc_countdown;
+    fail_debug_alloc_countdown = n;
+    return left;
+}
+
+Py_GC_PRECISE static void
+debug_flush(debug_output *out, int python_ok)
+{
+    for (size_t i = 0; i < out->used; ) {
+        const char *line = out->data + i;
+        size_t length = strlen(line) + 1;
+        if (python_ok) {
+            PySys_WriteStderr("%s", line);
+        }
+        else {
+            fputs(line, stderr);
+        }
+        i += length;
+    }
+    free(out->data);
+    out->data = NULL;
+    out->used = out->capacity = 0;
+}
+
 static void
-debug_write(struct _gc_live_state *ls, const char *format, ...)
+debug_write(debug_output *out, const char *format, ...)
 {
     char buf[1000];
     va_list va;
     va_start(va, format);
     PyOS_vsnprintf(buf, sizeof(buf), format, va);
     va_end(va);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (ls->no_python || tstate == NULL || !live_python_ok(tstate)) {
+    if (out->to_stderr) {
         fputs(buf, stderr);
+        return;
     }
-    else {
-        PySys_WriteStderr("%s", buf);
+    size_t length = strlen(buf) + 1;
+    if (out->used > (size_t)PY_SSIZE_T_MAX - length) {
+        goto fallback;
     }
+    size_t needed = out->used + length;
+    if (needed > out->capacity) {
+        size_t capacity = out->capacity ? out->capacity : 1024;
+        while (capacity < needed) {
+            if (capacity > (size_t)PY_SSIZE_T_MAX / 2) {
+                capacity = needed;
+                break;
+            }
+            capacity *= 2;
+        }
+        if (fail_debug_alloc_countdown > 0
+            && --fail_debug_alloc_countdown == 0)
+        {
+            goto fallback;
+        }
+        char *data = realloc(out->data, capacity);
+        if (data == NULL) {
+            goto fallback;
+        }
+        out->data = data;
+        out->capacity = capacity;
+    }
+    memcpy(out->data + out->used, buf, length);
+    out->used = needed;
+    return;
+
+fallback:
+    /* Preserve the prefix and this record without a Python/OOM callback.
+       Native stdio may block, but never releases this domain's GIL. */
+    debug_flush(out, 0);
+    fputs(buf, stderr);
+    out->to_stderr = 1;
 }
 
 static void
-debug_cycle(struct _gc_live_state *ls, const char *msg, PyObject *op)
+debug_cycle(debug_output *out, const char *msg, PyObject *op)
 {
-    debug_write(ls, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
+    debug_write(out, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
 }
 
 /* Add a collection to the totals in the ring of generation 2's stats, which
@@ -1503,7 +1688,7 @@ static int stress_every = 0;
    a collection from the queue's code walks. */
 static Py_NO_INLINE Py_ssize_t
 collect(PyThreadState *tstate, struct _gc_live_state *ls,
-        _PyGC_Reason reason)
+        _PyGC_Reason reason, debug_output *out)
 {
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
@@ -1524,6 +1709,8 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     (void)PyTime_PerfCounterRaw(&t0);
     _PyGCMarkResult res;
     objstack garbage = {0};
+    _PyGCRoot garbage_root;
+    int garbage_rooted = 0;
     Py_ssize_t ncollected = 0, bytes_freed = 0;
     if (_PyGC_TraceLiveMark(tstate, &res) < 0) {
         unpin_domain(&res);
@@ -1531,6 +1718,8 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     add_root_stats(ls, &res.roots);
     call_batch batch = {NULL, NULL};
+    Py_ssize_t *first = NULL;
+    Py_ssize_t nfirst = 0;
     int failed = clear_callback_weakrefs(&batch, &res) < 0
                  || handle_finalizers(gc, &batch, &res, &garbage) < 0
                  || queue_destroy_hooks(&batch, &res) < 0;
@@ -1538,12 +1727,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     barrier_after_mark(tstate, &res);
     route_calls(tstate, &res, &batch);
     unpin_domain(&res);
-    if (failed) {
-        // Out of memory: keep everything.  What was queued runs.
-        undo_dead(&res);
-        garbage.n = 0;
-    }
-    else {
+    if (!failed) {
         for (Py_ssize_t i = 0;
              (res.kinds & _PyGC_DEAD_WEAKREFS) && i < res.ndead; i++)
         {
@@ -1557,17 +1741,25 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
             }
         }
         if (gc->debug & _PyGC_DEBUG_COLLECTABLE) {
-            // Only the names and addresses: Python code that the write runs
-            // cannot reach the dead objects, whose weak references are clear.
+            // Copy text now; the eventual writer must not borrow objects.
             for (Py_ssize_t i = 0; i < res.ndead; i++) {
                 PyObject *op = res.dead[i].op;
                 if ((op->ob_flags & _Py_GC_DEAD_FLAG) && _PyObject_IS_GC(op)) {
-                    debug_cycle(ls, "collectable", op);
+                    debug_cycle(out, "collectable", op);
                 }
             }
         }
-        ncollected = sweep(tstate, gc, &res, &bytes_freed);
+        failed = order_dead_first(&res, &first, &nfirst) < 0;
+        if (!failed) {
+            ncollected = sweep(tstate, gc, &res, first, nfirst, &bytes_freed);
+        }
     }
+    if (failed) {
+        // Out of memory: keep everything.  What was queued runs.
+        undo_dead(&res);
+        garbage.n = 0;
+    }
+    free(first);
     (void)PyTime_PerfCounterRaw(&t1);
 
     ls->bytes_freed += bytes_freed;
@@ -1582,7 +1774,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     cur.ts_stop = t1;
     cur.heap_size = res.nobjects;
     record_stats(gc, &cur);
-    gc->heap_size = res.nobjects - res.ndead;
+    gc->heap_size = failed ? res.nobjects : res.nobjects - res.ndead;
     gc->long_lived_total = gc->heap_size;
 
     gc->alloc_bytes = 0;
@@ -1593,8 +1785,13 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     free(res.dead);
 
+    if (garbage.n != 0) {
+        assert(garbage.n <= (size_t)res.ndead);
+        _PyGC_AddRoot(&garbage_root, garbage.items, (Py_ssize_t)garbage.n);
+        garbage_rooted = 1;
+    }
     if (gc->debug & _PyGC_DEBUG_STATS) {
-        debug_write(ls, "gc: %zd objects, %zd collected, %zd bytes freed, "
+        debug_write(out, "gc: %zd objects, %zd collected, %zd bytes freed, "
                     "%zd live bytes, %.4fs elapsed\n",
                     res.nobjects, ncollected, bytes_freed,
                     res.live_bytes, cur.duration);
@@ -1605,7 +1802,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
     for (size_t i = 0; i < garbage.n; i++) {
         if (gc->debug & _PyGC_DEBUG_UNCOLLECTABLE) {
-            debug_cycle(ls, "uncollectable", garbage.items[i]);
+            debug_cycle(out, "uncollectable", garbage.items[i]);
         }
     }
     for (size_t i = 0; gc->garbage != NULL && i < garbage.n; i++) {
@@ -1616,6 +1813,9 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     }
 done:
     assert(res.ndomain == 0);  // unpinned on every path
+    if (garbage_rooted) {
+        _PyGC_RemoveRoot(&garbage_root);
+    }
     free(garbage.items);
     invoke_gc_callback(tstate, "stop", &cur);
     gc->frame = NULL;
@@ -1640,10 +1840,13 @@ collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
     if (heap != NULL) {
         m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
     }
-    Py_ssize_t n = collect(tstate, ls, reason);
+    debug_output out = {.to_stderr = ls->no_python || !live_python_ok(tstate)};
+    Py_ssize_t n = collect(tstate, ls, reason, &out);
     // A collection that the queue's code triggers records its own entry.
     ts->gc_trace.entry.sp = 0;
-    *nfinalized = ls->no_python ? 0 : run_queue(tstate);
+    int python_ok = !ls->no_python && live_python_ok(tstate);
+    debug_flush(&out, python_ok);
+    *nfinalized = python_ok ? run_queue(tstate) : 0;
     if (heap != NULL) {
         m->current_object_heap = heap;
     }

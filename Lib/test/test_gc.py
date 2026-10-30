@@ -49,6 +49,19 @@ def _gc_mode_checked(code, mode):
             "_testinternalcapi.gc_verify_mode()\n" + code)
 
 
+def _assert_debug_output(code):
+    mode, extras = _testinternalcapi.gc_verify_mode()
+    verify = ("", "retain", "kill")[mode]
+    if extras:
+        verify += ":" + ",".join(
+            name for bit, name in ((1, "pymem"), (2, "structs"))
+            if extras & bit)
+    prelude = ("import _testinternalcapi\n"
+               f"assert _testinternalcapi.gc_verify_mode() == {(mode, extras)!r}\n"
+               "assert _testinternalcapi.gc_get_stress() == 0\n")
+    return assert_python_ok("-c", prelude + code,
+                            PYTHON_GCVERIFY=verify, PYTHON_GCSTRESS="")
+
 ### Support code
 ###############################################################################
 
@@ -1532,6 +1545,294 @@ class TracingCollectorTests(unittest.TestCase):
         for ref in refs:
             self.assertIsNone(ref())
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_work_oom_recovers_next_collection(self):
+        # The root stack, cleanup journal and output each grow once.  In
+        # particular, failure of the journal must leave no unrecorded MARKED.
+        for stage in (1, 2, 3):
+            with self.subTest(stage=stage):
+                _queue_child(f"stage = {stage}\n" + textwrap.dedent("""
+                    gc.disable()
+                    calls = []
+                    class Finalized:
+                        __slots__ = ()
+                        def __del__(self):
+                            calls.append('finalized')
+                    def make():
+                        Finalized()
+                    gc.collect()
+                    make()
+                    _testinternalcapi.gc_fail_work_alloc(stage)
+                    assert gc.collect() == 0, 'work OOM swept objects'
+                    assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'work OOM did not fire'
+                    assert calls == [], 'work OOM delivered a finalizer'
+                    gc.collect()
+                    assert calls == ['finalized'], 'finalizer missing after work OOM recovery'
+                    gc.collect()
+                    assert calls == ['finalized'], 'work OOM duplicated a finalizer'
+                """), PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None or _testcapi is None,
+                     "requires _testinternalcapi and _testcapi")
+    def test_legacy_cycle_work_oom_recovers_next_collection(self):
+        _queue_child("""
+            from _testcapi import with_tp_del
+            gc.disable()
+            calls = []
+            @with_tp_del
+            class Legacy:
+                __slots__ = ('link',)
+                def __tp_del__(self):
+                    calls.append('legacy')
+            def make():
+                obj = Legacy()
+                obj.link = obj
+            gc.collect()
+            make()
+            _testinternalcapi.gc_fail_work_alloc(1)
+            assert gc.collect() == 0, 'cycle work OOM swept objects'
+            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'cycle work OOM did not fire'
+            assert not any(type(obj) is Legacy for obj in gc.garbage), 'incomplete cycle published garbage'
+            assert calls == [], 'incomplete cycle delivered tp_del'
+            gc.collect()
+            held = [obj for obj in gc.garbage if type(obj) is Legacy]
+            assert len(held) == 1, 'legacy cycle missing after work OOM recovery'
+            assert held[0].link is held[0]
+            assert calls == [], 'cycle recovery delivered tp_del'
+            held[0].link = None
+            gc.garbage.remove(held[0])
+            held.clear()
+            gc.collect()
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_journal_growth_oom_recovers_next_collection(self):
+        _queue_child("""
+            gc.disable()
+            calls = []
+            count = 1050
+            class Finalized:
+                __slots__ = ()
+                def __del__(self):
+                    calls.append('finalized')
+            def make():
+                for _ in range(count):
+                    Finalized()
+            gc.collect()
+            make()
+            # Independent roots reuse the DFS stack.  After its allocation,
+            # the first journal and output allocations, growth four extends
+            # the journal that already holds 1024 marked objects.
+            _testinternalcapi.gc_fail_work_alloc(4)
+            assert gc.collect() == 0, 'journal growth OOM swept objects'
+            assert _testinternalcapi.gc_fail_work_alloc(0) == 0, 'journal growth OOM did not fire'
+            assert calls == [], 'journal growth OOM delivered a finalizer'
+            gc.collect()
+            assert len(calls) == count, 'finalizers missing after journal growth OOM recovery'
+            gc.collect()
+            assert len(calls) == count, 'journal growth OOM duplicated finalizers'
+        """, PYTHON_GCSTRESS="")
+
+    DEBUG_OUTPUT_SETUP = """
+import gc, sys, weakref, _testinternalcapi
+gc.disable()
+gc.set_debug(0)
+gc.collect()
+stops = 0
+def callback(phase, info):
+    global stops
+    if phase == 'stop':
+        stops += 1
+gc.callbacks.append(callback)
+def make_garbage(n):
+    for _ in range(n):
+        value = []
+        value.append(value)
+"""
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_after_snapshot(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            phases = []
+            lines = []
+            class Writer:
+                def write(self, text):
+                    phases.append(stops)
+                    lines.append(text)
+            make_garbage(100)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            # PySys_WriteStderr swallows writer exceptions: assert outside it.
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+            assert any('collectable' in line for line in lines), lines
+            assert any('bytes freed' in line for line in lines), lines
+        """)
+        _assert_debug_output(code)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_after_garbage_publication(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            class Item:
+                pass
+            def make():
+                item = Item()
+                item.loop = item
+                return weakref.ref(item)
+            ref = make()
+            published = []
+            lines = []
+            class Writer:
+                def write(self, text):
+                    lines.append(text)
+                    published.append(ref() is not None and
+                                     any(item is ref() for item in gc.garbage))
+            gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_SAVEALL | gc.DEBUG_UNCOLLECTABLE)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert published and all(published), 'debug writer before garbage publication'
+            assert any('bytes freed' in line for line in lines), lines
+            assert any('uncollectable' in line for line in lines), lines
+            gc.garbage.clear()
+            gc.collect()
+        """)
+        _assert_debug_output(code)
+
+    @threading_helper.requires_working_threading()
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_writer_yields_and_collects(self):
+        code = "import threading\n" + self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            request = threading.Event()
+            done = threading.Event()
+            errors = []
+            def worker():
+                if not request.wait(10):
+                    errors.append('writer never entered')
+                else:
+                    try:
+                        gc.collect()
+                    except BaseException as exc:
+                        errors.append(repr(exc))
+                done.set()
+            thread = threading.Thread(target=worker)
+            thread.start()
+            phases = []
+            class Writer:
+                entered = False
+                def write(self, text):
+                    if self.entered:
+                        return
+                    self.entered = True
+                    phases.append(stops)
+                    gc.set_debug(0)
+                    request.set()
+                    if not done.wait(10):
+                        errors.append('writer could not yield to collecting thread')
+                    gc.collect()
+            make_garbage(100)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+                request.set()
+                thread.join(15)
+            assert not thread.is_alive(), 'collecting thread stuck'
+            assert not errors, errors
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+        """)
+        _assert_debug_output(code)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_buffer_oom(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            calls = []
+            class Writer:
+                def write(self, text):
+                    calls.append(text)
+            make_garbage(200)
+            # Growth two has a real retained prefix; no queue/order hook is armed.
+            _testinternalcapi.gc_fail_debug_alloc(2)
+            gc.set_debug(gc.DEBUG_COLLECTABLE | gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                gc.collect()
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert _testinternalcapi.gc_fail_debug_alloc(0) == 0, 'buffer OOM did not fire'
+            assert not calls, 'buffer OOM called Python writer'
+        """)
+        _, _, err = _assert_debug_output(code)
+        lines = err.splitlines()
+        objects = [line for line in lines if b"gc: collectable" in line]
+        self.assertGreater(len(objects), 20)
+        self.assertEqual(len(objects), len(set(objects)))
+        stats = [i for i, line in enumerate(lines) if b"bytes freed" in line]
+        self.assertEqual(len(stats), 1)
+        self.assertTrue(all(i < stats[0] for i, line in enumerate(lines)
+                            if b"gc: collectable" in line))
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_writer_exception_preserves_exception(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            phases = []
+            class Writer:
+                def write(self, text):
+                    phases.append(stops)
+                    raise ValueError('writer failure')
+            gc.set_debug(gc.DEBUG_STATS)
+            sys.stderr = Writer()
+            try:
+                try:
+                    raise LookupError('interrupted exception')
+                except LookupError as exc:
+                    gc.collect()
+                    assert sys.exception() is exc
+            finally:
+                sys.stderr = sys.__stderr__
+                gc.set_debug(0)
+            assert phases and all(phases), 'debug writer before snapshot retirement'
+        """)
+        _, _, err = _assert_debug_output(code)
+        self.assertIn(b"bytes freed", err)
+        self.assertNotIn(b"writer failure", err)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_debug_output_inline_uses_c_stderr(self):
+        code = self.DEBUG_OUTPUT_SETUP + textwrap.dedent("""
+            calls = []
+            class Writer:
+                def write(self, text):
+                    calls.append(text)
+            old_stress = _testinternalcapi.gc_get_stress()
+            gc.enable()
+            sys.stderr = Writer()
+            try:
+                gc.set_debug(gc.DEBUG_STATS)
+                _testinternalcapi.gc_set_stress(1)
+                for _ in range(8):
+                    value = [None]
+            finally:
+                gc.set_debug(0)
+                _testinternalcapi.gc_set_stress(old_stress)
+                sys.stderr = sys.__stderr__
+                gc.disable()
+            assert not calls, 'inline collection called Python writer'
+        """)
+        _, _, err = _assert_debug_output(code)
+        self.assertIn(b"bytes freed", err)
+
     def test_weakref_callback_runs_after_collection(self):
         class A:
             pass
@@ -1577,6 +1878,129 @@ class TracingCollectorTests(unittest.TestCase):
             chains.append(r)
         del chains, r
         gc.collect()
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_allocation_failure(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            class Sub(_testcapi.DeallocReader):
+                pass
+            def build():
+                previous = None
+                for _ in range(4):
+                    reader = Sub(_testcapi.StatefulReferent())
+                    reader.previous = previous
+                    previous = reader
+            gc.collect()
+            # No finalizers/callbacks/hooks: delivery must not cause an
+            # automatic second pass that hides the failed first pass.
+            # Index array, edge-array growth, and eight graph scratch arrays.
+            for allocation in range(1, 11):
+                build()
+                before = gc.get_stats()[2]
+                _testinternalcapi.gc_fail_order_alloc(allocation)
+                try:
+                    collected = gc.collect()
+                finally:
+                    order_left = _testinternalcapi.gc_fail_order_alloc(0)
+                assert order_left == 0, (allocation, order_left)
+                assert collected == 0, (
+                    'ordering OOM swept objects', allocation, collected)
+                after = gc.get_stats()[2]
+                assert after['bytes_freed'] == before['bytes_freed'], (
+                    'ordering OOM freed blocks', allocation)
+                assert after['live_bytes'] >= before['live_bytes']
+                assert gc.collect() >= 4
+                assert not any(type(obj) is Sub for obj in gc.get_objects())
+                assert gc.get_stats()[2]['bytes_freed'] > before['bytes_freed']
+            print('ordering failures preserved all ten chains')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(), 'ordering failures preserved all ten chains')
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_failure_delivers_queued_calls_once(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            calls = []
+            during_finalizer = []
+            class Sub(_testcapi.DeallocReader):
+                pass
+            def chain():
+                referent = _testcapi.StatefulReferent()
+                for _ in range(4):
+                    referent = Sub(referent)
+                return referent
+            class Finalized:
+                def __init__(self, reader):
+                    self.reader = reader
+                def __del__(self):
+                    during_finalizer.append(gc.get_stats()[2]['bytes_freed'])
+                    calls.append('finalizer')
+            def build():
+                # This chain stays dead when the finalizer's own chain
+                # is resurrected, so late ordering still needs storage.
+                chain()
+                finalizer = Finalized(chain())
+                return weakref.ref(finalizer,
+                                   lambda ref: calls.append('callback'))
+            gc.collect()
+            ref = build()
+            before = gc.get_stats()[2]['bytes_freed']
+            _testinternalcapi.gc_fail_order_alloc(1)
+            try:
+                gc.collect()
+            finally:
+                order_left = _testinternalcapi.gc_fail_order_alloc(0)
+            assert order_left == 0
+            assert calls == ['callback', 'finalizer'], calls
+            # The first pass freed nothing, even though its routed calls
+            # run afterward. A manual collection may then do a second pass.
+            assert during_finalizer == [before], during_finalizer
+            gc.collect()
+            assert calls == ['callback', 'finalizer'], calls
+            assert not any(type(obj) is Sub for obj in gc.get_objects())
+            assert gc.get_stats()[2]['bytes_freed'] > before
+            assert ref() is None
+            print('partial batch delivered exactly once and reclaimed in order')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(),
+                         'partial batch delivered exactly once and reclaimed in order')
+
+    @unittest.skipIf(_testcapi is None, "requires _testcapi")
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_sweep_order_after_finalizer_resurrection(self):
+        out = _queue_child("""
+            import _testcapi
+            gc.disable()
+            saved = []
+            class Sub(_testcapi.DeallocReader):
+                pass
+            class Finalized:
+                def __del__(self):
+                    saved.append(self)
+            def build():
+                first = Sub(_testcapi.StatefulReferent())
+                second = Sub(_testcapi.StatefulReferent())
+                first.other = second
+                second.other = first
+                finalizer = Finalized()
+                finalizer.reader = second
+                return weakref.ref(first), weakref.ref(second)
+            refs = build()
+            gc.collect()
+            assert len(saved) == 1
+            assert all(ref() is not None for ref in refs)
+            saved.clear()
+            gc.collect()
+            assert all(ref() is None for ref in refs)
+            print('resurrected flagged cycle survives until its owner is dropped')
+        """, PYTHON_GCSTRESS="")
+        self.assertEqual(out.strip(),
+                         'resurrected flagged cycle survives until its owner is dropped')
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_dealloc_reads_referents_in_a_cycle(self):
@@ -3111,7 +3535,9 @@ class TracingCollectorTests(unittest.TestCase):
         assert_python_ok("-c", "pass", PYTHON_GCVERIFY="retain:structs,pymem")
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    @support.disable_gc()
     def test_root_stats(self):
+        # Isolate snapshots from allocation-driven collections.
         # The root phase's counters: one schema for the total and the last
         # collection, which a collection moves.
         before = _testinternalcapi.gc_root_stats()

@@ -96,8 +96,12 @@ separate support decisions; process exit does not excuse ordinary leaks.
    boil-buffer-xid-main-only, new branch boil/gc-final-validation at3c6, owns
    a fresh O1 out-of-source build. Build/cleanup pass98s; new13 passes13/0
    and whole9 passes1863/120skips, zero fallback, completion95d56f4c checked.
-   Next: four reviewed causal omissions in one negative build, then release,
-   debug and ASan profiles plus closure. Reuse existing recipes/modes/locks;
+   Four causal omissions now reach their named assertions in one copied
+   build, indexe859/all54 refs checked. Test-onlyf945 replaces scanner
+   traversal/count checks with liveness/data/resource checks; fresh wholeRe
+   passes172/3skips on native3c6, carrying13/eight other modules explicitly.
+   O3 build/cleanup passes; next are eight release/debug/ASan profiles and
+   closure, then independent landing review and smoke. Reuse existing recipes/modes/locks;
    stop unexpected failures, diagnose and keep original results. Independent
    source/evidence review precedes primary merge and post-merge smoke. Process
    exit does not excuse supported-run lifetime leaks.

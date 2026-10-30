@@ -4819,3 +4819,29 @@ relative destinations. LandedH3 and isolatedH1/H2 stay distinct; historical
 0.828243 timing is not a current score. No performance implementation or new
 timing is authorized before GC landing. Behavioral testing policy is recorded
 in PROCESS/closure plan; critical ownership/rollback units remain appropriate.
+
+
+### 11:35 PDT: behavior-based scanner checks and four causal controls complete
+
+Test-onlyf9457ef8494 changes onlyLib/test_re.py: removes reflective traversal
+and exact acquisition/release counts, retains match/string data underGC and
+allocation pressure, checks exporter live/dead and backing resize. Review
+caught an initial expected-string alias that would retain the tested string;
+corrected4c72 preserves independent expected construction. Source remains
+frozen during native work. Fresh wholeRe passes172/3skips on native3c6,
+107collections/0fallback/0unpinned; completion4bd06285/all19 refs checked.
+Carry thirteen focused cases and eight original whole modules explicitly.
+
+Fresh O3 configure/make and cleanup pass114.75s; capsuleaf7b/all10refs clears
+independent review. Negative35c92 is exactly four runtime omissions from3c6,
+with unchanged tests. Each produces its intended one-case assertion failure,
+no errors/skips/crash/timeout/retry and zero fallback/unpinned; ordinary
+nativeFAIL2/host1 results stay failed. Root and independent reviewer verify
+e859dd0f/all54 refs and named causal observations. Broader ASan/debug/release
+and closure recipe is granted after final actualsource/receipt binding.
+Candidatef945 is pushed; primary stillsafetyff6. Merge-tree check is clean
+without touching the index/worktree or preserved unrelated drafts.
+
+Planning docs and the seven-opportunity interpreter source report are current;
+Loom handover is synchronized. Next hourly update about12:30 PDT, with
+material failures or completed gates reported sooner. No interpreter timing.

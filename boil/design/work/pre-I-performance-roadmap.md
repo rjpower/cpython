@@ -24,15 +24,15 @@ bridges, common frame/call costs and dispatch by source evidence and expected
 breadth; identify what fresh measurements would confirm each proposal.
 Recommendations remain provisional until matched timing after GC landing.
 
-Current GC checkpoint,2026-10-30 11:28 PDT: safetyff6 is landed. Final
+Current GC checkpoint,2026-10-30 11:35 PDT: safetyff6 is landed. Final
 main-only/drainer/buffer source3c6b8daa506 is complete, including ND and
 same-owner XID ports and the two safeguard removals. Component O1 evidence
 passes through explicit test-only corrected composites; final-union native
 qualification remains: fresh O1 new13/whole9 pass, but broader profiles and
 closure are pending. An unknown ambient in-source build blocked its first
 make before compilation. Preserve it and qualify in a clean existing source
-worktree with a fresh owned O1 build. Four causal controls,
-release/ASan/full/closure and primary landing precede fresh interpreter timing.
+worktree with a fresh owned O1 build. Four causal controls and the behavioral scanner successor now pass their
+bounded checks; release/ASan/full/closure and landing precede fresh timing.
 The [provisional source report](pre-I-interpreter-status-and-opportunities.md)
 now inventories the implementation and seven ranked shared opportunities.
 The [closure plan](gc-closure-plan.md) and [owner ledger](10a-buffer-safeguard-removal.md)

@@ -23,7 +23,7 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 11:28 PDT; actual source and retained outcomes) |
+| Step | What | State (2026-10-30 11:35 PDT; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -1005,7 +1005,7 @@ interpreter's init is finding B (step 7a), identified by the C stack and
 a probe naming the callback's interpreter, not by mechanism alone. An
 attribution without that evidence is not accepted.
 
-### Current coordinator ruling, 2026-10-30 11:28 PDT
+### Current coordinator ruling, 2026-10-30 11:35 PDT
 
 **User direction, 11:22 PDT: observable behavior first.** Integration tests
 should primarily check useful liveness and reclamation, readable live data,
@@ -1054,9 +1054,14 @@ mechanical reuse of the accepted build/target recipe and executable modes.
 Fresh build/cleanup now pass in98s. New13 (ND4, XID8, retention/OOM1)
 passes13/0skips, then affected9 passes1863/120skips, actual kill/N0 and zero
 fallback. Completion95d56f4c/all37 references are independently checked.
-Fresh O3 and the one negative build are active. Eight broader profiles and
-closure have a reviewed recipe; actual receipt/source binding remains.
-Source-review four disjoint causal omissions before one copied negative build:
+O3 build/cleanup now passes; copied negative4 reaches all four intended
+assertions with guards intact. Test-onlyf945 replaces scanner traversal/count
+checks with live/dead exporter, actual match data and reusable backing checks.
+Fresh whole test_re passes172/3skips on unchanged native3c6; carry13 and eight
+old whole modules explicitly, completion4bd06285/all19 refs checked. Negative
+indexe859dd0f/all54 refs checked. Broad eight-profile and closure execution
+is granted after independent final mechanical binding; stop unexpected failure.
+The four reviewed causal omissions use one copied negative build:
 drainer claim, SRE null-before-release, transactional Unpickler replacement,
 and ND closed-owner read guard. Each needs its named assertion, not a crash
 or timeout. Existing release/debug/ASan profiles and closure then qualify the

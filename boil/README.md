@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 11:28 PDT. Latest runtime merge is ff6ed9d6bfb,
+revised 2026-10-30 11:35 PDT. Latest runtime merge is ff6ed9d6bfb,
 integrating qualified GC safety candidate9e223040 over prior runtime
 d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
 post-merge smoke pass. Shared
@@ -72,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 11:28 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 11:35 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -116,7 +116,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering and remaining precision/platform obligations |
-| Three GC safety repairs and supported-runtime closure | Safety9e/native168 is qualified and landed as ff6. Final main-only/drainer/buffer union3c6b8daa506 includes all six owner families and removes export-count coercion and silent swept-exporter suppression. Independent source reviews clear bounded validation. Earlier925d focus17/whole9 passed; corrected consumer evidence is an explicit composite | Final union needs native qualification and landing. Clean existing worktree boil-buffer-xid-main-only, branch boil/gc-final-validation, now owns a fresh O1 build. Original candidate checkout has an unknown-origin in-source build: preserve it and the failed make-precondition record; no final-union targets ran there. New13/whole9, four causal controls, release/ASan/full/closure and integration smoke remain. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| Three GC safety repairs and supported-runtime closure | Safetyff6 is landed. Runtime3c6 plus behavioral test-only successorf945 completes the main-only/drainer/six-owner source and removes the two safeguards. Fresh O1 new13/whole9 pass; corrected wholeRe172/3skips passes on native3c6. O3 build passes; four copied causal omissions reach their intended assertions | Eight release/debug/ASan profiles, closure, independent landing review, primary merge and smoke remain. Bounded evidence is explicitly assembled at real source/native identities. The original unknown ambient build and make-precondition failure remain preserved. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
@@ -245,14 +245,15 @@ are the milestone; foreign adoption, generic cleanup APIs and a completion
 DAG stay deferred. Interpreter timing remains parked. Loom and GitHub use
 are authorized.
 
-**11:28 PDT update.** The actual final-union O1 build/cleanup passes in98
-seconds. New13 passes13/0skips; whole affected9 passes1,863 reported tests/
-120skips, with zero GC fallback. Source/native/mode and all37 completion
-references are independently checked. This is bounded feedback, not landing.
-O3 release and the isolated four-omission negative build are active; eight
-release/debug/ASan profiles plus closure have a reviewed execution recipe.
-Their final receipt/source binding follows the causal controls and review of
-one scanner integration test under the new behavioral-testing guidance.
+**11:35 PDT update.** Final test source isf9457ef8494, with unchanged C/native
+source3c6b8daa506. Fresh O1 new13 passes13/0skips and whole affected9 passes
+1,863/120skips, zero fallback. The behavioral scanner revision then passes
+fresh whole test_re172/3skips; thirteen focused cases and eight other whole
+modules carry explicitly. O3 build/cleanup passes in115seconds. All four
+copied causal omissions reach their intended assertions, with no crash,
+timeout, retry or fallback; ordinary failed native results stay failed.
+Eight broader profiles plus closure have a reviewed recipe and an execution
+grant after final mechanical source/receipt binding. No primary landing yet.
 
 The provisional [interpreter status and opportunities report](design/work/pre-I-interpreter-status-and-opportunities.md)
 now records the implemented architecture, isolated H1/H2 and seven ranked

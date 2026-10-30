@@ -23,14 +23,14 @@ tiers 0 and 1 and a moving collector, then ports the packages. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-29 17:26 PDT; local commits and retained records) |
+| Step | What | State (2026-10-29 17:50 PDT; local commits and retained records) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
 | 6a, 6b | `PyValue` in the core and the value C API | landed |
 | 6c | the object protocol (note 09): shape in the header, positional slots, dictionary mode as a shape, split tables deleted | landed, gated; pre-I hand-offs: FOR_ITER_RANGE spill to H1/H3 attribution, nbody +5.3% to refreshed attribution, linear str += to string/compiler design with uniqueness/escape proof |
 | 6d | the remaining object slots on values (note 12): rung 1 class versions, capacity rule, poly stores, lazy-dict loads; rung 2 attribute and descriptor slots; rung 3 `callfunc` and wrapperfunc; rung 4 getsets | complete: rungs 1 to 4 landed (c66c69d55cf, 7ad194aa883, de1533e8b1a; every landing review returned fix first and was fixed); both getset families converted, 465 entries on the value signature; the Clinic numeric getters left for 6e are listed per module in note 06 section 21; C-mode hand-off table of 25 getset functions to 10a item 5 (results/6d-rung4-cmode.txt) |
-| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b native ce2ac/test-source c679/docs837; local combined candidate f2a5 awaits fresh qualification. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k is terminal FAIL: interpreter assertion, GC timeout and HTTPENV_CHANGED; no retry/newfilter. Four diagnostics support trigger-dependent eligibility; test-only annotation validated normal/stress. Public primary/current HTTP errors and trashcan noncompletion establish inherited exposure. Scoped incremental exception accepted; final GC/perf debt stays. Bytes3a f5e818 source/results clear coordinator review; compose one merged ladder. Tail11/0, cext16/seven skips, unchanged regen/traverse and19 headers pass. Exact union source review clear; O3/Og compilations and early16 pass. Release coverage is assembled563+1 (original env-failed full retained); debug/kill/stress/ASan, extras and final review remain. Old1bfe120 stays historical, no automatic20 redo; O1 still candidate. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
+| 10a | precise roots (note 11): attributed DWARF walk, C checker, kill/retain verification and stack-hit evidence | Rungs0/1/1b landed; rung2b native ce2ac/test-source c679/docs837; local combined candidate f2a5 awaits fresh qualification. Park/raw-mutex repairs and all three builds clear review. Fresh affected24, release/debug/debug-kill fulls (51,132 each), both stress11 sets (3,062 each), ASan16 kill (3,976) and tail make/stale pass, zero fallback. Finalstress100k is terminal FAIL: interpreter assertion, GC timeout and HTTPENV_CHANGED; no retry/newfilter. Four diagnostics support trigger-dependent eligibility; test-only annotation validated normal/stress. Public primary/current HTTP errors and trashcan noncompletion establish inherited exposure. Scoped incremental exception accepted; final GC/perf debt stays. Bytes3a f5e818 source/results clear coordinator review; compose one merged ladder. Tail11/0, cext16/seven skips, unchanged regen/traverse and19 headers pass. Exact union source review clear; O3/Og compilations and early16 pass. Release coverage is assembled563+1 (original env-failed full retained); debug normal/kill fulls pass51,134 each with zero fallback; release stress11 fails its stack-hit type assertion. Debug stress/ASan/extras stop pending diagnosis and final review. Old1bfe120 stays historical, no automatic20 redo; next coherent candidate selects O1 debug subject to fresh qualification. Then3a writers/PyMem,3b checker/readers,3c detached/queued roots and rung4 support |
 | 7a | per-interpreter queues, owner-correct callbacks, lifecycle and completion ordering (note 13) | rung1 candidate6f416bc4582 cleared independent round3 review and landed as052d8342e56. Normal suites atd43c8b4dd32 pass51,102 each/0fallback; frozen5cc full debug kill passes51,104/65,601 collections/0fallback. ASan14 passes3,589 with exact AddressSanitizerTests exclusion; original unfiltered failure remains FAIL. Stress11 passes3,046, subprocess371 three times and40 probes pass. Integration smoke1,924 and queues22 per build, actual-kill22 and unchanged regeneration pass. Rung2a design/probes preserved but agent held by automatic classifier; no native fix applied. Owner metadata2b and retirement/adoption/fork2c remain open |
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
@@ -81,7 +81,9 @@ HTTP exposure and trashcan noncompletion, with causes/interactions unresolved.
 The scoped incremental exception below preserves those final GC/performance
 blockers. See the triage and independent landing-readiness records. O1 is allowed
 for the isolated bytes-writer qualification; no global replacement is claimed;
-integration debug uses Og. Bounded tail make/stale checks may run in parallel,
+current frozen integration debug uses Og. The next coherent candidate uses O1
+subject to the qualification ruling below. Bounded tail make/stale checks may
+run in parallel,
 but its complete StackWalk waits for all fulls under their serialization lock
 because perf-map cleanup otherwise interferes. Extras and landing review follow.
 
@@ -844,6 +846,17 @@ ASan and the tail-call/walk matrix remain required where applicable.
 This does not waive a gate, an assertion or a failing test. The existing
 `-Og` debug configuration remains the baseline until that qualification
 is recorded; avoid duplicating all build trees merely to try a flag.
+
+Coordinator ruling, 2026-10-29 17:50 PDT: select O1 plus Py_DEBUG as
+this machine's debug configuration for the next coherent GC/IR candidate.
+Keep the existing f2/e9 Og trees and receipts frozen; do not rebuild them
+merely for a flag comparison. Bind actual compiler commands and effective
+flag order (configure's CFLAGS can follow OPT), Py_DEBUG, assertions and
+unwind data. Fresh negative/compiled-root/stale controls and normal/kill
+qualification are required before accepting that candidate. Historical O1
+fulls took about607/617s versus current Og718/702s, but source/load differ:
+this supports a turnaround experiment, not a calibrated speedup claim.
+Do not add a second Og full solely to compare scheduling configurations.
 
 The rerun rule. A gate line is produced at a commit and names it. A code
 change after the line invalidates it; the affected levels run again at

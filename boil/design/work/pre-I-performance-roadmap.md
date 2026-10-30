@@ -219,11 +219,17 @@ counting integration continues; H1 stays a bounded later experiment. A
 source-only generations design must first establish complete mutator/barrier,
 root, weakref and finalizer contracts. Known lifecycle defects remain blockers.
 
-As of 17:26, GC candidate f2a5 includes ROOTS and bytes-writer roots. Its
+As of 17:50, GC candidate f2a5 includes ROOTS and bytes-writer roots. Its
 16 early jobs pass; release coverage is assembled from 563 qualified original
 module cohorts plus one corrected-environment whole test_cmd_line. The original
-full remains failed from two launcher-environment effects. Debug full/kill,
-stress and ASan qualification continue. H3 union e9a1 has owned Py_STATS/O3/Og
+full remains failed from two launcher-environment effects. Both debug fulls
+pass51,134 tests with zero observed fallback. Release stress11 then fails
+one stack-hit type assertion; debug stress, ASan and extras have not started.
+Historical records match reused numeric addresses, and the reader separately
+holds a borrowed journal pointer across a potentially collecting allocation.
+Neither finding alone establishes the observed failure cause. Preserve the
+red run, diagnose once, repair the actual contract and qualify affected work;
+no retry-to-green or new exclusion follows. H3 union e9a1 has owned Py_STATS/O3/Og
 builds, real producer/reader checks and eight bounded smoke/H3/stale passes;
 three integration jobs await shared perf-map serialization. In parallel,
 [finalizer-order eligibility](pre-I-finalizer-order-proposal.md) is implemented
@@ -234,7 +240,10 @@ fails its intended assertion. Matched timing remains due. This addresses avoidab
 separately from old-live scanning. The
 [generations direction](7-nonmoving-generations-design.md) clears review but
 requires the closed store/constructor ledger and concrete promotion/commit
-interfaces before activation. Its allocator/domain ledger now identifies the
+interfaces before activation. The [frame/store ledger](7-generations-frame-store-ledger.md)
+now identifies pre-link send, yield/return/throw detach and escaped-frame owners;
+it is a future-minor obligation, not evidence of a current full-GC defect.
+Its allocator/domain ledger now identifies the
 young-only enumeration boundary, address reuse and abandoned heaps. The existing
 pre-sweep Python debug writer is an earlier reentry dependency than stop callbacks.
 

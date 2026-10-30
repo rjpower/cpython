@@ -4262,3 +4262,44 @@ question, separate from H1's frame-parameter experiment. Reaching2x upstream
 needs about2.41x current throughput; a conditional Amdahl model shows why GC
 and common frame/call/value/interpreter work both matter. The measured
 29-row score remains0.828. Next hourly report remains about17:50 PDT.
+
+### 17:50 PDT: broad GC results, diagnostic failure and next integration scope
+
+Frozen f2's Og normal and actual-kill full suites pass51,134 tests each,
+3,410 skips/564 modules and565 paired driver/worker cohorts. Receipts5623413d
+and6133f9cb retain66,798/66,809 collections, zero fallback and3,889 report-only
+unpinned hits each. Normal takes718s; kill702s. Assembled release coverage
+remains039eacec, with the original launcher-environment failure preserved.
+
+The following release stress11 is terminal FAILa10a4cc1:3,062 reported tests,
+100 skips, one test_stack_hits assertion (type tuple where Probe expected),
+ten passed modules plus failed test_gc; all12 mode/stress cohorts pair and
+source/product guards pass. Later debug stress, ASan16 and extras did not
+start. Candidate f2 remains local, unqualified for push. No partial stress
+PASS or retry-to-green is recorded.
+
+Source separates two diagnostic concerns. Journal filtering matches numeric
+addresses over historical collections and cannot identify an allocation's
+incarnation. Independently, gc_stack_hits captures its borrowed array before
+PyList_New; that allocation can collect and realloc the array before its
+first read. The reader is unchanged since its original implementation;
+ancestry is not a waiver or proof of this failure's cause. One ordinary
+prefix diagnostic952c57d9 runs once on the existing release binary: original
+test/assertions pass, both pre-clear prefixes are empty. This is inconclusive
+for stale-address attribution and does not establish pointer safety. A bounded
+reader/test repair proposal follows; the native campaign stays stopped.
+
+H3's eight bounded jobs and finalizer eligibility's four semantic checks plus
+ordering negative remain complete. H3 integration3 and four-row GC timing
+remain unrun. The next coherent accepted GC/IR union will use O1 plus Py_DEBUG,
+with effective flags and fresh root/negative/stale/normal/kill qualification;
+existing Og receipts stay frozen. Historical turnaround supports trying the
+configuration but is not a matched speed comparison.
+
+The frame/store generations ledger now records actual owner transitions and
+constructor gaps; no barrier or minor is implemented. Unicode writer design
+3cd46d77 closes21 private lifetime owners plus public Create, embedded-root
+registration, rooted Finish, private-header placement and test-adapter migration.
+Its isolated implementation is delegated; no native grant or new root fixture.
+The accepted performance score stays0.828x upstream; no new speedup is claimed.
+Next hourly documentation/status checkpoint about18:50 PDT.

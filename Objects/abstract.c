@@ -20,6 +20,7 @@
 #include "pycore_setobject.h"     // _PySet_ContainsValue()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
+#include "pycore_unicodeobject.h" // _PyUnicodeWriter
 
 #include <stddef.h>               // offsetof()
 

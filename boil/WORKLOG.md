@@ -4718,3 +4718,32 @@ ndarray's acquisition metadata/export accounting proof remains. No new native
 grant for those ports. Final supported union needs release/ASan/broad coverage
 and closure before landing. Interpreter timing remains parked. Next hourly
 status checkpoint about11:30 PDT, with earlier material updates as needed.
+
+
+### 10:48 PDT: drainer union passes; consumer oracle correction and sixth owner
+
+Candidate925d O1 focus17/0 and whole9 1518/146skips pass,208/12632collections,
+zero fallback. Sixty skips declare unsupported creation. Root checks terminal
+index af128e61/all36refs plus raw/cleanup. This is bounded validation, not a
+primary landing. Source627590 sealed consumers and48b021 Unpickler owner are
+independently reviewed, committed/pushed and composed in dc7b; make-only O1
+rebuild passes with116modules/0importfailures and preserved old925d payloads.
+
+New12 focus stops at11passes/one scanner-oracle failure; whole7 never starts.
+Match.group() reacquires the exporter, whose callback closes the idle scanner.
+Two independent reviews confirm it. Sole test-source successor772 replaces
+.group() with stored .span() offsets, keeping active/no-release and eventual
+once-only assertions. No C/native changes or rebuild. Original failure index
+0ba6b395/all18refs checked. Authorize one corrected case, then original whole7
+on explicit native-dc7/test-772; carry other11 passed IDs, never relabel FAIL.
+
+ND owner implementation proceeds source-only with original metadata separate
+from transformed views and balanced export counts. Private constructor reuse
+will explicitly reject successful reinitialization; named push/pop remain.
+The owner audit finds sixth persistent holder xibuffer, still reachable in
+same-owner queues/channels. Reuse the original MV's managed buffer on receipt
+and existing XID disposal instead of porting foreign-wrapper finalization.
+Source task is active. Final safeguard-removal ledger is independently read;
+no coercion or silent callback suppression remains an acceptable final policy.
+Three disjoint causal controls can share one negative build after source closes.
+No release/ASan/full union or refreshed performance result is claimed.

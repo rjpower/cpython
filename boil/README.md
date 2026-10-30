@@ -12,7 +12,7 @@ first analysis and plan is the artifact `plan`.
 This file is the hand-over point. It says what the design is, where the
 work stands, which document is authoritative for what, and how a change
 is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 10:30 PDT. Latest runtime merge is ff6ed9d6bfb,
+revised 2026-10-30 10:48 PDT. Latest runtime merge is ff6ed9d6bfb,
 integrating qualified GC safety candidate9e223040 over prior runtime
 d6a23b9fe0c. Candidate qualification, closure and bounded release/debug
 post-merge smoke pass. Shared
@@ -72,7 +72,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30 10:30 PDT**. PROCESS section0 records the
+Current checkpoint: **2026-10-30 10:48 PDT**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 
@@ -116,7 +116,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | --- | --- | --- |
 | Register IR/compiler, NaN-boxed values, shapes, tracing without refcounts | Core implementation landed; compiler reentrancy repair qualified | 6e remaining slot/receiver/value bridges; interpreter performance target |
 | GC/IR integration5a45 → d6a23 | All19 affected jobs, both ASan groups, all three corrected fulls, two stress11 sets and closure audits pass. Independent LAND_INCREMENTAL review and release/debug post-merge smoke pass. Original failed profiles remain preserved | Queue completion/resource ordering and remaining precision/platform obligations |
-| Three GC safety repairs | Qualified9e lands as ff6ed9d6bfb. Six original profiles pass, plus an explicit ten-old-modules/one-fresh-GC debug stress composite. Cext16/exact7 skips, unchanged regeneration/Clinic, traversal and19 header receipts pass. Both post-merge smoke rows pass1,930 reported tests, exact50/20 skips and zero fallback | Safety increment complete. Original failed stress profile stays failed; corrected GC reports152/4skips. Main-only dbb5 passes bounded validation. Buffer87b6 passes new5 and ordinary affected cases; its unchanged whole profile remains failed on one foreign-owner case. Single-drainer source review is active; remaining consumer ports proceed in parallel. Owner63b integration is deferred. See the [GC closure plan](design/work/gc-closure-plan.md) |
+| Three GC safety repairs | Qualified9e lands as ff6ed9d6bfb. Six original profiles pass, plus an explicit ten-old-modules/one-fresh-GC debug stress composite. Cext16/exact7 skips, unchanged regeneration/Clinic, traversal and19 header receipts pass. Both post-merge smoke rows pass1,930 reported tests, exact50/20 skips and zero fallback | Safety increment complete. Original failed stress profile stays failed; corrected GC reports152/4skips. Main-only dbb5 passes bounded validation. Buffer87b6 passes new5 and ordinary affected cases; its unchanged whole profile remains failed on one foreign-owner case. The first main-only/buffer/drainer candidate passes bounded O1 checks; remaining consumer ports and removal of old safeguards are active. Owner63b integration is deferred. See the [GC closure plan](design/work/gc-closure-plan.md) |
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Timing parked during GC; correct the header wrapper before future clean qualification. Later matched elapsed/code/spill review; no H1 speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Complete final-word semantics/CFG/maps, independent compiler projection, all reader/initialized-span transitions before activation; no runtime maps or clearing changes |
@@ -210,35 +210,47 @@ score, upstream parity or the2x target.
    improve call windows and linear string growth only under their root,
    initialization and alias/escape proofs. Re-measure each coherent change.
 
-**Active composition, not landed:** managed branch `boil/gc-simple` at
-c9587ad064b combines main-only dbb5, buffer87b6 and the support decorator export.
-It has not been built. Main-only's O1-debug new5 and whole4 pass; whole4 reports
-811 tests/76 skips, including59 explicitly unsupported creation cases. Existing
-main inspection, ordinary threads and rejection tests remain eligible. Buffer's
-new5 pass; whole4 reports479/23skips with one unchanged foreign-owner failure.
-All three native memoryview cycle regressions and ordinary Python release now
-pass. The old five-failure profile remains failed. A copied one-line omission
-of struct's inert transition fails the named assertion with its backing storage
-still live; root checked the causal receipt and its10 references.
+**Active composition, not landed:** candidate925d16c8bbf combined main-only,
+buffer readiness and the reviewed single drainer. O1-debug focus17/0skips and
+whole affected9 (1,518 reported/146skips) pass, zero fallback;60 skips declare
+unsupported creation. Root checked completion af128e61 and all36 references.
+Other/nested collectors enqueue and return; the active callback and saved
+exception stay rooted through reporting. Busy shutdown/fork boundaries pass
+the focused controls. Concurrent finalizer progress is explicitly given up.
+The earlier buffer-only foreign-owner failure remains failed, not relabeled.
 
-The single-drainer source is under review. Competing and nested collectors
-return after enqueueing; callback payload and saved-error roots remain live
-through error reporting. This gives up concurrent finalizer progress. Review
-found that Popen's preexec path also calls the fork entrypoint: it needs the
-same recoverable busy rejection as os.fork, rather than an accidental fatal
-public-wrapper call. Correct that before source clearance and the first
-coherent O1-debug build. Main-thread busy Py_FinalizeEx returns-1 with the live
-runtime and entry attachment restored; void/non-main busy paths have explicit
-fatal boundaries. This policy is source work, not landed behavior.
+Candidate dc7bd5c19f7 then composed source-reviewed PickleBuffer/SRE627590 and
+Unpickler48b021. Its O1 make-only rebuild passes; new12 focus has11 passes and
+one scanner test failure. The test called Match.group(), creating another
+exporter acquisition whose callback legitimately finalized the idle scanner.
+Two independent source reviews confirm that mechanism. Test-only772835f27ab
+uses stored span offsets to prove scanning still works, retaining the active-
+scan/no-release and eventual exactly-once assertions. One corrected case and
+the not-yet-started affected7 are authorized using unchanged dc7 native images.
+Original FAIL capsule0ba6b395 and all18 references are checked and preserved.
+There is no corrected native result yet.
 
-Unpickler's existing managed-buffer owner port and sealed PickleBuffer/SRE
-release transactions proceed in separate source worktrees. Testbuffer ndarray
-remains a source-proof obligation. Ordinary acquisition lifetime, stable
-metadata and callback reentry must be closed before removing the old sweep
-safeguards. No generic cleanup API, completion DAG or transparent process shim
-is planned. Interpreter timing remains parked. Loom and GitHub are authorized.
-Shared verifier/worker components are landed; full profile/gate orchestration is still separate work
-in `boil/tools/verification.md`. All jobs retain real source/config/product,
+NDArray's source port separates original managed acquisition metadata from
+transformed views and balances outward exports. Review also found a sixth
+persistent holder: same-interpreter queue/channel buffer transfer still uses
+an unsafe receiving-wrapper finalizer. Its source task reuses an ordinary
+memoryview registration and the existing XID disposal path instead. Foreign
+creation remains disabled by the candidate; no wrapper lifecycle framework is
+needed. The [safeguard-removal ledger](design/work/10a-buffer-safeguard-removal.md)
+tracks both remaining proofs before deleting forced-zero export counts and
+silent swept-exporter release suppression. These are source tasks, not landed
+fixes. The inherited live PickleBuffer re-export limitation for Python-defined
+exporters is separate functional debt; cycle tests do not establish that path.
+
+Remaining sequence: close NDArray and same-owner XID, remove the obsolete
+safeguards under checked invariants, run the three disjoint causal controls
+with one copied negative build, then qualify the actual supported union before
+landing. Main-only creation, ordinary threads, normal resource lifetime and
+callbacks are the milestone; foreign adoption, generic cleanup APIs and a
+completion DAG stay deferred. Interpreter timing remains parked. Loom and
+GitHub use are authorized.
+Shared verifier/worker components are landed; full profile/gate orchestration
+is still separate work in `boil/tools/verification.md`. All jobs retain real source/config/product,
 actual mode/stress, skip and failure identities. Fulls and perf-sensitive walks
 serialize because test_perf_profiler removes shared `/tmp/perf-*.map` files.
 

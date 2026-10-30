@@ -42,7 +42,7 @@ not establish finalizer completion order or whole-GC safety.
 | MARKED state left by failing cycle/finalizer worklist allocation | Reviewed repair composed at168 passes bounded checks and causal negative. Combined union has six profiles passed; debug stress fails only a diagnostic snapshot test allowing intervening automatic collection | Exact test-only9e isolates snapshots with assertions unchanged; one whole-GC debug/off/N1000 successor carries ten original passed modules. Original FAIL stays failed. Closure and independent landing review complete; integrated as ff6 |
 | Dependent finalizer/resource completion | Invocation order alone is insufficient. Generic completion DAG held after holistic review | Evaluate one drainer retaining the active callback through error reporting; competing/nested collectors enqueue without waiting. State loss of concurrent finalizer progress. Buffer release readiness still needs its own proof |
 | Interpreter close, owner metadata, retirement/adoption and fork | Owner63b bounded validation and causal negative complete; source pushed. Foreign mutation/lifecycle is not closed | Defer integration and broader lifecycle machinery under main-interpreter-only scope. Audit creation APIs for explicit rejection. Separate process exit from host-returning finalization; decide fork restrictions explicitly, without fabricating callback completion |
-| Python buffer-release callbacks | Five consumer families recorded in PROCESS §0.3; generic type capability held | Prefer existing per-acquisition managed owners. Prove exactly-once release, stable metadata and consumer raw-pointer/reentry checks for the concrete holder/view/exporter cycle and returned-view forwarding. Every blocked view must remain rooted with its dependencies; no forced zero export counts or skipping DEAD objects into sweep |
+| Python buffer-release callbacks | Five ordinary consumer families plus same-owner XID are recorded in the closure ledger; generic type capability held | Prefer existing per-acquisition managed owners. Prove exactly-once release, stable metadata and consumer raw-pointer/reentry checks for the concrete holder/view/exporter cycle and returned-view forwarding. Every blocked view must remain rooted with its dependencies; no forced zero export counts or skipping DEAD objects into sweep |
 | Remaining root/lifetime contracts and safe conservative coverage | Writers landed; compiler/PyMem carriers, reader operands, saved exception, detached/swap roots and raw inputs retain named debt | Resolve actual missing-lifetime cases with explicit owners/spans and causal controls. Keep conservative coverage until its replacement is proved; a clean run alone does not authorize removing it |
 | End-to-end lifecycle regressions and support boundary | Old HTTP/resource error and trashcan timeout remain historical failures; platform/SDK limits explicit | Run the relevant unchanged regressions once on the repaired union, inspect failures rather than retrying green; integration gates on the actual union. Publish supported configurations and unsupported ones honestly |
 
@@ -71,29 +71,29 @@ separate support decisions; process exit does not excuse ordinary leaks.
    creation rejection, the existing capability declaration and finite test
    classification. O1-debug new5 and whole4 pass; whole4 reports811/76skips,
    including59 unsupported creation cases. Root reviewed source and all38
-   final receipt references. Candidate c958 includes it, not primary yet.
-3. **One drainer, source review.** The GIL-protected claim keeps active payload
-   and saved-error roots through full reporting; other/nested collectors
-   enqueue and return without waiting. Preserve signal precedence and state
-   the finalizer-progress limitation. Busy main-thread Py_FinalizeEx returns-1
-   without freeing the live runtime; void/non-main busy paths are fatal.
-   Fork rejection unwinds its world/import locks. Source review found Popen's
-   preexec caller must use the recoverable private fork helper too. Correct
-   and review that before committing/composing and one coherent O1 build.
-4. **Buffer readiness and remaining consumers.** Source87b6 selects every
-   active view/managed acquisition, including native-only registrations,
-   before retaining unready closures. Actual memory consumption contributes
-   to the existing bounded explicit-collection second pass. No new loop or
-   universal chain-depth guarantee. New5 pass. Whole4 remains FAIL479/23skips
-   on the unchanged foreign-owner case; ordinary release and all three native
-   cycle regressions pass. Original five-failure profile remains failed.
-   The copied missing-inert-transition negative fails its named assertion;
-   causal receipt e53f67f9 and10 references were checked independently.
-   Source is composed in c958; no coherent native result yet. Unpickler's
-   existing managed-owner port and sealed PickleBuffer/SRE transactions are
-   source-only parallel tasks. Testbuffer ndarray still needs stable original
-   acquisition metadata and outward-export accounting proved. Old general
-   sweep safeguards stay until all concrete consumers are migrated.
+   final receipt references. Candidate925d includes it and passes bounded validation, not primary yet.
+3. **One drainer, bounded complete.** Reviewed44a5 is composed with main-only
+   and buffer readiness at925d. O1 focus17/0 and affected9 1518/146skips pass,
+   zero fallback; af128e61/all36refs checked. Callback payload/error roots,
+   nonwaiting competing collectors and explicit busy shutdown/fork handling
+   pass their focused controls. This is not release/ASan/full qualification.
+4. **Persistent buffer closure.** Source-reviewed627590 (PickleBuffer/SRE)
+   and48b021 (Unpickler managed owner) compose at dc7b. Native rebuild passes;
+   new12 focus remains FAIL11passes/one scanner test error. Match.group()
+   reacquires a separate buffer, so its callback closes the idle scanner.
+   Test-only772 uses span offsets, preserving all lifetime assertions; one
+   corrected case and original whole7 await execution on unchanged dc7 native
+   images. Old0ba6b395/all18refs is preserved and checked, never relabeled.
+   NDArray's original-metadata/export proof and same-owner XID's existing-MV
+   reuse are active source ports. The latter is a sixth persistent holder,
+   still used by supported same-interpreter queues/channels. Read the
+   [full inventory and removal cut](10a-buffer-safeguard-removal.md).
+   Remove memory_dealloc's export coercion and PyBuffer_Release's silent
+   swept-exporter suppression only after these owner proofs close; retain
+   checked zero-count and exporter DEAD/SWEPT invariants. A synthetic exact
+   MV export blocker will exercise unready retention/OOM mechanics honestly;
+   real ND acquisition/export tests remain separate. No universal resource-
+   chain depth guarantee or new collection loop is claimed.
 5. **Coherent supported GC union, coordinator.** Compose these reviewed
    changes and complete the remaining consumer migrations. Resolve normal-
    runtime lifetime failures on that union, using the existing relevant
@@ -106,10 +106,9 @@ separate support decisions; process exit does not excuse ordinary leaks.
    operation families and shared costs. Roughly2× on simple arithmetic guides
    design attention; it is neither a hard gate nor a reason for special cases.
 
-Safety qualification is complete. Source ports proceed while drainer review
-closes; compose reviewed pieces before native feedback. Keep builds within
-the existing two slots; serialize
-full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
+Safety qualification and bounded drainer feedback are complete. Compose the
+remaining reviewed ports before native feedback. Keep builds within the two
+existing slots; serialize full suites, StackWalk and perf-map-sensitive work. Interpreter timing waits
 for quiet native execution and the agreed GC correctness boundary.
 
 ## Validation and integration

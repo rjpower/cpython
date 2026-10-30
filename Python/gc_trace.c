@@ -2241,20 +2241,7 @@ live_walk_heaps(trace_t *t, struct live_walk *w)
     int ok = 1;
     for (int d = 0; ok && d < t->ndomain; d++) {
         PyInterpreterState *interp = t->domain[d];
-        w->owner = interp;
-        w->dict_watchers = 0;
-        w->type_watchers = 0;
-        // Reserved dict callbacks still run in dict_dealloc().
-        for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
-            if (interp->dict_state.watchers[i] != NULL) {
-                w->dict_watchers |= 1 << i;
-            }
-        }
-        for (int i = 0; i < TYPE_MAX_WATCHERS; i++) {
-            if (interp->type_watchers[i] != NULL) {
-                w->type_watchers |= 1 << i;
-            }
-        }
+        w->owner = t->interp;
         _Py_FOR_EACH_TSTATE_UNLOCKED(interp, p) {
             struct _mimalloc_thread_state *m =
                 &((_PyThreadStateImpl *)p)->mimalloc;
@@ -3410,6 +3397,18 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     /* The walk clears every mark, also after a failure, when it lists
        nothing. */
     struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
+    PyInterpreterState *interp = tstate->interp;
+    // CPython's own dict watchers hear of a deallocation in the sweep.
+    for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
+        if (interp->dict_state.watchers[i] != NULL) {
+            w.dict_watchers |= 1 << i;
+        }
+    }
+    for (int i = 0; i < TYPE_MAX_WATCHERS; i++) {
+        if (interp->type_watchers[i] != NULL) {
+            w.type_watchers |= 1 << i;
+        }
+    }
     int walked = live_walk_heaps(&t, &w);
     if (walked >= 0 && !w.failed) {
         live_clear_weak_caches(&t);

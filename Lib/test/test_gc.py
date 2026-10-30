@@ -7,7 +7,7 @@ from test.support import (verbose,
 from test.support.os_helper import temp_dir, TESTFN, unlink
 from test.support.script_helper import (assert_python_ok,
                                         assert_python_failure, make_script)
-from test.support import threading_helper, gc_threshold
+from test.support import threading_helper, gc_threshold, import_helper
 
 import gc
 import os
@@ -4017,6 +4017,251 @@ def _queue_child(code, **env):
     rc, out, err = assert_python_ok("-c", prelude + textwrap.dedent(code),
                                   **env)
     return out.decode()
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+@threading_helper.requires_working_threading()
+class SingleDrainerTests(unittest.TestCase):
+    def test_worker_collect_returns_without_overtaking(self):
+        _queue_child("""
+            import threading
+            from test import support
+            gc.disable()
+            ready = threading.Event()
+            collected = threading.Event()
+            order = []
+            errors = []
+            class Inner:
+                def __del__(self):
+                    order.append("inner")
+            class Outer:
+                def __del__(self):
+                    if ready.is_set():
+                        return
+                    order.append("outer-enter")
+                    ready.set()
+                    if not collected.wait(support.SHORT_TIMEOUT):
+                        errors.append("worker collection did not return")
+                    if "inner" in order:
+                        errors.append("inner callback overtook outer callback")
+                    order.append("outer-exit")
+            def make(cls):
+                for _ in range(20):
+                    obj = cls()
+                    obj.cycle = obj
+            def worker():
+                try:
+                    if not ready.wait(support.SHORT_TIMEOUT):
+                        errors.append("outer callback did not start")
+                        return
+                    make(Inner)
+                    gc.collect()
+                    order.append("worker-return")
+                finally:
+                    collected.set()
+            thread = threading.Thread(target=worker, daemon=True)
+            thread.start()
+            try:
+                make(Outer)
+                gc.collect()
+            finally:
+                ready.set()
+                thread.join(support.SHORT_TIMEOUT)
+            assert not thread.is_alive(), "collector worker did not finish"
+            assert not errors, errors
+            assert order[:3] == ["outer-enter", "worker-return", "outer-exit"], order
+            assert order[3:] and set(order[3:]) == {"inner"}, order
+        """, PYTHON_GCSTRESS="")
+
+    def test_nested_collection_and_unraisable(self):
+        _queue_child("""
+            gc.disable()
+            order = []
+            errors = []
+            refs = []
+            class Item:
+                pass
+            def inner(ref):
+                order.append("inner")
+            def make(callback):
+                for _ in range(20):
+                    obj = Item()
+                    obj.cycle = obj
+                    refs.append(weakref.ref(obj, callback))
+            def outer(ref):
+                if order:
+                    return
+                order.append("outer-enter")
+                make(inner)
+                gc.collect()
+                assert order == ["outer-enter"], order
+                order.append("outer-exit")
+                raise ValueError("queued callback error")
+            def unraisable(info):
+                gc.collect()
+                errors.append((info.exc_type, str(info.exc_value)))
+                order.append("unraisable")
+            sys.unraisablehook = unraisable
+            saved = LookupError("interrupted context")
+            try:
+                raise saved
+            except LookupError:
+                make(outer)
+                gc.collect()
+                assert sys.exception() is saved
+            assert order[:3] == ["outer-enter", "outer-exit", "unraisable"], order
+            assert order[3:] and set(order[3:]) == {"inner"}, order
+            assert errors == [(ValueError, "queued callback error")], errors
+        """, PYTHON_GCSTRESS="")
+
+    def check_busy(self, code):
+        # A daemon callback releases the GIL.  It must remain intact after
+        # a rejected lifecycle operation, and cleanup must always release it.
+        setup = textwrap.dedent("""
+            import threading
+            from test import support
+            gc.disable()
+            entered = threading.Event()
+            release = threading.Event()
+            errors = []
+            workers = []
+            class Blocked:
+                def __del__(self):
+                    if entered.is_set():
+                        return
+                    entered.set()
+                    if not release.wait(support.LONG_TIMEOUT):
+                        errors.append("callback was not released")
+            def collect():
+                def make():
+                    for _ in range(20):
+                        obj = Blocked()
+                        obj.cycle = obj
+                make()
+                gc.collect()
+            def start():
+                thread = threading.Thread(target=collect, daemon=True)
+                workers.append(thread)
+                thread.start()
+                assert entered.wait(support.SHORT_TIMEOUT), "callback did not start"
+        """)
+        cleanup = textwrap.dedent("""
+            finally:
+                release.set()
+                for thread in workers:
+                    thread.join(support.SHORT_TIMEOUT)
+                    assert not thread.is_alive(), "drainer did not finish"
+            assert not errors, errors
+        """)
+        _queue_child(setup + "try:\n" + textwrap.indent(textwrap.dedent(code), "    ")
+                     + cleanup, PYTHON_GCSTRESS="")
+
+    def test_finalize_busy(self):
+        import_helper.import_module("ctypes")
+        self.check_busy("""
+            import ctypes
+            finalize = ctypes.pythonapi.Py_FinalizeEx
+            finalize.restype = ctypes.c_int
+            current = ctypes.pythonapi.PyThreadState_Get
+            current.restype = ctypes.c_void_p
+            start()
+            before = current()
+            assert finalize() == -1
+            assert current() == before
+            assert ctypes.pythonapi.Py_IsInitialized() == 1
+            assert not sys.is_finalizing()
+        """)
+
+    def test_finalize_busy_after_atexit(self):
+        import_helper.import_module("ctypes")
+        self.check_busy("""
+            import atexit, ctypes
+            effects = []
+            def prepare():
+                effects.append("atexit")
+                try:
+                    start()
+                except BaseException:
+                    # A failed setup must not let finalization continue
+                    # into the Python frame that called it through ctypes.
+                    os._exit(1)
+            atexit.register(prepare)
+            finalize = ctypes.pythonapi.Py_FinalizeEx
+            finalize.restype = ctypes.c_int
+            assert finalize() == -1
+            assert effects == ["atexit"], effects
+            assert entered.is_set()
+            assert ctypes.pythonapi.Py_IsInitialized() == 1
+            assert not sys.is_finalizing()
+        """)
+
+    @support.requires_fork()
+    def test_fork_busy(self):
+        self.check_busy("""
+            import _imp, warnings
+            start()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                try:
+                    pid = os.fork()
+                except RuntimeError as exc:
+                    assert str(exc) == "cannot fork while GC callbacks are running", exc
+                    assert not _imp.lock_held(), "fork rejection leaked the import lock"
+                else:
+                    if pid == 0:
+                        os._exit(0)
+                    os.waitpid(pid, 0)
+                    raise AssertionError("fork admitted an active drainer")
+        """)
+
+    @support.requires_fork()
+    def test_fork_busy_after_hook(self):
+        self.check_busy("""
+            import _imp, warnings
+            os.register_at_fork(before=start)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                try:
+                    pid = os.fork()
+                except RuntimeError as exc:
+                    assert str(exc) == "cannot fork while GC callbacks are running", exc
+                    assert not _imp.lock_held(), "fork rejection leaked the import lock"
+                else:
+                    if pid == 0:
+                        os._exit(0)
+                    os.waitpid(pid, 0)
+                    raise AssertionError("fork admitted a drainer started by its hook")
+        """)
+
+    @support.requires_fork()
+    def test_subprocess_preexec_busy(self):
+        self.check_busy("""
+            import _imp, subprocess
+            from test.support.os_helper import fd_count
+            start()
+            before = fd_count()
+            gc.enable()
+            try:
+                child = subprocess.Popen(
+                    [sys.executable, "-c", "pass"], preexec_fn=lambda: None,
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            except RuntimeError as exc:
+                assert str(exc) == "cannot fork while GC callbacks are running", exc
+            else:
+                with child:
+                    child.communicate(timeout=support.SHORT_TIMEOUT)
+                raise AssertionError("preexec admitted an active drainer")
+            assert fd_count() == before, "rejected preexec leaked descriptors"
+            assert not _imp.lock_held(), "preexec rejection leaked the import lock"
+            assert gc.isenabled(), "preexec rejection did not restore enabled GC"
+            gc.disable()
+            # cwd forces the fork/exec path rather than posix_spawn.  No
+            # Python callback runs between fork and exec in this case.
+            with subprocess.Popen([sys.executable, "-c", "pass"],
+                                  cwd=os.curdir) as child:
+                assert child.wait(timeout=support.SHORT_TIMEOUT) == 0
+        """)
 
 
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")

@@ -2250,7 +2250,7 @@ runtime_has_subinterpreters(_PyRuntimeState *runtime)
     return interp->next != NULL;
 }
 
-static void
+static int
 make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
 {
     assert(tstate != NULL);
@@ -2329,6 +2329,14 @@ make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
         _PyEval_StopTheWorldAll(interp->runtime);
 
         HEAD_LOCK(interp->runtime);
+        if (interp->gc.queue_draining) {
+            /* No finalization guard has been latched for this interpreter.
+               Do not commit teardown beneath a running callback. */
+            HEAD_UNLOCK(interp->runtime);
+            _PyEval_StartTheWorldAll(interp->runtime);
+            PyMutex_Unlock(&interp->ceval.pending.mutex);
+            return -1;
+        }
         int has_subinterpreters = subinterpreters
                                     ? runtime_has_subinterpreters(interp->runtime)
                                     : 0;
@@ -2355,6 +2363,27 @@ make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
     assert(PyMutex_IsLocked(&interp->ceval.pending.mutex));
     assert(_Py_atomic_load_uintptr(&interp->finalization_guards) == _PyInterpreterGuard_GUARDS_NOT_ALLOWED);
     ASSERT_WORLD_STOPPED(interp);
+    return 0;
+}
+
+static int
+reject_busy_finalization(PyThreadState *tstate, PyThreadState *entry,
+                         int was_finalizing, int restore_entry)
+{
+    /* resolve_final_tstate() may create a state on this unsupported path.
+       Do not return with a leaked temporary state or claim to roll it back. */
+    if (!_Py_IsMainThread()) {
+        Py_FatalError("busy finalization requires the main thread");
+    }
+    if (!restore_entry) {
+        /* Preparation may already have deleted the entry's interpreter. */
+        Py_FatalError("busy finalization cannot restore a foreign interpreter");
+    }
+    tstate->interp->finalizing = was_finalizing;
+    if (_PyThreadState_GET() != entry) {
+        PyThreadState_Swap(entry);
+    }
+    return -1;
 }
 
 static int
@@ -2368,13 +2397,22 @@ _Py_Finalize(_PyRuntimeState *runtime)
     }
 
     /* Get final thread state pointer. */
+    PyThreadState *entry = _PyThreadState_GET();
+    int entry_in_main = entry == NULL || _Py_IsMainInterpreter(entry->interp);
     PyThreadState *tstate = resolve_final_tstate(runtime);
+    int was_finalizing = tstate->interp->finalizing;
+    if (tstate->interp->gc.queue_draining) {
+        return reject_busy_finalization(tstate, entry, was_finalizing, 1);
+    }
 
     // Block some operations.
     tstate->interp->finalizing = 1;
 
     // This call stops the world and takes the pending calls lock.
-    make_pre_finalization_calls(tstate, /*subinterpreters=*/1);
+    if (make_pre_finalization_calls(tstate, /*subinterpreters=*/1) < 0) {
+        return reject_busy_finalization(tstate, entry, was_finalizing,
+                                         entry_in_main);
+    }
 
     assert(_PyThreadState_GET() == tstate);
 
@@ -2543,7 +2581,11 @@ Py_FinalizeEx(void)
 void
 Py_Finalize(void)
 {
-    (void)_Py_Finalize(&_PyRuntime);
+    if (_Py_Finalize(&_PyRuntime) < 0
+        && _PyRuntimeState_GetInitialized(&_PyRuntime))
+    {
+        Py_FatalError("cannot finalize while GC callbacks are running");
+    }
 }
 
 
@@ -2731,10 +2773,15 @@ Py_EndInterpreter(PyThreadState *tstate)
     if (tstate->current_frame != tstate->base_frame) {
         Py_FatalError("thread still has a frame");
     }
+    if (interp->gc.queue_draining) {
+        Py_FatalError("cannot end an interpreter while GC callbacks are running");
+    }
     interp->finalizing = 1;
 
     // This call stops the world and takes the pending calls lock.
-    make_pre_finalization_calls(tstate, /*subinterpreters=*/0);
+    if (make_pre_finalization_calls(tstate, /*subinterpreters=*/0) < 0) {
+        Py_FatalError("cannot end an interpreter while GC callbacks are running");
+    }
 
     ASSERT_WORLD_STOPPED(interp);
     /* Remaining daemon threads will automatically exit

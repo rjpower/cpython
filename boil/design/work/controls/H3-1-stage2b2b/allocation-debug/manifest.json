@@ -1,0 +1,1054 @@
+{
+  "identities_before": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/instrumentation.c": "94e1cd97c5547474e0e4c8cf49a674430b1284b34a5553c7e297118debd66249",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/bytecodes.c": "0b45b41af826d87ad7bff32b0446a3016f7815d30317cfdb213d8b3eade1f561",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/generated_ir_cases.c.h": "ccba27ee58ad74c3cf46f6db3444b6e7a7e9ae8b357ac0eba7dd51e7b618f03f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_ir_metadata.h": "34207222de5297d36d4be803742e35a825a606855d7d7f76488428e5a2462792",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python": "5c40843083ca404e5e77312d2d1b4a377cae78d4aed60d4a0ca9195532ffda64",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "c3e46ea6e1bd156a84fc39ae9dffb8216058a4477e6d34b234cd11f6d39c9b31",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation_probe.c": "4d8f7a6270737ec8af1db2738c1df7bd2e7ccf79a9ce4168d3e02048c8babdb1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_allocation_probe.py": "b044ed13c490d6c7c650b3126b74d07c45c35fdf789c0e27b87da34d1d725184"
+  },
+  "consumed_headers": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation_probe.c": "4d8f7a6270737ec8af1db2738c1df7bd2e7ccf79a9ce4168d3e02048c8babdb1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/Python.h": "42fae201303260bfcf7c0792fbae827f5f15dea6bff81fcf234ef29d2eeb475f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/patchlevel.h": "b22e430bed238c5493f3be4af18892ac9a09e3f1ed747183c85375f7b153f95e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymacconfig.h": "75d2153db6687f222ae5bcc0fd3af3a346c823777ec2b5facdcd8610819bf0e2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyabi.h": "eeeb6ad957ec4a190b739f484befd0fac661554079ca5ad74c947667340e33cd",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyport.h": "ccb83255f1d60278fa29df2ced61a4481896cf6f360824c49918e4864d6c8b68",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/exports.h": "1d84ee02f561ec13136f3e15aed22c747b19b30b28c483d26ff21f6ea8a98ce6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymacro.h": "4c1de7b62aa4947f16208f4f09e6b9b9d6e3848643971a3148444cf1fd5bd299",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymath.h": "d2dde2a9a36604de30edec2edcea01d66976e262e4f3e4bc4b1b4c7f91efd632",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymem.h": "0befb603e8866a0ffbb76674b47e02b08ab23ed20feb6d098e163338d18170e6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pymem.h": "a27c048ec9c90733fba0e2703b095e0c51f631b03a2c5aa8370c1494a0b9a5c0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pytypedefs.h": "b6bf4e7b518eac2b0bcca441f5b1d2788551067a635322c4a81c9fe5e632e4f2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pybuffer.h": "bbdff75d4cb33d42bd06121aefcb979d16ebde9e465dd58a53ff8ae3957f81ab",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystats.h": "97540d6e0ae19119d70acada3120464813807af8f8a12f21e3f3218f86ca3eed",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyatomic.h": "6b90d21219d5a30fbd98560d2104fe42b07b645450dafc1704b52f47f125f1e5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyatomic.h": "8d082d53d9cebae0fa425dd715e49cc8b8d34cd0c93f4d0d1d27b4866f8a150b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyatomic_gcc.h": "bea93374cbca16f31c61f13a8bb891ffed2924662d64aa22dcc8bc14d0a05b2f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pylock.h": "e2d81b07e85bec591eaf2a5f4d9a9e7100c7dfeb274e58d4bc8181eda11bef57",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/critical_section.h": "3084d1909b40b24443157c0ff6169238aacdac99773131449a3114fc4494d575",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/critical_section.h": "e9deb5058f0cb8f874fcd522fb5e897cf8fc5f949ad76e75bdd2ec6fe86a9d2f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/object.h": "9cc353f276125432b27ffdc2b0c8908edbf7b7863223d8e9b2ec9be2e4c48883",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/object.h": "eb5128a02ecfd3295bea84c1fef2ce9d7aab8f3cd5e6388515ff417c24b815c4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/refcount.h": "2c81b44f4db64d26212b3b7fa1c0799315ff17c35ed808dc12dee969e9fc88cd",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/objimpl.h": "df98be98c62ce5363d59d087363ebadd71088c333df072ca49fd00016f5a5384",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/objimpl.h": "c09b25a5b5de54a855b9f0b8ce0682f3fa48d4b12af92ca66469b1a788c12ae0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/slots.h": "ceff36128a15211536894e9b10870a1f1d4400e164d127555a16d0f07b059277",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/slots_generated.h": "91aecfb2b478c6aa35a57de83745ecd1c05a7fcd6c902ba73951c37386e81fa9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyhash.h": "919303204a818cae82466c58aaa0c9a7ff5dd10fdd2e7c636177a8640a7fddbb",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyhash.h": "59299cebfab6aef4b0c7177a5e6f3c7ee13d304c6ec96a3468eb2b5f1a20fa27",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pydebug.h": "12e9ce8ceb7afa5ee4ff0440613b6d7e8743ff0e0c3191bb02760baf9390ea6c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bytearrayobject.h": "5eda7be4caa3fd1bbe8dc5d79680bcb2491b9d60b6f8ade463ad19400ef41cc1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/bytearrayobject.h": "f5e6d6a9e10fe89d63655f45b233123925b37c5076c13a07fe9f6494c0bd9368",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bytesobject.h": "691be67f2f431c2ceee20af5c2af9b2c1b5cd240b4e11f11063f5f08bd0c31f6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/bytesobject.h": "ea4910be4bfe696bab0e82b011c96ff4ef06b3dc1ea4615467da4c32cf772b91",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/unicodeobject.h": "421578de6ec277e474d6e259ec8f31753c8c36673ea7bc3594a14969d5c03a9b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/unicodeobject.h": "9380367be92a7e5223e2cefc08b863cf5a1c0089a6f9b7e5956602cf70260689",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyerrors.h": "0eb214d8d1a0071195829600b40396a2cdc1fd6d00659327d420f0df50c9141f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyerrors.h": "8c3962f3f2cb89a29efc69071333e767eed75b39d4cb1b9a5d082d2f34451a0d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/longobject.h": "1f58e808808653beb29c2a3c4244840d02017c2158f5c3b6fc829ba73f38d6d5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/longobject.h": "05c17903d9cea8180e47beba2c19db9b157a1f5d7bafa2460f0e4365bcccb652",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/longintrepr.h": "eb786bfc62cf3590636362c7cee0565ede9d0f3e9d147ec7c7e3bde08bee9501",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/boolobject.h": "11c1e89d34cf4e789c10390487186b8118741e69e5df9089ba06ae76e6283416",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/floatobject.h": "15ae8987948effae98054c309ea762906a076594f39aa9dfa95c4d5ee9750c83",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/floatobject.h": "f1c53f5b87f221db66004b836aa2fc9462aa46c2fbe46b417a8ddc803ce2f585",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyvalue.h": "730f979ee22f21c0e15ee161cfe596fd1bcc7a1b0d256d0f3e2dae746990f18e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/complexobject.h": "e5fc54c40fc46fc2ebe8f3f9430585dc5e48748ed8a52ff3b36e21f198feed43",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/complexobject.h": "6013269a1e843da04e6958343e0130ce2094c3f5c4f3a53175dd9fc6f1e7845c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/rangeobject.h": "b24104dc0559d4993c85183640a0639952be933bd4fabd7d93e3ee2d5c3beeab",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/memoryobject.h": "9243591ade554b6f619e773806ee447f244abfc9ff394b53b459d70bd32a912f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/memoryobject.h": "a31ac3459ab6ad78f2ee5c05c8bcaf6a86f5a514236822f29e0b7134c24c0e74",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/tupleobject.h": "0bf9df9fa4b894a7f3cfb43f64bab0b47ce06c6e320efe494721c574b3b1b68f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/tupleobject.h": "0a4d86fea35647c6418c9eb29c092be6f502110701aa7052dfb2ddb916812429",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/listobject.h": "de54a8dc8414d717dd3cc8cd9e982ac3aab1aa89a6940e81627377b299bbd4cc",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/listobject.h": "2d7744ca822b27cbd785f6b30e8f973e62cd26ae68449b2634d59bebf82700c0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/dictobject.h": "c3e2139dce9dada86517392bd15c684cc26cee0f49657611ae4cead3242464e8",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/dictobject.h": "8fe4213090da000f73514794564b42fb098d3f5a44a4b73134f39675e68e94a7",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/odictobject.h": "3a400e637f94dbaedf7cd7a5f3f96ca539cfccacdf4f6d792113cf364ee7d525",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/enumobject.h": "2244fe250db9995068fe74dce0e23fd70c12b03fd94751d98b773be8f64896b6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/setobject.h": "0bc18511dee2fcfa0fcd024f5b133be9c86b2f10387917cf2f7e5e074ebd78fc",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/setobject.h": "d942b9c643bc6b9a9af977ed420c1ce3c648db61ac30f8930647e2e2dd4eeb39",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/methodobject.h": "9c34026f1ad832930181a63b0b02805366d329aee4aa83f82fa9c29f943a5749",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/methodobject.h": "a138124de16298e308f0927a7bbe9e314aa9521a6794a5d50e683a2143d9de5b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/moduleobject.h": "4b27695cab3c72ec067a1a8147ace5375c6929f417406bf40d945bfd96a8f268",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/monitoring.h": "f06f25c1f3193754bade0aee118e07f1e2a794e65392f3a65a6a3ac9ee268410",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/funcobject.h": "602f43324b2635148aab085536ea2ad328ce1c5705b539664b752e52cd1bec9b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/classobject.h": "a6617cf55df7630238a559dbc0d9f16c8e58e5c6761c99e53c6d69fc7d4685c9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/fileobject.h": "97d626e77e0079c8ea93828d60367cd8b15c54e96def36a54243eab482b0f6db",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/fileobject.h": "3a2d87d6f21f0a87fd054cf128571cf8130316c13384bd93e1da3ce4dd4b3c12",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pycapsule.h": "e421db8a24fa7992bcdb31130e92673827f6ff9a9c03eb8406cd171399ef6aca",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/code.h": "b5516bfd040a49b24a6b583a0f1fa325faf7e0f8da1fd98f696206c9620fa33d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyframe.h": "58513e7017805ee5c49a329a552f72a6be6d88ce2bcfa344f5130582fa75ecb6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyframe.h": "96ef735b3912b45182282dbe003644d4a73e85d4d3d24381a140291cc0e57c58",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/traceback.h": "79b192ff3b8b3176a5f81e458b32976e3281493e771adb2a29566ea49cf64d2a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/traceback.h": "adbdb29f8c5f3546c1feb3ea7581df8eb02af9b3113e9492c48c28ff9eb4f931",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/sliceobject.h": "93c89896f316d2216c105f776f333eddff0188fe26e4f0f0e02f0b7534f83403",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/sliceobject.h": "10d0f61769d6db5e327ef4ef2e978f3a0b09db48305718685dd2d197ebf0aa98",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/cellobject.h": "51378eb9637bf594dca6a7f31756e9239303d197433d26dfbb8ecc63fbf7f4ee",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/iterobject.h": "6ad686f5ca43d534828ba07fae3dfba2c64c87649fafd8ebbb152551f22ec738",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/initconfig.h": "917e3042e8e65ffaf03485be723a90f05f84c3f5828277542c733aee47b9c6b5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystate.h": "ba6b58f81ef8db25932ccbec0651670723b53581c279afa3ff8709c3ef76cd7d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pystate.h": "57d907e73b4111d0e82f09be3d68d4d746b273b932ee7b00daf929496f045f75",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/genobject.h": "0ee1bcd0a42e7b3711d7e5311ea7670393d6224e8e85e9ec9aab81c14cf105af",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/descrobject.h": "100d7c883970ba72f9c8cd97683f80927092d90b6fe911a2ceede6ddf5108314",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/descrobject.h": "e8e0091719634dcf60eb4b084700c8c4fee5df21101ce5e7a9dae9860095e403",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/genericaliasobject.h": "df9d5dd5d8326269f1e21c7d87cc9157fd5bae9b5a7aebb2fe8239ca8b16d778",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/sentinelobject.h": "b9b8e2c0bb6f2ff388f7a481f7d6943165f4abce0c273f66b6887f871e16c1a2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/warnings.h": "18fde34b12247460de805fc259ea7f14305fce4779d244c0a7bdc7c73b8f6b51",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/warnings.h": "b758a2e42b0c497ea811464f579603d14fc30b50bd6ebe064d8d2a7df7e2bd76",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/weakrefobject.h": "bd4ccf51365dd9bd57da2df892c360e1a71c6c9be29faffad041847e03e9cd97",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/weakrefobject.h": "df719ee61ab5b17b583d19b605c8a083f3c8450bd7e575b8fc304e2905f22af8",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/structseq.h": "ab5a9d8388163d37fd2cb2db6786430176927dd46e46d47c8f745e18863cd43c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/structseq.h": "e05174cede4e0413b501eb11f37da88043bcd41c07259d07ac1a267ece7bd198",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/picklebufobject.h": "aa24deb0c2e95c6f9ce615c65d34e4eea7a62e4811768ad6e27980ad8e55f602",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pytime.h": "ea9fafdbcb2d02700baea293c493358a85624d2332e40c3434a4efa8f72e178e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/codecs.h": "32fa312b843da47ef06f3aa53837c1ba652bd1ee05d1a9fa3a5e621ecd76719b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pythread.h": "cab2a84b4600f51d1d01d7b9d6085eb50c93178489742235bf623afc41f9f7b4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pythread.h": "9d79295df4a87c7188ed3b71f855c031210e3b44ec1a0680a87458e94849bf3d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/context.h": "dfbcdf0032922b0e153ba93414e7f95d652b6304c6c0ad6ad41c00022669b303",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/modsupport.h": "04c8cfee6342828b0ead83fa801437f2f8229a958a828d56ada778406a2c74ec",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/modsupport.h": "b2fcbb9cd12fc5d993f9fdd5875770269ed8b3dd16aa306662747f26109a7048",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/compile.h": "1f10c818b29007e6a4446505a1140dd77ca6618ad81e87b502f4e22f4b274406",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/compile.h": "ccb8432f58f5670c488fd349abc8189c037805fc4f3271a03a74378e881cb4ca",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pythonrun.h": "382a51b4987ec02741daf757b2ba4b070f1d8143ebb8f84e14a1a692df93b75d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pythonrun.h": "16b97268e635a0c5183724e3cec2167e02dbcecdcd86b178f830684fccc7e98d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pylifecycle.h": "f01b162bbbe518a21632b0636987ebc8471e927f9fea0e2e7273e58a048f6bf6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pylifecycle.h": "89f7fe9942fa8101366ce6147a613d7a4eb84c497c8b1e095c1303ded6defea4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/ceval.h": "4e468d97f99b23bb98d37244ac182985a05285f969b3f583bff97e6bc4aa281f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/ceval.h": "38e92e118b7336a90a215fa1edb72267a2c31286d464356b1f8e41da91a28522",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/sysmodule.h": "e5c33bfeb6f6c2d9c861022ee7389a31b047b4fc46d64a73341a6c4b6ab5af0a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/audit.h": "0aa453936d869079c499f1eeb2f1d87a1181518d8a6f00c9bf9e8f9ab7a4076a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/audit.h": "b189331eb99656a5005725a56b27f309626e378232af97ca5e5978960178502a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/osmodule.h": "c013935b48f48ca8ce249a4d482c55e3fb6f1cfe786c5a32a57969bb74a779d9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/intrcheck.h": "183ae11868134ae814fe3573ccb9bead1979e4621d593d329a41e9c7d88c52fe",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/import.h": "e2f272799c98e90be25d0b5238b42fed79b96d23e134230b9e8090568cedb322",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/import.h": "4a267f2b15c6f3da21801929a92cc285281fa41f74df00033caf64167c7b85a3",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/abstract.h": "875a5e60b9639db21efa4db6a23a21293dc102187858575182a86c3be729af56",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/abstract.h": "ec199f47a5c90f948733f6491f84733e8345f69238033b5a5950df722d5de53a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bltinmodule.h": "1b5101b4b85409fd910032713906800bbb83580503036469c2a60ac8e80b8f72",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyctype.h": "10b5ccbc210fd2832e9c34849a3952e8db75f0016add89188358b1da6a8f3dbb",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystrtod.h": "149e766acebff1a90933d53bccb62e12d128d82a40b5c156b81b1847cc9a7a3a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystrcmp.h": "f401d8338fb6ecf5f12768ee95cd09c262f880b2ee522ca344b890dbdcde4c88",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/fileutils.h": "5ad4093a86921d4cb6738e00d7b2619170a20d4485aa642c271b9a933ad6e39f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/fileutils.h": "56caafdc38d2f5190b43e0cb64f43792572449d6a126e0cdefcc28773e9daad3",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyfpe.h": "ea7bfa7d891a0b5372d8b40a57d1b466b7824296e5c3f8d50b1a7cde084429b7",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/tracemalloc.h": "791f9cdf15900584f67661bf08a4a74d4c504e6e948c9b495fc54fff4e718524",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_structs.h": "19c93952b7a75d0d3381a208f8282a14fa0ecaa88d37b7e186b4dd9db8ce867b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_context.h": "c51c0e76e188a2dd222d10c120d24ba71e86c45d83d815797681ae295c699bed",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_typedefs.h": "19d1d586037872d1f140ac29787ff62038b53b47bde1ce3d6823650082e603fb"
+  },
+  "extension_sha256": "4f0d4af3dd37e88f539465ba980b1edfa0d0baee70540619c214b7c690630c69",
+  "compile_command": [
+    "gcc",
+    "-shared",
+    "-fno-omit-frame-pointer",
+    "-mno-omit-leaf-frame-pointer",
+    "-fno-strict-overflow",
+    "-Wsign-compare",
+    "-g",
+    "-Og",
+    "-Wall",
+    "-fPIC",
+    "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug",
+    "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include",
+    "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal",
+    "-MMD",
+    "-MF",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation-debug/headers.d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation_probe.c",
+    "-o",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation-debug/_h3_allocation.cpython-316d-x86_64-boil2-linux-gnu.so"
+  ],
+  "compiler_version": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "configuration": {
+    "CC": "gcc",
+    "LDSHARED": "gcc -shared",
+    "CFLAGS": "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer  -fno-strict-overflow -Wsign-compare -g -Og -Wall",
+    "EXT_SUFFIX": ".cpython-316d-x86_64-boil2-linux-gnu.so"
+  },
+  "cases": [
+    {
+      "kind": "ordinary",
+      "transition": false,
+      "fail_ordinal": -1,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          40,
+          1,
+          1
+        ],
+        [
+          12,
+          1,
+          1
+        ],
+        [
+          12,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 64,
+      "live_requested": 64,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": false,
+      "fail_ordinal": 0,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [],
+      "peak_requested": 0,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": false,
+      "fail_ordinal": 1,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          40,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 40,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": false,
+      "fail_ordinal": 2,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          40,
+          1,
+          0
+        ],
+        [
+          12,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 52,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": false,
+      "fail_ordinal": 3,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          40,
+          1,
+          1
+        ],
+        [
+          12,
+          1,
+          1
+        ],
+        [
+          12,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 64,
+      "live_requested": 64,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": true,
+      "fail_ordinal": -1,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 18,
+      "live_requested": 18,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": true,
+      "fail_ordinal": 0,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [],
+      "peak_requested": 0,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": true,
+      "fail_ordinal": 1,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          6,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 6,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": true,
+      "fail_ordinal": 2,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          6,
+          1,
+          0
+        ],
+        [
+          6,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 12,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "ordinary",
+      "transition": true,
+      "fail_ordinal": 3,
+      "words": 6,
+      "co_lines": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          3,
+          2
+        ],
+        [
+          3,
+          6,
+          3
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 18,
+      "live_requested": 18,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "backward",
+      "transition": false,
+      "fail_ordinal": -1,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          1
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 40,
+      "live_requested": 40,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "backward",
+      "transition": false,
+      "fail_ordinal": 0,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          1
+        ]
+      ],
+      "entries_size_succeeded_live": [],
+      "peak_requested": 0,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "backward",
+      "transition": false,
+      "fail_ordinal": 1,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          1
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 28,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "backward",
+      "transition": false,
+      "fail_ordinal": 2,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          1
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          0
+        ],
+        [
+          6,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 34,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "backward",
+      "transition": false,
+      "fail_ordinal": 3,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          1
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 40,
+      "live_requested": 40,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "high",
+      "transition": false,
+      "fail_ordinal": -1,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          2147483647
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 40,
+      "live_requested": 40,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "high",
+      "transition": false,
+      "fail_ordinal": 0,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          2147483647
+        ]
+      ],
+      "entries_size_succeeded_live": [],
+      "peak_requested": 0,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "high",
+      "transition": false,
+      "fail_ordinal": 1,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          2147483647
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 28,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "high",
+      "transition": false,
+      "fail_ordinal": 2,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          2147483647
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          0
+        ],
+        [
+          6,
+          1,
+          0
+        ]
+      ],
+      "peak_requested": 34,
+      "live_requested": 0,
+      "failed": 1,
+      "header_size": 16,
+      "untracked_frees": 0
+    },
+    {
+      "kind": "high",
+      "transition": false,
+      "fail_ordinal": 3,
+      "words": 3,
+      "co_lines": [
+        [
+          0,
+          1,
+          10
+        ],
+        [
+          1,
+          3,
+          2147483647
+        ]
+      ],
+      "entries_size_succeeded_live": [
+        [
+          28,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          1,
+          1
+        ]
+      ],
+      "peak_requested": 40,
+      "live_requested": 40,
+      "failed": 0,
+      "header_size": 16,
+      "untracked_frees": 0
+    }
+  ],
+  "denied_requests": "not measured: failmalloc rejects before recorder",
+  "identities_after": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/instrumentation.c": "94e1cd97c5547474e0e4c8cf49a674430b1284b34a5553c7e297118debd66249",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/bytecodes.c": "0b45b41af826d87ad7bff32b0446a3016f7815d30317cfdb213d8b3eade1f561",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/generated_ir_cases.c.h": "ccba27ee58ad74c3cf46f6db3444b6e7a7e9ae8b357ac0eba7dd51e7b618f03f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_ir_metadata.h": "34207222de5297d36d4be803742e35a825a606855d7d7f76488428e5a2462792",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python": "5c40843083ca404e5e77312d2d1b4a377cae78d4aed60d4a0ca9195532ffda64",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "c3e46ea6e1bd156a84fc39ae9dffb8216058a4477e6d34b234cd11f6d39c9b31",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation_probe.c": "4d8f7a6270737ec8af1db2738c1df7bd2e7ccf79a9ce4168d3e02048c8babdb1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_allocation_probe.py": "b044ed13c490d6c7c650b3126b74d07c45c35fdf789c0e27b87da34d1d725184"
+  },
+  "consumed_headers_after": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/allocation_probe.c": "4d8f7a6270737ec8af1db2738c1df7bd2e7ccf79a9ce4168d3e02048c8babdb1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/Python.h": "42fae201303260bfcf7c0792fbae827f5f15dea6bff81fcf234ef29d2eeb475f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/patchlevel.h": "b22e430bed238c5493f3be4af18892ac9a09e3f1ed747183c85375f7b153f95e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymacconfig.h": "75d2153db6687f222ae5bcc0fd3af3a346c823777ec2b5facdcd8610819bf0e2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyabi.h": "eeeb6ad957ec4a190b739f484befd0fac661554079ca5ad74c947667340e33cd",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyport.h": "ccb83255f1d60278fa29df2ced61a4481896cf6f360824c49918e4864d6c8b68",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/exports.h": "1d84ee02f561ec13136f3e15aed22c747b19b30b28c483d26ff21f6ea8a98ce6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymacro.h": "4c1de7b62aa4947f16208f4f09e6b9b9d6e3848643971a3148444cf1fd5bd299",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymath.h": "d2dde2a9a36604de30edec2edcea01d66976e262e4f3e4bc4b1b4c7f91efd632",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pymem.h": "0befb603e8866a0ffbb76674b47e02b08ab23ed20feb6d098e163338d18170e6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pymem.h": "a27c048ec9c90733fba0e2703b095e0c51f631b03a2c5aa8370c1494a0b9a5c0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pytypedefs.h": "b6bf4e7b518eac2b0bcca441f5b1d2788551067a635322c4a81c9fe5e632e4f2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pybuffer.h": "bbdff75d4cb33d42bd06121aefcb979d16ebde9e465dd58a53ff8ae3957f81ab",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystats.h": "97540d6e0ae19119d70acada3120464813807af8f8a12f21e3f3218f86ca3eed",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyatomic.h": "6b90d21219d5a30fbd98560d2104fe42b07b645450dafc1704b52f47f125f1e5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyatomic.h": "8d082d53d9cebae0fa425dd715e49cc8b8d34cd0c93f4d0d1d27b4866f8a150b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyatomic_gcc.h": "bea93374cbca16f31c61f13a8bb891ffed2924662d64aa22dcc8bc14d0a05b2f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pylock.h": "e2d81b07e85bec591eaf2a5f4d9a9e7100c7dfeb274e58d4bc8181eda11bef57",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/critical_section.h": "3084d1909b40b24443157c0ff6169238aacdac99773131449a3114fc4494d575",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/critical_section.h": "e9deb5058f0cb8f874fcd522fb5e897cf8fc5f949ad76e75bdd2ec6fe86a9d2f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/object.h": "9cc353f276125432b27ffdc2b0c8908edbf7b7863223d8e9b2ec9be2e4c48883",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/object.h": "eb5128a02ecfd3295bea84c1fef2ce9d7aab8f3cd5e6388515ff417c24b815c4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/refcount.h": "2c81b44f4db64d26212b3b7fa1c0799315ff17c35ed808dc12dee969e9fc88cd",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/objimpl.h": "df98be98c62ce5363d59d087363ebadd71088c333df072ca49fd00016f5a5384",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/objimpl.h": "c09b25a5b5de54a855b9f0b8ce0682f3fa48d4b12af92ca66469b1a788c12ae0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/slots.h": "ceff36128a15211536894e9b10870a1f1d4400e164d127555a16d0f07b059277",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/slots_generated.h": "91aecfb2b478c6aa35a57de83745ecd1c05a7fcd6c902ba73951c37386e81fa9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyhash.h": "919303204a818cae82466c58aaa0c9a7ff5dd10fdd2e7c636177a8640a7fddbb",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyhash.h": "59299cebfab6aef4b0c7177a5e6f3c7ee13d304c6ec96a3468eb2b5f1a20fa27",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pydebug.h": "12e9ce8ceb7afa5ee4ff0440613b6d7e8743ff0e0c3191bb02760baf9390ea6c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bytearrayobject.h": "5eda7be4caa3fd1bbe8dc5d79680bcb2491b9d60b6f8ade463ad19400ef41cc1",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/bytearrayobject.h": "f5e6d6a9e10fe89d63655f45b233123925b37c5076c13a07fe9f6494c0bd9368",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bytesobject.h": "691be67f2f431c2ceee20af5c2af9b2c1b5cd240b4e11f11063f5f08bd0c31f6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/bytesobject.h": "ea4910be4bfe696bab0e82b011c96ff4ef06b3dc1ea4615467da4c32cf772b91",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/unicodeobject.h": "421578de6ec277e474d6e259ec8f31753c8c36673ea7bc3594a14969d5c03a9b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/unicodeobject.h": "9380367be92a7e5223e2cefc08b863cf5a1c0089a6f9b7e5956602cf70260689",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyerrors.h": "0eb214d8d1a0071195829600b40396a2cdc1fd6d00659327d420f0df50c9141f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyerrors.h": "8c3962f3f2cb89a29efc69071333e767eed75b39d4cb1b9a5d082d2f34451a0d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/longobject.h": "1f58e808808653beb29c2a3c4244840d02017c2158f5c3b6fc829ba73f38d6d5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/longobject.h": "05c17903d9cea8180e47beba2c19db9b157a1f5d7bafa2460f0e4365bcccb652",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/longintrepr.h": "eb786bfc62cf3590636362c7cee0565ede9d0f3e9d147ec7c7e3bde08bee9501",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/boolobject.h": "11c1e89d34cf4e789c10390487186b8118741e69e5df9089ba06ae76e6283416",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/floatobject.h": "15ae8987948effae98054c309ea762906a076594f39aa9dfa95c4d5ee9750c83",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/floatobject.h": "f1c53f5b87f221db66004b836aa2fc9462aa46c2fbe46b417a8ddc803ce2f585",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyvalue.h": "730f979ee22f21c0e15ee161cfe596fd1bcc7a1b0d256d0f3e2dae746990f18e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/complexobject.h": "e5fc54c40fc46fc2ebe8f3f9430585dc5e48748ed8a52ff3b36e21f198feed43",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/complexobject.h": "6013269a1e843da04e6958343e0130ce2094c3f5c4f3a53175dd9fc6f1e7845c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/rangeobject.h": "b24104dc0559d4993c85183640a0639952be933bd4fabd7d93e3ee2d5c3beeab",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/memoryobject.h": "9243591ade554b6f619e773806ee447f244abfc9ff394b53b459d70bd32a912f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/memoryobject.h": "a31ac3459ab6ad78f2ee5c05c8bcaf6a86f5a514236822f29e0b7134c24c0e74",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/tupleobject.h": "0bf9df9fa4b894a7f3cfb43f64bab0b47ce06c6e320efe494721c574b3b1b68f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/tupleobject.h": "0a4d86fea35647c6418c9eb29c092be6f502110701aa7052dfb2ddb916812429",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/listobject.h": "de54a8dc8414d717dd3cc8cd9e982ac3aab1aa89a6940e81627377b299bbd4cc",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/listobject.h": "2d7744ca822b27cbd785f6b30e8f973e62cd26ae68449b2634d59bebf82700c0",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/dictobject.h": "c3e2139dce9dada86517392bd15c684cc26cee0f49657611ae4cead3242464e8",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/dictobject.h": "8fe4213090da000f73514794564b42fb098d3f5a44a4b73134f39675e68e94a7",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/odictobject.h": "3a400e637f94dbaedf7cd7a5f3f96ca539cfccacdf4f6d792113cf364ee7d525",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/enumobject.h": "2244fe250db9995068fe74dce0e23fd70c12b03fd94751d98b773be8f64896b6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/setobject.h": "0bc18511dee2fcfa0fcd024f5b133be9c86b2f10387917cf2f7e5e074ebd78fc",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/setobject.h": "d942b9c643bc6b9a9af977ed420c1ce3c648db61ac30f8930647e2e2dd4eeb39",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/methodobject.h": "9c34026f1ad832930181a63b0b02805366d329aee4aa83f82fa9c29f943a5749",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/methodobject.h": "a138124de16298e308f0927a7bbe9e314aa9521a6794a5d50e683a2143d9de5b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/moduleobject.h": "4b27695cab3c72ec067a1a8147ace5375c6929f417406bf40d945bfd96a8f268",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/monitoring.h": "f06f25c1f3193754bade0aee118e07f1e2a794e65392f3a65a6a3ac9ee268410",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/funcobject.h": "602f43324b2635148aab085536ea2ad328ce1c5705b539664b752e52cd1bec9b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/classobject.h": "a6617cf55df7630238a559dbc0d9f16c8e58e5c6761c99e53c6d69fc7d4685c9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/fileobject.h": "97d626e77e0079c8ea93828d60367cd8b15c54e96def36a54243eab482b0f6db",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/fileobject.h": "3a2d87d6f21f0a87fd054cf128571cf8130316c13384bd93e1da3ce4dd4b3c12",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pycapsule.h": "e421db8a24fa7992bcdb31130e92673827f6ff9a9c03eb8406cd171399ef6aca",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/code.h": "b5516bfd040a49b24a6b583a0f1fa325faf7e0f8da1fd98f696206c9620fa33d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pyframe.h": "58513e7017805ee5c49a329a552f72a6be6d88ce2bcfa344f5130582fa75ecb6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyframe.h": "96ef735b3912b45182282dbe003644d4a73e85d4d3d24381a140291cc0e57c58",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/traceback.h": "79b192ff3b8b3176a5f81e458b32976e3281493e771adb2a29566ea49cf64d2a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/traceback.h": "adbdb29f8c5f3546c1feb3ea7581df8eb02af9b3113e9492c48c28ff9eb4f931",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/sliceobject.h": "93c89896f316d2216c105f776f333eddff0188fe26e4f0f0e02f0b7534f83403",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/sliceobject.h": "10d0f61769d6db5e327ef4ef2e978f3a0b09db48305718685dd2d197ebf0aa98",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/cellobject.h": "51378eb9637bf594dca6a7f31756e9239303d197433d26dfbb8ecc63fbf7f4ee",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/iterobject.h": "6ad686f5ca43d534828ba07fae3dfba2c64c87649fafd8ebbb152551f22ec738",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/initconfig.h": "917e3042e8e65ffaf03485be723a90f05f84c3f5828277542c733aee47b9c6b5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystate.h": "ba6b58f81ef8db25932ccbec0651670723b53581c279afa3ff8709c3ef76cd7d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pystate.h": "57d907e73b4111d0e82f09be3d68d4d746b273b932ee7b00daf929496f045f75",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/genobject.h": "0ee1bcd0a42e7b3711d7e5311ea7670393d6224e8e85e9ec9aab81c14cf105af",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/descrobject.h": "100d7c883970ba72f9c8cd97683f80927092d90b6fe911a2ceede6ddf5108314",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/descrobject.h": "e8e0091719634dcf60eb4b084700c8c4fee5df21101ce5e7a9dae9860095e403",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/genericaliasobject.h": "df9d5dd5d8326269f1e21c7d87cc9157fd5bae9b5a7aebb2fe8239ca8b16d778",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/sentinelobject.h": "b9b8e2c0bb6f2ff388f7a481f7d6943165f4abce0c273f66b6887f871e16c1a2",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/warnings.h": "18fde34b12247460de805fc259ea7f14305fce4779d244c0a7bdc7c73b8f6b51",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/warnings.h": "b758a2e42b0c497ea811464f579603d14fc30b50bd6ebe064d8d2a7df7e2bd76",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/weakrefobject.h": "bd4ccf51365dd9bd57da2df892c360e1a71c6c9be29faffad041847e03e9cd97",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/weakrefobject.h": "df719ee61ab5b17b583d19b605c8a083f3c8450bd7e575b8fc304e2905f22af8",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/structseq.h": "ab5a9d8388163d37fd2cb2db6786430176927dd46e46d47c8f745e18863cd43c",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/structseq.h": "e05174cede4e0413b501eb11f37da88043bcd41c07259d07ac1a267ece7bd198",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/picklebufobject.h": "aa24deb0c2e95c6f9ce615c65d34e4eea7a62e4811768ad6e27980ad8e55f602",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pytime.h": "ea9fafdbcb2d02700baea293c493358a85624d2332e40c3434a4efa8f72e178e",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/codecs.h": "32fa312b843da47ef06f3aa53837c1ba652bd1ee05d1a9fa3a5e621ecd76719b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pythread.h": "cab2a84b4600f51d1d01d7b9d6085eb50c93178489742235bf623afc41f9f7b4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pythread.h": "9d79295df4a87c7188ed3b71f855c031210e3b44ec1a0680a87458e94849bf3d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/context.h": "dfbcdf0032922b0e153ba93414e7f95d652b6304c6c0ad6ad41c00022669b303",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/modsupport.h": "04c8cfee6342828b0ead83fa801437f2f8229a958a828d56ada778406a2c74ec",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/modsupport.h": "b2fcbb9cd12fc5d993f9fdd5875770269ed8b3dd16aa306662747f26109a7048",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/compile.h": "1f10c818b29007e6a4446505a1140dd77ca6618ad81e87b502f4e22f4b274406",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/compile.h": "ccb8432f58f5670c488fd349abc8189c037805fc4f3271a03a74378e881cb4ca",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pythonrun.h": "382a51b4987ec02741daf757b2ba4b070f1d8143ebb8f84e14a1a692df93b75d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pythonrun.h": "16b97268e635a0c5183724e3cec2167e02dbcecdcd86b178f830684fccc7e98d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pylifecycle.h": "f01b162bbbe518a21632b0636987ebc8471e927f9fea0e2e7273e58a048f6bf6",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pylifecycle.h": "89f7fe9942fa8101366ce6147a613d7a4eb84c497c8b1e095c1303ded6defea4",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/ceval.h": "4e468d97f99b23bb98d37244ac182985a05285f969b3f583bff97e6bc4aa281f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/ceval.h": "38e92e118b7336a90a215fa1edb72267a2c31286d464356b1f8e41da91a28522",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/sysmodule.h": "e5c33bfeb6f6c2d9c861022ee7389a31b047b4fc46d64a73341a6c4b6ab5af0a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/audit.h": "0aa453936d869079c499f1eeb2f1d87a1181518d8a6f00c9bf9e8f9ab7a4076a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/audit.h": "b189331eb99656a5005725a56b27f309626e378232af97ca5e5978960178502a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/osmodule.h": "c013935b48f48ca8ce249a4d482c55e3fb6f1cfe786c5a32a57969bb74a779d9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/intrcheck.h": "183ae11868134ae814fe3573ccb9bead1979e4621d593d329a41e9c7d88c52fe",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/import.h": "e2f272799c98e90be25d0b5238b42fed79b96d23e134230b9e8090568cedb322",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/import.h": "4a267f2b15c6f3da21801929a92cc285281fa41f74df00033caf64167c7b85a3",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/abstract.h": "875a5e60b9639db21efa4db6a23a21293dc102187858575182a86c3be729af56",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/abstract.h": "ec199f47a5c90f948733f6491f84733e8345f69238033b5a5950df722d5de53a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/bltinmodule.h": "1b5101b4b85409fd910032713906800bbb83580503036469c2a60ac8e80b8f72",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyctype.h": "10b5ccbc210fd2832e9c34849a3952e8db75f0016add89188358b1da6a8f3dbb",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystrtod.h": "149e766acebff1a90933d53bccb62e12d128d82a40b5c156b81b1847cc9a7a3a",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/pystrcmp.h": "f401d8338fb6ecf5f12768ee95cd09c262f880b2ee522ca344b890dbdcde4c88",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/fileutils.h": "5ad4093a86921d4cb6738e00d7b2619170a20d4485aa642c271b9a933ad6e39f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/fileutils.h": "56caafdc38d2f5190b43e0cb64f43792572449d6a126e0cdefcc28773e9daad3",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/pyfpe.h": "ea7bfa7d891a0b5372d8b40a57d1b466b7824296e5c3f8d50b1a7cde084429b7",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/cpython/tracemalloc.h": "791f9cdf15900584f67661bf08a4a74d4c504e6e948c9b495fc54fff4e718524",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_structs.h": "19c93952b7a75d0d3381a208f8282a14fa0ecaa88d37b7e186b4dd9db8ce867b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_context.h": "c51c0e76e188a2dd222d10c120d24ba71e86c45d83d815797681ae295c699bed",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_typedefs.h": "19d1d586037872d1f140ac29787ff62038b53b47bde1ce3d6823650082e603fb"
+  }
+}

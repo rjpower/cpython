@@ -1,0 +1,49 @@
+gate 1 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default at 878647973ba
+Using random seed: 3256028213
+0:00:00 load avg: 1.91 mem:   47.8 MiB Run 11 tests in parallel using 2 worker processes (timeout: 10 min, worker timeout: 15 min)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_ir.py:1147: RuntimeWarning: assigning None to 1 unbound local
+  frame.f_lineno = f.__code__.co_firstlineno + 1
+0:00:48 load avg: 1.94 mem:   73.9 MiB running (1): test_monitoring (38.5 sec)
+0:01:18 load avg: 2.03 mem:   73.9 MiB running (1): test_monitoring (1 min 8 sec)
+0:01:48 load avg: 1.75 mem:   73.9 MiB running (1): test_monitoring (1 min 38 sec)
+0:02:18 load avg: 1.80 mem:   73.4 MiB running (1): test_monitoring (2 min 8 sec)
+0:02:48 load avg: 1.72 mem:   74.6 MiB running (1): test_monitoring (2 min 38 sec)
+0:03:18 load avg: 1.62 mem:   75.2 MiB running (1): test_monitoring (3 min 8 sec)
+0:03:48 load avg: 1.83 mem:   75.3 MiB running (1): test_monitoring (3 min 38 sec)
+0:04:18 load avg: 1.68 mem:   75.4 MiB running (1): test_monitoring (4 min 8 sec)
+0:04:48 load avg: 1.86 mem:   75.4 MiB running (1): test_monitoring (4 min 38 sec)
+0:05:18 load avg: 2.09 mem:   75.4 MiB running (1): test_monitoring (5 min 8 sec)
+Current thread 0x00007d48837b07c0 [python] (most recent call first):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_monitoring.py", line 297 in func
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_monitoring.py", line 316 in test_uninstrumented_code_retains_configured_local_events
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/case.py", line 637 in _callTestMethod
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/case.py", line 691 in run
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/case.py", line 747 in __call__
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/suite.py", line 122 in run
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/suite.py", line 84 in __call__
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/suite.py", line 122 in run
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/unittest/suite.py", line 84 in __call__
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/testresult.py", line 158 in run
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 84 in _run_suite
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 42 in run_unittest
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 162 in test_func
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 118 in regrtest_runner
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 165 in _load_run_test
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 212 in _runtest_env_changed_exc
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 321 in _runtest
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/single.py", line 350 in run_single_test
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/worker.py", line 99 in worker_process
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/worker.py", line 137 in main
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/libregrtest/worker.py", line 141 in <module>
+  File "<frozen runpy>", line 87 in _run_code
+  File "<frozen runpy>", line 201 in _run_module_as_main
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_monitoring
+
+Total duration: 5 min 38 sec
+Total tests: run=1,262 (filtered) skipped=12
+Total test files: run=11/11 (filtered) failed=1
+Result: FAILURE

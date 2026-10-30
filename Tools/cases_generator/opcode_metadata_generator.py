@@ -18,7 +18,7 @@ from generators_common import (
     write_header,
     cflags,
 )
-from ir_generator import HandlerDomain, build_handler_domain
+from ir_generator import HandlerDomain, HandlerKind, build_handler_domain
 from cwriter import CWriter
 from typing import TextIO
 from stack import get_stack_effect
@@ -148,21 +148,14 @@ def generate_instruction_formats(analysis: Analysis, out: CWriter) -> None:
 
 def generate_deopt_table(analysis: Analysis, domain: HandlerDomain,
                          out: CWriter) -> None:
-    out.emit("PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];\n")
+    out.emit("PyAPI_DATA(const uint16_t) _PyOpcode_Deopt[IR_NUM_HANDLERS];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit("const uint8_t _PyOpcode_Deopt[256] = {\n")
-    deopts: list[tuple[str, str]] = []
-    for inst in analysis.instructions.values():
-        deopts.append((inst.name, domain.bases[inst.name]))
-    defined = set(domain.opmap.values())
-    for i in range(256):
-        if i not in defined:
-            deopts.append((f'{i}', f'{i}'))
-
-    assert len(deopts) == 256
-    assert len(set(x[0] for x in deopts)) == 256
-    for name, deopt in sorted(deopts):
-        out.emit(f"[{name}] = {deopt},\n")
+    out.emit("const uint16_t _PyOpcode_Deopt[IR_NUM_HANDLERS] = {\n")
+    ids = {**domain.opmap, **domain.handlers}
+    entries = {i: (ids[domain.bases[name]], name) for name, i in ids.items()}
+    for i in range(domain.count):
+        base, name = entries.get(i, (i, "unused"))
+        out.emit(f"[{i}] = {base}, /* {name} */\n")
     out.emit("};\n\n")
     out.emit("#endif // NEED_OPCODE_METADATA\n\n")
 
@@ -233,14 +226,15 @@ def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("#endif\n\n")
 
 
-def generate_name_table(analysis: Analysis, out: CWriter) -> None:
-    table_size = 256 + len(analysis.pseudos)
-    out.emit(f"PyAPI_DATA(const char) *_PyOpcode_OpName[{table_size}];\n")
+def generate_name_table(analysis: Analysis, domain: HandlerDomain,
+                        out: CWriter) -> None:
+    out.emit("PyAPI_DATA(const char) *_PyOpcode_OpName[IR_NUM_HANDLERS];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit(f"const char *_PyOpcode_OpName[{table_size}] = {{\n")
-    names = list(analysis.instructions) + list(analysis.pseudos)
-    for name in sorted(names):
-        out.emit(f'[{name}] = "{name}",\n')
+    out.emit("const char *_PyOpcode_OpName[IR_NUM_HANDLERS] = {\n")
+    ids = {**domain.opmap, **domain.handlers}
+    for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+        if domain.kinds[name] & HandlerKind.METADATA:
+            out.emit(f'[{handler}] = "{name}",\n')
     out.emit("};\n")
     out.emit("#endif\n\n")
 
@@ -432,7 +426,7 @@ def generate_opcode_metadata(
         generate_oparg_macros(out)
         generate_metadata_table(analysis, out)
         generate_expansion_table(analysis, out)
-        generate_name_table(analysis, out)
+        generate_name_table(analysis, domain, out)
         generate_cache_table(analysis, out)
         generate_feedback_fields_table(analysis, out)
         generate_deopt_table(analysis, domain, out)

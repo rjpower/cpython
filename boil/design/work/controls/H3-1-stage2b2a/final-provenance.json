@@ -1,0 +1,289 @@
+{
+  "tested_base": "617bea5be1b1b6b0d368e9ee8c4ca51eb18f7d5d",
+  "native_parent": "c5cf6ba6d2888ebbad085e990cf47e156a079780",
+  "tested_tree": "base plus recorded source hashes; evidence commit follows",
+  "sources": {
+    "Include/internal/pycore_call.h": "4dffcd9cbb06f7856036c5717f861838237a8e4cd81a11fefe492fc26c90addb",
+    "Include/internal/pycore_code.h": "1cab75205a39725c5c0bcc48e604f6368de65873dfa7561161bab43a84662d32",
+    "Include/internal/pycore_gc_walk.h": "cc5f769a1b2cf12b89e42e0aa058b745a2f40d83549f85b3089aadefd51db6ec",
+    "Include/internal/pycore_ir.h": "856a6006988307d28ee67b7bc82cd91b1a355e95c7bd2f3333a696031856f754",
+    "Include/internal/pycore_ir_metadata.h": "14166bb06a270ec26ffc412c6bbbef57314c3268bcb4b5e4b5f726703112e75b",
+    "Include/internal/pycore_opcode_metadata.h": "6aa41147cb843a7eb66473523b088a3ec50734ea64654b27162df892f02dcab3",
+    "Include/internal/pycore_structs.h": "19c93952b7a75d0d3381a208f8282a14fa0ecaa88d37b7e186b4dd9db8ce867b",
+    "Include/opcode_ids.h": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+    "Lib/_opcode_metadata.py": "8618b46e42afb0e4c6eaee2078caf37db726f37a1be985c45d217d74c8417ee8",
+    "Lib/dis.py": "232d8c0d2190392cca38a3b71ea2480e9192c168150f6876792cf85f3e18a4ef",
+    "Lib/opcode.py": "16a63abe6e92f54776012c5a4b3add7fb31f90dcae0739fcdad6c548abf65e01",
+    "Lib/test/libregrtest/worker.py": "d32b7ea772edfaa1e28f53c3c1a7219cdd132498416adcbde7d9159f331eab2f",
+    "Lib/test/test_code.py": "ccb08517c6e43c7d33db4a2332f3707b34543ee14a15294708b277e85b6ad29d",
+    "Lib/test/test_generated_cases.py": "8315884c61fa9de615efda58be556e5a0db8cd20fbbfaa5e4a0c4367d9b8dc20",
+    "Lib/test/test_ir.py": "de4f8f07e7018954281c5a5bc27a22e99ed3af4cec97e56a038c1f78d4a3b47c",
+    "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+    "Modules/_opcode.c": "43fe82646f2fe2ecbc6342e98341a2a69dcc356a401abb16014a2e5c547c2774",
+    "Modules/_testinternalcapi.c": "03da6c1e048d67b9cc813b03268bff8aca969f9c95d59c762419c35b4325d95d",
+    "Modules/clinic/gcmodule.c.h": "2291474e11c6d2e5e3eb0bfaf6096e9c96280d2f903b97ba45e904a2c0f82d95",
+    "Modules/gcmodule.c": "ad93e4f2911d68aa5a17fe3ee118d22197b5c9329617ef7b8d09ac7c8a6e9487",
+    "Objects/call.c": "596e9eda1650f30e478d756fdf62686e443039f58ef89b49fa6aa02161569d16",
+    "Objects/codeobject.c": "84ddb0e63f399454d92a3debc99ffb91d2976333358558164fe1bc38f20fd23b",
+    "Objects/listobject.c": "9c9a6a2518ca8a9c5a7647c582404ee9340c84254dcde6138c5b58d9f3cc3b2c",
+    "Objects/obmalloc.c": "56a331593663a5e44be55ed9eaa9e43ed939b43e7e64d8d07098dd9572d6be3e",
+    "Objects/shapeobject.c": "98f5491920aa7b1ed8befc89578aca59b8dde22e7bb7955ba504ae272f21f293",
+    "Objects/typeobject.c": "7646cab3ca829f331ea26e43a06a35215e06945c1a26e4e63da3c6e86de72f7c",
+    "Python/assemble.c": "e1e9eb4bfd9eac3b6f7d02cc04a5f820d567b58e81b58e59d6a169f340dc264b",
+    "Python/bytecodes.c": "cf5f7c177820d6640b59f079d6c878a4db48d06c42f17cb0e6b4547e780e879e",
+    "Python/ceval.c": "112150c7a927ac15aa5e882a3bb96b44984e016f918f446b59b0fdbacfb572ce",
+    "Python/ceval.h": "4a8e8636ca8903335d3cc79854a165d4facdf91e9bbd5a4c129259b938086464",
+    "Python/ceval_gil.c": "076fb9905b4bfda7b7d741438e8476759ce110ca238b1ed2686c6d264c9412cd",
+    "Python/gc_live.c": "24c7f6e8ce1856f2124c4f3dcaf0e6f49040549a502aad4490082efc35bc48c9",
+    "Python/generated_ir_cases.c.h": "c1c8c3190c67b654dca1e84e6618595cba6117ce73598b8c2e8e5f1e35e48985",
+    "Python/instrumentation.c": "0aba70e7cc8a795bf3e6ac81a9f4a64921cb3cb613d6b75364d7011b3e1faf32",
+    "Python/ir.c": "dff203b41537191a5fa16978cc5e69aad9f5c144cf4ac155a47453a455335c04",
+    "Python/pyvalue.c": "a9a7f73e3cec8bc9af3043cf76e3afc43d3fc63419f6a307306c72887e53f8de",
+    "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+    "Python/specialize.c": "9d87cb5fdf1b550720873fd645c649a0ff609ec8e04687395ae71bb19d8ac8e0",
+    "Tools/cases_generator/_typing_backports.py": "4fe25f5705e4f9f047ba330c70264032291c64d24cbd5f2d6da0615978521021",
+    "Tools/cases_generator/analyzer.py": "ca9f47ffce6c476c7b4319fc50d892e227e617497775e3e04d4adda3cf1c74c1",
+    "Tools/cases_generator/call_effects.py": "019e265f303bb7aec6caf4c38b94b1752bbbcfef905c2a04f6ab6d9a39974888",
+    "Tools/cases_generator/cwriter.py": "95f5d2f670fb23766830b4c2230c011d852a76e7e1482bbdde3c667e74dc6865",
+    "Tools/cases_generator/generators_common.py": "2b75dc0ea9c970ecb3c46c436c3842bcd3936806ec575445153aa01ed21fd4d6",
+    "Tools/cases_generator/ir_generator.py": "508ad9db94fc85963aeb07bdc303034babfa4f6152ce06417301f27cc3466c2d",
+    "Tools/cases_generator/ir_metadata_generator.py": "37d4a34172a29c7eb66d96c0f7ff225bb0c113144fd038adf8e1b9a8e6083c56",
+    "Tools/cases_generator/lexer.py": "40596eaab735fa6630e3a11432d6bad1753e6ef0b2a81d6e7cd293f8855c2fce",
+    "Tools/cases_generator/opcode_id_generator.py": "ccb4f92fb5432f3670d28b56ccffe9f790e4b81e28d1eefe46bdee41a3046895",
+    "Tools/cases_generator/opcode_metadata_generator.py": "ddcd95f52705105815482fe120fd656d6c2e092feccaa1e5ac7d4eccdb17902d",
+    "Tools/cases_generator/parser.py": "5eaa82d5c1375a9b4da1da7ce65e7d971dcc8c8008980436bef85a4fcdbb4fd8",
+    "Tools/cases_generator/parsing.py": "a79ea8da0f1f18c1ae637ee130910174cd764692dd7196b19db8c4658f718ef9",
+    "Tools/cases_generator/plexer.py": "c13ce4a0b558791b1843e0969ee6abfc3e094e2116cc817fc1101dee9ccbb876",
+    "Tools/cases_generator/py_metadata_generator.py": "e9ff71ff0cfba07c6956c4d8ae04a97a9da56db576946751fc1e09e0333d5c82",
+    "Tools/cases_generator/root_check.py": "aa466a07f9fce22c91d2c12fc07aafbce140b1d91ea68b854297c5490c07540f",
+    "Tools/cases_generator/root_check_c.py": "990e247878dcc1982d6adba71a1ede5064da2f00bbb5d51a67a34f9d974ac571",
+    "Tools/cases_generator/stack.py": "056b64f0b098ea9add1a6c03dfa31d2929078c424132f035a906b71b4700bf96",
+    "Tools/cases_generator/uop_id_generator.py": "35faaeb3554025d5ae8589c3d5838bdd323bd8ea19e30fb41a809dbf92c7aef0"
+  },
+  "capi_fixture_sha256": "2437070b11781cb0e0969720e15202ae40d7c85962bac09c91c9474ff5896c2f",
+  "shared_scope": "exact additive safe-lookup function and method entry; all prior fixtures identical",
+  "builds": {
+    "default": {
+      "build/default/python": "753ef7bfe76f3f2708b92ac4102c29e0da8cc74722009f6cfda0ec6935174f65",
+      "build/default/pyconfig.h": "b5a7d11bb3f7315543313cb91ea3855397491f315aab6b9b771eec8bfa8f8cd0",
+      "build/default/Makefile": "aef20aa4deee2ba4c41b885bf11123a009338fefc17356cb605f85534942f82e",
+      "build/default/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so": "350ab243edcf9f1595362519694260b45fc0a89b827b62c6bc3d233f5d611f58"
+    },
+    "debug": {
+      "build/debug/python": "e985d5790b7924dab4dd5cab4f686fe70d69548c0732ecc9fb1a99e43487a5d1",
+      "build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+      "build/debug/Makefile": "7161e4e3eb90bc5c198c7af83439b31b019576f0a7a118984f5251bfdcdbc136",
+      "build/debug/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54"
+    }
+  },
+  "products": {
+    "Include/internal/pycore_ir_metadata.h": {
+      "parent": "14166bb06a270ec26ffc412c6bbbef57314c3268bcb4b5e4b5f726703112e75b",
+      "current": "14166bb06a270ec26ffc412c6bbbef57314c3268bcb4b5e4b5f726703112e75b",
+      "unchanged": true
+    },
+    "Include/internal/pycore_opcode_metadata.h": {
+      "parent": "6aa41147cb843a7eb66473523b088a3ec50734ea64654b27162df892f02dcab3",
+      "current": "6aa41147cb843a7eb66473523b088a3ec50734ea64654b27162df892f02dcab3",
+      "unchanged": true
+    },
+    "Include/internal/pycore_uop_ids.h": {
+      "parent": "adef43dad1a4ba28590bd085da8d76c52e2bcf9d146f6170d9dc70e9f9d6bce5",
+      "current": "adef43dad1a4ba28590bd085da8d76c52e2bcf9d146f6170d9dc70e9f9d6bce5",
+      "unchanged": true
+    },
+    "Include/opcode_ids.h": {
+      "parent": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+      "current": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+      "unchanged": true
+    },
+    "Lib/_opcode_metadata.py": {
+      "parent": "8618b46e42afb0e4c6eaee2078caf37db726f37a1be985c45d217d74c8417ee8",
+      "current": "8618b46e42afb0e4c6eaee2078caf37db726f37a1be985c45d217d74c8417ee8",
+      "unchanged": true
+    },
+    "Python/generated_ir_cases.c.h": {
+      "parent": "c1c8c3190c67b654dca1e84e6618595cba6117ce73598b8c2e8e5f1e35e48985",
+      "current": "c1c8c3190c67b654dca1e84e6618595cba6117ce73598b8c2e8e5f1e35e48985",
+      "unchanged": true
+    },
+    "Python/ir_targets.h": {
+      "parent": "f9c4a09ee2ea39803265e1d038ace8eae02eb31c16a55a0d128cf559c46e8076",
+      "current": "f9c4a09ee2ea39803265e1d038ace8eae02eb31c16a55a0d128cf559c46e8076",
+      "unchanged": true
+    }
+  },
+  "control_sources": {
+    "assert-kill-worker.py": "936aa2aa70a8be94dde2613907d56accb7eca6e130a72cfdcb554d306c19febf",
+    "run_line_controls.py": "26ece847650f11b6dda38a5ff6ed497559494e42ffebfa5bb00f9aefed01a64b",
+    "record_provenance.py": "2b1b9ac68908eff25523eaeb0ef927647283af44e31b85f83bc525d9b7103a1e",
+    "line_probe.py": "f715b9d20afc7acbfab8d0236dbc695d6dea194e9de712ab039f281cbb248779"
+  },
+  "workers": [
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_ir"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_monitoring"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_code"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_tracemalloc"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_faulthandler"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_traceback"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_frame"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_sys_settrace"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_sys_setprofile"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_peepholer"
+      ]
+    },
+    {
+      "mode": [
+        2,
+        0
+      ],
+      "executable": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+      "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so",
+      "capi_sha256": "51ab6dfc8dc2fcca7ab7768b1ea44d46043982e58c75d52bd559cb68da2b3b54",
+      "ignore_environment": 0,
+      "isolated": 0,
+      "entrypoint": "worker.main",
+      "tests": [
+        "test_generated_cases"
+      ]
+    }
+  ]
+}

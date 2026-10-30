@@ -356,6 +356,30 @@ checks and cleanup; do not relabel it a passed build receipt or rerun make
 merely to remove red history. This covers Clang goto's line-ended CIE token,
 not absent CFI or an actual compile/runtime failure.
 
+Coordinator landing ruling, 2026-10-29 20:10 PDT: exact5a45 completes all
+seven profiles, closure and independent LAND_INCREMENTAL review. The merge
+into primary changes only a frozen list of project-prose paths relative to
+that tested candidate: every other tracked file must remain byte-identical.
+For this merge, reuse the qualified5a45 binaries and their own frozen source/
+stdlib roots for one post-merge smoke per GCC release/O1-debug configuration.
+Bind the actual integration commit/tree and exact changed boil Markdown
+paths separately from compiled/runtime source5a45. This is not a claim of
+recompiling the integration head. Retain the seven-profile/closure evidence,
+source/config/tool/native checks, actual mode/N0 and fresh-cache witnesses.
+No further compile or full-suite repeat follows a proven project-prose-only
+merge. A runtime, test, generated, build or tool change invalidates this
+exception and requires its own reconciliation. Primary publication waits for
+both smoke results; inherited final-GC/performance debt remains open.
+
+Queue2a's original classifier-held probes stay preserved, without a native
+retry. The newly reviewed source design separates three safety changes.
+The coordinator authorizes isolated source implementation of sweep-order
+preparation/rollback first; its focused implementation and failure seam
+need review before native validation. Debug-output/root-lifetime design is
+next. Completion scheduling is not implementation-ready: eligibility,
+sparse graph storage and running-call close/fork behavior still need proof.
+This does not reopen the old raw-address fixture or grant a probe matrix.
+
 The first dispatch inventory is complete. H3-1 designs the handler domain:
 IR fields are 16-bit but numbering, deopt metadata, instrumentation and
 statistics still assume 256 handlers. One generated domain definition

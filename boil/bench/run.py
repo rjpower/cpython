@@ -34,7 +34,7 @@ boxes
     ``-X pystats`` at ``loops`` and ``3 * loops`` after a warm-up, and the
     value is the difference of the int, float and array boxes, divided as
     for instr.  The entry also keeps the boxes by class, the boxes by
-    instruction and the dispatches (instructions executed).  One pair: the
+    instruction and counted handler entries. One pair: the
     counts are deterministic.  Py_STATS writes each process's stats to a new
     randomly named file in /tmp/py_stats, shared with other users of the
     machine, so the runner takes the one file that appears during its
@@ -359,9 +359,28 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
     for line in path.read_text().splitlines():
         key, sep, value = line.strip().rpartition(":")
         if sep and value.strip().isdigit():
+            if key.strip() in counts:
+                raise MeasurementError(f"duplicate pystats key: {key.strip()}")
             counts[key.strip()] = int(value)
     path.unlink()
     return counts
+
+
+def handler_entry_metadata(counts: dict[str, int]) -> dict[str, int]:
+    fields = {
+        "Handler entry coverage version": "handler_entry_coverage_version",
+        "Handler entry dispatch mode": "handler_entry_dispatch_mode",
+        "Handler domain count": "handler_count",
+        "Handler metadata entries": "handler_metadata_entries",
+    }
+    if any(key not in counts for key in fields):
+        raise MeasurementError("pystats lacks full handler-entry coverage metadata")
+    result = {target: counts[source] for source, target in fields.items()}
+    if (result["handler_entry_coverage_version"] != 2
+            or result["handler_entry_dispatch_mode"] not in (0, 1)
+            or not 0 < result["handler_metadata_entries"] <= result["handler_count"] <= 1 << 16):
+        raise MeasurementError("unsupported pystats handler-entry metadata")
+    return result
 
 
 def check_pystats(ctx: Context) -> None:
@@ -377,6 +396,9 @@ def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     lo, hi = loops, HIGH * loops
     pystats_counts(ctx, bench, lo)  # warm-up: fills the pyc cache
     a, b = pystats_counts(ctx, bench, lo), pystats_counts(ctx, bench, hi)
+    metadata = handler_entry_metadata(a)
+    if metadata != handler_entry_metadata(b):
+        raise MeasurementError("pystats handler-entry coverage/mode differs between samples")
     missing = [k for k in BOX_TOTALS if k not in b]
     if missing:
         raise MeasurementError(f"{ctx.python} reports no {missing[0]}: not a Py_STATS "
@@ -389,13 +411,15 @@ def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     by_class = {k[len("Object boxes ("):-1]: per(k) for k in b if k.startswith("Object boxes (")}
     by_op = {k[len("opcode["):-len("].boxes")]: per(k) for k in b
              if k.startswith("opcode[") and k.endswith("].boxes") and per(k)}
-    dispatches = sum(per(k) for k in b if k.endswith("].execution_count"))
+    counted_handler_entries = sum(per(k) for k in a.keys() | b.keys()
+                                  if k.endswith("].execution_count"))
     unit = "boxes per iteration" if bench.inner > 1 else "boxes per loop"
     entry = {"group": bench.group, "unit": unit, "value": sum(per(k) for k in BOX_TOTALS),
              "int_boxes": per(BOX_TOTALS[0]), "float_boxes": per(BOX_TOTALS[1]),
              "array_boxes": per(BOX_TOTALS[2]), "by_class": by_class,
              "by_instruction": dict(sorted(by_op.items(), key=lambda kv: -kv[1])),
-             "dispatches": dispatches, "allocations": per("Object allocations"),
+             "counted_handler_entries": counted_handler_entries,
+             **metadata, "allocations": per("Object allocations"),
              "dict_mode": {k[len("Object materialize dict ("):-1]: per(k) for k in b
                            if k.startswith("Object materialize dict (")},
              "values": [sum(per(k) for k in BOX_TOTALS)],

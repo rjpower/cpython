@@ -11,7 +11,7 @@
  * current handler and its feedback.
  */
 
-#define NEED_IR_METADATA            // defines _PyIR_Formats, _PyIR_OnlyNames
+#define NEED_IR_METADATA            // defines _PyIR_Formats and handler properties
 #include "Python.h"
 
 #include "pycore_backoff.h"         // adaptive_counter_warmup()
@@ -59,13 +59,7 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 int
 _PyIR_BaseOpcode(int handler)
 {
-    if (handler == IR_JUMP) {
-        return JUMP_FORWARD;
-    }
-    if (handler >= IR_FIRST_ONLY_HANDLER) {
-        handler = _PyIR_Formats[handler].shadow;
-        assert(handler < IR_FIRST_ONLY_HANDLER);
-    }
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return _PyOpcode_Deopt[handler];
 }
 
@@ -214,7 +208,8 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         return handler;
     }
     // The instrumented twin of a NOFB form is NOFB too
-    if (handler >= IR_FIRST_ONLY_HANDLER && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
+    if (_PyIR_HasProperty(handler, _PyIR_H_NOFB)
+        && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
         && _PyIR_FormatOf(opcode)->nofb != 0)
     {
         return _PyIR_FormatOf(opcode)->nofb;

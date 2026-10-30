@@ -1,0 +1,9 @@
+{"binary": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/integration-default/python", "binary_sha256": "da4d776d346b1007887ed2bd470e771ae1cbb1afae661256a6644fb1a64bbb3c", "config_sha256": "b5a7d11bb3f7315543313cb91ea3855397491f315aab6b9b771eec8bfa8f8cd0", "opcode_module": "/tmp/boilgate/Lib/opcode.py", "sources": {"Objects/codeobject.c": "3021c408b1f93ba66dcbabc5ff5db192f1902d49457c07c319e698855153640b", "Include/internal/pycore_ir.h": "ed40912bb116d725c524ef7c9cfdff5395eb6079a1d3b7444a7c8c09c1b72319", "Include/opcode_ids.h": "771037b58eb30ba432fbfb07a8d9f45a5b1d6e4a3d06b5b551efa4206bcd9a27"}}
+replace INSTRUMENTED_LINE BUG: ACCEPTED; never executing malformed code ff00
+marshal INSTRUMENTED_LINE BUG: ACCEPTED; never executing malformed code ff00
+replace BINARY_OP_ADD_INT REJECTED code: word 0 has no feedback entry 0
+marshal BINARY_OP_ADD_INT BUG: ACCEPTED; never executing malformed code 8200
+replace INTERPRETER_EXIT BUG: ACCEPTED; never executing malformed code 1200
+marshal INTERPRETER_EXIT BUG: ACCEPTED; never executing malformed code 1200
+replace EXIT_INIT_CHECK BUG: ACCEPTED; never executing malformed code 0b00
+marshal EXIT_INIT_CHECK BUG: ACCEPTED; never executing malformed code 0b00

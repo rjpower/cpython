@@ -1,0 +1,11 @@
+--- a/Include/internal/pycore_ir.h
++++ b/Include/internal/pycore_ir.h
+@@ -283,7 +283,7 @@
+ static inline int
+ _PyIR_SetHandler(_PyIRWord *instr, int handler)
+ {
+-    if (!_PyIR_HasProperty(handler, _PyIR_H_DISPATCH)) {
++    if (!_PyIR_HasProperty((uint16_t)handler, _PyIR_H_DISPATCH)) {
+         return 0;
+     }
+     _PyIRWord word = (*instr & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;

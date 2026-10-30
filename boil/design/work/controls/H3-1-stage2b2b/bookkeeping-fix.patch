@@ -1,0 +1,53 @@
+--- a/Python/instrumentation.c
++++ b/Python/instrumentation.c
+@@ -1723,6 +1723,13 @@
+      * objects.
+      * See https://github.com/python/cpython/issues/108390 */
+     if (code->co_flags & CO_NO_MONITORING_EVENTS) {
++        if (tool_id >= 0) {
++            /* The configured local request is independent of installation. */
++            _PyCoMonitoringData *monitoring = code->_co_monitoring;
++            assert(monitoring != NULL);
++            set_local_events(&monitoring->local_monitors, tool_id, events);
++            monitoring->tool_versions[tool_id] = interp->monitoring_tool_versions[tool_id];
++        }
+         return 0;
+     }
+     if (_PyCode_GetExec(code) == NULL) {
+--- a/Lib/test/test_monitoring.py
++++ b/Lib/test/test_monitoring.py
+@@ -291,6 +291,34 @@
+             self.assertTrue(reached_success)
+             self.assertGreaterEqual(failures, 3)
+ 
++    def test_uninstrumented_code_retains_configured_local_events(self):
++        capi = import_helper.import_module("_testinternalcapi")
++        CO_NO_MONITORING_EVENTS = 0x2000000  # Include/cpython/code.h
++        def func(x):
++            return x + 1
++        func.__code__ = func.__code__.replace(
++            co_flags=func.__code__.co_flags | CO_NO_MONITORING_EVENTS)
++        code = func.__code__
++        seen = []
++        def record(current, offset):
++            if current is code:
++                seen.append(offset)
++        sys.monitoring.register_callback(TEST_TOOL, E.INSTRUCTION, record)
++        before = capi.get_ir(code, True)
++        requested = E.LINE | E.INSTRUCTION
++        try:
++            sys.monitoring.set_local_events(TEST_TOOL, code, requested)
++            self.assertEqual(sys.monitoring.get_local_events(TEST_TOOL, code), requested)
++            self.assertEqual(capi.get_ir(code, True), before)
++            state = capi.monitoring_state(code)
++            self.assertFalse(any(state[1]))
++            self.assertEqual(state[4], (0, 0, 0, 0, 0))
++            self.assertEqual(func(3), 4)
++            self.assertEqual(seen, [])
++        finally:
++            sys.monitoring.set_local_events(TEST_TOOL, code, 0)
++        self.assertEqual(sys.monitoring.get_local_events(TEST_TOOL, code), 0)
++
+     def test_absolute_lines_from_valid_ast(self):
+         import ast
+         for first, line in ((10, 1), (10, 8), (1, 2**31 - 1)):

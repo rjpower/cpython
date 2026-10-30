@@ -1,0 +1,22 @@
+combined-regen.log 0
+combined-domain.log 0
+combined-root-source-scan.log 1
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/close_codegen.py", line 64, in <module>
+    run("combined-root-source-scan.log", prefix + ["Tools/cases_generator/root_check_c.py", "--summary", *marked])
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/close_codegen.py", line 47, in run
+    assert result.returncode == 0, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,runpy,_testinternalcapi as c; assert (sys.flags.optimize,__debug__,c.gc_verify_mode(),c.gc_get_stress()) == (0,True,(0,0),0); print('actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0',flush=True); sys.argv=sys.argv[1:]; runpy.run_path(sys.argv[0],run_name='__main__')
+                                                                                                                                                                                                                                                        ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen runpy>", line 292, in run_path
+  File "<frozen runpy>", line 97, in _run_module_code
+  File "<frozen runpy>", line 87, in _run_code
+  File "Tools/cases_generator/root_check_c.py", line 40, in <module>
+    import call_effects
+ModuleNotFoundError: No module named 'call_effects'
+

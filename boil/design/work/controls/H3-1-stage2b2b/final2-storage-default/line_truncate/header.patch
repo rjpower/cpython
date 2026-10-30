@@ -1,0 +1,11 @@
+--- a/header
++++ b/header
+@@ -137,7 +137,7 @@
+                           int line)
+ {
+     assert(line >= -1);
+-    line_data->lines[index] = line;
++    line_data->lines[index] = (uint16_t)line;
+ }
+ 
+ // Exported for external JIT support. Invalid scalar IDs return -1.

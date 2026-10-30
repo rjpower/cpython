@@ -258,9 +258,8 @@ static inline int
 instr_opcode(_PyInstr *instr)
 {
     int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (handler >= IR_FIRST_ONLY_HANDLER) {
-        handler = _PyIR_FormatOf(handler)->shadow;
-        assert(handler < IR_FIRST_ONLY_HANDLER);
+    if (!_PyIR_HasProperty(handler, _PyIR_H_SPECIALIZED)) {
+        return _PyIR_BaseOpcode(handler);
     }
     return handler;
 }
@@ -300,8 +299,7 @@ instr_entry(_PyInstr *instr)
 static inline int
 set_opcode(_PyInstr *instr, int opcode)
 {
-    _PyIR_SetHandler(instr, opcode);
-    return 1;
+    return _PyIR_SetHandler(instr, opcode);
 }
 
 static inline void
@@ -429,8 +427,10 @@ fb_begin(_PyInstr *instr)
 {
     _PyFbHeader *h = instr_fb(instr);
     assert(h != NULL);
-    uint8_t opcode = instr_opcode(instr);
-    if (h->state == FB_MONO && h->poly == 0 && _PyOpcode_Deopt[opcode] != opcode) {
+    int opcode = instr_opcode(instr);
+    if (h->state == FB_MONO && h->poly == 0
+        && _PyIR_HasProperty(opcode, _PyIR_H_SPECIALIZED))
+    {
         fb_save_mono(instr, h, opcode);
     }
     // Constant sizes, so that the compiler inlines the stores
@@ -527,14 +527,11 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
 }
 
 static inline void
-specialize(_PyInstr *instr, uint8_t specialized_opcode)
+specialize(_PyInstr *instr, int specialized_opcode)
 {
     assert(!PyErr_Occurred());
     if (!set_opcode(instr, specialized_opcode)) {
-        STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
-                            SPEC_FAIL_OTHER);
-        return;
+        Py_FatalError("invalid specialization handler");
     }
     STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
     _PyFbHeader *h = instr_fb(instr);
@@ -1097,7 +1094,9 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
             assert(kind == _Py_LOOKUP_ABSENT);
             // Retry after the cooldown.  A specialised opcode in memory
             // would read the entry that fb_begin() cleared.
-            set_opcode(instr, LOAD_ATTR);
+            if (!set_opcode(instr, LOAD_ATTR)) {
+                return -1;
+            }
             set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
     }

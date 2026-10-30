@@ -737,6 +737,17 @@ order_visit(PyObject *op, void *arg)
     return 0;
 }
 
+/* Legacy-cycle resurrection can clear DEAD before ordering.  Objects that
+   need no call can still connect finalizers, so this does not filter edges. */
+static inline int
+finalizer_eligible(PyObject *op)
+{
+    return (op->ob_flags & _Py_GC_DEAD_FLAG)
+        && !(op->ob_flags & _Py_GC_FINALIZED_FLAG)
+        && Py_TYPE(op)->tp_finalize != NULL
+        && !_PyGen_FinalizerIsNoop(op);
+}
+
 /* List the dead objects that reach a dead object with a finalizer, and those
    objects, in the order their finalizers run: an object before the objects
    it reaches, as reference counting finalizes them, so that a file's
@@ -755,7 +766,9 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
             continue;
         }
         PyObject *root = res->dead[i].op;
-        if (root->ob_flags & _Py_GC_MARKED_FLAG) {
+        if (!finalizer_eligible(root)
+            || (root->ob_flags & _Py_GC_MARKED_FLAG))
+        {
             continue;
         }
         objstack_push(&stack, root);
@@ -764,7 +777,7 @@ finalizer_order(_PyGCMarkResult *res, objstack *order)
             uintptr_t top = (uintptr_t)stack.items[--stack.n];
             PyObject *op = (PyObject *)(top & ~(uintptr_t)1);
             if (top & 1) {
-                if (Py_TYPE(op)->tp_finalize != NULL) {
+                if (finalizer_eligible(op)) {
                     objstack_push(order, op);
                 }
                 continue;
@@ -860,10 +873,7 @@ handle_finalizers(GCState *gc, call_batch *b,
     }
     for (size_t i = 0; i < order.n; i++) {
         PyObject *op = order.items[i];
-        if ((op->ob_flags & _Py_GC_DEAD_FLAG)  // not reached from a legacy cycle
-            && !(op->ob_flags & _Py_GC_FINALIZED_FLAG)
-            && !_PyGen_FinalizerIsNoop(op))
-        {
+        if (finalizer_eligible(op)) {
             if (queue_push(b, op, NULL, CALL_FINALIZE) < 0) {
                 free(order.items);
                 goto error;

@@ -1,0 +1,3 @@
+PASS: 264 opcode/pseudo IDs, 287 dispatch IDs, count302 and first267 equal stage1 baseline
+PRISTINE dispatch count: 153
+runtime-only dispatch count: 134

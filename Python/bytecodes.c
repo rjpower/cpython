@@ -170,7 +170,8 @@ dummy_func(
             if (check_instrumentation) {
                 uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                 uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
+                if (code_version != global_version &&
+                    !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
                     int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                     if (err) {
                         ERROR_NO_POP();
@@ -266,13 +267,13 @@ dummy_func(
         }
 
         // The constant is an exact int that fits in int32, held inline.
-        inst(LOAD_CONST_INLINE_INT, (-- value)) {
+        pristine inst(LOAD_CONST_INLINE_INT, (-- value)) {
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineInt(value));
         }
 
         // The constant is an exact float other than NaN, held inline.
-        inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
+        pristine inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineFloat(value));
         }
@@ -287,7 +288,7 @@ dummy_func(
             value = PyValue_FromObject(obj);
         }
 
-        inst(LOAD_SMALL_INT_INLINE, (-- value)) {
+        pristine inst(LOAD_SMALL_INT_INLINE, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInt32((int32_t)oparg);
             ERROR_IF(PyValue_IsNull(value));
@@ -1398,7 +1399,7 @@ dummy_func(
             ERROR_IF(true);
         }
 
-        tier1 inst(INTERPRETER_EXIT, (retval --)) {
+        static_exec tier1 inst(INTERPRETER_EXIT, (retval --)) {
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             /* Restore previous frame and return. */
@@ -4423,7 +4424,7 @@ dummy_func(
             _CREATE_INIT_FRAME +
             _PUSH_FRAME;
 
-        inst(EXIT_INIT_CHECK, (should_be_none -- )) {
+        static_exec inst(EXIT_INIT_CHECK, (should_be_none -- )) {
             if (!_PyValue_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                     "__init__() should return None, not '%.200s'",
@@ -5510,7 +5511,7 @@ dummy_func(
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(INSTR_OFFSET_OF(this_instr));
-                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
+                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -5543,7 +5544,9 @@ dummy_func(
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, next_opcode));
             }
-            assert(next_opcode > 0 && next_opcode < 256);
+            assert(next_opcode > 0 &&
+                   _PyIR_HasProperty(next_opcode, _PyIR_H_METADATA) &&
+                   _PyIR_BaseOpcode(next_opcode) == next_opcode);
             opcode = ORIGINAL_HANDLER(next_opcode);
             DISPATCH_GOTO();
         }

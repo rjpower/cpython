@@ -85,13 +85,11 @@ typedef struct _Py_GlobalMonitors {
     uint8_t tools[_PY_MONITORING_UNGROUPED_EVENTS];
 } _Py_GlobalMonitors;
 
-/* Ancillary data structure used for instrumentation.
-   Line instrumentation creates this with sufficient
-   space for one entry per code unit. The total size
-   of the data will be `bytes_per_entry * Py_SIZE(code)` */
+/* Per-word absolute lines and canonical displaced opcodes.  A zero token
+ * means that the word is not eligible for LINE instrumentation. */
 typedef struct {
-    uint8_t bytes_per_entry;
-    uint8_t data[1];
+    uint16_t *original_opcodes;
+    int lines[1];
 } _PyCoLineInstrumentationData;
 
 
@@ -113,22 +111,37 @@ typedef struct _PyCoMonitoringData {
     uint8_t *line_tools;
     /* Information to support instruction events */
     /* The underlying instructions, which can themselves be instrumented */
-    uint8_t *per_instruction_opcodes;
+    uint16_t *per_instruction_opcodes;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
 } _PyCoMonitoringData;
 
-extern int
-_Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
+PyAPI_FUNC(int)
+_Py_Instrumentation_GetLine(_PyCoLineInstrumentationData *line_data, int index);
 
-static inline uint8_t
+static inline uint16_t
 _PyCode_GetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index)
 {
-    return line_data->data[index*line_data->bytes_per_entry];
+    return line_data->original_opcodes[index];
 }
 
-// Exported for external JIT support
-PyAPI_FUNC(uint8_t) _PyCode_Deinstrument(uint8_t opcode);
+static inline void
+_PyCode_SetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index,
+                          uint16_t opcode)
+{
+    line_data->original_opcodes[index] = opcode;
+}
+
+static inline void
+_PyCode_SetMonitoringLine(_PyCoLineInstrumentationData *line_data, int index,
+                          int line)
+{
+    assert(line >= -1);
+    line_data->lines[index] = line;
+}
+
+// Exported for external JIT support. Invalid scalar IDs return -1.
+PyAPI_FUNC(int) _PyCode_Deinstrument(int opcode);
 
 #ifdef __cplusplus
 }

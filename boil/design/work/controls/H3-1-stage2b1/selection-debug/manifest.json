@@ -1,0 +1,70 @@
+{
+  "inputs": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/ir.c": "dff203b41537191a5fa16978cc5e69aad9f5c144cf4ac155a47453a455335c04",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_ir.h": "856a6006988307d28ee67b7bc82cd91b1a355e95c7bd2f3333a696031856f754",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_ir_metadata.h": "14166bb06a270ec26ffc412c6bbbef57314c3268bcb4b5e4b5f726703112e75b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/opcode_ids.h": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python": "17a633e255083ea87904d221bb416498fdae94dacd7391d669fc6ce3bbaee751"
+  },
+  "body_sha256": "2db7e0fccc27d3f1c779e0ee36e1fc3cb9c18683f4459d12f23b7c8467a0e4ea",
+  "compiler": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "variants": {
+    "positive": {
+      "command": [
+        "gcc",
+        "-shared",
+        "-fno-omit-frame-pointer",
+        "-mno-omit-leaf-frame-pointer",
+        "-fno-strict-overflow",
+        "-Wsign-compare",
+        "-g",
+        "-Og",
+        "-Wall",
+        "-fPIC",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal",
+        "-MMD",
+        "-MF",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/positive/headers.d",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/positive/fixture.c",
+        "-o",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/positive/_h3_selection.cpython-316d-x86_64-boil2-linux-gnu.so"
+      ],
+      "returncode": 0,
+      "source_sha256": "224a5571833f98ebb25ec2cd10d23dcfb4ad1c690e30892622b8b61a952ae196",
+      "binary_sha256": "7780c198cff7c3fae183c5e974c78a13e90c4a593bc16fe534d6e3b62ff1ae19",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "probe_sha256": "0c29a66d89f4fcba54a0405a183e8d1818dfb84c09fa7c8b5c498a766205e271"
+    },
+    "omit-nofb": {
+      "command": [
+        "gcc",
+        "-shared",
+        "-fno-omit-frame-pointer",
+        "-mno-omit-leaf-frame-pointer",
+        "-fno-strict-overflow",
+        "-Wsign-compare",
+        "-g",
+        "-Og",
+        "-Wall",
+        "-fPIC",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal",
+        "-MMD",
+        "-MF",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/omit-nofb/headers.d",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/omit-nofb/fixture.c",
+        "-o",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/omit-nofb/_h3_selection.cpython-316d-x86_64-boil2-linux-gnu.so"
+      ],
+      "returncode": 1,
+      "source_sha256": "a898fcd5723b6ca67142f6081b6e8488d75c9c49eeba678dfcd98e1beef62095",
+      "binary_sha256": "c2284289b2dd894ac4562604b235d672f0ff68ef23b5a763d91341008cc5d8aa",
+      "patch_sha256": "94727b47ba19ec9cc8d34c0a3c10fec3927886c724db14eb5ee4ce545197e6be",
+      "probe_sha256": "0c29a66d89f4fcba54a0405a183e8d1818dfb84c09fa7c8b5c498a766205e271"
+    }
+  }
+}

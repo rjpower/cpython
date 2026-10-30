@@ -39,6 +39,7 @@ def generate_opcode_header(
             write_define(name, op)
 
         out.emit("\n")
+        write_define("IR_NUM_HANDLERS", domain.count)
         write_define("HAVE_ARGUMENT", domain.have_arg)
         write_define("MIN_SPECIALIZED_OPCODE", domain.opmap["RESUME"]+1)
         write_define("MIN_INSTRUMENTED_OPCODE", domain.min_instrumented)

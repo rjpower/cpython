@@ -1,0 +1,63 @@
+{
+  "scope": "LINE blocks only; source/layout forecast using measured probe inputs",
+  "excludes": "allocator overhead, common monitoring header, executing copy and tool arrays",
+  "new_heap_measurement": "not run; required after implementation",
+  "rows": {
+    "backward_2": {
+      "measured_nwords": 3,
+      "measured_firstlineno": 10,
+      "measured_lines": [
+        10,
+        8
+      ],
+      "old_relative_width": 1,
+      "absolute_width": 1,
+      "old_requested_LINE_bytes": 7,
+      "proposed_variable_LINE_bytes": 25,
+      "proposed_fixed_LINE_bytes": 34,
+      "fixed_minus_variable": 9
+    },
+    "backward_9": {
+      "measured_nwords": 3,
+      "measured_firstlineno": 10,
+      "measured_lines": [
+        10,
+        1
+      ],
+      "old_relative_width": 1,
+      "absolute_width": 1,
+      "old_requested_LINE_bytes": 7,
+      "proposed_variable_LINE_bytes": 25,
+      "proposed_fixed_LINE_bytes": 34,
+      "fixed_minus_variable": 9
+    },
+    "extreme_positive": {
+      "measured_nwords": 3,
+      "measured_firstlineno": 1,
+      "measured_lines": [
+        1,
+        2147483647
+      ],
+      "old_relative_width": 4,
+      "absolute_width": 4,
+      "old_requested_LINE_bytes": 16,
+      "proposed_variable_LINE_bytes": 34,
+      "proposed_fixed_LINE_bytes": 34,
+      "fixed_minus_variable": 0
+    },
+    "module_zero": {
+      "measured_nwords": 5,
+      "measured_firstlineno": 1,
+      "measured_lines": [
+        0,
+        1
+      ],
+      "old_relative_width": 1,
+      "absolute_width": 1,
+      "old_requested_LINE_bytes": 11,
+      "proposed_variable_LINE_bytes": 31,
+      "proposed_fixed_LINE_bytes": 46,
+      "fixed_minus_variable": 15
+    }
+  }
+}

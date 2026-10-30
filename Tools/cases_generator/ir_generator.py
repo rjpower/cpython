@@ -495,6 +495,16 @@ class HandlerKind(IntFlag):
     IR_ONLY = 8
     NOFB = 16
     PSEUDO = 32
+    METADATA = 64
+    DISPATCH = 128
+    PRISTINE = 256
+    ADAPTIVE = 512
+
+
+class HandlerState(IntFlag):
+    SPECIALIZATION = 1
+    MONITORING = 2
+    STATIC_EXEC = 4
 
 
 def check_handler_count(count: int) -> None:
@@ -514,6 +524,10 @@ class HandlerDomain:
     handlers: Mapping[str, int]
     bases: Mapping[str, str]
     kinds: Mapping[str, HandlerKind]
+    required_state: Mapping[str, HandlerState]
+    operations: Mapping[str, int]
+    instrumented: Mapping[str, str]
+    deinstrumented: Mapping[str, str]
     have_arg: int
     min_instrumented: int
     first_ir_only: int
@@ -521,7 +535,8 @@ class HandlerDomain:
 
     def __post_init__(self) -> None:
         check_handler_count(self.count)
-        for field in ("opmap", "handlers", "bases", "kinds"):
+        for field in ("opmap", "handlers", "bases", "kinds", "required_state",
+                      "operations", "instrumented", "deinstrumented"):
             object.__setattr__(self, field,
                                MappingProxyType(dict(getattr(self, field))))
         ids = dict(self.opmap)
@@ -533,22 +548,45 @@ class HandlerDomain:
             raise ValueError("duplicate handler ID")
         if any(not 0 <= handler < self.count for handler in ids.values()):
             raise ValueError("handler ID outside domain")
-        if set(self.bases) != set(ids) or set(self.kinds) != set(ids):
+        if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)
+                or set(self.required_state) != set(ids)):
             raise ValueError("incomplete handler base/kind metadata")
+        expected_operations = {name for name, kind in self.kinds.items()
+                               if kind & HandlerKind.BINARY_OP}
+        if set(self.operations) != expected_operations:
+            raise ValueError("incomplete handler operation metadata")
+        operation_count = len(binary_ops())
+        if (len(set(self.operations.values())) != len(self.operations)
+                or any(not 0 <= op < operation_count
+                       for op in self.operations.values())):
+            raise ValueError("invalid handler operation metadata")
+        for base, monitored in self.instrumented.items():
+            if (base not in ids or monitored not in ids
+                    or not self.kinds[monitored] & HandlerKind.INSTRUMENTED
+                    or self.bases[base] != base
+                    or self.bases[monitored] != monitored):
+                raise ValueError(f"invalid instrumentation relation: {base}")
+        for monitored, base in self.deinstrumented.items():
+            if self.instrumented.get(base) != monitored or base == monitored:
+                raise ValueError(f"invalid deinstrumentation relation: {monitored}")
         for name, base in self.bases.items():
             if base not in ids or self.bases[base] != base:
                 raise ValueError(f"invalid handler base for {name}: {base}")
+        for name, kind in self.kinds.items():
+            if kind & HandlerKind.DISPATCH and not kind & HandlerKind.METADATA:
+                raise ValueError(f"dispatch handler has no metadata: {name}")
+            if kind & HandlerKind.PRISTINE and (
+                    not kind & HandlerKind.DISPATCH or self.required_state[name]):
+                raise ValueError(f"invalid pristine handler: {name}")
+            if kind & HandlerKind.ADAPTIVE and (
+                    not kind & HandlerKind.DISPATCH or kind & (
+                        HandlerKind.SPECIALIZED | HandlerKind.INSTRUMENTED
+                        | HandlerKind.NOFB)):
+                raise ValueError(f"invalid adaptive handler: {name}")
 
     def require_analysis(self, analysis: Analysis) -> None:
         if analysis is not self.analysis:
             raise ValueError("handler domain belongs to a different analysis")
-
-    def shadow(self, name: str) -> str:
-        # The legacy format shadow normalizes IR variants, but leaves
-        # specializations to the opcode deopt table. Preserve emitted bytes.
-        if self.kinds[name] & (HandlerKind.BINARY_OP | HandlerKind.NOFB):
-            return self.bases[name]
-        return name
 
 
 def _assign_opcodes(
@@ -672,7 +710,58 @@ def build_handler_domain(analysis: Analysis) -> HandlerDomain:
         variant = name + NOFB_SUFFIX
         bases[variant] = bases[name]
         kinds[variant] = kinds[name] | HandlerKind.NOFB
-    return HandlerDomain(analysis, opmap, handlers, bases, kinds,
+    required_state = {name: HandlerState(0) for name in ids}
+    insts = all_instructions(analysis)
+    for name in ids:
+        if name in insts or name in analysis.pseudos or name in derived:
+            kinds[name] |= HandlerKind.METADATA
+        if name in handlers:
+            kinds[name] |= HandlerKind.DISPATCH
+        inst = insts.get(name)
+        annotations = {annotation for part in inst.parts if isinstance(part, Uop)
+                       for annotation in part.annotations} if inst else set()
+        if kinds[name] & HandlerKind.INSTRUMENTED:
+            required_state[name] |= HandlerState.MONITORING
+        if kinds[name] & HandlerKind.SPECIALIZED and "pristine" not in annotations:
+            required_state[name] |= HandlerState.SPECIALIZATION
+        if "static_exec" in annotations:
+            required_state[name] |= HandlerState.STATIC_EXEC
+        if "pristine" in annotations and required_state[name]:
+            raise ValueError(f"pristine handler requires runtime state: {name}")
+        if kinds[name] & HandlerKind.DISPATCH and not required_state[name]:
+            kinds[name] |= HandlerKind.PRISTINE
+    instrumented: dict[str, str] = {}
+    deinstrumented: dict[str, str] = {}
+    formats = compute_formats(analysis)
+    for name in handlers:
+        inst = insts.get(name)
+        if name in binary:
+            inst = insts[BINARY_OP_FAMILY]
+        if (inst is not None
+                and not kinds[name] & (HandlerKind.SPECIALIZED
+                                      | HandlerKind.INSTRUMENTED | HandlerKind.NOFB)
+                and formats[name].fb != LOC_NONE and uses_feedback(inst)
+                and any("specializing" in part.annotations for part in inst.parts
+                        if isinstance(part, Uop))):
+            kinds[name] |= HandlerKind.ADAPTIVE
+    for name in analysis.instructions:
+        if not kinds[name] & HandlerKind.INSTRUMENTED:
+            continue
+        if name in ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"):
+            instrumented[name] = name
+            continue
+        base = name.removeprefix("INSTRUMENTED_")
+        if base not in analysis.instructions:
+            continue
+        if (kinds[base] & (HandlerKind.INSTRUMENTED | HandlerKind.SPECIALIZED)
+                or formats[base] != formats[name]):
+            raise ValueError(f"incompatible instrumentation pair: {base}, {name}")
+        instrumented[base] = name
+        instrumented[name] = name
+        deinstrumented[name] = base
+    operations = {name: op for op, name in enumerate(binary)}
+    return HandlerDomain(analysis, opmap, handlers, bases, kinds, required_state,
+                         operations, instrumented, deinstrumented,
                          have_arg, min_instrumented, first, first + len(derived))
 
 
@@ -1730,7 +1819,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({inst.name});\n")
+    out.emit(f"INSTRUCTION_STATS({name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
         out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
@@ -1758,7 +1847,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {name};\n")
+        # A derived handler shares the instruction body, including its
+        # semantic opcode tests. Dispatch still uses the raw handler ID.
+        out.emit(f"opcode = {inst.name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")

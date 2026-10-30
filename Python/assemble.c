@@ -773,6 +773,9 @@ layout(struct assembler *a, _PyRegCfg *cfg)
 static int
 encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
 {
+    if (!_PyIR_HasProperty(op->handler, _PyIR_H_PRISTINE)) {
+        return too_large("handler", op->handler);
+    }
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
@@ -822,7 +825,11 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[r] = 0;
         }
     }
-    *word = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
+    if (!_PyIR_MakeWord(op->handler, fields[0], fields[1], fields[2],
+                        fields[3], word))
+    {
+        return too_large("handler", op->handler);
+    }
     return SUCCESS;
 }
 

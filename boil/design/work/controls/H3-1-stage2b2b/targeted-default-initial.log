@@ -1,0 +1,18 @@
+gate 1 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default at 878647973ba
+Using random seed: 4011758527
+0:00:00 load avg: 3.97 mem:   45.4 MiB Run 2 tests in parallel using 2 worker processes (timeout: 10 min, worker timeout: 15 min)
+test test_monitoring failed -- Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_monitoring.py", line 168, in test_deinstrument_scalar_and_alias
+    self.assertEqual(capi.monitoring_deinstrument(opcode), expected, name)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 94 != 300 : INSTRUMENTED_LOAD_SUPER_ATTR_NOFB
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_monitoring
+
+Total duration: 18.4 sec
+Total tests: run=173 (filtered) failures=1
+Total test files: run=2/2 (filtered) failed=1
+Result: FAILURE

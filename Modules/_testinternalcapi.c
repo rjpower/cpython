@@ -27,7 +27,9 @@
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+#include "pycore_instruments.h"  // monitoring storage and deinstrumentation
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
+#include "pycore_ir.h"              // _PyIR_MakeWord(), _PyIR_SetHandler()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
@@ -1607,9 +1609,7 @@ get_ir(PyObject *self, PyObject *args)
     for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
-        const char *name = handler < IR_FIRST_ONLY_HANDLER
-            ? _PyOpcode_OpName[handler]
-            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        const char *name = _PyOpcode_OpName[handler];
         PyObject *item = Py_BuildValue(
             "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
@@ -1620,6 +1620,97 @@ get_ir(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     return result;
+}
+
+static PyObject *
+code_safe_addr2line(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int offset;
+    if (!PyArg_ParseTuple(args, "O!i:code_safe_addr2line",
+                          &PyCode_Type, &code, &offset)) {
+        return NULL;
+    }
+    return PyLong_FromLong(_PyCode_SafeAddr2Line(code, offset));
+}
+
+static PyObject *
+monitoring_storage_roundtrip(PyObject *self, PyObject *args)
+{
+    int index, opcode, line;
+    if (!PyArg_ParseTuple(args, "iii:monitoring_storage_roundtrip",
+                          &index, &opcode, &line)) {
+        return NULL;
+    }
+    uint16_t originals[3] = {0};
+    const int nwords = Py_ARRAY_LENGTH(originals);
+    if (index < 0 || index >= nwords || opcode < 0 || opcode > UINT16_MAX ||
+        line < -1) {
+        PyErr_SetString(PyExc_ValueError, "invalid monitoring storage input");
+        return NULL;
+    }
+    struct {
+        _PyCoLineInstrumentationData lines;
+        int extra[Py_ARRAY_LENGTH(originals)];
+    } storage = {0};
+    uint16_t tokens[Py_ARRAY_LENGTH(originals)] = {255, 511, UINT16_MAX};
+    int lines[Py_ARRAY_LENGTH(originals)] = {-1, 0, INT_MAX};
+    tokens[index] = (uint16_t)opcode;
+    lines[index] = line;
+    storage.lines.original_opcodes = originals;
+    for (int i = 0; i < nwords; i++) {
+        _PyCode_SetOriginalOpcode(&storage.lines, i, tokens[i]);
+        _PyCode_SetMonitoringLine(&storage.lines, i, lines[i]);
+    }
+    return Py_BuildValue("((ii)(ii)(ii))",
+                         _PyCode_GetOriginalOpcode(&storage.lines, 0),
+                         _Py_Instrumentation_GetLine(&storage.lines, 0),
+                         _PyCode_GetOriginalOpcode(&storage.lines, 1),
+                         _Py_Instrumentation_GetLine(&storage.lines, 1),
+                         _PyCode_GetOriginalOpcode(&storage.lines, 2),
+                         _Py_Instrumentation_GetLine(&storage.lines, 2));
+}
+
+static PyObject *
+monitoring_deinstrument(PyObject *self, PyObject *args)
+{
+    int opcode;
+    if (!PyArg_ParseTuple(args, "i:monitoring_deinstrument", &opcode)) {
+        return NULL;
+    }
+    return PyLong_FromLong(_PyCode_Deinstrument(opcode));
+}
+
+static PyObject *
+monitoring_state(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    if (!PyArg_ParseTuple(args, "O!:monitoring_state", &PyCode_Type, &code)) {
+        return NULL;
+    }
+    _PyCoMonitoringData *data = code->_co_monitoring;
+    if (data == NULL) {
+        Py_RETURN_NONE;
+    }
+    _Py_LocalMonitors local = data->local_monitors;
+    _Py_LocalMonitors active = data->active_monitors;
+    uintptr_t versions[PY_MONITORING_TOOL_IDS];
+    memcpy(versions, data->tool_versions, sizeof(versions));
+    uintptr_t code_version = code->_co_instrumentation_version;
+    int present[5] = {
+        data->tools != NULL, data->lines != NULL, data->line_tools != NULL,
+        data->per_instruction_opcodes != NULL,
+        data->per_instruction_tools != NULL
+    };
+    return Py_BuildValue("(y#y#y#K(iiiii))",
+                         (const char *)local.tools,
+                         (Py_ssize_t)sizeof(local.tools),
+                         (const char *)active.tools,
+                         (Py_ssize_t)sizeof(active.tools),
+                         (const char *)versions,
+                         (Py_ssize_t)sizeof(versions),
+                         (unsigned long long)code_version,
+                         present[0], present[1], present[2], present[3], present[4]);
 }
 
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
@@ -4408,14 +4499,15 @@ gc_stack_hits(PyObject *self, PyObject *args)
     size_t n;
     int64_t dropped;
     const _PyGCStackHit *hits = _PyGC_TraceStackHits(interp, &n, &dropped);
+    size_t count = n;
     PyObject *list = PyList_New(0);
     if (list == NULL) {
         return NULL;
     }
+    hits = _PyGC_TraceStackHits(interp, &n, &dropped);
     // Building the list allocates, so a collection may list more hits and
     // move the array: each hit is copied first, the array read again, and
     // the hits listed meanwhile are not reported.
-    size_t count = n;
     for (size_t i = 0; i < count; i++) {
         _PyGCStackHit h = hits[i];
         if (addr != 0 && h.op != addr) {
@@ -4899,7 +4991,29 @@ specialize_current_instruction(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+/* Exercise the actual scalar boundaries before their uint16_t casts. */
+static PyObject *
+ir_scalar_boundary(PyObject *self, PyObject *args)
+{
+    int rewrite, handler;
+    if (!PyArg_ParseTuple(args, "pi:ir_scalar_boundary", &rewrite, &handler)) {
+        return NULL;
+    }
+    _PyIRWord before = IR_WORD(NOP, 1, 2, 3, 4);
+    _PyIRWord word = before;
+    int accepted;
+    if (rewrite) {
+        accepted = _PyIR_SetHandler(&word, handler);
+    }
+    else {
+        accepted = _PyIR_MakeWord(handler, 1, 2, 3, 4, &word);
+    }
+    return Py_BuildValue("(iKK)", accepted,
+                         (unsigned long long)before, (unsigned long long)word);
+}
+
 static PyMethodDef module_functions[] = {
+    {"ir_scalar_boundary", ir_scalar_boundary, METH_VARARGS},
     {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_queue_info", gc_queue_info, METH_VARARGS},
@@ -4986,6 +5100,10 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", _PyCFunction_CAST(get_co_localskinds), METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"code_safe_addr2line", code_safe_addr2line, METH_VARARGS, NULL},
+    {"monitoring_storage_roundtrip", monitoring_storage_roundtrip, METH_VARARGS, NULL},
+    {"monitoring_deinstrument", monitoring_deinstrument, METH_VARARGS, NULL},
+    {"monitoring_state", monitoring_state, METH_VARARGS, NULL},
     {"set_ir_max_forward", _PyCFunction_CAST(set_ir_max_forward), METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
@@ -5095,6 +5213,9 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_GCWalk(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_UnicodeWriter(module) < 0) {
         return 1;
     }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {

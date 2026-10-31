@@ -91,4 +91,37 @@ then launched at 19:24:50 UTC and returned at 19:36:00 UTC: 51,261 tests,
 Its five additional skips are exactly the unsupported nursery controls with
 the approved reason; the validator accepted their identities. Module states
 again match release/OFF. Post-gate idle observation passed; its cleanup
-verifier precedes stress-two. ASan16 and closure remain pending.
+verifier completed at 19:36:20 UTC. Release stress1000 then launched and passed
+at 19:38:30 UTC: 3,121 tests, 153 skips, eleven passing modules, 35,917
+collections, zero fallbacks and 41 report-only snapshot visits. Its cleanup
+passed at 19:38:51 UTC; debug stress1000 launched immediately. These stress
+profiles validate the major path with the exact unsupported nursery skips.
+Debug stress1000 passed at 19:41:43 UTC: 3,121 tests, 118 skips, eleven passing
+modules, 38,381 collections, zero fallbacks and 38 report-only snapshot visits.
+Current cleanup passed. ASan16 KILL then passed at 19:47:02 UTC: 4,043 tests,
+146 skips, sixteen passing modules, 13,128 collections, zero fallbacks and
+four report-only snapshot visits. Current cleanup passed. This keeps the
+approved ASan exclusions, fake-stack/leak-check limits and lack of
+multiprocessing-leaf credit. Closure launched at 19:47:35 UTC and passed:
+`test_cext` returned 16 tests/seven exact skips, 557 collections and zero
+fallbacks/report-only snapshot visits. Regeneration left tracked outputs
+unchanged; traversal passed; nineteen syntax receipts passed with no warnings.
+The existing unsupported `_tkinter`, `_dbm`, `_gdbm` and `readline` header limits
+remain explicit. Closure returned at 19:52:09 UTC; final input/idle checks
+completed at 19:52:27 UTC, before the 20:14:30 UTC deadline. The reviewed sealer
+then verified and flattened 334 artifacts into
+`build/restart-recovery/qualification-completion.json` (SHA256
+`ca931e655365f1995a37ef3b429d333bb8d4dd73d6ed82935b69c1b7832994da`).
+Independent final audit rehashed all 334 references, replayed all six broad
+validators and checked current source/products/headers and closure. The
+[final review](reviews/final-qualification-20261031.md) accepted the exact union
+at 19:55:44 UTC, before the deadline. The separate
+`build/restart-recovery/final-landing-review.json` binds the review and capsule;
+its decision is acceptance for integration, with actual merge and post-merge
+smokes still required.
+
+The original broad preparation also retains
+`build/nursery-shape-broad/host-preflight-original-failure.json`: a host assertion
+selected `uv run` rather than the helper's `run` argument. No native job launched
+in that failed preparation. The original activation preflight corrected that
+anchor and confirmed unchanged literal selections; the failure record remains.

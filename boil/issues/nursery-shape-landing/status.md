@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: full-three passed; debug KILL cleanup precedes stress-two
+- Phase: independent final acceptance passed; exact integration and post-merge smokes next
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -36,30 +36,24 @@ qualification batch. No performance claim or automatic repeat-to-green.
 
 ## Now / next
 
-All four builds, early controls and backend controls completed before the
-restart. Release full has a terminal pass: 51,261 tests, zero unwind fallbacks
-and one report-only detached-snapshot visit. Current frozen-input and idle-process
-checks passed; its missing cleanup receipt was completed with a separately
-timestamped observation at 19:14:30 UTC. Debug full OFF/N0 also passed: 51,261
-tests, 3,744 skips, 60,750 collections, zero fallbacks and four report-only
-detached-snapshot visits. Debug KILL full passed with 51,261 tests, 3,749 skips,
-60,708 collections, zero fallbacks and one report-only visit. Its five extra
-skips are exactly the unsupported nursery controls. Stress, ASan16 and closure remain.
-The expired attempt is incomplete,
-not a qualification pass or a rejection of the runtime hypothesis.
+The thirteen-file union passed independent source review, four fresh builds,
+early/backend controls, full suites in release/debug OFF/debug KILL, both
+stress1000 selections and ASan16. All terminal rows and cleanup receipts passed with zero
+unwind fallbacks; actual counts, skips and report-only diagnostics are in
+[results](results.md).
 
-The primary checkout lost its linked-worktree metadata and 4,921 tracked files.
-Missing-only recovery restored the branch at a01a9b953e2 while preserving all
-surviving files and build evidence. All five pre-existing user files were
-recovered exactly: one modified review from a loose Git blob, then four
-untracked notes from task-specific session patches. Each matches its preserved
-SHA256 and remains outside project commits; see the
-[recovery follow-up](reviews/restart-user-note-recovery.md).
-The separate frozen union remains the qualification source.
+Closure passed, including C extensions, unchanged regeneration, traversal and
+nineteen declared syntax receipts. The batch finished with cleanup at 19:52:27
+UTC. The 334-artifact capsule passed independent audit and six validator replays.
+[Final acceptance](reviews/final-qualification-20261031.md) was recorded at
+19:55:44 UTC, before the deadline.
+The remaining-only batch runs from 19:14:30 to
+20:14:30 UTC under the [restart plan](resume-plan.md). The original expired
+attempt remains incomplete; its completed results stand through reviewed carry.
 
-Independent carry and launcher review passed. The remaining-only batch started
-19:14:30 UTC and ends 20:14:30 UTC. Debug full OFF/N0 returned at 19:24:28 UTC;
-its cleanup verification passed at 19:24:50 UTC. Debug KILL returned at 19:36:00
-UTC; cleanup verification precedes stress-two, ASan16 and closure under the
-[restart plan](resume-plan.md).
-See [results](results.md). There is no runtime landing or new speed claim.
+Primary checkout recovery is complete, including all five pre-existing user
+files with exact preserved hashes. User work retains its original unstaged
+state; see the [recovery follow-up](reviews/restart-user-note-recovery.md).
+The separate frozen union is unchanged. Integration preparation is reviewed
+but held until the actual merge is bound. There is no
+runtime landing or new speed claim yet.

@@ -50,3 +50,8 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   KILL full suites with zero unwind fallbacks. Remaining stress, sanitizer and
   closure gates continue within the separately bounded restart batch.
   [Qualification evidence](issues/nursery-shape-landing/results.md).
+- 2026-10-31: Independent final review accepted the exact nursery/shape union
+  after all required carried and refreshed qualification, sanitizer, closure
+  and cleanup gates. The 334-artifact capsule and six validator replays passed
+  within the restart batch deadline. Integration and post-merge smokes follow.
+  [Acceptance](issues/nursery-shape-landing/reviews/final-qualification-20261031.md).

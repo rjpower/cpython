@@ -8,7 +8,6 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | string_design | Execute the reviewed 90-minute batch; stop on unexpected failure |
-| Interpreter | [Attribute shared call setup](interpreter-call-setup/status.md) | stats_design_review | One supported minimal proposal or rejection within 30 minutes |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
@@ -57,6 +56,9 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 - [Documentation consolidation](documentation-migration/status.md): complete; current contracts, concise workflow and bounded experiment template adopted.
 
 - [Residual attribution](interpreter-residual-costs/status.md): independently replayed finding selected the frame-transfer experiment; no new benchmark was needed.
+- [Call setup attribution](interpreter-call-setup/status.md): existing exact calls
+  already use value windows; present profiles do not support a generic interface
+  rewrite. Hypothesis rejected without a runtime change or new benchmark.
 
 ## Landed
 

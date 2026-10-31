@@ -1,11 +1,13 @@
 # Attribute shared call setup costs
 
-- State: active
+- State: closed
+- Outcome: reported
+- Decision: reject a new generic call/setup interface implementation from present evidence
 - Owner: stats_design_review; coordinator selects any implementation
 - Updated: 2026-10-31
-- Budget: 30 minutes from assignment; no native runs
+- Budget: concluded within 30 minutes; no native runs
 - Depends on: [residual attribution](../interpreter-residual-costs/status.md)
-- Phase: bounded source/profile investigation
+- Phase: attribution complete; coordinator replay verified
 
 ## Hypothesis
 
@@ -30,5 +32,18 @@ survey. A proposal is not a runtime landing or measured speedup.
 
 ## Now / next
 
-Investigation runs alongside shared GC/shape qualification with separate
-ownership. Report the evidence and one recommendation, or a concrete rejection.
+The exact Python call path already uses unboxed value windows. Generic setup
+was absent from the coroutine samples and small in the generator capture;
+observed object/value conversions were canonicalization, not demonstrated
+argument boxing. Outer evaluator ancestry includes useful execution and cannot
+be assigned to setup cost.
+
+The coordinator independently replayed all four captures, verified six raw
+inputs and checked ten source files against the captured revision. No runtime
+implementation or new profile is selected. Shared nursery/shape qualification
+continues; revisit calls only with a named consumer and removable work.
+
+## References
+
+- [Boundary review](design.md).
+- [Attribution and reproducible evidence](results.md).

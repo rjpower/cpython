@@ -25,3 +25,6 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
 - 2026-10-31: Selected the exact nursery/shape combination for one reviewed,
   finite qualification batch. Started parallel call-setup attribution and
   completed benchmark documentation consolidation. [Work index](issues/README.md).
+- 2026-10-31: Combined GCC builds and early nursery/shape controls passed;
+  sanitizer and tail builds followed. Closed call-setup attribution without
+  selecting an interface rewrite. [Work index](issues/README.md).

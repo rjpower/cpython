@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: fresh O1/Py_DEBUG build running
+- Phase: GCC builds and early controls passed; ASan and tail builds running
 - Execution: started 16:06:20 UTC; deadline 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -38,6 +38,12 @@ qualification batch. No performance claim or automatic repeat-to-green.
 
 Coordinator independently proved the exact thirteen-file union and 6,903
 unchanged tracked entries. Independent review cleared the [finite plan](plan.md)
-and its source/product boundaries. The first fresh build is running; checkpoints
-are 16:21:20, 16:36:20 and 17:11:20 UTC. There is no combined qualification pass or runtime
-landing yet. Coverage/reclamation and old-scan reduction remain separate work.
+and its source/product boundaries. At 16:10 UTC, fresh GCC O1/Py_DEBUG and O3
+builds and cleanup passed, each with 116 modules and no import failures. Early
+union nursery five OFF and shape/IR thirty-four KILL controls passed with no
+skips and verified cleanup; terminal evidence is being frozen for review.
+Fresh ASan and Clang tail builds are active. Full/stress suites have not started.
+
+Checkpoints are 16:21:20, 16:36:20 and 17:11:20 UTC. There is no combined
+qualification pass or runtime landing yet. Coverage/reclamation and old-scan
+reduction remain separate work.

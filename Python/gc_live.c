@@ -1018,8 +1018,13 @@ error:
 static int
 queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
 {
+    if (!(res->kinds & (_PyGC_DEAD_HOOK | _PyGC_DEAD_BUFFER))) {
+        return 0;
+    }
     live_call *last = b->tail;
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+    for (Py_ssize_t i = 0;
+         (res->kinds & _PyGC_DEAD_HOOK) && i < res->ndead; i++)
+    {
         _PyGCDeadObject *d = &res->dead[i];
         if (!(d->kinds & _PyGC_DEAD_HOOK)
             || !(d->op->ob_flags & _Py_GC_DEAD_FLAG))
@@ -1027,8 +1032,7 @@ queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
             d->kinds &= ~_PyGC_DEAD_HOOK;
             continue;
         }
-        int is_buffer = Py_IS_TYPE(d->op, &PyMemoryView_Type)
-                        || Py_IS_TYPE(d->op, &_PyManagedBuffer_Type);
+        int is_buffer = d->kinds & _PyGC_DEAD_BUFFER;
         if (is_buffer && !_PyMemoryView_ReleaseReady(d->op)) {
             d->kinds &= ~_PyGC_DEAD_HOOK;
             continue;
@@ -1051,11 +1055,14 @@ queue_destroy_hooks(call_batch *b, _PyGCMarkResult *res)
     /* Select every ready hook before retention: an unready view can reach the
        owner whose queued release will make progress.  Declining a hook alone
        would leave the view and its native acquisition eligible for sweep. */
-    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+    for (Py_ssize_t i = 0;
+         (res->kinds & _PyGC_DEAD_BUFFER) && i < res->ndead; i++)
+    {
+        if (!(res->dead[i].kinds & _PyGC_DEAD_BUFFER)) {
+            continue;
+        }
         PyObject *op = res->dead[i].op;
         if ((op->ob_flags & _Py_GC_DEAD_FLAG)
-            && (Py_IS_TYPE(op, &PyMemoryView_Type)
-                || Py_IS_TYPE(op, &_PyManagedBuffer_Type))
             && !_PyMemoryView_ReleaseReady(op)
             && resurrect(&s, op) < 0)
         {

@@ -1950,6 +1950,43 @@ def make_garbage(n):
         self.assertEqual(called, [ref])
         self.assertIsNone(ref())
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_weakrefs_after_resurrection(self):
+        _queue_child("""
+            gc.disable()
+            survivors = []
+            finalized = []
+            callbacks = []
+            class A:
+                def __init__(self):
+                    self.data = b"still usable"
+                    self.cycle = self
+                def __del__(self):
+                    finalized.append(self.data)
+                    survivors.append(self)
+            def build():
+                obj = A()
+                return weakref.ref(obj), weakref.ref(obj, callbacks.append)
+            plain, first = build()
+            gc.collect()
+            assert first() is None
+            assert callbacks == [first], callbacks
+            assert finalized == [b"still usable"], finalized
+            # Callback-free weakrefs stay usable through finalization and
+            # are cleared only if the object remains unreachable afterward.
+            assert plain() is survivors[0]
+            assert survivors[0].data == b"still usable"
+            # A new weakref on the resurrected object must be processed at
+            # its next death, even though its finalizer will not run again.
+            second = weakref.ref(survivors[0], callbacks.append)
+            survivors.clear()
+            gc.collect()
+            assert plain() is None and second() is None
+            assert callbacks == [first, second], callbacks
+            assert finalized == [b"still usable"], finalized
+            assert survivors == [], survivors
+        """, PYTHON_GCSTRESS="")
+
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_dealloc_reads_referents(self):
         # A DeallocReader's dealloc reads its referent's state and aborts if

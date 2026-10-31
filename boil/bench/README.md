@@ -1,6 +1,6 @@
 # boil/bench: the internal benchmark set
 
-The set defined in boil/design/10-internal-benchmarks.md: three groups of
+The set follows the [measurement contract](../design/measurement.md): three groups of
 pure-Python workloads with no third-party dependency, run the same way at
 every step, and one runner. Each step records it; ports are not a gate
 until the ports phase.
@@ -36,7 +36,7 @@ pickle, logging and unpack_sequence that is 10 to 400 inner operations).
 
 **Object protocol and calls** (`internal/micro/`, 65 files). One statement
 in a loop of 1000 iterations; the file's docstring says what an iteration
-does. Note 10's list: attribute load and store, monomorphic and polymorphic
+does. The diagnostic set includes: attribute load and store, monomorphic and polymorphic
 over two shapes; method call; instance creation; `__slots__` load; property;
 class attribute; global and builtin load; `len`, `abs` and `math.sin`;
 Python calls with one and three positional arguments and with keywords;

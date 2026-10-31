@@ -4,44 +4,30 @@
 - Updated: 2026-10-31
 - Owner: unassigned
 - Dependencies: a scheduled usable liveness/root-map consumer
-- Branch/head: archived `boil/h2-root-effects` at `b3e6847348d`
-- Worktree: retired; source and selected evidence retained
+- Branch/head: retained `boil/h2-root-effects` at `b3e6847348d`
+- Worktree: none active
 
 ## Now
 
-The inert scalar decoder `5df33656912` and parser correction `b3e6847348d`
-remain unmerged. The frozen decoder declares 27 supported pristine handlers
-and 126 unsupported/unresolved handlers. Successful decoding describes only
-its stated temporary-slot inputs and outputs; it is not complete semantic
-effects, CFG/liveness analysis, purity or a runtime root map.
-
-No active consumer, runtime map lookup, slot-clearing retirement or weakened
-root coverage follows from this work. Existing native tests support the inert
-slice at their recorded identities. The original release parser failure and
-the corrected test-only bridge remain distinct; their counts are not new
-executions on the current runtime.
-
-The current collector keeps its maintained root contracts. H2 has no active
-checkout, build, target job or measurement window. The archived decoder is an
-input to a future proposal, not an outstanding supported-runtime gate.
+Inert decoder `5df33656912` and parser correction `b3e6847348d` are unmerged.
+The decoder declares 27 supported pristine handlers and 126 unresolved handlers.
+Its temporary-slot inputs/outputs are not complete semantic effects, purity,
+CFG/liveness analysis or runtime root maps. No map reading or slot-clearing
+retirement is active, and the maintained root coverage remains unchanged.
 
 ## Next
 
-Reopen when a concrete consumer needs usable liveness information. Assign an
-owner and review current handler semantics, exceptional transfers and consumer
-failure behavior together. Unsupported results must retain the safe existing
-path; successful temporary decoding must not be promoted into stronger proof.
-Do not activate inert metadata merely to finish an old rung.
+Resume for a concrete consumer. Review current handler semantics, exceptional
+transfers and consumer failure behavior together. Unsupported results retain
+the safe path; successful temporary decoding cannot justify stronger claims.
 
 ## Completion
 
-Qualify a complete, useful producer/consumer slice before changing runtime
-root reading or clearing behavior. Its semantic and rooting oracles must
-cover the claimed scope. Otherwise retain the archive and remain deferred;
-there is no current implementation or performance promise.
+Validate a complete useful producer/consumer slice before changing runtime root
+reading or clearing. Otherwise retain the source and remain deferred. There is
+no current implementation assignment or performance promise.
 
 ## References
 
-- [Independent source review and parser disposition](../../design/work/reviews/H2-root-effects-source-review.md).
-- [Handler and root contract](../../design/14-handler-contract.md).
-- [Archive and evidence retention](../../design/work/worktree-closure-plan.md).
+- [Handler/effect contract](../../design/handler-and-observer-contract.md).
+- [Root contract](../../design/gc-roots-and-lifetimes.md).

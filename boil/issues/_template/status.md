@@ -1,38 +1,39 @@
-# Issue title
+# Experiment title
 
-- State: queued
+- State: queued / active / blocked / review / deferred / closed
+- Owner: accountable owner and active agent when assigned
 - Updated: YYYY-MM-DD
-- Owner: unassigned
-- Dependencies: named issues or decisions; otherwise none
-- Branch/head: none assigned; name only an actual branch and commit
-- Worktree: none assigned; name only an actual owned checkout
+- Budget: concrete elapsed/work budget; checkpoint and decision deadline
+- Depends on: linked experiment IDs, or none
+- Branch/worktree/head: actual identity when assigned
+- Outcome: landed / reported / abandoned / superseded (closed only)
+- Decision: integrate / reject (when concluded)
 
-Use `queued`, `active`, `blocked`, `review`, `deferred` or `closed`.
-For `closed`, add `Outcome: landed`, `reported`, `abandoned` or `superseded`.
-Deferred work needs a resume condition; blocked work needs a concrete blocker.
+## Hypothesis
 
-## Now
+One falsifiable claim about useful behavior, performance or maintainability.
+State the baseline and the smallest change that can answer it.
 
-State the current decision, supported scope and actual implementation or
-validation position. Distinguish proposed, reviewed, built, measured and landed
-work. Name source, native and integration identities separately when they
-differ. Summarize the result; link its detailed record instead of copying logs.
+## Experiment
 
-## Next
+List the bounded change, owned files, relevant behavior checks and measurements.
+Use the smallest functioning consumer that answers the question. Record the
+control, comparison conditions and evidence links; prefer observed data,
+liveness, resource behavior and memory over incidental implementation counters.
 
-Name one concrete next action and who must assign or unblock it. If work is
-closed, state whether any action remains.
+## Decision rule
 
-## Completion
+Integrate when the behavior is correct and the stated benefit/structural result
+justifies the change. Reject when evidence refutes the hypothesis or complexity
+outweighs the benefit. Define both conditions before running the experiment.
+At the budget limit, stop and record the result. Reject an inconclusive attempt
+without claiming the hypothesis disproved; narrow or split a follow-up instead
+of silently extending scope. Partial foundations can integrate when
+they are useful and correct; they need not deliver every later optimization.
 
-Describe the user-visible outcome and the evidence or decision that closes
-this issue. Preserve scope limits and link original failed attempts. Do not
-turn an implementation checkpoint into qualification or a performance claim.
+## Now / next
 
-## References
-
-Link the authoritative design, plan, review and results that exist. Only this
-status file is required. Optional design, plan or evidence files should serve
-distinct purposes; do not create empty companion documents. Keep immutable
-receipts and referenced paths unchanged. This file records current status,
-not the chronological history kept in WORKLOG and Git.
+Current source-bound result, immediate action and blocker/resume condition.
+Keep this record current; put long designs, run history and reviews in linked
+optional files. Close with the decision, actual landing identity if applicable,
+and separate follow-ups. A reported finding is not a runtime landing.

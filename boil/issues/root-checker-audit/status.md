@@ -9,33 +9,27 @@
 
 ## Now
 
-Historical handoffs mix repaired runtime issues, incomplete precision coverage
-and checker limitations. Reconcile them before implementation; this ledger is
-not a newly established supported-runtime blocker.
-
-Traversal auditing still uses textual member/path heuristics and bounded
-pointer depth. C checking retains the block-local expected failure and opaque
-dict/type boundaries. Remaining questions include SLOT/specializer coverage,
-folded-reader operands, saved-exception controls and strict PyMem ownership.
-Do not repeat stale claims: compiler capsules now traverse metadata, writers
-have registered owners, and argument-order/hashtable negative controls exist.
-Those facts do not alone close every stronger precision obligation.
+Traversal auditing uses textual member/path heuristics and bounded pointer depth.
+C checking retains expected-failure and opaque-boundary limits. Questions include
+SLOT/specializer coverage, folded-reader operands, saved-exception controls and
+strict PyMem ownership. Separate diagnostic limits from concrete missing roots;
+this backlog is not a newly established supported-runtime blocker.
 
 ## Next
 
-Assign one finite ledger: map each archived handoff to current source and
-evidence, then classify it closed, retained by contract or needing a concrete
-checker/control repair. Separate diagnostic limitations from missing roots.
+Select one bounded reconciliation: map each finding to current source and
+accepted evidence, then classify it closed, retained by contract or needing a
+specific control/repair. Split implementation from this backlog before execution.
 
 ## Completion
 
-Every retained finding has a source-bound disposition and owner. Checker
-repairs need meaningful omission/collecting negatives; runtime repairs need
-observable data/liveness evidence. Do not weaken validation to empty the list.
+Every admitted finding has a source-bound disposition. Checker repairs use
+meaningful omitted-root/collecting negatives; runtime repairs validate data and
+liveness. Do not weaken checks to empty a list.
 
 ## References
 
-- [Historical handoffs, §0.1/§0.3](../../archive/process-2026-10-31.md).
-- [Root contract](../../design/11-precise-roots.md) and [2b scope](../../design/work/10a-2b-asbuilt.md).
+- [Root/lifetime contract](../../design/gc-roots-and-lifetimes.md).
+- [Precise managed-edge proposal](precise-managed-edges.md).
 - [Traversal checker](../../../Tools/boil/traverse_audit.py).
 - [C checker controls](../../../Lib/test/test_generated_cases.py).

@@ -1,54 +1,52 @@
 # Work board
 
-Each issue has one authoritative `status.md`. Designs, implementation plans,
-reviews and results remain in their linked documents; this board is navigation,
-not a second status ledger. Stable issue IDs do not change when work closes.
+Each issue's `status.md` owns its state. Experiments have a hypothesis, concrete
+budget and integrate/reject decision; see the [template](_template/status.md).
 
-**No runtime work or benchmarks are active.** The next two tracks can proceed
-in parallel after the coordinator assigns owners and scopes. Queued means
-not started or not yet assigned.
+## Running in parallel
 
-## Next
+| Track | Active experiment | Owner | Next decision |
+| --- | --- | --- | --- |
+| GC | [Minimal nonmoving nursery](gc-nursery-minimum/status.md) | string_design | Resolve the small minor-collection consumer and source scope |
+| Interpreter | [Bulk frame payload transfer](frame-transfer-bulk/status.md) | stats_design_review | Review the small copy/clear candidate, then compare native code and cost |
 
-- [Common young allocation and reclamation](gc-common-young-space/status.md):
-  one useful young-space consumer, including lifecycle and bulk reclamation.
-- [Interpreter shared costs](interpreter-shared-costs/status.md): bounded
-  attribution followed by shared, orthogonal implementation proposals.
+The first runtime decision checkpoint is within an hour of 15:15 UTC on
+2026-10-31. Source work and builds can overlap with separate file ownership;
+quiet performance measurement windows and integration serialize.
 
-## Closed
+## Next GC experiments, in order
 
-- [GC cleanup and scanning](gc-cleanup-scanning/status.md): landed, qualified
-  and measured. Component failures and composite evidence remain explicit.
+1. [Broader coverage and cheaper reclamation](gc-nursery-coverage/status.md).
+2. [Reduce old-object scan work](gc-nursery-old-work/status.md).
+
+Each follows the preceding result; the initial nursery need not solve the full
+future allocator, copying, lifecycle and barrier design at once.
 
 ## Unassigned follow-ups
 
-- [Value/native interfaces](value-native-interfaces/status.md): remaining
-  slot/Clinic boundaries and identity/accessor contract reconciliation.
-- [Verification orchestration](verification-orchestration/status.md): shared
-  profile execution and gate integration beyond landed components.
-- [Root/checker audit](root-checker-audit/status.md): reconcile historical
-  handoffs and finite diagnostic/precision coverage.
+- [Value/native interfaces](value-native-interfaces/status.md).
+- [Verification orchestration](verification-orchestration/status.md).
+- [Root/checker audit](root-checker-audit/status.md).
+
+These are intake scopes. Split a bounded hypothesis before dispatching work.
 
 ## Deferred
 
-- [H1 tail dispatch](h1-tail-dispatch/status.md).
-- [H2 root maps](h2-root-maps/status.md).
+- [Tail-dispatch frame passing](h1-tail-dispatch/status.md).
+- [Physical liveness/root maps](h2-root-maps/status.md).
 - [Foreign interpreter lifecycle](gc-foreign-lifecycle/status.md).
-- [Handler tooling consumers](handler-tooling-consumers/status.md): H3
-  transport/schema/export follow-up, distinct from H1/H2.
+- [Handler tooling consumers](handler-tooling-consumers/status.md).
 
-Deferred means retained with a stated reactivation condition, not abandoned.
-State values are `queued`, `active`, `blocked`, `review`, `deferred` and
-`closed`. Closed records also name an outcome: `landed`, `reported`,
-`abandoned` or `superseded`. Only `status.md` is required; use the
-[template](_template/status.md) and add other documents only when useful.
+JIT tiers and broader package ports follow interpreter work and settled native
+contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 
-The [project overview](../README.md) introduces the runtime;
-[PROCESS](../PROCESS.md) governs assignments, reviews and gates. Status
-transitions do not waive existing gates or add an approval step.
+## Reported
 
-Later [JIT tiers](../design/06-architecture-v2.md) and
-[broader package ports](../design/10-internal-benchmarks.md) remain future
-milestones, not active assignments. Ports must reconcile native ABI identity
-and the settled value/root interfaces; historical package results are not
-qualification of the current runtime.
+- [Documentation consolidation](documentation-migration/status.md): complete; current contracts, concise workflow and bounded experiment template adopted.
+
+- [Residual attribution](interpreter-residual-costs/status.md): independently replayed finding selected the frame-transfer experiment; no new benchmark was needed.
+
+## Landed
+
+- [GC cleanup and scanning](gc-cleanup-scanning/status.md): qualified, integrated
+  and measured. This is the comparison baseline for the new experiments.

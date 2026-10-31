@@ -3,7 +3,7 @@
 Usage, from the repository root: python slot_inventory.py [--where] [--calls] SLOT...
 for SLOT such as tp_getattro.  Positional initialisers with the slot's
 comment, designated initialisers and PyType_Slot entries are counted, over
-Objects/, Modules/, Python/ and PC/ (boil/design/work/6d-2.md).
+Objects/, Modules/, Python/ and PC/ (boil/design/values-and-object-protocol.md).
 """
 import re, sys, pathlib, collections
 where = "--where" in sys.argv

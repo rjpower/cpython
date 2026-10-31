@@ -17,7 +17,7 @@ The sum is printed as a markdown table: per class, the words scanned and
 the words that hit an object; then the other counters, and the times in
 milliseconds.  ``check`` prints one line, the stack walk's fallbacks
 and the unpinned detach records visited, and exits 1 on a fallback, which
-blocks a landing (boil/design/11-precise-roots.md, section 10); gate.sh
+blocks a landing (boil/design/validation.md); gate.sh
 runs it after the suite at levels 2 and 3.
 """
 

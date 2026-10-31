@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / helper correction | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review remaining-only launch correction; retain original deadline |
-| IR / feedback preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Activate reviewed native feedback for source-accepted 7f0b1819f84 |
+| GC / native feedback | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review bounded debug outcomes; original deadline 22:07:46 UTC |
+| IR / queued native feedback | [Exact constant operands](interpreter-constant-operands/status.md) | coordinator | Activate accepted helpers after the GC module window |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

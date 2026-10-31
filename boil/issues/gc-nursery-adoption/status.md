@@ -50,10 +50,11 @@ accepts b34931a881b for bounded native feedback. Concrete helpers, launch
 bindings and the [held feedback plan](feedback-plan.md) received coordinator
 acceptance. The first launch stopped before configuration on inconsistent
 assembler path spellings in the readiness/build tool records; no build or
-target test ran. [Failure evidence](feedback-results.md) is preserved. A
-fifteen-minute helper correction and independent review precede a remaining-only
-retry under the original 22:07:46.664152 UTC batch deadline. No native build or
-behavior pass is claimed.
+target test ran. [Failure evidence](feedback-results.md) is preserved. The
+[independent correction review](reviews/feedback-helper-correction-20261031-v2.md)
+accepted the new held helpers. Root activated their remaining-only execution
+at 21:16:41 UTC under the original 22:07:46.664152 UTC deadline. Tool identity
+passed and actual configuration began; build/behavior results remain pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

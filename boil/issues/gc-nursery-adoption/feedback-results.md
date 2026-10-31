@@ -37,3 +37,24 @@ procedure for readiness and build, keep exact origin equality, and serialize
 the initial comparison through the existing failure receipt. Prepare a new
 held evidence directory and retain the original absolute deadline. Independent
 correction review and fresh root activation precede any remaining-only retry.
+
+## Reviewed remaining-only continuation
+
+The [independent v2 correction review](reviews/feedback-helper-correction-20261031-v2.md)
+accepted the exact helper change within its ten-minute cap, including an actual
+host-only failure-receipt fixture. The v1 source, test selection, observer,
+skip and cleanup contracts remain unchanged. All original receipts remain.
+
+Root activated v2 at 21:16:41.661016 UTC and launched its sole invocation in
+exec session **53437**. Batch start is 21:16:43.755905. Both activation and
+supervisor enforce the original **22:07:46.664152 UTC** deadline. Evidence is
+under the isolated checkout's `build/nursery-adoption-feedback-v2/`.
+
+- Plan SHA-256: `9d994fc26185422694c8ee56124570a138616088c36125034fc53bb2801c9f46`.
+- Manifest: `446e8b93f06d6d8968102ae6aa21c37fe3f3a28a7e41abd0178f89105f017924`.
+- Activation: `f88feed52cd7195c0de1c37498dfd57efc5c57583354feaf53ae0c0d7ba87252`.
+- Independent correction receipt: `dc9a98c6f81f80e5e7a2288efaa883b70a10c962ddc3f17e07e6e72f27423bef`.
+
+At the 21:17 UTC checkpoint, the exact toolchain check had passed and configure
+was running. No build, test, qualification or performance pass is recorded yet.
+Owners monitor this invocation; no alternate worker or retry is authorized.

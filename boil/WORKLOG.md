@@ -112,3 +112,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   requiring original low/high counter capture.
   [GC feedback](issues/gc-nursery-adoption/feedback-results.md),
   [IR measurement review](issues/interpreter-constant-operands/reviews/performance-plan-20261031.md).
+- 2026-10-31: Independent review accepted the nursery helper correction; the
+  remaining-only launch passed tool identity and began configuration under
+  the original deadline. Accepted the frozen IR feedback helpers after host
+  replay and queued their activation behind the GC module window. Native
+  behavior and performance remain pending.
+  [GC execution record](issues/gc-nursery-adoption/feedback-results.md),
+  [IR helper review](issues/interpreter-constant-operands/reviews/feedback-helpers-20261031-v1.md).

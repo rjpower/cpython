@@ -58,3 +58,33 @@ from that observation alone.
 | `debug-0-new-cases.post-gate-cleanup.json` | `faaaa262017e40b40fa5b551fd598f32a717e112fb62d96464154d8e2c97279f` |
 | `affected/debug-0-new-cases.result.json` | `1db0a2ad18c5ba81efba9494da2ee6bc2c4902e0daea2d838df3911a90480104` |
 | `affected/debug-0-new-cases.log` | `1115089156461e410d31cc8c1b4bba9db87e4f3a8422c82b6b3420f55f3b47ab` |
+
+## Observed words and reviewed test-only continuation
+
+The exact-code observation ran once in session 36051 at 21:33 UTC, returned
+zero and passed verification/idle cleanup. It recorded 27 collections and
+zero fallbacks. It called neither the three nested functions nor their test.
+Shared/dynamic inputs retain ordinary forms; only the inlined true branch of
+`canonical` has ADD_SMALL_RHS literal 1. Its false branch retains literal 0's
+load and ordinary ADD. The [test correction review](reviews/test-oracle-correction-20261031-v1.md)
+binds all inner and external outer receipts through audit
+`d7bf9af6357bc56c9f7b778c250715c72fc028f98204cabc9883832c75a53efd`.
+
+Commit `a475acbf46d117137f7201adcb4557ce92fb9ec5` changes only
+`Lib/test/test_ir.py`: the renamed control keeps shared/dynamic rejection,
+asserts the witnessed branch forms, and retains both branch outputs. Raw-CFG
+rejection cases and all runtime/compiler/generator sources are unchanged.
+The original failed assertion is preserved; the correction has its own scope.
+
+Root accepted the [remaining helpers](reviews/remaining-helpers-20261031-v1.md)
+and activated them at **21:40:36.097965 UTC**, session **7327**. Debug execution
+uses the explicitly bridged 7f0 native image and a475 test source; a later fresh
+O3 build will name a475. The original deadline remains **22:20:45.868428 UTC**.
+No debug product or old receipt is rewritten. New plan SHA-256 is
+`630f7d4408d7709c93c885ae1685ed1391d72ff934be9e49940e1cb662036b39`;
+manifest is `2a436739b8846b3825466a913741d397c6c1e2e09141d9c1606b9e378e96a2d4`.
+
+At 21:40:46 UTC the corrected eleven-case selection passed with zero skips,
+including terminal verification and idle cleanup. Full `test_ir` then started.
+Broader behavior, emitted-work, qualification and performance decisions remain
+open; this checkpoint does not accept the complete representation.

@@ -132,3 +132,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   to test with the exact original code objects before changing the pass or
   oracle. Both streams prepare bounded observations with unchanged deadlines.
   [IR failure evidence](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Reviewed exact-body/code observations narrowed both oracle
+  failures. GC targets retired while unrelated records remained; a separate
+  last-entry metadata control preserves that boundary's coverage. IR words
+  confirmed existing block inlining; accepted its test-only correction and
+  exact debug-product bridge. Corrected eleven-case selection passed; broader
+  remaining feedback runs under the original deadline.
+  [GC observations](issues/gc-nursery-adoption/feedback-results.md),
+  [IR continuation](issues/interpreter-constant-operands/feedback-results.md).

@@ -96,3 +96,40 @@ reviewed bounded observation/correction.
 | `focus-off.launch-result.json` | `fefd30b5660a0e944312e92a072162c342c02b7cc0c66452eb7818d48014c8dd` |
 | `focus-off.post-gate-cleanup.json` | `b8378572fe3ca7f11dcaa152f6af862a50e2ed6808cb40e19310a91d814856cb` |
 | `runs/focus-off.result.json` | `3788d594c50beb0cf052b6ae714ded73b652fd1e48a04e512483d6301bb48f7b` |
+
+## Exact-body observations and bounded test correction
+
+The [reviewed observation](reviews/failure-observation-20261031-v1.md) ran once
+in session 81764 at 21:31:29 UTC. Its gate finished at 21:31:38 and terminal
+verification at 21:31:40, with idle cleanup.
+Both original bodies/assertions and observer prefixes were preserved. Each
+child returned the required assertion failure; this earns diagnostic evidence
+only. The independent [outcome review](reviews/observation-outcome-20261031-v1.md)
+binds the raw snapshots, roots and all outer launch/gate/verification receipts.
+Result SHA-256 is `ade9e44e45f664174641ef8b98b0d4b20deee7215999a3d54d9aac80659ecada`;
+the independent audit is `8e4917acc2646c4aeb3677508c5f8a29585be5e74b57cdd4acb947c6e77a2f5c`.
+The children recorded 37 collections, zero fallbacks and zero unpinned reports.
+
+Both initial target records were present. Free removed its target while
+preserving an unrelated record at the same attempt sequence; the nonempty hint
+correctly stayed one. Resize preserved its original record through in-place
+and failed realloc, removed it after moving, and retained two unrelated records.
+This observed resize passed the old-address assertion and failed the later
+whole-ledger-empty assertion. Added-prefix allocation layout can perturb the
+failure: the first run's old-address failure remains preserved and is not
+conclusively explained by this observation.
+
+The review header's manually entered 21:32 minute is inaccurate; its written
+and hashed approval preceded the actual 21:31:26 activation. Activation/start
+receipts own the event times; the original review bytes remain preserved.
+
+The [independent correction design](reviews/retirement-oracle-design-20261031.md)
+accepts per-target original-provenance retirement, preserved unrelated records,
+and a separate deterministic one-entry metadata check. Root granted source/
+host work with a hard 21:49 UTC freeze. The scratch fixture calls the unchanged
+live retirement function on private metadata, checks absent/no-op, exact
+last-entry hint/count transition and harmless empty repeat, and never installs
+state in the live collector or exercises interpreter creation. It supplies
+metadata evidence rather than a B-reachability witness. The actual free,
+resize and rooted-reuse controls remain. New C fixture code requires exact
+source review and fresh debug products; no source correction is accepted yet.

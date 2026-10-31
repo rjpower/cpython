@@ -56,8 +56,12 @@ accepted the new held helpers. Root activated their remaining-only execution
 at 21:16:41 UTC under the original 22:07:46.664152 UTC deadline. The debug build
 passed; the first selection ran twenty methods with two failures involving
 private-tuple diagnostic records. Execution stopped and cleanup passed.
-Read-only diagnosis must distinguish original record provenance from legitimate
-address reuse before any bounded correction. No behavior acceptance is claimed.
+Exact-body observations witnessed retirement of both original target records
+while preserving unrelated records; the observation's changed resize failure
+location limits its causal claim about the first run. Independent design review
+accepted per-target oracles and an isolated exact-last-entry metadata fixture.
+Source/host correction freezes by 21:49 UTC, then receives exact review and a
+fresh debug build within the original window. No behavior acceptance is claimed.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

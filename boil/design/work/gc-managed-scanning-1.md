@@ -3,7 +3,7 @@
 2026-10-30. The reviewed direct-scanning source is part of composed successor
 `0b15b4bbc9b`. Four build/audit cohorts and focused/affected behavior pass;
 **The operator composite qualification is PASS; independent LAND clears this integration;
-postmerge smokes remain pending.**
+postmerge smokes pass.**
 No direct-scanning speedup or allocation/lookup reduction is claimed yet.
 
 ## Implemented boundary
@@ -87,7 +87,7 @@ and `focused-completion.json` (`20e132de`) in `boil-gc-native-cleanup`.
 The final index must preserve both the339 broad identities and fresh0b15
 coverage, original failures, source/native/compiler bridges and resource skips.
 
-ASan16 and closure pass; independent final LAND clears the composite; postmerge smokes remain pending. Linked
+ASan16 and closure pass; independent final LAND clears the composite; postmerge smokes pass. Linked
 direct-loop cost, total code-size effect, post-cleanup timing and the next
 trusted-repeat-edge proposal remain unmeasured. This slice introduces no
 moving backend, universal layout registry or relaxed precise-edge validation.
@@ -112,5 +112,16 @@ process coverage. Closure passes cext16 with the exact seven declared skips,
 regeneration/clinic, traversal and19 borrowed-header receipts; `_tkinter`,
 `_dbm`, `_gdbm` and `readline` remain explicitly unsupported. All four source,
 configuration, tool and product postguards pass. Independent LAND clears the composite; primary integration includes this record.
-The two normal postmerge smokes remain pending; no
+The two normal postmerge smokes pass; no
 post-cleanup performance result is claimed.
+
+## Integration and postmerge checks
+
+Integrated as `aee46aacae2`; the exact difference from qualified0b15 is13
+project Markdown paths. Final postmerge index
+`build/gc-cleanup-integration-v2/final-receipts.json`, SHA256
+`382dd354f46d84391f2e27d6c593dd043a6ee258bb3bd2ab6e76dd8ae2ff1215`,
+binds23 receipts. Release passes1,937/80 and debug1,937/50; each has all nine
+modules passing, native/launcher/cleanup0 and zero root fallback. Debug has
+two report-only detached-snapshot visits; release has zero. These are fresh
+integration checks with the qualified images, not a new native rebuild.

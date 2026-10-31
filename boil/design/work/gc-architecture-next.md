@@ -2,25 +2,25 @@
 
 Coordinator decision, 2026-10-30, replacing revision 1 after review 33. The
 supported Linux/main-interpreter/GIL collector is landed in `75e8a1e0c01`.
-The next change, selective death processing, is implemented and measured in
-an isolated branch; **it is not landed**. Its coroutine throughput improves
-**30.9%** in the unprofiled paired comparison, with smaller, noisier changes
-on the other rows. Final debug stress exposed a reproducible warning-delivery
-bug under restricted builtins; selective qualification remains FAIL and its
-closure is unrun. We will qualify one reviewed union of selective processing,
-the warning repair, native-only generator cleanup and direct managed scanning,
-then develop a common copying nursery with
-stable native/large-object space. Restoring reference counting remains a
-technically valid alternative; the measured win favors these simpler cuts first.
+Selective death processing, native-only generator cleanup, direct managed
+scanning and warning/origin repairs are now qualified and integrated as one
+reviewed change. The earlier selective-only comparison improved coroutine
+throughput **30.9%**, with smaller, noisier changes on the other rows; it does
+not measure this final union. Its failed campaign remains preserved. Next,
+measure the union, then select the next structural
+cut from its profile. A common copying nursery with stable native/large-object
+space remains the forward direction. Restoring reference counting is a valid
+alternative; the measured selective win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 19:58 PDT: source `0b15b4bbc9b` has completed
+Current checkpoint, 2026-10-30 20:04 PDT: source `0b15b4bbc9b` has completed
 qualification and independent LAND review and is integrated with this record.
 Its explicit composite retains339's three fulls/release stress as339 evidence;
 fresh0b15 four-cohort builds, causal origin/data proof, affected modules, tail
 ownership, debug stress3,116/113, ASan16 4,038/141 and closure all pass. Final
-index50054725 binds382 artifacts. Original failures remain preserved. The two
-postmerge smokes and finite performance batch are next; no new speedup is
-claimed. See the [final landing review](reviews/gc-cleanup-final-landing.md).
+index50054725 binds382 artifacts. Original failures remain preserved. Integration
+`aee46aacae2` adds only13 project Markdown paths over qualified0b15. Both postmerge
+smokes pass (release1,937/80; debug1,937/50; zero fallback), indexed by382dd354.
+The finite performance batch is next; no new speedup is claimed. See the [final landing review](reviews/gc-cleanup-final-landing.md).
 
 This plan supersedes the earlier requirement to ship nonmoving generations
 before movement. The existing generation/store ledgers remain source inputs.

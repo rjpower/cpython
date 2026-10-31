@@ -129,6 +129,11 @@ push, then roots owns the finite performance batch. Serving0b15 stays frozen.
 H1's exact strrchr effect declaration/unit control from94ab is now included;
 H1 runtime frame passing and H2 decoder remain archived and unmerged.
 
+Postmerge20:04PDT: aee46 integrates0b15 with exactly13Markdown differences.
+Both normal smoke9 rows pass1,937 tests each (80/50 skips), zero fallback;
+index382dd354 binds23refs. Roots now owns actual-origin refresh and finite
+performance; primary-only docs may advance while serving0b15 stays frozen.
+
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves
 30.9%; the other three ranges overlap. O1-debug focused13 and four affected

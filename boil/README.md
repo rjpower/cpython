@@ -19,10 +19,10 @@ and warning/origin correctness repairs. The [independent landing review](design/
 clears the explicit composite: predecessor339's three fulls and release stress
 retain their original identities; fresh successor builds, origin/data proof,
 affected modules, debug stress, ASan16 and closure pass. The failed predecessor
-stress and other original failures remain preserved. Both postmerge smokes are
-next, before pushing the runtime integration.
+stress and other original failures remain preserved. Both postmerge smokes pass: release1,937/80 and debug1,937/50, with zero
+GC fallback. Integration commit is **aee46aacae2**.
 
-Next: run the two normal release/debug smokes, then execute the
+Next: execute the
 [post-landing measurement plan](design/work/gc-post-cleanup-performance-plan.md).
 It refreshes all29 workloads versus upstream, four same-fork comparisons,
 four hot `perf` profiles and existing arithmetic/attribute diagnostics. Keep

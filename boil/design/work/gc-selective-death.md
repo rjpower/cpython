@@ -2,7 +2,7 @@
 
 2026-10-30 as-built reconciliation. Current reviewed source is `0b15b4bbc9b`;
 its operator composite qualification is PASS. Independent LAND clears this integration;
-postmerge smokes remain pending. The selective-only measurements and failed
+postmerge smokes pass. The selective-only measurements and failed
 campaign below retain their original source/native identities. They are not
 measurements or full-suite passes for the current combined source.
 
@@ -182,7 +182,7 @@ the proved two-store delta, four fresh build audits and current affected,
 debug-stress, ASan16 and closure evidence. Do not relabel339's failed stress or
 old fulls as0b15 uniform full passes. ASan16 and closure now pass, and the operator final index records qualification
 PASS for that explicit composite. Independent LAND clears this primary integration; postmerge
-smokes remain pending. No combined-source speedup is claimed. The held post-landing
+smokes pass. No combined-source speedup is claimed. The held post-landing
 measurement plan will refresh all29, the parent comparison and native profiles
 only after those prerequisites and actual origins are complete.
 
@@ -206,5 +206,16 @@ process coverage. Closure passes cext16 with the exact seven declared skips,
 regeneration/clinic, traversal and19 borrowed-header receipts; `_tkinter`,
 `_dbm`, `_gdbm` and `readline` remain explicitly unsupported. All four source,
 configuration, tool and product postguards pass. Independent LAND clears the composite; primary integration includes this record.
-The two normal postmerge smokes remain pending; no
+The two normal postmerge smokes pass; no
 post-cleanup performance result is claimed.
+
+## Integration and postmerge checks
+
+Integrated as `aee46aacae2`; the exact difference from qualified0b15 is13
+project Markdown paths. Final postmerge index
+`build/gc-cleanup-integration-v2/final-receipts.json`, SHA256
+`382dd354f46d84391f2e27d6c593dd043a6ee258bb3bd2ab6e76dd8ae2ff1215`,
+binds23 receipts. Release passes1,937/80 and debug1,937/50; each has all nine
+modules passing, native/launcher/cleanup0 and zero root fallback. Debug has
+two report-only detached-snapshot visits; release has zero. These are fresh
+integration checks with the qualified images, not a new native rebuild.

@@ -5659,3 +5659,14 @@ Three339 fulls/release stress stay339 executions, original339 debug stress stays
 FAIL, and fresh0b15 delta qualification is explicit. No repeated broad fulls or
 new benchmark score. Two normal postmerge smokes precede runtime push, then the
 finite29/parent4/profile4/micro plan. Serving0b15 and all images stay frozen.
+
+### 2026-10-30 20:04 PDT — both integration smokes pass
+
+Actual mergeaee46aacae2/tree9c79c898 differs from qualified0b15 in exactly13
+project Markdown paths; every other tracked byte matches. Final postmerge
+index382dd354/23refs binds both fresh native0/run0/verify0/cleanuptrue rows:
+release1,937/80,784collections/0fallback/0snapshot visits; debug1,937/50,
+823collections/0fallback/2report-only snapshot visits. All nine modules pass.
+The qualified images are reused; no new rebuild is claimed. Independent raw
+terminal review clears both rows and all23 refs. Push runtime and begin held candidate29 origins
+using this real smoke index. No performance number is claimed yet.

@@ -5,7 +5,7 @@ processing, native suspended-generator cleanup, managed scanning and the
 warning-context repair. Four fresh incremental build/audit capsules pass.
 Focused behavior and the previously failing debug stress pass. **The operator
 composite qualification is PASS; independent LAND clears this integration;
-postmerge smokes remain pending.**
+postmerge smokes pass.**
 This record does not turn predecessor passes into successor full-suite passes.
 
 ## Implemented contract
@@ -141,5 +141,16 @@ process coverage. Closure passes cext16 with the exact seven declared skips,
 regeneration/clinic, traversal and19 borrowed-header receipts; `_tkinter`,
 `_dbm`, `_gdbm` and `readline` remain explicitly unsupported. All four source,
 configuration, tool and product postguards pass. Independent LAND clears the composite; primary integration includes this record.
-The two normal postmerge smokes remain pending; no
+The two normal postmerge smokes pass; no
 post-cleanup performance result is claimed.
+
+## Integration and postmerge checks
+
+Integrated as `aee46aacae2`; the exact difference from qualified0b15 is13
+project Markdown paths. Final postmerge index
+`build/gc-cleanup-integration-v2/final-receipts.json`, SHA256
+`382dd354f46d84391f2e27d6c593dd043a6ee258bb3bd2ab6e76dd8ae2ff1215`,
+binds23 receipts. Release passes1,937/80 and debug1,937/50; each has all nine
+modules passing, native/launcher/cleanup0 and zero root fallback. Debug has
+two report-only detached-snapshot visits; release has zero. These are fresh
+integration checks with the qualified images, not a new native rebuild.

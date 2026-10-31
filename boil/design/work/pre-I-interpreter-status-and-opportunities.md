@@ -28,8 +28,7 @@ pass51,255 tests each and release stress passes on339. Its debug stress fails
 in coroutine origin construction before the traced origin field is initialized.
 Successor0b15 adds exactly two pre-tracking initializations and an origin/data
 regression. All four builds, finite delta qualification and closure pass;
-independent composite LAND clears integration. Two postmerge smokes and the
-finite measurement plan follow. No refreshed performance claim is made. This
+independent composite LAND clears integration. Integrationaee46 and both postmerge smokes pass; the finite measurement plan follows. No refreshed performance claim is made. This
 construction repair changes no IR handler or call ABI. H1's exact strrchr
 effect/unit prerequisite is included, while its runtime frame-passing history
 and inert H2 remain archived and unmerged.

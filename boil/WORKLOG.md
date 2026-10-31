@@ -126,3 +126,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   without another GC invocation.
   [GC failures](issues/gc-nursery-adoption/feedback-results.md),
   [IR execution](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: IR debug build passed; eleven focused cases returned ten passes
+  and one negative-oracle failure. Preserved the stopped batch and idle cleanup.
+  Source review identifies existing exit-block inlining as a concrete cause
+  to test with the exact original code objects before changing the pass or
+  oracle. Both streams prepare bounded observations with unchanged deadlines.
+  [IR failure evidence](issues/interpreter-constant-operands/feedback-results.md).

@@ -2,7 +2,7 @@
 
 - State: review
 - Owner: qualification_review_resumed; coordinator selects implementation
-- Updated: 2026-10-31, 21:22 UTC
+- Updated: 2026-10-31, 21:27 UTC
 - Budget: offline research complete; 90-minute host-only prototype
 - Source started: 2026-10-31 20:20:13 UTC; decision due 21:50:13 UTC
 - Checkpoints: 20:50:13 domain/format; 21:20:13 fallback/observer/stack proof
@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: exact source/helpers accepted; debug-first native feedback running
+- Decision: debug build passed; first selection failed; exact-word observation held for review
 - Candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
 
@@ -61,11 +61,14 @@ accepts this source for bounded feedback. The coordinator's
 [helper review](reviews/feedback-helpers-20261031-v1.md) accepts the exact eleven-row
 launch after independent host/control/tool replay. Root activated the
 [native feedback](feedback-plan.md) at 21:20:45 UTC after the GC invocation
-stopped and verified cleanup. Its sixty-minute deadline is 22:20:45 UTC;
-the [execution record](feedback-results.md) owns current outcomes.
+stopped and verified cleanup. The debug build passed; eleven new cases returned
+ten passes and one source-control assertion failure, then execution stopped.
+An exact-CodeType observation must distinguish earlier block inlining from an
+invalid pass admission before any correction. The original deadline remains
+22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
 The [held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
 independent [design review](reviews/performance-plan-20261031.md) accepts the
 proposal for later preparation, with raw counter capture and native feedback
-still required. Target-test, native emission and performance results remain
-pending.
+still required. Broader behavior, native emitted-work and performance acceptance
+remain pending.

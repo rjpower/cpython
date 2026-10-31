@@ -8,7 +8,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / failure diagnosis | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Distinguish record provenance in two actual failed cases |
-| IR / native feedback | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Review the bounded debug-first batch; deadline 22:20:45 UTC |
+| IR / failure diagnosis | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Observe exact original code words before correcting the negative oracle |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

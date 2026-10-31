@@ -82,3 +82,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   optimizations do not establish a missing interpreter pipeline.
   [Research](issues/interpreter-lowering-research/results.md),
   [current work](issues/README.md).
+- 2026-10-31: Froze nursery adoption candidate b34931a881b after host syntax,
+  root and traversal checks, with twenty focused tests prepared. Independent
+  source review found and resolved retry-backoff and private-tuple diagnostic
+  lifetime cases before freeze. Exact-source review and held debug feedback
+  follow; no native pass or landing is claimed.
+  [Adoption status](issues/gc-nursery-adoption/status.md),
+  [feedback scope](issues/gc-nursery-adoption/feedback-plan.md).

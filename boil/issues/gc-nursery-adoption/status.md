@@ -1,6 +1,6 @@
 # Adopt the nursery as the runtime architecture
 
-- State: active
+- State: review
 - Owner: restart_audit implements; coroutine_design_review independently reviews; coordinator integrates
 - Updated: 2026-10-31
 - Base: merged `d98291018c9665ae3db6952da0b0a40a4e04992b`
@@ -10,6 +10,8 @@
 - Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
 - Source started: 2026-10-31 20:18:11 UTC; source checkpoint due 21:48:11 UTC
 - Overall dispatch deadline: 2026-11-01 04:18:11 UTC
+- Candidate: `b34931a881b33b47a2b2f4b1b2a644c50fed963b`, frozen 20:48:24 UTC
+- Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
 
 ## Hypothesis
 
@@ -39,9 +41,12 @@ for that comparison, not a second collector mode.
 
 The [independent design review](reviews/nursery-adoption-design-20261031.md)
 cleared design `046b8ab0…` for the first source increment. Implementation is
-running in the isolated worktree from documentation checkpoint `32f14069fd2`,
-whose runtime source is d98291018c9. No target interpreter, build or native
-suite is authorized before source review and a coordinated feedback plan.
+frozen in the isolated worktree from documentation checkpoint `32f14069fd2`,
+whose runtime source is d98291018c9. The candidate adds mandatory admission,
+actual checked minors, transactional diagnostic records, storage-lifetime
+retirement and failed-collection debt/backoff. Host checks pass; twenty
+focused tests are prepared. Exact-source independent review and the
+[held feedback plan](feedback-plan.md) precede any native execution.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

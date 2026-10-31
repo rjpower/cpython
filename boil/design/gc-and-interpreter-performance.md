@@ -8,18 +8,22 @@ throughput reaches aggregate parity, while generator and coroutine gaps are
 larger. The landed cleanup improves those shared costs; it does not establish
 broad parity or a general 2× result.
 
-Work in two bounded tracks: establish the smallest useful nursery path, and
-attribute residual interpreter cost before proposing shared-interface changes.
-Then extend coverage, cheap reclamation and old-work reduction as separate useful
-increments. Do not require every future contract in the first experiment.
+Two bounded candidates now await coherent qualification: an opt-in nonmoving
+nursery for cells/tuples, and one shape admission per polymorphic attribute
+operation. Their behavior checks passed; neither is a runtime landing or a new
+throughput result. Bulk frame transfer was rejected after its finite comparison.
+Extend nursery coverage, reclamation and old-work reduction in separate steps.
 
 ## Current runtime
 
 The collector is full-heap mark/sweep with hybrid roots, actual death-work
 selection, guarded native suspended-generator cleanup and direct managed scans.
 Supported execution is Linux, one main interpreter, ordinary threads and the GIL.
-There is no active nursery or moving collector. Root and native lifetime rules
-remain in force; see [the contract](gc-roots-and-lifetimes.md).
+The default has no nursery or moving collector. The experimental nursery uses
+existing storage, scans all old objects and promotes survivors in place; it
+establishes a generation boundary before attempting a performance improvement.
+Root and native lifetime rules remain in force; see
+[the contract](gc-roots-and-lifetimes.md).
 
 The [measurement report](../issues/gc-cleanup-scanning/performance.md) gives
 matched inputs, all rows, raw vectors, phases and limits. Five serial samples
@@ -28,10 +32,10 @@ sweep all remain material; sampled inventory is not an object-age histogram.
 
 ## Collector sequence
 
-1. [Minimum nursery](../issues/gc-nursery-minimum/status.md): prove a functional
-   young-domain collection and survivor path with the smallest coherent source
-   change. Conservative scanning of old storage is acceptable for this first
-   experiment. Declare its budget and observable decision checks.
+1. [Minimum nursery](../issues/gc-nursery-minimum/status.md): bounded behavior,
+   major-path compatibility and negative controls passed independent review.
+   Qualify the small opt-in candidate with the interpreter change. Its
+   conservative old scan and cell/tuple cohort establish no speedup.
 2. [Coverage and reclamation](../issues/gc-nursery-coverage/status.md): extend to
    actual allocation-heavy traffic, including generator/coroutine bodies and
    embedded frames. Make safe dead-storage reclamation cheaper; report retained
@@ -48,11 +52,17 @@ contracts and is not a prerequisite for the first age experiment.
 
 ## Interpreter track and parity++
 
-[Residual attribution](../issues/interpreter-residual-costs/status.md) selects
-the [bulk frame-transfer candidate](../issues/frame-transfer-bulk/status.md).
-It is a bounded shared-path experiment, not a measured speedup. Existing
-frame-window sharing, compiler folds and tagged payloads are already present;
-preserve their initialization, root and exception contracts.
+[Residual attribution](../issues/interpreter-residual-costs/status.md) led to
+the [bulk frame-transfer experiment](../issues/frame-transfer-bulk/status.md),
+rejected after two matched process rounds showed no repeatable benefit.
+The next [shape-admission candidate](../issues/shape-admission-reuse/status.md)
+passed source, behavior and emitted-code review: four matcher sites become two,
+one per existing load/store family. This removes duplicate work without a new
+protocol; the sampled duplicate share is only 0.774% of Richards CPU, so it is
+not a broad performance explanation or an elapsed speed claim.
+
+Existing frame-window sharing, compiler folds and tagged payloads are already
+present; preserve their initialization, root and exception contracts.
 
 Generators measure 0.603× upstream and need about 1.66× more throughput for
 parity. Their separate profile spends about 22% in timed GC; removing that timed

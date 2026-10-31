@@ -14,6 +14,12 @@ young garbage can die, surviving young objects promote in place, and every
 old object plus its outgoing closure is retained conservatively. Full and
 automatic collections remain majors. The default is disabled.
 
+The test control is temporary experiment admission, not a preferred permanent
+GC API. It isolates the unsupported verifier/stress modes and leaves the
+qualified default intact. At this stage's decision, explicitly retain it for
+the next bounded experiment, replace it with a settled default contract, or
+reject the path; do not let the knob become permanent by omission.
+
 This deliberately scans all old objects and builds ordinary dead records for
 young deaths. It proves a usable generation boundary, not reduced old work or
 cheap reclamation. Cells/tuples are a bounded first cohort, not demonstrated
@@ -25,10 +31,18 @@ coverage of dominant generator/coroutine allocations.
   only at exact cell/tuple allocation; empty static tuples and subclasses
   remain old. Existing flag masks must preserve age through tracking and
   marking; block reuse starts with cleared flags as before.
+  A non-rooting `young_pending` hint survives disabling, so a subsequent major
+  still promotes the cohort. It may remain conservatively set after dead
+  candidates are freed; the next successful census retires it. The ordinary
+  never-enabled runtime does not acquire an extra promotion walk.
 - Before root closure, visit every allocated old object through the existing
   conservative/SHALLOW-safe marking path. This covers old→young stores with
   no barrier and temporarily retains unreachable old owners. There is no
   native-owner registry, moving alias or new allocation ownership protocol.
+  The all-old census requires TRACKED before interpreting tuple items: it can
+  encounter an unpublished tuple that ordinary roots have never exposed.
+  This artificial retention does not rearm old DEL_CALLED/non-GC FINALIZED
+  state; a later major determines actual reachability again.
 - Use the same mark stack, dead inventory, lifecycle preparation and sweep.
   Promote survivors only after successful tracing; OOM keeps everything and
   clears scratch marks/DEAD through existing cleanup. Partial promotion is
@@ -42,6 +56,9 @@ coverage of dominant generator/coroutine allocations.
   allocation debt or next-major limit; periodic automatic majors remain active
   when GC is enabled. Explicit full collection still reclaims old cycles and
   resource owners. With automatic GC disabled, the caller owns explicit majors.
+  Experimental `gc.get_objects` takes a noncollecting heap snapshot; the normal
+  snapshot helper forces a major and would erase the age observation.
+  Both paths expose only GC-capable, tracked objects, never unpublished slots.
 - Preserve GC debug/SAVEALL, reftracer and ordinary deallocation behavior;
   there is no bulk discard or suppressed observer in this experiment.
 

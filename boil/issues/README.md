@@ -7,12 +7,13 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC | [Minimal nonmoving nursery](gc-nursery-minimum/status.md) | string_design | Resolve the small minor-collection consumer and source scope |
-| Interpreter | [Bulk frame payload transfer](frame-transfer-bulk/status.md) | stats_design_review | Review the small copy/clear candidate, then compare native code and cost |
+| GC | [Minimal nonmoving nursery](gc-nursery-minimum/status.md) | string_design | Bounded hypothesis passed; select for coherent landing qualification |
+| Interpreter | [Share polymorphic shape admission](shape-admission-reuse/status.md) | stats_design_review | Independent review passed; select for coherent landing qualification |
 
-The first runtime decision checkpoint is within an hour of 15:15 UTC on
-2026-10-31. Source work and builds can overlap with separate file ownership;
-quiet performance measurement windows and integration serialize.
+The nursery's first decision finished within its one-hour budget. Source work,
+reviews and builds can overlap with separate ownership; quiet measurements,
+shared full-suite/perf-map windows and integration serialize. Qualify the
+selected GC/interpreter combination once rather than repeat unchanged ladders.
 
 ## Next GC experiments, in order
 
@@ -39,6 +40,10 @@ These are intake scopes. Split a bounded hypothesis before dispatching work.
 
 JIT tiers and broader package ports follow interpreter work and settled native
 contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
+
+## Rejected
+
+- [Bulk frame transfer](frame-transfer-bulk/status.md): no repeatable gain in two matched process rounds; no further qualification.
 
 ## Reported
 

@@ -32,5 +32,6 @@ two competing live layouts.
 
 Migration and coordinator review are complete. Current contracts and issue
 records replace the mixed live layout; workflow and entry points are concise.
-All preserved original bytes and user-owned review files were independently
-checked. Publish the committed views; future work follows the bounded template.
+All 737 preserved original files and user-owned review bytes were independently
+checked. The migration is pushed at abd5c0926df; published views identify that
+source revision. Future work follows the bounded template.

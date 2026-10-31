@@ -1,12 +1,14 @@
 # Minimal nonmoving nursery
 
-- State: active
+- State: review
 - Owner: string_design; coordinator integrates
 - Updated: 2026-10-31
 - Budget: first decision within 60 minutes of 15:15 UTC; checkpoint at 30 minutes
 - Depends on: [landed GC baseline](../gc-cleanup-scanning/status.md)
-- Branch: boil/gc-nursery-minimum, base b3f2bcc605c
-- Worktree: ../boil-gc-nursery-minimum; source preparation
+- Branch: boil/gc-nursery-minimum, candidate 3a473612157
+- Worktree: ../boil-gc-nursery-minimum
+- Phase: bounded experiment accepted for qualification; not landed
+- Decision: integrate if coherent landing qualification passes
 
 ## Hypothesis
 
@@ -35,7 +37,19 @@ unfinished work does not become landed by reaching the deadline.
 
 ## Now / next
 
-The source feasibility pass selected existing allocator storage plus a young
-header flag and conservative old roots as the first candidate. Close publication,
-reentry, accounting and rollback details, then prepare a bounded source change.
-Broader coverage and reduced old scanning are separate follow-ups.
+Candidate 3a473612157 passed independent source review, fresh O1/Py_DEBUG
+build, five supported behavior checks and whole GC/tuple/types in OFF and KILL.
+The latter ran 362 tests per mode, with 23 and 28 skips respectively; the five
+additional KILL skips are exactly the unsupported nursery controls. A safe
+full-instead-of-minor negative failed at the intended old-owner assertion.
+Independent review replayed the results and verified cleanup.
+
+The first bounded hypothesis works. Next, select the coherent landing and
+qualify it once with the interpreter candidate. Keep the nursery opt-in;
+the all-old scan and tiny cohort establish no performance gain.
+
+## References
+
+- [Design](design.md).
+- [Three bounded stages](plan.md).
+- [Results and retained evidence](results.md).

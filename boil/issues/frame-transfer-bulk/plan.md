@@ -1,5 +1,8 @@
 # Finite frame-transfer experiment
 
+Executed 2026-10-31; [results](results.md) reject the implementation after the
+declared two-round comparison. The sequence below records the experiment plan.
+
 1. Source review: inspect the single-header patch and all three caller proofs;
    run existing host root checks and diff checks. No commit/build before the
    coordinator reviews the patch. Root owns status; this issue owns the header
@@ -22,5 +25,6 @@
    No arbitrary performance threshold or automatic repeat-to-green. Stop at
    the 90-minute decision budget and report what remains unresolved.
 
-Native builds, tests and timing have not started. Host source checks are separate
-from native correctness or performance credit.
+The completed scope is one fresh O3 build, ten OFF cases and two paired-four
+rounds. The mistakenly scheduled release-KILL startup failure remains distinct.
+No debug/sanitizer/full qualification follows a rejected performance experiment.

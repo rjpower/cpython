@@ -1,39 +1,39 @@
 # Bulk frame payload transfer
 
-- State: active
-- Owner: stats_design_review; coordinator reviews/integrates
+- State: closed
+- Outcome: abandoned
+- Decision: reject this implementation
+- Owner: stats_design_review; coordinator accepted the result
 - Updated: 2026-10-31
-- Budget: 90 minutes from assignment; checkpoint at 30 minutes
-- Depends on: [residual attribution](../interpreter-residual-costs/status.md)
-- Branch: boil/frame-transfer-bulk, candidate 5b4d7d9126c
-- Worktree: ../boil-frame-transfer-bulk; separate release build running
+- Budget: 90 minutes; stopped after the two declared comparison rounds
+- Candidate: 5b4d7d9126c, retained on boil/frame-transfer-bulk; unmerged
 
 ## Hypothesis
 
-Expressing the existing full-range frame payload move as nonoverlapping copy
-followed by source clearing produces simpler/faster native code than the scalar
-copy-and-clear loop, while keeping one shared frame lifetime contract.
+Replacing the shared scalar frame payload move with memcpy plus source memset
+would produce simpler/faster native execution while preserving all three callers.
 
-## Experiment
+## Result and decision
 
-Audit all three callers, preserve every slot/header/root/publication rule, and
-change only the shared payload implementation. Verify nonoverlapping storage and
-all-zero NULL representation. Use relevant generator/coroutine/escaped-frame
-behavior, inspect emitted O3 code, then run a small matched comparison if viable.
-No prefix elision, new frame ABI, dispatch change or workload-specific handler.
+The one-header candidate passed source review and release OFF behavior checks.
+Native code contains two libc calls. Two matched process rounds showed no
+repeatable target benefit: coroutine ratios were 1.0023 and 0.9652, generator
+ratios 0.9966 and 0.9925 (parent elapsed / candidate elapsed). Other rows were
+noisy. These data justify rejecting the implementation, not a precise causal
+regression estimate or a claim that frame transfer cannot improve.
 
-## Decision rule
+The coordinator independently replayed all 80 values and verified 190 evidence
+references. Preserve the separate release-KILL startup configuration failure;
+it earned no test/kill credit. No further build, debug/ASan/full qualification
+or timing is assigned to this rejected candidate.
 
-Integrate when behavior is preserved and native code/cost justify the simpler
-implementation. Reject if tiny-frame call overhead or regressions outweigh the
-benefit, or the caller alias proof fails. Stop at the budget with the evidence
-and decision; further ideas become separate experiments. A sampled source share
-is a motivation, not a promised saving.
+## Next
 
-## Now / next
+Continue the independent [shape-admission experiment](../shape-admission-reuse/status.md).
+Keep this candidate and evidence separate from primary; no runtime change landed.
 
-Attribution found a scalar loop in the qualified coroutine image; its sampled
-loop interval is 2.476% of that capture's total CPU. The larger whole-helper
-share includes other stores and is not the expected gain. The coordinator reviewed the
-minimal shared-helper patch; the separate release feedback build is running.
-No new timing result or runtime landing is claimed.
+## References
+
+- [Results and retained evidence](results.md).
+- [Source/lifetime proof](design.md).
+- [Executed finite plan](plan.md).

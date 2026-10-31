@@ -61,5 +61,7 @@ accepts this source for bounded feedback. Concrete launch preparation and
 coordinator helper acceptance precede the [held native feedback](feedback-plan.md).
 The [held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
-design review is pending. No target execution, native emission result or
+independent [design review](reviews/performance-plan-20261031.md) accepts the
+proposal for later preparation, with raw counter capture and native feedback
+still required. No target execution, native emission result or
 speedup is claimed.

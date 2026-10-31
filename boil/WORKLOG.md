@@ -104,3 +104,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   reviewed launch bindings before execution.
   [IR review](issues/interpreter-constant-operands/reviews/source-20261031-v1.md),
   [held measurement design](issues/interpreter-constant-operands/performance-plan.md).
+- 2026-10-31: The first nursery feedback launch stopped before configuration:
+  readiness and build recorded different assembler path aliases for identical
+  binaries. Preserved the failure and verified idle cleanup; bounded a helper
+  correction under the original batch deadline. No native build/test credit.
+  Independent review accepted the revised held IR measurement proposal after
+  requiring original low/high counter capture.
+  [GC feedback](issues/gc-nursery-adoption/feedback-results.md),
+  [IR measurement review](issues/interpreter-constant-operands/reviews/performance-plan-20261031.md).

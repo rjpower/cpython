@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_cell.h"          // PyCell_GetRef()
+#include "pycore_gc.h"            // _PyGC_YoungAllocated()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"
 
@@ -16,6 +17,7 @@ PyCell_New(PyObject *obj)
     if (op == NULL)
         return NULL;
     op->ob_ref = obj == NULL ? PyValue_NULL : PyValue_FromObject(obj);
+    _PyGC_YoungAllocated((PyObject *)op);
 
     _PyObject_GC_TRACK(op);
     return (PyObject *)op;

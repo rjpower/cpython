@@ -679,7 +679,7 @@ resurrect(objstack *s, PyObject *op)
 
 static void
 invoke_gc_callback(PyThreadState *tstate, const char *phase,
-                   struct gc_generation_stats *stats)
+                   struct gc_generation_stats *stats, int young)
 {
     GCState *gcstate = &tstate->interp->gc;
     if (gcstate->callbacks == NULL || PyList_GET_SIZE(gcstate->callbacks) == 0
@@ -689,7 +689,7 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
     }
     assert(PyList_CheckExact(gcstate->callbacks));
     PyObject *info = Py_BuildValue("{sisnsnsnsd}",
-        "generation", NUM_GENERATIONS - 1,
+        "generation", young ? 0 : NUM_GENERATIONS - 1,
         "collected", stats->collected,
         "uncollectable", stats->uncollectable,
         "candidates", stats->candidates,
@@ -1612,21 +1612,29 @@ debug_cycle(debug_output *out, const char *msg, PyObject *op)
     debug_write(out, "gc: %s <%s %p>\n", msg, Py_TYPE(op)->tp_name, (void *)op);
 }
 
-/* Add a collection to the totals in the ring of generation 2's stats, which
-   gc.get_stats() and _remote_debugging read, as add_stats() in gc.c does.
-   There is one generation: every collection is a full one. */
+/* Preserve the existing public statistics protocol: experimental minors
+   use generation0's ring; ordinary full collections use generation2. */
 static void
-record_stats(GCState *gc, const struct gc_generation_stats *cur)
+record_stats(GCState *gc, const struct gc_generation_stats *cur, int young)
 {
     struct gc_stats *gs = gc->generation_stats;
     uint32_t seq = _Py_atomic_load_uint32_relaxed(&gs->update_seq);
     // An odd sequence number tells a reader that an update is in progress.
     _Py_atomic_store_uint32_relaxed(&gs->update_seq, seq + 1);
     _Py_atomic_fence_seq_cst();
-    struct gc_old_stats_buffer *ring = &gs->old[1];
-    struct gc_generation_stats *prev = &ring->items[ring->index];
-    ring->index = (ring->index + 1) % GC_OLD_STATS_SIZE;
-    struct gc_generation_stats *stats = &ring->items[ring->index];
+    struct gc_generation_stats *prev, *stats;
+    if (young) {
+        struct gc_young_stats_buffer *ring = &gs->young;
+        prev = &ring->items[ring->index];
+        ring->index = (ring->index + 1) % GC_YOUNG_STATS_SIZE;
+        stats = &ring->items[ring->index];
+    }
+    else {
+        struct gc_old_stats_buffer *ring = &gs->old[1];
+        prev = &ring->items[ring->index];
+        ring->index = (ring->index + 1) % GC_OLD_STATS_SIZE;
+        stats = &ring->items[ring->index];
+    }
     *stats = *prev;
     stats->ts_start = cur->ts_start;
     stats->ts_stop = cur->ts_stop;
@@ -1811,7 +1819,7 @@ static int stress_every = 0;
    a collection from the queue's code walks. */
 static Py_NO_INLINE Py_ssize_t
 collect(PyThreadState *tstate, struct _gc_live_state *ls,
-        _PyGC_Reason reason, debug_output *out)
+        _PyGC_Reason reason, debug_output *out, int young)
 {
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
@@ -1826,7 +1834,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     gc->frame = tstate->current_frame;
     ls->exc = _PyErr_GetRaisedException(tstate);
     struct gc_generation_stats cur = {0};
-    invoke_gc_callback(tstate, "start", &cur);
+    invoke_gc_callback(tstate, "start", &cur, young);
 
     PyTime_t t0 = 0, t1 = 0;
     (void)PyTime_PerfCounterRaw(&t0);
@@ -1835,7 +1843,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     _PyGCRoot garbage_root;
     int garbage_rooted = 0;
     Py_ssize_t ncollected = 0, bytes_freed = 0;
-    if (_PyGC_TraceLiveMark(tstate, &res) < 0) {
+    if (_PyGC_TraceLiveMark(tstate, &res, young) < 0) {
         unpin_domain(&res);
         goto done;  // out of memory: nothing is freed
     }
@@ -1914,15 +1922,17 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     cur.ts_start = t0;
     cur.ts_stop = t1;
     cur.heap_size = res.nobjects;
-    record_stats(gc, &cur);
+    record_stats(gc, &cur, young);
     gc->heap_size = failed ? res.nobjects : res.nobjects - res.ndead;
-    gc->long_lived_total = gc->heap_size;
-
-    gc->alloc_bytes = 0;
-    gc->alloc_limit = gc->alloc_threshold > 0
-        ? Py_MAX(gc->alloc_threshold, res.live_bytes) : PY_SSIZE_T_MAX;
-    if (stress_every > 0) {
-        gc->alloc_limit = 0;
+    if (!young) {
+        gc->long_lived_total = gc->heap_size;
+        // A minor must not postpone the next automatic major.
+        gc->alloc_bytes = 0;
+        gc->alloc_limit = gc->alloc_threshold > 0
+            ? Py_MAX(gc->alloc_threshold, res.live_bytes) : PY_SSIZE_T_MAX;
+        if (stress_every > 0) {
+            gc->alloc_limit = 0;
+        }
     }
     free(res.dead);
 
@@ -1938,7 +1948,7 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
                     res.live_bytes, cur.duration);
     }
     if (!ls->skip_verify) {
-        _PyGC_TraceAfterCollect(tstate, NUM_GENERATIONS - 1,
+        _PyGC_TraceAfterCollect(tstate, young ? 0 : NUM_GENERATIONS - 1,
                                 reason == _Py_GC_REASON_MANUAL);
     }
     for (size_t i = 0; i < garbage.n; i++) {
@@ -1958,7 +1968,7 @@ done:
         _PyGC_RemoveRoot(&garbage_root);
     }
     free(garbage.items);
-    invoke_gc_callback(tstate, "stop", &cur);
+    invoke_gc_callback(tstate, "stop", &cur, young);
     gc->frame = NULL;
     gc->collecting = 0;
     _PyErr_SetRaisedException(tstate, ls->exc);
@@ -1973,7 +1983,7 @@ done:
    consumed memory acquisitions in *ncompleted, after error reporting. */
 Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
 collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
-             _PyGC_Reason reason, int *ncompleted)
+             _PyGC_Reason reason, int *ncompleted, int young)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     struct _mimalloc_thread_state *m = &ts->mimalloc;
@@ -1982,7 +1992,7 @@ collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
         m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
     }
     debug_output out = {.to_stderr = ls->no_python || !live_python_ok(tstate)};
-    Py_ssize_t n = collect(tstate, ls, reason, &out);
+    Py_ssize_t n = collect(tstate, ls, reason, &out, young);
     // A collection that the queue's code triggers records its own entry.
     ts->gc_trace.entry.sp = 0;
     int python_ok = !ls->no_python && live_python_ok(tstate);
@@ -2000,7 +2010,7 @@ collect_pass(PyThreadState *tstate, struct _gc_live_state *ls,
    would keep garbage alive.  Not inlined, so that the callers' frames are
    above.  Precise, so the walk does not scan its own frame. */
 Py_GC_PRECISE static Py_NO_INLINE Py_ssize_t
-collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
+collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason, int young)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     // After the close (_PyGC_Fini()) there is no live state and nothing
@@ -2016,7 +2026,7 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
     }
     int ncompleted;
-    Py_ssize_t n = collect_pass(tstate, ls, reason, &ncompleted);
+    Py_ssize_t n = collect_pass(tstate, ls, reason, &ncompleted, young);
     /* The objects that finalizers did not resurrect are garbage again.  An
        explicit collection frees them, as the reference counting build
        does within one collection; an automatic one leaves them to the
@@ -2032,7 +2042,7 @@ collect_from_entry(PyThreadState *tstate, _PyGC_Reason reason)
     {
         _PyGC_CaptureCaller(&ts->gc_trace.entry);
         ls->skip_verify = 1;
-        n += collect_pass(tstate, ls, reason, &ncompleted);
+        n += collect_pass(tstate, ls, reason, &ncompleted, young);
         ls->skip_verify = 0;
     }
     ts->gc_trace.entry = outer_entry;
@@ -2129,7 +2139,7 @@ _PyGC_LiveCollectHere(PyThreadState *tstate)
         return 0;  // closed, or no memory: as in collect_from_entry()
     }
     ls->no_python = 1;
-    (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP, 0);
     ls->no_python = 0;
     if (tstate->interp->gc.queue_head != NULL) {
         _Py_ScheduleGC(tstate);
@@ -2171,6 +2181,8 @@ PyStatus
 _PyGC_Init(PyInterpreterState *interp)
 {
     GCState *gcstate = &interp->gc;
+    gcstate->young_enabled = 0;
+    gcstate->young_pending = 0;
     // The main interpreter's state is static: after Py_FinalizeEx(), its
     // queue is closed and empty.
     assert(gcstate->queue_head == NULL);
@@ -2392,7 +2404,7 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 static PyObject **
 snapshot(PyThreadState *tstate, Py_ssize_t *n)
 {
-    (void)collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_MANUAL, 0);
     Py_ssize_t nobjs;
     PyObject **objs = _PyGC_TraceLiveHeapObjects(tstate->interp, &nobjs);
     if (objs == NULL) {
@@ -2451,24 +2463,35 @@ _PyGC_GetReferrers(PyInterpreterState *interp, PyObject *objs)
     return result;
 }
 
-/* Generations do not exist: generation 2 and None mean every object, and
-   the younger generations are empty. */
+/* Normally generation2 and None list every object.  The opt-in experiment
+   additionally exposes its young cohort through generation0. */
 PyObject *
 _PyGC_GetObjects(PyInterpreterState *interp, int generation)
 {
-    if (generation >= 0 && generation < NUM_GENERATIONS - 1) {
+    int ages = interp->gc.young_enabled;
+    if (generation == 1 || (generation == 0 && !ages)) {
         return PyList_New(0);
     }
     PyThreadState *tstate = _PyThreadState_GET();
     GCState *gc = &interp->gc;
     Py_ssize_t n;
-    PyObject **all = snapshot(tstate, &n);
+    PyObject **all = ages ? _PyGC_TraceLiveHeapObjects(interp, &n)
+                         : snapshot(tstate, &n);
     if (all == NULL) {
         return PyErr_NoMemory();
     }
     gc->collecting++;
     PyObject *result = PyList_New(0);
     for (Py_ssize_t i = 0; result != NULL && i < n; i++) {
+        if (!_PyObject_IS_GC(all[i]) || !_PyObject_GC_IS_TRACKED(all[i])) {
+            continue;
+        }
+        int is_young = (all[i]->ob_flags & _Py_GC_YOUNG_FLAG) != 0;
+        if (ages && generation >= 0
+            && (generation == 0 ? !is_young : is_young))
+        {
+            continue;
+        }
         if (PyList_Append(result, all[i]) < 0) {
             Py_CLEAR(result);
         }
@@ -2547,19 +2570,30 @@ PyGC_Collect(void)
     if (!tstate->interp->gc.enabled) {
         return 0;
     }
-    return collect_from_entry(tstate, _Py_GC_REASON_MANUAL);
+    return collect_from_entry(tstate, _Py_GC_REASON_MANUAL, 0);
 }
 
 Py_GC_PRECISE Py_ssize_t
 _PyGC_Collect(PyThreadState *tstate, int generation, _PyGC_Reason reason)
 {
-    return collect_from_entry(tstate, reason);
+    int young = generation == 0 && tstate->interp->gc.young_enabled;
+    if (young) {
+        int extra;
+        if (_PyGC_TraceGetVerifyMode(tstate->interp, &extra) != 0
+            || stress_every != 0)
+        {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "experimental minor requires verifier and stress off");
+            return -1;
+        }
+    }
+    return collect_from_entry(tstate, reason, young);
 }
 
 Py_GC_PRECISE void
 _PyGC_CollectNoFail(PyThreadState *tstate)
 {
-    (void)collect_from_entry(tstate, _Py_GC_REASON_SHUTDOWN);
+    (void)collect_from_entry(tstate, _Py_GC_REASON_SHUTDOWN, 0);
 }
 
 void
@@ -2698,7 +2732,7 @@ _Py_RunGC(PyThreadState *tstate)
     // can have work without a collection here: one that an allocation ran
     // left it, or another interpreter's collection put it there.
     if (gc->alloc_bytes >= gc->alloc_limit && can_collect(tstate)) {
-        (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP);
+        (void)collect_from_entry(tstate, _Py_GC_REASON_HEAP, 0);
     }
     (void)run_queue(tstate);
 }
@@ -2847,4 +2881,3 @@ _PyGC_LiveGetStats(PyInterpreterState *interp, Py_ssize_t *bytes_freed,
     *live_bytes = ls ? ls->live_bytes : 0;
     *pause_max = ls ? PyTime_AsSecondsDouble(ls->pause_max_ns) : 0.0;
 }
-

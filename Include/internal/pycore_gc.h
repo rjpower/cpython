@@ -78,6 +78,18 @@ static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
 
 extern void _Py_ScheduleGC(PyThreadState *tstate);
 
+/* Called only by the admitted exact cell/tuple allocation paths.  Promotion
+   changes this bit without moving storage or changing TRACKED. */
+static inline void
+_PyGC_YoungAllocated(PyObject *op)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate != NULL && tstate->interp->gc.young_enabled) {
+        op->ob_flags |= _Py_GC_YOUNG_FLAG;
+        tstate->interp->gc.young_pending = 1;
+    }
+}
+
 
 /* Tell the GC to track this object.
  *

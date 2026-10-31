@@ -88,8 +88,10 @@ were unknown. Candidate33944 adds exact noncollecting declarations and critical
 regressions; program C/headers are unchanged from4d8. All seven generated outputs
 match. O1, O3, ASan and tail builds now pass, with the original failures retained.
 Focused12 and whole10 pass release/debugkill; each whole10 run reports one
-diagnostic unpinned object and zero fallback. Remaining early root/backend runtime checks
-precede the held broad ladder. Earlier
+diagnostic unpinned object and zero fallback. All early ASan/tail/root checks
+also pass and clear independent review. Broad release full passes51,255/3,795
+with zero fallback and one report-only unpinned record; debug normal full is
+active. Debug-kill full, stress2, ASan16, closure and landing remain. Earlier
 selective ASan16 and three fulls pass, but final debug stress fails; its closure
 is unrun. The actual union must qualify before landing.
 

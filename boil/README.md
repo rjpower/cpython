@@ -24,8 +24,10 @@ managed scanning and the restricted-builtins warning repair. Program C/headers
 are frozen at `4d8e690f483`; later commits add exact decoder/libc effect metadata,
 critical classifier regressions and records. All seven generated outputs match.
 Four builds pass (O1 debug, O3 release, ASan and Clang tail), as do focused and
-affected-module checks and all seven ordinary jobs. The corrected ASan selection
-and remaining backend runtime checks run before broad qualification. Original
+affected-module checks and all seven ordinary jobs. All early ASan/tail checks
+also pass. Broad qualification is running: release full passes 51,255 tests;
+debug normal full is active. Debug-kill full, two stress runs, ASan16 and closure
+follow. Original
 selective stress, two linked-audit and ASan recipe failures remain recorded.
 **This runtime candidate is not landed.**
 
@@ -168,7 +170,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
-| GC performance union | Candidate33944 combines reviewed programC4d8 and exact decoder/libc effect repairs. Four builds, focused12 and whole10 pass; original selective stress and first linked-audit failures remain | Finish early backend/root checks, broad release/debug/stress/ASan qualification, closure and independent landing review. No refreshed union performance result |
+| GC performance union | Candidate33944 combines reviewed programC4d8 and exact decoder/libc effect repairs. All early checks pass; release full passes51,255. Original failures remain | Debug normal full active; debug-kill full, stress2, ASan16, closure and independent landing review remain. No refreshed union performance result |
 | Common nursery and stable native space | Revised measured plan plus allocator, frame, container and runtime-store ledgers | Measure the qualified union; choose justified allocator/space work, then writable slots/pinning, core barriers, scanned native owners and independent minor oracle. No nursery/minors/barriers implemented |
 | JIT, broad movement and package ports | JIT and whole-heap movement deferred; nursery and small native contract fixtures are in the current performance plan | Interpreter checkpointI before JIT; extend package migration as native root/barrier/pinning contracts settle |
 

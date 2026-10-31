@@ -13,6 +13,13 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
+Current checkpoint, 2026-10-30 18:44 PDT: candidate `33944d24e55` contains
+the four reviewed improvements below. All early ordinary, sanitizer and tail
+checks pass. Broad release full passes 51,255 tests; debug normal full is active.
+Debug-kill full, two stress profiles, ASan16, closure and final landing review
+remain. Post-landing comparison and integration packets are source-reviewed
+and held; no new whole-interpreter score is claimed.
+
 This plan supersedes the earlier requirement to ship nonmoving generations
 before movement. The existing generation/store ledgers remain source inputs.
 A nursery is a substantial implementation, with the finite contracts below;
@@ -249,35 +256,31 @@ finite major allowance collects old garbage even during zero-promotion traffic.
 
 ### A. Select actual death work and distinguish native-only cleanup
 
-The selective patch has an O3 build, independent source/performance review,
-focused 13 behavioral controls and four O1-debug modules passing 599 tests with
-46 explicit skips. The topic documentation is now `d3331398c624`; it changes
-only the record, with all 588 O3 products/aliases unchanged from measured `10d`.
-Its initial resurrection test had the wrong plain-weakref
-expectation; the corrected test matches pinned upstream and checks eventual
-second death. Keep that original failure in the record. Complete the existing
-landing gates and independent landing review on the composed candidate, then
-merge once. The three selective full suites and ASan pass, but final debug
-stress reports an unraisable import KeyError. A deterministic ordinary-API
-probe loses the intended never-awaited warning and reports two import errors:
-native warning retrieval inherits the interrupted frame's restricted builtins.
-Repair runtime-owned module retrieval rather than suppressing the test.
-Keep this failed campaign distinct from the final union's qualification.
+Selective death processing, native-only cleanup, direct managed scanning and
+the warning repair are implemented in reviewed program source `4d8e690f483`.
+Candidate33944 adds exact decoder/libc effect declarations and critical tool
+regressions; program C/headers remain identical. Qualify this union once, then
+merge and measure it. Preserve the earlier selective campaign's stress failure:
+delayed warning retrieval inherited a restricted frame's builtins, lost its
+warning and reported import KeyErrors. The repair now resolves current modules
+and uses explicit interpreter import semantics; it does not suppress the test.
+The corrected plain-weakref/resurrection oracle and original failed expectation
+also remain in the record.
 
-The [five-file native-cleanup handoff](gc-native-cleanup-next.md) is the next
-code slice. Share `gen_close`'s existing side-effect-free eligibility check:
+The implemented [native-cleanup slice](gc-native-cleanup-next.md) shares
+`gen_close`'s existing side-effect-free eligibility check:
 exact ordinary generator, suspended frame, no escaped frame object, safe
-RESUME-depth state and no unwind monitoring. Classify the entire dead set;
-use the native cohort only when there are no actual Python-capable finalizers,
+RESUME-depth state and no unwind monitoring. It classifies the entire dead set
+and uses the native cohort only when there are no actual Python-capable finalizers,
 registered weakrefs, hooks, buffer/read-before-free dependencies, old queued
 work or active observers. Other collections use the existing path.
 
-Finish all fallible preparation and revalidate the whole cohort before clearing
-any frame. The commit interval performs no allocation, Python execution or
-thread detachment. Native-clear the frame once, then use normal deallocation
+All fallible preparation and whole-cohort revalidation precede frame clearing.
+The commit interval performs no allocation, Python execution or
+thread detachment. It clears each frame once, then uses normal deallocation
 and accounting. This preserves OOM rollback before commit and avoids inventing
-rollback after irreversible cleanup. Validate observable finally/delegation,
-resurrection, weakref, escaped-frame, monitoring and payload reclamation behavior.
+rollback after irreversible cleanup. Behavior checks cover finally/delegation,
+resurrection, weakref, escaped-frame, monitoring and payload reclamation.
 Then reuse the bounded comprehension/generator comparison and report observed
 native-clear execution/CPU cost and the admitted scope. Sampled execution does
 not establish an exact admission rate. The distinction must earn its benefit
@@ -668,8 +671,9 @@ This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
 resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
 and exact decoder/libc effect repairs. Both original linked-audit failures remain
-recorded; O1/O3/ASan/tail builds, focused12 and whole10 pass. Broad qualification remains pending;
-root-list replacement and a universal layout-description framework are not
+recorded; all early ordinary/ASan/tail checks pass and broad release full passes
+51,255. Debug normal full is active; final qualification and landing remain.
+Root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
 The [comparison plan](gc-post-cleanup-performance-plan.md) freezes which existing

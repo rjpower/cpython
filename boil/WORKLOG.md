@@ -5495,3 +5495,40 @@ steps rather than repeating gate history. Existing arithmetic diagnostics are
 explicitly invariant-input expressions, not increment recurrences; two held
 cold/warmed disassembly witnesses will check arithmetic versus folded dispatch
 after landing. No measurement row, benchmark runner or performance result added.
+
+### 2026-10-30 18:44 PDT — hourly checkpoint: first broad full passes
+
+Candidate33944 remains frozen and unlanded; primary runtime is still75e8.
+All early/backend coverage clears independent review (index8109be53/51refs):
+ASan focused12 passes, with220collections/0fallback/2report-only unpinned;
+tail smoke1937/50, focused12 and ownership1 all pass with zero fallback/unpinned.
+All cleanup is complete. Original failures and offline ASan smoke composite
+remain at their explicit source/native/recipe identities.
+
+Actual final broad activation88d60ba3/literal931c7a69 clears independent review:
+five unchanged serial full/stress profiles, ASan16 and conditional closure.
+Three loaders, required selection fields,564/11 rosters and2,915 borrowed headers
+are checked. Source339, O3/ASan native17ef and O1programC4d8 remain explicit.
+Release full now passes51,255tests/3,795skips across564 modules
+(462PASS/94SKIP/8RESOURCE_DENIED),58,655collections, zero fallback and one
+report-only unpinned record; cleanup0,261.131s. Independent raw/validator/binding
+review clears result9a43098a and cleanup18bf2a4b. Debug normal full is active;
+debug-kill full, stress2, ASan16,
+closure and final LAND review remain. No broad retry or source edit.
+
+Parallel host-only preparation is complete and independently source-clear:
+performance current-image draftf78ca363, disassembly addendum and source-bound
+offline phase mapping; postmerge smoke packet6d3ac17e with actual1937/80 and
+1937/50 expectations. Final qualification/merge/origin/window bindings stay null
+and fail closed. Actual required postmerge smoke receipts seed own-image
+provenance, followed by fresh29 origins before timing; no synthetic receipt or
+extra bootstrap target. A prospective merge is clean and differs339 in eight
+project Markdown paths only; the actual final tree must be rechecked.
+
+README/PROCESS/GC plan now describe implemented source and actual gate state;
+the GC plan removes superseded instructions to implement the already-composed
+slice. No new performance score: matched29 remains0.8243× upstream, isolated
+selective coroutine1.309× remains that exact comparison. After qualification,
+merge and two smokes, run the held29/parent4/profile4/micro plan and publish
+the actual improvement/regressions/phase CPU/instructions/RSS/pause scope.
+Next hourly documentation checkpoint19:44PDT, with material results sooner.

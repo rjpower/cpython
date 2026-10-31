@@ -4175,6 +4175,49 @@ gc_set_stress(PyObject *self, PyValue arg)
     return PyValue_FromObject(Py_None);
 }
 
+/* Temporary experiment control; normal gc.collect(0) is the minor consumer.
+   Keep the opt-in out of the public GC configuration until its usefulness and
+   supported modes have been evaluated. */
+static PyValue
+gc_set_young_enabled(PyObject *self, PyValue arg)
+{
+    if (!PyValue_IsInlineInt(arg)
+        || (PyValue_Int32(arg) != 0 && PyValue_Int32(arg) != 1))
+    {
+        PyErr_SetString(PyExc_ValueError, "expected 0 or 1");
+        return PyValue_NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    struct _gc_runtime_state *gc = &interp->gc;
+    if (gc->collecting || gc->sweeping || gc->queue_draining) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "cannot change young mode during collection or delivery");
+        return PyValue_NULL;
+    }
+    int enabled = PyValue_Int32(arg);
+    if (enabled) {
+#if !defined(WITH_MIMALLOC) || defined(Py_GIL_DISABLED)
+        PyErr_SetString(PyExc_RuntimeError,
+                        "experimental minor requires GIL and mimalloc");
+        return PyValue_NULL;
+#else
+        int extra;
+        if (!_Py_IsMainInterpreter(interp)
+            || _PyGC_TraceGetVerifyMode(interp, &extra) != 0
+            || _PyGC_LiveGetStress() != 0)
+        {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "experimental minor requires main interpreter, "
+                            "verifier and stress off");
+            return PyValue_NULL;
+        }
+#endif
+    }
+    int previous = gc->young_enabled;
+    gc->young_enabled = enabled;
+    return PyValue_FromInt32(previous);
+}
+
 /* A static type that only gc_ready_static_type() readies, as an extension
    module readies its static types: the header leaves ob_type to
    PyType_Ready(), which allocates before it sets it. */
@@ -5208,6 +5251,7 @@ static PyMethodDef module_functions[] = {
     {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
     {"gc_get_stress", gc_get_stress, METH_NOARGS},
     {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
+    {"gc_set_young_enabled", _PyCFunction_CAST(gc_set_young_enabled), METH_O},
     {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
     {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
     {"gc_queue_ready_collect", gc_queue_ready_collect, METH_NOARGS},

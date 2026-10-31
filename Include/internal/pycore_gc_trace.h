@@ -330,7 +330,8 @@ typedef struct {
  * tstate's object heaps, then walk the heaps: a marked object is unmarked,
  * an unmarked one gets _Py_GC_DEAD_FLAG and is listed.  Returns -1, with
  * nothing listed or flagged, if the collector's own memory ran out. */
-extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
+extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res,
+                             int young);
 
 /* Step 7a: the interpreter of res's domain whose heap holds op's block,
  * or NULL if op is in none of them (a static object). */

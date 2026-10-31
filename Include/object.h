@@ -616,7 +616,7 @@ given type object has a specified feature.
 
 /* Flag values for ob_flags, bits 48-63 of the header word.  Whether a heap
  * block holds an initialized object is not in the header: the allocator's
- * object map says (Include/internal/pycore_gc_trace.h).  Bits 4-6 and 15 are
+ * object map says (Include/internal/pycore_gc_trace.h).  Bits 4-6 are
  * spare.  The bits from 7 up are the collector's (Python/gc_live.c and
  * Python/gc_trace.c); it writes them while it holds the GIL. */
 #define _Py_IMMORTAL_FLAGS (1 << 0)
@@ -641,6 +641,7 @@ given type object has a specified feature.
                                                without being traversed */
 #  define _Py_GC_DEL_CALLED_FLAG (1 << 14)  /* tp_del called since the mark
                                                last reached the object */
+#  define _Py_GC_YOUNG_FLAG      (1 << 15)  /* experimental stable young cohort */
 /* What Py_REFCNT() returns: nothing is counted. */
 #  define _Py_GC_REFCNT          ((uint32_t)1 << 30)
 

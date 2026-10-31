@@ -1,14 +1,16 @@
 # Share polymorphic shape admission
 
-- State: review
+- State: closed
+- Outcome: landed
 - Owner: stats_design_review; coordinator reviews/integrates
 - Updated: 2026-10-31
 - Budget: 45 minutes for the decision; checkpoint at 20 minutes
 - Depends on: [residual attribution](../interpreter-residual-costs/status.md)
 - Branch: boil/shape-admission-reuse, candidate c46f1bef67f
 - Worktree: ../boil-shape-admission-reuse
-- Phase: combined qualification accepted; source integrated; post-merge checks pending
-- Decision: retain shared family simplification; close after joint post-merge acceptance
+- Integration: d98291018c9; qualified source/native e9e10d5b503
+- Phase: joint qualification and post-merge closure accepted
+- Decision: retain shared family simplification
 
 ## Hypothesis
 
@@ -44,8 +46,8 @@ existing pystats skips; ten IR/generator controls passed. Emitted matcher sites
 fell from four to two, and evaluator code shrank by 213 bytes. Independent
 review verified source, generated outputs and all 71 evidence references.
 The exact combination passed [shared qualification](../nursery-shape-landing/status.md)
-and independent final review. Source is integrated; the exact merge bridge and
-two post-merge smokes remain.
+and independent final review. Source, exact merge bridge and both post-merge
+smokes passed independent [landing closure](../nursery-shape-landing/reviews/final-smoke-20261031.md).
 No elapsed speedup is claimed.
 
 ## References

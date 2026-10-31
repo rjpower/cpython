@@ -125,3 +125,35 @@ The original broad preparation also retains
 selected `uv run` rather than the helper's `run` argument. No native job launched
 in that failed preparation. The original activation preflight corrected that
 anchor and confirmed unchanged literal selections; the failure record remains.
+
+## Integration and accepted post-merge closure
+
+Merge `d98291018c9665ae3db6952da0b0a40a4e04992b` has tree
+`31b8431cd0f076190b427ef563116ec599b85eb2`. The actual no-renames bridge to
+qualified union e9e10d5b503 enumerates 34 project-prose paths; 6,903 other
+tracked mode/type/blob entries are identical. The independently reviewed
+activation binds this merge separately from the source/native/library products.
+No merge rebuild is claimed. Sealed release/debug interpreters remain in
+`../boil-nursery-shape-qualification/build/{release,debug}/python`.
+
+The smoke batch ran 20:01:38–20:04:58 UTC within its 20:16:38 UTC deadline.
+Both OFF/N0 rows returned nine PASSED modules and ten paired driver/workers:
+
+| Build | Tests | Exact skips | Collections | Unwind fallbacks | Report-only snapshot visits |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Release | 1,937 | 80 | 784 | 0 | 0 |
+| O1/Py_DEBUG | 1,937 | 50 | 823 | 0 | 1 |
+
+Current cleanup and product/source guards passed. The final independent audit
+rehashed 45 smoke artifacts, 19 ready-plan inputs and all 334 qualification
+references, replayed both validators and observed both target builds idle.
+[Landing closure](reviews/final-smoke-20261031.md) was accepted at 20:07:12 UTC.
+Completion `build/nursery-shape-integration/smoke-batch-completion.json` is
+`10b94754ddc481da16b4c68c705331196481010216da73d5ec4db8df58e36750`;
+its independent audit is `e8d229da5b8bde98b5a5674ed983bf85e36dc36b87c51b4d6ac1db8dbdf3eb54`.
+The review retains a corrected host-auditor schema assertion and its original
+failure envelope; no native retry or source/helper change was involved.
+
+This increment is landed, without a new throughput result. The subsequent
+user decision keeps the nursery architecture and removes its temporary global
+control through a separately reviewed [adoption change](../gc-nursery-adoption/status.md).

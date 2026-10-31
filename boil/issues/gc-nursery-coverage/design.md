@@ -1,5 +1,13 @@
 # Exact native coroutines: young coverage and completed-object death work
 
+Status update, 2026-10-31: **superseded as an implementation grant; needs
+rebasing after [nursery adoption](../gc-nursery-adoption/status.md).** The user
+has decided to keep and improve the nursery as the runtime architecture.
+Global nursery enable/disable controls are being removed. The original
+proposal and review below remain historical evidence; their opt-in and
+automatic-major-only assumptions are not the next runtime contract. Future
+comparisons may use temporary source ablations, never permanent runtime flags.
+
 Planning proposal, 2026-10-31. Source inspected at frozen union
 `e9e10d5b503eaf219797a5db44766eeab6fad4dc` in
 `../boil-nursery-shape-qualification`. No implementation, native runs or new

@@ -4,7 +4,8 @@
 - Owner: restart_audit designs; coroutine_design_review independently reviews; coordinator decides
 - Updated: 2026-10-31
 - Budget: eight elapsed hours from first implementation edit; 90-minute source/review and first-debug checkpoints; 60-minute matched comparison
-- Depends on: [shared landing](../nursery-shape-landing/status.md), then independent design acceptance
+- Depends on: [nursery adoption](../gc-nursery-adoption/status.md), then rebased independent design acceptance
+- Phase: prior opt-in design superseded; allocation-family proposal needs rebase
 
 ## Hypothesis
 
@@ -28,9 +29,11 @@ this experiment. Specify the exact family and comparison before starting.
 
 ## Now / next
 
-The [design](design.md) and [independent review](reviews/coroutine-design-20261031.md)
-are accepted for bounded implementation after the shared landing. The approved
-design hash is `eb80298825500321988b2836ef4092e4787a9a109bf40b94c18de840e9694676`.
+The prior [design](design.md) and [independent review](reviews/coroutine-design-20261031.md)
+are retained as historical evidence. Their implementation grant is superseded
+by the user's decision to adopt the nursery without a global enable/disable
+mode. The originally approved design hash is
+`eb80298825500321988b2836ef4092e4787a9a109bf40b94c18de840e9694676`.
 It selects exact native coroutines and their embedded frames, young admission
 and a guarded completed-object cleanup shortcut. Three matched arms distinguish
 admission from the shortcut's incremental value. Debug witnesses must observe
@@ -39,6 +42,8 @@ byte units. Added promotion scans may outweigh the small sampled teardown
 cost; neither coverage nor activity alone establishes a useful optimization.
 
 No runtime changes, builds or benchmarks are running here. Implementation waits
-for the shared landing. The implementation clock has not started. Ordinary generators,
-async generators, allocator replacement and old-scan reduction remain outside
-this family scope.
+for adoption and a rebased design/review with no global nursery knob. Temporary
+source ablations may isolate allocation/cleanup costs; permanent runtime flags
+may not preserve the old optionality. The implementation clock has not started.
+Ordinary generators, async generators, allocator replacement and old-scan
+reduction remain outside this family scope.

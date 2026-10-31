@@ -60,3 +60,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   actual merge binding and the reviewed release/debug smoke pair close this
   landing. No new performance result is claimed.
   [Landing status](issues/nursery-shape-landing/status.md).
+- 2026-10-31: Closed nursery/shape landing at d98291018c9 after independent
+  exact-merge and release/debug smoke review. Both smokes returned 1,937 tests,
+  zero unwind fallbacks and verified cleanup. User direction now keeps the
+  nursery architecture and removes its temporary whole-runtime switch;
+  adoption/checker design and constant-operand IR research run in parallel.
+  [Landing closure](issues/nursery-shape-landing/reviews/final-smoke-20261031.md),
+  [adoption](issues/gc-nursery-adoption/status.md).
+- 2026-10-31: Independent design review cleared mandatory nursery admission,
+  real checked minors and removal of the global switch; automatic cadence is
+  a separate measured increment. Native IR inspection selected a small-integer
+  RHS operand form for a bounded host-only prototype. Both designs proceed
+  to isolated source work, with SSA/LuaJIT comparison running alongside them.
+  [GC review](issues/gc-nursery-adoption/reviews/nursery-adoption-design-20261031.md),
+  [IR review](issues/interpreter-constant-operands/reviews/design-20261031.md).

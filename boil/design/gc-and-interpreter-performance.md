@@ -10,17 +10,21 @@ broad parity or a general 2× result.
 
 The opt-in nonmoving nursery for cells/tuples and one shape admission per
 polymorphic attribute operation passed coherent qualification and are integrated
-in source. [Post-merge checks](../issues/nursery-shape-landing/status.md) track
-landing closure; neither change establishes a new throughput result.
+in source. [Post-merge checks](../issues/nursery-shape-landing/status.md) and
+independent landing closure passed; neither change establishes a new throughput result.
 Bulk frame transfer was rejected after its finite comparison.
-Extend nursery coverage, reclamation and old-work reduction in separate steps.
+Remove the temporary whole-runtime nursery switch in the
+[adoption increment](../issues/gc-nursery-adoption/status.md), then extend
+coverage, reclamation and old-work reduction in separate measured steps.
 
 ## Current runtime
 
 The collector is full-heap mark/sweep with hybrid roots, actual death-work
 selection, guarded native suspended-generator cleanup and direct managed scans.
 Supported execution is Linux, one main interpreter, ordinary threads and the GIL.
-The default has no nursery or moving collector. The experimental nursery uses
+This landed snapshot retains its temporary opt-in control. That is not a
+long-term runtime choice: the nursery architecture is kept, and adoption removes
+the switch while settling real minor/checker semantics. The nursery uses
 existing storage, scans all old objects and promotes survivors in place; it
 establishes a generation boundary before attempting a performance improvement.
 Root and native lifetime rules remain in force; see

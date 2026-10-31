@@ -7,25 +7,22 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | coordinator | Qualified source integrated; prove actual merge bridge and run the release/debug smoke pair |
-| GC / next design | [Exact coroutine coverage and reclamation](gc-nursery-coverage/status.md) | restart_audit / independent reviewer | Reviewed design accepted; implementation waits for shared landing |
+| GC / design | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review mandatory admission, real minor checking and separate scheduling experiment |
+| IR / prototype | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Build a bounded shared operand-source candidate after design review |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
-Qualify the selected combination once rather than repeat unchanged ladders.
-Broader nursery implementation waits for that decision.
-
-## Integrated; post-merge checks pending
-
-- [Minimal nonmoving nursery](gc-nursery-minimum/status.md): working opt-in
-  cell/tuple consumer, conservative old scan; combined qualification passed.
-- [Shared shape admission](shape-admission-reuse/status.md): four emitted
-  matcher sites become two; combined qualification passed, no speed claim.
+Qualify each coherent increment once. Temporary source comparisons remain
+experiments, not permanent runtime choices. The nursery architecture is kept;
+adoption removes its temporary global enable/disable control.
 
 ## Next GC experiments, in order
 
-1. [Broader coverage and cheaper reclamation](gc-nursery-coverage/status.md).
-2. [Reduce old-object scan work](gc-nursery-old-work/status.md).
+1. [Adopt real minor/checker semantics](gc-nursery-adoption/status.md), then
+   select one measured automatic cadence without a runtime switch.
+2. [Broader coverage and cheaper reclamation](gc-nursery-coverage/status.md):
+   rebase the exact-coroutine proposal on adoption; its opt-in grant is superseded.
+3. [Reduce old-object scan work](gc-nursery-old-work/status.md).
 
 Each follows the preceding result; the initial nursery need not solve the full
 future allocator, copying, lifecycle and barrier design at once.
@@ -63,5 +60,9 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 
 ## Landed
 
+- [Minimal nursery and shared shape admission](nursery-shape-landing/status.md):
+  exact source, combined qualification, actual merge bridge, release/debug smokes
+  and independent closure accepted at d98291018c9. The temporary nursery control
+  will be removed by the adoption track; no new speedup is claimed.
 - [GC cleanup and scanning](gc-cleanup-scanning/status.md): qualified, integrated
   and measured. This is the comparison baseline for the new experiments.

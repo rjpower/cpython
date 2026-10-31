@@ -1,6 +1,7 @@
 # Qualify the nursery and shape simplification together
 
-- State: active
+- State: closed
+- Outcome: landed
 - Owner: coordinator; qualification_review_resumed independently reviews
 - Updated: 2026-10-31
 - Budget: original 90-minute attempt expired; remaining-only batch under [restart plan](resume-plan.md)
@@ -9,7 +10,8 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: qualified source integrated; actual merge bridge and post-merge smokes next
+- Integration: d98291018c9665ae3db6952da0b0a40a4e04992b
+- Phase: qualification, merge bridge, post-merge smokes and independent closure accepted
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -36,26 +38,21 @@ qualification batch. No performance claim or automatic repeat-to-green.
 
 ## Now / next
 
-The thirteen-file union passed independent source review, four fresh builds,
-early/backend controls, full suites in release/debug OFF/debug KILL, both
-stress1000 selections and ASan16. All terminal rows and cleanup receipts passed with zero
-unwind fallbacks; actual counts, skips and report-only diagnostics are in
-[results](results.md).
+The exact source is integrated at d98291018c9, qualified on e9e10d5b503 products.
+All required builds, behavior/backend controls, full-three, stress-two, ASan16
+and closure passed. Independent audit accepted the 334-artifact qualification
+capsule before its deadline. The actual merge bridge proves 34 prose-only
+differences and 6,903 otherwise identical mode/type/blob entries.
 
-Closure passed, including C extensions, unchanged regeneration, traversal and
-nineteen declared syntax receipts. The batch finished with cleanup at 19:52:27
-UTC. The 334-artifact capsule passed independent audit and six validator replays.
-[Final acceptance](reviews/final-qualification-20261031.md) was recorded at
-19:55:44 UTC, before the deadline.
-The remaining-only batch runs from 19:14:30 to
-20:14:30 UTC under the [restart plan](resume-plan.md). The original expired
-attempt remains incomplete; its completed results stand through reviewed carry.
+Release/debug post-merge smokes each passed 1,937 tests with exact skips,
+zero unwind fallbacks and verified cleanup. Independent
+[landing closure](reviews/final-smoke-20261031.md) accepted their complete
+evidence at 20:07:12 UTC. See [results](results.md) for identities and limits.
+No gate remains for this source and no speedup is claimed.
 
-Primary checkout recovery is complete, including all five pre-existing user
-files with exact preserved hashes. User work retains its original unstaged
-state; see the [recovery follow-up](reviews/restart-user-note-recovery.md).
-The separate frozen union is unchanged. Source is integrated with runtime
-contracts updated in the same merge. Integration preparation remains held until
-the actual merge identity and exact prose-only tree bridge are bound, then one
-release/debug smoke pair and independent outcome review close the landing.
-No new speed claim is made.
+Recovery also restored all five pre-existing user files to their exact hashes
+and original unstaged state. Frozen evidence remains intact. The temporary
+nursery switch belongs to this historical increment; the next
+[adoption change](../gc-nursery-adoption/status.md) removes whole-runtime
+optionality and supports actual minors under checking/stress. The nursery
+architecture is retained and will be improved.

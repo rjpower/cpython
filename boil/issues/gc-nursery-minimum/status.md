@@ -1,14 +1,16 @@
 # Minimal nonmoving nursery
 
-- State: review
+- State: closed
+- Outcome: landed
 - Owner: string_design; coordinator integrates
 - Updated: 2026-10-31
 - Budget: first decision within 60 minutes of 15:15 UTC; checkpoint at 30 minutes
 - Depends on: [landed GC baseline](../gc-cleanup-scanning/status.md)
 - Branch: boil/gc-nursery-minimum, candidate 3a473612157
 - Worktree: ../boil-gc-nursery-minimum
-- Phase: combined qualification accepted; source integrated; post-merge checks pending
-- Decision: retain opt-in consumer; close after joint post-merge acceptance
+- Integration: d98291018c9; qualified source/native e9e10d5b503
+- Phase: joint qualification and post-merge closure accepted
+- Decision: retain nursery architecture; remove temporary optionality in the adoption increment
 
 ## Hypothesis
 
@@ -46,9 +48,11 @@ Independent review replayed the results and verified cleanup.
 
 The first bounded hypothesis works. The exact combination passed
 [shared qualification](../nursery-shape-landing/status.md) and independent final
-review. The source is integrated; its exact merge bridge and two post-merge
-smokes remain. Keep the nursery opt-in;
-the all-old scan and tiny cohort establish no performance gain.
+review. The source, exact merge bridge and both post-merge smokes passed
+independent [landing closure](../nursery-shape-landing/reviews/final-smoke-20261031.md).
+The all-old scan and tiny cohort establish no performance gain. Next,
+[adopt the nursery](../gc-nursery-adoption/status.md) without a whole-runtime
+enable/disable switch, then extend allocation coverage.
 
 ## References
 

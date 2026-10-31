@@ -102,6 +102,11 @@ The seven-file source froze early at 23:10:24 UTC. All 22 assembled child
 programs compile on the host, twenty prior nursery IDs remain, and seven
 methods were added. Independent exact-source review and concrete feedback
 preparation now proceed in parallel; no new native pass is claimed.
+The [independent source review](reviews/cadence-source-20261031-v1.md) now
+accepts exact c8cc for separately reviewed native feedback. The held
+[cadence feedback plan](cadence-feedback-plan.md) covers thirteen actual
+methods/twenty-two children and three isolated source-negative children in
+one 45-minute window. Concrete helpers and activation remain pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

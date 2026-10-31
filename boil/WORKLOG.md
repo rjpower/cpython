@@ -220,3 +220,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   C bodies. Opened a separate 30-minute host-only design investigation; this
   neither attributes the full slowdown nor reopens the rejected increment.
   [Research scope](issues/interpreter-dispatch-state/status.md).
+- 2026-10-31: Accepted independent exact-source review of the seven-file GC
+  cadence increment. Prepared a separate 45-minute native feedback scope for
+  thirteen methods/twenty-two children and three isolated fault controls;
+  concrete helper review precedes activation. No native cadence result yet.
+  [Source review](issues/gc-nursery-adoption/reviews/cadence-source-20261031-v1.md),
+  [Held feedback](issues/gc-nursery-adoption/cadence-feedback-plan.md).

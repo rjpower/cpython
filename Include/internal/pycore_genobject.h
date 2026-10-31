@@ -33,6 +33,14 @@ _PyGen_FinalizerIsNoop(PyObject *op)
 PyAPI_FUNC(PyObject *)_PyGen_yf(PyGenObject *);
 extern int _PyGen_ClearFrame(PyGenObject *self);
 
+/* Read-only admission for an exact, ordinarily suspended generator whose
+ * frame has not escaped and whose close only clears native state. */
+extern int _PyGen_CanClearUnreachable(PyThreadState *tstate, PyObject *op);
+/* Collector-only commit: the caller has revalidated every unreachable
+ * candidate and excluded observers, callbacks and dependent native cleanup.
+ * No allocation, Python execution or detachment is allowed until sweep. */
+extern void _PyGen_ClearUnreachable(PyObject *op);
+
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyGen_SetStopIterationValue(PyObject *);
 

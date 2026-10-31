@@ -1381,11 +1381,27 @@ sweep_one(PyThreadState *tstate, GCState *gc, _PyGCDeadObject *d,
    that a dealloc can read its type. */
 static Py_ssize_t
 sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
-      const Py_ssize_t *first, Py_ssize_t nfirst, Py_ssize_t *bytes_freed)
+      const Py_ssize_t *first, Py_ssize_t nfirst, int native_cleanup,
+      Py_ssize_t *bytes_freed)
 {
     Py_ssize_t ncollected = 0;
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     gc->sweeping = 1;
+    if (native_cleanup) {
+        // The whole cohort was revalidated before entering this nonfailing
+        // interval.  Existing sweep guards reject allocating/Python cleanup.
+        for (Py_ssize_t i = 0; i < res->ndead; i++) {
+            PyObject *op = res->dead[i].op;
+            if ((res->dead[i].kinds & _PyGC_DEAD_FINALIZE)
+                && finalizer_eligible(op))
+            {
+#ifdef Py_DEBUG
+                gc->sweep_op = op;
+#endif
+                _PyGen_ClearUnreachable(op);
+            }
+        }
+    }
     for (int phase = 0; phase < 3; phase++) {
         if ((phase == 0 && !(res->kinds & _PyGC_DEAD_FIRST))
             || (phase == 2 && !(res->kinds & _PyGC_DEAD_TYPE)))
@@ -1433,6 +1449,69 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
     }
     *bytes_freed = freed;
     return ncollected;
+}
+
+/* A whole-pass choice: no other callback or native observer may see these
+   suspended frames before their native-only cleanup.  No graph is changed. */
+static int
+native_cleanup_ready(PyThreadState *tstate, _PyGCMarkResult *res)
+{
+    PyInterpreterState *interp = tstate->interp;
+    GCState *gc = &interp->gc;
+    if (!(res->kinds & _PyGC_DEAD_FINALIZE)
+        || (res->kinds & (_PyGC_DEAD_DEL | _PyGC_DEAD_FIRST | _PyGC_DEAD_HOOK))
+        || res->ndomain != 1 || res->domain[0] != interp
+        || !_Py_IsMainInterpreter(interp) || gc->queue_phase != QUEUE_OPEN
+        || gc->queue_head != NULL || gc->queue_draining || gc->debug
+        || (gc->callbacks != NULL && PyList_GET_SIZE(gc->callbacks) != 0)
+        || _PyRuntime.ref_tracer.tracer_func != NULL
+        || interp->sys_tracing_threads || interp->sys_profiling_threads
+        || (interp->eval_frame != NULL
+            && interp->eval_frame != _PyEval_EvalFrameDefault))
+    {
+        return 0;
+    }
+    for (size_t event = 0; event < Py_ARRAY_LENGTH(interp->monitors.tools);
+         event++)
+    {
+        if (interp->monitors.tools[event] != 0) {
+            return 0;
+        }
+    }
+    for (size_t tool = 0; tool < Py_ARRAY_LENGTH(interp->monitoring_callables);
+         tool++)
+    {
+        if (interp->monitoring_tool_names[tool] != NULL) {
+            return 0;
+        }
+        for (size_t event = 0;
+             event < Py_ARRAY_LENGTH(interp->monitoring_callables[tool]); event++)
+        {
+            if (interp->monitoring_callables[tool][event] != NULL) {
+                return 0;
+            }
+        }
+    }
+    int found = 0;
+    for (Py_ssize_t i = 0; i < res->ndead; i++) {
+        _PyGCDeadObject *d = &res->dead[i];
+        PyObject *op = d->op;
+        if ((op->ob_flags & _Py_HAS_WEAKREFS_FLAG)
+            || (PyType_Check(op)
+                && (((PyTypeObject *)op)->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN))
+            || Py_IS_TYPE(op, &PyMemoryView_Type)
+            || Py_IS_TYPE(op, &_PyManagedBuffer_Type))
+        {
+            return 0;
+        }
+        if ((d->kinds & _PyGC_DEAD_FINALIZE) && finalizer_eligible(op)) {
+            if (!_PyGen_CanClearUnreachable(tstate, op)) {
+                return 0;
+            }
+            found = 1;
+        }
+    }
+    return found;
 }
 
 /* Bytes only: collect_pass owns this batch across the collection.  No
@@ -1761,15 +1840,30 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
     call_batch batch = {NULL, NULL};
     Py_ssize_t *first = NULL;
     Py_ssize_t nfirst = 0;
-    int failed = clear_callback_weakrefs(&batch, &res) < 0
+    int native_cleanup = native_cleanup_ready(tstate, &res);
+    int failed = 0;
+    if (native_cleanup) {
+        // Prepare everything fallible before touching a frame.  This cohort
+        // currently has no referent-reading deallocators, so no order storage.
+        failed = order_dead_first(&res, &first, &nfirst) < 0;
+        if (!failed && !native_cleanup_ready(tstate, &res)) {
+            free(first);
+            first = NULL;
+            nfirst = 0;
+            native_cleanup = 0;
+        }
+    }
+    if (!native_cleanup) {
+        failed = clear_callback_weakrefs(&batch, &res) < 0
                  || handle_finalizers(gc, &batch, &res, &garbage) < 0
                  || queue_destroy_hooks(&batch, &res) < 0;
+    }
     // Before the sweep; no Python code has run since the mark.
     barrier_after_mark(tstate, &res);
     route_calls(tstate, &res, &batch);
     unpin_domain(&res);
     if (!failed) {
-        for (Py_ssize_t i = 0;
+        for (Py_ssize_t i = 0; !native_cleanup &&
              (res.kinds & _PyGC_DEAD_WEAKREFS) && i < res.ndead; i++)
         {
             PyObject *op = res.dead[i].op;
@@ -1790,9 +1884,12 @@ collect(PyThreadState *tstate, struct _gc_live_state *ls,
                 }
             }
         }
-        failed = order_dead_first(&res, &first, &nfirst) < 0;
+        if (!native_cleanup) {
+            failed = order_dead_first(&res, &first, &nfirst) < 0;
+        }
         if (!failed) {
-            ncollected = sweep(tstate, gc, &res, first, nfirst, &bytes_freed);
+            ncollected = sweep(tstate, gc, &res, first, nfirst,
+                               native_cleanup, &bytes_freed);
         }
     }
     if (failed) {

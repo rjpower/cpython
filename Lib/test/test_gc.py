@@ -1546,6 +1546,109 @@ class TracingCollectorTests(unittest.TestCase):
             self.assertIsNone(ref())
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_observes_suspended_generator(self):
+        _queue_child("""
+            import inspect
+            gc.disable()
+            survivors = []
+            observed = []
+            def generate():
+                payload = bytearray(b"still usable")
+                yield "ready"
+                yield payload
+            class Owner:
+                def __init__(self):
+                    self.gen = generate()
+                    assert next(self.gen) == "ready"
+                    self.cycle = self
+                def __del__(self):
+                    observed.append(inspect.getgeneratorstate(self.gen))
+                    self.payload = next(self.gen)
+                    survivors.append(self)
+            def make():
+                Owner()
+            gc.collect()
+            make()
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], observed
+            assert len(survivors) == 1
+            owner = survivors.pop()
+            assert owner.payload == b"still usable"
+            owner.payload.extend(b" after resurrection")
+            assert owner.payload == b"still usable after resurrection"
+            assert inspect.getgeneratorstate(owner.gen) == inspect.GEN_CLOSED
+            del owner
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], observed
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_weakref_callback_observes_suspended_generator(self):
+        _queue_child("""
+            import inspect
+            gc.disable()
+            survivors = []
+            observed = []
+            def generate():
+                yield "ready"
+                yield bytearray(b"callback payload")
+            class Trigger:
+                def __init__(self):
+                    self.cycle = self
+            def callback(ref):
+                assert ref() is None
+                gen = plain()
+                observed.append(inspect.getgeneratorstate(gen))
+                survivors.append((gen, next(gen)))
+            def make():
+                gen = generate()
+                assert next(gen) == "ready"
+                trigger = Trigger()
+                return weakref.ref(gen), weakref.ref(trigger, callback)
+            gc.collect()
+            plain, trigger = make()
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], (
+                'weakref callback must observe a suspended generator', observed)
+            assert len(survivors) == 1
+            gen, payload = survivors.pop()
+            assert plain() is gen
+            assert payload == b"callback payload"
+            payload.extend(b" alive")
+            assert payload == b"callback payload alive"
+            assert inspect.getgeneratorstate(gen) == inspect.GEN_CLOSED
+            del gen, payload
+            gc.collect()
+            assert plain() is None and trigger() is None
+            assert observed == [inspect.GEN_SUSPENDED], observed
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_suspended_generator_payloads_do_not_accumulate(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                __slots__ = ('data',)
+                def __init__(self):
+                    self.data = bytearray(64 * 1024)
+            def generate():
+                payload = Payload()
+                yield 1
+                yield payload
+            def make_batch():
+                for _ in range(32):
+                    gen = generate()
+                    assert next(gen) == 1
+            def payload_count():
+                return sum(type(obj) is Payload for obj in gc.get_objects())
+            gc.collect()
+            for _ in range(4):
+                make_batch()
+                gc.collect()
+                assert payload_count() == 0, 'suspended payloads retained'
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_finalizer_work_oom_recovers_next_collection(self):
         # The root stack, cleanup journal and output each grow once.  In
         # particular, failure of the journal must leave no unrecorded MARKED.

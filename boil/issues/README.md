@@ -7,7 +7,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / design | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review mandatory admission, real minor checking and separate scheduling experiment |
+| GC / source | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review mandatory admission and real minor checking; cadence follows separately |
 | IR / prototype | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Build a bounded shared operand-source candidate after design review |
 
 Source work, light analysis and reviews can overlap with separate ownership;
@@ -57,6 +57,10 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 - [Call setup attribution](interpreter-call-setup/status.md): existing exact calls
   already use value windows; present profiles do not support a generic interface
   rewrite. Hypothesis rejected without a runtime change or new benchmark.
+- [Lowering and LuaJIT staging](interpreter-lowering-research/status.md): current
+  local optimizations and interblock liveness are substantial; a general SSA
+  optimizer is absent. Continue constant operands first, then inspect literal
+  read subscripts. General compare/branch fusion needs a separate encoding proof.
 
 ## Landed
 

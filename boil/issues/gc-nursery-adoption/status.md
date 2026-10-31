@@ -1,12 +1,15 @@
 # Adopt the nursery as the runtime architecture
 
-- State: review
-- Owner: restart_audit designs; coordinator assigns implementation and independent review
+- State: active
+- Owner: restart_audit implements; coroutine_design_review independently reviews; coordinator integrates
 - Updated: 2026-10-31
 - Base: merged `d98291018c9665ae3db6952da0b0a40a4e04992b`
-- Budget: 45-minute design handoff; proposed implementation dispatch is eight elapsed hours with 90-minute source/review and first-feedback checkpoints
+- Budget: design accepted; eight elapsed hours with 90-minute source and first-feedback checkpoints
 - Depends on: [post-merge nursery/shape checks](../nursery-shape-landing/status.md)
 - Decision: keep the functioning nursery; remove global nursery/no-nursery optionality
+- Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
+- Source started: 2026-10-31 20:18:11 UTC; source checkpoint due 21:48:11 UTC
+- Overall dispatch deadline: 2026-11-01 04:18:11 UTC
 
 ## Hypothesis
 
@@ -34,9 +37,11 @@ for that comparison, not a second collector mode.
 
 ## Now / next
 
-Design prepared from the actual merged source. No runtime edits, native jobs,
-commits or HEAD changes belong to this design task. Independent design review
-precedes source implementation; integration smokes keep their current inputs.
+The [independent design review](reviews/nursery-adoption-design-20261031.md)
+cleared design `046b8ab0…` for the first source increment. Implementation is
+running in the isolated worktree from documentation checkpoint `32f14069fd2`,
+whose runtime source is d98291018c9. No target interpreter, build or native
+suite is authorized before source review and a coordinated feedback plan.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

@@ -68,6 +68,11 @@ not a broad performance explanation or an elapsed speed claim.
 
 Existing frame-window sharing, compiler folds and tagged payloads are already
 present; preserve their initialization, root and exception contracts.
+The [lowering comparison](../issues/interpreter-lowering-research/results.md)
+distinguishes these local optimizations from general SSA and LuaJIT's trace
+optimizer. Its next concrete consumer is the active
+[constant-operand prototype](../issues/interpreter-constant-operands/status.md);
+literal read subscripts are a conditional successor. Neither has a measured gain.
 
 Generators measure 0.603× upstream and need about 1.66× more throughput for
 parity. Their separate profile spends about 22% in timed GC; removing that timed

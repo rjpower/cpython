@@ -74,3 +74,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   to isolated source work, with SSA/LuaJIT comparison running alongside them.
   [GC review](issues/gc-nursery-adoption/reviews/nursery-adoption-design-20261031.md),
   [IR review](issues/interpreter-constant-operands/reviews/design-20261031.md).
+- 2026-10-31: Dispatched isolated nursery adoption and constant-operand source
+  work with finite checkpoints. Source research confirmed regional single
+  definitions, local folds and interblock liveness, without a general SSA
+  optimizer. LuaJIT's baseline literal-operand staging supports the current
+  arithmetic prototype and a conditional subscript follow-up; its trace
+  optimizations do not establish a missing interpreter pipeline.
+  [Research](issues/interpreter-lowering-research/results.md),
+  [current work](issues/README.md).

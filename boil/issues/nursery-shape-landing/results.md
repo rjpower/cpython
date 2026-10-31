@@ -80,5 +80,5 @@ Debug full OFF/N0 returned at 19:24:28 UTC with a terminal pass: 51,261 tests,
 565 actual driver/worker processes, zero fallbacks and four report-only
 detached-snapshot visits. Module states match release: 462 PASSED, 94 SKIPPED
 and eight RESOURCE_DENIED. Current post-gate idle observation passed; the
-original success verifier is completing cleanup. Debug KILL, stress-two,
-ASan16 and closure remain pending.
+original success verifier completed cleanup at 19:24:50 UTC. Debug KILL full
+then launched at 19:24:50 UTC. Stress-two, ASan16 and closure remain pending.

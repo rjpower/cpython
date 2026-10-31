@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: debug full OFF/N0 passed; cleanup verification precedes debug KILL
+- Phase: debug full OFF/N0 and cleanup passed; debug KILL full running
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -55,6 +55,6 @@ The separate frozen union remains the qualification source.
 
 Independent carry and launcher review passed. The remaining-only batch started
 19:14:30 UTC and ends 20:14:30 UTC. Debug full OFF/N0 returned at 19:24:28 UTC;
-its cleanup verification precedes debug KILL, stress-two, ASan16 and closure
-under the [restart plan](resume-plan.md).
+its cleanup verification passed at 19:24:50 UTC. Debug KILL full is running;
+stress-two, ASan16 and closure follow under the [restart plan](resume-plan.md).
 See [results](results.md). There is no runtime landing or new speed claim.

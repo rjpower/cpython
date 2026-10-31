@@ -8,7 +8,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / causal controls | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coordinator | First feedback accepted; design temporary force-major and debt-reset controls |
-| IR / release completion preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | All debug scopes passed; preserve timed-out O3 and review separate twenty-minute remaining scope |
+| IR / fresh release completion | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | All debug scopes passed; three-row fresh completion runs until 22:45:24 UTC |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

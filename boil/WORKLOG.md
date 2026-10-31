@@ -172,3 +172,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   and assigned an explicit separate twenty-minute release/emission completion
   scope for preparation/review. No speedup or qualification claim.
   [IR execution and decision](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Independent review accepted the preserved 426-entry interrupted
+  tree and exact release-completion helpers. Started the separate twenty-minute
+  fresh O3/cases/emission batch; GC causal controls remain reviewed and held
+  behind that native window. Original timeout retained, no new speed claim.
+  [Completion scope](issues/interpreter-constant-operands/feedback-results.md),
+  [GC controls](issues/gc-nursery-adoption/causal-plan.md).

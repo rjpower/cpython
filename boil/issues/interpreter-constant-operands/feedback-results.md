@@ -231,3 +231,18 @@ existing fresh-only protocol without trusting interrupted objects. No deletion
 or native execution is authorized by that preparation alone. Held helpers and
 actual preservation receipts precede root activation; no new deadline is
 substituted into an old artifact.
+
+Independent [completion preparation review](reviews/completion-preparation-20261031-v1.md)
+accepts the 426-entry archive and exact held plan. Root's
+[helper review](reviews/completion-helpers-20261031-v1.md) rehashed 596 inputs
+and the unchanged fresh-only bodies. Archive receipt SHA-256 is
+`59b6082cfac6892eb6a6a752b3b0c2242ee58e57a3490dddc9bc40a8b488fef5`;
+independent receipt is
+`536df423cdbdb0d82e7c789ca58f3418a0adfdc761ed420d2f640cc6ad16e858`.
+
+Root activated the new completion at **22:25:24.688115 UTC**, session47819,
+deadline **22:45:24.688115 UTC**. Evidence is under
+`build/constant-operands-completion-v1/`; plan SHA-256 is
+`ab49c7d6b11b5633a269132c31b6d2a31df2e1013580a792155553910ff8c338`,
+manifest `fa1e6b8792d742c932ce12560390ddfce82d14ad239ca73a5e6592dafbd1d108`.
+Fresh O3 is running. No complete release or emitted-work result is claimed.

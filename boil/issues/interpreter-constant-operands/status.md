@@ -97,8 +97,10 @@ The original first-feedback deadline remains 22:20:45 UTC. The coordinator
 explicitly assigned a separate twenty-minute completion scope for the three
 unfinished release/emission rows, with source unchanged. Host preparation will
 archive and hash all interrupted products, then propose a fresh release build
-under exact reviewed helpers. Native activation remains held. The
-[execution record](feedback-results.md) owns outcomes and separate clocks.
+under exact reviewed helpers. Independent preservation/preparation review
+accepted all 426 archive entries. Root activated the three-row completion at
+22:25:24 UTC with its separate 22:45:24 UTC deadline; fresh O3 is running.
+The [execution record](feedback-results.md) owns outcomes and separate clocks.
 The [held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
 independent [design review](reviews/performance-plan-20261031.md) accepts the

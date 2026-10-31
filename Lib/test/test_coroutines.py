@@ -2510,6 +2510,29 @@ class OriginTrackingTest(unittest.TestCase):
         finally:
             warnings._warn_unawaited_coroutine = orig_wuc
 
+    def test_unawaited_warning_with_restricted_builtins(self):
+        import gc
+
+        async def corofn(cycle):
+            pass
+
+        collect = eval('lambda: collect()',
+                       {'__builtins__': {}, 'collect': gc.collect})
+        with support.disable_gc(), warnings.catch_warnings(record=True) as w, \
+             support.catch_unraisable_exception() as cm:
+            warnings.simplefilter('always', RuntimeWarning)
+            # Keep the coroutine in a cycle so collection, rather than
+            # reference counting, selects the frame delivering its warning.
+            cycle = []
+            coro = corofn(cycle)
+            cycle.append(coro)
+            del coro, cycle
+            collect()
+            self.assertIsNone(cm.unraisable)
+            self.assertEqual(len(w), 1)
+            self.assertIs(w[0].category, RuntimeWarning)
+            self.assertIn('was never awaited', str(w[0].message))
+
 
 class UnawaitedWarningDuringShutdownTest(unittest.TestCase):
     # https://bugs.python.org/issue32591#msg310726

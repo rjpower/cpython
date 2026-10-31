@@ -97,3 +97,29 @@ The documentation commit containing this update is later than measured source
 `10d8773815c`; runtime files and native products remain unchanged. O1 behavior
 remains the bounded scope above. O3 measurement is complete; candidate broad
 qualification and landing have not been claimed.
+
+The subsequent source-frozen campaign at `94ae1b1d4a2` passed release and
+O1 debug normal/kill fulls, release stress11, ASan16 and the early controls.
+Final debug stress11 remains **FAIL**: native regrtest returned zero, but
+`test_asyncgen` reported an unraisable `KeyError('__import__')`; ten other
+modules passed. The unchanged validator rejected that environment change,
+and closure did not run. Failure index
+`build/selective-death-qualification/stress11-debug-failure-completion.json`
+has SHA256 `287d7efde85701ba43b6e732d8095ab0e2928a4a810e2277c498add1aa156d6a`.
+All three original product/configuration/tool guards passed after cleanup.
+
+A single deterministic diagnostic on the sealed O1 image reproduced the
+external bug without asyncio: collecting a never-awaited coroutine inside a
+lambda with empty builtins lost its RuntimeWarning and emitted two
+`KeyError('__import__')` unraisables. Its result SHA256 is
+`8312369807635565b088547b54eaf31d299357ded35dd5578b027bfff7f354b3`.
+The warning helper tried importing through the interrupted frame's builtins,
+then repeated that lookup during fallback display. The focused repair reads
+the current interpreter's warnings module first and, when absent and imports
+are available, imports through interpreter machinery. It preserves dynamic
+attributes, explicit blocked module entries, late-finalization fallback and
+genuine helper errors. New behavioral regressions cover restricted-frame
+delivery and cached/replaced/missing/blocked modules; the existing broken
+coroutine-helper regression remains required. Source review and actual-union
+native qualification are pending. Historical campaign results and sealed
+products are unchanged; this runtime repair requires new union products.

@@ -119,3 +119,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   behavior and performance remain pending.
   [GC execution record](issues/gc-nursery-adoption/feedback-results.md),
   [IR helper review](issues/interpreter-constant-operands/reviews/feedback-helpers-20261031-v1.md).
+- 2026-10-31: Nursery debug build passed; its first twenty-method selection
+  returned eighteen passes and two private-tuple diagnostic-record failures.
+  Stopped the batch, verified cleanup and retained both failures for provenance
+  diagnosis. Activated the reviewed IR native batch while GC analysis continues
+  without another GC invocation.
+  [GC failures](issues/gc-nursery-adoption/feedback-results.md),
+  [IR execution](issues/interpreter-constant-operands/feedback-results.md).

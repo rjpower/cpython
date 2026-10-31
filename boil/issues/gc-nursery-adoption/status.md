@@ -53,8 +53,11 @@ assembler path spellings in the readiness/build tool records; no build or
 target test ran. [Failure evidence](feedback-results.md) is preserved. The
 [independent correction review](reviews/feedback-helper-correction-20261031-v2.md)
 accepted the new held helpers. Root activated their remaining-only execution
-at 21:16:41 UTC under the original 22:07:46.664152 UTC deadline. Tool identity
-passed and actual configuration began; build/behavior results remain pending.
+at 21:16:41 UTC under the original 22:07:46.664152 UTC deadline. The debug build
+passed; the first selection ran twenty methods with two failures involving
+private-tuple diagnostic records. Execution stopped and cleanup passed.
+Read-only diagnosis must distinguish original record provenance from legitimate
+address reuse before any bounded correction. No behavior acceptance is claimed.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

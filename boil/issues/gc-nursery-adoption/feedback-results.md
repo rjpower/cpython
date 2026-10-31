@@ -58,3 +58,41 @@ under the isolated checkout's `build/nursery-adoption-feedback-v2/`.
 At the 21:17 UTC checkpoint, the exact toolchain check had passed and configure
 was running. No build, test, qualification or performance pass is recorded yet.
 Owners monitor this invocation; no alternate worker or retry is authorized.
+
+### Build passed; focused selection failed
+
+The debug build returned zero after 95.871 seconds at 21:18:19.898 UTC;
+post-cleanup verification returned zero at 21:18:21.934. Its module check
+reported 116 modules, zero import failures and ten missing optional modules.
+Build-result SHA-256 is
+`760be694487803efbfd3c851f1e821a73ea2fa701354525141e92c4f325aedf2`;
+post-cleanup receipt is
+`45b86d2c0ba97561c796542361f4fa112fc5061b93cb127e0e5f31f72a8e2943`.
+This is an unqualified build result for b34931a881b, not behavior acceptance.
+
+The first OFF selection ran twenty methods in 5.995 seconds: eighteen passed
+and two failed. The target returned 2; the enclosing row returned 1 and the
+batch stopped at 21:18:40.749627 UTC. Later KILL/extras, retain/stress, remote
+statistics and whole-GC rows did not launch. Session 53437 is terminal; cleanup
+verified no live target PID under the build lock.
+
+- `test_free_retires_last_diagnostic_record` failed its initial sole-record
+  equality before testing post-free retirement.
+- `test_private_tuple_resize_retires_diagnostic_record` passed the same-size
+  and failed-realloc provenance checks and the post-move reclamation check,
+  then failed an assertion that no record named the old address.
+
+These are actual failures. Their snapshots were not printed. The fourth resize
+callback allocates new cells/tuples, so legitimate address reuse with a new
+record origin is a hypothesis to distinguish from stale original provenance.
+Neither interpretation is accepted without the actual records. The dedicated
+address-reuse case passed, but does not erase these failures or establish the
+failed assertions' cause. Runtime and fixtures remain unchanged pending a
+reviewed bounded observation/correction.
+
+| v2 receipt | SHA-256 |
+| --- | --- |
+| `batch-failure.json` | `c325af1409fe2eed4c1ae940a390cc1f2080fb9c5724e1fde03569a4da1bd79f` |
+| `focus-off.launch-result.json` | `fefd30b5660a0e944312e92a072162c342c02b7cc0c66452eb7818d48014c8dd` |
+| `focus-off.post-gate-cleanup.json` | `b8378572fe3ca7f11dcaa152f6af862a50e2ed6808cb40e19310a91d814856cb` |
+| `runs/focus-off.result.json` | `3788d594c50beb0cf052b6ae714ded73b652fd1e48a04e512483d6301bb48f7b` |

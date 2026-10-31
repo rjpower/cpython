@@ -1,6 +1,3 @@
-// Need limited C API version 3.15 for PyType_FromSlots()
-#define Py_LIMITED_API 0x030f0000
-
 #include "parts.h"
 
 PyABIInfo_VAR(abi_info);

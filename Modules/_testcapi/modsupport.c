@@ -25,18 +25,18 @@ pyabiinfo_check(PyObject *Py_UNUSED(module), PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-pyarg_parsearray(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
+static PyValue
+pyarg_parsearray(PyObject* self, const PyValue *args, Py_ssize_t nargs)
 {
     int a, b, c = 0;
     if (!PyArg_ParseArray(args, nargs, "ii|i", &a, &b, &c)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("iii", a, b, c);
+    return PyValue_FromResult(Py_BuildValue("iii", a, b, c));
 }
 
-static PyObject *
-pyarg_parsearrayandkeywords(PyObject* self, PyObject* const* args,
+static PyValue
+pyarg_parsearrayandkeywords(PyObject* self, const PyValue *args,
                             Py_ssize_t nargs, PyObject* kwnames)
 {
     int a, b, c = 0;
@@ -44,9 +44,9 @@ pyarg_parsearrayandkeywords(PyObject* self, PyObject* const* args,
     if (!PyArg_ParseArrayAndKeywords(args, nargs, kwnames,
                                      "ii|i", kwlist,
                                      &a, &b, &c)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("iii", a, b, c);
+    return PyValue_FromResult(Py_BuildValue("iii", a, b, c));
 }
 
 static PyMethodDef TestMethods[] = {

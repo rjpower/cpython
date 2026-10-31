@@ -69,7 +69,7 @@ Quick Reference
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
    | :c:member:`~PyTypeObject.tp_hash`              | :c:type:`hashfunc`                | __hash__          | X |   |   | G |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
-   | :c:member:`~PyTypeObject.tp_call`              | :c:type:`ternaryfunc`             | __call__          |   | X |   | X |
+   | :c:member:`~PyTypeObject.tp_call`              | :c:type:`callfunc`                | __call__          |   | X |   | X |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
    | :c:member:`~PyTypeObject.tp_str`               | :c:type:`reprfunc`                | __str__           | X |   |   | X |
    +------------------------------------------------+-----------------------------------+-------------------+---+---+---+---+
@@ -379,7 +379,7 @@ slot typedefs
 |                             |    const char *             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`getattrofunc`      | .. line-block::             | :c:type:`PyObject` * |
+| :c:type:`getattrofunc`      | .. line-block::             | PyValue              |
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
@@ -388,9 +388,9 @@ slot typedefs
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
-|                             |    :c:type:`PyObject` *     |                      |
+|                             |    PyValue                  |                      |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`descrgetfunc`      | .. line-block::             | :c:type:`PyObject` * |
+| :c:type:`descrgetfunc`      | .. line-block::             | PyValue              |
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
@@ -400,7 +400,7 @@ slot typedefs
 |                             |                             |                      |
 |                             |    :c:type:`PyObject` *     |                      |
 |                             |    :c:type:`PyObject` *     |                      |
-|                             |    :c:type:`PyObject` *     |                      |
+|                             |    PyValue                  |                      |
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`hashfunc`          | :c:type:`PyObject` *        | Py_hash_t            |
 +-----------------------------+-----------------------------+----------------------+
@@ -412,7 +412,7 @@ slot typedefs
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`getiterfunc`       | :c:type:`PyObject` *        | :c:type:`PyObject` * |
 +-----------------------------+-----------------------------+----------------------+
-| :c:type:`iternextfunc`      | :c:type:`PyObject` *        | :c:type:`PyObject` * |
+| :c:type:`iternextfunc`      | :c:type:`PyObject` *        | PyValue              |
 +-----------------------------+-----------------------------+----------------------+
 | :c:type:`lenfunc`           | :c:type:`PyObject` *        | :c:type:`Py_ssize_t` |
 +-----------------------------+-----------------------------+----------------------+
@@ -1031,15 +1031,20 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    :c:data:`PyBaseObject_Type` uses :c:func:`PyObject_GenericHash`.
 
 
-.. c:member:: ternaryfunc PyTypeObject.tp_call
+.. c:member:: callfunc PyTypeObject.tp_call
 
    .. corresponding-type-slot:: Py_tp_call
 
    An optional pointer to a function that implements calling the object.  This
-   should be ``NULL`` if the object is not callable.  The signature is the same as
-   for :c:func:`PyObject_Call`::
+   should be ``NULL`` if the object is not callable.  The arguments are those
+   of :c:func:`PyObject_Call`; the result is a canonical value, as for
+   :c:func:`PyObject_CallValue`, or ``PyValue_NULL`` with an exception set::
 
-      PyObject *tp_call(PyObject *self, PyObject *args, PyObject *kwargs);
+      PyValue tp_call(PyObject *self, PyObject *args, PyObject *kwargs);
+
+   A function of the earlier form, returning ``PyObject *``, does not match
+   this type; a ``Py_tp_call`` slot of that form is caught on debug builds
+   when it returns a box of an int or float that should have been inline.
 
    **Inheritance:**
 
@@ -1079,9 +1084,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    An optional pointer to the get-attribute function.
 
-   The signature is the same as for :c:func:`PyObject_GetAttr`::
+   The signature is::
 
-      PyObject *tp_getattro(PyObject *self, PyObject *attr);
+      PyValue tp_getattro(PyObject *self, PyObject *attr);
+
+   The attribute is returned as a value, so an int or float held inline is
+   not boxed; ``PyValue_NULL`` is returned with an exception set on failure.
+   *self* is an object, never an inline value: an int or float uses the
+   generic function.  :c:func:`PyObject_GetAttr` returns the result as an
+   object.
 
    It is usually convenient to set this field to :c:func:`PyObject_GenericGetAttr`,
    which implements the normal way of looking for object attributes.
@@ -1105,12 +1116,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    An optional pointer to the function for setting and deleting attributes.
 
-   The signature is the same as for :c:func:`PyObject_SetAttr`::
+   The signature is::
 
-      int tp_setattro(PyObject *self, PyObject *attr, PyObject *value);
+      int tp_setattro(PyObject *self, PyObject *attr, PyValue value);
 
-   In addition, setting *value* to ``NULL`` to delete an attribute must be
-   supported.  It is usually convenient to set this field to
+   The value to store is passed as a value.  In addition, *value* set to
+   ``PyValue_NULL`` deletes the attribute, which must be supported; a value
+   of ``None`` is stored like any other.  A function that keeps the value
+   in a :c:expr:`PyObject *` field boxes it with :c:func:`!PyValue_Object`.
+   It is usually convenient to set this field to
    :c:func:`PyObject_GenericSetAttr`, which implements the normal
    way of setting object attributes.
 
@@ -1294,6 +1308,15 @@ and :c:data:`PyType_Type` effectively act as defaults.)
       The type traverse function must call :c:func:`PyObject_VisitManagedDict`
       and its clear function must call :c:func:`PyObject_ClearManagedDict`.
 
+      .. impl-detail::
+
+         When the type also has :c:member:`~PyTypeObject.tp_itemsize` of
+         zero, the attributes are in the slots that
+         :c:macro:`Py_TPFLAGS_INLINE_VALUES` describes.  Otherwise
+         :c:func:`PyType_Ready` clears this flag and gives the instances a
+         dictionary pointer at a :c:member:`~PyTypeObject.tp_dictoffset` of
+         its own; the two functions above still visit and clear it.
+
       .. versionadded:: 3.12
 
       **Inheritance:**
@@ -1316,18 +1339,6 @@ and :c:data:`PyType_Type` effectively act as defaults.)
       This flag is inherited unless the
       :c:member:`~PyTypeObject.tp_weaklistoffset` field is set in a superclass.
 
-
-   .. c:macro:: Py_TPFLAGS_PREHEADER
-
-      These bits indicate that the VM will manage some fields by storing them
-      before the object. Currently, this macro is equivalent to
-      :c:expr:`Py_TPFLAGS_MANAGED_DICT | Py_TPFLAGS_MANAGED_WEAKREF`.
-
-      This macro value relies on the implementation of the VM, so its value is not
-      stable and may change in a future version. Prefer using individual
-      flags instead.
-
-      .. versionadded:: 3.12
 
 
    .. c:macro:: Py_TPFLAGS_ITEMS_AT_END
@@ -1522,9 +1533,11 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    .. c:macro:: Py_TPFLAGS_INLINE_VALUES
 
-      This bit indicates that instances of this type will have an "inline values"
-      array (containing the object's attributes) placed directly after the end
-      of the object.
+      This bit indicates that instances of this type have attribute slots
+      placed at :c:member:`~PyTypeObject.tp_basicsize`, as many as the type
+      fixes when it is readied.  The object's shape names the attribute in
+      each slot; once the object's ``__dict__`` exists, the first slot holds
+      it and the attributes are in it.
 
       This requires that :c:macro:`Py_TPFLAGS_HAVE_GC` is set.
 
@@ -1546,6 +1559,24 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
       .. seealso::
          :mod:`abc`
+
+
+   .. c:macro:: Py_TPFLAGS_DEALLOC_READS_REFERENTS
+
+      This bit indicates that the type's :c:member:`~PyTypeObject.tp_dealloc`
+      reads the C state of objects that the instance refers to, rather than
+      only releasing its references to them.  The collector deallocates
+      unreachable objects in no particular order, except that it deallocates
+      the instances of types with this flag before other objects, and among
+      them a referrer before its referent, as reference counting would.  A
+      referent counts if the referrer's :c:member:`~PyTypeObject.tp_traverse`
+      visits it directly.  Flagged instances that refer to each other in a
+      cycle are deallocated in an order that breaks the cycle at one of its
+      references.
+
+      **Inheritance:**
+
+      This flag is inherited.
 
 
    .. c:macro:: Py_TPFLAGS_HAVE_STACKLESS_EXTENSION
@@ -1868,11 +1899,13 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    An optional pointer to a function that returns the next item in an
    :term:`iterator`. The signature is::
 
-      PyObject *tp_iternext(PyObject *self);
+      PyValue tp_iternext(PyObject *self);
 
-   When the iterator is :term:`exhausted`, the ``tp_iternext`` function must
-   return ``NULL``; a :exc:`StopIteration` exception may or may not be set.
-   When another error occurs, it must return ``NULL`` too.
+   The item is returned as a value, so an int or float item held inline is
+   not boxed.  When the iterator is :term:`exhausted`, the ``tp_iternext``
+   function must return ``PyValue_NULL``; a :exc:`StopIteration` exception
+   may or may not be set.  When another error occurs, it must return
+   ``PyValue_NULL`` too.
    The presence of ``tp_iternext`` signals that the instances of this type are
    iterators.
 
@@ -1880,7 +1913,7 @@ and :c:data:`PyType_Type` effectively act as defaults.)
    function should return the iterator instance itself (not a new iterator
    instance).
 
-   This function has the same signature as :c:func:`PyIter_Next`.
+   :c:func:`PyIter_Next` returns the item of this function as an object.
 
    **Inheritance:**
 
@@ -2018,7 +2051,11 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    The function signature is::
 
-      PyObject * tp_descr_get(PyObject *self, PyObject *obj, PyObject *type);
+      PyValue tp_descr_get(PyObject *self, PyObject *obj, PyObject *type);
+
+   The result is a value, or ``PyValue_NULL`` with an exception set.  *obj*
+   is an object (``NULL`` for a lookup on the class): the caller boxes an
+   inline int or float to bind it.
 
    .. XXX explain more?
 
@@ -2036,9 +2073,9 @@ and :c:data:`PyType_Type` effectively act as defaults.)
 
    The function signature is::
 
-      int tp_descr_set(PyObject *self, PyObject *obj, PyObject *value);
+      int tp_descr_set(PyObject *self, PyObject *obj, PyValue value);
 
-   The *value* argument is set to ``NULL`` to delete the value.
+   The *value* argument is ``PyValue_NULL`` to delete the value.
 
    .. XXX explain more?
 
@@ -3192,24 +3229,24 @@ Slot Type typedefs
    Set the value of the named attribute for the object.
    The value argument is set to ``NULL`` to delete the attribute.
 
-.. c:type:: PyObject *(*getattrofunc)(PyObject *self, PyObject *attr)
+.. c:type:: PyValue (*getattrofunc)(PyObject *self, PyObject *attr)
 
    Return the value of the named attribute for the object.
 
    See :c:member:`~PyTypeObject.tp_getattro`.
 
-.. c:type:: int (*setattrofunc)(PyObject *self, PyObject *attr, PyObject *value)
+.. c:type:: int (*setattrofunc)(PyObject *self, PyObject *attr, PyValue value)
 
    Set the value of the named attribute for the object.
-   The value argument is set to ``NULL`` to delete the attribute.
+   The value argument is ``PyValue_NULL`` to delete the attribute.
 
    See :c:member:`~PyTypeObject.tp_setattro`.
 
-.. c:type:: PyObject *(*descrgetfunc)(PyObject *, PyObject *, PyObject *)
+.. c:type:: PyValue (*descrgetfunc)(PyObject *, PyObject *, PyObject *)
 
    See :c:member:`~PyTypeObject.tp_descr_get`.
 
-.. c:type:: int (*descrsetfunc)(PyObject *, PyObject *, PyObject *)
+.. c:type:: int (*descrsetfunc)(PyObject *, PyObject *, PyValue)
 
    See :c:member:`~PyTypeObject.tp_descr_set`.
 
@@ -3225,7 +3262,7 @@ Slot Type typedefs
 
    See :c:member:`~PyTypeObject.tp_iter`.
 
-.. c:type:: PyObject *(*iternextfunc)(PyObject *)
+.. c:type:: PyValue (*iternextfunc)(PyObject *)
 
    See :c:member:`~PyTypeObject.tp_iternext`.
 
@@ -3244,6 +3281,10 @@ Slot Type typedefs
    See :c:member:`~PyAsyncMethods.am_send`.
 
 .. c:type:: PyObject *(*ternaryfunc)(PyObject *, PyObject *, PyObject *)
+
+.. c:type:: PyValue (*callfunc)(PyObject *, PyObject *, PyObject *)
+
+   See :c:member:`~PyTypeObject.tp_call`.
 
 .. c:type:: PyObject *(*ssizeargfunc)(PyObject *, Py_ssize_t)
 

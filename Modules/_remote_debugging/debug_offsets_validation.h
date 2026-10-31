@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 888,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 896,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -288,8 +288,9 @@ validate_fixed_field(
     APPLY(interpreter_frame, previous, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(interpreter_frame, executable, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(interpreter_frame, instr_ptr, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
+    APPLY(interpreter_frame, ir_words, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(interpreter_frame, owner, sizeof(char), _Alignof(char), buffer_size); \
-    APPLY(interpreter_frame, stackpointer, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
+    APPLY(interpreter_frame, return_slot, sizeof(uint16_t), _Alignof(uint16_t), buffer_size); \
     APPLY(interpreter_frame, tlbc_index, sizeof(int32_t), _Alignof(int32_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_CODE_OBJECT_FIELDS(APPLY, buffer_size) \
@@ -297,7 +298,7 @@ validate_fixed_field(
     APPLY(code_object, filename, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(code_object, linetable, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(code_object, firstlineno, sizeof(int), _Alignof(int), buffer_size); \
-    APPLY(code_object, co_code_adaptive, sizeof(char), _Alignof(char), buffer_size); \
+    APPLY(code_object, co_words, sizeof(uint64_t), _Alignof(uint64_t), buffer_size); \
     APPLY(code_object, co_tlbc, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_SET_OBJECT_FIELDS(APPLY, buffer_size) \
@@ -420,10 +421,18 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
     PY_REMOTE_DEBUG_VALIDATE_SECTION(pyobject);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(
         pyobject,
-        ob_type,
+        ob_header,
         sizeof(uintptr_t),
         _Alignof(uintptr_t),
         SIZEOF_PYOBJECT);
+
+    PY_REMOTE_DEBUG_VALIDATE_SECTION(shape);
+    PY_REMOTE_DEBUG_VALIDATE_FIELD(
+        shape,
+        type,
+        sizeof(uintptr_t),
+        _Alignof(uintptr_t),
+        SIZEOF_SHAPE);
 
     PY_REMOTE_DEBUG_VALIDATE_SECTION(type_object);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(

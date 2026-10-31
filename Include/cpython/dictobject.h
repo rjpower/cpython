@@ -3,11 +3,7 @@
 #endif
 
 typedef struct _dictkeysobject PyDictKeysObject;
-typedef struct _dictvalues PyDictValues;
 
-/* The ma_values pointer is NULL for a combined table
- * or points to an array of PyObject* for a split table
- */
 typedef struct {
     PyObject_HEAD
 
@@ -16,26 +12,20 @@ typedef struct {
 
     /* This is a private field for CPython's internal use.
      * Bits 0-7 are for dict watchers.
-     * Bits 8-11 are for the watched mutation counter (used by tier2 optimization)
+     * Bits 8-11 are for the watched mutation counter
      * Bits 12-31 are currently unused
      * Bits 32-63 are a unique id in the free threading build (used for per-thread refcounting)
      */
     uint64_t _ma_watcher_tag;
 
+    /* The keys and the values */
     PyDictKeysObject *ma_keys;
-
-    /* If ma_values is NULL, the table is "combined": keys and values
-       are stored in ma_keys.
-
-       If ma_values is not NULL, the table is split:
-       keys are stored in ma_keys and values are stored in ma_values */
-    PyDictValues *ma_values;
 } PyDictObject;
 
 // frozendict
 PyAPI_DATA(PyTypeObject) PyFrozenDict_Type;
 #define PyFrozenDict_Check(op) PyObject_TypeCheck((op), &PyFrozenDict_Type)
-#define PyFrozenDict_CheckExact(op) Py_IS_TYPE((op), &PyFrozenDict_Type)
+#define PyFrozenDict_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyFrozenDict_Type)
 
 #define PyAnyDict_CheckExact(ob) \
     (PyDict_CheckExact(ob) || PyFrozenDict_CheckExact(ob))
@@ -54,15 +44,17 @@ static inline Py_ssize_t PyDict_GET_SIZE(PyObject *op) {
     PyDictObject *mp;
     assert(PyAnyDict_Check(op));
     mp = _Py_CAST(PyDictObject*, op);
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_ssize_relaxed(&mp->ma_used);
-#else
     return mp->ma_used;
-#endif
 }
 #define PyDict_GET_SIZE(op) PyDict_GET_SIZE(_PyObject_CAST(op))
 
 PyAPI_FUNC(int) PyDict_ContainsString(PyObject *mp, const char *key);
+
+/* PyDict_GetItemRef() with the item as a value, so that an inline item is
+   not boxed: 1 and the item if KEY is present, 0 and PyValue_NULL if it is
+   missing, or -1 and PyValue_NULL with an exception set. */
+PyAPI_FUNC(int) PyDict_GetItemRefValue(PyObject *mp, PyObject *key,
+                                       PyValue *result);
 
 PyAPI_FUNC(PyObject *) _PyDict_NewPresized(Py_ssize_t minused);
 

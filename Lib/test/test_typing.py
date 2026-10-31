@@ -52,7 +52,7 @@ import types
 
 from test.support import (
     captured_stderr, cpython_only, requires_docstrings, import_helper, run_code,
-    subTests, EqualToForwardRef,
+    subTests, EqualToForwardRef, gc_collect,
     exceeds_recursion_limit, run_with_limited_c_stack,
     skip_wasi_stack_overflow, skip_emscripten_stack_overflow,
 )
@@ -10307,6 +10307,7 @@ class ParamSpecTests(BaseTestCase):
                 attr = getattr(P, attr_name)
                 ref = weakref.ref(attr, lambda _: callback_fired.append(True))
                 del attr
+                gc_collect()
                 self.assertEqual(callback_fired, [True])
                 self.assertIsNone(ref())
 

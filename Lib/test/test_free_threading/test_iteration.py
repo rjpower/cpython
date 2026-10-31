@@ -1,4 +1,3 @@
-import sys
 import threading
 import unittest
 from test import support
@@ -133,13 +132,11 @@ class ContendedSeqIterExhaustionTest(unittest.TestCase):
                 raise IndexError(i)
             return i
 
-    @support.refcount_test
     def test_shared_iterator_exhaustion(self):
         nthreads = 8
         nrounds = 20 if support.check_sanitizer(thread=True) else 100
         seq = self.Seq(4)
         expected = set(range(seq.n))
-        refcount_before = sys.getrefcount(seq)
 
         def drain(it, barrier, results):
             items = []
@@ -164,10 +161,6 @@ class ContendedSeqIterExhaustionTest(unittest.TestCase):
             # Threads may see duplicate or missing items, but never
             # invented ones.
             self.assertEqual(set(results) - expected, set())
-
-        # A double-DECREF of the sequence does not always crash; it
-        # reliably shows up as a sagging reference count.
-        self.assertEqual(sys.getrefcount(seq), refcount_before)
 
 
 class ContendedRangeIterationTest(ContendedTupleIterationTest):

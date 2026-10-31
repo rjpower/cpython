@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_uuid_uuid4__doc__,
 "uuid4($module, /)\n"
@@ -71,15 +71,14 @@ static PyObject *
 _uuid__install_c_hooks_impl(PyObject *module, PyObject *random_func,
                             PyObject *time_func);
 
-static PyObject *
-_uuid__install_c_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_uuid__install_c_hooks(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -102,20 +101,28 @@ _uuid__install_c_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     PyObject *random_func;
     PyObject *time_func;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 2, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    random_func = args[0];
-    time_func = args[1];
+    random_func = PyValue_Object(args[0]);
+    if (random_func == NULL) {
+        goto exit;
+    }
+    time_func = PyValue_Object(args[1]);
+    if (time_func == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _uuid__install_c_hooks_impl(module, random_func, time_func);
+    _return_value = _uuid__install_c_hooks_impl(module, random_func, time_func);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -142,7 +149,6 @@ _uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 7
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -165,8 +171,8 @@ _uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[7];
-    PyObject * const *fastargs;
+    PyValue argsbuf[7];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *hex = Py_None;
@@ -177,7 +183,7 @@ _uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *version = Py_None;
     PyObject *is_safe = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -185,38 +191,56 @@ _uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        hex = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        hex = PyValue_Object(fastargs[0]);
+        if (hex == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[1]) {
-        bytes = fastargs[1];
+    if (!PyValue_IsNull(fastargs[1])) {
+        bytes = PyValue_Object(fastargs[1]);
+        if (bytes == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[2]) {
-        bytes_le = fastargs[2];
+    if (!PyValue_IsNull(fastargs[2])) {
+        bytes_le = PyValue_Object(fastargs[2]);
+        if (bytes_le == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[3]) {
-        fields = fastargs[3];
+    if (!PyValue_IsNull(fastargs[3])) {
+        fields = PyValue_Object(fastargs[3]);
+        if (fields == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[4]) {
-        int_value = fastargs[4];
+    if (!PyValue_IsNull(fastargs[4])) {
+        int_value = PyValue_Object(fastargs[4]);
+        if (int_value == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[5]) {
-        version = fastargs[5];
+    if (!PyValue_IsNull(fastargs[5])) {
+        version = PyValue_Object(fastargs[5]);
+        if (version == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -225,7 +249,10 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    is_safe = fastargs[6];
+    is_safe = PyValue_Object(fastargs[6]);
+    if (is_safe == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = _uuid_UUID___init___impl((uuidobject *)self, hex, bytes, bytes_le, fields, int_value, version, is_safe);
 
@@ -240,18 +267,26 @@ PyDoc_STRVAR(_uuid_UUID__from_int__doc__,
 "Create a UUID from an integer value. Internal use only.");
 
 #define _UUID_UUID__FROM_INT_METHODDEF    \
-    {"_from_int", (PyCFunction)_uuid_UUID__from_int, METH_O|METH_CLASS, _uuid_UUID__from_int__doc__},
+    {"_from_int", _PyCFunction_CAST(_uuid_UUID__from_int), METH_O|METH_CLASS, _uuid_UUID__from_int__doc__},
 
 static PyObject *
 _uuid_UUID__from_int_impl(PyTypeObject *type, PyObject *value);
 
-static PyObject *
-_uuid_UUID__from_int(PyObject *type, PyObject *value)
+static PyValue
+_uuid_UUID__from_int(PyObject *type, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *value;
+    PyObject *_return_value;
 
-    return_value = _uuid_UUID__from_int_impl((PyTypeObject *)type, value);
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = _uuid_UUID__from_int_impl((PyTypeObject *)type, value);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -282,18 +317,26 @@ PyDoc_STRVAR(_uuid_UUID___setstate____doc__,
 "Expects a mapping with \'int\' and optionally \'is_safe\' keys.");
 
 #define _UUID_UUID___SETSTATE___METHODDEF    \
-    {"__setstate__", (PyCFunction)_uuid_UUID___setstate__, METH_O, _uuid_UUID___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(_uuid_UUID___setstate__), METH_O, _uuid_UUID___setstate____doc__},
 
 static PyObject *
 _uuid_UUID___setstate___impl(uuidobject *self, PyObject *state);
 
-static PyObject *
-_uuid_UUID___setstate__(PyObject *self, PyObject *state)
+static PyValue
+_uuid_UUID___setstate__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *state;
+    PyObject *_return_value;
 
-    return_value = _uuid_UUID___setstate___impl((uuidobject *)self, state);
+    state = PyValue_Object(arg);
+    if (state == NULL) {
+        goto exit;
+    }
+    _return_value = _uuid_UUID___setstate___impl((uuidobject *)self, state);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
-/*[clinic end generated code: output=929e54bf30e649aa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5499719cfaec602f input=a9049054013a1b77]*/

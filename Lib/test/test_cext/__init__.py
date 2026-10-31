@@ -28,6 +28,8 @@ SOURCES = [
 ]
 RUNTESTS_PY = os.path.join(SOURCE_DIR, 'runtests.py')
 MSVC = support.MS_WINDOWS
+NO_LIMITED_API = ("this CPython has no limited C API or stable ABI: "
+                  "Python.h rejects Py_LIMITED_API")
 
 
 # With MSVC on a debug build, the linker fails with: cannot open file
@@ -123,12 +125,15 @@ class TestPublicC(BaseTests, unittest.TestCase):
     def test_build_c11(self):
         self.check_build('_test_cext_c11', std='c11')
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_limited(self):
         self.check_build('_test_cext_limited', limited=True)
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_limited_c11(self):
         self.check_build('_test_cext_limited_c11', limited=True, std='c11')
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_abi3t(self):
         # Test with Py_TARGET_ABI3T
         self.check_build('_test_cext_abi3t', abi3t=True)
@@ -164,12 +169,15 @@ class TestPublicCpp(BaseTests, unittest.TestCase):
     def test_build_intel_asm(self):
         self.check_build('_test_cppext_intel_asm', extra_cflags='-masm=intel')
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_limited(self):
         self.check_build('_test_cppext_limited', limited=True)
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_limited_cpp03(self):
         self.check_build('_test_cppext_limited_cpp03', std='c++03', limited=True)
 
+    @unittest.skip(NO_LIMITED_API)
     def test_build_abi3t(self):
         # Test with Py_TARGET_ABI3T
         self.check_build('_test_cppext_abi3t', abi3t=True)

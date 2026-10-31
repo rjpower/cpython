@@ -470,7 +470,7 @@ later:
 #include "pycore_dict.h"             // _Py_dict_lookup()
 #include "pycore_object.h"           // _PyObject_GC_UNTRACK()
 #include "pycore_pyerrors.h"         // _PyErr_ChainExceptions1()
-#include "pycore_tuple.h"            // _PyTuple_Recycle()
+#include "pycore_tuple.h"            // _PyTuple_FromPairSteal()
 #include <stddef.h>                  // offsetof()
 #include "pycore_weakref.h"          // FT_CLEAR_WEAKREFS()
 
@@ -499,7 +499,6 @@ struct _odictobject {
 
     size_t od_state;             /* incremented whenever the LL changes */
     PyObject *od_inst_dict;      /* OrderedDict().__dict__ */
-    PyObject *od_weakreflist;    /* holds weakrefs to the odict */
 };
 
 #define _PyODictObject_CAST(op) _Py_CAST(PyODictObject*, (op))
@@ -537,15 +536,11 @@ static Py_ssize_t
 _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(od);
-    PyObject *value = NULL;
+    PyValue value;
     PyDictKeysObject *keys = ((PyDictObject *)od)->ma_keys;
     Py_ssize_t ix;
-#ifdef Py_GIL_DISABLED
-    ix = _Py_dict_lookup_threadsafe((PyDictObject *)od, key, hash, &value);
-    Py_XDECREF(value);
-#else
-    ix = _Py_dict_lookup((PyDictObject *)od, key, hash, &value);
-#endif
+    ix = _Py_dict_lookup((PyDictObject *)od, PyValue_FromObject(key), hash,
+                         &value);
     if (ix == DKIX_EMPTY) {
         return keys->dk_nentries;  /* index of new entry */
     }
@@ -1428,7 +1423,7 @@ odict_dealloc(PyObject *op)
     PyObject_GC_UnTrack(self);
 
     Py_XDECREF(self->od_inst_dict);
-    FT_CLEAR_WEAKREFS(op, self->od_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
 
     _odict_clear_nodes(self);
     PyDict_Type.tp_dealloc((PyObject *)self);
@@ -1601,12 +1596,13 @@ PyTypeObject PyODict_Type = {
     0,                                          /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
     odict_doc,                                  /* tp_doc */
     odict_traverse,                             /* tp_traverse */
     odict_tp_clear,                             /* tp_clear */
     odict_richcompare,                          /* tp_richcompare */
-    offsetof(PyODictObject, od_weakreflist),    /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     odict_iter,                                 /* tp_iter */
     0,                                          /* tp_iternext */
     odict_methods,                              /* tp_methods */
@@ -1709,7 +1705,6 @@ typedef struct {
     Py_ssize_t di_size;
     size_t di_state;
     PyObject *di_current;
-    PyObject *di_result; /* reusable result tuple for iteritems */
 } odictiterobject;
 
 static void
@@ -1719,9 +1714,6 @@ odictiter_dealloc(PyObject *op)
     _PyObject_GC_UNTRACK(di);
     Py_XDECREF(di->di_odict);
     Py_XDECREF(di->di_current);
-    if ((di->kind & _odict_ITER_ITEMS) == _odict_ITER_ITEMS) {
-        Py_DECREF(di->di_result);
-    }
     PyObject_GC_Del(di);
 }
 
@@ -1731,7 +1723,6 @@ odictiter_traverse(PyObject *op, visitproc visit, void *arg)
     odictiterobject *di = (odictiterobject*)op;
     Py_VISIT(di->di_odict);
     Py_VISIT(di->di_current);  /* A key could be any type, not just str. */
-    Py_VISIT(di->di_result);
     return 0;
 }
 
@@ -1810,20 +1801,20 @@ odictiter_nextkey(odictiterobject *di)
 odictiter.__next__ as odictiter_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 odictiter_iternext_impl(PyObject *self)
-/*[clinic end generated code: output=71aef8eec9e1a133 input=bc8bec6c85481b93]*/
+/*[clinic end generated code: output=ecff2c9dcce52c0a input=bc8bec6c85481b93]*/
 {
     odictiterobject *di = (odictiterobject*)self;
     PyObject *result, *value;
     PyObject *key = odictiter_nextkey(di);  /* new reference */
 
     if (key == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* Handle the keys case. */
     if (! (di->kind & _odict_ITER_VALUES)) {
-        return key;
+        return PyValue_FromResult(key);
     }
 
     if (PyDict_GetItemRef((PyObject *)di->di_odict, key, &value) != 1) {
@@ -1836,37 +1827,21 @@ odictiter_iternext_impl(PyObject *self)
     /* Handle the values case. */
     if (!(di->kind & _odict_ITER_KEYS)) {
         Py_DECREF(key);
-        return value;
+        return PyValue_FromResult(value);
     }
 
     /* Handle the items case. */
-    result = di->di_result;
-
-    if (_PyObject_IsUniquelyReferenced(result)) {
-        /* not in use so we can reuse it
-         * (the common case during iteration) */
-        Py_INCREF(result);
-        Py_DECREF(PyTuple_GET_ITEM(result, 0));  /* borrowed */
-        Py_DECREF(PyTuple_GET_ITEM(result, 1));  /* borrowed */
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
-        PyTuple_SET_ITEM(result, 0, key);  /* steals reference */
-        PyTuple_SET_ITEM(result, 1, value);  /* steals reference */
-    }
-    else {
-        result = _PyTuple_FromPairSteal(key, value);
-        if (result == NULL) {
-            goto error;
-        }
+    result = _PyTuple_FromPairSteal(key, value);
+    if (result == NULL) {
+        goto error;
     }
 
-    return result;
+    return PyValue_FromResult(result);
 
 error:
     Py_CLEAR(di->di_current);
     Py_CLEAR(di->di_odict);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -1938,21 +1913,12 @@ odictiter_new(PyODictObject *od, int kind)
     odictiterobject *di;
     _ODictNode *node;
     int reversed = kind & _odict_ITER_REVERSED;
-    PyObject *result = NULL;
 
-    if ((kind & _odict_ITER_ITEMS) == _odict_ITER_ITEMS) {
-        result = _PyTuple_FromPairSteal(Py_None, Py_None);
-        if (result == NULL) {
-            return NULL;
-        }
-    }
     di = PyObject_GC_New(odictiterobject, &PyODictIter_Type);
     if (di == NULL) {
-        Py_XDECREF(result);
         return NULL;
     }
 
-    di->di_result = result;
     di->kind = kind;
     Py_BEGIN_CRITICAL_SECTION(od);
     node = reversed ? _odict_LAST(od) : _odict_FIRST(od);

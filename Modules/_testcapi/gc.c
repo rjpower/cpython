@@ -62,12 +62,17 @@ failed:
     return NULL;
 }
 
-static PyObject *
-without_gc(PyObject *Py_UNUSED(self), PyObject *obj)
+static PyValue
+without_gc(PyObject *Py_UNUSED(self), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     PyTypeObject *tp = (PyTypeObject*)obj;
     if (!PyType_Check(obj) || !PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
-        return PyErr_Format(PyExc_TypeError, "heap type expected, got %R", obj);
+        return PyValue_FromResult(
+            PyErr_Format(PyExc_TypeError, "heap type expected, got %R", obj));
     }
     if (PyType_IS_GC(tp)) {
         // Don't try this at home, kids:
@@ -77,7 +82,7 @@ without_gc(PyObject *Py_UNUSED(self), PyObject *obj)
         tp->tp_clear = NULL;
     }
     assert(!PyType_IS_GC(tp));
-    return Py_NewRef(obj);
+    return PyValue_FromObject(obj);
 }
 
 static void
@@ -85,9 +90,6 @@ slot_tp_del(PyObject *self)
 {
     PyObject *del, *res;
 
-    /* Temporarily resurrect the object. */
-    assert(Py_REFCNT(self) == 0);
-    Py_SET_REFCNT(self, 1);
 
     /* Save the current exception, if any. */
     PyObject *exc = PyErr_GetRaisedException();
@@ -116,23 +118,6 @@ slot_tp_del(PyObject *self)
     /* Restore the saved exception. */
     PyErr_SetRaisedException(exc);
 
-    /* Undo the temporary resurrection; can't use DECREF here, it would
-     * cause a recursive call.
-     */
-    assert(Py_REFCNT(self) > 0);
-    Py_SET_REFCNT(self, Py_REFCNT(self) - 1);
-    if (Py_REFCNT(self) == 0) {
-        /* this is the normal path out */
-        return;
-    }
-
-    /* __del__ resurrected it!  Make it look like the original Py_DECREF
-     * never happened.
-     */
-    {
-        _Py_ResurrectReference(self);
-    }
-    assert(!PyType_IS_GC(Py_TYPE(self)) || PyObject_GC_IsTracked(self));
 }
 
 static PyObject *
@@ -293,20 +278,24 @@ obj_extra_data_get_extra_storage(PyObject *self)
     return (PyObject **)((char *)self + Py_TYPE(self)->tp_basicsize);
 }
 
-static PyObject *
+static PyValue
 obj_extra_data_get(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyObject **extra_storage = obj_extra_data_get_extra_storage(self);
     PyObject *value = *extra_storage;
     if (!value) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(value);
+    return PyValue_FromObject(value);
 }
 
 static int
-obj_extra_data_set(PyObject *self, PyObject *newval, void *Py_UNUSED(ignored))
+obj_extra_data_set(PyObject *self, PyValue newval_v, void *Py_UNUSED(ignored))
 {
+    PyObject *newval = PyValue_Object(newval_v);
+    if (newval == NULL && !PyValue_IsNull(newval_v)) {
+        return -1;
+    }
     PyObject **extra_storage = obj_extra_data_get_extra_storage(self);
     Py_CLEAR(*extra_storage);
     if (newval) {
@@ -364,12 +353,231 @@ static PyType_Spec ObjExtraData_TypeSpec = {
     .slots = ObjExtraData_Slots,
 };
 
+/* A DeallocReader's dealloc reads the state of its referent, a
+   StatefulReferent or another DeallocReader, whose own dealloc destroys that
+   state, and aborts if it finds the state destroyed.  Reference counting
+   always deallocates the reader first; the tracing collector does so because
+   the reader's type has Py_TPFLAGS_DEALLOC_READS_REFERENTS. */
+#define REFERENT_ALIVE 0x5ca1ab1e
+
+typedef struct {
+    PyObject_HEAD
+    unsigned int state;
+} StatefulReferent;
+
+static PyObject *
+stateful_referent_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    StatefulReferent *self = (StatefulReferent *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->state = REFERENT_ALIVE;
+    return (PyObject *)self;
+}
+
+static void
+stateful_referent_dealloc(PyObject *self)
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    ((StatefulReferent *)self)->state = 0;
+    tp->tp_free(self);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot StatefulReferent_Slots[] = {
+    {Py_tp_new, stateful_referent_new},
+    {Py_tp_dealloc, stateful_referent_dealloc},
+    {0, NULL},
+};
+
+static PyType_Spec StatefulReferent_TypeSpec = {
+    .name = "_testcapi.StatefulReferent",
+    .basicsize = sizeof(StatefulReferent),
+    .flags = Py_TPFLAGS_DEFAULT,
+    .slots = StatefulReferent_Slots,
+};
+
+typedef struct {
+    StatefulReferent base;      // a reader is also a referent
+    StatefulReferent *referent;
+} DeallocReader;
+
+static void dealloc_reader_dealloc(PyObject *self);
+
+/* Is tp a StatefulReferent, a DeallocReader or a subclass of either? */
+static int
+has_referent_state(PyTypeObject *tp)
+{
+    for (; tp != NULL; tp = tp->tp_base) {
+        if (tp->tp_dealloc == stateful_referent_dealloc
+            || tp->tp_dealloc == dealloc_reader_dealloc)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static PyObject *
+dealloc_reader_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    PyObject *referent;
+    if (!PyArg_ParseTuple(args, "O:DeallocReader", &referent)) {
+        return NULL;
+    }
+    if (!has_referent_state(Py_TYPE(referent))) {
+        PyErr_SetString(PyExc_TypeError,
+                        "expected a StatefulReferent or a DeallocReader");
+        return NULL;
+    }
+    DeallocReader *self = (DeallocReader *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->base.state = REFERENT_ALIVE;
+    self->referent = (StatefulReferent *)Py_NewRef(referent);
+    return (PyObject *)self;
+}
+
+static int
+dealloc_reader_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    Py_VISIT(((DeallocReader *)self)->referent);
+    return 0;
+}
+
+static void
+dealloc_reader_dealloc(PyObject *self)
+{
+    PyTypeObject *tp = Py_TYPE(self);
+    PyObject_GC_UnTrack(self);
+    StatefulReferent *referent = ((DeallocReader *)self)->referent;
+    if (referent->state != REFERENT_ALIVE) {
+        Py_FatalError("a DeallocReader outlived its referent's dealloc");
+    }
+    ((DeallocReader *)self)->base.state = 0;
+    Py_DECREF(referent);
+    tp->tp_free(self);
+    Py_DECREF(tp);
+}
+
+static PyType_Slot DeallocReader_Slots[] = {
+    {Py_tp_new, dealloc_reader_new},
+    {Py_tp_dealloc, dealloc_reader_dealloc},
+    {Py_tp_traverse, dealloc_reader_traverse},
+    {0, NULL},
+};
+
+static PyType_Spec DeallocReader_TypeSpec = {
+    .name = "_testcapi.DeallocReader",
+    .basicsize = sizeof(DeallocReader),
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC
+              | Py_TPFLAGS_DEALLOC_READS_REFERENTS),
+    .slots = DeallocReader_Slots,
+};
+
+/* A reference held only in a PyMem block that a static points to: no
+   tp_traverse visits it, so only a root registered with PyGC_AddRoot()
+   keeps the object alive. */
+static PyObject **pymem_slot = NULL;
+static int pymem_slot_rooted = 0;
+
+static PyObject *
+gc_hold_in_pymem(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    int rooted;
+    if (!PyArg_ParseTuple(args, "Op", &obj, &rooted)) {
+        return NULL;
+    }
+    if (pymem_slot != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "an object is already held");
+        return NULL;
+    }
+    PyObject **slot = PyMem_Malloc(sizeof(PyObject *));
+    if (slot == NULL) {
+        return PyErr_NoMemory();
+    }
+    *slot = Py_NewRef(obj);
+    if (rooted && PyGC_AddRoot(slot) < 0) {
+        Py_DECREF(obj);
+        PyMem_Free(slot);
+        return NULL;
+    }
+    pymem_slot = slot;
+    pymem_slot_rooted = rooted;
+    Py_RETURN_NONE;
+}
+
+/* Free the block.  Return the object if it was rooted; an object that was
+   not may have been freed, so it is not touched. */
+static PyObject *
+gc_release_pymem(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    if (pymem_slot == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "no object is held");
+        return NULL;
+    }
+    PyObject **slot = pymem_slot;
+    pymem_slot = NULL;
+    if (!pymem_slot_rooted) {
+        // The reference counting build leaks the object, which is harmless
+        // in a test.
+        PyMem_Free(slot);
+        Py_RETURN_NONE;
+    }
+    PyObject *obj = *slot;  // the block's reference passes to the caller
+    PyGC_RemoveRoot(slot);
+    PyMem_Free(slot);
+    return obj;
+}
+
+/* A capsule whose destructor calls a Python callable, as an extension's
+   destructor may.  The capsule's context holds the callable without a
+   traverse, so the caller must keep it alive. */
+static void
+calling_capsule_destructor(PyObject *capsule)
+{
+    PyObject *callable = PyCapsule_GetContext(capsule);
+    PyObject *res = PyObject_CallNoArgs(callable);
+    if (res == NULL) {
+        PyErr_FormatUnraisable("Exception ignored in a capsule destructor");
+    }
+    Py_XDECREF(res);
+    Py_DECREF(callable);
+}
+
+static PyValue
+capsule_calling(PyObject *self, PyValue callable_value)
+{
+    PyObject *callable = PyValue_Object(callable_value);
+    if (callable == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *capsule = PyCapsule_New(&pymem_slot, "_testcapi.calling",
+                                      calling_capsule_destructor);
+    if (capsule == NULL) {
+        return PyValue_NULL;
+    }
+    if (PyCapsule_SetContext(capsule, Py_NewRef(callable)) < 0) {
+        Py_DECREF(callable);
+        Py_DECREF(capsule);
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(capsule);
+}
+
 static PyMethodDef test_methods[] = {
+    {"capsule_calling", _PyCFunction_CAST(capsule_calling), METH_O},
+    {"gc_hold_in_pymem", gc_hold_in_pymem, METH_VARARGS},
+    {"gc_release_pymem", gc_release_pymem, METH_NOARGS},
     {"test_gc_control", test_gc_control, METH_NOARGS},
     {"test_gc_visit_objects_basic", test_gc_visit_objects_basic, METH_NOARGS, NULL},
     {"test_gc_visit_objects_frozen", test_gc_visit_objects_frozen, METH_NOARGS, NULL},
     {"test_gc_visit_objects_exit_early", test_gc_visit_objects_exit_early, METH_NOARGS, NULL},
-    {"without_gc", without_gc, METH_O, NULL},
+    {"without_gc", _PyCFunction_CAST(without_gc), METH_O, NULL},
     {"with_tp_del", with_tp_del, METH_VARARGS, NULL},
     {NULL}
 };
@@ -392,6 +600,20 @@ int _PyTestCapi_Init_GC(PyObject *mod)
     Py_DECREF(ObjExtraData_Type);
     if (ret < 0) {
         return ret;
+    }
+
+    PyType_Spec *specs[] = {&StatefulReferent_TypeSpec,
+                            &DeallocReader_TypeSpec};
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(specs); i++) {
+        PyObject *type = PyType_FromModuleAndSpec(mod, specs[i], NULL);
+        if (type == NULL) {
+            return -1;
+        }
+        ret = PyModule_AddType(mod, (PyTypeObject *)type);
+        Py_DECREF(type);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
     return 0;

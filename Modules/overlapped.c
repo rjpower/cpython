@@ -1654,19 +1654,19 @@ _overlapped_Overlapped_ConnectPipe_impl(OverlappedObject *self,
     return Py_BuildValue(F_HANDLE, PipeHandle);
 }
 
-static PyObject*
+static PyValue
 Overlapped_getaddress(PyObject *op, void *Py_UNUSED(closure))
 {
     OverlappedObject *self = OverlappedObject_CAST(op);
-    return PyLong_FromVoidPtr(&self->overlapped);
+    return PyValue_FromResult(PyLong_FromVoidPtr(&self->overlapped));
 }
 
-static PyObject*
+static PyValue
 Overlapped_getpending(PyObject *op, void *Py_UNUSED(closure))
 {
     OverlappedObject *self = OverlappedObject_CAST(op);
-    return PyBool_FromLong(!HasOverlappedIoCompleted(&self->overlapped) &&
-                           self->type != TYPE_NOT_STARTED);
+    return PyValue_FromObject((!HasOverlappedIoCompleted(&self->overlapped) &&
+                           self->type != TYPE_NOT_STARTED) ? Py_True : Py_False);
 }
 
 static int

@@ -2,7 +2,9 @@
 /* Interface to Sjoerd's portable C thread library */
 
 #include "Python.h"
+#include "pycore_dict.h"          // _PyDict_GetItemValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
+#include "pycore_gc_trace.h"      // _PyGC_AddRoot()
 #include "pycore_interp.h"        // _PyInterpreterState.threads.count
 #include "pycore_lock.h"
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
@@ -337,6 +339,8 @@ struct bootstate {
     PyObject *func;
     PyObject *args;
     PyObject *kwargs;
+    // Registers func, args and kwargs: raw memory is not scanned.
+    _PyGCRoot root;
     ThreadHandle *handle;
     PyEvent handle_ready;
 };
@@ -344,6 +348,7 @@ struct bootstate {
 static void
 thread_bootstate_free(struct bootstate *boot, int decref)
 {
+    _PyGC_RemoveRoot(&boot->root);
     if (decref) {
         Py_DECREF(boot->func);
         Py_DECREF(boot->args);
@@ -467,6 +472,7 @@ ThreadHandle_start(ThreadHandle *self, PyObject *func, PyObject *args,
     boot->func = Py_NewRef(func);
     boot->args = Py_NewRef(args);
     boot->kwargs = Py_XNewRef(kwargs);
+    _PyGC_AddRoot(&boot->root, &boot->func, 3);
     boot->handle = self;
     ThreadHandle_incref(self);
     boot->handle_ready = (PyEvent){0};
@@ -1431,7 +1437,6 @@ static PyType_Spec rlock_type_spec = {
 
 typedef struct {
     PyObject_HEAD
-    PyObject *weakreflist;      /* List of weak references to self */
 } localdummyobject;
 
 #define localdummyobject_CAST(op)   ((localdummyobject *)(op))
@@ -1440,21 +1445,15 @@ static void
 localdummy_dealloc(PyObject *op)
 {
     localdummyobject *self = localdummyobject_CAST(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     PyTypeObject *tp = Py_TYPE(self);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
 
-static PyMemberDef local_dummy_type_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(localdummyobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot local_dummy_type_slots[] = {
     {Py_tp_dealloc, localdummy_dealloc},
     {Py_tp_doc, "Thread-local dummy"},
-    {Py_tp_members, local_dummy_type_members},
     {0, 0}
 };
 
@@ -1462,7 +1461,7 @@ static PyType_Spec local_dummy_type_spec = {
     .name = "_thread._localdummy",
     .basicsize = sizeof(localdummyobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = local_dummy_type_slots,
 };
 
@@ -1471,7 +1470,6 @@ typedef struct {
     PyObject_HEAD
     PyObject *args;
     PyObject *kw;
-    PyObject *weakreflist;      /* List of weak references to self */
     /* A {localdummy -> localdict} dict */
     PyObject *localdicts;
     /* A set of weakrefs to thread sentinels localdummies*/
@@ -1483,14 +1481,14 @@ typedef struct {
 /* Forward declaration */
 static int create_localsdict(localobject *self, thread_module_state *state,
                              PyObject **localsdict, PyObject **sentinel_wr);
-static PyObject *clear_locals(PyObject *meth_self, PyObject *dummyweakref);
+static PyValue clear_locals(PyObject *meth_self, PyValue arg);
 
 /* Create a weakref to the sentinel localdummy for the current thread */
 static PyObject *
 create_sentinel_wr(localobject *self)
 {
     static PyMethodDef wr_callback_def = {
-        "clear_locals", clear_locals, METH_O
+        "clear_locals", _PyCFunction_CAST(clear_locals), METH_O
     };
 
     PyThreadState *tstate = PyThreadState_Get();
@@ -1613,9 +1611,7 @@ local_dealloc(PyObject *op)
     localobject *self = localobject_CAST(op);
     /* Weakrefs must be invalidated right now, otherwise they can be used
        from code called below, which is very dangerous since Py_REFCNT(self) == 0 */
-    if (self->weakreflist != NULL) {
-        PyObject_ClearWeakRefs(op);
-    }
+    PyObject_ClearWeakRefs(op);
     PyObject_GC_UnTrack(self);
     (void)local_clear(op);
     PyTypeObject *tp = Py_TYPE(self);
@@ -1766,7 +1762,7 @@ _ldict(localobject *self, thread_module_state *state)
 }
 
 static int
-local_setattro(PyObject *op, PyObject *name, PyObject *v)
+local_setattro(PyObject *op, PyObject *name, PyValue v)
 {
     localobject *self = localobject_CAST(op);
     PyObject *module = PyType_GetModuleByDef(Py_TYPE(self), &thread_module);
@@ -1798,12 +1794,7 @@ err:
     return -1;
 }
 
-static PyObject *local_getattro(PyObject *, PyObject *);
-
-static PyMemberDef local_type_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(localobject, weakreflist), Py_READONLY},
-    {NULL},
-};
+static PyValue local_getattro(PyObject *, PyObject *);
 
 static PyType_Slot local_type_slots[] = {
     {Py_tp_dealloc, local_dealloc},
@@ -1813,7 +1804,6 @@ static PyType_Slot local_type_slots[] = {
     {Py_tp_traverse, local_traverse},
     {Py_tp_clear, local_clear},
     {Py_tp_new, local_new},
-    {Py_tp_members, local_type_members},
     {0, 0}
 };
 
@@ -1821,11 +1811,13 @@ static PyType_Spec local_type_spec = {
     .name = "_thread._local",
     .basicsize = sizeof(localobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = local_type_slots,
 };
 
-static PyObject *
+/* The attribute as a value: an inline value in the local dict is not
+   boxed. */
+static PyValue
 local_getattro(PyObject *op, PyObject *name)
 {
     localobject *self = localobject_CAST(op);
@@ -1835,47 +1827,54 @@ local_getattro(PyObject *op, PyObject *name)
 
     PyObject *ldict = _ldict(self, state);
     if (ldict == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     int r = PyObject_RichCompareBool(name, &_Py_ID(__dict__), Py_EQ);
     if (r == 1) {
-        return ldict;
+        return PyValue_FromObject(ldict);
     }
     if (r == -1) {
         Py_DECREF(ldict);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!Py_IS_TYPE(self, state->local_type)) {
         /* use generic lookup for subtypes */
-        PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+        PyValue res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
         Py_DECREF(ldict);
         return res;
     }
 
     /* Optimization: just look in dict ourselves */
-    PyObject *value;
-    if (PyDict_GetItemRef(ldict, name, &value) != 0) {
-        // found or error
+    PyValue value;
+    if (_PyDict_GetItemValue(ldict, PyValue_FromObject(name), &value) < 0) {
+        Py_DECREF(ldict);
+        return PyValue_NULL;
+    }
+    if (!PyValue_IsNull(value)) {
         Py_DECREF(ldict);
         return value;
     }
 
     /* Fall back on generic to get __class__ and __dict__ */
-    PyObject *res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
+    PyValue res = _PyObject_GenericGetAttrWithDict(op, name, ldict, 0);
     Py_DECREF(ldict);
     return res;
 }
 
 /* Called when a dummy is destroyed, indicating that the owning thread is being
  * cleared. */
-static PyObject *
-clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
+static PyValue
+clear_locals(PyObject *locals_and_key, PyValue arg)
 {
+    PyObject *dummyweakref = PyValue_Object(arg);
+    if (dummyweakref == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *localweakref = PyTuple_GetItem(locals_and_key, 0);
     localobject *self = localobject_CAST(_PyWeakref_GET_REF(localweakref));
     if (self == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 
     /* If the thread-local object is still alive and not being cleared,
@@ -1895,7 +1894,7 @@ clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
     }
 
     Py_DECREF(self);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 /* Module functions */
@@ -2359,8 +2358,8 @@ Handle uncaught Thread.run() exception.
 [clinic start generated code]*/
 
 static PyObject *
-_thread__excepthook(PyObject *module, PyObject *args)
-/*[clinic end generated code: output=cadc54a3be0e6007 input=5ae2316c400a3497]*/
+_thread__excepthook_impl(PyObject *module, PyObject *args)
+/*[clinic end generated code: output=2fe7e28146948136 input=5ae2316c400a3497]*/
 {
     thread_module_state *state = get_thread_state(module);
 
@@ -2490,8 +2489,8 @@ threading module.
 [clinic start generated code]*/
 
 static PyObject *
-_thread__make_thread_handle(PyObject *module, PyObject *identobj)
-/*[clinic end generated code: output=afa56c40a7e1c394 input=57bb20ebf5825dd1]*/
+_thread__make_thread_handle_impl(PyObject *module, PyObject *identobj)
+/*[clinic end generated code: output=9091e4c706f431e4 input=57bb20ebf5825dd1]*/
 {
     thread_module_state *state = get_thread_state(module);
     if (!PyLong_Check(identobj)) {

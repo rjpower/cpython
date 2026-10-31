@@ -1,0 +1,65 @@
+{
+  "name": "cffi",
+  "version": "2.1.1",
+  "kind": "sdist",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+    "sha256": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be"
+  },
+  "requires": [
+    "python/pycparser"
+  ],
+  "build_requires": [
+    "setuptools==84.2.1"
+  ],
+  "patches": [
+    {
+      "file": "fs-encoding.patch",
+      "sha256": "f4f5d04f40afcd3788a3862794fe9da72651b621205e020e41e7ebade95f2dc3",
+      "touches": {
+        "src/c/_cffi_backend.c": "335899c93f88c53939fa8121502fb7129f34b9b8bdd97563d33346e0e91f9964"
+      }
+    },
+    {
+      "file": "pyvalue-backend.patch",
+      "sha256": "a65f07c8faa36481b21dbc6627ecd6d90e6414beeb47991b54a0b13a65928d00",
+      "touches": {
+        "src/c/_cffi_backend.c": "335899c93f88c53939fa8121502fb7129f34b9b8bdd97563d33346e0e91f9964",
+        "src/c/call_python.c": "6000b41af46d69fb219046c4a479c2eb649ec9b81ab0dbca63506aca6276f730",
+        "src/c/cffi1_module.c": "4b1d23c1296d170fdbd50d2b495503764f7a091f06704159661d2f1e917fc9c6",
+        "src/c/commontypes.c": "a2c4c38ff13daf6b4fdfb65d84371af9a3f750af0a098cb0b64de028630ce705",
+        "src/c/ffi_obj.c": "936ab9fb4d8a755af0bc5e45afdf1784c484860ab242530f178a5c87aa925c00",
+        "src/c/minibuffer.h": "1a34875dc4f616ef6c0eb8772fb23bb0ddd1efb9e964757741143b5288c290d5"
+      }
+    },
+    {
+      "file": "pyvalue-generated.patch",
+      "sha256": "64802a65c6aa0b0dbe37b71a70eecc927402df91d5e981ad082a6b17e6d5cd12",
+      "touches": {
+        "src/cffi/recompiler.py": "4c9545d3b985cd819357ab33a76ccfac977674928737e781fd2ba22621a5f4ac",
+        "src/cffi/vengine_cpy.py": "ad1a2e610e819650085cd8d91933d45b9e2b07de76aa2de0726d7a4965d628b7"
+      }
+    },
+    {
+      "file": "tracing-collector.patch",
+      "sha256": "e7d8c9787854a05fd70b95365ee58c7435ae4924dbd503135e8594b621f9d99b",
+      "touches": {
+        "src/c/_cffi_backend.c": "335899c93f88c53939fa8121502fb7129f34b9b8bdd97563d33346e0e91f9964",
+        "src/c/cglob.c": "0f74a63de81de6fb9c93eabf639b2fa30b8c9b64a2d368221577443bec0a0757",
+        "src/c/ffi_obj.c": "936ab9fb4d8a755af0bc5e45afdf1784c484860ab242530f178a5c87aa925c00",
+        "src/c/misc_thread_common.h": "7e690d56e244b7391c74bafacea5c0dba0f1807f9240fc9276939c6f11280ee3"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "script": "tests/smoke.py"
+    },
+    {
+      "script": "tests/api.py"
+    },
+    {
+      "script": "tests/tracing.py"
+    }
+  ]
+}

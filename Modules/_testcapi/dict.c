@@ -258,40 +258,60 @@ test_dict_iteration(PyObject* self, PyObject *Py_UNUSED(ignored))
 }
 
 
-static PyObject *
-frozendict_check(PyObject *self, PyObject *obj)
+static PyValue
+frozendict_check(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyFrozenDict_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyFrozenDict_Check(obj)));
 }
 
-static PyObject *
-frozendict_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+frozendict_checkexact(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyFrozenDict_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyFrozenDict_CheckExact(obj)));
 }
 
-static PyObject *
-anydict_check(PyObject *self, PyObject *obj)
+static PyValue
+anydict_check(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyAnyDict_Check(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyAnyDict_Check(obj)));
 }
 
-static PyObject *
-anydict_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+anydict_checkexact(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromLong(PyAnyDict_CheckExact(obj));
+    return PyValue_FromResult(PyLong_FromLong(PyAnyDict_CheckExact(obj)));
 }
 
 
-static PyObject *
-frozendict_new(PyObject *self, PyObject *obj)
+static PyValue
+frozendict_new(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyFrozenDict_New(obj);
+    return PyValue_FromResult(PyFrozenDict_New(obj));
 }
 
 
@@ -306,11 +326,11 @@ static PyMethodDef test_methods[] = {
     {"dict_popstring", dict_popstring, METH_VARARGS},
     {"dict_popstring_null", dict_popstring_null, METH_VARARGS},
     {"test_dict_iteration",     test_dict_iteration,             METH_NOARGS},
-    {"frozendict_check", frozendict_check, METH_O},
-    {"frozendict_checkexact", frozendict_checkexact, METH_O},
-    {"anydict_check", anydict_check, METH_O},
-    {"anydict_checkexact", anydict_checkexact, METH_O},
-    {"frozendict_new", frozendict_new, METH_O},
+    {"frozendict_check", _PyCFunction_CAST(frozendict_check), METH_O},
+    {"frozendict_checkexact", _PyCFunction_CAST(frozendict_checkexact), METH_O},
+    {"anydict_check", _PyCFunction_CAST(anydict_check), METH_O},
+    {"anydict_checkexact", _PyCFunction_CAST(anydict_checkexact), METH_O},
+    {"frozendict_new", _PyCFunction_CAST(frozendict_new), METH_O},
     {NULL},
 };
 

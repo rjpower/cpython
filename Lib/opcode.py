@@ -14,11 +14,17 @@ import _opcode
 from _opcode import stack_effect
 
 from _opcode_metadata import (_specializations, _specialized_opmap, opmap,  # noqa: F401
-                              HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE)  # noqa: F401
+                              _ir_opmap, HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE)  # noqa: F401
+from _opcode_metadata import (_handler_flags, _handler_bases, _handler_operations,
+                              _HANDLER_SPECIALIZED)
 EXTENDED_ARG = opmap['EXTENDED_ARG']
 
-opname = ['<%r>' % (op,) for op in range(max(opmap.values()) + 1)]
-for m in (opmap, _specialized_opmap):
+# The code is register IR: a word per instruction, whose handler is an
+# opcode, a specialisation, or one of the handlers in _ir_opmap.  opname
+# names every handler.
+_ir_formats = _opcode.get_ir_formats()
+opname = ['<%r>' % (op,) for op in range(len(_ir_formats))]
+for m in (opmap, _specialized_opmap, _ir_opmap):
     for op, i in m.items():
         opname[i] = op
 
@@ -48,88 +54,3 @@ _common_constants = [builtins.AssertionError, builtins.NotImplementedError,
 _nb_ops = _opcode.get_nb_ops()
 
 hascompare = [opmap["COMPARE_OP"]]
-
-_cache_format = frozendict(
-    LOAD_GLOBAL=frozendict(
-        counter=1,
-        index=1,
-        module_keys_version=1,
-        builtin_keys_version=1,
-    ),
-    BINARY_OP=frozendict(
-        counter=1,
-        descr=4,
-    ),
-    UNPACK_SEQUENCE=frozendict(
-        counter=1,
-    ),
-    COMPARE_OP=frozendict(
-        counter=1,
-    ),
-    CONTAINS_OP=frozendict(
-        counter=1,
-    ),
-    FOR_ITER=frozendict(
-        counter=1,
-    ),
-    GET_ITER=frozendict(
-        counter=1,
-    ),
-    LOAD_SUPER_ATTR=frozendict(
-        counter=1,
-    ),
-    LOAD_ATTR=frozendict(
-        counter=1,
-        version=2,
-        keys_version=2,
-        descr=4,
-    ),
-    STORE_ATTR=frozendict(
-        counter=1,
-        version=2,
-        index=1,
-    ),
-    CALL=frozendict(
-        counter=1,
-        func_version=2,
-    ),
-    CALL_KW=frozendict(
-        counter=1,
-        func_version=2,
-    ),
-    CALL_FUNCTION_EX=frozendict(
-        counter=1,
-    ),
-    STORE_SUBSCR=frozendict(
-        counter=1,
-    ),
-    SEND=frozendict(
-        counter=1,
-    ),
-    JUMP_BACKWARD=frozendict(
-        counter=1,
-    ),
-    TO_BOOL=frozendict(
-        counter=1,
-        version=2,
-    ),
-    POP_JUMP_IF_TRUE=frozendict(
-        counter=1,
-    ),
-    POP_JUMP_IF_FALSE=frozendict(
-        counter=1,
-    ),
-    POP_JUMP_IF_NONE=frozendict(
-        counter=1,
-    ),
-    POP_JUMP_IF_NOT_NONE=frozendict(
-        counter=1,
-    ),
-    RESUME=frozendict(
-        counter=1,
-    ),
-)
-
-_inline_cache_entries = frozendict({
-    name : sum(value.values()) for (name, value) in _cache_format.items()
-})

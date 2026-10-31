@@ -24,6 +24,27 @@
         return PyLong_FromSsize_t(_ret);    \
     } while (0)
 
+/* RETURN_INT() and RETURN_SIZE() for a function that returns PyValue. */
+#define RETURN_INT_VALUE(value) do {        \
+        int _ret = (value);                 \
+        if (_ret == -1) {                   \
+            assert(PyErr_Occurred());       \
+            return PyValue_NULL;            \
+        }                                   \
+        assert(!PyErr_Occurred());          \
+        return PyValue_FromResult(PyLong_FromLong(_ret)); \
+    } while (0)
+
+#define RETURN_SIZE_VALUE(value) do {       \
+        Py_ssize_t _ret = (value);          \
+        if (_ret == -1) {                   \
+            assert(PyErr_Occurred());       \
+            return PyValue_NULL;            \
+        }                                   \
+        assert(!PyErr_Occurred());          \
+        return PyValue_FromResult(PyLong_FromSsize_t(_ret)); \
+    } while (0)
+
 /* Marker to check that pointer value was set. */
 static const char uninitialized[] = "uninitialized";
 #define UNINITIALIZED_PTR ((void *)uninitialized)

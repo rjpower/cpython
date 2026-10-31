@@ -3,10 +3,8 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -72,18 +70,26 @@ PyDoc_STRVAR(_hashlib_HASH_update__doc__,
 "Update this hash object\'s state with the provided string.");
 
 #define _HASHLIB_HASH_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)_hashlib_HASH_update, METH_O, _hashlib_HASH_update__doc__},
+    {"update", _PyCFunction_CAST(_hashlib_HASH_update), METH_O, _hashlib_HASH_update__doc__},
 
 static PyObject *
 _hashlib_HASH_update_impl(HASHobject *self, PyObject *obj);
 
-static PyObject *
-_hashlib_HASH_update(PyObject *self, PyObject *obj)
+static PyValue
+_hashlib_HASH_update(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
 
-    return_value = _hashlib_HASH_update_impl((HASHobject *)self, obj);
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _hashlib_HASH_update_impl((HASHobject *)self, obj);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -101,15 +107,14 @@ PyDoc_STRVAR(_hashlib_HASHXOF_digest__doc__,
 static PyObject *
 _hashlib_HASHXOF_digest_impl(HASHobject *self, Py_ssize_t length);
 
-static PyObject *
-_hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASHXOF_digest(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -132,8 +137,9 @@ _hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t length;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -142,22 +148,22 @@ _hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
-        if (length < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "length cannot be negative");
-            goto exit;
-        }
+            if (length < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "length cannot be negative");
+                goto exit;
+            }
     }
-    return_value = _hashlib_HASHXOF_digest_impl((HASHobject *)self, length);
+    _return_value = _hashlib_HASHXOF_digest_impl((HASHobject *)self, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -179,15 +185,14 @@ PyDoc_STRVAR(_hashlib_HASHXOF_hexdigest__doc__,
 static PyObject *
 _hashlib_HASHXOF_hexdigest_impl(HASHobject *self, Py_ssize_t length);
 
-static PyObject *
-_hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASHXOF_hexdigest(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -210,8 +215,9 @@ _hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t length;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -220,22 +226,22 @@ _hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nar
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
-        if (length < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "length cannot be negative");
-            goto exit;
-        }
+            if (length < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "length cannot be negative");
+                goto exit;
+            }
     }
-    return_value = _hashlib_HASHXOF_hexdigest_impl((HASHobject *)self, length);
+    _return_value = _hashlib_HASHXOF_hexdigest_impl((HASHobject *)self, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -261,15 +267,14 @@ static PyObject *
 _hashlib_HASH_new_impl(PyObject *module, const char *name, PyObject *data,
                        int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_HASH_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASH_new(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -292,31 +297,41 @@ _hashlib_HASH_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     const char *name;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("new", "argument 'name'", "str", args[0]);
-        goto exit;
-    }
-    name = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("new", "argument 'name'", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        data = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        data = PyValue_Object(args[1]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -325,8 +340,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[2]) {
-        usedforsecurity = PyObject_IsTrue(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        usedforsecurity = PyObject_IsTrueValue(args[2]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -334,9 +349,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[3];
+    string = PyValue_Object(args[3]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_HASH_new_impl(module, name, data, usedforsecurity, string);
+    _return_value = _hashlib_HASH_new_impl(module, name, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -355,15 +374,14 @@ static PyObject *
 _hashlib_openssl_md5_impl(PyObject *module, PyObject *data,
                           int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_md5(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -386,11 +404,12 @@ _hashlib_openssl_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -400,8 +419,11 @@ _hashlib_openssl_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -410,8 +432,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -419,9 +441,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_md5_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_md5_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -440,15 +466,14 @@ static PyObject *
 _hashlib_openssl_sha1_impl(PyObject *module, PyObject *data,
                            int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -471,11 +496,12 @@ _hashlib_openssl_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -485,8 +511,11 @@ _hashlib_openssl_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -495,8 +524,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -504,9 +533,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha1_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha1_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -526,15 +559,14 @@ static PyObject *
 _hashlib_openssl_sha224_impl(PyObject *module, PyObject *data,
                              int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha224(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha224(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -557,11 +589,12 @@ _hashlib_openssl_sha224(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -571,8 +604,11 @@ _hashlib_openssl_sha224(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -581,8 +617,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -590,9 +626,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha224_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha224_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -612,15 +652,14 @@ static PyObject *
 _hashlib_openssl_sha256_impl(PyObject *module, PyObject *data,
                              int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha256(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -643,11 +682,12 @@ _hashlib_openssl_sha256(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -657,8 +697,11 @@ _hashlib_openssl_sha256(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -667,8 +710,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -676,9 +719,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha256_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha256_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -698,15 +745,14 @@ static PyObject *
 _hashlib_openssl_sha384_impl(PyObject *module, PyObject *data,
                              int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha384(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha384(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -729,11 +775,12 @@ _hashlib_openssl_sha384(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -743,8 +790,11 @@ _hashlib_openssl_sha384(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -753,8 +803,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -762,9 +812,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha384_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha384_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -784,15 +838,14 @@ static PyObject *
 _hashlib_openssl_sha512_impl(PyObject *module, PyObject *data,
                              int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha512(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha512(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -815,11 +868,12 @@ _hashlib_openssl_sha512(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -829,8 +883,11 @@ _hashlib_openssl_sha512(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -839,8 +896,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -848,9 +905,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha512_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha512_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -872,15 +933,14 @@ static PyObject *
 _hashlib_openssl_sha3_224_impl(PyObject *module, PyObject *data,
                                int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_224(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -903,11 +963,12 @@ _hashlib_openssl_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -917,8 +978,11 @@ _hashlib_openssl_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -927,8 +991,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -936,9 +1000,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_224_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha3_224_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -962,15 +1030,14 @@ static PyObject *
 _hashlib_openssl_sha3_256_impl(PyObject *module, PyObject *data,
                                int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_256(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -993,11 +1060,12 @@ _hashlib_openssl_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1007,8 +1075,11 @@ _hashlib_openssl_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1017,8 +1088,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -1026,9 +1097,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_256_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha3_256_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1052,15 +1127,14 @@ static PyObject *
 _hashlib_openssl_sha3_384_impl(PyObject *module, PyObject *data,
                                int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_384(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1083,11 +1157,12 @@ _hashlib_openssl_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1097,8 +1172,11 @@ _hashlib_openssl_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1107,8 +1185,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -1116,9 +1194,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_384_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha3_384_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1142,15 +1224,14 @@ static PyObject *
 _hashlib_openssl_sha3_512_impl(PyObject *module, PyObject *data,
                                int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_512(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1173,11 +1254,12 @@ _hashlib_openssl_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1187,8 +1269,11 @@ _hashlib_openssl_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1197,8 +1282,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -1206,9 +1291,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_512_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_sha3_512_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1232,15 +1321,14 @@ static PyObject *
 _hashlib_openssl_shake_128_impl(PyObject *module, PyObject *data,
                                 int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_shake_128(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_shake_128(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1263,11 +1351,12 @@ _hashlib_openssl_shake_128(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1277,8 +1366,11 @@ _hashlib_openssl_shake_128(PyObject *module, PyObject *const *args, Py_ssize_t n
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1287,8 +1379,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -1296,9 +1388,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_shake_128_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_shake_128_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1322,15 +1418,14 @@ static PyObject *
 _hashlib_openssl_shake_256_impl(PyObject *module, PyObject *data,
                                 int usedforsecurity, PyObject *string);
 
-static PyObject *
-_hashlib_openssl_shake_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_shake_256(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1353,11 +1448,12 @@ _hashlib_openssl_shake_256(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1367,8 +1463,11 @@ _hashlib_openssl_shake_256(PyObject *module, PyObject *const *args, Py_ssize_t n
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1377,8 +1476,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -1386,9 +1485,13 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = args[2];
+    string = PyValue_Object(args[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _hashlib_openssl_shake_256_impl(module, data, usedforsecurity, string);
+    _return_value = _hashlib_openssl_shake_256_impl(module, data, usedforsecurity, string);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1411,15 +1514,14 @@ pbkdf2_hmac_impl(PyObject *module, const char *hash_name,
                  Py_buffer *password, Py_buffer *salt, long iterations,
                  PyObject *dklen_obj);
 
-static PyObject *
-pbkdf2_hmac(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pbkdf2_hmac(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1442,43 +1544,66 @@ pbkdf2_hmac(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 4;
     const char *hash_name;
     Py_buffer password = {NULL, NULL};
     Py_buffer salt = {NULL, NULL};
     long iterations;
     PyObject *dklen_obj = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 4, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("pbkdf2_hmac", "argument 'hash_name'", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("pbkdf2_hmac", "argument 'hash_name'", "str", _arg);
+            goto exit;
+        }
+        hash_name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (hash_name == NULL) {
+            goto exit;
+        }
     }
-    hash_name = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (hash_name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &password, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[1], &password, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[2], &salt, PyBUF_SIMPLE) != 0) {
-        goto exit;
-    }
-    iterations = PyLong_AsLong(args[3]);
+    iterations = PyLong_AsLongValue(args[3]);
     if (iterations == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    dklen_obj = args[4];
+    dklen_obj = PyValue_Object(args[4]);
+    if (dklen_obj == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = pbkdf2_hmac_impl(module, hash_name, &password, &salt, iterations, dklen_obj);
+    _return_value = pbkdf2_hmac_impl(module, hash_name, &password, &salt, iterations, dklen_obj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for password */
@@ -1507,15 +1632,14 @@ _hashlib_scrypt_impl(PyObject *module, Py_buffer *password, Py_buffer *salt,
                      unsigned long n, unsigned long r, unsigned long p,
                      long maxmem, long dklen);
 
-static PyObject *
-_hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_scrypt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 7
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1538,7 +1662,7 @@ _hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[7];
+    PyValue argsbuf[7];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 5;
     Py_buffer password = {NULL, NULL};
     Py_buffer salt = {NULL, NULL};
@@ -1547,32 +1671,63 @@ _hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     unsigned long p;
     long maxmem = 0;
     long dklen = 64;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 4, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &password, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &password, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[1], &salt, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    if (!_PyLong_UnsignedLong_Converter(args[2], &n)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLong_Converter(_arg, &n)) {
+            goto exit;
+        }
     }
-    if (!_PyLong_UnsignedLong_Converter(args[3], &r)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[3]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLong_Converter(_arg, &r)) {
+            goto exit;
+        }
     }
-    if (!_PyLong_UnsignedLong_Converter(args[4], &p)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[4]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedLong_Converter(_arg, &p)) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[5]) {
-        maxmem = PyLong_AsLong(args[5]);
+    if (!PyValue_IsNull(args[5])) {
+        maxmem = PyLong_AsLongValue(args[5]);
         if (maxmem == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1580,12 +1735,13 @@ _hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
             goto skip_optional_kwonly;
         }
     }
-    dklen = PyLong_AsLong(args[6]);
+    dklen = PyLong_AsLongValue(args[6]);
     if (dklen == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _hashlib_scrypt_impl(module, &password, &salt, n, r, p, maxmem, dklen);
+    _return_value = _hashlib_scrypt_impl(module, &password, &salt, n, r, p, maxmem, dklen);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for password */
@@ -1613,15 +1769,14 @@ static PyObject *
 _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
                               Py_buffer *msg, PyObject *digest);
 
-static PyObject *
-_hashlib_hmac_singleshot(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_hmac_singleshot(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1644,24 +1799,41 @@ _hashlib_hmac_singleshot(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_buffer key = {NULL, NULL};
     Py_buffer msg = {NULL, NULL};
     PyObject *digest;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &key, PyBUF_SIMPLE) != 0) {
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &key, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
+    }
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &msg, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
+    }
+    digest = PyValue_Object(args[2]);
+    if (digest == NULL) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &msg, PyBUF_SIMPLE) != 0) {
-        goto exit;
-    }
-    digest = args[2];
-    return_value = _hashlib_hmac_singleshot_impl(module, &key, &msg, digest);
+    _return_value = _hashlib_hmac_singleshot_impl(module, &key, &msg, digest);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for key */
@@ -1689,15 +1861,14 @@ static PyObject *
 _hashlib_hmac_new_impl(PyObject *module, Py_buffer *key, PyObject *msg_obj,
                        PyObject *digestmod);
 
-static PyObject *
-_hashlib_hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_hmac_new(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1720,32 +1891,46 @@ _hashlib_hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer key = {NULL, NULL};
     PyObject *msg_obj = NULL;
     PyObject *digestmod = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &key, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &key, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        msg_obj = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        msg_obj = PyValue_Object(args[1]);
+        if (msg_obj == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    digestmod = args[2];
+    digestmod = PyValue_Object(args[2]);
+    if (digestmod == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _hashlib_hmac_new_impl(module, &key, msg_obj, digestmod);
+    _return_value = _hashlib_hmac_new_impl(module, &key, msg_obj, digestmod);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for key */
@@ -1786,15 +1971,14 @@ PyDoc_STRVAR(_hashlib_HMAC_update__doc__,
 static PyObject *
 _hashlib_HMAC_update_impl(HMACobject *self, PyObject *msg);
 
-static PyObject *
-_hashlib_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HMAC_update(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1817,16 +2001,21 @@ _hashlib_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *msg;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    msg = args[0];
-    return_value = _hashlib_HMAC_update_impl((HMACobject *)self, msg);
+    msg = PyValue_Object(args[0]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hashlib_HMAC_update_impl((HMACobject *)self, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1928,19 +2117,27 @@ PyDoc_STRVAR(_hashlib_compare_digest__doc__,
 static PyObject *
 _hashlib_compare_digest_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyObject *
-_hashlib_compare_digest(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hashlib_compare_digest(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *a;
     PyObject *b;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compare_digest", nargs, 2, 2)) {
         goto exit;
     }
-    a = args[0];
-    b = args[1];
-    return_value = _hashlib_compare_digest_impl(module, a, b);
+    a = PyValue_Object(args[0]);
+    if (a == NULL) {
+        goto exit;
+    }
+    b = PyValue_Object(args[1]);
+    if (b == NULL) {
+        goto exit;
+    }
+    _return_value = _hashlib_compare_digest_impl(module, a, b);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1977,4 +2174,4 @@ exit:
 #ifndef _HASHLIB_OPENSSL_SHAKE_256_METHODDEF
     #define _HASHLIB_OPENSSL_SHAKE_256_METHODDEF
 #endif /* !defined(_HASHLIB_OPENSSL_SHAKE_256_METHODDEF) */
-/*[clinic end generated code: output=608e8ac9483c9173 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=11dee627bf1c31fa input=a9049054013a1b77]*/

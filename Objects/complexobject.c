@@ -8,7 +8,6 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_complexobject.h" // _PyComplex_FormatAdvancedWriter()
 #include "pycore_floatobject.h"   // _Py_convert_int_to_double()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_pymath.h"        // _Py_ADJUST_ERANGE2()
@@ -424,16 +423,12 @@ complex_subtype_from_c_complex(PyTypeObject *type, Py_complex cval)
 PyObject *
 PyComplex_FromCComplex(Py_complex cval)
 {
-    PyComplexObject *op = _Py_FREELIST_POP(PyComplexObject, complexes);
-
+    /* Inline PyObject_New */
+    PyComplexObject *op = PyObject_Malloc(sizeof(PyComplexObject));
     if (op == NULL) {
-        /* Inline PyObject_New */
-        op = PyObject_Malloc(sizeof(PyComplexObject));
-        if (op == NULL) {
-            return PyErr_NoMemory();
-        }
-        _PyObject_Init((PyObject*)op, &PyComplex_Type);
+        return PyErr_NoMemory();
     }
+    _PyObject_Init((PyObject*)op, &PyComplex_Type);
     op->cval = cval;
     return (PyObject *) op;
 }
@@ -442,12 +437,7 @@ static void
 complex_dealloc(PyObject *op)
 {
     assert(PyComplex_Check(op));
-    if (PyComplex_CheckExact(op)) {
-        _Py_FREELIST_FREE(complexes, op, PyObject_Free);
-    }
-    else {
-        Py_TYPE(op)->tp_free(op);
-    }
+    Py_TYPE(op)->tp_free(op);
 }
 
 static PyObject *
@@ -852,14 +842,12 @@ complex_richcompare(PyObject *v, PyObject *w, int op)
          * comparison when possible.
          */
         if (i.imag == 0.0) {
-            PyObject *j, *sub_res;
-            j = PyFloat_FromDouble(i.real);
-            if (j == NULL)
+            PyValue j = PyValue_FromDouble(i.real);
+            if (PyValue_IsNull(j))
                 return NULL;
 
-            sub_res = PyObject_RichCompare(j, w, op);
-            Py_DECREF(j);
-            return sub_res;
+            return PyValue_Object(
+                PyObject_RichCompareValue(j, PyValue_FromObject(w), op));
         }
         else {
             equal = 0;
@@ -1291,14 +1279,14 @@ complex_new_impl(PyTypeObject *type, PyObject *r, PyObject *i)
         /* The "real" part really is entirely real, and contributes
            nothing in the imaginary direction.
            Just treat it as a double. */
-        tmp = PyNumber_Float(r);
+        PyValue real = PyNumber_FloatValue(PyValue_FromObject(r));
         assert(!own_r);
-        if (tmp == NULL)
+        if (PyValue_IsNull(real))
             return NULL;
-        assert(PyFloat_Check(tmp));
-        cr.real = PyFloat_AsDouble(tmp);
+        assert(PyValue_Type(real) == &PyFloat_Type
+               || PyFloat_Check(PyValue_ObjectBorrow(real)));
+        cr.real = PyFloat_AsDoubleValue(real);
         cr.imag = 0.0;
-        Py_DECREF(tmp);
     }
     if (i == NULL) {
         ci.real = cr.imag;
@@ -1315,11 +1303,10 @@ complex_new_impl(PyTypeObject *type, PyObject *r, PyObject *i)
         /* The "imag" part really is entirely imaginary, and
            contributes nothing in the real direction.
            Just treat it as a double. */
-        tmp = PyNumber_Float(i);
-        if (tmp == NULL)
+        PyValue imag = PyNumber_FloatValue(PyValue_FromObject(i));
+        if (PyValue_IsNull(imag))
             return NULL;
-        ci.real = PyFloat_AsDouble(tmp);
-        Py_DECREF(tmp);
+        ci.real = PyFloat_AsDoubleValue(imag);
     }
     /*  If the input was in canonical form, then the "real" and "imag"
         parts are real numbers, so that ci.imag and cr.imag are zero.

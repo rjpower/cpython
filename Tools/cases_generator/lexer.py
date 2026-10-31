@@ -230,10 +230,15 @@ annotations = {
     "register",
     "replaced",
     "pure",
-    "replicate",
     "tier1",
-    "tier2",
     "no_save_ip",
+    "inline_ok",
+    "window",
+    "returns",
+    "stores_early",
+    "ir_only",
+    "pristine",
+    "static_exec",
 }
 
 __all__ = []

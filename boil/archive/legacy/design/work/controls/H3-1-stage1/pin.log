@@ -1,0 +1,59 @@
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2173434æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+
+Using random seed: 4230129710
+0:00:00 load avg: 2.55 mem:   37.8 MiB Run 1 test sequentially in a single process
+0:00:00 load avg: 2.55 mem:   38.0 MiB [1/1] test_generated_cases
+test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) ... 
+  test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) (ir_only=False) ... ERROR
+  test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) (ir_only=True) ... ERROR
+
+======================================================================
+ERROR: test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) (ir_only=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1378, in test_absent_instrumented_pin
+    domain = ir_generator.build_handler_domain(analysis)
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Tools/cases_generator/ir_generator.py", line 675, in build_handler_domain
+    return HandlerDomain(analysis, opmap, handlers, bases, kinds,
+                         have_arg, min_instrumented, first, first + len(derived))
+  File "<string>", line 12, in __init__
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Tools/cases_generator/ir_generator.py", line 535, in __post_init__
+    raise ValueError("handler ID outside domain")
+ValueError: handler ID outside domain
+
+======================================================================
+ERROR: test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) (ir_only=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1378, in test_absent_instrumented_pin
+    domain = ir_generator.build_handler_domain(analysis)
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Tools/cases_generator/ir_generator.py", line 675, in build_handler_domain
+    return HandlerDomain(analysis, opmap, handlers, bases, kinds,
+                         have_arg, min_instrumented, first, first + len(derived))
+  File "<string>", line 12, in __init__
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Tools/cases_generator/ir_generator.py", line 533, in __post_init__
+    raise ValueError("duplicate handler ID")
+ValueError: duplicate handler ID
+
+----------------------------------------------------------------------
+Ran 1 test in 0.004s
+
+FAILED (errors=2)
+test test_generated_cases failed
+0:00:00 load avg: 2.55 mem:   40.8 MiB [1/1/1] test_generated_cases failed (2 errors)
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 207 ms
+Total tests: run=1 (filtered)
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

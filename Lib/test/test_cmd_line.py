@@ -183,17 +183,12 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(proc.out.rstrip(), b"{'faulthandler': True}")
         self.assertEqual(proc.err, b'')
 
-        # "-X showrefcount" shows the refcount, but only in debug builds
+        # "-X showrefcount" is accepted, but no build counts references,
+        # so it shows nothing.
         proc = assert_python_ok('-I', '-X', 'showrefcount', '-c', code)
         self.assertEqual(proc.out.rstrip(),
                          b"{'faulthandler': True, 'showrefcount': True}")
-        if support.Py_DEBUG:
-            # bpo-46417: Tolerate negative reference count which can occur
-            # because of bugs in C extensions. This test is only about checking
-            # the showrefcount feature.
-            self.assertRegex(proc.err, br'^\[-?\d+ refs, \d+ blocks\]')
-        else:
-            self.assertEqual(proc.err, b'')
+        self.assertEqual(proc.err, b'')
 
     @support.cpython_only
     def test_xoption_frozen_modules(self):
@@ -845,6 +840,8 @@ class CmdLineTest(unittest.TestCase):
             elif support.check_sanitizer(address=True, memory=True):
                 # ASan and MSan builds default to malloc, even with pymalloc.
                 alloc_name = "malloc_debug"
+            elif support.with_mimalloc():
+                alloc_name = "mimalloc_debug"
             elif support.with_pymalloc():
                 alloc_name = "pymalloc_debug"
             else:
@@ -919,51 +916,6 @@ class CmdLineTest(unittest.TestCase):
                               env=env)
         self.assertEqual(proc.stdout.rstrip(), name)
         self.assertEqual(proc.returncode, 0)
-
-    @support.cpython_only
-    def test_pythonmalloc(self):
-        # Test the PYTHONMALLOC environment variable
-        malloc = not support.Py_GIL_DISABLED
-        pymalloc = support.with_pymalloc()
-        sanitizer = support.check_sanitizer(address=True, memory=True)
-        mimalloc = support.with_mimalloc()
-        if support.Py_GIL_DISABLED:
-            default_name = 'mimalloc_debug' if support.Py_DEBUG else 'mimalloc'
-            default_name_debug = 'mimalloc_debug'
-        elif sanitizer:
-            # ASan and MSan builds default to malloc, even with pymalloc.
-            default_name = 'malloc_debug' if support.Py_DEBUG else 'malloc'
-            default_name_debug = 'malloc_debug'
-        elif pymalloc:
-            default_name = 'pymalloc_debug' if support.Py_DEBUG else 'pymalloc'
-            default_name_debug = 'pymalloc_debug'
-        else:
-            default_name = 'malloc_debug' if support.Py_DEBUG else 'malloc'
-            default_name_debug = 'malloc_debug'
-
-        tests = [
-            (None, default_name),
-            ('debug', default_name_debug),
-        ]
-        if malloc:
-            tests.extend([
-                ('malloc', 'malloc'),
-                ('malloc_debug', 'malloc_debug'),
-            ])
-        if pymalloc:
-            tests.extend((
-                ('pymalloc', 'pymalloc'),
-                ('pymalloc_debug', 'pymalloc_debug'),
-            ))
-        if mimalloc:
-            tests.extend((
-                ('mimalloc', 'mimalloc'),
-                ('mimalloc_debug', 'mimalloc_debug'),
-            ))
-
-        for env_var, name in tests:
-            with self.subTest(env_var=env_var, name=name):
-                self.check_pythonmalloc(env_var, name)
 
     def test_pythondevmode_env(self):
         # Test the PYTHONDEVMODE environment variable

@@ -1,11 +1,3 @@
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifdef Py_GIL_DISABLED
-#  define Py_TARGET_ABI3T 0x030f0000
-#else
-   // Need limited C API version 3.13 for Py_GetConstant()
-#  define Py_LIMITED_API 0x030d0000
-#endif
-
 #include "parts.h"
 #include "util.h"
 
@@ -207,41 +199,6 @@ test_py_setref(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 
 
-#define TEST_REFCOUNT() \
-    do { \
-        PyObject *obj = PyList_New(0); \
-        if (obj == NULL) { \
-            return NULL; \
-        } \
-        assert(Py_REFCNT(obj) == 1); \
-        \
-        /* test Py_NewRef() */ \
-        PyObject *ref = Py_NewRef(obj); \
-        assert(ref == obj); \
-        assert(Py_REFCNT(obj) == 2); \
-        Py_DECREF(ref); \
-        \
-        /* test Py_XNewRef() */ \
-        PyObject *xref = Py_XNewRef(obj); \
-        assert(xref == obj); \
-        assert(Py_REFCNT(obj) == 2); \
-        Py_DECREF(xref); \
-        \
-        assert(Py_XNewRef(NULL) == NULL); \
-        \
-        Py_DECREF(obj); \
-        Py_RETURN_NONE; \
-    } while (0)
-
-
-// Test Py_NewRef() and Py_XNewRef() macros
-static PyObject*
-test_refcount_macros(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    TEST_REFCOUNT();
-}
-
-
 // Test Py_MIN(), Py_MAX() and Py_ABS() macros.
 // On GCC/clang, they are implemented as a statement expression to only
 // evaluate each argument only once.
@@ -297,17 +254,6 @@ test_min_max_abs_macros(PyObject *self, PyObject *Py_UNUSED(ignored))
 
     Py_RETURN_NONE;
 }
-
-#undef Py_NewRef
-#undef Py_XNewRef
-
-// Test Py_NewRef() and Py_XNewRef() functions, after undefining macros.
-static PyObject*
-test_refcount_funcs(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    TEST_REFCOUNT();
-}
-
 
 // Test Py_Is() function
 #define TEST_PY_IS() \
@@ -370,8 +316,6 @@ static PyMethodDef test_methods[] = {
     {"test_incref_decref_API",  test_incref_decref_API,          METH_NOARGS},
     {"test_py_clear", test_py_clear, METH_NOARGS},
     {"test_py_setref", test_py_setref, METH_NOARGS},
-    {"test_refcount_macros", test_refcount_macros, METH_NOARGS},
-    {"test_refcount_funcs", test_refcount_funcs, METH_NOARGS},
     {"test_min_max_abs_macros", test_min_max_abs_macros, METH_NOARGS},
     {"test_py_is_macros", test_py_is_macros, METH_NOARGS},
     {"test_py_is_funcs", test_py_is_funcs, METH_NOARGS},

@@ -1764,7 +1764,11 @@ Special writable attributes
      - Set this attribute to :const:`True` to allow per-opcode events to be
        requested. Note that this may lead to
        undefined interpreter behaviour if exceptions raised by the trace
-       function escape to the function being traced.
+       function escape to the function being traced.  An instruction reads
+       the local variables it names when it executes, so a trace function
+       that rebinds a local through :attr:`~frame.f_locals` at an opcode
+       event within an expression changes the value that the rest of the
+       expression uses.
 
    * - .. attribute:: frame.f_lineno
      - The current line number of the frame -- writing to this

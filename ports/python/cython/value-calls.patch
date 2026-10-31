@@ -1,0 +1,1149 @@
+diff --git a/Cython/Compiler/Code.py b/Cython/Compiler/Code.py
+index 7a00740..0789f81 100644
+--- a/Cython/Compiler/Code.py
++++ b/Cython/Compiler/Code.py
+@@ -3222,14 +3222,24 @@ class CCodeWriter:
+         func_cname = entry.func_cname
+         if entry.is_special:
+             method_flags = entry.signature.method_flags() or []
+-            from .TypeSlots import method_noargs
+-            if method_noargs in method_flags:
++            from .TypeSlots import method_noargs, method_onearg
++            if method_onearg in method_flags:
++                # A METH_O function takes and returns a value; the special
++                # method's wrapper fills a slot and takes objects.
++                func_cname = Naming.method_wrapper_prefix + func_cname
++                self.putln("static PyValue %s(PyObject *self, PyValue arg) {" % func_cname)
++                self.putln("PyObject *o = PyValue_Object(arg);")
++                self.putln("if (unlikely(!o)) return PyValue_NULL;")
++                self.putln("return PyValue_FromResult(%s(self, o));" % entry.func_cname)
++                self.putln("}")
++            elif method_noargs in method_flags:
+                 # Special NOARGS methods really take no arguments besides 'self', but PyCFunction expects one.
+                 func_cname = Naming.method_wrapper_prefix + func_cname
+                 self.putln("static PyObject *%s(PyObject *self, CYTHON_UNUSED PyObject *arg) {" % func_cname)
+                 func_call = "%s(self)" % entry.func_cname
+                 if entry.name == "__next__":
+-                    self.putln("PyObject *res = %s;" % func_call)
++                    # tp_iternext returns a value.
++                    self.putln("PyObject *res = PyValue_Object(%s);" % func_call)
+                     # tp_iternext can return NULL without an exception
+                     self.putln("if (!res && !PyErr_Occurred()) { PyErr_SetNone(PyExc_StopIteration); }")
+                     self.putln("return res;")
+diff --git a/Cython/Compiler/ExprNodes.py b/Cython/Compiler/ExprNodes.py
+index 985e48a..06c32a5 100644
+--- a/Cython/Compiler/ExprNodes.py
++++ b/Cython/Compiler/ExprNodes.py
+@@ -3174,8 +3174,9 @@ class IteratorNode(ScopedExprNode):
+ 
+     gil_message = "Iterating over Python object"
+ 
++    # tp_iternext returns a value.
+     _func_iternext_type = PyrexTypes.CPtrType(PyrexTypes.CFuncType(
+-        PyrexTypes.py_object_type, [
++        PyrexTypes.c_pyvalue_type, [
+             PyrexTypes.CFuncTypeArg("it", PyrexTypes.py_object_type, None),
+             ]))
+ 
+@@ -3271,8 +3272,7 @@ class IteratorNode(ScopedExprNode):
+             # makes it visible to the C compiler that the pointer really isn't NULL, so that
+             # it can distinguish between the special cases and the generic case.
+             code.put(
+-                f"{self.iter_func_ptr} = (CYTHON_COMPILING_IN_LIMITED_API) ? "
+-                f"PyIter_Next : __Pyx_PyObject_GetIterNextFunc({self.py_result()}); "
++                f"{self.iter_func_ptr} = __Pyx_PyObject_GetIterNextFunc({self.py_result()}); "
+             )
+             code.putln(code.error_goto_if_null(self.iter_func_ptr, self.pos))
+         if self.may_be_a_sequence:
+@@ -3349,7 +3349,7 @@ class IteratorNode(ScopedExprNode):
+         code.globalstate.use_utility_code(
+             UtilityCode.load_cached("GivenExceptionMatches", "Exceptions.c"))
+         code.putln("{")
+-        code.putln(f"{result_name} = {self.iter_func_ptr}({self.py_result()});")
++        code.putln(f"{result_name} = PyValue_Object({self.iter_func_ptr}({self.py_result()}));")
+         code.putln("if (unlikely(!%s)) {" % result_name)
+         code.putln("PyObject* exc_type = PyErr_Occurred();")
+         code.putln("if (exc_type) {")
+@@ -8897,8 +8897,9 @@ class SequenceNode(ExprNode):
+             item.release(code)
+         rhs.free_temps(code)
+ 
++    # tp_iternext returns a value.
+     _func_iternext_type = PyrexTypes.CPtrType(PyrexTypes.CFuncType(
+-        PyrexTypes.py_object_type, [
++        PyrexTypes.c_pyvalue_type, [
+             PyrexTypes.CFuncTypeArg("it", PyrexTypes.py_object_type, None),
+             ]))
+ 
+@@ -9049,12 +9050,11 @@ class SequenceNode(ExprNode):
+ 
+         iternext_func = code.funcstate.allocate_temp(self._func_iternext_type, manage_ref=False)
+         code.putln(
+-            f"{iternext_func} = (CYTHON_COMPILING_IN_LIMITED_API) ? "
+-            f"PyIter_Next : __Pyx_PyObject_GetIterNextFunc({iterator_temp});"
++            f"{iternext_func} = __Pyx_PyObject_GetIterNextFunc({iterator_temp});"
+         )
+ 
+         unpacking_error_label = code.new_label('unpacking_failed')
+-        unpack_code = "%s(%s)" % (iternext_func, iterator_temp)
++        unpack_code = "PyValue_Object(%s(%s))" % (iternext_func, iterator_temp)
+         if use_loop:
+             code.putln("for (index=0; index < %s; index++) {" % len(unpacked_items))
+             code.put("PyObject* item = %s; if (unlikely(!item)) " % unpack_code)
+diff --git a/Cython/Compiler/Naming.py b/Cython/Compiler/Naming.py
+index 8e8b391..64ef5bc 100644
+--- a/Cython/Compiler/Naming.py
++++ b/Cython/Compiler/Naming.py
+@@ -82,6 +82,7 @@ carray_literal_prefix = pyrex_prefix + "literalcarray_"
+ ctuple_type_prefix = pyrex_prefix + "ctuple_"
+ args_cname       = pyrex_prefix + "args"
+ nargs_cname      = pyrex_prefix + "nargs"
++value_arg_cname  = pyrex_prefix + "arg_value"
+ kwvalues_cname   = pyrex_prefix + "kwvalues"
+ callargs_cname   = pyrex_prefix + "callargs"
+ generator_cname  = pyrex_prefix + "generator"
+diff --git a/Cython/Compiler/Nodes.py b/Cython/Compiler/Nodes.py
+index ad33575..5495502 100644
+--- a/Cython/Compiler/Nodes.py
++++ b/Cython/Compiler/Nodes.py
+@@ -3928,7 +3928,7 @@ class DefNodeWrapper(FuncDefNode):
+             code.put_label(code.error_label)
+             for cname, type in code.funcstate.all_managed_temps():
+                 code.put_xdecref(cname, type)
+-            err_val = self.error_value()
++            err_val = self.signature.error_value
+             if err_val is not None:
+                 code.putln("%s = %s;" % (Naming.retval_cname, err_val))
+ 
+@@ -3960,7 +3960,9 @@ class DefNodeWrapper(FuncDefNode):
+                     code.put_var_decref(arg.entry)
+ 
+         code.put_finish_refcount_context()
+-        if not self.return_type.is_void:
++        if self.signature.value_abi(self.target.entry):
++            code.putln("return PyValue_FromResult(%s);" % Naming.retval_cname)
++        elif not self.return_type.is_void:
+             code.putln("return %s;" % Naming.retval_cname)
+         code.putln('}')
+         code.exit_cfunc_scope()
+@@ -3970,6 +3972,7 @@ class DefNodeWrapper(FuncDefNode):
+     def generate_function_header(self, code, with_pymethdef, proto_only=0):
+         arg_code_list = []
+         sig = self.signature
++        value_abi = sig.value_abi(self.target.entry)
+ 
+         if sig.has_dummy_arg or self.self_in_stararg:
+             arg_code = "PyObject *%s" % Naming.self_cname
+@@ -3981,6 +3984,9 @@ class DefNodeWrapper(FuncDefNode):
+             if not arg.is_generic:
+                 if arg.is_self_arg or arg.is_type_arg:
+                     arg_code_list.append("PyObject *%s" % arg.hdr_cname)
++                elif value_abi:
++                    # METH_O passes its argument as a value.
++                    arg_code_list.append("PyValue %s" % Naming.value_arg_cname)
+                 else:
+                     arg_code_list.append(
+                         arg.hdr_type.declaration_code(arg.hdr_cname))
+@@ -3991,7 +3997,8 @@ class DefNodeWrapper(FuncDefNode):
+             varargs_args = "PyObject *%s, PyObject *%s" % (
+                     Naming.args_cname, Naming.kwds_cname)
+             if sig.use_fastcall:
+-                fastcall_args = "PyObject *const *%s, Py_ssize_t %s, PyObject *%s" % (
++                fastcall_args = "%s *%s, Py_ssize_t %s, PyObject *%s" % (
++                        "const PyValue" if value_abi else "PyObject *const",
+                         Naming.args_cname, Naming.nargs_cname, Naming.kwds_cname)
+                 fastcall_guard = sig.fastcall_guard
+                 arg_code_list.append(
+@@ -4010,7 +4017,10 @@ class DefNodeWrapper(FuncDefNode):
+             mf = "CYTHON_UNUSED "
+             with_pymethdef = False
+ 
+-        dc = self.return_type.declaration_code(entry.func_cname)
++        if value_abi:
++            dc = "PyValue %s" % entry.func_cname
++        else:
++            dc = self.return_type.declaration_code(entry.func_cname)
+         header = "%sstatic %s(%s)" % (mf, dc, arg_code)
+         code.putln("%s; /*proto*/" % header)
+ 
+@@ -4049,6 +4059,12 @@ class DefNodeWrapper(FuncDefNode):
+                 "static PyMethodDef %s = " % entry.pymethdef_cname)
+             code.put_pymethoddef(self.target.entry, ";", allow_skip=False)
+         code.putln("%s {" % header)
++        if value_abi:
++            for arg in self.args:
++                if not (arg.is_generic or arg.is_self_arg or arg.is_type_arg):
++                    code.putln("PyObject *%s = PyValue_Object(%s);" % (
++                        arg.hdr_cname, Naming.value_arg_cname))
++                    code.putln("if (unlikely(!%s)) return PyValue_NULL;" % arg.hdr_cname)
+ 
+     def generate_argument_declarations(self, env, code):
+         for arg in self.args:
+@@ -4073,7 +4089,7 @@ class DefNodeWrapper(FuncDefNode):
+                 code.putln(nargs_code)
+ 
+         # Array containing the values of keyword arguments when using METH_FASTCALL.
+-        code.putln('CYTHON_UNUSED PyObject *const *%s;' % Naming.kwvalues_cname)
++        code.putln('CYTHON_UNUSED const PyValue *%s;' % Naming.kwvalues_cname)
+ 
+     def generate_argument_parsing_code(self, env, code, decl_code):
+         # Generate fast equivalent of PyArg_ParseTuple call for
+@@ -4439,7 +4455,7 @@ class DefNodeWrapper(FuncDefNode):
+                 for i, arg in enumerate(positional_args):
+                     code.putln(
+                         f"values[{i}] = __Pyx_ArgRef_{self.signature.fastvar}({Naming.args_cname}, {i});")
+-                    code.putln(f"if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[{i}])) {goto_error}")
++                    code.putln(f"if (unlikely(!values[{i}])) {goto_error}")
+             else:
+                 # parse the positional arguments from the variable length
+                 # args tuple and reject illegal argument tuple sizes
+@@ -4454,7 +4470,7 @@ class DefNodeWrapper(FuncDefNode):
+                         code.putln(f'case {i+1:2d}:')
+                     code.putln(
+                         f"values[{i}] = __Pyx_ArgRef_{self.signature.fastvar}({Naming.args_cname}, {i});")
+-                    code.putln(f"if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[{i}])) {goto_error}")
++                    code.putln(f"if (unlikely(!values[{i}])) {goto_error}")
+                 if min_positional_args == 0:
+                     code.putln('CYTHON_FALLTHROUGH;')
+                     code.put('case  0: ')
+@@ -4605,13 +4621,13 @@ class DefNodeWrapper(FuncDefNode):
+         for i in range(max_positional_args-1, num_required_posonly_args-1, -1):
+             code.putln(f'case {i+1:2d}:')
+             code.putln(f"values[{i}] = __Pyx_ArgRef_{self.signature.fastvar}({Naming.args_cname}, {i});")
+-            code.putln(f"if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[{i}])) {code.error_goto(self.pos)}")
++            code.putln(f"if (unlikely(!values[{i}])) {code.error_goto(self.pos)}")
+             code.putln('CYTHON_FALLTHROUGH;')
+         if num_required_posonly_args > 0:
+             code.put(f'case {num_required_posonly_args:2d}: ')
+             for i in range(num_required_posonly_args-1, -1, -1):
+                 code.putln(f"values[{i}] = __Pyx_ArgRef_{self.signature.fastvar}({Naming.args_cname}, {i});")
+-                code.putln(f"if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[{i}])) {code.error_goto(self.pos)}")
++                code.putln(f"if (unlikely(!values[{i}])) {code.error_goto(self.pos)}")
+             code.putln('break;')
+         for i in range(num_required_posonly_args-2, -1, -1):
+             code.putln(f'case {i+1:2d}:')
+@@ -4770,6 +4786,8 @@ class DefNodeWrapper(FuncDefNode):
+                 code.putln("}")
+ 
+     def error_value(self):
++        if self.signature.value_abi(self.target.entry):
++            return "PyValue_NULL"
+         return self.signature.error_value
+ 
+ 
+diff --git a/Cython/Compiler/PyrexTypes.py b/Cython/Compiler/PyrexTypes.py
+index eb441ca..8285a85 100644
+--- a/Cython/Compiler/PyrexTypes.py
++++ b/Cython/Compiler/PyrexTypes.py
+@@ -5823,6 +5823,8 @@ cy_numeric_type = FusedType([c_short_type,
+ c_buf_diminfo_type =  CStructOrUnionType("__Pyx_Buf_DimInfo", "struct",
+                                       None, 1, "__Pyx_Buf_DimInfo")
+ c_pyx_buffer_type = CStructOrUnionType("__Pyx_Buffer", "struct", None, 1, "__Pyx_Buffer")
++# The value type of the CPython C API (Include/pyvalue.h), opaque to Cython.
++c_pyvalue_type = CStructOrUnionType("PyValue", "struct", None, 1, "PyValue")
+ c_pyx_buffer_ptr_type = CPtrType(c_pyx_buffer_type)
+ c_pyx_buffer_nd_type = CStructOrUnionType("__Pyx_LocalBuf_ND", "struct",
+                                       None, 1, "__Pyx_LocalBuf_ND")
+diff --git a/Cython/Compiler/TypeSlots.py b/Cython/Compiler/TypeSlots.py
+index 44da9ab..4b96dfb 100644
+--- a/Cython/Compiler/TypeSlots.py
++++ b/Cython/Compiler/TypeSlots.py
+@@ -100,6 +100,9 @@ class Signature:
+     # Use METH_FASTCALL instead of METH_VARARGS
+     use_fastcall = FastcallUsed.NO
+ 
++    # The wrapper returns a PyValue (tp_iternext)
++    returns_value = False
++
+     def __init__(self, arg_format, ret_format, nogil=False):
+         self.has_dummy_arg = False
+         self.has_generic_args = False
+@@ -195,12 +198,28 @@ class Signature:
+                     return [method_varargs, method_keywords]
+         return None
+ 
++    def value_abi(self, entry):
++        # Does the Python wrapper of entry take and return PyValue?  A
++        # method table's METH_O and METH_FASTCALL functions do, and so does
++        # tp_iternext.  A special method's wrapper fills a slot, which takes
++        # objects, so its method table entry gets a value trampoline
++        # (Code.put_pymethoddef_wrapper()).
++        if self.returns_value:
++            return True
++        if entry.is_special:
++            return False
++        mflags = self.method_flags() or ()
++        return method_onearg in mflags or (
++            method_fastcall in mflags and self.use_fastcall == self.FastcallUsed.YES)
++
+     def method_function_type(self):
+         # Return the C function type
+         mflags = self.method_flags()
+         kw = "WithKeywords" if (method_keywords in mflags) else ""
+         for m in mflags:
+-            if m == method_noargs or m == method_onearg:
++            if m == method_onearg:
++                return "PyCFunctionO"
++            if m == method_noargs:
+                 return "PyCFunction"
+             if m == method_varargs:
+                 return "PyCFunction" + kw
+@@ -1021,7 +1040,8 @@ reprfunc = Signature("T", "O")             # typedef PyObject *(*reprfunc)(PyObj
+ hashfunc = Signature("T", "h")             # typedef Py_hash_t (*hashfunc)(PyObject *);
+ richcmpfunc = Signature("TOi", "O")        # typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
+ getiterfunc = Signature("T", "O")          # typedef PyObject *(*getiterfunc) (PyObject *);
+-iternextfunc = Signature("T", "O")         # typedef PyObject *(*iternextfunc) (PyObject *);
++iternextfunc = Signature("T", "O")         # typedef PyValue (*iternextfunc) (PyObject *);
++iternextfunc.returns_value = True
+ descrgetfunc = Signature("TOO", "O")       # typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
+ descrsetfunc = Signature("TOO", 'r')       # typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
+ descrdelfunc = Signature("TO", 'r')
+diff --git a/Cython/Utility/AsyncGen.c b/Cython/Utility/AsyncGen.c
+index 4211342..26f7db7 100644
+--- a/Cython/Utility/AsyncGen.c
++++ b/Cython/Utility/AsyncGen.c
+@@ -393,13 +393,15 @@ PyDoc_STRVAR(__Pyx_async_aiter_doc,
+ PyDoc_STRVAR(__Pyx_async_anext_doc,
+ "__anext__(v) -> continue asynchronous iteration and return the next element.");
+ 
++__PYX_VALUE_METH_O(__Pyx_async_gen_asend_O, __Pyx_async_gen_asend, __pyx_PyAsyncGenObject *)
++
+ static PyMethodDef __Pyx_async_gen_methods[] = {
+-    {"asend", (PyCFunction)__Pyx_async_gen_asend, METH_O, __Pyx_async_asend_doc},
++    {"asend", (PyCFunction)(void(*)(void))__Pyx_async_gen_asend_O, METH_O, __Pyx_async_asend_doc},
+     {"athrow",(PyCFunction)__Pyx_async_gen_athrow, METH_VARARGS, __Pyx_async_athrow_doc},
+     {"aclose", (PyCFunction)__Pyx_async_gen_aclose, METH_NOARGS, __Pyx_async_aclose_doc},
+     {"__aiter__", (PyCFunction)__Pyx_async_gen_self_method, METH_NOARGS, __Pyx_async_aiter_doc},
+     {"__anext__", (PyCFunction)__Pyx_async_gen_anext_method, METH_NOARGS, __Pyx_async_anext_doc},
+-    {"__reduce_ex__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_O, 0},
++    {"__reduce_ex__", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_fail_reduce_ex_O, METH_O, 0},
+     {"__reduce__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_NOARGS, 0},
+     {0, 0, 0, 0}        /* Sentinel */
+ };
+@@ -657,9 +659,13 @@ __Pyx_async_gen_asend_close(PyObject *g, PyObject *args)
+ }
+ 
+ 
++__PYX_VALUE_METH_O(__Pyx_async_gen_asend_send_O, __Pyx_async_gen_asend_send, PyObject *)
++__PYX_VALUE_METH_THROW(__Pyx_async_gen_asend_throw_Fast, __Pyx_async_gen_asend_throw, __pyx_PyAsyncGenASend *)
++__PYX_VALUE_ITERNEXT(__Pyx_async_gen_asend_iternext_Value, __Pyx_async_gen_asend_iternext, PyObject *)
++
+ static PyMethodDef __Pyx_async_gen_asend_methods[] = {
+-    {"send", (PyCFunction)__Pyx_async_gen_asend_send, METH_O, __Pyx_async_gen_send_doc},
+-    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_async_gen_asend_throw),
++    {"send", (PyCFunction)(void(*)(void))__Pyx_async_gen_asend_send_O, METH_O, __Pyx_async_gen_send_doc},
++    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_async_gen_asend_throw_Fast),
+ #if CYTHON_COMPILING_IN_LIMITED_API && __PYX_LIMITED_VERSION_HEX < 0x030A0000
+         METH_VARARGS,
+ #else
+@@ -678,7 +684,7 @@ static PyType_Slot __pyx__PyAsyncGenASendType_slots[] = {
+     {Py_tp_traverse, (void *)__Pyx_async_gen_asend_traverse},
+     {Py_tp_methods, (void *)__Pyx_async_gen_asend_methods},
+     {Py_tp_iter, (void *)PyObject_SelfIter},
+-    {Py_tp_iternext, (void *)__Pyx_async_gen_asend_iternext},
++    {Py_tp_iternext, (void *)__Pyx_async_gen_asend_iternext_Value},
+     {0, 0},
+ };
+ 
+@@ -1073,9 +1079,13 @@ __Pyx_async_gen_athrow_close(PyObject *g, PyObject *args)
+ }
+ 
+ 
++__PYX_VALUE_METH_O(__Pyx_async_gen_athrow_send_O, __Pyx_async_gen_athrow_send, __pyx_PyAsyncGenAThrow *)
++__PYX_VALUE_METH_THROW(__Pyx_async_gen_athrow_throw_Fast, __Pyx_async_gen_athrow_throw, __pyx_PyAsyncGenAThrow *)
++__PYX_VALUE_ITERNEXT(__Pyx_async_gen_athrow_iternext_Value, __Pyx_async_gen_athrow_iternext, __pyx_PyAsyncGenAThrow *)
++
+ static PyMethodDef __Pyx_async_gen_athrow_methods[] = {
+-    {"send", (PyCFunction)__Pyx_async_gen_athrow_send, METH_O, __Pyx_async_gen_send_doc},
+-    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_async_gen_athrow_throw),
++    {"send", (PyCFunction)(void(*)(void))__Pyx_async_gen_athrow_send_O, METH_O, __Pyx_async_gen_send_doc},
++    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_async_gen_athrow_throw_Fast),
+ #if CYTHON_COMPILING_IN_LIMITED_API && __PYX_LIMITED_VERSION_HEX < 0x030A0000
+         METH_VARARGS,
+ #else
+@@ -1093,7 +1103,7 @@ static PyType_Slot __pyx__PyAsyncGenAThrowType_slots[] = {
+     {Py_am_await, (void *)PyObject_SelfIter},
+     {Py_tp_traverse, (void *)__Pyx_async_gen_athrow_traverse},
+     {Py_tp_iter, (void *)PyObject_SelfIter},
+-    {Py_tp_iternext, (void *)__Pyx_async_gen_athrow_iternext},
++    {Py_tp_iternext, (void *)__Pyx_async_gen_athrow_iternext_Value},
+     {Py_tp_methods, (void *)__Pyx_async_gen_athrow_methods},
+     {Py_tp_getattro, (void *)PyObject_GenericGetAttr},
+     {0, 0},
+diff --git a/Cython/Utility/Coroutine.c b/Cython/Utility/Coroutine.c
+index dffb289..f374c93 100644
+--- a/Cython/Utility/Coroutine.c
++++ b/Cython/Utility/Coroutine.c
+@@ -520,6 +520,31 @@ static void __Pyx_SetBackportTypeAmSend(PyTypeObject *type, __Pyx_PyAsyncMethods
+ 
+ static PyObject *__Pyx_Coroutine_fail_reduce_ex(PyObject *self, PyObject *arg); /*proto*/
+ 
++// A method table's METH_O and METH_FASTCALL functions take and return values,
++// and so does tp_iternext.  These define such a function, name, around an
++// object function, impl, which takes self as self_type.
++#define __PYX_VALUE_METH_O(name, impl, self_type)                             \
++    static PyValue name(PyObject *self, PyValue arg) {                       \
++        PyObject *o = PyValue_Object(arg);                                   \
++        if (unlikely(!o)) return PyValue_NULL;                               \
++        return PyValue_FromResult(impl((self_type)self, o));                 \
++    }
++#define __PYX_VALUE_ITERNEXT(name, impl, self_type)                           \
++    static PyValue name(PyObject *self) {                                    \
++        return PyValue_FromResult(impl((self_type)self));                    \
++    }
++// throw(typ[, val[, tb]]): impl reads at most three arguments.
++#define __PYX_VALUE_METH_THROW(name, impl, self_type)                         \
++    static PyValue name(PyObject *self, const PyValue *args, Py_ssize_t nargs) { \
++        PyObject *objs[3];                                                   \
++        Py_ssize_t i;                                                        \
++        for (i = 0; i < nargs && i < 3; i++) {                               \
++            objs[i] = PyValue_Object(args[i]);                               \
++            if (unlikely(!objs[i])) return PyValue_NULL;                     \
++        }                                                                    \
++        return PyValue_FromResult(impl((self_type)self, objs, nargs));       \
++    }
++
+ //////////////////// Coroutine.proto ////////////////////
+ 
+ #define __Pyx_Coroutine_USED
+@@ -1757,6 +1782,11 @@ static PyObject *__Pyx_Coroutine_fail_reduce_ex(PyObject *self, PyObject *arg) {
+ }
+ // #endif
+ 
++__PYX_VALUE_METH_O(__Pyx_Coroutine_fail_reduce_ex_O, __Pyx_Coroutine_fail_reduce_ex, PyObject *)
++__PYX_VALUE_METH_O(__Pyx_Coroutine_Send_O, __Pyx_Coroutine_Send, PyObject *)
++__PYX_VALUE_METH_THROW(__Pyx_Coroutine_Throw_Fast, __Pyx_Coroutine_Throw, PyObject *)
++__PYX_VALUE_ITERNEXT(__Pyx_Generator_Next_Value, __Pyx_Generator_Next, PyObject *)
++
+ //////////////////// Coroutine.module_state_decls ////////////////////
+ 
+ PyTypeObject *__pyx_CoroutineType;
+@@ -1859,10 +1889,14 @@ static PyObject *__Pyx_CoroutineAwait_no_new(PyTypeObject *type, PyObject *args,
+ }
+ #endif
+ 
++__PYX_VALUE_METH_O(__Pyx_CoroutineAwait_Send_O, __Pyx_CoroutineAwait_Send, __pyx_CoroutineAwaitObject *)
++__PYX_VALUE_METH_THROW(__Pyx_CoroutineAwait_Throw_Fast, __Pyx_CoroutineAwait_Throw, __pyx_CoroutineAwaitObject *)
++__PYX_VALUE_ITERNEXT(__Pyx_CoroutineAwait_Next_Value, __Pyx_CoroutineAwait_Next, __pyx_CoroutineAwaitObject *)
++
+ static PyMethodDef __pyx_CoroutineAwait_methods[] = {
+-    {"send", (PyCFunction) __Pyx_CoroutineAwait_Send, METH_O,
++    {"send", (PyCFunction)(void(*)(void)) __Pyx_CoroutineAwait_Send_O, METH_O,
+      PyDoc_STR("send(arg) -> send 'arg' into coroutine,\nreturn next yielded value or raise StopIteration.")},
+-    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_CoroutineAwait_Throw),
++    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_CoroutineAwait_Throw_Fast),
+ #if CYTHON_COMPILING_IN_LIMITED_API && __PYX_LIMITED_VERSION_HEX < 0x030A0000
+         METH_VARARGS,
+ #else
+@@ -1872,7 +1906,7 @@ static PyMethodDef __pyx_CoroutineAwait_methods[] = {
+     {"close", (PyCFunction) __Pyx_CoroutineAwait_Close_Method, METH_NOARGS, PyDoc_STR("close() -> raise GeneratorExit inside coroutine.")},
+ // only needed with type-specs, but included in all versions for clarity
+ // #if CYTHON_USE_TYPE_SPECS
+-    {"__reduce_ex__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_O, 0},
++    {"__reduce_ex__", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_fail_reduce_ex_O, METH_O, 0},
+     {"__reduce__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_NOARGS, 0},
+ // #endif
+     {0, 0, 0, 0}
+@@ -1887,7 +1921,7 @@ static PyType_Slot __pyx_CoroutineAwaitType_slots[] = {
+ #endif
+     {Py_tp_methods, (void *)__pyx_CoroutineAwait_methods},
+     {Py_tp_iter, (void *)__Pyx_CoroutineAwait_self},
+-    {Py_tp_iternext, (void *)__Pyx_CoroutineAwait_Next},
++    {Py_tp_iternext, (void *)__Pyx_CoroutineAwait_Next_Value},
+ #if __PYX_HAS_PY_AM_SEND == 1
+     {Py_am_send, (void *)__Pyx_CoroutineAwait_AmSend},
+ #endif
+@@ -1925,9 +1959,9 @@ static PyObject *__Pyx_Coroutine_await(PyObject *coroutine) {
+ }
+ 
+ static PyMethodDef __pyx_Coroutine_methods[] = {
+-    {"send", (PyCFunction) __Pyx_Coroutine_Send, METH_O,
++    {"send", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_Send_O, METH_O,
+      PyDoc_STR("send(arg) -> send 'arg' into coroutine,\nreturn next iterated value or raise StopIteration.")},
+-    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_Coroutine_Throw),
++    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_Coroutine_Throw_Fast),
+ #if CYTHON_COMPILING_IN_LIMITED_API && __PYX_LIMITED_VERSION_HEX < 0x030A0000
+         METH_VARARGS,
+ #else
+@@ -1935,7 +1969,7 @@ static PyMethodDef __pyx_Coroutine_methods[] = {
+ #endif
+      PyDoc_STR("throw(typ[,val[,tb]]) -> raise exception in coroutine,\nreturn next iterated value or raise StopIteration.")},
+     {"close", (PyCFunction) __Pyx_Coroutine_Close_Method, METH_NOARGS, PyDoc_STR("close() -> raise GeneratorExit inside coroutine.")},
+-    {"__reduce_ex__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_O, 0},
++    {"__reduce_ex__", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_fail_reduce_ex_O, METH_O, 0},
+     {"__reduce__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_NOARGS, 0},
+     {0, 0, 0, 0}
+ };
+@@ -2065,7 +2099,7 @@ static PyType_Slot __pyx_IterableCoroutineType_slots[] = {
+     {Py_am_await, (void *)&__Pyx_Coroutine_await},
+     {Py_tp_traverse, (void *)__Pyx_Coroutine_traverse},
+     {Py_tp_iter, (void *)__Pyx_Coroutine_await},
+-    {Py_tp_iternext, (void *)__Pyx_Generator_Next},
++    {Py_tp_iternext, (void *)__Pyx_Generator_Next_Value},
+     {Py_tp_methods, (void *)__pyx_Coroutine_methods},
+     {Py_tp_members, (void *)__pyx_Coroutine_memberlist},
+     {Py_tp_getset, (void *)__pyx_Coroutine_getsets},
+@@ -2126,9 +2160,9 @@ if (likely(__pyx_Generator_init($module_cname) == 0)); else
+ //@substitute: naming
+ 
+ static PyMethodDef __pyx_Generator_methods[] = {
+-    {"send", (PyCFunction) __Pyx_Coroutine_Send, METH_O,
++    {"send", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_Send_O, METH_O,
+      PyDoc_STR("send(arg) -> send 'arg' into generator,\nreturn next yielded value or raise StopIteration.")},
+-    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_Coroutine_Throw),
++    {"throw", __PYX_REINTERPRET_FUNCION(PyCFunction, __Pyx_Coroutine_Throw_Fast),
+ #if CYTHON_COMPILING_IN_LIMITED_API && __PYX_LIMITED_VERSION_HEX < 0x030A0000
+         METH_VARARGS,
+ #else
+@@ -2137,7 +2171,7 @@ static PyMethodDef __pyx_Generator_methods[] = {
+      PyDoc_STR("throw(typ[,val[,tb]]) -> raise exception in generator,\nreturn next yielded value or raise StopIteration.")},
+     {"close", (PyCFunction) __Pyx_Coroutine_Close_Method, METH_NOARGS,
+      PyDoc_STR("close() -> raise GeneratorExit inside generator.")},
+-    {"__reduce_ex__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_O, 0},
++    {"__reduce_ex__", (PyCFunction)(void(*)(void)) __Pyx_Coroutine_fail_reduce_ex_O, METH_O, 0},
+     {"__reduce__", (PyCFunction) __Pyx_Coroutine_fail_reduce_ex, METH_NOARGS, 0},
+     {0, 0, 0, 0}
+ };
+@@ -2168,7 +2202,7 @@ static PyType_Slot __pyx_GeneratorType_slots[] = {
+     {Py_tp_dealloc, (void *)__Pyx_Coroutine_dealloc},
+     {Py_tp_traverse, (void *)__Pyx_Coroutine_traverse},
+     {Py_tp_iter, (void *)PyObject_SelfIter},
+-    {Py_tp_iternext, (void *)__Pyx_Generator_Next},
++    {Py_tp_iternext, (void *)__Pyx_Generator_Next_Value},
+     {Py_tp_methods, (void *)__pyx_Generator_methods},
+     {Py_tp_members, (void *)__pyx_Generator_memberlist},
+     {Py_tp_getset, (void *)__pyx_Generator_getsets},
+diff --git a/Cython/Utility/CythonFunction.c b/Cython/Utility/CythonFunction.c
+index ace9973..e89c6da 100644
+--- a/Cython/Utility/CythonFunction.c
++++ b/Cython/Utility/CythonFunction.c
+@@ -241,10 +241,11 @@ static PyObject *__Pyx_CyFunction_Init(PyObject *op_in, PyMethodDef *ml,
+                                       PyObject* code);
+ 
+ #if CYTHON_VECTORCALL
+-static PyObject * __Pyx_CyFunction_Vectorcall_NOARGS(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+-static PyObject * __Pyx_CyFunction_Vectorcall_O(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+-static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
+-static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames);
++// Vectorcall functions take and return values.
++static PyValue __Pyx_CyFunction_Vectorcall_NOARGS(PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
++static PyValue __Pyx_CyFunction_Vectorcall_O(PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
++static PyValue __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS(PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
++static PyValue __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyValue func, const PyValue *args, size_t nargsf, PyObject *kwnames);
+ #endif
+ 
+ //////////////////// CythonFunctionShared ////////////////////
+@@ -686,21 +687,22 @@ __Pyx_CyFunction_get_annotations(PyObject *op_in, void *context) {
+     return result;
+ }
+ 
+-static PyObject *__Pyx_CyFunction_annotate_impl(PyObject *self, PyObject *arg) {
++// METH_O: takes and returns a value.
++static PyValue __Pyx_CyFunction_annotate_impl(PyObject *self, PyValue arg) {
+     CYTHON_UNUSED_VAR(arg);
+     if (unlikely(!self)) {
+         PyErr_SetString(PyExc_SystemError, "cython __annotate__ called without 'self' argument");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     // Although we guard against trivial recursive calls from self.__annotate__ = self.__annotate__
+     // we can't guard against all recursive calls.
+     PyObject *result;
+     if (Py_EnterRecursiveCall(" in cyfunction annotate")) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+     result = __Pyx_CyFunction_get_annotations(self, NULL);
+     Py_LeaveRecursiveCall();
+-    return result;
++    return PyValue_FromResult(result);
+ }
+ 
+ // We don't yet support PEP649 properly, so __annotate__ is
+@@ -730,7 +732,7 @@ __Pyx_CyFunction_set_annotate(PyObject *op_in, PyObject* value, void *context) {
+         PyCFunction cfunction = PyCFunction_GET_FUNCTION(value);
+         PyObject *value_self = PyCFunction_GET_SELF(value);
+ #endif
+-        if (cfunction == __Pyx_CyFunction_annotate_impl && value_self == op_in) {
++        if (cfunction == (PyCFunction)(void(*)(void))__Pyx_CyFunction_annotate_impl && value_self == op_in) {
+             // We're doing self.__annotate__ == self.__annotate__ somehow.
+             // Just clear it from the dictionary to avoid an infinite recursive call.
+             return __Pyx_CyFunction_set_annotate_in_dict_if_exists(op_in, NULL);
+@@ -964,7 +966,7 @@ __Pyx_CyFunction_reduce(PyObject *m_in, PyObject *args)
+ static PyMethodDef __pyx_CyFunction_methods[] = {
+     // Having __annotate_cython__ as an attribute makes it pickleable.
+     // Keep it as the first element to make access easier.
+-    {"__annotate_cython__", __Pyx_CyFunction_annotate_impl, METH_O,
++    {"__annotate_cython__", (PyCFunction)(void(*)(void))__Pyx_CyFunction_annotate_impl, METH_O,
+         "Placeholder __annotate__ function to allow 'functools.wraps' to work "
+         "on Cython functions."},
+     {"__reduce__", (PyCFunction)__Pyx_CyFunction_reduce, METH_NOARGS, 0},
+@@ -1247,7 +1249,7 @@ static PyObject * __Pyx_CyFunction_CallMethod(PyObject *func, PyObject *self, Py
+                 #else
+                 arg0 = __Pyx_PySequence_ITEM(arg, 0); if (unlikely(!arg0)) return NULL;
+                 #endif
+-                result = (*meth)(self, arg0);
++                result = PyValue_Object((*(PyCFunctionO)(void(*)(void))meth)(self, PyValue_FromObject(arg0)));
+                 #if !(CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS)
+                 Py_DECREF(arg0);
+                 #endif
+@@ -1284,7 +1286,8 @@ static PyObject *__Pyx_CyFunction_CallAsMethod(PyObject *func, PyObject *args, P
+      __pyx_vectorcallfunc vc = __Pyx_CyFunction_func_vectorcall(cyfunc);
+     if (vc) {
+ #if CYTHON_ASSUME_SAFE_MACROS && CYTHON_ASSUME_SAFE_SIZE
+-        return __Pyx_PyVectorcall_FastCallDict(func, vc, &PyTuple_GET_ITEM(args, 0), (size_t)PyTuple_GET_SIZE(args), kw);
++        // A tuple's items are values.
++        return __Pyx_PyVectorcall_FastCallDict(func, vc, ((PyTupleObject*)args)->ob_item, (size_t)PyTuple_GET_SIZE(args), kw);
+ #else
+         // avoid unused function warning
+         (void) &__Pyx_PyVectorcall_FastCallDict;
+@@ -1352,21 +1355,24 @@ static CYTHON_INLINE int __Pyx_CyFunction_Vectorcall_CheckArgs(PyObject *func, _
+     return ret;
+ }
+ 
+-static PyObject * __Pyx_CyFunction_Vectorcall_NOARGS(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
++static PyValue __Pyx_CyFunction_Vectorcall_NOARGS(PyValue callable, const PyValue *args, size_t nargsf, PyObject *kwnames)
+ {
++    PyObject *func = PyValue_ObjectBorrow(callable);
+     __pyx_CyFunctionObject *cyfunc = __Pyx_as_CyFunctionObject(func);
+     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+     PyObject *self;
+ #if CYTHON_COMPILING_IN_LIMITED_API
+     PyCFunction meth = cyfunc->func_methoddef->ml_meth;
+-    if (unlikely(!meth)) return NULL;
++    if (unlikely(!meth)) return PyValue_NULL;
+ #else
+     PyCFunction meth = ((PyCFunctionObject*)cyfunc)->m_ml->ml_meth;
+ #endif
+ 
+     switch (__Pyx_CyFunction_Vectorcall_CheckArgs(func, cyfunc, nargs, kwnames)) {
+     case 1:
+-        self = args[0];
++        // self may be an inline value, as in an unbound call.
++        self = PyValue_Object(args[0]);
++        if (unlikely(!self)) return PyValue_NULL;
+         args += 1;
+         nargs -= 1;
+         break;
+@@ -1374,32 +1380,35 @@ static PyObject * __Pyx_CyFunction_Vectorcall_NOARGS(PyObject *func, PyObject *c
+         self = func;
+         break;
+     default:
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     if (unlikely(nargs != 0)) {
+         __Pyx_CyFunction_raise_argument_count_error(
+             func, "takes no arguments", nargs);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return meth(self, NULL);
++    return PyValue_FromResult(meth(self, NULL));
+ }
+ 
+-static PyObject * __Pyx_CyFunction_Vectorcall_O(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
++static PyValue __Pyx_CyFunction_Vectorcall_O(PyValue callable, const PyValue *args, size_t nargsf, PyObject *kwnames)
+ {
++    PyObject *func = PyValue_ObjectBorrow(callable);
+     __pyx_CyFunctionObject *cyfunc = __Pyx_as_CyFunctionObject(func);
+     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+     PyObject *self;
+ #if CYTHON_COMPILING_IN_LIMITED_API
+     PyCFunction meth = cyfunc->func_methoddef->ml_meth;
+-    if (unlikely(!meth)) return NULL;
++    if (unlikely(!meth)) return PyValue_NULL;
+ #else
+     PyCFunction meth = ((PyCFunctionObject*)cyfunc)->m_ml->ml_meth;
+ #endif
+ 
+     switch (__Pyx_CyFunction_Vectorcall_CheckArgs(func, cyfunc, nargs, kwnames)) {
+     case 1:
+-        self = args[0];
++        // self may be an inline value, as in an unbound call.
++        self = PyValue_Object(args[0]);
++        if (unlikely(!self)) return PyValue_NULL;
+         args += 1;
+         nargs -= 1;
+         break;
+@@ -1407,32 +1416,35 @@ static PyObject * __Pyx_CyFunction_Vectorcall_O(PyObject *func, PyObject *const
+         self = func;
+         break;
+     default:
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     if (unlikely(nargs != 1)) {
+         __Pyx_CyFunction_raise_argument_count_error(
+             func, "takes exactly one argument", nargs);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return meth(self, args[0]);
++    return ((PyCFunctionO)(void(*)(void))meth)(self, args[0]);
+ }
+ 
+-static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
++static PyValue __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS(PyValue callable, const PyValue *args, size_t nargsf, PyObject *kwnames)
+ {
++    PyObject *func = PyValue_ObjectBorrow(callable);
+     __pyx_CyFunctionObject *cyfunc = __Pyx_as_CyFunctionObject(func);
+     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+     PyObject *self;
+ #if CYTHON_COMPILING_IN_LIMITED_API
+     PyCFunction meth = cyfunc->func_methoddef->ml_meth;
+-    if (unlikely(!meth)) return NULL;
++    if (unlikely(!meth)) return PyValue_NULL;
+ #else
+     PyCFunction meth = ((PyCFunctionObject*)cyfunc)->m_ml->ml_meth;
+ #endif
+ 
+     switch (__Pyx_CyFunction_Vectorcall_CheckArgs(func, cyfunc, nargs, NULL)) {
+     case 1:
+-        self = args[0];
++        // self may be an inline value, as in an unbound call.
++        self = PyValue_Object(args[0]);
++        if (unlikely(!self)) return PyValue_NULL;
+         args += 1;
+         nargs -= 1;
+         break;
+@@ -1440,27 +1452,30 @@ static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS(PyObject *func,
+         self = func;
+         break;
+     default:
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     return ((__Pyx_PyCFunctionFastWithKeywords)(void(*)(void))meth)(self, args, nargs, kwnames);
+ }
+ 
+-static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
++static PyValue __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyValue callable, const PyValue *args, size_t nargsf, PyObject *kwnames)
+ {
++    PyObject *func = PyValue_ObjectBorrow(callable);
+     __pyx_CyFunctionObject *cyfunc = __Pyx_as_CyFunctionObject(func);
+     PyTypeObject *cls = (PyTypeObject *) __Pyx__CyFunction_GetClassObj(cyfunc);
+     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+     PyObject *self;
+ #if CYTHON_COMPILING_IN_LIMITED_API
+     PyCFunction meth = cyfunc->func_methoddef->ml_meth;
+-    if (unlikely(!meth)) return NULL;
++    if (unlikely(!meth)) return PyValue_NULL;
+ #else
+     PyCFunction meth = ((PyCFunctionObject*)cyfunc)->m_ml->ml_meth;
+ #endif
+     switch (__Pyx_CyFunction_Vectorcall_CheckArgs(func, cyfunc, nargs, NULL)) {
+     case 1:
+-        self = args[0];
++        // self may be an inline value, as in an unbound call.
++        self = PyValue_Object(args[0]);
++        if (unlikely(!self)) return PyValue_NULL;
+         args += 1;
+         nargs -= 1;
+         break;
+@@ -1468,7 +1483,7 @@ static PyObject * __Pyx_CyFunction_Vectorcall_FASTCALL_KEYWORDS_METHOD(PyObject
+         self = func;
+         break;
+     default:
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     #if PY_VERSION_HEX < 0x030e00A6
+diff --git a/Cython/Utility/FunctionArguments.c b/Cython/Utility/FunctionArguments.c
+index 8204fd1..fcf2015 100644
+--- a/Cython/Utility/FunctionArguments.c
++++ b/Cython/Utility/FunctionArguments.c
+@@ -242,7 +242,7 @@ static void __Pyx_RejectKeywords(const char* function_name, PyObject *kwds) {
+ //@requires: ParseKeywordsImpl
+ 
+ static CYTHON_INLINE int __Pyx_ParseKeywords(
+-    PyObject *kwds, PyObject *const *kwvalues, PyObject ** const argnames[],
++    PyObject *kwds, const PyValue *kwvalues, PyObject ** const argnames[],
+     PyObject *kwds2, PyObject *values[],
+     Py_ssize_t num_pos_args, Py_ssize_t num_kwargs,
+     const char* function_name,
+@@ -269,7 +269,7 @@ static CYTHON_INLINE int __Pyx_ParseKeywords(
+ 
+ static int __Pyx_ParseKeywords(
+     PyObject *kwds,
+-    PyObject * const *kwvalues,
++    const PyValue *kwvalues,
+     PyObject ** const argnames[],
+     PyObject *kwds2,
+     PyObject *values[],
+@@ -297,7 +297,7 @@ static int __Pyx_ParseKeywords(
+ 
+ static int __Pyx_ParseKeywordsTuple(
+     PyObject *kwds,
+-    PyObject * const *kwvalues,
++    const PyValue *kwvalues,
+     PyObject ** const argnames[],
+     PyObject *kwds2,
+     PyObject *values[],
+@@ -701,7 +701,7 @@ bad:
+ 
+ static int __Pyx_ParseKeywordsTuple(
+     PyObject *kwds,
+-    PyObject * const *kwvalues,
++    const PyValue *kwvalues,
+     PyObject ** const argnames[],
+     PyObject *kwds2,
+     PyObject *values[],
+@@ -729,20 +729,23 @@ static int __Pyx_ParseKeywordsTuple(
+         while (*name && (**name != key)) name++;
+         if (*name) {
+             // Declared keyword: **name == key
+-            PyObject *value = kwvalues[pos];
+-            values[name-argnames] = __Pyx_NewRef(value);
++            PyObject *value = PyValue_Object(kwvalues[pos]);
++            if (unlikely(!value)) goto bad;
++            values[name-argnames] = value;
+         } else {
+             size_t index_found = 0;
+             int cmp = __Pyx_MatchKeywordArg(key, argnames, first_kw_arg, &index_found, function_name);
+ 
+             if (cmp == 1) {
+                 // Found in declared keywords => assign value.
+-                PyObject *value = kwvalues[pos];
+-                values[index_found] = __Pyx_NewRef(value);
++                PyObject *value = PyValue_Object(kwvalues[pos]);
++                if (unlikely(!value)) goto bad;
++                values[index_found] = value;
+             } else {
+                 if (unlikely(cmp == -1)) goto bad;
+                 if (kwds2) {
+-                    PyObject *value = kwvalues[pos];
++                    PyObject *value = PyValue_Object(kwvalues[pos]);
++                    if (unlikely(!value)) goto bad;
+                     if (unlikely(PyDict_SetItem(kwds2, key, value))) goto bad;
+                 } else if (!ignore_unknown_kwargs) {
+                     goto invalid_keyword;
+@@ -934,12 +937,13 @@ static CYTHON_INLINE int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_
+ #define __Pyx_GetKwValue_VARARGS(kw, kwvalues, s) __Pyx_PyDict_GetItemStrWithError(kw, s)
+ #define __Pyx_KwargsAsDict_VARARGS(kw, kwvalues) PyDict_Copy(kw)
+ #if CYTHON_VECTORCALL
+-    #define __Pyx_ArgRef_FASTCALL(args, i) __Pyx_NewRef(args[i])
++    // METH_FASTCALL arguments are values: reading one boxes it, which may fail.
++    #define __Pyx_ArgRef_FASTCALL(args, i) PyValue_Object(args[i])
+     #define __Pyx_NumKwargs_FASTCALL(kwds) __Pyx_PyTuple_GET_SIZE(kwds)
+     #define __Pyx_KwValues_FASTCALL(args, nargs) ((args) + (nargs))
+-    static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues, PyObject *s);
++    static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, const PyValue *kwvalues, PyObject *s);
+   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030d0000 || CYTHON_COMPILING_IN_LIMITED_API || CYTHON_COMPILING_IN_PYPY || CYTHON_COMPILING_IN_GRAAL
+-    CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues);/*proto*/
++    CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, const PyValue *kwvalues);/*proto*/
+   #else
+     #define __Pyx_KwargsAsDict_FASTCALL(kw, kwvalues) _PyStack_AsDict(kwvalues, kw)
+   #endif
+@@ -970,20 +974,21 @@ static CYTHON_INLINE int __Pyx_MergeKeywords(PyObject *kwdict, PyObject *source_
+ #define __Pyx_ArgsSlice_VARARGS(args, start, stop) PyTuple_GetSlice(args, start, stop)
+ 
+ #if CYTHON_VECTORCALL
+-#define __Pyx_ArgsSlice_FASTCALL(args, start, stop) __Pyx_PyTuple_FromArray(args + start, stop - start)
++#define __Pyx_ArgsSlice_FASTCALL(args, start, stop) __Pyx_PyTuple_FromValueArray(args + start, stop - start)
+ #else
+ #define __Pyx_ArgsSlice_FASTCALL __Pyx_ArgsSlice_VARARGS
+ #endif
+ 
+ /////////////// fastcall ///////////////
+ //@requires: ObjectHandling.c::TupleFromArray
++//@requires: ObjectHandling.c::TupleFromValueArray
+ //@requires: Optimize.c::UnicodeEquals
+ 
+ #if CYTHON_VECTORCALL
+ // kwnames: tuple with names of keyword arguments
+ // kwvalues: C array with values of keyword arguments
+ // s: str with the keyword name to look for
+-static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues, PyObject *s)
++static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, const PyValue *kwvalues, PyObject *s)
+ {
+     // Search the kwnames array for s and return the corresponding value.
+     // We do two loops: a first one to compare pointers (which will find a
+@@ -999,7 +1004,8 @@ static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyO
+         #if !CYTHON_ASSUME_SAFE_MACROS
+         if (unlikely(!namei)) return NULL;
+         #endif
+-        if (s == namei) return kwvalues[i];
++        // NULL with an exception set if boxing fails.
++        if (s == namei) return PyValue_Object(kwvalues[i]);
+     }
+     for (i = 0; i < n; i++)
+     {
+@@ -1010,14 +1016,14 @@ static CYTHON_INLINE PyObject * __Pyx_GetKwValue_FASTCALL(PyObject *kwnames, PyO
+         int eq = __Pyx_PyUnicode_Equals(s, namei);
+         if (unlikely(eq != 0)) {
+             if (unlikely(eq < 0)) return NULL;  /* error */
+-            return kwvalues[i];
++            return PyValue_Object(kwvalues[i]);
+         }
+     }
+     return NULL;  /* not found (no exception set) */
+ }
+ 
+ #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030d0000 || CYTHON_COMPILING_IN_LIMITED_API || CYTHON_COMPILING_IN_PYPY || CYTHON_COMPILING_IN_GRAAL
+-CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues) {
++CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, const PyValue *kwvalues) {
+     Py_ssize_t i, nkwargs;
+     PyObject *dict;
+ #if !CYTHON_ASSUME_SAFE_SIZE
+@@ -1038,7 +1044,8 @@ CYTHON_UNUSED static PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, Py
+ #else
+         PyObject *key = PyTuple_GET_ITEM(kwnames, i);
+ #endif
+-        if (unlikely(PyDict_SetItem(dict, key, kwvalues[i]) < 0))
++        PyObject *value = PyValue_Object(kwvalues[i]);
++        if (unlikely(!value || PyDict_SetItem(dict, key, value) < 0))
+             goto bad;
+     }
+     return dict;
+diff --git a/Cython/Utility/ModuleSetupCode.c b/Cython/Utility/ModuleSetupCode.c
+index d30c50a..3671d20 100644
+--- a/Cython/Utility/ModuleSetupCode.c
++++ b/Cython/Utility/ModuleSetupCode.c
+@@ -1,5 +1,10 @@
+ /////////////// InitLimitedAPI ///////////////
+ 
++// This Cython generates code for the PyValue C API, which has no limited API.
++#if defined(Py_LIMITED_API) || defined(CYTHON_LIMITED_API)
++  #error "The PyValue C API has no limited API: build without Py_LIMITED_API and CYTHON_LIMITED_API"
++#endif
++
+ #if defined(Py_LIMITED_API)
+   #if !defined(CYTHON_LIMITED_API)
+   // Use Py_LIMITED_API as the main control for Cython's limited API mode.
+@@ -17,6 +22,12 @@
+ 
+ /////////////// CModulePreamble ///////////////
+ 
++// Calls pass PyValue (Include/pyvalue.h): METH_O, METH_FASTCALL, vectorcall
++// and tp_iternext functions take and return values.
++#ifndef Py_PYVALUE_H
++  #error "This Cython generates code for the PyValue C API"
++#endif
++
+ #include <stddef.h> /* For offsetof */
+ #ifndef offsetof
+   #define offsetof(type, member) ( (size_t) & ((type*)0) -> member )
+@@ -406,16 +417,12 @@
+     // The gain is unclear, however, since the GIL handling itself became faster in recent CPython versions.
+     #define CYTHON_FAST_GIL (PY_VERSION_HEX < 0x030C00A6)
+   #endif
+-  #ifndef CYTHON_VECTORCALL
+-    #define CYTHON_VECTORCALL 1
+-  #endif
+-  #if CYTHON_USE_TYPE_SPECS && PY_VERSION_HEX < 0x030E0000
+-    // Py_tp_vectorcall slot unavailable
+-    #undef CYTHON_VECTORCALL_TPNEW
+-    #define CYTHON_VECTORCALL_TPNEW 0
+-  #elif !defined(CYTHON_VECTORCALL_TPNEW)
+-    #define CYTHON_VECTORCALL_TPNEW CYTHON_VECTORCALL
+-  #endif
++  // The generated METH_FASTCALL wrappers take values, so they need vectorcall.
++  // A type's tp_vectorcall stays unused: tp_new takes an args tuple.
++  #undef CYTHON_VECTORCALL
++  #define CYTHON_VECTORCALL 1
++  #undef CYTHON_VECTORCALL_TPNEW
++  #define CYTHON_VECTORCALL_TPNEW 0
+   #ifndef CYTHON_PEP487_INIT_SUBCLASS
+     #define CYTHON_PEP487_INIT_SUBCLASS 1
+   #endif
+diff --git a/Cython/Utility/ObjectHandling.c b/Cython/Utility/ObjectHandling.c
+index 20ad4e3..257bd83 100644
+--- a/Cython/Utility/ObjectHandling.c
++++ b/Cython/Utility/ObjectHandling.c
+@@ -217,7 +217,8 @@ static CYTHON_INLINE PyObject *__Pyx_PyIter_Next_Plain(PyObject *iterator) {
+     (void)__Pyx_GetBuiltinName; // only for early limited API
+     iternextfunc iternext = __Pyx_PyObject_GetIterNextFunc(iterator);
+     assert(iternext);
+-    return iternext(iterator);
++    // tp_iternext returns a value.
++    return PyValue_Object(iternext(iterator));
+ #endif
+ }
+ 
+@@ -267,7 +268,8 @@ static CYTHON_INLINE PyObject *__Pyx_PyIter_Next2(PyObject* iterator, PyObject*
+     // We always do a quick slot check because calling PyIter_Check() is so wasteful.
+     iternextfunc iternext = __Pyx_PyObject_TryGetSlot(iterator, tp_iternext, iternextfunc);
+     if (likely(iternext)) {
+-        next = iternext(iterator);
++        // tp_iternext returns a value.
++        next = PyValue_Object(iternext(iterator));
+         if (likely(next))
+             return next;
+     #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX < 0x030d0000
+@@ -1933,8 +1935,9 @@ static PyObject *__Pyx_SelflessCall(PyObject *method, PyObject *args, PyObject *
+     return result;
+ }
+ #else
+-static PyObject *__Pyx_SelflessCall(PyObject *method, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+-    return PyObject_Vectorcall(method, args ? args+1 : NULL, nargs ? (size_t) nargs-1 : 0, kwnames);
++// METH_FASTCALL: takes and returns values.
++static PyValue __Pyx_SelflessCall(PyObject *method, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames) {
++    return PyObject_VectorcallValue(PyValue_FromObject(method), args ? args+1 : NULL, nargs ? (size_t) nargs-1 : 0, kwnames);
+ }
+ #endif
+ 
+@@ -2009,10 +2012,32 @@ static int __Pyx_TryUnpackUnboundCMethod(__Pyx_CachedCFunction* target) {
+     ((PyCFunction)(void(*)(void))(cfunc)->func)(self, args)
+ #define __Pyx_CallCFunctionWithKeywords(cfunc, self, args, kwargs) \
+     ((PyCFunctionWithKeywords)(void(*)(void))(cfunc)->func)(self, args, kwargs)
++// METH_O and METH_FASTCALL functions take and return values.
++#define __Pyx_CallCFunctionO(cfunc, self, arg) \
++    PyValue_Object(((PyCFunctionO)(void(*)(void))(cfunc)->func)(self, PyValue_FromObject(arg)))
+ #define __Pyx_CallCFunctionFast(cfunc, self, args, nargs) \
+-    ((__Pyx_PyCFunctionFast)(void(*)(void))(PyCFunction)(cfunc)->func)(self, args, nargs)
++    __Pyx__CallCFunctionFast((void(*)(void))(cfunc)->func, self, args, nargs, NULL, 0)
+ #define __Pyx_CallCFunctionFastWithKeywords(cfunc, self, args, nargs, kwnames) \
+-    ((__Pyx_PyCFunctionFastWithKeywords)(void(*)(void))(PyCFunction)(cfunc)->func)(self, args, nargs, kwnames)
++    __Pyx__CallCFunctionFast((void(*)(void))(cfunc)->func, self, args, nargs, kwnames, 1)
++static PyObject *__Pyx__CallCFunctionFast(void (*func)(void), PyObject *self, PyObject *const *args,
++                                          Py_ssize_t nargs, PyObject *kwnames, int with_keywords); /*proto*/
++
++/////////////// CallCFunction ///////////////
++
++// The callers pass at most two arguments and no keywords.
++CYTHON_UNUSED static PyObject *__Pyx__CallCFunctionFast(void (*func)(void), PyObject *self, PyObject *const *args,
++                                          Py_ssize_t nargs, PyObject *kwnames, int with_keywords) {
++    PyValue values[2];
++    Py_ssize_t i;
++    assert(nargs <= 2 && kwnames == NULL);
++    for (i = 0; i < nargs; i++) {
++        values[i] = PyValue_FromObject(args[i]);
++    }
++    if (with_keywords) {
++        return PyValue_Object(((PyCFunctionFastWithKeywords)func)(self, values, nargs, kwnames));
++    }
++    return PyValue_Object(((PyCFunctionFast)func)(self, values, nargs));
++}
+ 
+ 
+ /////////////// CallUnboundCMethod0.proto ///////////////
+@@ -2099,7 +2124,7 @@ static CYTHON_INLINE PyObject* __Pyx_CallUnboundCMethod1(__Pyx_CachedCFunction*
+     if (likely(was_initialized == 2 && cfunc->func)) {
+         int flag = cfunc->flag;
+         if (flag == METH_O) {
+-            return __Pyx_CallCFunction(cfunc, self, arg);
++            return __Pyx_CallCFunctionO(cfunc, self, arg);
+         } else if (flag == METH_FASTCALL) {
+             return __Pyx_CallCFunctionFast(cfunc, self, &arg, 1);
+         } else if (flag == (METH_FASTCALL | METH_KEYWORDS)) {
+@@ -2296,14 +2321,9 @@ static CYTHON_INLINE PyObject* __Pyx_PyObject_FastCallDict(PyObject *func, PyObj
+ 
+     if (kwargs == NULL) {
+         #if CYTHON_VECTORCALL
+-          #if CYTHON_COMPILING_IN_LIMITED_API || CYTHON_COMPILING_IN_PYPY
++            // A vectorcall function takes values: PyObject_Vectorcall()
++            // converts the objects.
+             return PyObject_Vectorcall(func, args, nargsf, NULL);
+-          #else
+-            vectorcallfunc f = __Pyx_PyVectorcall_Function(func);
+-            if (f) {
+-                return f(func, args, nargsf, NULL);
+-            }
+-          #endif
+         #endif
+     }
+ 
+@@ -2556,6 +2576,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyObject_CallMethO(PyObject *func, PyObject
+ /////////////// PyObjectCallMethO ///////////////
+ 
+ #if CYTHON_COMPILING_IN_CPYTHON
++// Call a METH_O function with arg, or a METH_NOARGS function if arg is NULL.
+ static CYTHON_INLINE PyObject* __Pyx_PyObject_CallMethO(PyObject *func, PyObject *arg) {
+     PyObject *self, *result;
+     PyCFunction cfunc;
+@@ -2564,7 +2585,12 @@ static CYTHON_INLINE PyObject* __Pyx_PyObject_CallMethO(PyObject *func, PyObject
+ 
+     if (unlikely(Py_EnterRecursiveCall(" while calling a Python object")))
+         return NULL;
+-    result = cfunc(self, arg);
++    if (arg) {
++        // METH_O takes and returns a value.
++        result = PyValue_Object(((PyCFunctionO)(void(*)(void))cfunc)(self, PyValue_FromObject(arg)));
++    } else {
++        result = cfunc(self, NULL);
++    }
+     Py_LeaveRecursiveCall();
+     if (unlikely(!result) && unlikely(!PyErr_Occurred())) {
+         PyErr_SetString(
+@@ -2618,7 +2644,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyObject_CallNoArg(PyObject *func) {
+ /////////////// PyVectorcallFastCallDict.proto ///////////////
+ 
+ #if CYTHON_VECTORCALL
+-static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, __pyx_vectorcallfunc vc, PyObject *const *args, size_t nargs, PyObject *kw);
++static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, __pyx_vectorcallfunc vc, const PyValue *args, size_t nargs, PyObject *kw);
+ #endif
+ 
+ /////////////// PyVectorcallFastCallDict ///////////////
+@@ -2626,13 +2652,13 @@ static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, _
+ 
+ #if CYTHON_VECTORCALL
+ // Slow path when kw is non-empty
+-static PyObject *__Pyx_PyVectorcall_FastCallDict_kw(PyObject *func, __pyx_vectorcallfunc vc, PyObject *const *args, size_t nargs, PyObject *kw)
++static PyObject *__Pyx_PyVectorcall_FastCallDict_kw(PyObject *func, __pyx_vectorcallfunc vc, const PyValue *args, size_t nargs, PyObject *kw)
+ {
+     // Code based on _PyObject_FastCallDict() and _PyStack_UnpackDict() from CPython
+     PyObject *res = NULL;
+     PyObject *kwnames;
+-    PyObject **newargs;
+-    PyObject **kwvalues;
++    PyValue *newargs;
++    PyValue *kwvalues;
+     Py_ssize_t i;
+     #if CYTHON_AVOID_BORROWED_REFS
+     PyObject *pos;
+@@ -2650,7 +2676,7 @@ static PyObject *__Pyx_PyVectorcall_FastCallDict_kw(PyObject *func, __pyx_vector
+     #endif
+ 
+     // Copy positional arguments
+-    newargs = (PyObject **)PyMem_Malloc((nargs + (size_t)nkw) * sizeof(args[0]));
++    newargs = (PyValue *)PyMem_Malloc((nargs + (size_t)nkw) * sizeof(args[0]));
+     if (unlikely(newargs == NULL)) {
+         PyErr_NoMemory();
+         return NULL;
+@@ -2679,7 +2705,7 @@ static PyObject *__Pyx_PyVectorcall_FastCallDict_kw(PyObject *func, __pyx_vector
+         #else
+         PyTuple_SET_ITEM(kwnames, i, key);
+         #endif
+-        kwvalues[i] = value;
++        kwvalues[i] = PyValue_FromObject(value);
+         i++;
+     }
+     if (unlikely(!keys_are_strings)) {
+@@ -2688,20 +2714,19 @@ static PyObject *__Pyx_PyVectorcall_FastCallDict_kw(PyObject *func, __pyx_vector
+     }
+ 
+     // The actual call
+-    res = vc(func, newargs, nargs, kwnames);
++    res = PyValue_Object(vc(PyValue_FromObject(func), newargs, nargs, kwnames));
+ 
+ cleanup:
+     #if CYTHON_AVOID_BORROWED_REFS
+     Py_DECREF(pos);
+     #endif
+     Py_DECREF(kwnames);
+-    for (i = 0; i < nkw; i++)
+-        Py_DECREF(kwvalues[i]);
++    // kw keeps the keyword values alive.
+     PyMem_Free(newargs);
+     return res;
+ }
+ 
+-static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, __pyx_vectorcallfunc vc, PyObject *const *args, size_t nargs, PyObject *kw)
++static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, __pyx_vectorcallfunc vc, const PyValue *args, size_t nargs, PyObject *kw)
+ {
+     Py_ssize_t kw_size =
+         likely(kw == NULL) ?
+@@ -2713,7 +2738,7 @@ static CYTHON_INLINE PyObject *__Pyx_PyVectorcall_FastCallDict(PyObject *func, _
+ #endif
+ 
+     if (kw_size == 0) {
+-        return vc(func, args, nargs, NULL);
++        return PyValue_Object(vc(PyValue_FromObject(func), args, nargs, NULL));
+     }
+ #if !CYTHON_ASSUME_SAFE_SIZE
+     else if (unlikely(kw_size == -1)) {

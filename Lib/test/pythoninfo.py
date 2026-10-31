@@ -156,12 +156,9 @@ def collect_sys(info_add):
         info_add('sys.%s.encoding' % name, encoding)
 
     # Were we compiled --with-pydebug?
-    Py_DEBUG = hasattr(sys, 'gettotalrefcount')
-    if Py_DEBUG:
-        text = 'Yes (sys.gettotalrefcount() present)'
-    else:
-        text = 'No (sys.gettotalrefcount() missing)'
-    info_add('build.Py_DEBUG', text)
+    import sysconfig
+    Py_DEBUG = bool(sysconfig.get_config_var('Py_DEBUG'))
+    info_add('build.Py_DEBUG', 'Yes' if Py_DEBUG else 'No')
 
     # Were we compiled --with-trace-refs?
     Py_TRACE_REFS = hasattr(sys, 'getobjects')
@@ -788,7 +785,6 @@ def collect_testinternalcapi(info_add):
     call_func(info_add, 'pymem.allocator', _testinternalcapi, 'pymem_getallocatorsname')
 
     for name in (
-        'SIZEOF_PYGC_HEAD',
         'SIZEOF_PYOBJECT',
     ):
         copy_attr(info_add, f'_testinternalcapi.{name}', _testinternalcapi, name)

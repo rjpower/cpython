@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<string>", line 26, in <module>
+    assert 'opcode = INSTRUMENTED_LOAD_SUPER_ATTR;' in lines, ('semantic body opcode', lines[:25])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('semantic body opcode', ['', '#if _Py_TAIL_CALL_INTERP', 'int opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;', '(void)(opcode);', '_PyInterpreterFrame *frame = tstate->current_frame;', '#endif', '_PyIRWord* const this_instr = next_instr;', '(void)this_instr;', 'frame->instr_ptr = next_instr;', 'next_instr += 1;', 'INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);', 'int oparg = (int)IR_FIELD_CD(this_instr);', '(void)oparg;', 'PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));', '(void)window;', 'opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;', 'PyValue global_super_st;', 'PyValue class_st;', 'PyValue self_st;', 'PyValue attr;', 'PyValue *null;', '// _LOAD_SUPER_ATTR', '{', 'self_st = window[2];', 'class_st = window[1];'])

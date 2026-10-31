@@ -174,7 +174,7 @@ constevaluator_repr(PyObject *self)
 }
 
 static PyObject *
-constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
+constevaluator_call_object(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     constevaluatorobject *ce = constevaluatorobject_CAST(self);
     if (!_PyArg_NoKeywords("constevaluator.__call__", kwargs)) {
@@ -222,6 +222,12 @@ constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
         return PyUnicodeWriter_Finish(writer);
     }
     return Py_NewRef(value);
+}
+
+static PyValue
+constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromResult(constevaluator_call_object(self, args, kwargs));
 }
 
 static PyObject *
@@ -394,10 +400,10 @@ caller(void)
     if (f == NULL) {
         Py_RETURN_NONE;
     }
-    if (f == NULL || PyStackRef_IsNull(f->f_funcobj)) {
+    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
         Py_RETURN_NONE;
     }
-    PyObject *r = PyFunction_GetModule(PyStackRef_AsPyObjectBorrow(f->f_funcobj));
+    PyObject *r = PyFunction_GetModule(PyValue_ObjectBorrow(f->f_funcobj));
     if (!r) {
         PyErr_Clear();
         Py_RETURN_NONE;
@@ -543,88 +549,88 @@ static PyMemberDef typevar_members[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 typevar_bound(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->bound != NULL) {
-        return Py_NewRef(self->bound);
+        return PyValue_FromObject(self->bound);
     }
     if (self->evaluate_bound == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     PyObject *bound = PyObject_CallNoArgs(self->evaluate_bound);
     self->bound = Py_XNewRef(bound);
-    return bound;
+    return PyValue_FromResult(bound);
 }
 
-static PyObject *
+static PyValue
 typevar_default(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->default_value != NULL) {
-        return Py_NewRef(self->default_value);
+        return PyValue_FromObject(self->default_value);
     }
     if (self->evaluate_default == NULL) {
-        return &_Py_NoDefaultStruct;
+        return PyValue_FromObject(&_Py_NoDefaultStruct);
     }
     PyObject *default_value = PyObject_CallNoArgs(self->evaluate_default);
     self->default_value = Py_XNewRef(default_value);
-    return default_value;
+    return PyValue_FromResult(default_value);
 }
 
-static PyObject *
+static PyValue
 typevar_constraints(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->constraints != NULL) {
-        return Py_NewRef(self->constraints);
+        return PyValue_FromObject(self->constraints);
     }
     if (self->evaluate_constraints == NULL) {
-        return PyTuple_New(0);
+        return PyValue_FromResult(PyTuple_New(0));
     }
     PyObject *constraints = PyObject_CallNoArgs(self->evaluate_constraints);
     self->constraints = Py_XNewRef(constraints);
-    return constraints;
+    return PyValue_FromResult(constraints);
 }
 
-static PyObject *
+static PyValue
 typevar_evaluate_bound(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->evaluate_bound != NULL) {
-        return Py_NewRef(self->evaluate_bound);
+        return PyValue_FromObject(self->evaluate_bound);
     }
     if (self->bound != NULL) {
-        return constevaluator_alloc(self->bound);
+        return PyValue_FromResult(constevaluator_alloc(self->bound));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 typevar_evaluate_constraints(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->evaluate_constraints != NULL) {
-        return Py_NewRef(self->evaluate_constraints);
+        return PyValue_FromObject(self->evaluate_constraints);
     }
     if (self->constraints != NULL) {
-        return constevaluator_alloc(self->constraints);
+        return PyValue_FromResult(constevaluator_alloc(self->constraints));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 typevar_evaluate_default(PyObject *op, void *Py_UNUSED(closure))
 {
     typevarobject *self = typevarobject_CAST(op);
     if (self->evaluate_default != NULL) {
-        return Py_NewRef(self->evaluate_default);
+        return PyValue_FromObject(self->evaluate_default);
     }
     if (self->default_value != NULL) {
-        return constevaluator_alloc(self->default_value);
+        return PyValue_FromResult(constevaluator_alloc(self->default_value));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyGetSetDef typevar_getset[] = {
@@ -801,7 +807,7 @@ typevar_typing_prepare_subst_impl(typevarobject *self, PyObject *alias,
     }
     else if (i == args_len) {
         // If the TypeVar has a default, use it.
-        PyObject *dflt = typevar_default((PyObject *)self, NULL);
+        PyObject *dflt = PyValue_Object(typevar_default((PyObject *)self, NULL));
         if (dflt == NULL) {
             Py_DECREF(params);
             return NULL;
@@ -855,12 +861,16 @@ typevar_has_default_impl(typevarobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-typevar_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+typevar_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of TypeVar");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef typevar_methods[] = {
@@ -868,7 +878,7 @@ static PyMethodDef typevar_methods[] = {
     TYPEVAR_TYPING_PREPARE_SUBST_METHODDEF
     TYPEVAR_REDUCE_METHODDEF
     TYPEVAR_HAS_DEFAULT_METHODDEF
-    {"__mro_entries__", typevar_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(typevar_mro_entries), METH_O},
     {0}
 };
 
@@ -1040,16 +1050,20 @@ paramspecargs_new_impl(PyTypeObject *type, PyObject *origin)
     return (PyObject *)paramspecattr_new(type, origin);
 }
 
-static PyObject *
-paramspecargs_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspecargs_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpecArgs");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspecargs_methods[] = {
-    {"__mro_entries__", paramspecargs_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspecargs_mro_entries), METH_O},
     {0}
 };
 
@@ -1120,16 +1134,20 @@ paramspeckwargs_new_impl(PyTypeObject *type, PyObject *origin)
     return (PyObject *)paramspecattr_new(type, origin);
 }
 
-static PyObject *
-paramspeckwargs_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspeckwargs_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpecKwargs");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspeckwargs_methods[] = {
-    {"__mro_entries__", paramspeckwargs_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspeckwargs_mro_entries), METH_O},
     {0}
 };
 
@@ -1236,46 +1254,46 @@ static PyMemberDef paramspec_members[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 paramspec_args(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.paramspecargs_type;
-    return (PyObject *)paramspecattr_new(tp, self);
+    return PyValue_FromResult((PyObject *)paramspecattr_new(tp, self));
 }
 
-static PyObject *
+static PyValue
 paramspec_kwargs(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.paramspeckwargs_type;
-    return (PyObject *)paramspecattr_new(tp, self);
+    return PyValue_FromResult((PyObject *)paramspecattr_new(tp, self));
 }
 
-static PyObject *
+static PyValue
 paramspec_default(PyObject *op, void *Py_UNUSED(closure))
 {
     paramspecobject *self = paramspecobject_CAST(op);
     if (self->default_value != NULL) {
-        return Py_NewRef(self->default_value);
+        return PyValue_FromObject(self->default_value);
     }
     if (self->evaluate_default == NULL) {
-        return &_Py_NoDefaultStruct;
+        return PyValue_FromObject(&_Py_NoDefaultStruct);
     }
     PyObject *default_value = PyObject_CallNoArgs(self->evaluate_default);
     self->default_value = Py_XNewRef(default_value);
-    return default_value;
+    return PyValue_FromResult(default_value);
 }
 
-static PyObject *
+static PyValue
 paramspec_evaluate_default(PyObject *op, void *Py_UNUSED(closure))
 {
     paramspecobject *self = paramspecobject_CAST(op);
     if (self->evaluate_default != NULL) {
-        return Py_NewRef(self->evaluate_default);
+        return PyValue_FromObject(self->evaluate_default);
     }
     if (self->default_value != NULL) {
-        return constevaluator_alloc(self->default_value);
+        return PyValue_FromResult(constevaluator_alloc(self->default_value));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyGetSetDef paramspec_getset[] = {
@@ -1417,12 +1435,16 @@ paramspec_has_default_impl(paramspecobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-paramspec_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+paramspec_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of ParamSpec");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef paramspec_methods[] = {
@@ -1430,7 +1452,7 @@ static PyMethodDef paramspec_methods[] = {
     PARAMSPEC_TYPING_PREPARE_SUBST_METHODDEF
     PARAMSPEC_HAS_DEFAULT_METHODDEF
     PARAMSPEC_REDUCE_METHODDEF
-    {"__mro_entries__", paramspec_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(paramspec_mro_entries), METH_O},
     {0}
 };
 
@@ -1702,12 +1724,16 @@ typevartuple_has_default_impl(typevartupleobject *self)
     Py_RETURN_FALSE;
 }
 
-static PyObject *
-typevartuple_mro_entries(PyObject *self, PyObject *args)
+static PyValue
+typevartuple_mro_entries(PyObject *self, PyValue args_value)
 {
+    PyObject *args = PyValue_Object(args_value);
+    if (args == NULL) {
+        return PyValue_NULL;
+    }
     PyErr_SetString(PyExc_TypeError,
                     "Cannot subclass an instance of TypeVarTuple");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static int
@@ -1734,32 +1760,32 @@ typevartuple_clear(PyObject *self)
     return 0;
 }
 
-static PyObject *
+static PyValue
 typevartuple_default(PyObject *op, void *Py_UNUSED(closure))
 {
     typevartupleobject *self = typevartupleobject_CAST(op);
     if (self->default_value != NULL) {
-        return Py_NewRef(self->default_value);
+        return PyValue_FromObject(self->default_value);
     }
     if (self->evaluate_default == NULL) {
-        return &_Py_NoDefaultStruct;
+        return PyValue_FromObject(&_Py_NoDefaultStruct);
     }
     PyObject *default_value = PyObject_CallNoArgs(self->evaluate_default);
     self->default_value = Py_XNewRef(default_value);
-    return default_value;
+    return PyValue_FromResult(default_value);
 }
 
-static PyObject *
+static PyValue
 typevartuple_evaluate_default(PyObject *op, void *Py_UNUSED(closure))
 {
     typevartupleobject *self = typevartupleobject_CAST(op);
     if (self->evaluate_default != NULL) {
-        return Py_NewRef(self->evaluate_default);
+        return PyValue_FromObject(self->evaluate_default);
     }
     if (self->default_value != NULL) {
-        return constevaluator_alloc(self->default_value);
+        return PyValue_FromResult(constevaluator_alloc(self->default_value));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyGetSetDef typevartuple_getset[] = {
@@ -1773,7 +1799,7 @@ static PyMethodDef typevartuple_methods[] = {
     TYPEVARTUPLE_TYPING_PREPARE_SUBST_METHODDEF
     TYPEVARTUPLE_REDUCE_METHODDEF
     TYPEVARTUPLE_HAS_DEFAULT_METHODDEF
-    {"__mro_entries__", typevartuple_mro_entries, METH_O},
+    {"__mro_entries__", _PyCFunction_CAST(typevartuple_mro_entries), METH_O},
     {0}
 };
 
@@ -1866,13 +1892,13 @@ static PyObject *
 get_type_param_default(PyThreadState *ts, PyObject *typeparam) {
     // Does not modify refcount of existing objects.
     if (Py_IS_TYPE(typeparam, ts->interp->cached_objects.typevar_type)) {
-        return typevar_default(typeparam, NULL);
+        return PyValue_Object(typevar_default(typeparam, NULL));
     }
     else if (Py_IS_TYPE(typeparam, ts->interp->cached_objects.paramspec_type)) {
-        return paramspec_default(typeparam, NULL);
+        return PyValue_Object(paramspec_default(typeparam, NULL));
     }
     else if (Py_IS_TYPE(typeparam, ts->interp->cached_objects.typevartuple_type)) {
-        return typevartuple_default(typeparam, NULL);
+        return PyValue_Object(typevartuple_default(typeparam, NULL));
     }
     else {
         PyErr_Format(PyExc_TypeError, "Expected a type param, got %R", typeparam);
@@ -1932,45 +1958,45 @@ static PyMemberDef typealias_members[] = {
     {0}
 };
 
-static PyObject *
+static PyValue
 typealias_value(PyObject *self, void *Py_UNUSED(closure))
 {
     typealiasobject *ta = typealiasobject_CAST(self);
-    return typealias_get_value(ta);
+    return PyValue_FromResult(typealias_get_value(ta));
 }
 
-static PyObject *
+static PyValue
 typealias_evaluate_value(PyObject *self, void *Py_UNUSED(closure))
 {
     typealiasobject *ta = typealiasobject_CAST(self);
     if (ta->compute_value != NULL) {
-        return Py_NewRef(ta->compute_value);
+        return PyValue_FromObject(ta->compute_value);
     }
     assert(ta->value != NULL);
-    return constevaluator_alloc(ta->value);
+    return PyValue_FromResult(constevaluator_alloc(ta->value));
 }
 
-static PyObject *
+static PyValue
 typealias_parameters(PyObject *self, void *Py_UNUSED(closure))
 {
     typealiasobject *ta = typealiasobject_CAST(self);
     if (ta->type_params == NULL) {
-        return PyTuple_New(0);
+        return PyValue_FromResult(PyTuple_New(0));
     }
-    return unpack_typevartuples(ta->type_params);
+    return PyValue_FromResult(unpack_typevartuples(ta->type_params));
 }
 
-static PyObject *
+static PyValue
 typealias_type_params(PyObject *self, void *Py_UNUSED(closure))
 {
     typealiasobject *ta = typealiasobject_CAST(self);
     if (ta->type_params == NULL) {
-        return PyTuple_New(0);
+        return PyValue_FromResult(PyTuple_New(0));
     }
-    return Py_NewRef(ta->type_params);
+    return PyValue_FromObject(ta->type_params);
 }
 
-static PyObject *
+static PyValue
 typealias_module(PyObject *self, void *Py_UNUSED(closure))
 {
     typealiasobject *ta = typealiasobject_CAST(self);
@@ -1979,7 +2005,7 @@ typealias_module(PyObject *self, void *Py_UNUSED(closure))
     module = Py_XNewRef(ta->module);
     Py_END_CRITICAL_SECTION();
     if (module != NULL) {
-        return module;
+        return PyValue_FromResult(module);
     }
     if (ta->compute_value != NULL) {
         PyObject* mod = PyFunction_GetModule(ta->compute_value);
@@ -1987,15 +2013,19 @@ typealias_module(PyObject *self, void *Py_UNUSED(closure))
             // PyFunction_GetModule() returns a borrowed reference,
             // and it may return NULL (e.g., for functions defined
             // in an exec()'ed block).
-            return Py_NewRef(mod);
+            return PyValue_FromObject(mod);
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static int
-typealias_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+typealias_set_module(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyObject *old;
     typealiasobject *ta = typealiasobject_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(self);

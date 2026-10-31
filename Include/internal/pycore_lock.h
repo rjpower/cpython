@@ -118,7 +118,7 @@ typedef struct {
 extern void _PyRawMutex_LockSlow(_PyRawMutex *m);
 extern void _PyRawMutex_UnlockSlow(_PyRawMutex *m);
 
-static inline void
+Py_GC_PRECISE static inline void
 _PyRawMutex_Lock(_PyRawMutex *m)
 {
     uintptr_t unlocked = _Py_UNLOCKED;
@@ -128,7 +128,7 @@ _PyRawMutex_Lock(_PyRawMutex *m)
     _PyRawMutex_LockSlow(m);
 }
 
-static inline void
+Py_GC_PRECISE static inline void
 _PyRawMutex_Unlock(_PyRawMutex *m)
 {
     uintptr_t locked = _Py_LOCKED;

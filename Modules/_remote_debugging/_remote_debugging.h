@@ -27,11 +27,12 @@ extern "C" {
 #include "internal/pycore_debug_offsets.h"  // _Py_DebugOffsets
 #include "internal/pycore_frame.h"          // FRAME_SUSPENDED_YIELD_FROM
 #include "internal/pycore_interpframe.h"    // FRAME_OWNED_BY_INTERPRETER
+#include "internal/pycore_ir.h"             // _PyIRBlock
 #include "internal/pycore_llist.h"          // struct llist_node
 #include "internal/pycore_long.h"           // _PyLong_GetZero
 #include "internal/pycore_pyerrors.h"       // _PyErr_FormatFromCause
 #include "internal/pycore_pyhash.h"        // _Py_HashPointerRaw
-#include "internal/pycore_stackref.h"       // Py_TAG_BITS
+#include "internal/pycore_value.h"       // _PyValue_TAG_BITS
 #include "../../Python/remote_debug.h"
 
 #include <assert.h>
@@ -124,7 +125,7 @@ typedef enum _WIN32_THREADSTATE {
 
 #define GET_MEMBER(type, obj, offset) \
     (*(const type *)memcpy(&(type){0}, (const char *)(obj) + (offset), sizeof(type)))
-#define CLEAR_PTR_TAG(ptr) (((uintptr_t)(ptr) & ~Py_TAG_BITS))
+#define CLEAR_PTR_TAG(ptr) (((uintptr_t)(ptr) & ~_PyValue_TAG_BITS))
 #define GET_MEMBER_NO_TAG(type, obj, offset) (type)(CLEAR_PTR_TAG(GET_MEMBER(type, obj, offset)))
 
 /* Size macros for opaque buffers */
@@ -135,6 +136,7 @@ typedef enum _WIN32_THREADSTATE {
 #define SIZEOF_LLIST_NODE sizeof(struct llist_node)
 #define SIZEOF_PAGE_CACHE_ENTRY sizeof(page_cache_entry_t)
 #define SIZEOF_PYOBJECT sizeof(PyObject)
+#define SIZEOF_SHAPE sizeof(_PyShape)
 #define SIZEOF_SET_OBJ sizeof(PySetObject)
 #define SIZEOF_TASK_OBJ 4096
 #define SIZEOF_THREAD_STATE sizeof(PyThreadState)
@@ -155,18 +157,10 @@ typedef enum _WIN32_THREADSTATE {
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-#ifdef Py_GIL_DISABLED
-#define INTERP_STATE_MIN_SIZE MAX(MAX(MAX(MAX(offsetof(PyInterpreterState, _code_object_generation) + sizeof(uint64_t), \
-                                              offsetof(PyInterpreterState, tlbc_indices.tlbc_generation) + sizeof(uint32_t)), \
-                                          offsetof(PyInterpreterState, threads.head) + sizeof(void*)), \
-                                      offsetof(PyInterpreterState, _gil.last_holder) + sizeof(PyThreadState*)), \
-                                  offsetof(PyInterpreterState, gc.frame) + sizeof(_PyInterpreterFrame *))
-#else
 #define INTERP_STATE_MIN_SIZE MAX(MAX(MAX(offsetof(PyInterpreterState, _code_object_generation) + sizeof(uint64_t), \
                                           offsetof(PyInterpreterState, threads.head) + sizeof(void*)), \
                                       offsetof(PyInterpreterState, _gil.last_holder) + sizeof(PyThreadState*)), \
                                   offsetof(PyInterpreterState, gc.frame) + sizeof(_PyInterpreterFrame *))
-#endif
 #define INTERP_STATE_BUFFER_SIZE MAX(INTERP_STATE_MIN_SIZE, 256)
 
 #define MAX_TLBC_SIZE 2048
@@ -221,7 +215,6 @@ typedef struct {
     PyObject *linetable;  // bytes
     PyObject *last_frame_info;
     ptrdiff_t last_addrq;
-    uintptr_t addr_code_adaptive;
 } CachedCodeMetadata;
 
 /* Frame cache constants and types */
@@ -384,10 +377,6 @@ typedef struct {
     UnwinderStats stats;  // statistics for performance analysis
     InterpreterTstateCacheEntry cached_tstates[INTERPRETER_THREAD_CACHE_SIZE];
     InterpreterGenerationCacheEntry cached_generations[INTERPRETER_THREAD_CACHE_SIZE];
-#ifdef Py_GIL_DISABLED
-    uint32_t tlbc_generation;
-    _Py_hashtable_t *tlbc_cache;
-#endif
 #ifdef __APPLE__
     uint64_t thread_id_offset;
     int thread_id_offset_initialized;
@@ -463,7 +452,7 @@ typedef struct {
 typedef struct {
     uintptr_t code_addr;            // Code object address in remote process
     uintptr_t instruction_pointer;  // Current instruction pointer
-    int32_t tlbc_index;             // Thread-local bytecode index (free-threading)
+    uintptr_t ir_words;             // The first word of the frame's executing copy
 } CodeObjectContext;
 
 typedef struct {
@@ -569,17 +558,6 @@ extern bool parse_linetable(
 );
 
 /* TLBC cache (only for Py_GIL_DISABLED) */
-#ifdef Py_GIL_DISABLED
-typedef struct {
-    void *tlbc_array;
-    Py_ssize_t tlbc_array_size;
-    uint32_t generation;
-} TLBCCacheEntry;
-
-extern void tlbc_cache_entry_destroy(void *ptr);
-extern TLBCCacheEntry *get_tlbc_cache_entry(RemoteUnwinderObject *self, uintptr_t code_addr, uint32_t current_generation);
-extern int cache_tlbc_array(RemoteUnwinderObject *unwinder, uintptr_t code_addr, uintptr_t tlbc_array_addr, uint32_t generation);
-#endif
 
 /* ============================================================================
  * FRAME FUNCTION DECLARATIONS
@@ -604,7 +582,6 @@ extern int parse_frame_from_chunks(
     PyObject **result,
     uintptr_t address,
     uintptr_t *previous_frame,
-    uintptr_t *stackpointer,
     StackChunkList *chunks
 );
 

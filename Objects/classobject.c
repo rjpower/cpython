@@ -3,7 +3,7 @@
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
-#include "pycore_freelist.h"
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -43,16 +43,20 @@ PyMethod_Self(PyObject *im)
 }
 
 
-static PyObject *
-method_vectorcall(PyObject *method, PyObject *const *args,
+/* Precise: its one collecting call is the last, and the method object,
+   which holds self and the function, is the caller's to anchor. */
+Py_GC_PRECISE static PyValue
+method_vectorcall(PyValue method_v, const PyValue *args,
                   size_t nargsf, PyObject *kwnames)
 {
+    PyObject *method = PyValue_ObjectBorrow(method_v);
     assert(Py_IS_TYPE(method, &PyMethod_Type));
 
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self = PyMethod_GET_SELF(method);
-    PyObject *func = PyMethod_GET_FUNCTION(method);
-    return _PyObject_VectorcallPrepend(tstate, func, self, args, nargsf, kwnames);
+    PyValue self = PyValue_FromObject(PyMethod_GET_SELF(method));
+    PyValue func = PyValue_FromObject(PyMethod_GET_FUNCTION(method));
+    return _PyObject_VectorcallPrependValue(tstate, func, self, args,
+                                            nargsf, kwnames);
 }
 
 
@@ -68,14 +72,10 @@ PyMethod_New(PyObject *func, PyObject *self)
         PyErr_BadInternalCall();
         return NULL;
     }
-    PyMethodObject *im = _Py_FREELIST_POP(PyMethodObject, pymethodobjects);
+    PyMethodObject *im = PyObject_GC_New(PyMethodObject, &PyMethod_Type);
     if (im == NULL) {
-        im = PyObject_GC_New(PyMethodObject, &PyMethod_Type);
-        if (im == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
-    im->im_weakreflist = NULL;
     im->im_func = Py_NewRef(func);
     im->im_self = Py_NewRef(self);
     im->vectorcall = method_vectorcall;
@@ -139,11 +139,12 @@ static PyMemberDef method_memberlist[] = {
    The one exception is __doc__; there's a default __doc__ which
    should only be used for the class, not for instances */
 
-static PyObject *
+static PyValue
 method_get_doc(PyObject *self, void *context)
 {
     PyMethodObject *im = _PyMethodObject_CAST(self);
-    return PyObject_GetAttr(im->im_func, &_Py_ID(__doc__));
+    return PyObject_GetAttrValue(PyValue_FromObject(im->im_func),
+                                 &_Py_ID(__doc__));
 }
 
 static PyGetSetDef method_getset[] = {
@@ -151,7 +152,8 @@ static PyGetSetDef method_getset[] = {
     {0}
 };
 
-static PyObject *
+/* The attribute as a value: the function's, or a descriptor's on the type. */
+static PyValue
 method_getattro(PyObject *obj, PyObject *name)
 {
     PyMethodObject *im = (PyMethodObject *)obj;
@@ -161,7 +163,7 @@ method_getattro(PyObject *obj, PyObject *name)
     {
         if (!_PyType_IsReady(tp)) {
             if (PyType_Ready(tp) < 0)
-                return NULL;
+                return PyValue_NULL;
         }
         descr = _PyType_LookupRef(tp, name);
     }
@@ -169,16 +171,16 @@ method_getattro(PyObject *obj, PyObject *name)
     if (descr != NULL) {
         descrgetfunc f = TP_DESCR_GET(Py_TYPE(descr));
         if (f != NULL) {
-            PyObject *res = f(descr, obj, (PyObject *)Py_TYPE(obj));
-            Py_DECREF(descr);
+            PyValue res = f(descr, obj, (PyObject *)Py_TYPE(obj));
+            _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
             return res;
         }
         else {
-            return descr;
+            return PyValue_FromObject(descr);
         }
     }
 
-    return PyObject_GetAttr(im->im_func, name);
+    return PyObject_GetAttrValue(PyValue_FromObject(im->im_func), name);
 }
 
 /*[clinic input]
@@ -214,11 +216,11 @@ method_dealloc(PyObject *self)
 {
     PyMethodObject *im = _PyMethodObject_CAST(self);
     _PyObject_GC_UNTRACK(im);
-    FT_CLEAR_WEAKREFS(self, im->im_weakreflist);
+    FT_CLEAR_WEAKREFS(self);
     Py_DECREF(im->im_func);
     Py_XDECREF(im->im_self);
     assert(Py_IS_TYPE(self, &PyMethod_Type));
-    _Py_FREELIST_FREE(pymethodobjects, (PyObject *)im, PyObject_GC_Del);
+    PyObject_GC_Del(im);
 }
 
 static PyObject *
@@ -303,11 +305,10 @@ method_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 method_descr_get(PyObject *meth, PyObject *obj, PyObject *cls)
 {
-    Py_INCREF(meth);
-    return meth;
+    return PyValue_FromObject(meth);
 }
 
 PyTypeObject PyMethod_Type = {
@@ -322,11 +323,10 @@ PyTypeObject PyMethod_Type = {
     .tp_getattro = method_getattro,
     .tp_setattro = PyObject_GenericSetAttr,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-                Py_TPFLAGS_HAVE_VECTORCALL,
+                Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_doc = method_new__doc__,
     .tp_traverse = method_traverse,
     .tp_richcompare = method_richcompare,
-    .tp_weaklistoffset = offsetof(PyMethodObject, im_weakreflist),
     .tp_methods = method_methods,
     .tp_members = method_memberlist,
     .tp_getset = method_getset,
@@ -372,11 +372,12 @@ static PyMemberDef instancemethod_memberlist[] = {
     {NULL}      /* Sentinel */
 };
 
-static PyObject *
+static PyValue
 instancemethod_get_doc(PyObject *self, void *context)
 {
-    return PyObject_GetAttr(PyInstanceMethod_GET_FUNCTION(self),
-                            &_Py_ID(__doc__));
+    return PyObject_GetAttrValue(
+        PyValue_FromObject(PyInstanceMethod_GET_FUNCTION(self)),
+        &_Py_ID(__doc__));
 }
 
 static PyGetSetDef instancemethod_getset[] = {
@@ -384,7 +385,8 @@ static PyGetSetDef instancemethod_getset[] = {
     {0}
 };
 
-static PyObject *
+/* The attribute as a value: the function's, or a descriptor's on the type. */
+static PyValue
 instancemethod_getattro(PyObject *self, PyObject *name)
 {
     PyTypeObject *tp = Py_TYPE(self);
@@ -392,23 +394,23 @@ instancemethod_getattro(PyObject *self, PyObject *name)
 
     if (!_PyType_IsReady(tp)) {
         if (PyType_Ready(tp) < 0)
-            return NULL;
+            return PyValue_NULL;
     }
     descr = _PyType_LookupRef(tp, name);
 
     if (descr != NULL) {
         descrgetfunc f = TP_DESCR_GET(Py_TYPE(descr));
         if (f != NULL) {
-            PyObject *res = f(descr, self, (PyObject *)Py_TYPE(self));
-            Py_DECREF(descr);
+            PyValue res = f(descr, self, (PyObject *)Py_TYPE(self));
+            _PyValue_CheckSlotResult(res, Py_TYPE(descr), "tp_descr_get");
             return res;
         }
         else {
-            return descr;
+            return PyValue_FromObject(descr);
         }
     }
 
-    return PyObject_GetAttr(PyInstanceMethod_GET_FUNCTION(self), name);
+    return PyObject_GetAttrValue(PyValue_FromObject(PyInstanceMethod_GET_FUNCTION(self)), name);
 }
 
 static void
@@ -424,20 +426,21 @@ instancemethod_traverse(PyObject *self, visitproc visit, void *arg) {
     return 0;
 }
 
-static PyObject *
+static PyValue
 instancemethod_call(PyObject *self, PyObject *arg, PyObject *kw)
 {
-    return PyObject_Call(PyInstanceMethod_GET_FUNCTION(self), arg, kw);
+    return PyObject_CallValue(
+        PyValue_FromObject(PyInstanceMethod_GET_FUNCTION(self)), arg, kw);
 }
 
-static PyObject *
+static PyValue
 instancemethod_descr_get(PyObject *descr, PyObject *obj, PyObject *type) {
     PyObject *func = PyInstanceMethod_GET_FUNCTION(descr);
     if (obj == NULL) {
-        return Py_NewRef(func);
+        return PyValue_FromObject(func);
     }
     else
-        return PyMethod_New(func, obj);
+        return PyValue_FromResult(PyMethod_New(func, obj));
 }
 
 static PyObject *

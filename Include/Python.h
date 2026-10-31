@@ -5,6 +5,10 @@
 #ifndef Py_PYTHON_H
 #define Py_PYTHON_H
 
+#if defined(Py_LIMITED_API) || defined(Py_TARGET_ABI3T)
+#  error "This CPython has no limited C API or stable ABI (abi3): build without Py_LIMITED_API."
+#endif
+
 // Since this is a "meta-include" file, "#ifdef __cplusplus / extern "C" {"
 // is not needed.
 
@@ -48,11 +52,6 @@
 #endif
 
 #if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED)
-#    if defined(_MSC_VER) || defined(__MINGW32__)
-#      include <intrin.h>             // __readgsqword()
-#    endif
-#  endif
 #endif // Py_GIL_DISABLED
 
 #ifdef _MSC_VER
@@ -91,6 +90,7 @@ __pragma(warning(disable: 4201))
 #include "cpython/longintrepr.h"
 #include "boolobject.h"
 #include "floatobject.h"
+#include "pyvalue.h"
 #include "complexobject.h"
 #include "rangeobject.h"
 #include "memoryobject.h"

@@ -1,11 +1,10 @@
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_write_noraise()
-#include "pycore_gc.h"            // PyGC_Head
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_lock.h"          // PyMutex_LockFlags()
-#include "pycore_object.h"        // _PyType_PreHeaderSize()
+#include "pycore_object.h"
 #include "pycore_pymem.h"         // _Py_tracemalloc_config
 #include "pycore_pystate.h"       // _PyInterpreterGuard_TryAcquire()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -316,7 +315,7 @@ hashtable_compare_traceback(const void *key1, const void *key2)
 static void
 tracemalloc_get_frame(_PyInterpreterFrame *pyframe, frame_t *frame)
 {
-    assert(PyStackRef_CodeCheck(pyframe->f_executable));
+    assert(PyValue_Type(pyframe->f_executable) == &PyCode_Type);
     frame->filename = UNKNOWN_FILENAME;
 
     int lineno = -1;
@@ -1416,9 +1415,7 @@ _PyTraceMalloc_TraceRef(PyObject *op, PyRefTracerEvent event,
         goto done;
     }
 
-    PyTypeObject *type = Py_TYPE(op);
-    const size_t presize = _PyType_PreHeaderSize(type);
-    uintptr_t ptr = (uintptr_t)((char *)op - presize);
+    uintptr_t ptr = (uintptr_t)op;
 
     trace_t *trace = _Py_hashtable_get(tracemalloc_traces, TO_PTR(ptr));
     if (trace != NULL) {
@@ -1572,9 +1569,7 @@ PyObject *
 _PyTraceMalloc_GetObjectTraceback(PyObject *obj)
 /*[clinic end generated code: output=41ee0553a658b0aa input=29495f1b21c53212]*/
 {
-    PyTypeObject *type = Py_TYPE(obj);
-    const size_t presize = _PyType_PreHeaderSize(type);
-    uintptr_t ptr = (uintptr_t)((char *)obj - presize);
+    uintptr_t ptr = (uintptr_t)obj;
     return _PyTraceMalloc_GetTraceback(DEFAULT_DOMAIN, ptr);
 }
 

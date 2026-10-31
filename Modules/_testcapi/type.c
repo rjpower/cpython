@@ -58,7 +58,7 @@ test_get_statictype_slots(PyObject *self, PyObject *Py_UNUSED(ignored))
         return NULL;
     }
 
-    ternaryfunc tp_call = PyType_GetSlot(&PyLong_Type, Py_tp_call);
+    callfunc tp_call = PyType_GetSlot(&PyLong_Type, Py_tp_call);
     if (tp_call != NULL) {
         PyErr_SetString(PyExc_AssertionError, "mismatch: tp_call of long");
         return NULL;
@@ -100,70 +100,86 @@ test_get_statictype_slots(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 
 // Get type->tp_version_tag
-static PyObject *
-type_get_version(PyObject *self, PyObject *arg)
+static PyValue
+type_get_version(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     PyObject *res = PyLong_FromUnsignedLong(type->tp_version_tag);
     if (res == NULL) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
-    return res;
+    return PyValue_FromResult(res);
 }
 
 
 // Test PyUnstable_Type_AssignVersionTag()
-static PyObject *
-type_assign_version(PyObject *self, PyObject *arg)
+static PyValue
+type_assign_version(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     int res = PyUnstable_Type_AssignVersionTag(type);
-    return PyLong_FromLong(res);
+    return PyValue_FromResult(PyLong_FromLong(res));
 }
 
 
 // Get PyTypeObject.tp_bases
-static PyObject *
-type_get_tp_bases(PyObject *self, PyObject *arg)
+static PyValue
+type_get_tp_bases(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     PyObject *bases = type->tp_bases;
     if (bases == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(bases);
+    return PyValue_FromResult(Py_NewRef(bases));
 }
 
 
 // Get PyTypeObject.tp_mro
-static PyObject *
-type_get_tp_mro(PyObject *self, PyObject *arg)
+static PyValue
+type_get_tp_mro(PyObject *self, PyValue arg_value)
 {
+    PyObject *arg = PyValue_Object(arg_value);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     PyObject *mro = type->tp_mro;
     if (mro == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(mro);
+    return PyValue_FromResult(Py_NewRef(mro));
 }
 
 
 static PyMethodDef test_methods[] = {
     {"test_get_type_dict", test_get_type_dict, METH_NOARGS},
     {"test_get_statictype_slots", test_get_statictype_slots,     METH_NOARGS},
-    {"type_get_version", type_get_version, METH_O, PyDoc_STR("type->tp_version_tag")},
-    {"type_assign_version", type_assign_version, METH_O, PyDoc_STR("PyUnstable_Type_AssignVersionTag")},
-    {"type_get_tp_bases", type_get_tp_bases, METH_O},
-    {"type_get_tp_mro", type_get_tp_mro, METH_O},
+    {"type_get_version", _PyCFunction_CAST(type_get_version), METH_O, PyDoc_STR("type->tp_version_tag")},
+    {"type_assign_version", _PyCFunction_CAST(type_assign_version), METH_O, PyDoc_STR("PyUnstable_Type_AssignVersionTag")},
+    {"type_get_tp_bases", _PyCFunction_CAST(type_get_tp_bases), METH_O},
+    {"type_get_tp_mro", _PyCFunction_CAST(type_get_tp_mro), METH_O},
     {NULL},
 };
 

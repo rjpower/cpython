@@ -3,12 +3,12 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_io_StringIO_getvalue__doc__,
 "getvalue($self, /)\n"
@@ -73,11 +73,12 @@ PyDoc_STRVAR(_io_StringIO_read__doc__,
 static PyObject *
 _io_StringIO_read_impl(stringio *self, Py_ssize_t size);
 
-static PyObject *
-_io_StringIO_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_StringIO_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
@@ -85,13 +86,20 @@ _io_StringIO_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &size)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_Py_convert_optional_to_ssize_t(_arg, &size)) {
+            goto exit;
+        }
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_read_impl((stringio *)self, size);
+    _return_value = _io_StringIO_read_impl((stringio *)self, size);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -111,11 +119,12 @@ PyDoc_STRVAR(_io_StringIO_readline__doc__,
 static PyObject *
 _io_StringIO_readline_impl(stringio *self, Py_ssize_t size);
 
-static PyObject *
-_io_StringIO_readline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_StringIO_readline(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
@@ -123,25 +132,32 @@ _io_StringIO_readline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &size)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_Py_convert_optional_to_ssize_t(_arg, &size)) {
+            goto exit;
+        }
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_readline_impl((stringio *)self, size);
+    _return_value = _io_StringIO_readline_impl((stringio *)self, size);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 stringio_iternext_impl(stringio *self);
 
-static PyObject *
+static PyValue
 stringio_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = stringio_iternext_impl((stringio *)self);
@@ -166,11 +182,12 @@ PyDoc_STRVAR(_io_StringIO_truncate__doc__,
 static PyObject *
 _io_StringIO_truncate_impl(stringio *self, PyObject *pos);
 
-static PyObject *
-_io_StringIO_truncate(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_StringIO_truncate(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pos = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("truncate", nargs, 0, 1)) {
         goto exit;
@@ -178,11 +195,15 @@ _io_StringIO_truncate(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    pos = args[0];
+    pos = PyValue_Object(args[0]);
+    if (pos == NULL) {
+        goto exit;
+    }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_truncate_impl((stringio *)self, pos);
+    _return_value = _io_StringIO_truncate_impl((stringio *)self, pos);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -207,22 +228,22 @@ PyDoc_STRVAR(_io_StringIO_seek__doc__,
 static PyObject *
 _io_StringIO_seek_impl(stringio *self, Py_ssize_t pos, int whence);
 
-static PyObject *
-_io_StringIO_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_StringIO_seek(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t pos;
     int whence = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -232,14 +253,15 @@ _io_StringIO_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    whence = PyLong_AsInt(args[1]);
+    whence = PyLong_AsIntValue(args[1]);
     if (whence == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_seek_impl((stringio *)self, pos, whence);
+    _return_value = _io_StringIO_seek_impl((stringio *)self, pos, whence);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -255,20 +277,28 @@ PyDoc_STRVAR(_io_StringIO_write__doc__,
 "the length of the string.");
 
 #define _IO_STRINGIO_WRITE_METHODDEF    \
-    {"write", (PyCFunction)_io_StringIO_write, METH_O, _io_StringIO_write__doc__},
+    {"write", _PyCFunction_CAST(_io_StringIO_write), METH_O, _io_StringIO_write__doc__},
 
 static PyObject *
 _io_StringIO_write_impl(stringio *self, PyObject *obj);
 
-static PyObject *
-_io_StringIO_write(PyObject *self, PyObject *obj)
+static PyValue
+_io_StringIO_write(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
 
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_write_impl((stringio *)self, obj);
+    _return_value = _io_StringIO_write_impl((stringio *)self, obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -322,7 +352,6 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -345,14 +374,14 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *value = NULL;
     PyObject *newline_obj = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -360,13 +389,19 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        value = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        value = PyValue_Object(fastargs[0]);
+        if (value == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    newline_obj = fastargs[1];
+    newline_obj = PyValue_Object(fastargs[1]);
+    if (newline_obj == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = _io_StringIO___init___impl((stringio *)self, value, newline_obj);
 
@@ -475,30 +510,38 @@ PyDoc_STRVAR(_io_StringIO___setstate____doc__,
 "\n");
 
 #define _IO_STRINGIO___SETSTATE___METHODDEF    \
-    {"__setstate__", (PyCFunction)_io_StringIO___setstate__, METH_O, _io_StringIO___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(_io_StringIO___setstate__), METH_O, _io_StringIO___setstate____doc__},
 
 static PyObject *
 _io_StringIO___setstate___impl(stringio *self, PyObject *state);
 
-static PyObject *
-_io_StringIO___setstate__(PyObject *self, PyObject *state)
+static PyValue
+_io_StringIO___setstate__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *state;
+    PyObject *_return_value;
 
+    state = PyValue_Object(arg);
+    if (state == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO___setstate___impl((stringio *)self, state);
+    _return_value = _io_StringIO___setstate___impl((stringio *)self, state);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
 static int
 _io_StringIO_closed_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -507,7 +550,7 @@ _io_StringIO_closed_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -516,10 +559,10 @@ exit:
 static int
 _io_StringIO_line_buffering_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_line_buffering_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -528,7 +571,7 @@ _io_StringIO_line_buffering_get(PyObject *self, void *Py_UNUSED(context))
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -537,21 +580,23 @@ exit:
 static PyObject *
 _io_StringIO_newlines_get_impl(stringio *self);
 
-static PyObject *
+static PyValue
 _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_StringIO_newlines_get_impl((stringio *)self);
+    _return_value = _io_StringIO_newlines_get_impl((stringio *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
-#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", (getter)_io_StringIO_closed_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_CLOSED_GETSETDEF {"closed", _io_StringIO_closed_get, NULL, NULL},
 
-#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", (getter)_io_StringIO_line_buffering_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_LINE_BUFFERING_GETSETDEF {"line_buffering", _io_StringIO_line_buffering_get, NULL, NULL},
 
-#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
+#define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", _io_StringIO_newlines_get, NULL, NULL},
 
-/*[clinic end generated code: output=38a0385529d9cbef input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6367d93e698eb984 input=a9049054013a1b77]*/

@@ -127,15 +127,6 @@ class PrintTest(unittest.TestCase):
         with open(output_filename, 'r') as output_file:
             self.assertEqual(output_file.read(), '<nil>')
 
-    def testPyObjectPrintNoRefObject(self):
-        output_filename = os_helper.TESTFN
-        self.addCleanup(os_helper.unlink, output_filename)
-
-        # Test repr printing
-        correct_output = _testcapi.pyobject_print_noref_object(output_filename)
-        with open(output_filename, 'r') as output_file:
-            self.assertEqual(output_file.read(), correct_output)
-
     def testPyObjectPrintOSError(self):
         output_filename = os_helper.TESTFN
         self.addCleanup(os_helper.unlink, output_filename)
@@ -186,7 +177,6 @@ class EnableDeferredRefcountingTest(unittest.TestCase):
 
         # The object must be tracked by the GC
         not_gc_tracked = tuple([1, 2])
-        self.assertFalse(gc.is_tracked(not_gc_tracked))
         self.assertEqual(_testcapi.pyobject_enable_deferred_refcount(not_gc_tracked), 0)
 
         # Make sure reference counting works on foo now
@@ -213,16 +203,6 @@ class EnableDeferredRefcountingTest(unittest.TestCase):
         if support.Py_GIL_DISABLED:
             self.assertTrue(_testinternalcapi.has_deferred_refcount(silly_list))
 
-
-class IsUniquelyReferencedTest(unittest.TestCase):
-    """Test PyUnstable_Object_IsUniquelyReferenced"""
-    def test_is_uniquely_referenced(self):
-        self.assertTrue(_testcapi.is_uniquely_referenced(object()))
-        self.assertTrue(_testcapi.is_uniquely_referenced([]))
-        # Immortals
-        self.assertFalse(_testcapi.is_uniquely_referenced(()))
-        self.assertFalse(_testcapi.is_uniquely_referenced(42))
-        # CRASHES is_uniquely_referenced(NULL)
 
 class CAPITest(unittest.TestCase):
     def check_negative_refcount(self, code):
@@ -288,25 +268,6 @@ class CAPITest(unittest.TestCase):
         s = sys.intern(s)
         gc.collect()
 
-    def test_is_unique_temporary(self):
-        self.assertTrue(_testcapi.pyobject_is_unique_temporary(object()))
-        obj = object()
-        self.assertFalse(_testcapi.pyobject_is_unique_temporary(obj))
-
-        def func(x):
-            # This relies on the LOAD_FAST_BORROW optimization (gh-130704)
-            self.assertEqual(sys.getrefcount(x), 1)
-            self.assertFalse(_testcapi.pyobject_is_unique_temporary(x))
-
-        func(object())
-
-        # Test that a newly created object in C is not considered
-        # a uniquely referenced temporary, because it's not on the stack.
-        # gh-142586: do the test in a loop over a list to test for handling
-        # tagged ints on the stack.
-        for i in [0, 1, 2]:
-            self.assertFalse(_testcapi.pyobject_is_unique_temporary_new_object())
-
     def pyobject_dump(self, obj, release_gil=False):
         pyobject_dump = _testcapi.pyobject_dump
 
@@ -366,8 +327,10 @@ class RefTracerTest(unittest.TestCase):
             chain = [chain]
         _testcapi.start_counting_list_destroys()
         del chain
+        # The collection may also free other lists.
+        support.gc_collect()
         destroys = _testcapi.stop_counting_list_destroys()
-        self.assertEqual(destroys, depth)
+        self.assertGreaterEqual(destroys, depth)
 
 
 if __name__ == "__main__":

@@ -27,13 +27,9 @@ typedef struct {
     PyObject_HEAD
     PyObject *md_dict;
     void *md_state;
-    PyObject *md_weaklist;
     // for logging purposes after md_dict is cleared
     PyObject *md_name;
     bool md_token_is_def;  /* if true, `md_token` is the PyModuleDef */
-#ifdef Py_GIL_DISABLED
-    bool md_requires_gil;
-#endif
     Py_ssize_t md_state_size;
     traverseproc md_state_traverse;
     inquiry md_state_clear;
@@ -72,13 +68,17 @@ static inline PyObject* _PyModule_GetDict(PyObject *mod) {
 }
 
 extern PyObject * _PyModule_GetFilenameObject(PyObject *);
+
+/* The collector calls a dead module's m_free before the sweep,
+   where it may run code (Python/gc_live.c); module_dealloc() does not. */
+extern void _PyModule_FreeState(PyObject *m);
 extern Py_ssize_t _PyModule_GetFilenameUTF8(
         PyObject *module,
         char *buffer,
         Py_ssize_t maxlen);
 
-PyObject* _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
-PyObject* _Py_module_getattro(PyObject *m, PyObject *name);
+PyValue _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
+PyValue _Py_module_getattro(PyObject *m, PyObject *name);
 
 #ifdef __cplusplus
 }

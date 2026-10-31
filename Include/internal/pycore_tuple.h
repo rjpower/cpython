@@ -9,10 +9,18 @@ extern "C" {
 #endif
 
 #include "pycore_object.h"        // _PyObject_GC_IS_TRACKED
-#include "pycore_structs.h"       // _PyStackRef
+#include "pycore_structs.h"       // _PyGCValueRange
+
+static inline _PyGCValueRange
+_PyTuple_GCValues(PyTupleObject *tuple)
+{
+    _PyGCValueRange values = {tuple->ob_item, Py_SIZE(tuple)};
+    return values;
+}
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
-extern void _PyTuple_DebugMallocStats(FILE *out);
+// v in the tuple op: 1, 0, or -1 with an exception set.
+PyAPI_FUNC(int) _PyTuple_ContainsValue(PyObject *op, PyValue v);
 
 /* runtime lifecycle */
 
@@ -25,7 +33,17 @@ PyAPI_FUNC(void) _PyStolenTuple_Free(PyObject *self);
 
 #define _PyTuple_ITEMS(op) _Py_RVALUE(_PyTuple_CAST(op)->ob_item)
 
-PyAPI_FUNC(PyObject *)_PyTuple_FromStackRefStealOnSuccess(const union _PyStackRef *, Py_ssize_t);
+/* The items of tuple op as PyObject *, for a tuple whose items are all
+   objects that are never inline, such as keyword names: a PyValue that
+   refers to an object is the object's pointer. */
+#define _PyTuple_HEAP_ITEMS(op) ((PyObject **)_PyTuple_ITEMS(op))
+
+/* The items of tuple op as an array of PyObject * (_PyValue_ObjectArray()),
+   for calls and argument parsing.  NULL with an exception set if boxing
+   fails. */
+PyAPI_FUNC(PyObject *const *) _PyTuple_Objects(PyObject *op);
+
+PyAPI_FUNC(PyObject *)_PyTuple_FromValues(const struct PyValue *, Py_ssize_t);
 PyAPI_FUNC(PyObject *)_PyTuple_FromArraySteal(PyObject *const *, Py_ssize_t);
 PyAPI_FUNC(PyObject *) _PyTuple_BinarySlice(PyObject *, PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_Concat(PyObject *, PyObject *);
@@ -40,22 +58,12 @@ typedef struct {
     PyTupleObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyTupleIterObject;
 
+
 #define _PyTuple_RESET_HASH_CACHE(op)       \
     do {                                    \
         assert(op != NULL);                 \
         _PyTuple_CAST(op)->ob_hash = -1;    \
     } while (0)
-
-/* bpo-42536: If reusing a tuple object, this should be called to re-track it
-   with the garbage collector and reset its hash cache. */
-static inline void
-_PyTuple_Recycle(PyObject *op)
-{
-    _PyTuple_RESET_HASH_CACHE(op);
-    if (!_PyObject_GC_IS_TRACKED(op)) {
-        _PyObject_GC_TRACK(op);
-    }
-}
 
 /* Below are the official constants from the xxHash specification. Optimizing
    compilers should emit a single "rotate" instruction for the

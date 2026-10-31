@@ -13,6 +13,7 @@ annotated by François Pinard, and converted to C by Raymond Hettinger.
 #include "Python.h"
 #include "pycore_list.h"          // _PyList_ITEMS(), _PyList_AppendTakeRef()
 #include "pycore_pyatomic_ft_wrappers.h"
+#include "pycore_value.h"         // PyObject_RichCompareBoolValue()
 
 #include "clinic/_heapqmodule.c.h"
 
@@ -25,7 +26,7 @@ module _heapq
 static int
 siftdown(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
 {
-    PyObject *newitem, *parent, **arr;
+    PyValue newitem, parent, *arr;
     Py_ssize_t parentpos, size;
     int cmp;
 
@@ -43,11 +44,7 @@ siftdown(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
         parent = arr[parentpos];
-        Py_INCREF(newitem);
-        Py_INCREF(parent);
-        cmp = PyObject_RichCompareBool(newitem, parent, Py_LT);
-        Py_DECREF(parent);
-        Py_DECREF(newitem);
+        cmp = PyObject_RichCompareBoolValue(newitem, parent, Py_LT);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -71,7 +68,7 @@ static int
 siftup(PyListObject *heap, Py_ssize_t pos)
 {
     Py_ssize_t startpos, endpos, childpos, limit;
-    PyObject *tmp1, *tmp2, **arr;
+    PyValue tmp1, tmp2, *arr;
     int cmp;
 
     assert(PyList_Check(heap));
@@ -89,13 +86,9 @@ siftup(PyListObject *heap, Py_ssize_t pos)
         /* Set childpos to index of smaller child.   */
         childpos = 2*pos + 1;    /* leftmost child position  */
         if (childpos + 1 < endpos) {
-            PyObject* a = arr[childpos];
-            PyObject* b = arr[childpos + 1];
-            Py_INCREF(a);
-            Py_INCREF(b);
-            cmp = PyObject_RichCompareBool(a, b, Py_LT);
-            Py_DECREF(a);
-            Py_DECREF(b);
+            PyValue a = arr[childpos];
+            PyValue b = arr[childpos + 1];
+            cmp = PyObject_RichCompareBoolValue(a, b, Py_LT);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */
@@ -152,7 +145,8 @@ _heapq_heappush_impl(PyObject *module, PyObject *heap, PyObject *item)
 static PyObject *
 heappop_internal(PyObject *heap, int siftup_func(PyListObject *, Py_ssize_t))
 {
-    PyObject *lastelt, *returnitem;
+    PyValue lastelt;
+    PyObject *returnitem;
     Py_ssize_t n;
 
     /* raises IndexError if the heap is empty */
@@ -162,16 +156,14 @@ heappop_internal(PyObject *heap, int siftup_func(PyListObject *, Py_ssize_t))
         return NULL;
     }
 
-    lastelt = PyList_GET_ITEM(heap, n-1) ;
-    Py_INCREF(lastelt);
+    lastelt = PyList_GET_VALUE(heap, n-1);
     if (PyList_SetSlice(heap, n-1, n, NULL)) {
-        Py_DECREF(lastelt);
         return NULL;
     }
     n--;
 
     if (!n)
-        return lastelt;
+        return PyValue_Object(lastelt);
     returnitem = PyList_GET_ITEM(heap, 0);
     PyListObject *list = _PyList_CAST(heap);
     FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], lastelt);
@@ -211,7 +203,7 @@ heapreplace_internal(PyObject *heap, PyObject *item, int siftup_func(PyListObjec
 
     returnitem = PyList_GET_ITEM(heap, 0);
     PyListObject *list = _PyList_CAST(heap);
-    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], Py_NewRef(item));
+    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup_func(list, 0)) {
         Py_DECREF(returnitem);
         return NULL;
@@ -289,7 +281,7 @@ _heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyObject *item)
 
     returnitem = PyList_GET_ITEM(heap, 0);
     PyListObject *list = _PyList_CAST(heap);
-    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], Py_NewRef(item));
+    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup(list, 0)) {
         Py_DECREF(returnitem);
         return NULL;
@@ -408,7 +400,7 @@ _heapq_heapify_impl(PyObject *module, PyObject *heap)
 static int
 siftdown_max(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
 {
-    PyObject *newitem, *parent, **arr;
+    PyValue newitem, parent, *arr;
     Py_ssize_t parentpos, size;
     int cmp;
 
@@ -425,11 +417,8 @@ siftdown_max(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
     newitem = arr[pos];
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
-        parent = Py_NewRef(arr[parentpos]);
-        Py_INCREF(newitem);
-        cmp = PyObject_RichCompareBool(parent, newitem, Py_LT);
-        Py_DECREF(parent);
-        Py_DECREF(newitem);
+        parent = arr[parentpos];
+        cmp = PyObject_RichCompareBoolValue(parent, newitem, Py_LT);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -453,7 +442,7 @@ static int
 siftup_max(PyListObject *heap, Py_ssize_t pos)
 {
     Py_ssize_t startpos, endpos, childpos, limit;
-    PyObject *tmp1, *tmp2, **arr;
+    PyValue tmp1, tmp2, *arr;
     int cmp;
 
     assert(PyList_Check(heap));
@@ -471,13 +460,9 @@ siftup_max(PyListObject *heap, Py_ssize_t pos)
         /* Set childpos to index of larger child.   */
         childpos = 2*pos + 1;    /* leftmost child position  */
         if (childpos + 1 < endpos) {
-            PyObject* a = arr[childpos + 1];
-            PyObject* b = arr[childpos];
-            Py_INCREF(a);
-            Py_INCREF(b);
-            cmp = PyObject_RichCompareBool(a, b, Py_LT);
-            Py_DECREF(a);
-            Py_DECREF(b);
+            PyValue a = arr[childpos + 1];
+            PyValue b = arr[childpos];
+            cmp = PyObject_RichCompareBoolValue(a, b, Py_LT);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */
@@ -627,7 +612,7 @@ _heapq_heappushpop_max_impl(PyObject *module, PyObject *heap, PyObject *item)
 
     returnitem = PyList_GET_ITEM(heap, 0);
     PyListObject *list = _PyList_CAST(heap);
-    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], Py_NewRef(item));
+    FT_ATOMIC_STORE_PTR_RELAXED(list->ob_item[0], PyValue_FromObject(item));
     if (siftup_max(list, 0) < 0) {
         Py_DECREF(returnitem);
         return NULL;

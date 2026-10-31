@@ -1,46 +1,70 @@
 #include "parts.h"
 #include "util.h"
 
-static PyObject *
-set_check(PyObject *self, PyObject *obj)
+static PyValue
+set_check(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PySet_Check(obj));
+    RETURN_INT_VALUE(PySet_Check(obj));
 }
 
-static PyObject *
-set_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+set_checkexact(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PySet_CheckExact(obj));
+    RETURN_INT_VALUE(PySet_CheckExact(obj));
 }
 
-static PyObject *
-frozenset_check(PyObject *self, PyObject *obj)
+static PyValue
+frozenset_check(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PyFrozenSet_Check(obj));
+    RETURN_INT_VALUE(PyFrozenSet_Check(obj));
 }
 
-static PyObject *
-frozenset_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+frozenset_checkexact(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PyFrozenSet_CheckExact(obj));
+    RETURN_INT_VALUE(PyFrozenSet_CheckExact(obj));
 }
 
-static PyObject *
-anyset_check(PyObject *self, PyObject *obj)
+static PyValue
+anyset_check(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PyAnySet_Check(obj));
+    RETURN_INT_VALUE(PyAnySet_Check(obj));
 }
 
-static PyObject *
-anyset_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+anyset_checkexact(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PyAnySet_CheckExact(obj));
+    RETURN_INT_VALUE(PyAnySet_CheckExact(obj));
 }
 
 static PyObject *
@@ -63,11 +87,15 @@ frozenset_new(PyObject *self, PyObject *args)
     return PyFrozenSet_New(iterable);
 }
 
-static PyObject *
-set_size(PyObject *self, PyObject *obj)
+static PyValue
+set_size(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_SIZE(PySet_Size(obj));
+    RETURN_SIZE_VALUE(PySet_Size(obj));
 }
 
 static PyObject *
@@ -106,18 +134,26 @@ set_discard(PyObject *self, PyObject *args)
     RETURN_INT(PySet_Discard(obj, item));
 }
 
-static PyObject *
-set_pop(PyObject *self, PyObject *obj)
+static PyValue
+set_pop(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PySet_Pop(obj);
+    return PyValue_FromResult(PySet_Pop(obj));
 }
 
-static PyObject *
-set_clear(PyObject *self, PyObject *obj)
+static PyValue
+set_clear(PyObject *self, PyValue arg)
 {
+    PyObject *obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_INT(PySet_Clear(obj));
+    RETURN_INT_VALUE(PySet_Clear(obj));
 }
 
 static PyObject *
@@ -160,27 +196,6 @@ raiseTestError(const char* test_name, const char* msg)
 {
     PyErr_Format(PyExc_AssertionError, "%s: %s", test_name, msg);
     return NULL;
-}
-
-static PyObject *
-test_frozenset_add_in_capi_tracking_immutable(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    // Test: GC tracking - frozenset with only immutable items should not be tracked
-    PyObject *frozenset = PyFrozenSet_New(NULL);
-    if (frozenset == NULL) {
-        return NULL;
-    }
-    if (PySet_Add(frozenset, Py_True) < 0) {
-        Py_DECREF(frozenset);
-        return NULL;
-    }
-    if (PyObject_GC_IsTracked(frozenset)) {
-        Py_DECREF(frozenset);
-        return raiseTestError("test_frozenset_add_in_capi_tracking_immutable",
-                              "frozenset with only bool should not be GC tracked");
-    }
-    Py_DECREF(frozenset);
-    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -267,26 +282,25 @@ test_set_contains_does_not_convert_unhashable_key(PyObject *self, PyObject *Py_U
 }
 
 static PyMethodDef test_methods[] = {
-    {"set_check", set_check, METH_O},
-    {"set_checkexact", set_checkexact, METH_O},
-    {"frozenset_check", frozenset_check, METH_O},
-    {"frozenset_checkexact", frozenset_checkexact, METH_O},
-    {"anyset_check", anyset_check, METH_O},
-    {"anyset_checkexact", anyset_checkexact, METH_O},
+    {"set_check", _PyCFunction_CAST(set_check), METH_O},
+    {"set_checkexact", _PyCFunction_CAST(set_checkexact), METH_O},
+    {"frozenset_check", _PyCFunction_CAST(frozenset_check), METH_O},
+    {"frozenset_checkexact", _PyCFunction_CAST(frozenset_checkexact), METH_O},
+    {"anyset_check", _PyCFunction_CAST(anyset_check), METH_O},
+    {"anyset_checkexact", _PyCFunction_CAST(anyset_checkexact), METH_O},
 
     {"set_new", set_new, METH_VARARGS},
     {"frozenset_new", frozenset_new, METH_VARARGS},
 
-    {"set_size", set_size, METH_O},
+    {"set_size", _PyCFunction_CAST(set_size), METH_O},
     {"set_contains", set_contains, METH_VARARGS},
     {"set_add", set_add, METH_VARARGS},
     {"set_discard", set_discard, METH_VARARGS},
-    {"set_pop", set_pop, METH_O},
-    {"set_clear", set_clear, METH_O},
+    {"set_pop", _PyCFunction_CAST(set_pop), METH_O},
+    {"set_clear", _PyCFunction_CAST(set_clear), METH_O},
 
     {"test_frozenset_add_in_capi", test_frozenset_add_in_capi, METH_NOARGS},
     {"test_frozenset_add_in_capi_tracking", test_frozenset_add_in_capi_tracking, METH_NOARGS},
-    {"test_frozenset_add_in_capi_tracking_immutable", test_frozenset_add_in_capi_tracking_immutable, METH_NOARGS},
     {"test_set_contains_does_not_convert_unhashable_key",
      test_set_contains_does_not_convert_unhashable_key, METH_NOARGS},
 

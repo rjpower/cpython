@@ -8,52 +8,36 @@ extern "C" {
 /* Object and type object interface */
 
 /*
-Objects are structures allocated on the heap.  Special rules apply to
-the use of objects to ensure they are properly garbage-collected.
-Objects are never allocated statically or on the stack; they must be
-accessed through special macros and functions only.  (Type objects are
-exceptions to the first rule; the standard types are represented by
-statically initialized type objects, although work on type/class unification
-for Python 2.2 made it possible to have heap-allocated type objects too).
+Heap objects are owned by the tracing collector.  C code must keep live
+objects reachable through the root and traversal interfaces; copying or
+discarding a pointer does not change a reference count.  Some immortal
+objects, including built-in types and singletons, are allocated statically.
 
-An object has a 'reference count' that is increased or decreased when a
-pointer to the object is copied or deleted; when the reference count
-reaches zero there are no references to the object left and it can be
-removed from the heap.
+An object's type determines its behavior and layout.  The PyObject header
+is one machine word containing a shape pointer and collector flags.  The
+shape identifies the type and, where applicable, attribute storage.
+Py_TYPE() obtains the type through the shape; code must use the accessors
+rather than treating the header as a direct type pointer.
 
-An object has a 'type' that determines what it represents and what kind
-of data it contains.  An object's type is fixed when it is created.
-Types themselves are represented as objects; an object contains a
-pointer to the corresponding type object.  The type itself has a type
-pointer pointing to the object representing the type 'type', which
-contains a pointer to itself!.
+The C object interface uses PyObject pointers.  Core value slots use PyValue,
+which can also hold inline numbers.  A concrete object structure starts
+with PyObject_HEAD and adds its own fields; casting between that structure
+and PyObject preserves the common header.
 
-Objects do not float around in memory; once allocated an object keeps
-the same size and address.  Objects that must hold variable-size data
-can contain pointers to variable-size parts of the object.  Not all
-objects of the same type have the same size; but the size cannot change
-after allocation.  (These restrictions are made so a reference to an
-object can be simply a pointer -- moving an object would require
-updating all the pointers, and changing an object's size would require
-moving it if there was another object right next to it.)
-
-Objects are always accessed through pointers of the type 'PyObject *'.
-The type 'PyObject' is a structure that only contains the reference count
-and the type pointer.  The actual memory allocated for an object
-contains other data that can only be accessed after casting the pointer
-to a pointer to a longer structure type.  This longer type must start
-with the reference count and type fields; the macro PyObject_HEAD should be
-used for this (to accommodate for future changes).  The implementation
-of a particular object type can cast the object pointer to the proper
-type and back.
+The current collector does not relocate objects.  APIs that explicitly
+resize an object can return a different address under their own ownership
+conditions, so callers must follow each API's pointer and lifetime rules.
+An interior C pointer needs its underlying storage kept alive; it is not
+itself a general writable root or a relocation contract.
 
 A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
-/* Py_DEBUG implies Py_REF_DEBUG. */
-#if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
-#  define Py_REF_DEBUG
+/* The tracing collector owns memory and nothing is reference counted (note
+   06, step 5).  Its header flags live in the high half of the first word. */
+#if SIZEOF_VOID_P != 8
+#  error "the tracing collector requires a 64-bit platform"
 #endif
 
 #if defined(_Py_OPAQUE_PYOBJECT) && !defined(Py_LIMITED_API)
@@ -74,24 +58,10 @@ whose size is determined when the object is allocated.
  *
  * Before changing this, see the check in PyModuleDef_Init().
  */
-#if defined(Py_GIL_DISABLED)
 #define PyObject_HEAD_INIT(type)    \
     {                               \
-        0,                          \
-        _Py_STATICALLY_ALLOCATED_FLAG, \
-        { 0 },                      \
-        0,                          \
-        _Py_IMMORTAL_REFCNT_LOCAL,  \
-        0,                          \
-        (type),                     \
+        { _Py_STATIC_HEADER_INIT(type) }, \
     },
-#else
-#define PyObject_HEAD_INIT(type)    \
-    {                               \
-        { _Py_STATIC_IMMORTAL_INITIAL_REFCNT },    \
-        (type)                      \
-    },
-#endif
 
 #define PyVarObject_HEAD_INIT(type, size) \
     {                                     \
@@ -112,7 +82,7 @@ whose size is determined when the object is allocated.
 
 /* PyObjects are given a minimum alignment so that the least significant bits
  * of an object pointer become available for other purposes.
- * This must be an integer literal with the value (1 << _PyGC_PREV_SHIFT), number of bytes.
+ * This must be an integer literal, a number of bytes.
  */
 #define _PyObject_MIN_ALIGNMENT 4
 
@@ -123,49 +93,79 @@ whose size is determined when the object is allocated.
  */
 #ifdef _Py_OPAQUE_PYOBJECT
   /* PyObject is opaque */
-#elif !defined(Py_GIL_DISABLED)
-struct _object {
+#else
+#if SIZEOF_VOID_P != 8
+#  error "the object header needs 64-bit pointers"
+#endif
+/* The header is one word: the shape pointer in bits 0-47 (no user-space
+ * pointer is wider) and sixteen flag bits in 48-63, ob_flags, which belong to
+ * the collector (see _Py_GC_MARKED_FLAG and the flags beside it).  The shape
+ * (struct _PyShape below; boil/design/09-object-protocol.md) says which type
+ * the object has and, for an instance with attribute slots, which attributes
+ * it has and where.  Read the type with Py_TYPE(), which follows the shape,
+ * and set it with Py_SET_TYPE(), which stores the type's root shape and keeps
+ * the flags.  _Py_ANONYMOUS lets C99 and C++03 accept a struct whose only
+ * member is the anonymous union. */
+_Py_ANONYMOUS struct _object {
     _Py_ANONYMOUS union {
-#if SIZEOF_VOID_P > 4
-        int64_t ob_refcnt_full; /* This field is needed for efficient initialization with Clang on ARM */
+        uintptr_t ob_header;
         struct {
 #  if PY_BIG_ENDIAN
             uint16_t ob_flags;
-            uint16_t ob_overflow;
-            uint32_t ob_refcnt;
+            uint16_t _ob_type_bits[3];
 #  else
-            uint32_t ob_refcnt;
-            uint16_t ob_overflow;
+            uint16_t _ob_type_bits[3];
             uint16_t ob_flags;
 #  endif
         };
-#else
-        Py_ssize_t ob_refcnt;  // part of stable ABI; do not change
-#endif
         _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, char) _aligner;
     };
-
-    PyTypeObject *ob_type;  // part of stable ABI; do not change
 };
-#else
-// Objects that are not owned by any thread use a thread id (tid) of zero.
-// This includes both immortal objects and objects whose reference count
-// fields have been merged.
-#define _Py_UNOWNED_TID             0
+#endif
 
-struct _object {
-    // ob_tid stores the thread id (or zero). It is also used by the GC and the
-    // trashcan mechanism as a linked list pointer and by the GC to store the
-    // computed "gc_refs" refcount.
-    _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, uintptr_t) ob_tid;
-    uint16_t ob_flags;
-    PyMutex ob_mutex;           // per-object lock
-    uint8_t ob_gc_bits;         // gc-related state
-    uint32_t ob_ref_local;      // local reference count
-    Py_ssize_t ob_ref_shared;   // shared (atomic) reference count
-    PyTypeObject *ob_type;
+#define _Py_HEADER_SHAPE_MASK (((uintptr_t)1 << 48) - 1)
+
+#ifndef _Py_OPAQUE_PYOBJECT
+/* A shape: the hidden class of an object (boil/design/09-object-protocol.md).
+ * Every object has one, and its header points to it.  The type owns its
+ * shapes; a type whose instances have no attribute slots has exactly one,
+ * its root shape, which is embedded in the type object (tp_root_shape), so
+ * that the header of a static object is an address constant.
+ *
+ * Every field but type_version, class_version and flags is fixed when the
+ * shape is made.  type_version mirrors type->tp_version_tag: the type writes
+ * it into each of its shapes whenever its version changes, so that an
+ * attribute guard is "the header is this shape" and "the shape's
+ * type_version is this version".  A generalisation renews the type_version
+ * of the shapes it widens, so it can differ from the type's.  class_version
+ * is always type->tp_version_tag; a guard on the class alone (a member, a
+ * property, a method) reads it from the header without loading the type
+ * (boil/design/12-object-slots-on-values.md section 6.5).  flags is a copy of type->tp_flags, rewritten whenever the type's
+ * flags change; the Check macros read it, and only for bits fixed when the
+ * type is readied (the *_SUBCLASS bits and Py_TPFLAGS_HAVE_GC).  The fields
+ * after them are the shape tree, which only the core reads
+ * (Include/internal/pycore_shape.h). */
+typedef struct _PyShapeSlot _PyShapeSlot;
+struct _PyShape {
+    PyTypeObject *type;             // the owner: Py_TYPE() of every object with this shape
+    unsigned long flags;            // a copy of type->tp_flags
+    uint32_t type_version;          // type->tp_version_tag, or renewed by a generalisation
+    uint32_t class_version;         // type->tp_version_tag, always
+    uint16_t nslots;                // slots in use, holes included
+    uint8_t shape_kind;             // _PyShapeKind (pycore_shape.h)
+    uint8_t edge_slot;              // the slot the edge from parent filled
+    struct _PyShape *parent;        // NULL for a root or dictionary-mode shape
+    PyObject *edge_name;            // the name the edge from parent added
+    struct _PyShape *children;      // the transitions: first child
+    struct _PyShape *sibling;       // the next child of parent
+    _PyShapeSlot *slots;            // nslots entries (pycore_shape.h)
 };
-#endif // !defined(_Py_OPAQUE_PYOBJECT)
+typedef struct _PyShape _PyShape;
+
+/* The shape of OB: the header with the collector's flags masked off. */
+#define _PyObject_SHAPE(ob) \
+    ((_PyShape *)(_PyObject_CAST(ob)->ob_header & _Py_HEADER_SHAPE_MASK))
+#endif
 
 /* Cast argument to PyObject* type. */
 #define _PyObject_CAST(op) _Py_CAST(PyObject*, (op))
@@ -201,11 +201,6 @@ PyAPI_FUNC(void) Py_SET_SIZE(PyVarObject *ob, Py_ssize_t size);
 
 #ifndef _Py_OPAQUE_PYOBJECT
 
-static inline void
-Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
-{
-    ob->ob_type = type;
-}
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < _Py_PACK_VERSION(3, 11)
 // Non-limited API & limited API 3.11 & below: use static inline functions and
@@ -214,7 +209,6 @@ Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 #  define Py_SIZE(ob) _Py_SIZE_impl(_PyObject_CAST(ob))
 #  define Py_IS_TYPE(ob, type) _Py_IS_TYPE_impl(_PyObject_CAST(ob), (type))
 #  define Py_SET_SIZE(ob, size) _Py_SET_SIZE_impl(_PyVarObject_CAST(ob), (size))
-#  define Py_SET_TYPE(ob, type) Py_SET_TYPE(_PyObject_CAST(ob), type)
 #elif Py_LIMITED_API+0 < _Py_PACK_VERSION(3, 15)
 // Limited API 3.11-3.14: use static inline functions, without casts
 #  define Py_SIZE(ob) _Py_SIZE_impl(ob)
@@ -228,10 +222,29 @@ Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 // Limited API 3.15+: use function calls
 #endif
 
+#if defined(Py_DEBUG) && !defined(Py_LIMITED_API)
+/* The verifier's kill mode gives the header of an object it killed the
+   trap type, whose slots abort, as Py_TYPE() does, with the object's
+   record (Python/gc_trace.c). */
+PyAPI_DATA(PyTypeObject) _PyGC_TrapType;
+PyAPI_FUNC(void) _Py_NO_RETURN _PyGC_TrapUse(PyObject *op, const char *use);
+#endif
+
 static inline
 PyTypeObject* _Py_TYPE_impl(PyObject *ob)
 {
-    return ob->ob_type;
+#ifdef Py_DEBUG
+    // An object whose header has no shape, or whose type's root shape was
+    // never filled (a static type outside the early pass, never readied,
+    // whose objects were not made by _PyObject_Init).
+    assert(_PyObject_SHAPE(ob) != NULL && _PyObject_SHAPE(ob)->type != NULL);
+#  ifndef Py_LIMITED_API
+    if (_PyObject_SHAPE(ob)->type == &_PyGC_TrapType) {
+        _PyGC_TrapUse(ob, "Py_TYPE");
+    }
+#  endif
+#endif
+    return _PyObject_SHAPE(ob)->type;
 }
 
 // bpo-39573: The Py_SET_SIZE() function must be used to set an object size.
@@ -254,11 +267,7 @@ _Py_SET_SIZE_impl(PyVarObject *ob, Py_ssize_t size)
 {
     assert(Py_TYPE(_PyObject_CAST(ob)) != &PyLong_Type);
     assert(Py_TYPE(_PyObject_CAST(ob)) != &PyBool_Type);
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_ssize_relaxed(&ob->ob_size, size);
-#else
     ob->ob_size = size;
-#endif
 }
 
 #endif // !defined(_Py_OPAQUE_PYOBJECT)
@@ -298,29 +307,50 @@ typedef int (*traverseproc)(PyObject *, visitproc, void *);
 typedef void (*freefunc)(void *);
 typedef void (*destructor)(PyObject *);
 typedef PyObject *(*getattrfunc)(PyObject *, char *);
-typedef PyObject *(*getattrofunc)(PyObject *, PyObject *);
+/* The attribute slots on values (6d rung 2): a getter returns the
+   attribute as a value, or PyValue_NULL with an exception set, and a
+   setter takes the value, PyValue_NULL to delete. */
+typedef PyValue (*getattrofunc)(PyObject *, PyObject *);
 typedef int (*setattrfunc)(PyObject *, char *, PyObject *);
-typedef int (*setattrofunc)(PyObject *, PyObject *, PyObject *);
+typedef int (*setattrofunc)(PyObject *, PyObject *, PyValue);
 typedef PyObject *(*reprfunc)(PyObject *);
 typedef Py_hash_t (*hashfunc)(PyObject *);
 typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
 typedef PyObject *(*getiterfunc) (PyObject *);
-typedef PyObject *(*iternextfunc) (PyObject *);
+/* The next item of an iterator as a value, or PyValue_NULL when it is
+   exhausted (with no exception set, or with StopIteration set) or on error
+   (with another exception set). */
+typedef PyValue (*iternextfunc) (PyObject *);
+/* The result of _tp_iteritem: the item at index as a value and the index of
+   the next, or PyValue_NULL and the index at the end, or PyValue_NULL and a
+   negative index with an exception set. */
 typedef struct {
-    PyObject *object;
+    PyValue value;
     Py_ssize_t index;
-} _PyObjectIndexPair;
-typedef _PyObjectIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
-typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
-typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
+} _PyValueIndexPair;
+typedef _PyValueIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
+/* A descriptor's __get__ (descr, obj or NULL, type) as a value, and its
+   __set__ (descr, obj, value), whose PyValue_NULL is __delete__. */
+typedef PyValue (*descrgetfunc) (PyObject *, PyObject *, PyObject *);
+typedef int (*descrsetfunc) (PyObject *, PyObject *, PyValue);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);
 typedef PyObject *(*newfunc)(PyTypeObject *, PyObject *, PyObject *);
 typedef PyObject *(*allocfunc)(PyTypeObject *, Py_ssize_t);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030c0000 // 3.12
-typedef PyObject *(*vectorcallfunc)(PyObject *callable, PyObject *const *args,
-                                    size_t nargsf, PyObject *kwnames);
+/* The vectorcall convention (PEP 590) on values: callable is the object
+   whose vectorcall this is, args holds the positional arguments and then
+   the values of the keywords named in kwnames, and the result is a value,
+   or PyValue_NULL with an exception set. */
+typedef PyValue (*vectorcallfunc)(PyValue callable, const PyValue *args,
+                                  size_t nargsf, PyObject *kwnames);
 #endif
+
+/* tp_call: callable is the object whose type holds the slot, args the
+   tuple of positional arguments and kwargs a dict or NULL.  The result is
+   a value, or PyValue_NULL with an exception set. */
+typedef PyValue (*callfunc)(PyObject *callable, PyObject *args,
+                            PyObject *kwargs);
 
 typedef struct{
     int slot;    /* slot id, see below */
@@ -415,10 +445,10 @@ PyAPI_FUNC(int) PyObject_HasAttrWithError(PyObject *, PyObject *);
 PyAPI_FUNC(int) PyObject_HasAttrStringWithError(PyObject *, const char *);
 #endif
 PyAPI_FUNC(PyObject *) PyObject_SelfIter(PyObject *);
-PyAPI_FUNC(PyObject *) PyObject_GenericGetAttr(PyObject *, PyObject *);
-PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyObject *);
+PyAPI_FUNC(PyValue) PyObject_GenericGetAttr(PyObject *, PyObject *);
+PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyValue);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000
-PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyObject *, void *);
+PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyValue, void *);
 #endif
 PyAPI_FUNC(Py_hash_t) PyObject_Hash(PyObject *);
 PyAPI_FUNC(Py_hash_t) PyObject_HashNotImplemented(PyObject *);
@@ -466,25 +496,23 @@ given type object has a specified feature.
 /* Track types initialized using _PyStaticType_InitBuiltin(). */
 #define _Py_TPFLAGS_STATIC_BUILTIN (1 << 1)
 
-/* The values array is placed inline directly after the rest of
- * the object. Implies Py_TPFLAGS_HAVE_GC.
+/* Instances have the type's fixed number of attribute slots (PyValue),
+ * starting at tp_basicsize, which their shape describes
+ * (Include/internal/pycore_shape.h).  Implies Py_TPFLAGS_HAVE_GC.
  */
 #define Py_TPFLAGS_INLINE_VALUES (1 << 2)
 
-/* Placement of weakref pointers are managed by the VM, not by the type.
- * The VM will automatically set tp_weaklistoffset. Implies Py_TPFLAGS_HAVE_GC.
+/* The type supports weak references, which the VM keeps in its weak
+ * reference table (no per-object storage).  The VM sets tp_weaklistoffset
+ * to a marker.
  */
 #define Py_TPFLAGS_MANAGED_WEAKREF (1 << 3)
 
-/* Placement of dict (and values) pointers are managed by the VM, not by the type.
- * The VM will automatically set tp_dictoffset. Implies Py_TPFLAGS_HAVE_GC.
+/* The VM, not the type, places the instance dict, and sets tp_dictoffset to
+ * -1.  Instances have attribute slots (Py_TPFLAGS_INLINE_VALUES); the dict,
+ * once an instance has one, is its slot 0.  Implies Py_TPFLAGS_HAVE_GC.
  */
 #define Py_TPFLAGS_MANAGED_DICT (1 << 4)
-
-/* Type has dictionary or weakref pointers that are managed by VM and has
- * to allocate space to store these.
- */
-#define Py_TPFLAGS_PREHEADER (Py_TPFLAGS_MANAGED_WEAKREF | Py_TPFLAGS_MANAGED_DICT)
 
 /* Set if instances of the type object are treated as sequences for pattern matching */
 #define Py_TPFLAGS_SEQUENCE (1 << 5)
@@ -539,6 +567,15 @@ given type object has a specified feature.
 /* Type is abstract and cannot be instantiated */
 #define Py_TPFLAGS_IS_ABSTRACT (1UL << 20)
 
+#ifndef Py_LIMITED_API
+/* The type's dealloc reads the C state of objects it refers to, not just
+   releases them.  Reference counting deallocates a referrer before its
+   referents; the tracing collector keeps that order for dead
+   instances of this type by deallocating them first, referrer first among
+   themselves.  Subtypes inherit it. */
+#define Py_TPFLAGS_DEALLOC_READS_REFERENTS (1UL << 21)
+#endif
+
 // This undocumented flag gives certain built-ins their unique pattern-matching
 // behavior, which allows a single positional subpattern to match against the
 // subject itself (rather than a mapped attribute on it):
@@ -577,15 +614,35 @@ given type object has a specified feature.
 #define Py_TPFLAGS_HAVE_FINALIZE (1UL << 0)
 #define Py_TPFLAGS_HAVE_VERSION_TAG   (1UL << 18)
 
-// Flag values for ob_flags (16 bits available, if SIZEOF_VOID_P > 4).
+/* Flag values for ob_flags, bits 48-63 of the header word.  Whether a heap
+ * block holds an initialized object is not in the header: the allocator's
+ * object map says (Include/internal/pycore_gc_trace.h).  Bits 4-6 and 15 are
+ * spare.  The bits from 7 up are the collector's (Python/gc_live.c and
+ * Python/gc_trace.c); it writes them while it holds the GIL. */
 #define _Py_IMMORTAL_FLAGS (1 << 0)
 #define _Py_LEGACY_ABI_CHECK_FLAG (1 << 1) /* see PyModuleDef_Init() */
 #define _Py_STATICALLY_ALLOCATED_FLAG (1 << 2)
-#if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED) && defined(Py_DEBUG)
-#    define _Py_TYPE_REVEALED_FLAG (1 << 3)
-#  endif
-#endif
+#define _Py_HAS_WEAKREFS_FLAG (1 << 3)  /* the object has an entry in the
+                                           weak reference table
+                                           (Objects/weakrefobject.c) */
+#  define _Py_GC_NOTIFIED_FLAG   (1 << 7)   /* the collector ran the
+                                               destroy calls of the
+                                               object's dealloc */
+#  define _Py_GC_MARKED_FLAG     (1 << 8)   /* reached by the current mark */
+#  define _Py_GC_SWEPT_FLAG      _Py_GC_MARKED_FLAG  /* on a dead object:
+                                               its tp_dealloc has run */
+#  define _Py_GC_DEAD_FLAG       (1 << 9)   /* unreachable, being swept */
+#  define _Py_GC_FINALIZED_FLAG  (1 << 10)  /* tp_finalize called (PEP 442) */
+#  define _Py_GC_OWNS_RESOURCES_FLAG (1 << 11) /* reserved: dealloc releases
+                                                 external resources */
+#  define _Py_GC_TRACKED_FLAG    (1 << 12)  /* PyObject_GC_Track() was called:
+                                               the object is fully built */
+#  define _Py_GC_SHALLOW_FLAG    (1 << 13)  /* marked by a conservative root
+                                               without being traversed */
+#  define _Py_GC_DEL_CALLED_FLAG (1 << 14)  /* tp_del called since the mark
+                                               last reached the object */
+/* What Py_REFCNT() returns: nothing is counted. */
+#  define _Py_GC_REFCNT          ((uint32_t)1 << 30)
 
 #define Py_CONSTANT_NONE 0
 #define Py_CONSTANT_FALSE 1
@@ -743,6 +800,39 @@ times.
 #  undef Py_CPYTHON_OBJECT_H
 #endif
 
+#ifndef _Py_OPAQUE_PYOBJECT
+/* The root shape of TYPE: the shape of its objects that have no attributes
+   in slots, and the only shape of a type without attribute slots. */
+#define _Py_TYPE_ROOT_SHAPE(type) (&_Py_CAST(PyTypeObject*, (type))->tp_root_shape)
+
+/* Py_SET_TYPE() gives OB the root shape of TYPE.  An object of a type with
+   attribute slots then has no attributes in its shape: the caller of
+   Py_SET_TYPE() on such an object makes its shape agree with its slots. */
+static inline void
+Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
+{
+    ob->ob_header = ((ob->ob_header & ~_Py_HEADER_SHAPE_MASK)
+                     | (uintptr_t)_Py_TYPE_ROOT_SHAPE(type));
+}
+#define Py_SET_TYPE(ob, type) Py_SET_TYPE(_PyObject_CAST(ob), (type))
+
+/* An exact type test against a type with one shape is one compare of the
+   header with a constant: _Py_IS_ROOT_SHAPE(ob, &PyList_Type) is
+   Py_IS_TYPE(ob, &PyList_Type) without the load of the shape's type.  TYPE
+   must have no attribute slots (no Py_TPFLAGS_INLINE_VALUES), so that no
+   object of TYPE has another shape; the exact Check macros of the builtin
+   types use it. */
+#define _Py_IS_ROOT_SHAPE(ob, type) \
+    ((_PyObject_CAST(ob)->ob_header & _Py_HEADER_SHAPE_MASK) \
+     == (uintptr_t)_Py_TYPE_ROOT_SHAPE(type))
+
+/* The type flags of OB, read from its shape: the bits the Check macros
+   test, fixed when the type is readied. */
+#define _PyObject_TYPE_FLAGS(ob) (_PyObject_SHAPE(ob)->flags)
+#define _PyObject_FastSubclass(ob, flag) \
+    ((_PyObject_TYPE_FLAGS(ob) & (unsigned long)(flag)) != 0)
+#endif
+
 
 static inline int
 PyType_HasFeature(PyTypeObject *type, unsigned long feature)
@@ -760,7 +850,7 @@ PyType_HasFeature(PyTypeObject *type, unsigned long feature)
 #define PyType_FastSubclass(type, flag) PyType_HasFeature((type), (flag))
 
 static inline int PyType_Check(PyObject *op) {
-    return PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_TYPE_SUBCLASS);
+    return _PyObject_FastSubclass(op, Py_TPFLAGS_TYPE_SUBCLASS);
 }
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < 0x030b0000
 #  define PyType_Check(op) PyType_Check(_PyObject_CAST(op))
@@ -770,7 +860,7 @@ static inline int PyType_Check(PyObject *op) {
     (assert(PyType_Check(op)), _Py_CAST(PyTypeObject*, (op)))
 
 static inline int PyType_CheckExact(PyObject *op) {
-    return Py_IS_TYPE(op, &PyType_Type);
+    return _Py_IS_ROOT_SHAPE(op, &PyType_Type);
 }
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 < 0x030b0000
 #  define PyType_CheckExact(op) PyType_CheckExact(_PyObject_CAST(op))

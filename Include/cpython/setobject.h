@@ -4,9 +4,12 @@
 
 /* There are three kinds of entries in the table:
 
-1. Unused:  key == NULL and hash == 0
-2. Dummy:   key == dummy and hash == -1
-3. Active:  key != NULL and key != dummy and hash != -1
+1. Unused:  key is PyValue_NULL and hash == 0
+2. Dummy:   key is dummy and hash == -1
+3. Active:  key is neither and hash != -1
+
+An active key is a canonical PyValue: an int that fits in int32 or a float
+other than NaN is held as its value, and has no object until one is read.
 
 The hash field of Unused slots is always zero.
 
@@ -18,7 +21,7 @@ either entry->key==dummy or by entry->hash==-1.
 #define PySet_MINSIZE 8
 
 typedef struct {
-    PyObject *key;
+    PyValue key;
     Py_hash_t hash;             /* Cached hash code of the key */
 } setentry;
 
@@ -55,17 +58,12 @@ typedef struct {
     Py_ssize_t finger;          /* Search finger for pop() */
 
     setentry smalltable[PySet_MINSIZE];
-    PyObject *weakreflist;      /* List of weak references */
 } PySetObject;
 
 #define _PySet_CAST(so) \
     (assert(PyAnySet_Check(so)), _Py_CAST(PySetObject*, so))
 
 static inline Py_ssize_t PySet_GET_SIZE(PyObject *so) {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_ssize_relaxed(&(_PySet_CAST(so)->used));
-#else
     return _PySet_CAST(so)->used;
-#endif
 }
 #define PySet_GET_SIZE(so) PySet_GET_SIZE(_PyObject_CAST(so))

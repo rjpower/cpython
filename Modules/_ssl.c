@@ -46,8 +46,9 @@
 /* Redefined below for Windows debug builds after important #includes */
 #define _PySSL_FIX_ERRNO
 
+/* Pinned: every use reattaches in the same frame (Include/ceval.h) */
 #define PySSL_BEGIN_ALLOW_THREADS_S(save) \
-    do { (save) = PyEval_SaveThread(); } while(0)
+    do { (save) = _PyEval_SaveThreadPinned(); } while(0)
 #define PySSL_END_ALLOW_THREADS_S(save) \
     do { PyEval_RestoreThread(save); _PySSL_FIX_ERRNO; } while(0)
 #define PySSL_BEGIN_ALLOW_THREADS(self) { \
@@ -1015,13 +1016,17 @@ newPySSLSocket(PySSLContext *sslctx, PySocketSockObject *sock,
         }
     }
     if (owner && owner != Py_None) {
-        if (_ssl__SSLSocket_owner_set((PyObject *)self, owner, NULL) < 0) {
+        if (_ssl__SSLSocket_owner_set((PyObject *)self,
+                                      PyValue_FromObject(owner), NULL) < 0)
+        {
             Py_DECREF(self);
             return NULL;
         }
     }
     if (session && session != Py_None) {
-        if (_ssl__SSLSocket_session_set((PyObject *)self, session, NULL) < 0) {
+        if (_ssl__SSLSocket_session_set((PyObject *)self,
+                                        PyValue_FromObject(session), NULL) < 0)
+        {
             Py_DECREF(self);
             return NULL;
         }
@@ -2460,7 +2465,14 @@ _ssl__SSLSocket_owner_set_impl(PySSLSocket *self, PyObject *value)
 static int
 PySSL_traverse(PyObject *op, visitproc visit, void *arg)
 {
+    PySSLSocket *self = PySSLSocket_CAST(op);
     Py_VISIT(Py_TYPE(op));
+    /* The tracing collector frees what no traverse reaches: the weakref
+       objects and the context are owned here and nowhere else. */
+    Py_VISIT(self->Socket);
+    Py_VISIT(self->ctx);
+    Py_VISIT(self->owner);
+    Py_VISIT(self->server_hostname);
     return 0;
 }
 
@@ -4392,27 +4404,27 @@ _ssl__SSLContext_check_hostname_set_impl(PySSLContext *self, int value)
     return 0;
 }
 
-static PyObject *
+static PyValue
 get_post_handshake_auth(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
 #if defined(PySSL_HAVE_POST_HS_AUTH)
-    return PyBool_FromLong(self->post_handshake_auth);
+    return PyValue_FromObject((self->post_handshake_auth) ? Py_True : Py_False);
 #else
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 #endif
 }
 
 #if defined(PySSL_HAVE_POST_HS_AUTH)
 static int
-set_post_handshake_auth(PyObject *op, PyObject *arg, void *Py_UNUSED(closure))
+set_post_handshake_auth(PyObject *op, PyValue arg, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_SetString(PyExc_AttributeError, "cannot delete attribute");
         return -1;
     }
-    int pha = PyObject_IsTrue(arg);
+    int pha = PyObject_IsTrueValue(arg);
 
     if (pha == -1) {
         return -1;

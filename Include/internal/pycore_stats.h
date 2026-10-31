@@ -10,61 +10,41 @@ extern "C" {
 
 #include "pycore_structs.h"     //
 
+/* What a box of an inline value is for: the classes of boxing sites that the
+   statistics count (object_stats.value_boxes).  Other boxes are counted only
+   in the totals. */
+#define _PY_BOX_CONTAINER_STORE 0   /* stored into a list, tuple, dict, set
+                                       or cell */
+#define _PY_BOX_ATTRIBUTE_STORE 1   /* stored as an attribute */
+#define _PY_BOX_CALL            2   /* an argument of a call into C */
+#define _PY_BOX_RETURN          3   /* the eval loop's result to C */
+#define _PY_BOX_OTHER           4   /* not counted by class */
+#define _PY_BOX_SITES           64
+
 
 #ifdef Py_STATS
-
-#include "pycore_bitutils.h"  // _Py_bit_length
 
 #define STAT_INC(opname, name) _Py_STATS_EXPR(opcode_stats[opname].specialization.name++)
 #define STAT_DEC(opname, name) _Py_STATS_EXPR(opcode_stats[opname].specialization.name--)
 #define OPCODE_EXE_INC(opname) _Py_STATS_EXPR(opcode_stats[opname].execution_count++)
+#define BOX_STAT_INC(opname, kind) \
+    do { \
+        _Py_STATS_EXPR(opcode_stats[opname].boxes++); \
+        VALUE_BOX_STAT_INC(kind); \
+    } while (0)
+#define VALUE_BOX_STAT_INC(kind) _Py_STATS_EXPR(object_stats.value_boxes[kind]++)
 #define CALL_STAT_INC(name) _Py_STATS_EXPR(call_stats.name++)
 #define OBJECT_STAT_INC(name) _Py_STATS_EXPR(object_stats.name++)
 #define OBJECT_STAT_INC_COND(name, cond) _Py_STATS_COND_EXPR(cond, object_stats.name++)
 #define EVAL_CALL_STAT_INC(name) _Py_STATS_EXPR(call_stats.eval_calls[name]++)
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) _Py_STATS_COND_EXPR(PyFunction_Check(callable), call_stats.eval_calls[name]++)
 #define GC_STAT_ADD(gen, name, n) _Py_STATS_EXPR(gc_stats[(gen)].name += (n))
-#define OPT_STAT_INC(name) _Py_STATS_EXPR(optimization_stats.name++)
-#define OPT_STAT_ADD(name, n) _Py_STATS_EXPR(optimization_stats.name += (n))
-#define UOP_STAT_INC(opname, name) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (s) { \
-            assert(opname < 512); \
-            s->optimization_stats.opcode[opname].name++; \
-        } \
-    } while (0)
-#define UOP_PAIR_INC(uopcode, lastuop) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (lastuop && s) { \
-            s->optimization_stats.opcode[lastuop].pair_count[uopcode]++; \
-        } \
-        lastuop = uopcode; \
-    } while (0)
-#define OPT_UNSUPPORTED_OPCODE(opname) _Py_STATS_EXPR(optimization_stats.unsupported_opcode[opname]++)
-#define OPT_ERROR_IN_OPCODE(opname) _Py_STATS_EXPR(optimization_stats.error_in_opcode[opname]++)
-#define OPT_HIST(length, name) \
-    do { \
-        PyStats *s = _PyStats_GET(); \
-        if (s) { \
-            int bucket = _Py_bit_length(length >= 1 ? length - 1 : 0); \
-            bucket = (bucket >= _Py_UOP_HIST_SIZE) ? _Py_UOP_HIST_SIZE - 1 : bucket; \
-            s->optimization_stats.name[bucket]++; \
-        } \
-    } while (0)
 #define RARE_EVENT_STAT_INC(name) _Py_STATS_EXPR(rare_event_stats.name++)
 #define OPCODE_DEFERRED_INC(opname) _Py_STATS_COND_EXPR(opcode==opname, opcode_stats[opname].specialization.deferred++)
 
-#ifdef Py_GIL_DISABLED
-#define FT_STAT_MUTEX_SLEEP_INC() _Py_STATS_EXPR(ft_stats.mutex_sleeps++)
-#define FT_STAT_QSBR_POLL_INC() _Py_STATS_EXPR(ft_stats.qsbr_polls++)
-#define FT_STAT_WORLD_STOP_INC() _Py_STATS_EXPR(ft_stats.world_stops++)
-#else
 #define FT_STAT_MUTEX_SLEEP_INC()
 #define FT_STAT_QSBR_POLL_INC()
 #define FT_STAT_WORLD_STOP_INC()
-#endif
 
 // Export for '_opcode' shared extension
 PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
@@ -73,19 +53,14 @@ PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
 #define STAT_INC(opname, name) ((void)0)
 #define STAT_DEC(opname, name) ((void)0)
 #define OPCODE_EXE_INC(opname) ((void)0)
+#define BOX_STAT_INC(opname, kind) ((void)0)
+#define VALUE_BOX_STAT_INC(kind) ((void)0)
 #define CALL_STAT_INC(name) ((void)0)
 #define OBJECT_STAT_INC(name) ((void)0)
 #define OBJECT_STAT_INC_COND(name, cond) ((void)0)
 #define EVAL_CALL_STAT_INC(name) ((void)0)
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) ((void)0)
 #define GC_STAT_ADD(gen, name, n) ((void)0)
-#define OPT_STAT_INC(name) ((void)0)
-#define OPT_STAT_ADD(name, n) ((void)0)
-#define UOP_STAT_INC(opname, name) ((void)0)
-#define UOP_PAIR_INC(uopcode, lastuop) ((void)0)
-#define OPT_UNSUPPORTED_OPCODE(opname) ((void)0)
-#define OPT_ERROR_IN_OPCODE(opname) ((void)0)
-#define OPT_HIST(length, name) ((void)0)
 #define RARE_EVENT_STAT_INC(name) ((void)0)
 #define OPCODE_DEFERRED_INC(opname) ((void)0)
 #define FT_STAT_MUTEX_SLEEP_INC()

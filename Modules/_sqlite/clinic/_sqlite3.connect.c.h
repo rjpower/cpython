@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(pysqlite_connect__doc__,
@@ -23,4 +23,4 @@ PyDoc_STRVAR(pysqlite_connect__doc__,
 
 #define PYSQLITE_CONNECT_METHODDEF    \
     {"connect", _PyCFunction_CAST(pysqlite_connect), METH_FASTCALL|METH_KEYWORDS, pysqlite_connect__doc__},
-/*[clinic end generated code: output=07d5692e22b0fdf2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6a87bfd3f4254126 input=a9049054013a1b77]*/

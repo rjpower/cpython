@@ -41,6 +41,7 @@ __all__ = [
     "requires_IEEE_754", "requires_zlib",
     "has_fork_support", "requires_fork",
     "has_subprocess_support", "requires_subprocess",
+    "requires_subinterpreters",
     "has_socket_support", "requires_working_socket",
     "has_remote_subprocess_debugging", "requires_remote_subprocess_debugging",
     "anticipate_failure", "load_package_tests", "detect_api_mismatch",
@@ -66,8 +67,6 @@ __all__ = [
     "ALWAYS_EQ", "NEVER_EQ", "LARGEST", "SMALLEST",
     "LOOPBACK_TIMEOUT", "INTERNET_TIMEOUT", "SHORT_TIMEOUT", "LONG_TIMEOUT",
     "Py_DEBUG", "exceeds_recursion_limit", "skip_on_s390x",
-    "requires_jit_enabled",
-    "requires_jit_disabled",
     "force_not_colorized",
     "force_not_colorized_test_class",
     "make_clean_env",
@@ -680,6 +679,12 @@ def requires_subprocess():
     """Used for subprocess, os.spawn calls, fd inheritance"""
     return unittest.skipUnless(has_subprocess_support, "requires subprocess support")
 
+def requires_subinterpreters(func):
+    """Require the implementation's declared interpreter-creation support."""
+    return unittest.skipUnless(
+        sys.implementation.supports_isolated_interpreters,
+        "subinterpreters are not supported")(func)
+
 # Emscripten's socket emulation and WASI sockets have limitations.
 has_socket_support = not (
     is_emscripten
@@ -1067,7 +1072,8 @@ def expected_failure_if_gil_disabled():
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:
-    _header = 'nP'
+    # One word: the type pointer and the collector's flags
+    _header = 'P'
 _align = '0n'
 _vheader = _header + 'n'
 
@@ -1092,15 +1098,8 @@ _TPFLAGS_BASE_EXC_SUBCLASS = 1<<30
 _TPFLAGS_TYPE_SUBCLASS = 1<<31
 
 def check_sizeof(test, o, size):
-    try:
-        import _testinternalcapi
-    except ImportError:
-        raise unittest.SkipTest("_testinternalcapi required")
+    # Objects the collector tracks carry no header before the object
     result = sys.getsizeof(o)
-    # add GC header size
-    if ((type(o) == type) and (o.__flags__ & _TPFLAGS_HEAPTYPE) or\
-        ((type(o) != type) and (type(o).__flags__ & _TPFLAGS_HAVE_GC))):
-        size += _testinternalcapi.SIZEOF_PYGC_HEAD
     msg = 'wrong size for %s: got %d, expected %d' \
             % (type(o), result, size)
     test.assertEqual(result, size, msg)
@@ -1511,17 +1510,6 @@ def no_rerun(reason):
             _has_run = True
         return wrapper
     return deco
-
-
-def refcount_test(test):
-    """Decorator for tests which involve reference counting.
-
-    To start, the decorator does not run the test if is not run by CPython.
-    After that, any trace function is unset during the test to prevent
-    unexpected refcounts caused by the trace function.
-
-    """
-    return no_tracing(cpython_only(test))
 
 
 def requires_limited_api(test):
@@ -2187,8 +2175,8 @@ def check_free_after_iterating(test, iter, cls, args=()):
         # Issue 26494: Shouldn't crash
         test.assertRaises(StopIteration, next, it)
 
+    # The sequence should be deallocated just after the end of iterating.
     wrapper()
-    # The sequence should be deallocated just after the end of iterating
     gc_collect()
     test.assertTrue(done)
 
@@ -2732,7 +2720,7 @@ def setup_venv_with_pip_setuptools(venv_dir):
 
 # True if Python is built with the Py_DEBUG macro defined: if
 # Python is built in debug mode (./configure --with-pydebug).
-Py_DEBUG = hasattr(sys, 'gettotalrefcount')
+Py_DEBUG = bool(sysconfig.get_config_var('Py_DEBUG'))
 
 
 def late_deletion(obj):
@@ -3003,10 +2991,6 @@ skip_on_newlib = unittest.skipIf(sys.platform == 'cygwin',
                                  'the test fails on newlib C library')
 
 Py_TRACE_REFS = hasattr(sys, 'getobjects')
-
-_JIT_ENABLED = sys._jit.is_enabled()
-requires_jit_enabled = unittest.skipUnless(_JIT_ENABLED, "requires JIT enabled")
-requires_jit_disabled = unittest.skipIf(_JIT_ENABLED, "requires JIT disabled")
 
 
 _BASE_COPY_SRC_DIR_IGNORED_NAMES = frozenset({

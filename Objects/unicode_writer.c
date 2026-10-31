@@ -39,8 +39,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
 #include "Python.h"
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
+#include "pycore_pystate.h"       // _Py_AssertHoldsTstate()
 #include "pycore_unicodeobject.h" // _PyUnicode_Result()
 
 
@@ -70,6 +70,9 @@ _PyUnicodeWriter_Init(_PyUnicodeWriter *writer)
     /* ASCII is the bare minimum */
     writer->min_char = 127;
 
+    _PyGC_AddRoot(&writer->root, &writer->buffer, 1);
+    writer->root_active = 1;
+
     /* use a kind value smaller than PyUnicode_1BYTE_KIND so
        _PyUnicodeWriter_PrepareKind() will copy the buffer. */
     assert(writer->kind == 0);
@@ -88,12 +91,9 @@ PyUnicodeWriter_Create(Py_ssize_t length)
 
     const size_t size = sizeof(_PyUnicodeWriter);
     PyUnicodeWriter *pub_writer;
-    pub_writer = _Py_FREELIST_POP_MEM(unicode_writers);
+    pub_writer = (PyUnicodeWriter *)PyMem_Malloc(size);
     if (pub_writer == NULL) {
-        pub_writer = (PyUnicodeWriter *)PyMem_Malloc(size);
-        if (pub_writer == NULL) {
-            return (PyUnicodeWriter *)PyErr_NoMemory();
-        }
+        return (PyUnicodeWriter *)PyErr_NoMemory();
     }
     _PyUnicodeWriter *writer = (_PyUnicodeWriter *)pub_writer;
 
@@ -114,7 +114,7 @@ PyUnicodeWriter_Discard(PyUnicodeWriter *writer)
         return;
     }
     _PyUnicodeWriter_Dealloc((_PyUnicodeWriter*)writer);
-    _Py_FREELIST_FREE(unicode_writers, writer, PyMem_Free);
+    PyMem_Free(writer);
 }
 
 
@@ -122,9 +122,8 @@ PyUnicodeWriter_Discard(PyUnicodeWriter *writer)
 void
 _PyUnicodeWriter_InitWithBuffer(_PyUnicodeWriter *writer, PyObject *buffer)
 {
-    assert(PyUnstable_Object_IsUniquelyReferenced(buffer));
-
-    memset(writer, 0, sizeof(*writer));
+    _PyUnicodeWriter_Init(writer);
+    writer->min_char = 0;
     _PyUnicodeWriter_SetBuffer(writer, buffer);
     writer->min_length = writer->size;
     assert(_PyUnicodeWriter_CanWrite(writer));
@@ -135,6 +134,7 @@ int
 _PyUnicodeWriter_PrepareInternal(_PyUnicodeWriter *writer,
                                  Py_ssize_t length, Py_UCS4 maxchar)
 {
+    assert(writer->root_active);
     assert(length >= 0);
     assert(maxchar <= _Py_MAX_UNICODE);
 
@@ -539,6 +539,7 @@ _PyUnicodeWriter_WriteLatin1String(_PyUnicodeWriter *writer,
 PyObject *
 _PyUnicodeWriter_Finish(_PyUnicodeWriter *writer)
 {
+    assert(writer->root_active);
 #ifdef Py_DEBUG
     // Check for buffer overflow
     if (writer->buffer != NULL) {
@@ -553,14 +554,13 @@ _PyUnicodeWriter_Finish(_PyUnicodeWriter *writer)
     }
 #endif
 
+    /* Keep the registered slot authoritative through narrowing and shrinking. */
     PyObject *str = writer->buffer;
-    writer->buffer = NULL;
-
     Py_ssize_t final_size = writer->pos;
     if (final_size == 0) {
         // Get the empty string singleton
         PyObject *empty = _PyUnicode_GetEmpty();
-        Py_XDECREF(str);  // writer->buffer can be NULL if the position is 0
+        _PyUnicodeWriter_Dealloc(writer);
         return empty;
     }
 
@@ -575,8 +575,7 @@ _PyUnicodeWriter_Finish(_PyUnicodeWriter *writer)
         assert(PyUnicode_GET_LENGTH(str) >= 1);
         const Py_UCS1 *data = PyUnicode_1BYTE_DATA(str);
         Py_UCS1 ch = data[0];
-        Py_DECREF(str);
-        str = _Py_LATIN1_CHR(ch);
+        Py_SETREF(writer->buffer, _Py_LATIN1_CHR(ch));
         goto done;
     }
 
@@ -586,11 +585,11 @@ _PyUnicodeWriter_Finish(_PyUnicodeWriter *writer)
             // Adjust the string kind
             PyObject *str2 = PyUnicode_New(final_size, maxchar);
             if (str2 == NULL) {
-                Py_DECREF(str);
+                _PyUnicodeWriter_Dealloc(writer);
                 return NULL;
             }
             _PyUnicode_FastCopyCharacters(str2, 0, str, 0, final_size);
-            Py_SETREF(str, str2);
+            _PyUnicodeWriter_SetBuffer(writer, str2);
             goto done;
         }
     }
@@ -599,15 +598,20 @@ _PyUnicodeWriter_Finish(_PyUnicodeWriter *writer)
         // Truncate the string
         PyObject *str2 = _PyUnicode_ResizeCompact(str, final_size);
         if (str2 == NULL) {
-            Py_DECREF(str);
+            _PyUnicodeWriter_Dealloc(writer);
             return NULL;
         }
-        str = str2;
+        // Resize consumed the old buffer. Publish before any further work.
+        writer->buffer = str2;
         goto done;
     }
 
 done:
+    str = writer->buffer;
     assert(_PyUnicode_CheckConsistency(str, 1));
+    writer->buffer = NULL;
+    // RemoveRoot and this reset do not collect; the raw result goes to the caller.
+    _PyUnicodeWriter_Dealloc(writer);
     return str;
 }
 
@@ -637,7 +641,7 @@ PyUnicodeWriter_Finish(PyUnicodeWriter *writer)
 {
     PyObject *str = _PyUnicodeWriter_Finish((_PyUnicodeWriter*)writer);
     assert(((_PyUnicodeWriter*)writer)->buffer == NULL);
-    _Py_FREELIST_FREE(unicode_writers, writer, PyMem_Free);
+    PyMem_Free(writer);
     return str;
 }
 
@@ -646,4 +650,8 @@ void
 _PyUnicodeWriter_Dealloc(_PyUnicodeWriter *writer)
 {
     Py_CLEAR(writer->buffer);
+    if (writer->root_active) {
+        _PyGC_RemoveRoot(&writer->root);
+    }
+    memset(writer, 0, sizeof(*writer));
 }

@@ -3,11 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(Struct__doc__,
 "Struct(format)\n"
@@ -29,7 +28,6 @@ Struct(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -52,17 +50,20 @@ Struct(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
+    PyValue argsbuf[1];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *format;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    format = fastargs[0];
+    format = PyValue_Object(fastargs[0]);
+    if (format == NULL) {
+        goto exit;
+    }
     return_value = Struct_impl(type, format);
 
 exit:
@@ -89,7 +90,6 @@ Struct___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -112,17 +112,20 @@ Struct___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
+    PyValue argsbuf[1];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *format;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    format = fastargs[0];
+    format = PyValue_Object(fastargs[0]);
+    if (format == NULL) {
+        goto exit;
+    }
     return_value = Struct___init___impl((PyStructObject *)self, format);
 
 exit:
@@ -140,21 +143,29 @@ PyDoc_STRVAR(Struct_unpack__doc__,
 "format strings.");
 
 #define STRUCT_UNPACK_METHODDEF    \
-    {"unpack", (PyCFunction)Struct_unpack, METH_O, Struct_unpack__doc__},
+    {"unpack", _PyCFunction_CAST(Struct_unpack), METH_O, Struct_unpack__doc__},
 
 static PyObject *
 Struct_unpack_impl(PyStructObject *self, Py_buffer *buffer);
 
-static PyObject *
-Struct_unpack(PyObject *self, PyObject *arg)
+static PyValue
+Struct_unpack(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
+    PyObject *_return_value;
 
-    if (PyObject_GetBuffer(arg, &buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = Struct_unpack_impl((PyStructObject *)self, &buffer);
+    _return_value = Struct_unpack_impl((PyStructObject *)self, &buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for buffer */
@@ -183,15 +194,14 @@ static PyObject *
 Struct_unpack_from_impl(PyStructObject *self, Py_buffer *buffer,
                         Py_ssize_t offset);
 
-static PyObject *
-Struct_unpack_from(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+Struct_unpack_from(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -214,28 +224,34 @@ Struct_unpack_from(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -243,7 +259,8 @@ Struct_unpack_from(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         offset = ival;
     }
 skip_optional_pos:
-    return_value = Struct_unpack_from_impl((PyStructObject *)self, &buffer, offset);
+    _return_value = Struct_unpack_from_impl((PyStructObject *)self, &buffer, offset);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for buffer */
@@ -265,18 +282,26 @@ PyDoc_STRVAR(Struct_iter_unpack__doc__,
 "a multiple of the struct size.");
 
 #define STRUCT_ITER_UNPACK_METHODDEF    \
-    {"iter_unpack", (PyCFunction)Struct_iter_unpack, METH_O, Struct_iter_unpack__doc__},
+    {"iter_unpack", _PyCFunction_CAST(Struct_iter_unpack), METH_O, Struct_iter_unpack__doc__},
 
 static PyObject *
 Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer);
 
-static PyObject *
-Struct_iter_unpack(PyObject *self, PyObject *buffer)
+static PyValue
+Struct_iter_unpack(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *buffer;
+    PyObject *_return_value;
 
-    return_value = Struct_iter_unpack_impl((PyStructObject *)self, buffer);
+    buffer = PyValue_Object(arg);
+    if (buffer == NULL) {
+        goto exit;
+    }
+    _return_value = Struct_iter_unpack_impl((PyStructObject *)self, buffer);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -294,19 +319,21 @@ PyDoc_STRVAR(Struct_pack__doc__,
     {"pack", _PyCFunction_CAST(Struct_pack), METH_FASTCALL, Struct_pack__doc__},
 
 static PyObject *
-Struct_pack_impl(PyStructObject *self, PyObject * const *values,
+Struct_pack_impl(PyStructObject *self, const PyValue *values,
                  Py_ssize_t values_length);
 
-static PyObject *
-Struct_pack(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+Struct_pack(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *values;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *values;
     Py_ssize_t values_length;
+    PyObject *_return_value;
 
     values = args;
     values_length = nargs;
-    return_value = Struct_pack_impl((PyStructObject *)self, values, values_length);
+    _return_value = Struct_pack_impl((PyStructObject *)self, values, values_length);
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -328,31 +355,37 @@ PyDoc_STRVAR(Struct_pack_into__doc__,
 
 static PyObject *
 Struct_pack_into_impl(PyStructObject *self, Py_buffer *buffer,
-                      Py_ssize_t offset, PyObject * const *values,
+                      Py_ssize_t offset, const PyValue *values,
                       Py_ssize_t values_length);
 
-static PyObject *
-Struct_pack_into(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+Struct_pack_into(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pack_into", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("pack_into", "argument 1", "read-write bytes-like object", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_WRITABLE) < 0) {
+            _PyArg_BadArgument("pack_into", "argument 1", "read-write bytes-like object", _arg);
+            goto exit;
+        }
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -361,7 +394,8 @@ Struct_pack_into(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     values = args + 2;
     values_length = nargs - 2;
-    return_value = Struct_pack_into_impl((PyStructObject *)self, &buffer, offset, values, values_length);
+    _return_value = Struct_pack_into_impl((PyStructObject *)self, &buffer, offset, values, values_length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for buffer */
@@ -414,26 +448,32 @@ PyDoc_STRVAR(calcsize__doc__,
 "Return size in bytes of the struct described by the format string.");
 
 #define CALCSIZE_METHODDEF    \
-    {"calcsize", (PyCFunction)calcsize, METH_O, calcsize__doc__},
+    {"calcsize", _PyCFunction_CAST(calcsize), METH_O, calcsize__doc__},
 
 static Py_ssize_t
 calcsize_impl(PyObject *module, PyStructObject *s_object);
 
-static PyObject *
-calcsize(PyObject *module, PyObject *arg)
+static PyValue
+calcsize(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_ssize_t _return_value;
 
-    if (!cache_struct_converter(module, arg, &s_object)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
     }
     _return_value = calcsize_impl(module, s_object);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -455,26 +495,34 @@ PyDoc_STRVAR(pack__doc__,
     {"pack", _PyCFunction_CAST(pack), METH_FASTCALL, pack__doc__},
 
 static PyObject *
-pack_impl(PyObject *module, PyStructObject *s_object,
-          PyObject * const *values, Py_ssize_t values_length);
+pack_impl(PyObject *module, PyStructObject *s_object, const PyValue *values,
+          Py_ssize_t values_length);
 
-static PyObject *
-pack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pack(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pack", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
     }
     values = args + 1;
     values_length = nargs - 1;
-    return_value = pack_impl(module, s_object, values, values_length);
+    _return_value = pack_impl(module, s_object, values, values_length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -499,35 +547,47 @@ PyDoc_STRVAR(pack_into__doc__,
 
 static PyObject *
 pack_into_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer,
-               Py_ssize_t offset, PyObject * const *values,
+               Py_ssize_t offset, const PyValue *values,
                Py_ssize_t values_length);
 
-static PyObject *
-pack_into(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pack_into(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pack_into", nargs, 3, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("pack_into", "argument 2", "read-write bytes-like object", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_WRITABLE) < 0) {
+            _PyArg_BadArgument("pack_into", "argument 2", "read-write bytes-like object", _arg);
+            goto exit;
+        }
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -536,7 +596,8 @@ pack_into(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     }
     values = args + 3;
     values_length = nargs - 3;
-    return_value = pack_into_impl(module, s_object, &buffer, offset, values, values_length);
+    _return_value = pack_into_impl(module, s_object, &buffer, offset, values, values_length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -564,23 +625,37 @@ PyDoc_STRVAR(unpack__doc__,
 static PyObject *
 unpack_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer);
 
-static PyObject *
-unpack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unpack(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unpack", nargs, 2, 2)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = unpack_impl(module, s_object, &buffer);
+    _return_value = unpack_impl(module, s_object, &buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -610,15 +685,14 @@ static PyObject *
 unpack_from_impl(PyObject *module, PyStructObject *s_object,
                  Py_buffer *buffer, Py_ssize_t offset);
 
-static PyObject *
-unpack_from(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unpack_from(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -641,32 +715,44 @@ unpack_from(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -674,7 +760,8 @@ unpack_from(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         offset = ival;
     }
 skip_optional_pos:
-    return_value = unpack_from_impl(module, s_object, &buffer, offset);
+    _return_value = unpack_from_impl(module, s_object, &buffer, offset);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -704,21 +791,32 @@ static PyObject *
 iter_unpack_impl(PyObject *module, PyStructObject *s_object,
                  PyObject *buffer);
 
-static PyObject *
-iter_unpack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+iter_unpack(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     PyObject *buffer;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("iter_unpack", nargs, 2, 2)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!cache_struct_converter(module, _arg, &s_object)) {
+            goto exit;
+        }
+    }
+    buffer = PyValue_Object(args[1]);
+    if (buffer == NULL) {
         goto exit;
     }
-    buffer = args[1];
-    return_value = iter_unpack_impl(module, s_object, buffer);
+    _return_value = iter_unpack_impl(module, s_object, buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -726,4 +824,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=021b89d2d3c3c225 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ac3fc7ebcfb7a9f2 input=a9049054013a1b77]*/

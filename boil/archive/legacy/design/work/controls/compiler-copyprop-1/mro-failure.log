@@ -1,0 +1,133 @@
+Using random seed: 3200714414
+0:00:00 load avg: 4.19 mem:   46.5 MiB Run 1 test in parallel using 1 worker process (timeout: 10 min, worker timeout: 15 min)
+test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) ... 
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='class_attr') ... FAIL
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='instance_attr') ... FAIL
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getattr') ... FAIL
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getattribute') ... FAIL
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getitem') ... FAIL
+  test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='mro_store') ... FAIL
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='class_attr')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='instance_attr')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getattr')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getattribute')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='getitem')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+======================================================================
+FAIL: test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) (label='mro_store')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_peepholer.py", line 1581, in test_specialization_phase_runs_no_code
+    self.assertEqual([phase for phase, _ in events
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                      if phase == "specialize"], [], events)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['specialize'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'specialize'
+
+- ['specialize']
++ [] : [('specialize', 8)]
+
+----------------------------------------------------------------------
+Ran 1 test in 0.005s
+
+FAILED (failures=6)
+test test_peepholer failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_peepholer
+
+Total duration: 295 ms
+Total tests: run=1 (filtered) failures=6
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

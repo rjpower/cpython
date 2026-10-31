@@ -147,9 +147,6 @@ Tools/unicode/data/
 /.ccache
 /cross-build*/
 /dist/
-/jit_stencils*.h
-/jit_unwind_info*.h
-.jit-stamp
 /platform
 /profile-clean-stamp
 /profile-run-stamp

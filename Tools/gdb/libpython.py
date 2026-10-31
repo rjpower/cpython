@@ -43,6 +43,7 @@ The module also extends gdb with some python-specific commands.
 
 import gdb
 import os
+import struct
 import sys
 
 
@@ -71,23 +72,6 @@ def _type_unsigned_int_ptr():
 def _sizeof_void_p():
     return gdb.lookup_type('void').pointer().sizeof
 
-def _managed_dict_offset():
-    # See pycore_object.h
-    pyobj = gdb.lookup_type("PyObject")
-    if any(field.name == "ob_ref_local" for field in pyobj.fields()):
-        return -1 * _sizeof_void_p()
-    else:
-        return -3 * _sizeof_void_p()
-
-_INTERP_FRAME_HAS_TLBC_INDEX = None
-def interp_frame_has_tlbc_index():
-    global _INTERP_FRAME_HAS_TLBC_INDEX
-    if _INTERP_FRAME_HAS_TLBC_INDEX is None:
-        interp_frame = gdb.lookup_type("_PyInterpreterFrame")
-        _INTERP_FRAME_HAS_TLBC_INDEX = any(field.name == "tlbc_index"
-                                           for field in interp_frame.fields())
-    return _INTERP_FRAME_HAS_TLBC_INDEX
-
 Py_TPFLAGS_INLINE_VALUES     = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT      = (1 << 4)
 Py_TPFLAGS_HEAPTYPE          = (1 << 9)
@@ -104,6 +88,11 @@ Py_TPFLAGS_TYPE_SUBCLASS     = (1 << 31)
 FRAME_OWNED_BY_INTERPRETER = 3
 
 MAX_OUTPUT_LEN=1024
+
+# Include/object.h: the type pointer is the header word's bits 0-47.
+HEADER_SHAPE_MASK = (1 << 48) - 1
+# _Py_SHAPE_DICT in pycore_shape.h: the attributes are in the dict in slot 0
+SHAPE_KIND_DICT = 2
 
 hexdigits = "0123456789abcdef"
 
@@ -153,8 +142,24 @@ class TruncatedStringIO(object):
         return self._val
 
 
-def _PyStackRef_AsPyObjectBorrow(gdbval):
+def _PyValue_ObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
+
+# Inline ints and floats (Include/pyvalue.h). Pointers and
+# indices lie below VALUE_DOUBLE_OFFSET in every build.
+VALUE_DOUBLE_OFFSET = 1 << 49
+VALUE_INT_BASE = 0xFFFE << 48
+
+def _PyValue_InlineValue(gdbval):
+    '''Return the int or float that a PyValue holds inline, or None'''
+    bits = int(gdbval['bits'])
+    if bits < VALUE_DOUBLE_OFFSET:
+        return None
+    if bits >= VALUE_INT_BASE:
+        value = bits & 0xFFFFFFFF
+        return value - (1 << 32) if value >= (1 << 31) else value
+    raw = struct.pack('<Q', bits - VALUE_DOUBLE_OFFSET)
+    return struct.unpack('<d', raw)[0]
 
 
 class PyObjectPtr(object):
@@ -172,10 +177,10 @@ class PyObjectPtr(object):
 
     def __init__(self, gdbval, cast_to=None):
         # Clear the tagged pointer
-        if gdbval.type.name == '_PyStackRef':
+        if gdbval.type.name == 'PyValue':
             if cast_to is None:
                 cast_to = gdb.lookup_type('PyObject').pointer()
-            self._gdbval = _PyStackRef_AsPyObjectBorrow(gdbval).cast(cast_to)
+            self._gdbval = _PyValue_ObjectBorrow(gdbval).cast(cast_to)
         elif cast_to:
             self._gdbval = gdbval.cast(cast_to)
         else:
@@ -192,13 +197,22 @@ class PyObjectPtr(object):
            PyVarObject ob_base;
         so that the "ob_size" field is located insize the "ob_base" field, and
         the "ob_type" is most easily accessed by casting back to a (PyObject*).
+        The low 48 bits of the header word, "ob_header", are the object's
+        shape, and the shape's "type" field is its type.
         '''
         if self.is_null():
             raise NullPyObjectPtr(self)
 
         if name == 'ob_type':
             pyo_ptr = self._gdbval.cast(PyObjectPtr.get_gdb_type())
-            return pyo_ptr.dereference()[name]
+            header = int(pyo_ptr.dereference()['ob_header'])
+            shape = header & HEADER_SHAPE_MASK
+            if shape == 0:
+                return gdb.Value(0).cast(PyTypeObjectPtr.get_gdb_type())
+            # gdb.MemoryError, a RuntimeError, if the header is corrupt.
+            shape_ptr = gdb.Value(shape).cast(
+                gdb.lookup_type('struct _PyShape').pointer())
+            return shape_ptr.dereference()['type']
 
         if name == 'ob_size':
             pyo_ptr = self._gdbval.cast(PyVarObjectPtr.get_gdb_type())
@@ -388,6 +402,10 @@ class PyObjectPtr(object):
         Try to locate the appropriate derived class dynamically, and cast
         the pointer accordingly.
         '''
+        if gdbval.type.name == 'PyValue':
+            value = _PyValue_InlineValue(gdbval)
+            if value is not None:
+                return InlineStackValue(value)
         try:
             p = PyObjectPtr(gdbval)
             cls = cls.subclass_from_type(p.type())
@@ -407,6 +425,24 @@ class PyObjectPtr(object):
 
 class PyVarObjectPtr(PyObjectPtr):
     _typename = 'PyVarObject'
+
+class InlineStackValue(PyObjectPtr):
+    '''An int or float held in a PyValue without a heap object'''
+
+    def __init__(self, value):
+        self._value = value
+
+    def is_null(self):
+        return False
+
+    def safe_tp_name(self):
+        return type(self._value).__name__
+
+    def proxyval(self, visited):
+        return self._value
+
+    def write_repr(self, out, visited):
+        out.write(repr(self._value))
 
 class ProxyAlreadyVisited(object):
     '''
@@ -429,7 +465,7 @@ def _write_instance_repr(out, visited, name, pyop_attrdict, address):
     out.write(name)
 
     # Write dictionary of instance attributes:
-    if isinstance(pyop_attrdict, (PyKeysValuesPair, PyDictObjectPtr)):
+    if isinstance(pyop_attrdict, (PyShapeSlots, PyDictObjectPtr)):
         out.write('(')
         first = True
         items = pyop_attrdict.iteritems()
@@ -472,8 +508,28 @@ def _PyObject_VAR_SIZE(typeobj, nitems):
            ).cast(_PyObject_VAR_SIZE._type_size_t)
 _PyObject_VAR_SIZE._type_size_t = None
 
+def _object_shape(gdbval):
+    '''The struct _PyShape * in the header of the object at gdbval'''
+    header = int(gdbval.cast(PyObjectPtr.get_gdb_type()).dereference()['ob_header'])
+    return gdb.Value(header & HEADER_SHAPE_MASK).cast(
+        gdb.lookup_type('struct _PyShape').pointer())
+
+def _var_item_count(pyop):
+    '''The items that a computed tp_dictoffset counts, as
+    var_item_count() in Objects/object.c does: an int's digits, at least
+    one, or the absolute ob_size'''
+    if int_from_int(pyop.type().field('tp_flags')) & Py_TPFLAGS_LONG_SUBCLASS:
+        long_ptr = pyop._gdbval.cast(gdb.lookup_type('PyLongObject').pointer())
+        return max(int(long_ptr.dereference()['long_value']['lv_tag']) >> 3, 1)
+    return abs(int_from_int(pyop.field('ob_size')))
+
 class HeapTypeObjectPtr(PyObjectPtr):
     _typename = 'PyObject'
+
+    def _slots(self):
+        typeobj = self.type()
+        char_ptr = self._gdbval.cast(_type_char_ptr()) + typeobj.field('tp_basicsize')
+        return char_ptr.cast(gdb.lookup_type('PyValue').pointer())
 
     def get_attr_dict(self):
         '''
@@ -482,20 +538,18 @@ class HeapTypeObjectPtr(PyObjectPtr):
         '''
         try:
             typeobj = self.type()
+            if int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_INLINE_VALUES:
+                # Dictionary mode keeps the dict, or NULL, in slot 0.
+                if int(_object_shape(self._gdbval)['shape_kind']) != SHAPE_KIND_DICT:
+                    return None
+                pyop_dict = PyObjectPtr.from_pyobject_ptr(self._slots()[0])
+                return None if pyop_dict.is_null() else pyop_dict
             dictoffset = int_from_int(typeobj.field('tp_dictoffset'))
             if dictoffset != 0:
                 if dictoffset < 0:
-                    if int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_MANAGED_DICT:
-                        assert dictoffset == -1
-                        dictoffset = _managed_dict_offset()
-                    else:
-                        type_PyVarObject_ptr = gdb.lookup_type('PyVarObject').pointer()
-                        tsize = int_from_int(self._gdbval.cast(type_PyVarObject_ptr)['ob_size'])
-                        if tsize < 0:
-                            tsize = -tsize
-                        size = _PyObject_VAR_SIZE(typeobj, tsize)
-                        dictoffset += size
-                        assert dictoffset % _sizeof_void_p() == 0
+                    size = _PyObject_VAR_SIZE(typeobj, _var_item_count(self))
+                    dictoffset += int(size)
+                    assert dictoffset % _sizeof_void_p() == 0
 
                 dictptr = self._gdbval.cast(_type_char_ptr()) + dictoffset
                 PyObjectPtrPtr = PyObjectPtr.get_gdb_type().pointer()
@@ -510,25 +564,16 @@ class HeapTypeObjectPtr(PyObjectPtr):
         # Not found, or some kind of error:
         return None
 
-    def get_keys_values(self):
+    def get_shape_slots(self):
+        '''The attributes in slots, or None in dictionary mode or for a
+        type without slots'''
         typeobj = self.type()
-        has_values =  int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_MANAGED_DICT
-        if not has_values:
+        if not int_from_int(typeobj.field('tp_flags')) & Py_TPFLAGS_INLINE_VALUES:
             return None
-        obj_ptr = self._gdbval.cast(_type_char_ptr())
-        dict_ptr_ptr = obj_ptr + _managed_dict_offset()
-        dict_ptr = dict_ptr_ptr.cast(_type_char_ptr().pointer()).dereference()
-        if int(dict_ptr):
+        shape = _object_shape(self._gdbval)
+        if int(shape['shape_kind']) == SHAPE_KIND_DICT:
             return None
-        char_ptr = obj_ptr + typeobj.field('tp_basicsize')
-        values_ptr = char_ptr.cast(gdb.lookup_type("PyDictValues").pointer())
-        values = values_ptr['values']
-        return PyKeysValuesPair(self.get_cached_keys(), values)
-
-    def get_cached_keys(self):
-        typeobj = self.type()
-        HeapTypePtr = gdb.lookup_type("PyHeapTypeObject").pointer()
-        return typeobj._gdbval.cast(HeapTypePtr)['ht_cached_keys']
+        return PyShapeSlots(shape, self._slots())
 
     def proxyval(self, visited):
         '''
@@ -542,9 +587,9 @@ class HeapTypeObjectPtr(PyObjectPtr):
             return ProxyAlreadyVisited('<...>')
         visited.add(self.as_address())
 
-        keys_values = self.get_keys_values()
-        if keys_values:
-            attr_dict = keys_values.proxyval(visited)
+        shape_slots = self.get_shape_slots()
+        if shape_slots:
+            attr_dict = shape_slots.proxyval(visited)
         else:
             pyop_attr_dict = self.get_attr_dict()
             if pyop_attr_dict:
@@ -563,7 +608,7 @@ class HeapTypeObjectPtr(PyObjectPtr):
             return
         visited.add(self.as_address())
 
-        pyop_attrs = self.get_keys_values()
+        pyop_attrs = self.get_shape_slots()
         if not pyop_attrs:
             pyop_attrs = self.get_attr_dict()
         _write_instance_repr(out, visited,
@@ -709,15 +754,6 @@ def parse_location_table(firstlineno, linetable):
         addr = end_addr
 
 
-class PyCodeArrayPtr:
-    def __init__(self, gdbval):
-        self._gdbval = gdbval
-
-    def get_entry(self, index):
-        assert (index >= 0) and (index < self._gdbval["size"])
-        return self._gdbval["entries"][index]
-
-
 class PyCodeObjectPtr(PyObjectPtr):
     """
     Class wrapping a gdb.Value that's a PyCodeObject* i.e. a <code> instance
@@ -747,23 +783,23 @@ class PyCodeObjectPtr(PyObjectPtr):
         assert False, "Unreachable"
 
 
-def items_from_keys_and_values(keys, values):
-    entries, nentries = PyDictObjectPtr._get_entries(keys)
-    for i in safe_range(nentries):
-        ep = entries[i]
-        pyop_value = PyObjectPtr.from_pyobject_ptr(values[i])
-        if not pyop_value.is_null():
-            pyop_key = PyObjectPtr.from_pyobject_ptr(ep['me_key'])
-            yield (pyop_key, pyop_value)
+class PyShapeSlots:
+    '''An object's slots, named by its shape: slot i holds the attribute
+    that the shape names at i, and a hole has no name'''
 
-class PyKeysValuesPair:
-
-    def __init__(self, keys, values):
-        self.keys = keys
-        self.values = values
+    def __init__(self, shape, slots):
+        self.shape = shape
+        self.slots = slots
 
     def iteritems(self):
-        return items_from_keys_and_values(self.keys, self.values)
+        names = self.shape['slots']
+        for i in safe_range(int(self.shape['nslots'])):
+            name = names[i]['name']
+            if int(name) == 0:
+                continue
+            pyop_value = PyObjectPtr.from_pyobject_ptr(self.slots[i])
+            if not pyop_value.is_null():
+                yield (PyObjectPtr.from_pyobject_ptr(name), pyop_value)
 
     def proxyval(self, visited):
         result = {}
@@ -786,14 +822,6 @@ class PyDictObjectPtr(PyObjectPtr):
         analogous to dict.iteritems()
         '''
         keys = self.field('ma_keys')
-        values = self.field('ma_values')
-        has_values = int(values)
-        if has_values:
-            values = values['values']
-        if has_values:
-            for item in items_from_keys_and_values(keys, values):
-                yield item
-            return
         entries, nentries = self._get_entries(keys)
         for i in safe_range(nentries):
             ep = entries[i]
@@ -1108,10 +1136,10 @@ class PyFramePtr:
 
         obj_ptr_ptr = gdb.lookup_type("PyObject").pointer().pointer()
 
-        localsplus = self._gdbval["localsplus"]
+        slots = self._gdbval["base"]
 
         for i in safe_range(self.co_nlocals):
-            pyop_value = PyObjectPtr.from_pyobject_ptr(localsplus[i])
+            pyop_value = PyObjectPtr.from_pyobject_ptr(slots[i])
             if pyop_value.is_null():
                 continue
             pyop_name = PyObjectPtr.from_pyobject_ptr(self.co_localsplusnames[i])
@@ -1136,15 +1164,9 @@ class PyFramePtr:
         return self._f_special("nlocalsplus", int_from_int)
 
     def _f_lasti(self):
-        codeunit_p = gdb.lookup_type("_Py_CODEUNIT").pointer()
-        instr_ptr = self._gdbval["instr_ptr"]
-        if interp_frame_has_tlbc_index():
-            tlbc_index = self._gdbval["tlbc_index"]
-            code_arr = PyCodeArrayPtr(self._f_code().field("co_tlbc"))
-            first_instr = code_arr.get_entry(tlbc_index).cast(codeunit_p)
-        else:
-            first_instr = self._f_code().field("co_code_adaptive").cast(codeunit_p)
-        return int(instr_ptr - first_instr)
+        # The index of the word at instr_ptr in the executing copy of the
+        # code (Include/internal/pycore_ir.h), which the line table counts
+        return int(self._gdbval["instr_ptr"] - self._gdbval["ir_words"])
 
     def is_shim(self):
         return self._f_special("owner", int) == FRAME_OWNED_BY_INTERPRETER
@@ -1324,12 +1346,13 @@ class PySetObjectPtr(PyObjectPtr):
         return gdb.lookup_global_symbol('_PySet_Dummy').value()
 
     def __iter__(self):
-        dummy_ptr = self._dummy_key()
+        dummy_bits = int(self._dummy_key())
         table = self.field('table')
         for i in safe_range(self.field('mask') + 1):
             setentry = table[i]
             key = setentry['key']
-            if key != 0 and key != dummy_ptr:
+            bits = int(key['bits'])
+            if bits != 0 and bits != dummy_bits:
                 yield PyObjectPtr.from_pyobject_ptr(key)
 
     def proxyval(self, visited):
@@ -1619,7 +1642,8 @@ class wrapperobject(PyObjectPtr):
 
     def safe_tp_name(self):
         try:
-            return self.field('self')['ob_type']['tp_name'].string()
+            return PyObjectPtr.from_pyobject_ptr(self.field('self')).type() \
+                .field('tp_name').string()
         except (NullPyObjectPtr, RuntimeError, UnicodeDecodeError):
             return '<unknown tp_name>'
 
@@ -1674,7 +1698,7 @@ class PyObjectPtrPrinter:
 
 def pretty_printer_lookup(gdbval):
     type = gdbval.type.strip_typedefs().unqualified()
-    if type.code == gdb.TYPE_CODE_UNION and type.tag == '_PyStackRef':
+    if type.code == gdb.TYPE_CODE_STRUCT and type.tag == 'PyValue':
         return PyObjectPtrPrinter(gdbval)
 
     if type.code != gdb.TYPE_CODE_PTR:

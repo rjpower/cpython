@@ -1,5 +1,4 @@
 import gc
-import sys
 import doctest
 import unittest
 import collections
@@ -200,6 +199,7 @@ class ReferencesTestCase(TestBase):
         wr = weakref.ref(f)
         self.assertIs(wr(), f)
         del f
+        gc_collect()  # For PyPy or other GCs.
         self.assertIsNone(wr())
         self.check_basic_ref(create_cfunction)
         self.check_basic_callback(create_cfunction)
@@ -1279,17 +1279,6 @@ class WeakMethodTestCase(unittest.TestCase):
         gc.collect()
         self.assertEqual(calls, [r])
 
-    @support.cpython_only
-    def test_no_cycles(self):
-        # A WeakMethod doesn't create any reference cycle to itself.
-        o = Object(1)
-        def cb(_):
-            pass
-        r = weakref.WeakMethod(o.some_method, cb)
-        wr = weakref.ref(r)
-        del r
-        self.assertIs(wr(), None)
-
     def test_equality(self):
         def _eq(a, b):
             self.assertTrue(a == b)
@@ -1941,6 +1930,7 @@ class MappingTestCase(TestBase):
         self.assertIs(type(tmp4), weakref.WeakValueDictionary)
 
         del a
+        gc_collect()  # For PyPy or other GCs.
         self.assertNotIn(2, tmp1)
         self.assertNotIn(2, tmp2)
         self.assertNotIn(1, tmp3)
@@ -1998,6 +1988,7 @@ class MappingTestCase(TestBase):
         self.assertIs(type(tmp4), weakref.WeakKeyDictionary)
 
         del o1
+        gc_collect()  # For PyPy or other GCs.
         self.assertNotIn(4, tmp1.values())
         self.assertNotIn(4, tmp2.values())
         self.assertNotIn(1, tmp3.values())
@@ -2250,9 +2241,7 @@ class FinalizeTestCase(unittest.TestCase):
         pass
 
     def _collect_if_necessary(self):
-        # we create no ref-cycles so in CPython no gc should be needed
-        if sys.implementation.name != 'cpython':
-            support.gc_collect()
+        support.gc_collect()
 
     def test_finalize(self):
         def add(x,y,z):

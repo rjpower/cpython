@@ -1,8 +1,9 @@
-// Per-type method cache implementation
+// Per-type cache of lookup plans (Include/internal/pycore_lookup.h)
 
-// The cache is used for method and attribute lookups on type objects.
-// The stored names are always interned strings, and the
-// stored values are borrowed references to the corresponding method or attribute object.
+// The cache is used for attribute lookups on a type's objects and on the
+// type itself.  An entry is keyed by (shape, interned name); the entry for
+// the root shape also holds the raw MRO result that _PyType_Lookup()
+// returns.
 // For static types, the cache is stored on the per-interpreter managed_static_type_state,
 // and for heap types the cache is stored in the `PyTypeObject._tp_cache` field.
 
@@ -64,7 +65,6 @@ cache_free_delayed(struct type_cache *cache)
     if (cache == NULL || cache == &empty_cache) {
         return;
     }
-#ifndef Py_GIL_DISABLED
     // On gil-enabled builds, the cache owns strong references to the interned strings,
     // so we need to decref them before freeing the cache memory.
     for (uint32_t i = 0; i < cache_size(cache); i++) {
@@ -72,7 +72,6 @@ cache_free_delayed(struct type_cache *cache)
             Py_DECREF(cache->hashtable[i].name);
         }
     }
-#endif
     // Delay the freeing of old cache for concurrent lock-free readers
     _PyMem_FreeDelayed(cache, cache_nbytes(cache));
 }
@@ -108,28 +107,52 @@ _PyTypeCache_InitType(PyTypeObject *type)
     *cache_slot(type) = &empty_cache;
 }
 
-static inline void
-cache_insert(struct type_cache *cache, PyObject *name,
-             PyObject *value)
+static inline uint32_t
+entry_hash(_PyShape *shape, PyObject *name)
 {
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
-    uint32_t index = hash & cache->mask;
+    return (uint32_t)((size_t)hash ^ ((uintptr_t)shape >> 4));
+}
+
+static inline void
+cache_insert(struct type_cache *cache, _PyShape *shape, PyObject *name,
+             const _PyLookupPlan *plan)
+{
+    uint32_t index = entry_hash(shape, name) & cache->mask;
     for (;;) {
-        if (cache->hashtable[index].name == NULL) {
-#ifndef Py_GIL_DISABLED
-            // On free-threading, all interned strings are immortal.
+        struct type_cache_entry *entry = &cache->hashtable[index];
+        if (entry->name == NULL) {
             Py_INCREF(name);
-#endif
-            cache->hashtable[index].value = value;
-            FT_ATOMIC_STORE_PTR_RELEASE(cache->hashtable[index].name, name);
+            entry->shape = shape;
+            entry->plan = *plan;
+            FT_ATOMIC_STORE_PTR_RELEASE(entry->name, name);
             cache->used++;
             cache->available--;
             return;
         }
-        else if (cache->hashtable[index].name == name) {
-            /* someone else added the entry before us. */
+        else if (entry->name == name && entry->shape == shape) {
+            // A stale or less complete plan of the same key: the build
+            // without the GIL is gone, so it is replaced in place.
+            entry->plan = *plan;
             return;
+        }
+        index = (index + 1) & cache->mask;
+    }
+}
+
+static inline struct type_cache_entry *
+cache_find(struct type_cache *cache, _PyShape *shape, PyObject *name)
+{
+    uint32_t index = entry_hash(shape, name) & cache->mask;
+    for (;;) {
+        struct type_cache_entry *entry = &cache->hashtable[index];
+        PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(entry->name);
+        if (entry_name == name && entry->shape == shape) {
+            return entry;
+        }
+        if (entry_name == NULL) {
+            return NULL;
         }
         index = (index + 1) & cache->mask;
     }
@@ -160,7 +183,8 @@ cache_resize(PyTypeObject *type, struct type_cache *cache)
     OBJECT_STAT_INC(type_cache_resizes);
     for (uint32_t i = 0; i < old_size; i++) {
         if (cache->hashtable[i].name != NULL) {
-            cache_insert(new_cache, cache->hashtable[i].name, cache->hashtable[i].value);
+            cache_insert(new_cache, cache->hashtable[i].shape,
+                         cache->hashtable[i].name, &cache->hashtable[i].plan);
         }
     }
     new_cache->version_tag = type->tp_version_tag;
@@ -169,12 +193,22 @@ cache_resize(PyTypeObject *type, struct type_cache *cache)
     return 0;
 }
 
-// Insert a new entry to the type cache.
+// Insert or replace the entry for (shape, name) in the type cache.
 // The TYPE_LOCK should be held while calling this function.
 void
-_PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value)
+_PyTypeCache_Insert(PyTypeObject *type, _PyShape *shape, PyObject *name,
+                    const _PyLookupPlan *plan)
 {
+    assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
+    assert(shape->type == type);
     struct type_cache *cache = cache_get(type);
+    if (cache->used != 0) {
+        struct type_cache_entry *entry = cache_find(cache, shape, name);
+        if (entry != NULL) {
+            entry->plan = *plan;
+            return;
+        }
+    }
     // If the cache is full, resize it before inserting the new entry.
     // this also handles the case of empty cache where available is 0 but there are no entries.
     if (cache->available == 0) {
@@ -186,7 +220,7 @@ _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value)
         assert(cache->available > 0);
     }
     assert(cache->version_tag == type->tp_version_tag);
-    cache_insert(cache, name, value);
+    cache_insert(cache, shape, name, plan);
 }
 
 
@@ -194,43 +228,34 @@ _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value)
 // The cache is lock-free so it is possible that cache becomes stale during the lookup,
 // to prevent returning stale cache entry, the cache version is compared with the type version tag.
 struct _PyTypeCacheLookupResult
-_PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
+_PyTypeCache_Lookup(PyTypeObject *type, _PyShape *shape, PyObject *name)
 {
     assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
-    struct _PyTypeCacheLookupResult miss = {PyStackRef_NULL, 0, 0};
+    struct _PyTypeCacheLookupResult miss = {{0}, 0, 0};
     struct type_cache *cache = cache_get(type);
-    if (cache == NULL) {
+    if (cache == NULL || cache->used == 0) {
         return miss;
     }
-    Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
-    assert(hash != -1);
-    uint32_t index = hash & cache->mask;
-    _PyStackRef out_ref;
-    for (;;) {
-        PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
-        if (entry_name == name) {
-#ifdef Py_GIL_DISABLED
-            if (!_Py_TryXGetStackRef(&cache->hashtable[index].value, &out_ref)) {
-                return miss;
-            }
-#else
-            PyObject *v = cache->hashtable[index].value;
-            out_ref = v ? PyStackRef_FromPyObjectNew(v) : PyStackRef_NULL;
-#endif
-            break;
-        }
-        else if (entry_name == NULL) {
-            return miss;
-        }
-        index = (index + 1) & cache->mask;
+    struct type_cache_entry *entry = cache_find(cache, shape, name);
+    if (entry == NULL) {
+        return miss;
     }
     // Check the cache version against the type version tag to maintain
     // consistency with find_name_in_mro and prevent stale cache reads
     if (cache->version_tag != FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag)) {
-        PyStackRef_XCLOSE(out_ref);
         return miss;
     }
-    return (struct _PyTypeCacheLookupResult){out_ref, 1, cache->version_tag};
+    return (struct _PyTypeCacheLookupResult){entry->plan, 1, cache->version_tag};
+}
+
+size_t
+_PyTypeCache_SizeOf(PyTypeObject *type)
+{
+    struct type_cache *cache = cache_get(type);
+    if (cache == NULL || cache == &empty_cache) {
+        return 0;
+    }
+    return cache_nbytes(cache);
 }
 
 // Invalidate the type cache of the type.

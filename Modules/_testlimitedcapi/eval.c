@@ -1,16 +1,24 @@
 #include "parts.h"
 #include "util.h"
 
-static PyObject *
-eval_get_func_name(PyObject *self, PyObject *func)
+static PyValue
+eval_get_func_name(PyObject *self, PyValue arg)
 {
-    return PyUnicode_FromString(PyEval_GetFuncName(func));
+    PyObject *func = PyValue_Object(arg);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyUnicode_FromString(PyEval_GetFuncName(func)));
 }
 
-static PyObject *
-eval_get_func_desc(PyObject *self, PyObject *func)
+static PyValue
+eval_get_func_desc(PyObject *self, PyValue arg)
 {
-    return PyUnicode_FromString(PyEval_GetFuncDesc(func));
+    PyObject *func = PyValue_Object(arg);
+    if (func == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyUnicode_FromString(PyEval_GetFuncDesc(func)));
 }
 
 static PyObject *
@@ -74,8 +82,8 @@ eval_set_recursion_limit(PyObject *module, PyObject *args)
 }
 
 static PyMethodDef test_methods[] = {
-    {"eval_get_func_name", eval_get_func_name, METH_O, NULL},
-    {"eval_get_func_desc", eval_get_func_desc, METH_O, NULL},
+    {"eval_get_func_name", _PyCFunction_CAST(eval_get_func_name), METH_O, NULL},
+    {"eval_get_func_desc", _PyCFunction_CAST(eval_get_func_desc), METH_O, NULL},
     {"eval_getlocals", eval_getlocals, METH_NOARGS},
     {"eval_getglobals", eval_getglobals, METH_NOARGS},
     {"eval_getbuiltins", eval_getbuiltins, METH_NOARGS},

@@ -1,0 +1,723 @@
+{
+  "version": 1,
+  "provenance": {
+    "source": "boil/design/11-precise-roots.md:8.2,8.3",
+    "discovery_revision": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean:99435658509, Oct 29 2026, 06:24:39) [GCC 15.2.0]",
+    "discovery_integration_head": "02bcd2f613277785cee5606e6e37279afe96206e",
+    "discovery_log": "build/manifest-20261029/reclamation-discovery-final.json",
+    "historical_reclamation": {
+      "revision": "ea698089dbc",
+      "runner": "/tmp/boil10a/i6/i7loop.sh",
+      "selection_count": 13,
+      "module_count": 9,
+      "note": "Forkserver processes only; test_gc used the whole TracingCollectorTests class. Historical880 runs do not attest the expanded current matrix."
+    },
+    "inventory_dependencies": [
+      "Lib/test/_test_multiprocessing.py"
+    ]
+  },
+  "prerequisites": {
+    "verifier-state": {
+      "status": "available",
+      "owner": "shared/QUEUES",
+      "condition": "Parsed verifier getter is integrated; the selected binary must expose it.",
+      "evidence": [
+        "2155f16f45f",
+        "Lib/test/test_gc.py:test_verify_mode_state"
+      ],
+      "runtime_getters": [
+        "gc_verify_mode"
+      ]
+    },
+    "stress-state": {
+      "status": "available",
+      "owner": "shared/QUEUES",
+      "condition": "True gc_get_stress getter and reftracer prior-state restoration are integrated; the selected binary must expose the getter.",
+      "evidence": [
+        "02bcd2f6132",
+        "Lib/test/test_gc.py:test_stress_mode_state",
+        "coordinator: release/debug gate0, focused3 and debug kill/stress2 passed 2026-10-29"
+      ],
+      "runtime_getters": [
+        "gc_get_stress"
+      ]
+    },
+    "queue-owner-routing": {
+      "status": "available",
+      "owner": "QUEUES",
+      "condition": "7a rung1 owner routing is integrated; the selected build and source snapshot must include the landing before stress runs omit historical module-wide B-class exclusions.",
+      "evidence": [
+        "052d8342e562b1b10d10d26d640c98580616a035",
+        "boil/design/work/7a-1.md",
+        "boil/design/work/reviews/7a-1-landing-round3.md",
+        "coordinator: release/debug smoke1924, queues22 per build and actual-worker-kill22 passed 2026-10-29"
+      ],
+      "runtime_getters": []
+    },
+    "precise-entry-paths": {
+      "status": "pending",
+      "owner": "ROOTS",
+      "condition": "10a2b removes the section8.2 source allowances before the reclamation qualification can pass.",
+      "evidence": [
+        "boil/design/work/10a-2b.md"
+      ],
+      "runtime_getters": []
+    },
+    "full-stress-policy": {
+      "status": "pending",
+      "owner": "coordinator",
+      "condition": "Choose the once-only100000 full-suite build and reviewed selectors; do not reuse targeted-stress filters implicitly.",
+      "evidence": [
+        "boil/design/11-precise-roots.md:8.3"
+      ],
+      "runtime_getters": []
+    }
+  },
+  "sets": {
+    "asan14": {
+      "kind": "modules",
+      "items": [
+        "test.test_gc",
+        "test.test_capi",
+        "test.test_weakref",
+        "test.test_asyncgen",
+        "test.test_context",
+        "test.test_multiprocessing_fork",
+        "test.test_multiprocessing_forkserver",
+        "test.test_multiprocessing_spawn",
+        "test.test_set",
+        "test.test_memoryview",
+        "test.test_descr",
+        "test.test_ctypes",
+        "test.test_generators",
+        "test.test_coroutines"
+      ]
+    },
+    "stress11": {
+      "kind": "modules",
+      "items": [
+        "test.test_gc",
+        "test.test_weakref",
+        "test.test_generators",
+        "test.test_coroutines",
+        "test.test_asyncgen",
+        "test.test_descr",
+        "test.test_capi",
+        "test.test_sort",
+        "test.test_functools",
+        "test.test_context",
+        "test.test_ctypes"
+      ]
+    },
+    "reclamation-modules": {
+      "kind": "modules",
+      "items": [
+        "test.test_weakref",
+        "test.test_asyncgen",
+        "test.test_context",
+        "test.test_multiprocessing_fork.test_processes",
+        "test.test_multiprocessing_forkserver.test_processes",
+        "test.test_multiprocessing_spawn.test_processes",
+        "test.test_set",
+        "test.test_memoryview",
+        "test.test_descr",
+        "test.test_ctypes.test_callbacks",
+        "test.test_gc"
+      ]
+    },
+    "reclamation-cases": {
+      "kind": "cases",
+      "items": [
+        {
+          "module": "test.test_weakref",
+          "selector": "test.test_weakref.ReferencesTestCase.test_clearing_weakrefs_in_gc"
+        },
+        {
+          "module": "test.test_weakref",
+          "selector": "test.test_weakref.MappingTestCase.test_weak_keys_destroy_while_iterating"
+        },
+        {
+          "module": "test.test_weakref",
+          "selector": "test.test_weakref.MappingTestCase.test_weak_values_destroy_while_iterating"
+        },
+        {
+          "module": "test.test_asyncgen",
+          "selector": "test.test_asyncgen.AsyncGenAsyncioTest.test_async_gen_asyncio_gc_aclose_09"
+        },
+        {
+          "module": "test.test_asyncgen",
+          "selector": "test.test_asyncgen.AsyncGenAsyncioTest.test_async_gen_asyncio_shutdown_exception_02"
+        },
+        {
+          "module": "test.test_context",
+          "selector": "test.test_context.HamtTest.test_hamt_gc_2"
+        },
+        {
+          "module": "test.test_multiprocessing_fork.test_processes",
+          "selector": "test.test_multiprocessing_fork.test_processes.WithProcessesTestFinalize.test_finalize"
+        },
+        {
+          "module": "test.test_multiprocessing_fork.test_processes",
+          "selector": "test.test_multiprocessing_fork.test_processes.WithProcessesTestPool.test_release_task_refs"
+        },
+        {
+          "module": "test.test_multiprocessing_forkserver.test_processes",
+          "selector": "test.test_multiprocessing_forkserver.test_processes.WithProcessesTestFinalize.test_finalize"
+        },
+        {
+          "module": "test.test_multiprocessing_forkserver.test_processes",
+          "selector": "test.test_multiprocessing_forkserver.test_processes.WithProcessesTestPool.test_release_task_refs"
+        },
+        {
+          "module": "test.test_multiprocessing_spawn.test_processes",
+          "selector": "test.test_multiprocessing_spawn.test_processes.WithProcessesTestFinalize.test_finalize"
+        },
+        {
+          "module": "test.test_multiprocessing_spawn.test_processes",
+          "selector": "test.test_multiprocessing_spawn.test_processes.WithProcessesTestPool.test_release_task_refs"
+        },
+        {
+          "module": "test.test_set",
+          "selector": "test.test_set.TestFrozenSet.test_container_iterator"
+        },
+        {
+          "module": "test.test_set",
+          "selector": "test.test_set.TestFrozenSetSubclass.test_container_iterator"
+        },
+        {
+          "module": "test.test_set",
+          "selector": "test.test_set.TestSet.test_container_iterator"
+        },
+        {
+          "module": "test.test_set",
+          "selector": "test.test_set.TestSetSubclass.test_container_iterator"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.ArrayMemorySliceSliceTest.test_gc"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.ArrayMemorySliceTest.test_gc"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.ArrayMemoryviewTest.test_gc"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.BytesMemorySliceSliceTest.test_gc"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.BytesMemorySliceTest.test_gc"
+        },
+        {
+          "module": "test.test_memoryview",
+          "selector": "test.test_memoryview.BytesMemoryviewTest.test_gc"
+        },
+        {
+          "module": "test.test_descr",
+          "selector": "test.test_descr.ClassPropertiesAndMethods.test_slots"
+        },
+        {
+          "module": "test.test_ctypes.test_callbacks",
+          "selector": "test.test_ctypes.test_callbacks.Callbacks.test_issue_7959"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_collect_frees_garbage_without_cycles"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_finalizer_order"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_weakref_callback_runs_after_collection"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_capsule_destructor_runs_python_code"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_unrooted_pymem_reference_is_freed"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_release_buffer_runs_python_code"
+        },
+        {
+          "module": "test.test_gc",
+          "selector": "test.test_gc.TracingCollectorTests.test_segment_map_follows_huge_segments"
+        }
+      ]
+    },
+    "historical-reclamation-modules": {
+      "kind": "modules",
+      "items": [
+        "test.test_weakref",
+        "test.test_asyncgen",
+        "test.test_context",
+        "test.test_multiprocessing_forkserver.test_processes",
+        "test.test_set",
+        "test.test_memoryview",
+        "test.test_descr",
+        "test.test_ctypes.test_callbacks",
+        "test.test_gc"
+      ]
+    }
+  },
+  "exclusions": {
+    "remote-exec": {
+      "selector": "test_remote_exec_deleted_static_executable",
+      "status": "active",
+      "reason": "Machine-local timeout recorded before the fork.",
+      "owner": "coordinator/machine",
+      "remove_when": "The native remote-exec test passes on this machine.",
+      "evidence": [
+        "boil/tools/gate.sh"
+      ],
+      "profiles": [
+        "release-full",
+        "debug-full",
+        "debug-kill-full",
+        "asan14-kill",
+        "stress11-release",
+        "reclamation20-individual-release",
+        "reclamation20-module-order-release",
+        "stress11-debug",
+        "reclamation20-individual-debug",
+        "reclamation20-module-order-debug",
+        "stale100-release",
+        "stale100-debug",
+        "stale100-tailcall",
+        "stale100-debug-kill",
+        "stress100k-full"
+      ]
+    },
+    "asan-malloc-overflow": {
+      "selector": "*test_capi.test_mem.AddressSanitizerTests.test_buffer_overflow",
+      "status": "active",
+      "reason": "PYTHONMALLOC=malloc is not honored; mimalloc intercepts the deliberate overflow before ASan.",
+      "owner": "10a/memory-domain",
+      "remove_when": "Malloc selection works and the unfiltered ASan test passes.",
+      "evidence": [
+        "boil/design/11-precise-roots.md:8.2"
+      ],
+      "profiles": [
+        "asan14-kill"
+      ]
+    },
+    "writer-resize": {
+      "selector": "*test_resize*",
+      "status": "active",
+      "reason": "Writer buffer state is not rooted under allocation stress.",
+      "owner": "10a3a",
+      "remove_when": "Writer buffers have spans and relevant stress cases pass unfiltered.",
+      "evidence": [
+        "boil/design/11-precise-roots.md:6.2,8.2"
+      ],
+      "profiles": [
+        "stress11-release",
+        "stress11-debug"
+      ]
+    },
+    "writers": {
+      "selector": "*Writer*",
+      "status": "active",
+      "reason": "Recorded writer corruption and segfaults include recover_error.",
+      "owner": "10a3a",
+      "remove_when": "Writer buffers have spans and the complete writer stress cases pass unfiltered.",
+      "evidence": [
+        "boil/design/work/10a-2b.md:item6",
+        "boil/design/11-precise-roots.md:8.2"
+      ],
+      "profiles": [
+        "stress11-release",
+        "stress11-debug"
+      ]
+    },
+    "writer-format": {
+      "selector": "*test_capi.test_unicode*test_from_format",
+      "status": "active",
+      "reason": "Writer consumer corruption is outside the Writer class-name selector.",
+      "owner": "10a3a",
+      "remove_when": "Writer consumer storage is rooted and from_format stress passes.",
+      "evidence": [
+        "boil/design/11-precise-roots.md:8.2"
+      ],
+      "profiles": [
+        "stress11-release",
+        "stress11-debug"
+      ]
+    },
+    "kill-pymem-metadata": {
+      "selector": "*test_verify_kill*",
+      "status": "active",
+      "reason": "Stress in makecode exposes compiler u_metadata held only through PyMem, as kill:pymem is intended to do.",
+      "owner": "10a3a/compiler",
+      "remove_when": "Compiler metadata has roots/spans and the unfiltered stress cases pass.",
+      "evidence": [
+        "boil/design/11-precise-roots.md:8.2"
+      ],
+      "profiles": [
+        "stress11-release",
+        "stress11-debug"
+      ]
+    },
+    "shared-heap-source-skip": {
+      "selector": "test.test_gc.TracingCollectorTests.test_stress_shared_heap_callbacks",
+      "status": "retired",
+      "reason": "Historical source decorator removed after queue rung1; the legacy five-creation reproduction passes 20 fresh stress selections on each current release/O1 debug build, with actual process-state assertions.",
+      "owner": "10a2b after 7a1",
+      "remove_when": "Satisfied locally after 7a1 integration 052d8342e562: decorator removed and reproduction passes under stress. Retained as removal history; no CLI exclusion.",
+      "evidence": [
+        "Lib/test/test_gc.py:test_stress_shared_heap_callbacks",
+        "boil/PROCESS.md:0.3",
+        "052d8342e562b1b10d10d26d640c98580616a035",
+        "boil/design/work/10a-2b.md:Settled timing, counter attribution and source-skip retirement",
+        "Lib/test/test_gc.py SHA256 9c8258d0da5640b58e834b895a20b4c373fb6ebf3589a95820180756803807bf",
+        "build/takeover-20261029/shared-heap20-default-plan.json",
+        "build/takeover-20261029/shared-heap20-debug-plan.json",
+        "build/takeover-20261029/shared-heap20-default-results.jsonl",
+        "build/takeover-20261029/shared-heap20-debug-results.jsonl"
+      ],
+      "profiles": []
+    }
+  },
+  "profiles": {
+    "release-full": {
+      "build_kind": "release",
+      "gate": 2,
+      "selection": {
+        "kind": "full"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "suite"
+    },
+    "debug-full": {
+      "build_kind": "debug",
+      "gate": 3,
+      "selection": {
+        "kind": "full"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "suite"
+    },
+    "debug-kill-full": {
+      "build_kind": "debug",
+      "gate": 2,
+      "selection": {
+        "kind": "full"
+      },
+      "verify": "kill",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "suite"
+    },
+    "asan14-kill": {
+      "build_kind": "asan",
+      "gate": 1,
+      "selection": {
+        "kind": "modules",
+        "set": "asan14"
+      },
+      "verify": "kill",
+      "extras": [],
+      "stress": 0,
+      "asan_options": {
+        "detect_stack_use_after_return": 0,
+        "detect_leaks": 0
+      },
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec",
+        "asan-malloc-overflow"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "record"
+    },
+    "stress11-release": {
+      "build_kind": "release",
+      "gate": 1,
+      "selection": {
+        "kind": "modules",
+        "set": "stress11"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 1000,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec",
+        "writer-resize",
+        "writers",
+        "writer-format",
+        "kill-pymem-metadata"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "queue-owner-routing"
+      ],
+      "root_counters": "record"
+    },
+    "reclamation20-individual-release": {
+      "build_kind": "release",
+      "gate": 1,
+      "selection": {
+        "kind": "cases",
+        "set": "reclamation-cases"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 20,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "precise-entry-paths"
+      ],
+      "root_counters": "record"
+    },
+    "reclamation20-module-order-release": {
+      "build_kind": "release",
+      "gate": 1,
+      "selection": {
+        "kind": "modules",
+        "set": "reclamation-modules"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 20,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "precise-entry-paths"
+      ],
+      "root_counters": "record"
+    },
+    "stress11-debug": {
+      "build_kind": "debug",
+      "gate": 1,
+      "selection": {
+        "kind": "modules",
+        "set": "stress11"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 1000,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec",
+        "writer-resize",
+        "writers",
+        "writer-format",
+        "kill-pymem-metadata"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "queue-owner-routing"
+      ],
+      "root_counters": "record"
+    },
+    "reclamation20-individual-debug": {
+      "build_kind": "debug",
+      "gate": 1,
+      "selection": {
+        "kind": "cases",
+        "set": "reclamation-cases"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 20,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "precise-entry-paths"
+      ],
+      "root_counters": "record"
+    },
+    "reclamation20-module-order-debug": {
+      "build_kind": "debug",
+      "gate": 1,
+      "selection": {
+        "kind": "modules",
+        "set": "reclamation-modules"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 20,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "precise-entry-paths"
+      ],
+      "root_counters": "record"
+    },
+    "stale100-release": {
+      "build_kind": "release",
+      "gate": 1,
+      "selection": {
+        "kind": "stale",
+        "attempts": 100
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "stale"
+    },
+    "stale100-debug": {
+      "build_kind": "debug",
+      "gate": 1,
+      "selection": {
+        "kind": "stale",
+        "attempts": 100
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "stale"
+    },
+    "stale100-tailcall": {
+      "build_kind": "tailcall",
+      "gate": 1,
+      "selection": {
+        "kind": "stale",
+        "attempts": 100
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "stale"
+    },
+    "stale100-debug-kill": {
+      "build_kind": "debug",
+      "gate": 1,
+      "selection": {
+        "kind": "stale",
+        "attempts": 100
+      },
+      "verify": "kill",
+      "extras": [],
+      "stress": 0,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state"
+      ],
+      "root_counters": "stale"
+    },
+    "stress100k-full": {
+      "build_kind": "release",
+      "gate": 2,
+      "selection": {
+        "kind": "full"
+      },
+      "verify": "off",
+      "extras": [],
+      "stress": 100000,
+      "asan_options": null,
+      "repeat": 1,
+      "exclusions": [
+        "remote-exec"
+      ],
+      "requirements": [
+        "verifier-state",
+        "stress-state",
+        "queue-owner-routing",
+        "full-stress-policy"
+      ],
+      "root_counters": "suite"
+    }
+  }
+}

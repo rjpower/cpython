@@ -2,8 +2,8 @@
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_context.h"
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_gc.h"            // _PyObject_GC_MAY_BE_TRACKED()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_hamt.h"
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_object.h"
@@ -235,12 +235,8 @@ _PyContext_Enter(PyThreadState *ts, PyObject *octx)
 {
     ENSURE_Context(octx, -1)
     PyContext *ctx = (PyContext *)octx;
-#ifdef Py_GIL_DISABLED
-    int already_entered = _Py_atomic_exchange_int(&ctx->ctx_entered, 1);
-#else
     int already_entered = ctx->ctx_entered;
     ctx->ctx_entered = 1;
-#endif
 
     if (already_entered) {
         _PyErr_Format(ts, PyExc_RuntimeError,
@@ -327,7 +323,6 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
         goto not_found;
     }
 
-#ifndef Py_GIL_DISABLED
     if (var->var_cached != NULL &&
             var->var_cached_tsid == ts->id &&
             var->var_cached_tsver == ts->context_ver)
@@ -335,7 +330,6 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
         *val = var->var_cached;
         goto found;
     }
-#endif
 
     assert(PyContext_CheckExact(ts->context));
     PyHamtObject *vars = context_get_current_vars((PyContext *)ts->context);
@@ -347,11 +341,9 @@ PyContextVar_Get(PyObject *ovar, PyObject *def, PyObject **val)
     }
     if (res == 1) {
         assert(found != NULL);
-#ifndef Py_GIL_DISABLED
         var->var_cached = found;  /* borrow */
         var->var_cached_tsid = ts->id;
         var->var_cached_tsver = ts->context_ver;
-#endif
 
         *val = found;
         goto found;
@@ -468,18 +460,14 @@ class _contextvars.Context "PyContext *" "&PyContext_Type"
 static inline PyContext *
 _context_alloc(void)
 {
-    PyContext *ctx = _Py_FREELIST_POP(PyContext, contexts);
+    PyContext *ctx = PyObject_GC_New(PyContext, &PyContext_Type);
     if (ctx == NULL) {
-        ctx = PyObject_GC_New(PyContext, &PyContext_Type);
-        if (ctx == NULL) {
-            return NULL;
-        }
+        return NULL;
     }
 
     ctx->ctx_vars = NULL;
     ctx->ctx_prev = NULL;
     ctx->ctx_entered = 0;
-    ctx->ctx_weakreflist = NULL;
 
     return ctx;
 }
@@ -580,13 +568,10 @@ static void
 context_tp_dealloc(PyObject *self)
 {
     _PyObject_GC_UNTRACK(self);
-    PyContext *ctx = _PyContext_CAST(self);
-    if (ctx->ctx_weakreflist != NULL) {
-        PyObject_ClearWeakRefs(self);
-    }
+    PyObject_ClearWeakRefs(self);
     (void)context_tp_clear(self);
 
-    _Py_FREELIST_FREE(contexts, self, Py_TYPE(self)->tp_free);
+    Py_TYPE(self)->tp_free(self);
 }
 
 static PyObject *
@@ -783,8 +768,9 @@ _contextvars_Context_copy_impl(PyContext *self)
 }
 
 
-static PyObject *
-context_run(PyObject *self, PyObject *const *args,
+/* The span: the context, kwnames and the call's result */
+Py_GC_PRECISE static PyValue
+context_run(PyObject *self, const PyValue *args,
             Py_ssize_t nargs, PyObject *kwnames)
 {
     PyThreadState *ts = _PyThreadState_GET();
@@ -792,22 +778,30 @@ context_run(PyObject *self, PyObject *const *args,
     if (nargs < 1) {
         _PyErr_SetString(ts, PyExc_TypeError,
                          "run() missing 1 required positional argument");
-        return NULL;
+        return PyValue_NULL;
     }
 
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(ts, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    _PyValueSpan_AppendObject(&span, kwnames);
+    PyValue res = PyValue_NULL;
     if (_PyContext_Enter(ts, self)) {
-        return NULL;
+        goto done;
     }
 
-    PyObject *call_result = _PyObject_VectorcallTstate(
+    PyValue call_result = _PyObject_VectorcallValueTstate(
         ts, args[0], args + 1, nargs - 1, kwnames);
+    _PyValueSpan_Append(&span, call_result);
 
     if (_PyContext_Exit(ts, self)) {
-        Py_XDECREF(call_result);
-        return NULL;
+        goto done;
     }
-
-    return call_result;
+    res = call_result;
+done:
+    _PyThreadState_PopValueRoot(ts, &span);
+    return res;
 }
 
 
@@ -840,12 +834,12 @@ PyTypeObject PyContext_Type = {
     .tp_iter = context_tp_iter,
     .tp_dealloc = context_tp_dealloc,
     .tp_getattro = PyObject_GenericGetAttr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_richcompare = context_tp_richcompare,
     .tp_traverse = context_tp_traverse,
     .tp_clear = context_tp_clear,
     .tp_new = context_tp_new,
-    .tp_weaklistoffset = offsetof(PyContext, ctx_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
 };
 
@@ -856,10 +850,8 @@ PyTypeObject PyContext_Type = {
 static int
 contextvar_set(PyContextVar *var, PyObject *val)
 {
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
     PyThreadState *ts = _PyThreadState_GET();
-#endif
 
     PyContext *ctx = context_get();
     if (ctx == NULL) {
@@ -872,11 +864,9 @@ contextvar_set(PyContextVar *var, PyObject *val)
         return -1;
     }
 
-#ifndef Py_GIL_DISABLED
     var->var_cached = val;  /* borrow */
     var->var_cached_tsid = ts->id;
     var->var_cached_tsver = ts->context_ver;
-#endif
     /* Releasing the old variables may run a finalizer that updates the cache. */
     context_set_vars(ctx, new_vars);
     return 0;
@@ -885,9 +875,7 @@ contextvar_set(PyContextVar *var, PyObject *val)
 static int
 contextvar_del(PyContextVar *var)
 {
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
-#endif
 
     PyContext *ctx = context_get();
     if (ctx == NULL) {
@@ -955,11 +943,9 @@ contextvar_new(PyObject *name, PyObject *def)
     var->var_name = Py_NewRef(name);
     var->var_default = Py_XNewRef(def);
 
-#ifndef Py_GIL_DISABLED
     var->var_cached = NULL;
     var->var_cached_tsid = 0;
     var->var_cached_tsver = 0;
-#endif
 
     var->var_hash = contextvar_generate_hash(var, name);
     if (var->var_hash == -1) {
@@ -1007,11 +993,9 @@ contextvar_tp_clear(PyObject *op)
     PyContextVar *self = _PyContextVar_CAST(op);
     Py_CLEAR(self->var_name);
     Py_CLEAR(self->var_default);
-#ifndef Py_GIL_DISABLED
     self->var_cached = NULL;
     self->var_cached_tsid = 0;
     self->var_cached_tsver = 0;
-#endif
     return 0;
 }
 
@@ -1173,7 +1157,7 @@ static PyMethodDef PyContextVar_methods[] = {
     _CONTEXTVARS_CONTEXTVAR_GET_METHODDEF
     _CONTEXTVARS_CONTEXTVAR_SET_METHODDEF
     _CONTEXTVARS_CONTEXTVAR_RESET_METHODDEF
-    {"__class_getitem__", Py_GenericAlias,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,
     PyDoc_STR("ContextVars are generic over the type of their contained values")},
     {NULL, NULL}
@@ -1279,22 +1263,22 @@ error:
     return NULL;
 }
 
-static PyObject *
+static PyValue
 token_get_var(PyObject *op, void *Py_UNUSED(ignored))
 {
     PyContextToken *self = _PyContextToken_CAST(op);
-    return Py_NewRef(self->tok_var);;
+    return PyValue_FromObject(self->tok_var);;
 }
 
-static PyObject *
+static PyValue
 token_get_old_value(PyObject *op, void *Py_UNUSED(ignored))
 {
     PyContextToken *self = _PyContextToken_CAST(op);
     if (self->tok_oldval == NULL) {
-        return get_token_missing();
+        return PyValue_FromResult(get_token_missing());
     }
 
-    return Py_NewRef(self->tok_oldval);
+    return PyValue_FromObject(self->tok_oldval);
 }
 
 static PyGetSetDef PyContextTokenType_getsetlist[] = {
@@ -1340,7 +1324,7 @@ token_exit_impl(PyContextToken *self, PyObject *type, PyObject *val,
 }
 
 static PyMethodDef PyContextTokenType_methods[] = {
-    {"__class_getitem__",    Py_GenericAlias,
+    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
     METH_O|METH_CLASS,
     PyDoc_STR("Tokens are generic over the same type as the ContextVar which created them.")},
     TOKEN_ENTER_METHODDEF

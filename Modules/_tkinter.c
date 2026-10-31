@@ -894,16 +894,16 @@ PyTclObject_dealloc(PyObject *_self)
 PyDoc_STRVAR(PyTclObject_string__doc__,
 "the string representation of this object, either as str or bytes");
 
-static PyObject *
+static PyValue
 PyTclObject_string(PyObject *_self, void *Py_UNUSED(closure))
 {
     PyTclObject *self = PyTclObject_CAST(_self);
     if (!self->string) {
         self->string = unicodeFromTclObj(NULL, self->value);
         if (!self->string)
-            return NULL;
+            return PyValue_NULL;
     }
-    return Py_NewRef(self->string);
+    return PyValue_FromObject(self->string);
 }
 
 static PyObject *
@@ -961,11 +961,11 @@ PyTclObject_richcompare(PyObject *self, PyObject *other, int op)
 
 PyDoc_STRVAR(get_typename__doc__, "name of the Tcl type");
 
-static PyObject*
+static PyValue
 get_typename(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTclObject *obj = PyTclObject_CAST(self);
-    return unicodeFromTclString(obj->value->typePtr->name);
+    return PyValue_FromResult(unicodeFromTclString(obj->value->typePtr->name));
 }
 
 
@@ -976,7 +976,18 @@ static PyGetSetDef PyTclObject_getsetlist[] = {
     {0},
 };
 
+/* The type is not a GC type, but the tracing mark must reach the cached
+   string.  The mark visits the heap type itself. */
+static int
+PyTclObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyTclObject *self = PyTclObject_CAST(op);
+    Py_VISIT(self->string);
+    return 0;
+}
+
 static PyType_Slot PyTclObject_Type_slots[] = {
+    {Py_tp_traverse, PyTclObject_traverse},
     {Py_tp_dealloc, PyTclObject_dealloc},
     {Py_tp_repr, PyTclObject_repr},
     {Py_tp_str, PyTclObject_str},
@@ -3438,8 +3449,8 @@ _tkinter._flatten
 [clinic start generated code]*/
 
 static PyObject *
-_tkinter__flatten(PyObject *module, PyObject *item)
-/*[clinic end generated code: output=cad02a3f97f29862 input=6b9c12260aa1157f]*/
+_tkinter__flatten_impl(PyObject *module, PyObject *item)
+/*[clinic end generated code: output=925c9d4b089b66a3 input=6b9c12260aa1157f]*/
 {
     FlattenContext context;
 
@@ -3826,9 +3837,6 @@ PyInit__tkinter(void)
     m = PyModule_Create(&_tkintermodule);
     if (m == NULL)
         return NULL;
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
-#endif
 
     Tkinter_TclError = PyErr_NewException("_tkinter.TclError", NULL, NULL);
     if (PyModule_AddObjectRef(m, "TclError", Tkinter_TclError)) {

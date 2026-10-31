@@ -11,22 +11,27 @@ PyDoc_STRVAR(type___instancecheck____doc__,
 "Check if an object is an instance.");
 
 #define TYPE___INSTANCECHECK___METHODDEF    \
-    {"__instancecheck__", (PyCFunction)type___instancecheck__, METH_O, type___instancecheck____doc__},
+    {"__instancecheck__", _PyCFunction_CAST(type___instancecheck__), METH_O, type___instancecheck____doc__},
 
 static int
 type___instancecheck___impl(PyTypeObject *self, PyObject *instance);
 
-static PyObject *
-type___instancecheck__(PyObject *self, PyObject *instance)
+static PyValue
+type___instancecheck__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *instance;
     int _return_value;
 
+    instance = PyValue_Object(arg);
+    if (instance == NULL) {
+        goto exit;
+    }
     _return_value = type___instancecheck___impl((PyTypeObject *)self, instance);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -39,22 +44,27 @@ PyDoc_STRVAR(type___subclasscheck____doc__,
 "Check if a class is a subclass.");
 
 #define TYPE___SUBCLASSCHECK___METHODDEF    \
-    {"__subclasscheck__", (PyCFunction)type___subclasscheck__, METH_O, type___subclasscheck____doc__},
+    {"__subclasscheck__", _PyCFunction_CAST(type___subclasscheck__), METH_O, type___subclasscheck____doc__},
 
 static int
 type___subclasscheck___impl(PyTypeObject *self, PyObject *subclass);
 
-static PyObject *
-type___subclasscheck__(PyObject *self, PyObject *subclass)
+static PyValue
+type___subclasscheck__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *subclass;
     int _return_value;
 
+    subclass = PyValue_Object(arg);
+    if (subclass == NULL) {
+        goto exit;
+    }
     _return_value = type___subclasscheck___impl((PyTypeObject *)self, subclass);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -175,22 +185,24 @@ PyDoc_STRVAR(object___reduce_ex____doc__,
 "Helper for pickle.");
 
 #define OBJECT___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", (PyCFunction)object___reduce_ex__, METH_O, object___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(object___reduce_ex__), METH_O, object___reduce_ex____doc__},
 
 static PyObject *
 object___reduce_ex___impl(PyObject *self, int protocol);
 
-static PyObject *
-object___reduce_ex__(PyObject *self, PyObject *arg)
+static PyValue
+object___reduce_ex__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int protocol;
+    PyObject *_return_value;
 
-    protocol = PyLong_AsInt(arg);
+    protocol = PyLong_AsIntValue(arg);
     if (protocol == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = object___reduce_ex___impl(self, protocol);
+    _return_value = object___reduce_ex___impl(self, protocol);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -205,23 +217,31 @@ PyDoc_STRVAR(object___format____doc__,
 "Return str(self) if format_spec is empty. Raise TypeError otherwise.");
 
 #define OBJECT___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)object___format__, METH_O, object___format____doc__},
+    {"__format__", _PyCFunction_CAST(object___format__), METH_O, object___format____doc__},
 
 static PyObject *
 object___format___impl(PyObject *self, PyObject *format_spec);
 
-static PyObject *
-object___format__(PyObject *self, PyObject *arg)
+static PyValue
+object___format__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("__format__", "argument", "str", _arg);
+            goto exit;
+        }
+        format_spec = _arg;
     }
-    format_spec = arg;
-    return_value = object___format___impl(self, format_spec);
+    _return_value = object___format___impl(self, format_spec);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -262,4 +282,4 @@ object___dir__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return object___dir___impl(self);
 }
-/*[clinic end generated code: output=b55c0d257e2518d2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f98ece24c8fe7c31 input=a9049054013a1b77]*/

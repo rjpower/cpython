@@ -3918,46 +3918,6 @@ class _TestManagerRestart(BaseTestCase):
                 self.addCleanup(manager.shutdown)
 
 
-class FakeConnection:
-    def send(self, payload):
-        pass
-
-    def recv(self):
-        return '#ERROR', pyqueue.Empty()
-
-class TestManagerExceptions(unittest.TestCase):
-    # Issue 106558: Manager exceptions avoids creating cyclic references.
-    def setUp(self):
-        with warnings_helper.ignore_fork_in_thread_deprecation_warnings():
-            self.mgr = multiprocessing.Manager()
-
-    def tearDown(self):
-        self.mgr.shutdown()
-        self.mgr.join()
-
-    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
-    def test_queue_get(self):
-        queue = self.mgr.Queue()
-        if gc.isenabled():
-            gc.disable()
-            self.addCleanup(gc.enable)
-        try:
-            queue.get_nowait()
-        except pyqueue.Empty as e:
-            wr = weakref.ref(e)
-        self.assertEqual(wr(), None)
-
-    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
-    def test_dispatch(self):
-        if gc.isenabled():
-            gc.disable()
-            self.addCleanup(gc.enable)
-        try:
-            multiprocessing.managers.dispatch(FakeConnection(), None, None)
-        except pyqueue.Empty as e:
-            wr = weakref.ref(e)
-        self.assertEqual(wr(), None)
-
 #
 #
 #
@@ -4649,6 +4609,7 @@ class _TestHeap(BaseTestCase):
         random.shuffle(blocks)
         while blocks:
             blocks.pop()
+        support.gc_collect()  # the blocks are freed when collected
 
         self.assertEqual(heap._n_frees, heap._n_mallocs)
         self.assertEqual(len(heap._pending_free_blocks), 0)
@@ -4771,6 +4732,7 @@ class _TestSharedMemory(BaseTestCase):
         else:
             local_sms = shmem_name_or_obj
         local_sms.buf[:len(binary_data)] = binary_data
+        support.gc_collect()  # For other GCs.
         local_sms.close()
 
     def _new_shm_name(self, prefix):
@@ -5009,6 +4971,8 @@ class _TestSharedMemory(BaseTestCase):
         p.join()
         self.assertEqual(bytes(sms.buf[:5]), b'HELLO')
 
+        # The sliced views must be released before the mmap closes.
+        support.gc_collect()  # For other GCs.
         sms.close()
 
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
@@ -7790,6 +7754,20 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
+        # Closing a queue notifies its feeder before the feeder has finished
+        # closing pipe handles. Give that asynchronous shutdown a bounded wait.
+        deadline = time.monotonic() + support.SHORT_TIMEOUT
+        for thread in threads:
+            if thread.name == "QueueFeederThread":
+                thread.join(max(0.0, deadline - time.monotonic()))
+        thread = None
+        if threads and not any(t.is_alive() for t in threads):
+            # A queue's feeder thread that stopped after the collection
+            # above was still in threading._active then; only the next
+            # collection frees it.
+            threads = None
+            test.support.gc_collect()
+            threads = set(threading._dangling) - set(cls.dangling[1])
         if threads:
             test.support.environment_altered = True
             support.print_warning(f'Dangling threads: {threads}')

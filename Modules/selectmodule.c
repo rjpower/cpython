@@ -1126,14 +1126,14 @@ select_devpoll_close_impl(devpollObject *self)
     Py_RETURN_NONE;
 }
 
-static PyObject *
+static PyValue
 devpoll_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     devpollObject *self = devpollObject_CAST(op);
     if (self->fd_devpoll < 0) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 /*[clinic input]
@@ -1454,14 +1454,14 @@ select_epoll_close_impl(pyEpoll_Object *self)
 }
 
 
-static PyObject *
+static PyValue
 pyepoll_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     pyEpoll_Object *self = pyEpoll_Object_CAST(op);
     if (self->epfd < 0) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 /*[clinic input]
@@ -2272,14 +2272,14 @@ select_kqueue_close_impl(kqueue_queue_Object *self)
     Py_RETURN_NONE;
 }
 
-static PyObject *
+static PyValue
 kqueue_queue_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     kqueue_queue_Object *self = kqueue_queue_Object_CAST(op);
     if (self->kqfd < 0) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 /*[clinic input]
@@ -2510,7 +2510,18 @@ static PyMethodDef poll_methods[] = {
 };
 
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+poll_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    pollObject *self = pollObject_CAST(op);
+    Py_VISIT(self->dict);
+    return 0;
+}
+
 static PyType_Slot poll_Type_slots[] = {
+    {Py_tp_traverse, poll_traverse},
     {Py_tp_dealloc, poll_dealloc},
     {Py_tp_methods, poll_methods},
     {0, 0},

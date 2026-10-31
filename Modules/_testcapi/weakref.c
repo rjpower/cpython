@@ -2,40 +2,48 @@
 #include "util.h"
 
 
-static PyObject *
-pyweakref_getref(PyObject *module, PyObject *ref)
+static PyValue
+pyweakref_getref(PyObject *module, PyValue ref_value)
 {
+    PyObject *ref = PyValue_Object(ref_value);
+    if (ref == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(ref);
     PyObject *obj = UNINITIALIZED_PTR;
     int rc = PyWeakref_GetRef(ref, &obj);
     if (rc == -1 && PyErr_Occurred()) {
         assert(obj == NULL);
-        return NULL;
+        return PyValue_NULL;
     }
     if (obj == NULL) {
-        return Py_BuildValue("i", rc);
+        return PyValue_FromResult(Py_BuildValue("i", rc));
     }
     else {
         assert(obj != UNINITIALIZED_PTR);
-        return Py_BuildValue("iN", rc, obj);
+        return PyValue_FromResult(Py_BuildValue("iN", rc, obj));
     }
 }
 
-static PyObject *
-pyweakref_isdead(PyObject *module, PyObject *obj)
+static PyValue
+pyweakref_isdead(PyObject *module, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
     int rc = PyWeakref_IsDead(obj);
     if (rc == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(rc);
+    return PyValue_FromResult(PyLong_FromLong(rc));
 }
 
 
 static PyMethodDef test_methods[] = {
-    {"pyweakref_getref", pyweakref_getref, METH_O},
-    {"pyweakref_isdead", pyweakref_isdead, METH_O},
+    {"pyweakref_getref", _PyCFunction_CAST(pyweakref_getref), METH_O},
+    {"pyweakref_isdead", _PyCFunction_CAST(pyweakref_isdead), METH_O},
     {NULL},
 };
 

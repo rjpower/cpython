@@ -724,6 +724,8 @@ compobject_traverse(PyObject *op, visitproc visit, void *arg)
     compobject *self = _compobject_CAST(op);
     Py_VISIT(Py_TYPE(op));
     Py_VISIT(self->zdict);
+    Py_VISIT(self->unused_data);
+    Py_VISIT(self->unconsumed_tail);
     return 0;
 }
 
@@ -1403,6 +1405,7 @@ ZlibDecompressor_traverse(PyObject *op, visitproc visit, void *arg)
     ZlibDecompressor *self = ZlibDecompressor_CAST(op);
     Py_VISIT(Py_TYPE(op));
     Py_VISIT(self->zdict);
+    Py_VISIT(self->unused_data);
     return 0;
 }
 
@@ -1822,7 +1825,7 @@ static PyMethodDef ZlibDecompressor_methods[] = {
     {NULL}
 };
 
-static PyObject *
+static PyValue
 Decomp_unused_data_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     compobject *self = _compobject_CAST(op);
@@ -1830,10 +1833,10 @@ Decomp_unused_data_get(PyObject *op, void *Py_UNUSED(ignored))
     assert(self->unused_data != NULL);
     PyObject *result = Py_NewRef(self->unused_data);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject *
+static PyValue
 Decomp_unconsumed_tail_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     compobject *self = _compobject_CAST(op);
@@ -1841,7 +1844,7 @@ Decomp_unconsumed_tail_get(PyObject *op, void *Py_UNUSED(ignored))
     assert(self->unconsumed_tail != NULL);
     PyObject *result = Py_NewRef(self->unconsumed_tail);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyGetSetDef Decomp_getset[] = {
@@ -1865,7 +1868,7 @@ PyDoc_STRVAR(ZlibDecompressor_unused_data__doc__,
 PyDoc_STRVAR(ZlibDecompressor_needs_input_doc,
 "True if more input is needed before more decompressed data can be produced.");
 
-static PyObject *
+static PyValue
 ZlibDecompressor_unused_data_get(PyObject *op, void *Py_UNUSED(ignored))
 {
     ZlibDecompressor *self = ZlibDecompressor_CAST(op);
@@ -1873,7 +1876,7 @@ ZlibDecompressor_unused_data_get(PyObject *op, void *Py_UNUSED(ignored))
     assert(self->unused_data != NULL);
     PyObject *result = Py_NewRef(self->unused_data);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyGetSetDef ZlibDecompressor_getset[] = {

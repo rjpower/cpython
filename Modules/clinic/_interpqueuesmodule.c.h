@@ -3,10 +3,8 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(_interpqueues_create__doc__,
@@ -26,15 +24,14 @@ static PyObject *
 _interpqueues_create_impl(PyObject *module, Py_ssize_t maxsize,
                           int unboundarg, int fallbackarg);
 
-static PyObject *
-_interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_create(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -57,11 +54,12 @@ _interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_ssize_t maxsize;
     int unboundarg = -1;
     int fallbackarg = -1;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -70,10 +68,9 @@ _interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -83,8 +80,8 @@ _interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        unboundarg = PyLong_AsInt(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        unboundarg = PyLong_AsIntValue(args[1]);
         if (unboundarg == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -92,12 +89,13 @@ _interpqueues_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
             goto skip_optional_pos;
         }
     }
-    fallbackarg = PyLong_AsInt(args[2]);
+    fallbackarg = PyLong_AsIntValue(args[2]);
     if (fallbackarg == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _interpqueues_create_impl(module, maxsize, unboundarg, fallbackarg);
+    _return_value = _interpqueues_create_impl(module, maxsize, unboundarg, fallbackarg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -118,15 +116,14 @@ PyDoc_STRVAR(_interpqueues_destroy__doc__,
 static PyObject *
 _interpqueues_destroy_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_destroy(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_destroy(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -149,18 +146,26 @@ _interpqueues_destroy(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_destroy_impl(module, qid);
+    _return_value = _interpqueues_destroy_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -199,15 +204,14 @@ static PyObject *
 _interpqueues_put_impl(PyObject *module, int64_t qid, PyObject *obj,
                        int unboundarg, int fallbackarg);
 
-static PyObject *
-_interpqueues_put(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_put(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -230,27 +234,37 @@ _interpqueues_put(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     int64_t qid;
     PyObject *obj;
     int unboundarg = -1;
     int fallbackarg = -1;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
+    }
+    obj = PyValue_Object(args[1]);
+    if (obj == NULL) {
         goto exit;
     }
-    obj = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[2]) {
-        unboundarg = PyLong_AsInt(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        unboundarg = PyLong_AsIntValue(args[2]);
         if (unboundarg == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -258,12 +272,13 @@ _interpqueues_put(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    fallbackarg = PyLong_AsInt(args[3]);
+    fallbackarg = PyLong_AsIntValue(args[3]);
     if (fallbackarg == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _interpqueues_put_impl(module, qid, obj, unboundarg, fallbackarg);
+    _return_value = _interpqueues_put_impl(module, qid, obj, unboundarg, fallbackarg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -283,15 +298,14 @@ PyDoc_STRVAR(_interpqueues_get__doc__,
 static PyObject *
 _interpqueues_get_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_get(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_get(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -314,18 +328,26 @@ _interpqueues_get(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_get_impl(module, qid);
+    _return_value = _interpqueues_get_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -345,15 +367,14 @@ PyDoc_STRVAR(_interpqueues_bind__doc__,
 static PyObject *
 _interpqueues_bind_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_bind(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_bind(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -376,18 +397,26 @@ _interpqueues_bind(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_bind_impl(module, qid);
+    _return_value = _interpqueues_bind_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -407,15 +436,14 @@ PyDoc_STRVAR(_interpqueues_release__doc__,
 static PyObject *
 _interpqueues_release_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_release(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_release(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -438,18 +466,26 @@ _interpqueues_release(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_release_impl(module, qid);
+    _return_value = _interpqueues_release_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -467,15 +503,14 @@ PyDoc_STRVAR(_interpqueues_get_maxsize__doc__,
 static PyObject *
 _interpqueues_get_maxsize_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_get_maxsize(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_get_maxsize(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -498,18 +533,26 @@ _interpqueues_get_maxsize(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_get_maxsize_impl(module, qid);
+    _return_value = _interpqueues_get_maxsize_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -527,15 +570,14 @@ PyDoc_STRVAR(_interpqueues_get_queue_defaults__doc__,
 static PyObject *
 _interpqueues_get_queue_defaults_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_get_queue_defaults(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_get_queue_defaults(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -558,18 +600,26 @@ _interpqueues_get_queue_defaults(PyObject *module, PyObject *const *args, Py_ssi
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_get_queue_defaults_impl(module, qid);
+    _return_value = _interpqueues_get_queue_defaults_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -587,15 +637,14 @@ PyDoc_STRVAR(_interpqueues_is_full__doc__,
 static PyObject *
 _interpqueues_is_full_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_is_full(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_is_full(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -618,18 +667,26 @@ _interpqueues_is_full(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_is_full_impl(module, qid);
+    _return_value = _interpqueues_is_full_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -647,15 +704,14 @@ PyDoc_STRVAR(_interpqueues_get_count__doc__,
 static PyObject *
 _interpqueues_get_count_impl(PyObject *module, int64_t qid);
 
-static PyObject *
-_interpqueues_get_count(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues_get_count(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -678,18 +734,26 @@ _interpqueues_get_count(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int64_t qid;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!qidarg_converter(args[0], &qid)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!qidarg_converter(_arg, &qid)) {
+            goto exit;
+        }
     }
-    return_value = _interpqueues_get_count_impl(module, qid);
+    _return_value = _interpqueues_get_count_impl(module, qid);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -710,15 +774,14 @@ _interpqueues__register_heap_types_impl(PyObject *module,
                                         PyObject *emptyerror,
                                         PyObject *fullerror);
 
-static PyObject *
-_interpqueues__register_heap_types(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpqueues__register_heap_types(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -741,26 +804,40 @@ _interpqueues__register_heap_types(PyObject *module, PyObject *const *args, Py_s
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     PyTypeObject *queuetype;
     PyObject *emptyerror;
     PyObject *fullerror;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], &PyType_Type)) {
-        _PyArg_BadArgument("_register_heap_types", "argument 'queuetype'", (&PyType_Type)->tp_name, args[0]);
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("_register_heap_types", "argument 'queuetype'", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        queuetype = (PyTypeObject *)_arg;
+    }
+    emptyerror = PyValue_Object(args[1]);
+    if (emptyerror == NULL) {
         goto exit;
     }
-    queuetype = (PyTypeObject *)args[0];
-    emptyerror = args[1];
-    fullerror = args[2];
-    return_value = _interpqueues__register_heap_types_impl(module, queuetype, emptyerror, fullerror);
+    fullerror = PyValue_Object(args[2]);
+    if (fullerror == NULL) {
+        goto exit;
+    }
+    _return_value = _interpqueues__register_heap_types_impl(module, queuetype, emptyerror, fullerror);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7e56e5b0c684d294 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1df6f98839e8e983 input=a9049054013a1b77]*/

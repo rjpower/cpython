@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -20,14 +19,14 @@ PyDoc_STRVAR(MD5Type_copy__doc__,
 static PyObject *
 MD5Type_copy_impl(MD5object *self, PyTypeObject *cls);
 
-static PyObject *
-MD5Type_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+MD5Type_copy(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return MD5Type_copy_impl((MD5object *)self, cls);
+    return PyValue_FromResult(MD5Type_copy_impl((MD5object *)self, cls));
 }
 
 PyDoc_STRVAR(MD5Type_digest__doc__,
@@ -73,18 +72,26 @@ PyDoc_STRVAR(MD5Type_update__doc__,
 "Update this hash object\'s state with the provided string.");
 
 #define MD5TYPE_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)MD5Type_update, METH_O, MD5Type_update__doc__},
+    {"update", _PyCFunction_CAST(MD5Type_update), METH_O, MD5Type_update__doc__},
 
 static PyObject *
 MD5Type_update_impl(MD5object *self, PyObject *obj);
 
-static PyObject *
-MD5Type_update(PyObject *self, PyObject *obj)
+static PyValue
+MD5Type_update(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
 
-    return_value = MD5Type_update_impl((MD5object *)self, obj);
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = MD5Type_update_impl((MD5object *)self, obj);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -101,15 +108,14 @@ static PyObject *
 _md5_md5_impl(PyObject *module, PyObject *data, int usedforsecurity,
               PyObject *string_obj);
 
-static PyObject *
-_md5_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_md5_md5(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -132,11 +138,12 @@ _md5_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string_obj = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -146,8 +153,11 @@ _md5_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data = PyValue_Object(args[0]);
+        if (data == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -156,8 +166,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        usedforsecurity = PyObject_IsTrueValue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -165,11 +175,15 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string_obj = args[2];
+    string_obj = PyValue_Object(args[2]);
+    if (string_obj == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
-    return_value = _md5_md5_impl(module, data, usedforsecurity, string_obj);
+    _return_value = _md5_md5_impl(module, data, usedforsecurity, string_obj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=920fe54b9ed06f92 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6a53b089d2e6f068 input=a9049054013a1b77]*/

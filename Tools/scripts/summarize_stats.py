@@ -4,9 +4,7 @@ default stats folders.
 
 from __future__ import annotations
 
-# NOTE: Bytecode introspection modules (opcode, dis, etc.) should only
-# be imported when loading a single dataset. When comparing datasets, it
-# could get it wrong, leading to subtle errors.
+# Handler identities come from each producer, including when comparing data.
 
 import argparse
 import collections
@@ -44,7 +42,22 @@ else:
 SOURCE_DIR = Path(__file__).parents[2]
 
 
-TOTAL = "specialization.hit", "specialization.miss", "execution_count"
+HANDLER_SPECIALIZED = 1
+HANDLER_INSTRUMENTED = 2
+HANDLER_NOFB = 16
+HANDLER_METADATA = 64
+HANDLER_DISPATCH = 128
+HANDLER_ADAPTIVE = 512
+HANDLER_FACTS = {
+    "Handler entry coverage version": "_handler_entry_coverage_version",
+    "Handler entry dispatch mode": "_handler_entry_dispatch_mode",
+    "Handler domain count": "_handler_count",
+    "Handler metadata entries": "_handler_metadata_entries",
+}
+HANDLER_CONTRACT = (*HANDLER_FACTS.values(), "_handler_metadata")
+HANDLER_FIELDS = ("handler_id", "base_id", "handler_flags")
+RECORDED_EVENTS = ("hit", "miss", "deferred", "deopt")
+OPCODE_FIELD = re.compile(r"opcode\[([^]]+)\]\.(.+)")
 
 
 def pretty(name: str) -> str:
@@ -65,12 +78,7 @@ def _load_metadata_from_source():
                 defines[int(val.strip())].append(name.strip())
         return defines
 
-    import opcode
-
     return {
-        "_specialized_instructions": [
-            op for op in opcode._specialized_opmap.keys() if "__" not in op  # type: ignore
-        ],
         "_stats_defines": get_defines(
             Path("Include") / "cpython" / "pystats.h", "EVAL_CALL"
         ),
@@ -78,10 +86,113 @@ def _load_metadata_from_source():
     }
 
 
+def _unique_dict(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate stats key: {key}")
+        result[key] = value
+    return result
+
+
+def handler_contract(data: RawData) -> dict:
+    return {key: data[key] for key in HANDLER_CONTRACT}
+
+
+def validate_handler_data(data: RawData) -> None:
+    """Validate producer facts before aggregating or rendering any counters."""
+    if any(key not in data for key in HANDLER_CONTRACT):
+        raise ValueError("missing handler coverage/domain metadata")
+    for key in HANDLER_FACTS.values():
+        if type(data[key]) is not int:
+            raise ValueError(f"invalid handler fact: {key}")
+    if data["_handler_entry_coverage_version"] != 2:
+        raise ValueError("unsupported handler entry coverage version")
+    if data["_handler_entry_dispatch_mode"] not in (0, 1):
+        raise ValueError("unsupported handler entry dispatch mode")
+    count = data["_handler_count"]
+    metadata = data["_handler_metadata"]
+    if (not 0 < count <= 1 << 16 or not isinstance(metadata, dict)
+            or len(metadata) != data["_handler_metadata_entries"]):
+        raise ValueError("invalid handler domain/metadata entry count")
+    by_id = {}
+    for name, entry in metadata.items():
+        if (not isinstance(name, str) or not name or not isinstance(entry, dict)
+                or set(entry) != set(HANDLER_FIELDS)
+                or any(type(entry[field]) is not int for field in HANDLER_FIELDS)):
+            raise ValueError(f"incomplete handler facts: {name}")
+        identity, base, flags = (entry[field] for field in HANDLER_FIELDS)
+        if (not 0 <= identity < count or identity in by_id
+                or not 0 <= base < count or flags < 0 or flags & ~1023
+                or not flags & HANDLER_METADATA):
+            raise ValueError(f"invalid handler facts: {name}")
+        if flags & HANDLER_ADAPTIVE and (
+                not flags & HANDLER_DISPATCH
+                or flags & (HANDLER_SPECIALIZED | HANDLER_INSTRUMENTED | HANDLER_NOFB)):
+            raise ValueError(f"invalid adaptive handler: {name}")
+        by_id[identity] = name
+    for name, entry in metadata.items():
+        base = by_id.get(entry["base_id"])
+        if base is None or metadata[base]["base_id"] != entry["base_id"]:
+            raise ValueError(f"invalid canonical handler base: {name}")
+    if "CACHE" not in metadata or metadata["CACHE"]["handler_id"] != 0:
+        raise ValueError("missing CACHE-0 pair sentinel")
+
+    def dispatchable(name):
+        return (name in metadata
+                and metadata[name]["handler_flags"] & HANDLER_DISPATCH)
+
+    for key, value in data.items():
+        match = OPCODE_FIELD.fullmatch(key)
+        if match is None:
+            continue
+        name, field = match.groups()
+        if name not in metadata or type(value) is not int or value < 0:
+            raise ValueError(f"invalid handler counter: {key}")
+        if field in HANDLER_FIELDS:
+            raise ValueError("handler facts must be separate from counters")
+        if field == "execution_count" and not dispatchable(name):
+            raise ValueError(f"execution counter for nondispatch handler: {name}")
+        if field.startswith("pair_count"):
+            pair = re.fullmatch(r"pair_count\[([^]]+)\]", field)
+            if (pair is None or not dispatchable(pair[1])
+                    or not (dispatchable(name) or name == "CACHE")):
+                raise ValueError(f"invalid counted-entry pair: {key}")
+
+
+def _load_raw_file(path: Path) -> RawData:
+    pairs = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.rpartition(":")
+        if not separator:
+            raise ValueError(f"unparsable stats line in {path}: {line}")
+        pairs.append((key.strip(), int(value)))
+    raw = _unique_dict(pairs)
+    data = {}
+    for source, target in HANDLER_FACTS.items():
+        if source not in raw:
+            raise ValueError(f"missing producer fact: {source}")
+        data[target] = raw.pop(source)
+    metadata = collections.defaultdict(dict)
+    for key, value in raw.items():
+        match = OPCODE_FIELD.fullmatch(key)
+        if match is not None and match[2] in HANDLER_FIELDS:
+            metadata[match[1]][match[2]] = value
+        else:
+            data[key] = value
+    data["_handler_metadata"] = dict(metadata)
+    validate_handler_data(data)
+    return data
+
+
 def load_raw_data(input: Path) -> RawData:
     if input.is_file():
         with open(input, "r") as fd:
-            data = json.load(fd)
+            data = json.load(fd, object_pairs_hook=_unique_dict)
+
+        validate_handler_data(data)
 
         data["_stats_defines"] = {int(k): v for k, v in data["_stats_defines"].items()}
         data["_defines"] = {int(k): v for k, v in data["_defines"].items()}
@@ -90,26 +201,21 @@ def load_raw_data(input: Path) -> RawData:
 
     elif input.is_dir():
         stats = collections.Counter[str]()
-
-        for filename in input.iterdir():
-            with open(filename) as fd:
-                for line in fd:
-                    try:
-                        key, value = line.split(":")
-                    except ValueError:
-                        print(
-                            f"Unparsable line: '{line.strip()}' in {filename}",
-                            file=sys.stderr,
-                        )
-                        continue
-                    # Hack to handle older data files where some uops
-                    # are missing an underscore prefix in their name
-                    if key.startswith("uops[") and key[5:6] != "_":
-                        key = "uops[_" + key[5:]
-                    stats[key.strip()] += int(value)
+        contract = None
+        for filename in sorted(input.iterdir()):
+            raw = _load_raw_file(filename)
+            facts = handler_contract(raw)
+            if contract is None:
+                contract = facts
+            elif contract != facts:
+                raise ValueError("handler metadata/coverage/mode differs within cohort")
+            stats.update({key: value for key, value in raw.items()
+                          if key not in HANDLER_CONTRACT})
             stats["__nfiles__"] += 1
-
+        if contract is None:
+            raise ValueError("empty stats directory")
         data = dict(stats)
+        data.update(contract)
         data.update(_load_metadata_from_source())
         return data
 
@@ -118,6 +224,7 @@ def load_raw_data(input: Path) -> RawData:
 
 
 def save_raw_data(data: RawData, json_output: TextIO):
+    validate_handler_data(data)
     json.dump(data, json_output)
 
 
@@ -181,14 +288,14 @@ class DiffRatio(Ratio):
 
 class OpcodeStats:
     """
-    Manages the data related to specific set of opcodes, e.g. tier1 (with prefix
-    "opcode") or tier2 (with prefix "uops").
+    Manages the data related to specific set of opcodes, e.g. the interpreter's
+    instructions (with prefix "opcode").
     """
 
-    def __init__(self, data: dict[str, Any], defines, specialized_instructions):
+    def __init__(self, data: dict[str, Any], defines, metadata):
         self._data = data
         self._defines = defines
-        self._specialized_instructions = specialized_instructions
+        self._metadata = metadata
 
     def get_opcode_names(self) -> KeysView[str]:
         return self._data.keys()
@@ -205,16 +312,16 @@ class OpcodeStats:
     def get_total_execution_count(self) -> int:
         return sum(x.get("execution_count", 0) for x in self._data.values())
 
-    def get_execution_counts(self) -> dict[str, tuple[int, int]]:
-        counts = {}
-        for name, opcode_stat in self._data.items():
-            if "execution_count" in opcode_stat:
-                count = opcode_stat["execution_count"]
-                miss = 0
-                if "specializable" not in opcode_stat:
-                    miss = opcode_stat.get("specialization.miss", 0)
-                counts[name] = (count, miss)
-        return counts
+    def get_execution_counts(self) -> dict[str, int]:
+        return {name: entry["execution_count"] for name, entry in self._data.items()
+                if "execution_count" in entry}
+
+    def get_family_execution_counts(self) -> dict[str, int]:
+        names = {entry["handler_id"]: name for name, entry in self._metadata.items()}
+        counts = collections.Counter()
+        for name, count in self.get_execution_counts().items():
+            counts[names[self._metadata[name]["base_id"]]] += count
+        return dict(counts)
 
     @functools.cache
     def _get_pred_succ(
@@ -242,31 +349,13 @@ class OpcodeStats:
         return self._get_pred_succ()[1][opcode]
 
     def _get_stats_for_opcode(self, opcode: str) -> dict[str, int]:
-        return self._data[opcode]
-
-    def get_specialization_total(self, opcode: str) -> int:
-        family_stats = self._get_stats_for_opcode(opcode)
-        return sum(family_stats.get(kind, 0) for kind in TOTAL)
+        return self._data.get(opcode, {})
 
     def get_specialization_counts(self, opcode: str) -> dict[str, int]:
         family_stats = self._get_stats_for_opcode(opcode)
 
-        result = {}
-        for key, value in sorted(family_stats.items()):
-            if key.startswith("specialization."):
-                label = key[len("specialization.") :]
-                if label in ("success", "failure") or label.startswith("failure_kinds"):
-                    continue
-            elif key in (
-                "execution_count",
-                "specializable",
-            ) or key.startswith("pair"):
-                continue
-            else:
-                label = key
-            result[label] = value
-
-        return result
+        return {event: family_stats.get("specialization." + event, 0)
+                for event in RECORDED_EVENTS}
 
     def get_specialization_success_failure(self, opcode: str) -> dict[str, int]:
         family_stats = self._get_stats_for_opcode(opcode)
@@ -319,39 +408,33 @@ class OpcodeStats:
         }
 
     def is_specializable(self, opcode: str) -> bool:
-        return "specializable" in self._get_stats_for_opcode(opcode)
+        identity = self._metadata[opcode]["handler_id"]
+        return any(entry["base_id"] == identity
+                   and entry["handler_flags"] & HANDLER_ADAPTIVE
+                   for entry in self._metadata.values())
 
-    def get_specialized_total_counts(self) -> tuple[int, int, int]:
-        basic = 0
-        specialized_hits = 0
-        specialized_misses = 0
-        not_specialized = 0
-        for opcode, opcode_stat in self._data.items():
-            if "execution_count" not in opcode_stat:
-                continue
-            count = opcode_stat["execution_count"]
-            if "specializable" in opcode_stat:
-                not_specialized += count
-            elif opcode in self._specialized_instructions:
-                miss = opcode_stat.get("specialization.miss", 0)
-                specialized_hits += count - miss
-                specialized_misses += miss
+    def get_entry_kind_counts(self) -> tuple[int, int, int]:
+        adaptive = specialized = other = 0
+        for name, count in self.get_execution_counts().items():
+            flags = self._metadata[name]["handler_flags"]
+            if flags & HANDLER_ADAPTIVE:
+                adaptive += count
+            elif flags & HANDLER_SPECIALIZED:
+                specialized += count
             else:
-                basic += count
-        return basic, specialized_hits, specialized_misses, not_specialized
+                other += count
+        return adaptive, specialized, other
 
     def get_deferred_counts(self) -> dict[str, int]:
         return {
             opcode: opcode_stat.get("specialization.deferred", 0)
             for opcode, opcode_stat in self._data.items()
-            if opcode != "RESUME"
         }
 
     def get_misses_counts(self) -> dict[str, int]:
         return {
             opcode: opcode_stat.get("specialization.miss", 0)
             for opcode, opcode_stat in self._data.items()
-            if not self.is_specializable(opcode)
         }
 
     def get_opcode_counts(self) -> dict[str, int]:
@@ -365,6 +448,7 @@ class OpcodeStats:
 
 class Stats:
     def __init__(self, data: RawData):
+        validate_handler_data(data)
         self._data = data
 
     def get(self, key: str) -> int:
@@ -381,7 +465,7 @@ class Stats:
         return OpcodeStats(
             opcode_stats,
             self._data["_defines"],
-            self._data["_specialized_instructions"],
+            self._data["_handler_metadata"],
         )
 
     def get_call_stats(self) -> dict[str, int]:
@@ -403,9 +487,7 @@ class Stats:
 
     def get_object_stats(self) -> dict[str, tuple[int, int]]:
         total_materializations = self._data.get("Object inline values", 0)
-        total_allocations = self._data.get("Object allocations", 0) + self._data.get(
-            "Object allocations from freelist", 0
-        )
+        total_allocations = self._data.get("Object allocations", 0)
         total_increfs = (
             self._data.get("Object interpreter mortal increfs", 0) +
             self._data.get("Object mortal increfs", 0) +
@@ -450,159 +532,6 @@ class Stats:
             gc_stats[gen_n][name] = value
         return gc_stats
 
-    def get_optimization_stats(self) -> dict[str, tuple[int, int | None]]:
-        if "Optimization attempts" not in self._data:
-            return {}
-
-        attempts = self._data["Optimization attempts"]
-        created = self._data["Optimization traces created"]
-        executed = self._data["Optimization traces executed"]
-        uops = self._data["Optimization uops executed"]
-        trace_stack_overflow = self._data["Optimization trace stack overflow"]
-        trace_stack_underflow = self._data["Optimization trace stack underflow"]
-        trace_too_long = self._data["Optimization trace too long"]
-        trace_too_short = self._data["Optimization trace too short"]
-        inner_loop = self._data["Optimization inner loop"]
-        recursive_call = self._data["Optimization recursive call"]
-        low_confidence = self._data["Optimization low confidence"]
-        unknown_callee = self._data["Optimization unknown callee"]
-        executors_invalidated = self._data["Executors invalidated"]
-
-        return {
-            Doc(
-                "Optimization attempts",
-                "The number of times a potential trace is identified.  Specifically, this "
-                "occurs in the JUMP BACKWARD instruction when the counter reaches a "
-                "threshold.",
-            ): (attempts, None),
-            Doc(
-                "Traces created", "The number of traces that were successfully created."
-            ): (created, attempts),
-            Doc(
-                "Trace stack overflow",
-                "A trace is truncated because it would require more than 5 stack frames.",
-            ): (trace_stack_overflow, attempts),
-            Doc(
-                "Trace stack underflow",
-                "A potential trace is abandoned because it pops more frames than it pushes.",
-            ): (trace_stack_underflow, attempts),
-            Doc(
-                "Trace too long",
-                "A trace is truncated because it is longer than the instruction buffer.",
-            ): (trace_too_long, attempts),
-            Doc(
-                "Trace too short",
-                "A potential trace is abandoned because it is too short.",
-            ): (trace_too_short, attempts),
-            Doc(
-                "Inner loop found", "A trace is truncated because it has an inner loop"
-            ): (inner_loop, attempts),
-            Doc(
-                "Recursive call",
-                "A trace is truncated because it has a recursive call.",
-            ): (recursive_call, attempts),
-            Doc(
-                "Low confidence",
-                "A trace is abandoned because the likelihood of the jump to top being taken "
-                "is too low.",
-            ): (low_confidence, attempts),
-            Doc(
-                "Unknown callee",
-                "A trace is abandoned because the target of a call is unknown.",
-            ): (unknown_callee, attempts),
-            Doc(
-                "Executors invalidated",
-                "The number of executors that were invalidated due to watched "
-                "dictionary changes.",
-            ): (executors_invalidated, created),
-            Doc("Traces executed", "The number of traces that were executed"): (
-                executed,
-                None,
-            ),
-            Doc(
-                "Uops executed",
-                "The total number of uops (micro-operations) that were executed",
-            ): (
-                uops,
-                executed,
-            ),
-        }
-
-    def get_optimizer_stats(self) -> dict[str, tuple[int, int | None]]:
-        attempts = self._data["Optimization optimizer attempts"]
-        successes = self._data["Optimization optimizer successes"]
-        no_memory = self._data["Optimization optimizer failure no memory"]
-        builtins_changed = self._data["Optimizer remove globals builtins changed"]
-        incorrect_keys = self._data["Optimizer remove globals incorrect keys"]
-
-        return {
-            Doc(
-                "Optimizer attempts",
-                "The number of times the trace optimizer (_Py_uop_analyze_and_optimize) was run.",
-            ): (attempts, None),
-            Doc(
-                "Optimizer successes",
-                "The number of traces that were successfully optimized.",
-            ): (successes, attempts),
-            Doc(
-                "Optimizer no memory",
-                "The number of optimizations that failed due to no memory.",
-            ): (no_memory, attempts),
-            Doc(
-                "Remove globals builtins changed",
-                "The builtins changed during optimization",
-            ): (builtins_changed, attempts),
-            Doc(
-                "Remove globals incorrect keys",
-                "The keys in the globals dictionary aren't what was expected",
-            ): (incorrect_keys, attempts),
-        }
-
-    def get_jit_memory_stats(self) -> dict[Doc, tuple[int, int | None]]:
-        jit_total_memory_size = self._data["JIT total memory size"]
-        jit_code_size = self._data["JIT code size"]
-        jit_trampoline_size = self._data["JIT trampoline size"]
-        jit_data_size = self._data["JIT data size"]
-        jit_padding_size = self._data["JIT padding size"]
-        jit_freed_memory_size = self._data["JIT freed memory size"]
-
-        return {
-            Doc(
-                "Total memory size",
-                "The total size of the memory allocated for the JIT traces",
-            ): (jit_total_memory_size, None),
-            Doc(
-                "Code size",
-                "The size of the memory allocated for the code of the JIT traces",
-            ): (jit_code_size, jit_total_memory_size),
-            Doc(
-                "Trampoline size",
-                "The size of the memory allocated for the trampolines of the JIT traces",
-            ): (jit_trampoline_size, jit_total_memory_size),
-            Doc(
-                "Data size",
-                "The size of the memory allocated for the data of the JIT traces",
-            ): (jit_data_size, jit_total_memory_size),
-            Doc(
-                "Padding size",
-                "The size of the memory allocated for the padding of the JIT traces",
-            ): (jit_padding_size, jit_total_memory_size),
-            Doc(
-                "Freed memory size",
-                "The size of the memory freed from the JIT traces",
-            ): (jit_freed_memory_size, jit_total_memory_size),
-        }
-
-    def get_histogram(self, prefix: str) -> list[tuple[int, int]]:
-        rows = []
-        for k, v in self._data.items():
-            match = re.match(f"{prefix}\\[([0-9]+)\\]", k)
-            if match is not None:
-                entry = int(match.groups()[0])
-                rows.append((entry, v))
-        rows.sort()
-        return rows
-
     def get_rare_events(self) -> list[tuple[str, int]]:
         prefix = "Rare event "
         return [
@@ -621,9 +550,6 @@ class JoinMode(enum.Enum):
     # Join using the first column as a key, indicating the change in the second
     # column of each input table as a new column, and omit all other columns
     CHANGE_ONE_COLUMN = 2
-    # Join using the first column as a key, and indicate the change as a new
-    # column, but don't sort by the amount of change.
-    CHANGE_NO_SORT = 3
 
 
 class Table:
@@ -646,7 +572,7 @@ class Table:
         match self.join_mode:
             case JoinMode.SIMPLE:
                 return (key, *row_a, *row_b)
-            case JoinMode.CHANGE | JoinMode.CHANGE_NO_SORT:
+            case JoinMode.CHANGE:
                 return (key, *row_a, *row_b, DiffRatio(row_a[0], row_b[0]))
             case JoinMode.CHANGE_ONE_COLUMN:
                 return (key, row_a[0], row_b[0], DiffRatio(row_a[0], row_b[0]))
@@ -659,7 +585,7 @@ class Table:
                     *("Base " + x for x in columns[1:]),
                     *("Head " + x for x in columns[1:]),
                 )
-            case JoinMode.CHANGE | JoinMode.CHANGE_NO_SORT:
+            case JoinMode.CHANGE:
                 return (
                     columns[0],
                     *("Base " + x for x in columns[1:]),
@@ -749,21 +675,16 @@ def calc_execution_count_table(prefix: str) -> RowCalculator:
         total = opcode_stats.get_total_execution_count()
         cumulative = 0
         rows: Rows = []
-        for opcode, (count, miss) in sorted(
+        for opcode, count in sorted(
             counts.items(), key=itemgetter(1), reverse=True
         ):
             cumulative += count
-            if miss:
-                miss_val = Ratio(miss, count)
-            else:
-                miss_val = None
             rows.append(
                 (
                     opcode,
                     Count(count),
                     Ratio(count, total),
                     Ratio(cumulative, total),
-                    miss_val,
                 )
             )
         return rows
@@ -772,25 +693,34 @@ def calc_execution_count_table(prefix: str) -> RowCalculator:
 
 
 def execution_count_section() -> Section:
+    def family_rows(stats: Stats) -> Rows:
+        opcodes = stats.get_opcode_stats("opcode")
+        total = opcodes.get_total_execution_count()
+        return [(name, Count(count), Ratio(count, total))
+                for name, count in sorted(opcodes.get_family_execution_counts().items(),
+                                          key=itemgetter(1), reverse=True)]
+
     return Section(
-        "Execution counts",
-        "Execution counts for Tier 1 instructions.",
+        "Counted handler entries",
+        "Raw target entries and their producer-declared family totals.",
         [
             Table(
-                ("Name", "Count:", "Self:", "Cumulative:", "Miss ratio:"),
+                ("Raw target", "Count:", "Self:", "Cumulative:"),
                 calc_execution_count_table("opcode"),
                 join_mode=JoinMode.CHANGE_ONE_COLUMN,
-            )
+            ),
+            Table(("Family", "Count:", "Share:"), family_rows),
         ],
         doc="""
-        The "miss ratio" column shows the percentage of times the instruction
-        executed that it deoptimized. When this happens, the base unspecialized
-        instruction is not counted.
+        Counters precede predicted labels. Normal predicted gotos bypass an
+        entry; tailcall predicted calls enter and count again. These are not
+        counts of every logical operation or instruction word. Semantic events
+        and boxes keep their original counter sites and are reported separately.
         """,
     )
 
 
-def pair_count_section(prefix: str, title=None) -> Section:
+def pair_count_section(prefix: str) -> Section:
     def calc_pair_count_table(stats: Stats) -> Rows:
         opcode_stats = stats.get_opcode_stats(prefix)
         pair_counts = opcode_stats.get_pair_counts()
@@ -814,7 +744,7 @@ def pair_count_section(prefix: str, title=None) -> Section:
 
     return Section(
         "Pair counts",
-        f"Pair counts for top 100 {title if title else prefix} pairs",
+        f"Pair counts for top 100 {prefix} pairs",
         [
             Table(
                 ("Pair", "Count:", "Self:", "Cumulative:"),
@@ -823,8 +753,10 @@ def pair_count_section(prefix: str, title=None) -> Section:
         ],
         comparative=False,
         doc="""
-        Pairs of specialized operations that deoptimize and are then followed by
-        the corresponding unspecialized instruction are not counted as pairs.
+        Pairs connect consecutive counted entries in an eval activation,
+        including the initial CACHE-0 source. Disabled updates still advance
+        that sequence; clearing the aggregate does not reset the activation.
+        They are not universally adjacent executed words.
         """,
     )
 
@@ -872,8 +804,8 @@ def pre_succ_pairs_section() -> Section:
         iter_pre_succ_pairs_tables,
         comparative=False,
         doc="""
-        This does not include the unspecialized instructions that occur after a
-        specialized instruction deoptimizes.
+        Relationships follow counted entries, including the initial sentinel,
+        with the producer's dispatch-mode-specific predicted-entry behavior.
         """,
     )
 
@@ -881,24 +813,16 @@ def pre_succ_pairs_section() -> Section:
 def specialization_section() -> Section:
     def calc_specialization_table(opcode: str) -> RowCalculator:
         def calc(stats: Stats) -> Rows:
-            DOCS = {
-                "deferred": 'Lists the number of "deferred" (i.e. not specialized) instructions executed.',
-                "hit": "Specialized instructions that complete.",
-                "miss": "Specialized instructions that deopt.",
-                "deopt": "Specialized instructions that deopt.",
-            }
-
             opcode_stats = stats.get_opcode_stats("opcode")
-            total = opcode_stats.get_specialization_total(opcode)
             specialization_counts = opcode_stats.get_specialization_counts(opcode)
 
             return [
                 (
-                    Doc(label, DOCS[label]),
+                    label,
                     Count(count),
-                    Ratio(count, total),
                 )
                 for label, count in specialization_counts.items()
+                if count
             ]
 
         return calc
@@ -942,29 +866,30 @@ def specialization_section() -> Section:
         names = opcode_base_stats.get_opcode_names()
         if head_stats is not None:
             opcode_head_stats = head_stats.get_opcode_stats("opcode")
-            names &= opcode_head_stats.get_opcode_names()  # type: ignore
+            names |= opcode_head_stats.get_opcode_names()
         else:
             opcode_head_stats = None
 
         for opcode in sorted(names):
-            if not opcode_base_stats.is_specializable(opcode):
-                continue
-            if opcode_base_stats.get_specialization_total(opcode) == 0 and (
-                opcode_head_stats is None
-                or opcode_head_stats.get_specialization_total(opcode) == 0
-            ):
+            participants = [opcode_base_stats]
+            if opcode_head_stats is not None:
+                participants.append(opcode_head_stats)
+            if not any(any(op.get_specialization_counts(opcode).values())
+                       or any(op.get_specialization_success_failure(opcode).values())
+                       or op.get_specialization_failure_total(opcode)
+                       for op in participants):
                 continue
             yield Section(
                 opcode,
-                f"specialization stats for {opcode} family",
+                f"Semantic events recorded at {opcode}",
                 [
                     Table(
-                        ("Kind", "Count:", "Ratio:"),
+                        ("Recorded event", "Count:"),
                         calc_specialization_table(opcode),
                         JoinMode.CHANGE,
                     ),
                     Table(
-                        ("Success", "Count:", "Ratio:"),
+                        ("Attempt outcome", "Count:", "Share:"),
                         calc_specialization_success_failure_table(opcode),
                         JoinMode.CHANGE,
                     ),
@@ -977,102 +902,60 @@ def specialization_section() -> Section:
             )
 
     return Section(
-        "Specialization stats",
-        "Specialization stats by family",
+        "Recorded specialization events",
+        "Original semantic counter keys; no inferred event-to-entry attribution.",
         iter_specialization_tables,
     )
 
 
-def specialization_effectiveness_section() -> Section:
-    def calc_specialization_effectiveness_table(stats: Stats) -> Rows:
+def counted_entry_kind_section() -> Section:
+    def calc_entry_kind_table(stats: Stats) -> Rows:
         opcode_stats = stats.get_opcode_stats("opcode")
         total = opcode_stats.get_total_execution_count()
-
-        (
-            basic,
-            specialized_hits,
-            specialized_misses,
-            not_specialized,
-        ) = opcode_stats.get_specialized_total_counts()
-
-        return [
-            (
-                Doc(
-                    "Basic",
-                    "Instructions that are not and cannot be specialized, e.g. `LOAD_FAST`.",
-                ),
-                Count(basic),
-                Ratio(basic, total),
-            ),
-            (
-                Doc(
-                    "Not specialized",
-                    "Instructions that could be specialized but aren't, e.g. `LOAD_ATTR`, `BINARY_SLICE`.",
-                ),
-                Count(not_specialized),
-                Ratio(not_specialized, total),
-            ),
-            (
-                Doc(
-                    "Specialized hits",
-                    "Specialized instructions, e.g. `LOAD_ATTR_MODULE` that complete.",
-                ),
-                Count(specialized_hits),
-                Ratio(specialized_hits, total),
-            ),
-            (
-                Doc(
-                    "Specialized misses",
-                    "Specialized instructions, e.g. `LOAD_ATTR_MODULE` that deopt.",
-                ),
-                Count(specialized_misses),
-                Ratio(specialized_misses, total),
-            ),
-        ]
+        if not total:
+            return []
+        counts = opcode_stats.get_entry_kind_counts()
+        assert sum(counts) == total
+        return [(name, Count(count), Ratio(count, total))
+                for name, count in zip(("Adaptive", "Specialized", "Other"), counts)]
 
     def calc_deferred_by_table(stats: Stats) -> Rows:
         opcode_stats = stats.get_opcode_stats("opcode")
         deferred_counts = opcode_stats.get_deferred_counts()
-        total = sum(deferred_counts.values())
-        if total == 0:
-            return []
-
         return [
-            (name, Count(value), Ratio(value, total))
+            (name, Count(value))
             for name, value in sorted(
                 deferred_counts.items(), key=itemgetter(1), reverse=True
             )[:10]
+            if value
         ]
 
     def calc_misses_by_table(stats: Stats) -> Rows:
         opcode_stats = stats.get_opcode_stats("opcode")
         misses_counts = opcode_stats.get_misses_counts()
-        total = sum(misses_counts.values())
-        if total == 0:
-            return []
-
         return [
-            (name, Count(value), Ratio(value, total))
+            (name, Count(value))
             for name, value in sorted(
                 misses_counts.items(), key=itemgetter(1), reverse=True
             )[:10]
+            if value
         ]
 
     return Section(
-        "Specialization effectiveness",
+        "Counted entries by target kind",
         "",
         [
             Table(
-                ("Instructions", "Count:", "Ratio:"),
-                calc_specialization_effectiveness_table,
+                ("Target kind", "Count:", "Share:"),
+                calc_entry_kind_table,
                 JoinMode.CHANGE,
             ),
             Section(
                 "Deferred by instruction",
-                "Breakdown of deferred (not specialized) instruction counts by family",
+                "Deferred events by their recorded semantic key",
                 [
                     Table(
-                        ("Name", "Count:", "Ratio:"),
+                        ("Name", "Count:"),
                         calc_deferred_by_table,
                         JoinMode.CHANGE,
                     )
@@ -1080,10 +963,10 @@ def specialization_effectiveness_section() -> Section:
             ),
             Section(
                 "Misses by instruction",
-                "Breakdown of misses (specialized deopts) instruction counts by family",
+                "Miss events by their recorded semantic key",
                 [
                     Table(
-                        ("Name", "Count:", "Ratio:"),
+                        ("Name", "Count:"),
                         calc_misses_by_table,
                         JoinMode.CHANGE,
                     )
@@ -1091,8 +974,10 @@ def specialization_effectiveness_section() -> Section:
             ),
         ],
         doc="""
-        All entries are execution counts. Should add up to the total number of
-        Tier 1 instructions executed.
+        Adaptive, specialized and other raw entries partition the counted total.
+        A guard miss remains a specialized entry. Semantic event rows do not
+        partition executions: a guard can increment both member and family
+        miss counters, and reused truth uops retain TO_BOOL's recorded key.
         """,
     )
 
@@ -1145,9 +1030,6 @@ def object_stats_section() -> Section:
             )
         ],
         doc="""
-        Below, "allocations" means "allocations that are not from a freelist".
-        Total allocations = "Allocations from freelist" + "Allocations".
-
         "Inline values" is the number of values arrays inlined into objects.
 
         The cache hit/miss numbers are for the MRO cache, split into dunder and
@@ -1185,179 +1067,6 @@ def gc_stats_section() -> Section:
         doc="""
         Collected/visits gives some measure of efficiency.
         """,
-    )
-
-
-def optimization_section() -> Section:
-    def calc_optimization_table(stats: Stats) -> Rows:
-        optimization_stats = stats.get_optimization_stats()
-
-        return [
-            (
-                label,
-                Count(value),
-                Ratio(value, den, percentage=label != "Uops executed"),
-            )
-            for label, (value, den) in optimization_stats.items()
-        ]
-
-    def calc_optimizer_table(stats: Stats) -> Rows:
-        optimizer_stats = stats.get_optimizer_stats()
-
-        return [
-            (label, Count(value), Ratio(value, den))
-            for label, (value, den) in optimizer_stats.items()
-        ]
-
-    def calc_jit_memory_table(stats: Stats) -> Rows:
-        jit_memory_stats = stats.get_jit_memory_stats()
-
-        return [
-            (
-                label,
-                Count(value),
-                Ratio(value, den, percentage=label != "Total memory size"),
-            )
-            for label, (value, den) in jit_memory_stats.items()
-        ]
-
-    def calc_histogram_table(key: str, den: str | None = None) -> RowCalculator:
-        def calc(stats: Stats) -> Rows:
-            histogram = stats.get_histogram(key)
-
-            if den:
-                denominator = stats.get(den)
-            else:
-                denominator = 0
-                for _, v in histogram:
-                    denominator += v
-
-            rows: Rows = []
-            for k, v in histogram:
-                rows.append(
-                    (
-                        f"<= {k:,d}",
-                        Count(v),
-                        Ratio(v, denominator),
-                    )
-                )
-            # Don't include any leading and trailing zero entries
-            start = 0
-            end = len(rows) - 1
-
-            while start <= end:
-                if rows[start][1] == 0:
-                    start += 1
-                elif rows[end][1] == 0:
-                    end -= 1
-                else:
-                    break
-
-            return rows[start:end+1]
-
-        return calc
-
-    def calc_unsupported_opcodes_table(stats: Stats) -> Rows:
-        unsupported_opcodes = stats.get_opcode_stats("unsupported_opcode")
-        return sorted(
-            [
-                (opcode, Count(count))
-                for opcode, count in unsupported_opcodes.get_opcode_counts().items()
-            ],
-            key=itemgetter(1),
-            reverse=True,
-        )
-
-    def calc_error_in_opcodes_table(stats: Stats) -> Rows:
-        error_in_opcodes = stats.get_opcode_stats("error_in_opcode")
-        return sorted(
-            [
-                (opcode, Count(count))
-                for opcode, count in error_in_opcodes.get_opcode_counts().items()
-            ],
-            key=itemgetter(1),
-            reverse=True,
-        )
-
-    def iter_optimization_tables(base_stats: Stats, head_stats: Stats | None = None):
-        if not base_stats.get_optimization_stats() or (
-            head_stats is not None and not head_stats.get_optimization_stats()
-        ):
-            return
-
-        yield Table(("", "Count:", "Ratio:"), calc_optimization_table, JoinMode.CHANGE)
-        yield Table(("", "Count:", "Ratio:"), calc_optimizer_table, JoinMode.CHANGE)
-        yield Section(
-            "JIT memory stats",
-            "JIT memory stats",
-            [
-                Table(
-                    ("", "Size (bytes):", "Ratio:"),
-                    calc_jit_memory_table,
-                    JoinMode.CHANGE
-                )
-            ],
-        )
-        yield Section(
-            "JIT trace total memory histogram",
-            "JIT trace total memory histogram",
-            [
-                Table(
-                    ("Size (bytes)", "Count", "Ratio:"),
-                    calc_histogram_table("Trace total memory size"),
-                    JoinMode.CHANGE_NO_SORT,
-                )
-            ],
-        )
-        for name, den in [
-            ("Trace length", "Optimization traces created"),
-            ("Optimized trace length", "Optimization traces created"),
-            ("Trace run length", "Optimization traces executed"),
-        ]:
-            yield Section(
-                f"{name} histogram",
-                "",
-                [
-                    Table(
-                        ("Range", "Count:", "Ratio:"),
-                        calc_histogram_table(name, den),
-                        JoinMode.CHANGE_NO_SORT,
-                    )
-                ],
-            )
-        yield Section(
-            "Uop execution stats",
-            "",
-            [
-                Table(
-                    ("Name", "Count:", "Self:", "Cumulative:", "Miss ratio:"),
-                    calc_execution_count_table("uops"),
-                    JoinMode.CHANGE_ONE_COLUMN,
-                )
-            ],
-        )
-        yield pair_count_section(prefix="uop", title="Non-JIT uop")
-        yield Section(
-            "Unsupported opcodes",
-            "",
-            [
-                Table(
-                    ("Opcode", "Count:"),
-                    calc_unsupported_opcodes_table,
-                    JoinMode.CHANGE,
-                )
-            ],
-        )
-        yield Section(
-            "Optimizer errored out with opcode",
-            "Optimization stopped after encountering this opcode",
-            [Table(("Opcode", "Count:"), calc_error_in_opcodes_table, JoinMode.CHANGE)],
-        )
-
-    return Section(
-        "Optimization (Tier 2) stats",
-        "statistics about the Tier 2 optimizer",
-        iter_optimization_tables,
     )
 
 
@@ -1400,11 +1109,10 @@ LAYOUT = [
     pair_count_section("opcode"),
     pre_succ_pairs_section(),
     specialization_section(),
-    specialization_effectiveness_section(),
+    counted_entry_kind_section(),
     call_stats_section(),
     object_stats_section(),
     gc_stats_section(),
-    optimization_section(),
     rare_event_section(),
     meta_stats_section(),
 ]
@@ -1509,6 +1217,8 @@ def output_stats(inputs: list[Path], json_output=str | None):
                 )
             base_data = load_raw_data(Path(inputs[0]))
             head_data = load_raw_data(Path(inputs[1]))
+            if handler_contract(base_data) != handler_contract(head_data):
+                raise ValueError("handler metadata/coverage/mode differs across cohorts")
             base_stats = Stats(base_data)
             head_stats = Stats(head_data)
             output_markdown(sys.stdout, LAYOUT, base_stats, head_stats)

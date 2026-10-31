@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 static PyObject *
@@ -22,7 +22,6 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -45,34 +44,43 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
+    PyValue argsbuf[3];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyObject *readline;
     int extra_tokens;
     const char *encoding = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    readline = fastargs[0];
-    extra_tokens = PyObject_IsTrue(fastargs[1]);
+    readline = PyValue_Object(fastargs[0]);
+    if (readline == NULL) {
+        goto exit;
+    }
+    extra_tokens = PyObject_IsTrueValue(fastargs[1]);
     if (extra_tokens < 0) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyUnicode_Check(fastargs[2])) {
-        _PyArg_BadArgument("tokenizeriter", "argument 'encoding'", "str", fastargs[2]);
-        goto exit;
-    }
-    encoding = _PyUnicode_AsUTF8NoNUL(fastargs[2]);
-    if (encoding == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("tokenizeriter", "argument 'encoding'", "str", _arg);
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (encoding == NULL) {
+            goto exit;
+        }
     }
 skip_optional_kwonly:
     return_value = tokenizeriter_new_impl(type, readline, extra_tokens, encoding);
@@ -81,13 +89,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 tokenizeriter_next_impl(tokenizeriterobject *self);
 
-static PyObject *
+static PyValue
 tokenizeriter_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = tokenizeriter_next_impl((tokenizeriterobject *)self);
@@ -95,4 +103,4 @@ tokenizeriter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=67cc510ef85272ba input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e3819647c34e693b input=a9049054013a1b77]*/

@@ -53,10 +53,6 @@ def skip_unless_reliable_fork(test):
     return test
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 def restore_default_excepthook(testcase):
@@ -634,39 +630,6 @@ class ThreadTests(BaseTestCase):
         thread.join()
         assert not thread.is_alive()
 
-    def test_no_refcycle_through_target(self):
-        class RunSelfFunction(object):
-            def __init__(self, should_raise):
-                # The links in this refcycle from Thread back to self
-                # should be cleaned up when the thread completes.
-                self.should_raise = should_raise
-                self.thread = threading.Thread(target=self._run,
-                                               args=(self,),
-                                               kwargs={'yet_another':self})
-                self.thread.start()
-
-            def _run(self, other_ref, yet_another):
-                if self.should_raise:
-                    raise SystemExit
-
-        restore_default_excepthook(self)
-
-        cyclic_object = RunSelfFunction(should_raise=False)
-        weak_cyclic_object = weakref.ref(cyclic_object)
-        cyclic_object.thread.join()
-        del cyclic_object
-        self.assertIsNone(weak_cyclic_object(),
-                         msg=('%d references still around' %
-                              sys.getrefcount(weak_cyclic_object())))
-
-        raising_cyclic_object = RunSelfFunction(should_raise=True)
-        weak_raising_cyclic_object = weakref.ref(raising_cyclic_object)
-        raising_cyclic_object.thread.join()
-        del raising_cyclic_object
-        self.assertIsNone(weak_raising_cyclic_object(),
-                         msg=('%d references still around' %
-                              sys.getrefcount(weak_raising_cyclic_object())))
-
     def test_old_threading_api(self):
         # Just a quick sanity check to make sure the old method names are
         # still present
@@ -871,6 +834,11 @@ class ThreadTests(BaseTestCase):
                     print("main", main.name, type(main).__name__)
                     print("main ident", main.ident == ident)
                     print("current is main", threading.current_thread() is main)
+                    # The old main thread dies at a collection.  Not
+                    # elsewhere: the tracing verifier of a debug build
+                    # would report what only the old main thread's
+                    # stack, which no thread runs on now, holds.
+                    support.gc_collect()
                     print("_dangling", [t.name for t in list(threading._dangling)])
                     # stdout is fully buffered because not a tty,
                     # we have to flush before exit.
@@ -1725,6 +1693,7 @@ class ThreadJoinOnShutdown(BaseTestCase):
                 t.join()
 
 
+@support.requires_subinterpreters
 class SubinterpThreadingTests(BaseTestCase):
     def pipe(self):
         r, w = os.pipe()
@@ -1799,7 +1768,8 @@ class SubinterpThreadingTests(BaseTestCase):
         # The thread was joined properly.
         self.assertEqual(os.read(r, 1), b"x")
 
-    @requires_subinterpreters
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
+    @support.requires_subinterpreters
     def test_threads_join_with_no_main(self):
         r_interp, w_interp = self.pipe()
 

@@ -34,7 +34,10 @@ atexit_register(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("register", PyTuple_GET_SIZE(args), 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
+    func = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (func == NULL) {
+        goto exit;
+    }
     __clinic_args = PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
         goto exit;
@@ -58,4 +61,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=8fd8f691fdbc4e0a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ee57e1e9e853c66b input=a9049054013a1b77]*/

@@ -29,7 +29,7 @@
 #  error "this header file must not be included directly"
 #endif
 
-#define PYSTATS_MAX_UOP_ID 2000
+#include "opcode_ids.h"          // IR_NUM_HANDLERS
 
 #define SPECIALIZATION_FAILURE_KINDS 60
 
@@ -60,7 +60,10 @@ typedef struct _specialization_stats {
 typedef struct _opcode_stats {
     SpecializationStats specialization;
     uint64_t execution_count;
-    uint64_t pair_count[256];
+    /* Inline stack values that the instruction boxed to use an input as an
+       object (boil/design/02-tagged-values.md, section 4) */
+    uint64_t boxes;
+    uint64_t pair_count[IR_NUM_HANDLERS];
 } OpcodeStats;
 
 typedef struct _call_stats {
@@ -85,13 +88,10 @@ typedef struct _object_stats {
     uint64_t allocations4k;
     uint64_t allocations_big;
     uint64_t frees;
-    uint64_t to_freelist;
-    uint64_t from_freelist;
     uint64_t inline_values;
-    uint64_t dict_materialized_on_request;
-    uint64_t dict_materialized_new_key;
-    uint64_t dict_materialized_too_big;
-    uint64_t dict_materialized_str_subclass;
+    /* Entries into dictionary mode by reason (_PyDictModeReason in
+       pycore_shape.h) */
+    uint64_t dict_mode[7];
     uint64_t type_cache_hits;
     uint64_t type_cache_misses;
     uint64_t type_cache_dunder_hits;
@@ -99,6 +99,22 @@ typedef struct _object_stats {
     uint64_t type_cache_too_big;
     uint64_t type_cache_invalidations;
     uint64_t type_cache_resizes;
+    /* Inline values (Include/pyvalue.h): ints and floats created, and
+       boxes made of each kind of value; array boxes are those made for C
+       code that takes a PyValue array (calls and BUILD_*) */
+    uint64_t inline_ints_created;
+    uint64_t inline_floats_created;
+    uint64_t inline_int_boxes;
+    uint64_t inline_float_boxes;
+    uint64_t inline_array_boxes;
+    /* Boxes by what they were made for (_PY_BOX_CONTAINER_STORE and the
+       rest in pycore_stats.h).  A site that names no class counts only in
+       the totals, which the report lists as "other". */
+    uint64_t value_boxes[5];
+    /* The boxes made at each call site of _PyValue_BoxInline(), by return
+       address; a full table counts the rest in the last entry's count */
+    uintptr_t box_site_pc[64];
+    uint64_t box_site_count[64];
     /* Temporary value used during GC */
     uint64_t object_visits;
 } ObjectStats;
@@ -111,65 +127,6 @@ typedef struct _gc_stats {
     uint64_t objects_not_transitively_reachable;
 } GCStats;
 
-#ifdef Py_GIL_DISABLED
-// stats specific to free-threaded build
-typedef struct _ft_stats {
-    // number of times interpreter had to spin or park when trying to acquire a mutex
-    uint64_t mutex_sleeps;
-    // number of times that the QSBR mechanism polled (compute read sequence value)
-    uint64_t qsbr_polls;
-    // number of times stop-the-world mechanism was used
-    uint64_t world_stops;
-} FTStats;
-#endif
-
-typedef struct _uop_stats {
-    uint64_t execution_count;
-    uint64_t miss;
-    uint64_t pair_count[PYSTATS_MAX_UOP_ID + 1];
-} UOpStats;
-
-#define _Py_UOP_HIST_SIZE 32
-
-typedef struct _optimization_stats {
-    uint64_t attempts;
-    uint64_t traces_created;
-    uint64_t traces_executed;
-    uint64_t uops_executed;
-    uint64_t trace_stack_overflow;
-    uint64_t trace_stack_underflow;
-    uint64_t trace_too_long;
-    uint64_t trace_too_short;
-    uint64_t inner_loop;
-    uint64_t recursive_call;
-    uint64_t low_confidence;
-    uint64_t unknown_callee;
-    uint64_t trace_immediately_deopts;
-    uint64_t executors_invalidated;
-    uint64_t fitness_terminated_traces;
-    UOpStats opcode[PYSTATS_MAX_UOP_ID + 1];
-    uint64_t unsupported_opcode[256];
-    uint64_t trace_length_hist[_Py_UOP_HIST_SIZE];
-    uint64_t trace_run_length_hist[_Py_UOP_HIST_SIZE];
-    uint64_t optimized_trace_length_hist[_Py_UOP_HIST_SIZE];
-    uint64_t optimizer_attempts;
-    uint64_t optimizer_successes;
-    uint64_t optimizer_contradiction;
-    uint64_t optimizer_frame_overflow;
-    uint64_t optimizer_failure_reason_no_memory;
-    uint64_t remove_globals_builtins_changed;
-    uint64_t remove_globals_incorrect_keys;
-    uint64_t error_in_opcode[PYSTATS_MAX_UOP_ID + 1];
-    // JIT memory stats
-    uint64_t jit_total_memory_size;
-    uint64_t jit_code_size;
-    uint64_t jit_trampoline_size;
-    uint64_t jit_data_size;
-    uint64_t jit_got_size;
-    uint64_t jit_padding_size;
-    uint64_t jit_freed_memory_size;
-    uint64_t trace_total_memory_hist[_Py_UOP_HIST_SIZE];
-} OptimizationStats;
 
 typedef struct _rare_event_stats {
     /* Setting an object's class, obj.__class__ = ... */
@@ -188,13 +145,9 @@ typedef struct _rare_event_stats {
 } RareEventStats;
 
 typedef struct _stats {
-    OpcodeStats opcode_stats[256];
+    OpcodeStats opcode_stats[IR_NUM_HANDLERS];
     CallStats call_stats;
     ObjectStats object_stats;
-    OptimizationStats optimization_stats;
-#ifdef Py_GIL_DISABLED
-    FTStats ft_stats;
-#endif
     RareEventStats rare_event_stats;
     GCStats gc_stats[3]; // must match NUM_GENERATIONS
 } PyStats;

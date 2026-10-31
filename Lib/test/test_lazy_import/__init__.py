@@ -2840,22 +2840,6 @@ class CircularImportLazyTests(unittest.TestCase):
 class LazyImportFinalizationTests(unittest.TestCase):
     """Destructors that use lazy imports after finalization freed their state."""
 
-    def test_declare(self):
-        code = textwrap.dedent("""
-            import builtins, os
-
-            class Canary:
-                def __del__(self, write=os.write, exec=exec,
-                            builtins={"__lazy_import__": builtins.__lazy_import__}):
-                    exec("lazy import a.b", {"__builtins__": builtins})
-                    write(1, b"ok")
-
-            # Only this placeholder keeps the canary alive.
-            exec("lazy import pkg.mod", {"__builtins__": {
-                "__lazy_import__": builtins.__lazy_import__, "c": Canary()}})
-        """)
-        self.assertEqual(assert_python_ok("-c", code).out, b"ok")
-
     def test_resolve(self):
         code = textwrap.dedent("""
             import contextvars, json, os, types

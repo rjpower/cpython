@@ -6,6 +6,7 @@
 
 #include <Python.h>
 #include <stdbool.h>
+#include "pycore_shape.h"       // _PyShape_InitRoot()
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall
 #include "pycore_exceptions.h"    // struct _Py_exc_state
@@ -16,6 +17,7 @@
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 #include "osdefs.h"               // SEP
 #include "clinic/exceptions.c.h"
@@ -90,19 +92,19 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-static PyObject *
-BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
+static PyValue
+BaseException_vectorcall(PyValue type_obj, const PyValue *args,
                          size_t nargsf, PyObject *kwnames)
 {
-    PyTypeObject *type = _PyType_CAST(type_obj);
+    PyTypeObject *type = _PyType_CAST(PyValue_ObjectBorrow(type_obj));
     if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBaseExceptionObject *self;
     self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
     if (!self) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // The dict is created on the fly in PyObject_GenericSetAttr()
@@ -113,13 +115,12 @@ BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
     self->context = NULL;
     self->suppress_context = 0;
 
-    self->args = PyTuple_FromArray(args, PyVectorcall_NARGS(nargsf));
+    self->args = _PyTuple_FromValues(args, PyVectorcall_NARGS(nargsf));
     if (!self->args) {
-        Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return (PyObject *)self;
+    return PyValue_FromObject((PyObject *)self);
 }
 
 
@@ -141,9 +142,6 @@ BaseException_dealloc(PyObject *op)
 {
     PyBaseExceptionObject *self = PyBaseExceptionObject_CAST(op);
     PyObject_GC_UnTrack(self);
-    // bpo-44348: The trashcan mechanism prevents stack overflow when deleting
-    // long chains of exceptions. For example, exceptions can be chained
-    // through the __context__ attributes or the __traceback__ attribute.
     (void)BaseException_clear(op);
     Py_TYPE(self)->tp_free(self);
 }
@@ -1724,7 +1722,7 @@ static PyMemberDef BaseExceptionGroup_members[] = {
 };
 
 static PyMethodDef BaseExceptionGroup_methods[] = {
-    {"__class_getitem__", Py_GenericAlias,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue),
      METH_O|METH_CLASS,
      PyDoc_STR("Exception groups are generic over the type of their contained exceptions")},
     BASEEXCEPTIONGROUP_DERIVE_METHODDEF
@@ -2408,22 +2406,22 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     return res;
 }
 
-static PyObject *
+static PyValue
 OSError_written_get(PyObject *op, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
     if (self->written == -1) {
         PyErr_SetString(PyExc_AttributeError, "characters_written");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(self->written);
+    return PyValue_FromLongLong(self->written);
 }
 
-static int
-OSError_written_set(PyObject *op, PyObject *arg, void *context)
+Py_GC_PRECISE static int
+OSError_written_set(PyObject *op, PyValue arg, void *context)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         if (self->written == -1) {
             PyErr_SetString(PyExc_AttributeError, "characters_written");
             return -1;
@@ -2431,12 +2429,21 @@ OSError_written_set(PyObject *op, PyObject *arg, void *context)
         self->written = -1;
         return 0;
     }
+    // The span holds the exception, whose field is set after the call.
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)self);
+    int res = -1;
     Py_ssize_t n;
-    n = PyNumber_AsSsize_t(arg, PyExc_ValueError);
-    if (n == -1 && PyErr_Occurred())
-        return -1;
-    self->written = n;
-    return 0;
+    n = PyNumber_AsSsize_tValue(arg, PyExc_ValueError);
+    if (n != -1 || !PyErr_Occurred()) {
+        self->written = n;
+        res = 0;
+    }
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static PyMemberDef OSError_members[] = {
@@ -4137,13 +4144,8 @@ SimpleExtendsException(PyExc_Exception, ReferenceError,
 
 #define MEMERRORS_SAVE 16
 
-#ifdef Py_GIL_DISABLED
-# define MEMERRORS_LOCK(state) PyMutex_LockFlags(&state->memerrors_lock, _Py_LOCK_DONT_DETACH)
-# define MEMERRORS_UNLOCK(state) PyMutex_Unlock(&state->memerrors_lock)
-#else
 # define MEMERRORS_LOCK(state) ((void)0)
 # define MEMERRORS_UNLOCK(state) ((void)0)
-#endif
 
 static PyObject *
 get_memory_error(int allow_allocation, PyObject *args, PyObject *kwds)
@@ -4168,6 +4170,21 @@ get_memory_error(int allow_allocation, PyObject *args, PyObject *kwds)
         return (PyObject *)self;
     }
 
+    /* The free list stays empty (MemoryError_dealloc()).  A new instance,
+       if one can be allocated, keeps the traceback of each raise to itself,
+       as one from the free list does; the last-resort instance is shared,
+       and its traceback grows with each raise and keeps the frames alive.
+       The allocation's own failure raises the last-resort one. */
+    static _Py_thread_local int allocating;
+    if (!allow_allocation && !allocating) {
+        allocating = 1;
+        PyObject *err = BaseException_new((PyTypeObject *)PyExc_MemoryError,
+                                          NULL, NULL);
+        allocating = 0;
+        if (err != NULL) {
+            return err;
+        }
+    }
     if (!allow_allocation) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
         return Py_NewRef(
@@ -4190,7 +4207,7 @@ MemoryError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 PyObject *
 _PyErr_NoMemory(PyThreadState *tstate)
 {
-    if (Py_IS_TYPE(PyExc_MemoryError, NULL)) {
+    if (_PyObject_SHAPE(PyExc_MemoryError) == NULL) {
         /* PyErr_NoMemory() has been called before PyExc_MemoryError has been
            initialized by _PyExc_Init() */
         Py_FatalError("Out of memory and PyExc_MemoryError is not "
@@ -4218,16 +4235,6 @@ MemoryError_dealloc(PyObject *op)
         return;
     }
 
-    struct _Py_exc_state *state = get_exc_state();
-    MEMERRORS_LOCK(state);
-    if (state->memerrors_numfree < MEMERRORS_SAVE) {
-        self->dict = (PyObject *) state->memerrors_freelist;
-        state->memerrors_freelist = self;
-        state->memerrors_numfree++;
-        MEMERRORS_UNLOCK(state);
-        return;
-    }
-    MEMERRORS_UNLOCK(state);
 
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -4237,6 +4244,10 @@ preallocate_memerrors(void)
 {
     /* We create enough MemoryErrors and then decref them, which will fill
        up the freelist. */
+    /* Nothing is freed onto the free list (see MemoryError_dealloc), and
+       _PyErr_NoMemory() allocates a new MemoryError, or falls back to the
+       interpreter's last-resort one (get_memory_error()). */
+    return 0;
     int i;
 
     PyObject *errors[MEMERRORS_SAVE];
@@ -4546,6 +4557,15 @@ _PyExc_InitTypes(PyInterpreterState *interp)
 }
 
 
+void
+_PyExc_InitRootShapes(void)
+{
+    for (size_t i=0; i < Py_ARRAY_LENGTH(static_exceptions); i++) {
+        _PyShape_InitRoot(static_exceptions[i].exc);
+    }
+}
+
+
 static void
 _PyExc_FiniTypes(PyInterpreterState *interp)
 {
@@ -4688,7 +4708,8 @@ _PyException_AddNote(PyObject *exc, PyObject *note)
                      Py_TYPE(exc)->tp_name);
         return -1;
     }
-    PyObject *r = BaseException_add_note(exc, note);
+    PyObject *r = BaseException_add_note_impl((PyBaseExceptionObject *)exc,
+                                              note);
     int res = r == NULL ? -1 : 0;
     Py_XDECREF(r);
     return res;

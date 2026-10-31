@@ -3,12 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_long.h"          // _PyLong_UInt16_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 #if (defined(HAVE_ACCEPT) || defined(HAVE_ACCEPT4))
@@ -47,22 +46,24 @@ PyDoc_STRVAR(_socket_socket_setblocking__doc__,
 "setblocking(False) is equivalent to settimeout(0.0).");
 
 #define _SOCKET_SOCKET_SETBLOCKING_METHODDEF    \
-    {"setblocking", (PyCFunction)_socket_socket_setblocking, METH_O, _socket_socket_setblocking__doc__},
+    {"setblocking", _PyCFunction_CAST(_socket_socket_setblocking), METH_O, _socket_socket_setblocking__doc__},
 
 static PyObject *
 _socket_socket_setblocking_impl(PySocketSockObject *s, int flag);
 
-static PyObject *
-_socket_socket_setblocking(PyObject *s, PyObject *arg)
+static PyValue
+_socket_socket_setblocking(PyObject *s, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag;
+    PyObject *_return_value;
 
-    flag = PyObject_IsTrue(arg);
+    flag = PyObject_IsTrueValue(arg);
     if (flag < 0) {
         goto exit;
     }
-    return_value = _socket_socket_setblocking_impl((PySocketSockObject *)s, flag);
+    _return_value = _socket_socket_setblocking_impl((PySocketSockObject *)s, flag);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -98,18 +99,26 @@ PyDoc_STRVAR(_socket_socket_settimeout__doc__,
 "setblocking(0).");
 
 #define _SOCKET_SOCKET_SETTIMEOUT_METHODDEF    \
-    {"settimeout", (PyCFunction)_socket_socket_settimeout, METH_O, _socket_socket_settimeout__doc__},
+    {"settimeout", _PyCFunction_CAST(_socket_socket_settimeout), METH_O, _socket_socket_settimeout__doc__},
 
 static PyObject *
 _socket_socket_settimeout_impl(PySocketSockObject *s, PyObject *arg);
 
-static PyObject *
-_socket_socket_settimeout(PyObject *s, PyObject *arg)
+static PyValue
+_socket_socket_settimeout(PyObject *s, PyValue arg_)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
 
-    return_value = _socket_socket_settimeout_impl((PySocketSockObject *)s, arg);
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_socket_settimeout_impl((PySocketSockObject *)s, arg);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -151,34 +160,36 @@ static PyObject *
 _socket_socket_getsockopt_impl(PySocketSockObject *s, int level, int optname,
                                int buflen);
 
-static PyObject *
-_socket_socket_getsockopt(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_getsockopt(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int level;
     int optname;
     int buflen = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("getsockopt", nargs, 2, 3)) {
         goto exit;
     }
-    level = PyLong_AsInt(args[0]);
+    level = PyLong_AsIntValue(args[0]);
     if (level == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    optname = PyLong_AsInt(args[1]);
+    optname = PyLong_AsIntValue(args[1]);
     if (optname == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    buflen = PyLong_AsInt(args[2]);
+    buflen = PyLong_AsIntValue(args[2]);
     if (buflen == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_getsockopt_impl((PySocketSockObject *)s, level, optname, buflen);
+    _return_value = _socket_socket_getsockopt_impl((PySocketSockObject *)s, level, optname, buflen);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -197,18 +208,26 @@ PyDoc_STRVAR(_socket_socket_bind__doc__,
 "tuple (ifname, proto [,pkttype [,hatype [,addr]]]).");
 
 #define _SOCKET_SOCKET_BIND_METHODDEF    \
-    {"bind", (PyCFunction)_socket_socket_bind, METH_O, _socket_socket_bind__doc__},
+    {"bind", _PyCFunction_CAST(_socket_socket_bind), METH_O, _socket_socket_bind__doc__},
 
 static PyObject *
 _socket_socket_bind_impl(PySocketSockObject *s, PyObject *addro);
 
-static PyObject *
-_socket_socket_bind(PyObject *s, PyObject *addro)
+static PyValue
+_socket_socket_bind(PyObject *s, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *addro;
+    PyObject *_return_value;
 
-    return_value = _socket_socket_bind_impl((PySocketSockObject *)s, addro);
+    addro = PyValue_Object(arg);
+    if (addro == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_socket_bind_impl((PySocketSockObject *)s, addro);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -266,18 +285,26 @@ PyDoc_STRVAR(_socket_socket_connect__doc__,
 "For IP sockets, the address is a pair (host, port).");
 
 #define _SOCKET_SOCKET_CONNECT_METHODDEF    \
-    {"connect", (PyCFunction)_socket_socket_connect, METH_O, _socket_socket_connect__doc__},
+    {"connect", _PyCFunction_CAST(_socket_socket_connect), METH_O, _socket_socket_connect__doc__},
 
 static PyObject *
 _socket_socket_connect_impl(PySocketSockObject *s, PyObject *addro);
 
-static PyObject *
-_socket_socket_connect(PyObject *s, PyObject *addro)
+static PyValue
+_socket_socket_connect(PyObject *s, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *addro;
+    PyObject *_return_value;
 
-    return_value = _socket_socket_connect_impl((PySocketSockObject *)s, addro);
+    addro = PyValue_Object(arg);
+    if (addro == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_socket_connect_impl((PySocketSockObject *)s, addro);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -295,18 +322,26 @@ PyDoc_STRVAR(_socket_socket_connect_ex__doc__,
 "value) instead of raising an exception when an error occurs.");
 
 #define _SOCKET_SOCKET_CONNECT_EX_METHODDEF    \
-    {"connect_ex", (PyCFunction)_socket_socket_connect_ex, METH_O, _socket_socket_connect_ex__doc__},
+    {"connect_ex", _PyCFunction_CAST(_socket_socket_connect_ex), METH_O, _socket_socket_connect_ex__doc__},
 
 static PyObject *
 _socket_socket_connect_ex_impl(PySocketSockObject *s, PyObject *addro);
 
-static PyObject *
-_socket_socket_connect_ex(PyObject *s, PyObject *addro)
+static PyValue
+_socket_socket_connect_ex(PyObject *s, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *addro;
+    PyObject *_return_value;
 
-    return_value = _socket_socket_connect_ex_impl((PySocketSockObject *)s, addro);
+    addro = PyValue_Object(arg);
+    if (addro == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_socket_connect_ex_impl((PySocketSockObject *)s, addro);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -399,11 +434,12 @@ PyDoc_STRVAR(_socket_socket_listen__doc__,
 static PyObject *
 _socket_socket_listen_impl(PySocketSockObject *s, int backlog);
 
-static PyObject *
-_socket_socket_listen(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_listen(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int backlog = Py_MIN(SOMAXCONN, 128);
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("listen", nargs, 0, 1)) {
         goto exit;
@@ -411,12 +447,13 @@ _socket_socket_listen(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    backlog = PyLong_AsInt(args[0]);
+    backlog = PyLong_AsIntValue(args[0]);
     if (backlog == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_listen_impl((PySocketSockObject *)s, backlog);
+    _return_value = _socket_socket_listen_impl((PySocketSockObject *)s, backlog);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -442,22 +479,22 @@ static PyObject *
 _socket_socket_recv_impl(PySocketSockObject *s, Py_ssize_t recvlen,
                          int flags);
 
-static PyObject *
-_socket_socket_recv(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_recv(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t recvlen;
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("recv", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -467,12 +504,13 @@ _socket_socket_recv(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[1]);
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_recv_impl((PySocketSockObject *)s, recvlen, flags);
+    _return_value = _socket_socket_recv_impl((PySocketSockObject *)s, recvlen, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -497,15 +535,14 @@ static PyObject *
 _socket_socket_recv_into_impl(PySocketSockObject *s, Py_buffer *pbuf,
                               Py_ssize_t recvlen, int flags);
 
-static PyObject *
-_socket_socket_recv_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_socket_socket_recv_into(PyObject *s, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -528,31 +565,37 @@ _socket_socket_recv_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer pbuf = {NULL, NULL};
     Py_ssize_t recvlen = 0;
     int flags = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &pbuf, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("recv_into", "argument 'buffer'", "read-write bytes-like object", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &pbuf, PyBUF_WRITABLE) < 0) {
+            _PyArg_BadArgument("recv_into", "argument 'buffer'", "read-write bytes-like object", _arg);
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -563,12 +606,13 @@ _socket_socket_recv_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _socket_socket_recv_into_impl((PySocketSockObject *)s, &pbuf, recvlen, flags);
+    _return_value = _socket_socket_recv_into_impl((PySocketSockObject *)s, &pbuf, recvlen, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for pbuf */
@@ -597,22 +641,22 @@ static PyObject *
 _socket_socket_recvfrom_impl(PySocketSockObject *s, Py_ssize_t recvlen,
                              int flags);
 
-static PyObject *
-_socket_socket_recvfrom(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_recvfrom(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t recvlen;
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("recvfrom", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -622,12 +666,13 @@ _socket_socket_recvfrom(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[1]);
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_recvfrom_impl((PySocketSockObject *)s, recvlen, flags);
+    _return_value = _socket_socket_recvfrom_impl((PySocketSockObject *)s, recvlen, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -653,15 +698,14 @@ static PyObject *
 _socket_socket_recvfrom_into_impl(PySocketSockObject *s, Py_buffer *pbuf,
                                   Py_ssize_t recvlen, int flags);
 
-static PyObject *
-_socket_socket_recvfrom_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_socket_socket_recvfrom_into(PyObject *s, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -684,31 +728,37 @@ _socket_socket_recvfrom_into(PyObject *s, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer pbuf = {NULL, NULL};
     Py_ssize_t recvlen = 0;
     int flags = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &pbuf, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("recvfrom_into", "argument 'buffer'", "read-write bytes-like object", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &pbuf, PyBUF_WRITABLE) < 0) {
+            _PyArg_BadArgument("recvfrom_into", "argument 'buffer'", "read-write bytes-like object", _arg);
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -719,12 +769,13 @@ _socket_socket_recvfrom_into(PyObject *s, PyObject *const *args, Py_ssize_t narg
             goto skip_optional_pos;
         }
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _socket_socket_recvfrom_into_impl((PySocketSockObject *)s, &pbuf, recvlen, flags);
+    _return_value = _socket_socket_recvfrom_into_impl((PySocketSockObject *)s, &pbuf, recvlen, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for pbuf */
@@ -777,23 +828,23 @@ static PyObject *
 _socket_socket_recvmsg_impl(PySocketSockObject *s, Py_ssize_t bufsize,
                             Py_ssize_t ancbufsize, int flags);
 
-static PyObject *
-_socket_socket_recvmsg(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_recvmsg(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t bufsize;
     Py_ssize_t ancbufsize = 0;
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("recvmsg", nargs, 1, 3)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -805,10 +856,9 @@ _socket_socket_recvmsg(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -818,12 +868,13 @@ _socket_socket_recvmsg(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 3) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_recvmsg_impl((PySocketSockObject *)s, bufsize, ancbufsize, flags);
+    _return_value = _socket_socket_recvmsg_impl((PySocketSockObject *)s, bufsize, ancbufsize, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -875,27 +926,30 @@ _socket_socket_recvmsg_into_impl(PySocketSockObject *s,
                                  PyObject *buffers_arg,
                                  Py_ssize_t ancbufsize, int flags);
 
-static PyObject *
-_socket_socket_recvmsg_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_recvmsg_into(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *buffers_arg;
     Py_ssize_t ancbufsize = 0;
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("recvmsg_into", nargs, 1, 3)) {
         goto exit;
     }
-    buffers_arg = args[0];
+    buffers_arg = PyValue_Object(args[0]);
+    if (buffers_arg == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -905,12 +959,13 @@ _socket_socket_recvmsg_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs
     if (nargs < 3) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_recvmsg_into_impl((PySocketSockObject *)s, buffers_arg, ancbufsize, flags);
+    _return_value = _socket_socket_recvmsg_into_impl((PySocketSockObject *)s, buffers_arg, ancbufsize, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -934,28 +989,36 @@ PyDoc_STRVAR(_socket_socket_send__doc__,
 static PyObject *
 _socket_socket_send_impl(PySocketSockObject *s, Py_buffer *pbuf, int flags);
 
-static PyObject *
-_socket_socket_send(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_send(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer pbuf = {NULL, NULL};
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("send", nargs, 1, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &pbuf, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &pbuf, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[1]);
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_send_impl((PySocketSockObject *)s, &pbuf, flags);
+    _return_value = _socket_socket_send_impl((PySocketSockObject *)s, &pbuf, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for pbuf */
@@ -984,28 +1047,36 @@ static PyObject *
 _socket_socket_sendall_impl(PySocketSockObject *s, Py_buffer *pbuf,
                             int flags);
 
-static PyObject *
-_socket_socket_sendall(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_sendall(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer pbuf = {NULL, NULL};
     int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("sendall", nargs, 1, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &pbuf, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &pbuf, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[1]);
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socket_sendall_impl((PySocketSockObject *)s, &pbuf, flags);
+    _return_value = _socket_socket_sendall_impl((PySocketSockObject *)s, &pbuf, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for pbuf */
@@ -1046,36 +1117,47 @@ _socket_socket_sendmsg_impl(PySocketSockObject *s, PyObject *data_arg,
                             PyObject *cmsg_arg, int flags,
                             PyObject *addr_arg);
 
-static PyObject *
-_socket_socket_sendmsg(PyObject *s, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socket_sendmsg(PyObject *s, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *data_arg;
     PyObject *cmsg_arg = NULL;
     int flags = 0;
     PyObject *addr_arg = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("sendmsg", nargs, 1, 4)) {
         goto exit;
     }
-    data_arg = args[0];
+    data_arg = PyValue_Object(args[0]);
+    if (data_arg == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    cmsg_arg = args[1];
+    cmsg_arg = PyValue_Object(args[1]);
+    if (cmsg_arg == NULL) {
+        goto exit;
+    }
     if (nargs < 3) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[2]);
+    flags = PyLong_AsIntValue(args[2]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    addr_arg = args[3];
+    addr_arg = PyValue_Object(args[3]);
+    if (addr_arg == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _socket_socket_sendmsg_impl((PySocketSockObject *)s, data_arg, cmsg_arg, flags, addr_arg);
+    _return_value = _socket_socket_sendmsg_impl((PySocketSockObject *)s, data_arg, cmsg_arg, flags, addr_arg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1103,15 +1185,14 @@ _socket_socket_sendmsg_afalg_impl(PySocketSockObject *self,
                                   Py_buffer *iv, PyObject *assoclenobj,
                                   int flags);
 
-static PyObject *
-_socket_socket_sendmsg_afalg(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_socket_socket_sendmsg_afalg(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1134,13 +1215,14 @@ _socket_socket_sendmsg_afalg(PyObject *self, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data_arg = NULL;
     PyObject *opobj = NULL;
     Py_buffer iv = {NULL, NULL};
     PyObject *assoclenobj = NULL;
     int flags = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1150,8 +1232,11 @@ _socket_socket_sendmsg_afalg(PyObject *self, PyObject *const *args, Py_ssize_t n
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        data_arg = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        data_arg = PyValue_Object(args[0]);
+        if (data_arg == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1160,40 +1245,59 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (args[1]) {
-        if (!PyLong_Check(args[1])) {
-            _PyArg_BadArgument("sendmsg_afalg", "argument 'op'", "int", args[1]);
-            goto exit;
-        }
-        opobj = args[1];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[2]) {
-        if (PyObject_GetBuffer(args[2], &iv, PyBUF_SIMPLE) != 0) {
-            goto exit;
+    if (!PyValue_IsNull(args[1])) {
+        {
+            PyObject *_arg = PyValue_Object(args[1]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyLong_Check(_arg)) {
+                _PyArg_BadArgument("sendmsg_afalg", "argument 'op'", "int", _arg);
+                goto exit;
+            }
+            opobj = _arg;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (args[3]) {
-        if (!PyLong_Check(args[3])) {
-            _PyArg_BadArgument("sendmsg_afalg", "argument 'assoclen'", "int", args[3]);
-            goto exit;
+    if (!PyValue_IsNull(args[2])) {
+        {
+            PyObject *_arg = PyValue_Object(args[2]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (PyObject_GetBuffer(_arg, &iv, PyBUF_SIMPLE) != 0) {
+                goto exit;
+            }
         }
-        assoclenobj = args[3];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    flags = PyLong_AsInt(args[4]);
+    if (!PyValue_IsNull(args[3])) {
+        {
+            PyObject *_arg = PyValue_Object(args[3]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyLong_Check(_arg)) {
+                _PyArg_BadArgument("sendmsg_afalg", "argument 'assoclen'", "int", _arg);
+                goto exit;
+            }
+            assoclenobj = _arg;
+        }
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    flags = PyLong_AsIntValue(args[4]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_kwonly:
-    return_value = _socket_socket_sendmsg_afalg_impl((PySocketSockObject *)self, data_arg, opobj, &iv, assoclenobj, flags);
+    _return_value = _socket_socket_sendmsg_afalg_impl((PySocketSockObject *)self, data_arg, opobj, &iv, assoclenobj, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for iv */
@@ -1219,18 +1323,26 @@ PyDoc_STRVAR(_socket_socket_shutdown__doc__,
 "SHUT_RDWR).");
 
 #define _SOCKET_SOCKET_SHUTDOWN_METHODDEF    \
-    {"shutdown", (PyCFunction)_socket_socket_shutdown, METH_O, _socket_socket_shutdown__doc__},
+    {"shutdown", _PyCFunction_CAST(_socket_socket_shutdown), METH_O, _socket_socket_shutdown__doc__},
 
 static PyObject *
 _socket_socket_shutdown_impl(PySocketSockObject *s, PyObject *arg);
 
-static PyObject *
-_socket_socket_shutdown(PyObject *s, PyObject *arg)
+static PyValue
+_socket_socket_shutdown(PyObject *s, PyValue arg_)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
 
-    return_value = _socket_socket_shutdown_impl((PySocketSockObject *)s, arg);
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_socket_shutdown_impl((PySocketSockObject *)s, arg);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -1249,34 +1361,42 @@ PyDoc_STRVAR(_socket_socket_share__doc__,
 "instantiated by calling socket.fromshare().");
 
 #define _SOCKET_SOCKET_SHARE_METHODDEF    \
-    {"share", (PyCFunction)_socket_socket_share, METH_O, _socket_socket_share__doc__},
+    {"share", _PyCFunction_CAST(_socket_socket_share), METH_O, _socket_socket_share__doc__},
 
 static PyObject *
 _socket_socket_share_impl(PySocketSockObject *s, unsigned int processId);
 
-static PyObject *
-_socket_socket_share(PyObject *s, PyObject *arg)
+static PyValue
+_socket_socket_share(PyObject *s, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned int processId;
+    PyObject *_return_value;
 
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &processId, sizeof(unsigned int),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                Py_ASNATIVEBYTES_ALLOW_INDEX |
-                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-        if (_bytes < 0) {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
             goto exit;
         }
-        if ((size_t)_bytes > sizeof(unsigned int)) {
-            if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                "integer value out of range", 1) < 0)
-            {
+        {
+            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &processId, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
                 goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                    "integer value out of range", 1) < 0)
+                {
+                    goto exit;
+                }
             }
         }
     }
-    return_value = _socket_socket_share_impl((PySocketSockObject *)s, processId);
+    _return_value = _socket_socket_share_impl((PySocketSockObject *)s, processId);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1296,7 +1416,6 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1319,8 +1438,8 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     int family = -1;
@@ -1328,7 +1447,7 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
     int proto = -1;
     PyObject *fdobj = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1336,8 +1455,8 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        family = PyLong_AsInt(fastargs[0]);
+    if (!PyValue_IsNull(fastargs[0])) {
+        family = PyLong_AsIntValue(fastargs[0]);
         if (family == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1345,8 +1464,8 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (fastargs[1]) {
-        type = PyLong_AsInt(fastargs[1]);
+    if (!PyValue_IsNull(fastargs[1])) {
+        type = PyLong_AsIntValue(fastargs[1]);
         if (type == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1354,8 +1473,8 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (fastargs[2]) {
-        proto = PyLong_AsInt(fastargs[2]);
+    if (!PyValue_IsNull(fastargs[2])) {
+        proto = PyLong_AsIntValue(fastargs[2]);
         if (proto == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1363,7 +1482,10 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    fdobj = fastargs[3];
+    fdobj = PyValue_Object(fastargs[3]);
+    if (fdobj == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = sock_initobj_impl((PySocketSockObject *)self, family, type, proto, fdobj);
 
@@ -1402,7 +1524,28 @@ PyDoc_STRVAR(_socket_sethostname__doc__,
 "Set the hostname to name.");
 
 #define _SOCKET_SETHOSTNAME_METHODDEF    \
-    {"sethostname", (PyCFunction)_socket_sethostname, METH_O, _socket_sethostname__doc__},
+    {"sethostname", _PyCFunction_CAST(_socket_sethostname), METH_O, _socket_sethostname__doc__},
+
+static PyObject *
+_socket_sethostname_impl(PyObject *module, PyObject *hnobj);
+
+static PyValue
+_socket_sethostname(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *hnobj;
+    PyObject *_return_value;
+
+    hnobj = PyValue_Object(arg);
+    if (hnobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_sethostname_impl(module, hnobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* defined(HAVE_SETHOSTNAME) */
 
@@ -1417,7 +1560,28 @@ PyDoc_STRVAR(_socket_gethostbyname__doc__,
 "The address is a string of the form \'255.255.255.255\'.");
 
 #define _SOCKET_GETHOSTBYNAME_METHODDEF    \
-    {"gethostbyname", (PyCFunction)_socket_gethostbyname, METH_O, _socket_gethostbyname__doc__},
+    {"gethostbyname", _PyCFunction_CAST(_socket_gethostbyname), METH_O, _socket_gethostbyname__doc__},
+
+static PyObject *
+_socket_gethostbyname_impl(PyObject *module, PyObject *hobj);
+
+static PyValue
+_socket_gethostbyname(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *hobj;
+    PyObject *_return_value;
+
+    hobj = PyValue_Object(arg);
+    if (hobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_gethostbyname_impl(module, hobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* defined(HAVE_GETADDRINFO) */
 
@@ -1433,7 +1597,28 @@ PyDoc_STRVAR(_socket_gethostbyname_ex__doc__,
 "addresses, which are strings of the form \'255.255.255.255\'.");
 
 #define _SOCKET_GETHOSTBYNAME_EX_METHODDEF    \
-    {"gethostbyname_ex", (PyCFunction)_socket_gethostbyname_ex, METH_O, _socket_gethostbyname_ex__doc__},
+    {"gethostbyname_ex", _PyCFunction_CAST(_socket_gethostbyname_ex), METH_O, _socket_gethostbyname_ex__doc__},
+
+static PyObject *
+_socket_gethostbyname_ex_impl(PyObject *module, PyObject *hobj);
+
+static PyValue
+_socket_gethostbyname_ex(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *hobj;
+    PyObject *_return_value;
+
+    hobj = PyValue_Object(arg);
+    if (hobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_gethostbyname_ex_impl(module, hobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* (defined(HAVE_GETHOSTBYNAME_R) || defined (HAVE_GETHOSTBYNAME)) */
 
@@ -1450,7 +1635,28 @@ PyDoc_STRVAR(_socket_gethostbyaddr__doc__,
 "number.");
 
 #define _SOCKET_GETHOSTBYADDR_METHODDEF    \
-    {"gethostbyaddr", (PyCFunction)_socket_gethostbyaddr, METH_O, _socket_gethostbyaddr__doc__},
+    {"gethostbyaddr", _PyCFunction_CAST(_socket_gethostbyaddr), METH_O, _socket_gethostbyaddr__doc__},
+
+static PyObject *
+_socket_gethostbyaddr_impl(PyObject *module, PyObject *hobj);
+
+static PyValue
+_socket_gethostbyaddr(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *hobj;
+    PyObject *_return_value;
+
+    hobj = PyValue_Object(arg);
+    if (hobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_gethostbyaddr_impl(module, hobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* (defined(HAVE_GETHOSTBYNAME_R) || defined (HAVE_GETHOSTBYADDR)) */
 
@@ -1472,37 +1678,51 @@ static PyObject *
 _socket_getservbyname_impl(PyObject *module, const char *name,
                            const char *proto);
 
-static PyObject *
-_socket_getservbyname(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_getservbyname(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name;
     const char *proto = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("getservbyname", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("getservbyname", "argument 1", "str", args[0]);
-        goto exit;
-    }
-    name = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("getservbyname", "argument 1", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("getservbyname", "argument 2", "str", args[1]);
-        goto exit;
-    }
-    proto = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (proto == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("getservbyname", "argument 2", "str", _arg);
+            goto exit;
+        }
+        proto = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (proto == NULL) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = _socket_getservbyname_impl(module, name, proto);
+    _return_value = _socket_getservbyname_impl(module, name, proto);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1527,33 +1747,41 @@ PyDoc_STRVAR(_socket_getservbyport__doc__,
 static PyObject *
 _socket_getservbyport_impl(PyObject *module, int port, const char *proto);
 
-static PyObject *
-_socket_getservbyport(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_getservbyport(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int port;
     const char *proto = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("getservbyport", nargs, 1, 2)) {
         goto exit;
     }
-    port = PyLong_AsInt(args[0]);
+    port = PyLong_AsIntValue(args[0]);
     if (port == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("getservbyport", "argument 2", "str", args[1]);
-        goto exit;
-    }
-    proto = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (proto == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("getservbyport", "argument 2", "str", _arg);
+            goto exit;
+        }
+        proto = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (proto == NULL) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = _socket_getservbyport_impl(module, port, proto);
+    _return_value = _socket_getservbyport_impl(module, port, proto);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1570,26 +1798,34 @@ PyDoc_STRVAR(_socket_getprotobyname__doc__,
 "Return the protocol number for the named protocol.");
 
 #define _SOCKET_GETPROTOBYNAME_METHODDEF    \
-    {"getprotobyname", (PyCFunction)_socket_getprotobyname, METH_O, _socket_getprotobyname__doc__},
+    {"getprotobyname", _PyCFunction_CAST(_socket_getprotobyname), METH_O, _socket_getprotobyname__doc__},
 
 static PyObject *
 _socket_getprotobyname_impl(PyObject *module, const char *name);
 
-static PyObject *
-_socket_getprotobyname(PyObject *module, PyObject *arg)
+static PyValue
+_socket_getprotobyname(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("getprotobyname", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("getprotobyname", "argument", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
-    name = _PyUnicode_AsUTF8NoNUL(arg);
-    if (name == NULL) {
-        goto exit;
-    }
-    return_value = _socket_getprotobyname_impl(module, name);
+    _return_value = _socket_getprotobyname_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1607,7 +1843,28 @@ PyDoc_STRVAR(_socket_close__doc__,
 "won\'t work for socket file descriptors.");
 
 #define _SOCKET_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)_socket_close, METH_O, _socket_close__doc__},
+    {"close", _PyCFunction_CAST(_socket_close), METH_O, _socket_close__doc__},
+
+static PyObject *
+_socket_close_impl(PyObject *module, PyObject *fdobj);
+
+static PyValue
+_socket_close(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *fdobj;
+    PyObject *_return_value;
+
+    fdobj = PyValue_Object(arg);
+    if (fdobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_close_impl(module, fdobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #if !defined(NO_DUP)
 
@@ -1622,7 +1879,28 @@ PyDoc_STRVAR(_socket_dup__doc__,
 "descriptors.");
 
 #define _SOCKET_DUP_METHODDEF    \
-    {"dup", (PyCFunction)_socket_dup, METH_O, _socket_dup__doc__},
+    {"dup", _PyCFunction_CAST(_socket_dup), METH_O, _socket_dup__doc__},
+
+static PyObject *
+_socket_dup_impl(PyObject *module, PyObject *fdobj);
+
+static PyValue
+_socket_dup(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *fdobj;
+    PyObject *_return_value;
+
+    fdobj = PyValue_Object(arg);
+    if (fdobj == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_dup_impl(module, fdobj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* !defined(NO_DUP) */
 
@@ -1645,13 +1923,14 @@ PyDoc_STRVAR(_socket_socketpair__doc__,
 static PyObject *
 _socket_socketpair_impl(PyObject *module, int family, int type, int proto);
 
-static PyObject *
-_socket_socketpair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_socketpair(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int family = SOCKETPAIR_DEFAULT_FAMILY;
     int type = SOCK_STREAM;
     int proto = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("socketpair", nargs, 0, 3)) {
         goto exit;
@@ -1659,26 +1938,27 @@ _socket_socketpair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    family = PyLong_AsInt(args[0]);
+    family = PyLong_AsIntValue(args[0]);
     if (family == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    type = PyLong_AsInt(args[1]);
+    type = PyLong_AsIntValue(args[1]);
     if (type == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    proto = PyLong_AsInt(args[2]);
+    proto = PyLong_AsIntValue(args[2]);
     if (proto == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _socket_socketpair_impl(module, family, type, proto);
+    _return_value = _socket_socketpair_impl(module, family, type, proto);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1693,21 +1973,29 @@ PyDoc_STRVAR(_socket_ntohs__doc__,
 "Convert a 16-bit unsigned integer from network to host byte order.");
 
 #define _SOCKET_NTOHS_METHODDEF    \
-    {"ntohs", (PyCFunction)_socket_ntohs, METH_O, _socket_ntohs__doc__},
+    {"ntohs", _PyCFunction_CAST(_socket_ntohs), METH_O, _socket_ntohs__doc__},
 
 static PyObject *
 _socket_ntohs_impl(PyObject *module, uint16_t x);
 
-static PyObject *
-_socket_ntohs(PyObject *module, PyObject *arg)
+static PyValue
+_socket_ntohs(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uint16_t x;
+    PyObject *_return_value;
 
-    if (!_PyLong_UInt16_Converter(arg, &x)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt16_Converter(_arg, &x)) {
+            goto exit;
+        }
     }
-    return_value = _socket_ntohs_impl(module, x);
+    _return_value = _socket_ntohs_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1720,21 +2008,29 @@ PyDoc_STRVAR(_socket_ntohl__doc__,
 "Convert a 32-bit unsigned integer from network to host byte order.");
 
 #define _SOCKET_NTOHL_METHODDEF    \
-    {"ntohl", (PyCFunction)_socket_ntohl, METH_O, _socket_ntohl__doc__},
+    {"ntohl", _PyCFunction_CAST(_socket_ntohl), METH_O, _socket_ntohl__doc__},
 
 static PyObject *
 _socket_ntohl_impl(PyObject *module, uint32_t x);
 
-static PyObject *
-_socket_ntohl(PyObject *module, PyObject *arg)
+static PyValue
+_socket_ntohl(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uint32_t x;
+    PyObject *_return_value;
 
-    if (!_PyLong_UInt32_Converter(arg, &x)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt32_Converter(_arg, &x)) {
+            goto exit;
+        }
     }
-    return_value = _socket_ntohl_impl(module, x);
+    _return_value = _socket_ntohl_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1747,21 +2043,29 @@ PyDoc_STRVAR(_socket_htons__doc__,
 "Convert a 16-bit unsigned integer from host to network byte order.");
 
 #define _SOCKET_HTONS_METHODDEF    \
-    {"htons", (PyCFunction)_socket_htons, METH_O, _socket_htons__doc__},
+    {"htons", _PyCFunction_CAST(_socket_htons), METH_O, _socket_htons__doc__},
 
 static PyObject *
 _socket_htons_impl(PyObject *module, uint16_t x);
 
-static PyObject *
-_socket_htons(PyObject *module, PyObject *arg)
+static PyValue
+_socket_htons(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uint16_t x;
+    PyObject *_return_value;
 
-    if (!_PyLong_UInt16_Converter(arg, &x)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt16_Converter(_arg, &x)) {
+            goto exit;
+        }
     }
-    return_value = _socket_htons_impl(module, x);
+    _return_value = _socket_htons_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1774,21 +2078,29 @@ PyDoc_STRVAR(_socket_htonl__doc__,
 "Convert a 32-bit unsigned integer from host to network byte order.");
 
 #define _SOCKET_HTONL_METHODDEF    \
-    {"htonl", (PyCFunction)_socket_htonl, METH_O, _socket_htonl__doc__},
+    {"htonl", _PyCFunction_CAST(_socket_htonl), METH_O, _socket_htonl__doc__},
 
 static PyObject *
 _socket_htonl_impl(PyObject *module, uint32_t x);
 
-static PyObject *
-_socket_htonl(PyObject *module, PyObject *arg)
+static PyValue
+_socket_htonl(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uint32_t x;
+    PyObject *_return_value;
 
-    if (!_PyLong_UInt32_Converter(arg, &x)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UInt32_Converter(_arg, &x)) {
+            goto exit;
+        }
     }
-    return_value = _socket_htonl_impl(module, x);
+    _return_value = _socket_htonl_impl(module, x);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1801,26 +2113,34 @@ PyDoc_STRVAR(_socket_inet_aton__doc__,
 "Convert an IP address in string format (123.45.67.89) to the 32-bit packed binary format used in low-level network functions.");
 
 #define _SOCKET_INET_ATON_METHODDEF    \
-    {"inet_aton", (PyCFunction)_socket_inet_aton, METH_O, _socket_inet_aton__doc__},
+    {"inet_aton", _PyCFunction_CAST(_socket_inet_aton), METH_O, _socket_inet_aton__doc__},
 
 static PyObject *
 _socket_inet_aton_impl(PyObject *module, const char *ip_addr);
 
-static PyObject *
-_socket_inet_aton(PyObject *module, PyObject *arg)
+static PyValue
+_socket_inet_aton(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *ip_addr;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("inet_aton", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("inet_aton", "argument", "str", _arg);
+            goto exit;
+        }
+        ip_addr = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (ip_addr == NULL) {
+            goto exit;
+        }
     }
-    ip_addr = _PyUnicode_AsUTF8NoNUL(arg);
-    if (ip_addr == NULL) {
-        goto exit;
-    }
-    return_value = _socket_inet_aton_impl(module, ip_addr);
+    _return_value = _socket_inet_aton_impl(module, ip_addr);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1835,21 +2155,29 @@ PyDoc_STRVAR(_socket_inet_ntoa__doc__,
 "Convert an IP address from 32-bit packed binary format to string format.");
 
 #define _SOCKET_INET_NTOA_METHODDEF    \
-    {"inet_ntoa", (PyCFunction)_socket_inet_ntoa, METH_O, _socket_inet_ntoa__doc__},
+    {"inet_ntoa", _PyCFunction_CAST(_socket_inet_ntoa), METH_O, _socket_inet_ntoa__doc__},
 
 static PyObject *
 _socket_inet_ntoa_impl(PyObject *module, Py_buffer *packed_ip);
 
-static PyObject *
-_socket_inet_ntoa(PyObject *module, PyObject *arg)
+static PyValue
+_socket_inet_ntoa(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer packed_ip = {NULL, NULL};
+    PyObject *_return_value;
 
-    if (PyObject_GetBuffer(arg, &packed_ip, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &packed_ip, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _socket_inet_ntoa_impl(module, &packed_ip);
+    _return_value = _socket_inet_ntoa_impl(module, &packed_ip);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for packed_ip */
@@ -1878,29 +2206,37 @@ PyDoc_STRVAR(_socket_inet_pton__doc__,
 static PyObject *
 _socket_inet_pton_impl(PyObject *module, int af, const char *ip);
 
-static PyObject *
-_socket_inet_pton(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_inet_pton(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int af;
     const char *ip;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("inet_pton", nargs, 2, 2)) {
         goto exit;
     }
-    af = PyLong_AsInt(args[0]);
+    af = PyLong_AsIntValue(args[0]);
     if (af == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("inet_pton", "argument 2", "str", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("inet_pton", "argument 2", "str", _arg);
+            goto exit;
+        }
+        ip = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (ip == NULL) {
+            goto exit;
+        }
     }
-    ip = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (ip == NULL) {
-        goto exit;
-    }
-    return_value = _socket_inet_pton_impl(module, af, ip);
+    _return_value = _socket_inet_pton_impl(module, af, ip);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1922,24 +2258,32 @@ PyDoc_STRVAR(_socket_inet_ntop__doc__,
 static PyObject *
 _socket_inet_ntop_impl(PyObject *module, int af, Py_buffer *packed_ip);
 
-static PyObject *
-_socket_inet_ntop(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_inet_ntop(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int af;
     Py_buffer packed_ip = {NULL, NULL};
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("inet_ntop", nargs, 2, 2)) {
         goto exit;
     }
-    af = PyLong_AsInt(args[0]);
+    af = PyLong_AsIntValue(args[0]);
     if (af == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &packed_ip, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &packed_ip, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _socket_inet_ntop_impl(module, af, &packed_ip);
+    _return_value = _socket_inet_ntop_impl(module, af, &packed_ip);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for packed_ip */
@@ -1970,15 +2314,14 @@ static PyObject *
 _socket_getaddrinfo_impl(PyObject *module, PyObject *hobj, PyObject *pobj,
                          int family, int socktype, int protocol, int flags);
 
-static PyObject *
-_socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_socket_getaddrinfo(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2001,7 +2344,7 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
+    PyValue argsbuf[6];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *hobj;
     PyObject *pobj;
@@ -2009,19 +2352,26 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
     int socktype = 0;
     int protocol = 0;
     int flags = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    hobj = args[0];
-    pobj = args[1];
+    hobj = PyValue_Object(args[0]);
+    if (hobj == NULL) {
+        goto exit;
+    }
+    pobj = PyValue_Object(args[1]);
+    if (pobj == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[2]) {
-        family = PyLong_AsInt(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        family = PyLong_AsIntValue(args[2]);
         if (family == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2029,8 +2379,8 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        socktype = PyLong_AsInt(args[3]);
+    if (!PyValue_IsNull(args[3])) {
+        socktype = PyLong_AsIntValue(args[3]);
         if (socktype == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2038,8 +2388,8 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    if (args[4]) {
-        protocol = PyLong_AsInt(args[4]);
+    if (!PyValue_IsNull(args[4])) {
+        protocol = PyLong_AsIntValue(args[4]);
         if (protocol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2047,12 +2397,13 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    flags = PyLong_AsInt(args[5]);
+    flags = PyLong_AsIntValue(args[5]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _socket_getaddrinfo_impl(module, hobj, pobj, family, socktype, protocol, flags);
+    _return_value = _socket_getaddrinfo_impl(module, hobj, pobj, family, socktype, protocol, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2074,22 +2425,27 @@ PyDoc_STRVAR(_socket_getnameinfo__doc__,
 static PyObject *
 _socket_getnameinfo_impl(PyObject *module, PyObject *sa, int flags);
 
-static PyObject *
-_socket_getnameinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_socket_getnameinfo(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *sa;
     int flags;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("getnameinfo", nargs, 2, 2)) {
         goto exit;
     }
-    sa = args[0];
-    flags = PyLong_AsInt(args[1]);
+    sa = PyValue_Object(args[0]);
+    if (sa == NULL) {
+        goto exit;
+    }
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _socket_getnameinfo_impl(module, sa, flags);
+    _return_value = _socket_getnameinfo_impl(module, sa, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2128,7 +2484,28 @@ PyDoc_STRVAR(_socket_setdefaulttimeout__doc__,
 "When the socket module is first imported, the default is None.");
 
 #define _SOCKET_SETDEFAULTTIMEOUT_METHODDEF    \
-    {"setdefaulttimeout", (PyCFunction)_socket_setdefaulttimeout, METH_O, _socket_setdefaulttimeout__doc__},
+    {"setdefaulttimeout", _PyCFunction_CAST(_socket_setdefaulttimeout), METH_O, _socket_setdefaulttimeout__doc__},
+
+static PyObject *
+_socket_setdefaulttimeout_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+_socket_setdefaulttimeout(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _socket_setdefaulttimeout_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #if (defined(HAVE_IF_NAMEINDEX) || defined(MS_WINDOWS_DESKTOP))
 
@@ -2161,21 +2538,29 @@ PyDoc_STRVAR(_socket_if_nametoindex__doc__,
 "Returns the interface index corresponding to the interface name if_name.");
 
 #define _SOCKET_IF_NAMETOINDEX_METHODDEF    \
-    {"if_nametoindex", (PyCFunction)_socket_if_nametoindex, METH_O, _socket_if_nametoindex__doc__},
+    {"if_nametoindex", _PyCFunction_CAST(_socket_if_nametoindex), METH_O, _socket_if_nametoindex__doc__},
 
 static PyObject *
 _socket_if_nametoindex_impl(PyObject *module, PyObject *oname);
 
-static PyObject *
-_socket_if_nametoindex(PyObject *module, PyObject *arg)
+static PyValue
+_socket_if_nametoindex(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *oname = NULL;
+    PyObject *_return_value;
 
-    if (!PyUnicode_FSConverter(arg, &oname)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_FSConverter(_arg, &oname)) {
+            goto exit;
+        }
     }
-    return_value = _socket_if_nametoindex_impl(module, oname);
+    _return_value = _socket_if_nametoindex_impl(module, oname);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for oname */
@@ -2195,21 +2580,29 @@ PyDoc_STRVAR(_socket_if_indextoname__doc__,
 "Returns the interface name corresponding to the interface index if_index.");
 
 #define _SOCKET_IF_INDEXTONAME_METHODDEF    \
-    {"if_indextoname", (PyCFunction)_socket_if_indextoname, METH_O, _socket_if_indextoname__doc__},
+    {"if_indextoname", _PyCFunction_CAST(_socket_if_indextoname), METH_O, _socket_if_indextoname__doc__},
 
 static PyObject *
 _socket_if_indextoname_impl(PyObject *module, NET_IFINDEX index);
 
-static PyObject *
-_socket_if_indextoname(PyObject *module, PyObject *arg)
+static PyValue
+_socket_if_indextoname(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     NET_IFINDEX index;
+    PyObject *_return_value;
 
-    if (!_PyLong_NetIfindex_Converter(arg, &index)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_NetIfindex_Converter(_arg, &index)) {
+            goto exit;
+        }
     }
-    return_value = _socket_if_indextoname_impl(module, index);
+    _return_value = _socket_if_indextoname_impl(module, index);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2233,30 +2626,31 @@ PyDoc_STRVAR(_socket_CMSG_LEN__doc__,
 "outside the permissible range of values.");
 
 #define _SOCKET_CMSG_LEN_METHODDEF    \
-    {"CMSG_LEN", (PyCFunction)_socket_CMSG_LEN, METH_O, _socket_CMSG_LEN__doc__},
+    {"CMSG_LEN", _PyCFunction_CAST(_socket_CMSG_LEN), METH_O, _socket_CMSG_LEN__doc__},
 
 static PyObject *
 _socket_CMSG_LEN_impl(PyObject *module, Py_ssize_t length);
 
-static PyObject *
-_socket_CMSG_LEN(PyObject *module, PyObject *arg)
+static PyValue
+_socket_CMSG_LEN(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t length;
+    PyObject *_return_value;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
     }
-    return_value = _socket_CMSG_LEN_impl(module, length);
+    _return_value = _socket_CMSG_LEN_impl(module, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2279,30 +2673,31 @@ PyDoc_STRVAR(_socket_CMSG_SPACE__doc__,
 "the permissible range of values.");
 
 #define _SOCKET_CMSG_SPACE_METHODDEF    \
-    {"CMSG_SPACE", (PyCFunction)_socket_CMSG_SPACE, METH_O, _socket_CMSG_SPACE__doc__},
+    {"CMSG_SPACE", _PyCFunction_CAST(_socket_CMSG_SPACE), METH_O, _socket_CMSG_SPACE__doc__},
 
 static PyObject *
 _socket_CMSG_SPACE_impl(PyObject *module, Py_ssize_t length);
 
-static PyObject *
-_socket_CMSG_SPACE(PyObject *module, PyObject *arg)
+static PyValue
+_socket_CMSG_SPACE(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t length;
+    PyObject *_return_value;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(arg);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
     }
-    return_value = _socket_CMSG_SPACE_impl(module, length);
+    _return_value = _socket_CMSG_SPACE_impl(module, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2449,4 +2844,4 @@ exit:
 #ifndef _SOCKET_CMSG_SPACE_METHODDEF
     #define _SOCKET_CMSG_SPACE_METHODDEF
 #endif /* !defined(_SOCKET_CMSG_SPACE_METHODDEF) */
-/*[clinic end generated code: output=bca43f33969d67ad input=a9049054013a1b77]*/
+/*[clinic end generated code: output=53dd137a8d2e2a28 input=a9049054013a1b77]*/

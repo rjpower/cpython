@@ -22,6 +22,12 @@ typedef struct _typeobject PyTypeObject;
 typedef struct PyCodeObject PyCodeObject;
 typedef struct _frame PyFrameObject;
 
+/* The value type of the core (Include/pyvalue.h), defined here because
+   slot signatures take it. */
+typedef struct PyValue {
+    uintptr_t bits;
+} PyValue;
+
 typedef struct _ts PyThreadState;
 typedef struct _is PyInterpreterState;
 

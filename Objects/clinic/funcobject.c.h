@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(function___annotate____doc__,
 "Get the code object for a function.");
@@ -15,14 +15,16 @@ PyDoc_STRVAR(function___annotate____doc__,
 static PyObject *
 function___annotate___get_impl(PyFunctionObject *self);
 
-static PyObject *
+static PyValue
 function___annotate___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = function___annotate___get_impl((PyFunctionObject *)self);
+    _return_value = function___annotate___get_impl((PyFunctionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -31,22 +33,26 @@ static int
 function___annotate___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___annotate___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___annotate___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__annotate__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___annotate___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -56,14 +62,16 @@ PyDoc_STRVAR(function___annotations____doc__,
 static PyObject *
 function___annotations___get_impl(PyFunctionObject *self);
 
-static PyObject *
+static PyValue
 function___annotations___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = function___annotations___get_impl((PyFunctionObject *)self);
+    _return_value = function___annotations___get_impl((PyFunctionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -72,18 +80,22 @@ static int
 function___annotations___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___annotations___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___annotations___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value = NULL;
 
-    if (arg != NULL) {
-        value = arg;
+    if (!PyValue_IsNull(arg)) {
+        value = PyValue_Object(arg);
+        if (value == NULL) {
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___annotations___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -93,14 +105,16 @@ PyDoc_STRVAR(function___type_params____doc__,
 static PyObject *
 function___type_params___get_impl(PyFunctionObject *self);
 
-static PyObject *
+static PyValue
 function___type_params___get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = function___type_params___get_impl((PyFunctionObject *)self);
+    _return_value = function___type_params___get_impl((PyFunctionObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -109,22 +123,28 @@ static int
 function___type_params___set_impl(PyFunctionObject *self, PyObject *value);
 
 static int
-function___type_params___set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+function___type_params___set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute '__type_params__' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!PyTuple_Check(arg)) {
-        PyErr_Format(PyExc_TypeError, "attribute '__type_params__' must be tuple, not %T", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            PyErr_Format(PyExc_TypeError, "attribute '__type_params__' must be tuple, not %T", _arg);
+            goto exit;
+        }
+        value = _arg;
     }
-    value = arg;
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = function___type_params___set_impl((PyFunctionObject *)self, value);
     Py_END_CRITICAL_SECTION();
@@ -166,7 +186,6 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -189,8 +208,8 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
+    PyValue argsbuf[6];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyCodeObject *code;
@@ -200,53 +219,77 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *closure = Py_None;
     PyObject *kwdefaults = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], &PyCode_Type)) {
-        _PyArg_BadArgument("function", "argument 'code'", (&PyCode_Type)->tp_name, fastargs[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyCode_Type)) {
+            _PyArg_BadArgument("function", "argument 'code'", (&PyCode_Type)->tp_name, _arg);
+            goto exit;
+        }
+        code = (PyCodeObject *)_arg;
     }
-    code = (PyCodeObject *)fastargs[0];
-    if (!PyDict_Check(fastargs[1])) {
-        _PyArg_BadArgument("function", "argument 'globals'", "dict", fastargs[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyDict_Check(_arg)) {
+            _PyArg_BadArgument("function", "argument 'globals'", "dict", _arg);
+            goto exit;
+        }
+        globals = _arg;
     }
-    globals = fastargs[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[2]) {
-        name = fastargs[2];
+    if (!PyValue_IsNull(fastargs[2])) {
+        name = PyValue_Object(fastargs[2]);
+        if (name == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[3]) {
-        defaults = fastargs[3];
+    if (!PyValue_IsNull(fastargs[3])) {
+        defaults = PyValue_Object(fastargs[3]);
+        if (defaults == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[4]) {
-        closure = fastargs[4];
+    if (!PyValue_IsNull(fastargs[4])) {
+        closure = PyValue_Object(fastargs[4]);
+        if (closure == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    kwdefaults = fastargs[5];
+    kwdefaults = PyValue_Object(fastargs[5]);
+    if (kwdefaults == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = func_new_impl(type, code, globals, name, defaults, closure, kwdefaults);
 
 exit:
     return return_value;
 }
-#define FUNCTION___ANNOTATE___GETSETDEF {"__annotate__", (getter)function___annotate___get, (setter)function___annotate___set, function___annotate____doc__},
+#define FUNCTION___ANNOTATE___GETSETDEF {"__annotate__", function___annotate___get, function___annotate___set, function___annotate____doc__},
 
-#define FUNCTION___ANNOTATIONS___GETSETDEF {"__annotations__", (getter)function___annotations___get, (setter)function___annotations___set, function___annotations____doc__},
+#define FUNCTION___ANNOTATIONS___GETSETDEF {"__annotations__", function___annotations___get, function___annotations___set, function___annotations____doc__},
 
-#define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", (getter)function___type_params___get, (setter)function___type_params___set, function___type_params____doc__},
+#define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", function___type_params___get, function___type_params___set, function___type_params____doc__},
 
-/*[clinic end generated code: output=b722bea4e9d8b8be input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bcd8d23b348a0573 input=a9049054013a1b77]*/

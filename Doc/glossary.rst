@@ -1393,19 +1393,11 @@ Glossary
       helps prevent race conditions.
 
    reference count
-      The number of references to an object.  When the reference count of an
-      object drops to zero, it is deallocated.  Some objects are
-      :term:`immortal` and have reference counts that are never modified, and
-      therefore the objects are never deallocated.  Reference counting is
-      generally not visible to Python code, but it is a key element of the
-      :term:`CPython` implementation.  Programmers can call the
-      :func:`sys.getrefcount` function to return the
-      reference count for a particular object.
-
-      In :term:`CPython`, reference counts are not considered to be stable
-      or well-defined values; the number of references to an object, and how
-      that number is affected by Python code, may be different between
-      versions.
+      The number of references to an object.  :term:`CPython` does not count
+      references: its tracing garbage collector frees an object once nothing
+      reachable refers to it.  The C API keeps the names of the reference
+      counting functions, such as :c:func:`Py_INCREF` and :c:func:`Py_DECREF`,
+      which have no effect.
 
    regular package
       A traditional :term:`package`, such as a directory containing an

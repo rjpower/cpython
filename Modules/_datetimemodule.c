@@ -3185,25 +3185,25 @@ look_up_delta(int days, int seconds, int microseconds, PyTypeObject *type)
 
 /* Accessor properties. */
 
-static PyObject *
+static PyValue
 date_year(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_YEAR(self));
+    return PyValue_FromLongLong(GET_YEAR(self));
 }
 
-static PyObject *
+static PyValue
 date_month(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_MONTH(self));
+    return PyValue_FromLongLong(GET_MONTH(self));
 }
 
-static PyObject *
+static PyValue
 date_day(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Date *self = PyDate_CAST(op);
-    return PyLong_FromLong(GET_DAY(self));
+    return PyValue_FromLongLong(GET_DAY(self));
 }
 
 static PyGetSetDef date_getset[] = {
@@ -3760,34 +3760,34 @@ iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     return reduce_tuple;
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_year(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *year = PyTuple_GetItem(self, 0);
     if (year == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(year);
+    return PyValue_FromObject(year);
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_week(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *week = PyTuple_GetItem(self, 1);
     if (week == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(week);
+    return PyValue_FromObject(week);
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_weekday(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *weekday = PyTuple_GetItem(self, 2);
     if (weekday == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(weekday);
+    return PyValue_FromObject(weekday);
 }
 
 static PyGetSetDef iso_calendar_date_getset[] = {
@@ -4157,22 +4157,22 @@ tzinfo_nogo(const char* methodname)
 
 /* Methods.  A subclass must implement these. */
 
-static PyObject *
-tzinfo_tzname(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_tzname(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("tzname");
+    return PyValue_FromResult(tzinfo_nogo("tzname"));
 }
 
-static PyObject *
-tzinfo_utcoffset(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_utcoffset(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("utcoffset");
+    return PyValue_FromResult(tzinfo_nogo("utcoffset"));
 }
 
-static PyObject *
-tzinfo_dst(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(dt))
+static PyValue
+tzinfo_dst(PyObject *Py_UNUSED(self), PyValue Py_UNUSED(dt))
 {
-    return tzinfo_nogo("dst");
+    return PyValue_FromResult(tzinfo_nogo("dst"));
 }
 
 
@@ -4182,9 +4182,13 @@ static PyObject *add_datetime_timedelta(PyDateTime_DateTime *date,
 static PyObject *datetime_utcoffset(PyObject *self, PyObject *);
 static PyObject *datetime_dst(PyObject *self, PyObject *);
 
-static PyObject *
-tzinfo_fromutc(PyObject *self, PyObject *dt)
+static PyValue
+tzinfo_fromutc(PyObject *self, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *result = NULL;
     PyObject *off = NULL, *dst = NULL;
     PyDateTime_Delta *delta = NULL;
@@ -4192,17 +4196,17 @@ tzinfo_fromutc(PyObject *self, PyObject *dt)
     if (!PyDateTime_Check(dt)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
     if (GET_DT_TZINFO(dt) != self) {
         PyErr_SetString(PyExc_ValueError, "fromutc: dt.tzinfo "
                         "is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     off = datetime_utcoffset(dt, NULL);
     if (off == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (off == Py_None) {
         PyErr_SetString(PyExc_ValueError, "fromutc: non-None "
                         "utcoffset() result required");
@@ -4240,7 +4244,7 @@ tzinfo_fromutc(PyObject *self, PyObject *dt)
     Py_DECREF(delta);
     Py_DECREF(dst);
     Py_DECREF(off);
-    return result;
+    return PyValue_FromResult(result);
 
 Inconsistent:
     PyErr_SetString(PyExc_ValueError, "fromutc: tz.dst() gave "
@@ -4252,7 +4256,7 @@ Fail:
     Py_XDECREF(dst);
     Py_XDECREF(delta);
     Py_XDECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*
@@ -4291,17 +4295,17 @@ tzinfo_reduce(PyObject *self, PyObject *Py_UNUSED(dummy))
 
 static PyMethodDef tzinfo_methods[] = {
 
-    {"tzname", tzinfo_tzname, METH_O,
+    {"tzname", _PyCFunction_CAST(tzinfo_tzname), METH_O,
      PyDoc_STR("datetime -> string name of time zone.")},
 
-    {"utcoffset", tzinfo_utcoffset, METH_O,
+    {"utcoffset", _PyCFunction_CAST(tzinfo_utcoffset), METH_O,
      PyDoc_STR("datetime -> timedelta showing offset from UTC, negative "
            "values indicating West of UTC")},
 
-    {"dst", tzinfo_dst, METH_O,
+    {"dst", _PyCFunction_CAST(tzinfo_dst), METH_O,
      PyDoc_STR("datetime -> DST offset as timedelta positive east of UTC.")},
 
-    {"fromutc", tzinfo_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(tzinfo_fromutc), METH_O,
      PyDoc_STR("datetime in UTC -> datetime in local time.")},
 
     {"__reduce__",  tzinfo_reduce, METH_NOARGS,
@@ -4380,6 +4384,16 @@ timezone_dealloc(PyObject *op)
     Py_CLEAR(self->offset);
     Py_CLEAR(self->name);
     Py_TYPE(self)->tp_free(self);
+}
+
+/* The type is not GC; this is for the tracing collector. */
+static int
+timezone_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
+    Py_VISIT(self->offset);
+    Py_VISIT(self->name);
+    return 0;
 }
 
 static PyObject *
@@ -4482,51 +4496,68 @@ timezone_str(PyObject *op)
     return PyUnicode_FromFormat("UTC%c%02d:%02d", sign, hours, minutes);
 }
 
-static PyObject *
-timezone_tzname(PyObject *op, PyObject *dt)
+static PyValue
+timezone_tzname(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "tzname") == -1)
-        return NULL;
+        return PyValue_NULL;
 
-    return timezone_str(op);
+    return PyValue_FromResult(timezone_str(op));
 }
 
-static PyObject *
-timezone_utcoffset(PyObject *op, PyObject *dt)
+static PyValue
+timezone_utcoffset(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "utcoffset") == -1)
-        return NULL;
+        return PyValue_NULL;
 
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
-    return Py_NewRef(self->offset);
+    return PyValue_FromObject(self->offset);
 }
 
-static PyObject *
-timezone_dst(PyObject *op, PyObject *dt)
+static PyValue
+timezone_dst(PyObject *op, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (_timezone_check_argument(dt, "dst") == -1)
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-timezone_fromutc(PyObject *op, PyObject *arg)
+static PyValue
+timezone_fromutc(PyObject *op, PyValue arg_v)
 {
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyDateTime_Check(arg)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyDateTime_DateTime *dt = (PyDateTime_DateTime *)arg;  // fast safe cast
     if (!HASTZINFO(dt) || dt->tzinfo != op) {
         PyErr_SetString(PyExc_ValueError, "fromutc: dt.tzinfo is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
-    return add_datetime_timedelta(dt, (PyDateTime_Delta *)self->offset, 1);
+    return PyValue_FromResult(
+        add_datetime_timedelta(dt, (PyDateTime_Delta *)self->offset, 1));
 }
 
 static PyObject *
@@ -4539,17 +4570,17 @@ timezone_getinitargs(PyObject *op, PyObject *Py_UNUSED(dummy))
 }
 
 static PyMethodDef timezone_methods[] = {
-    {"tzname", timezone_tzname, METH_O,
+    {"tzname", _PyCFunction_CAST(timezone_tzname), METH_O,
      PyDoc_STR("If name is specified when timezone is created, returns the name."
                "  Otherwise returns offset as 'UTC(+|-)HH:MM'.")},
 
-    {"utcoffset", timezone_utcoffset, METH_O,
+    {"utcoffset", _PyCFunction_CAST(timezone_utcoffset), METH_O,
      PyDoc_STR("Return fixed offset.")},
 
-    {"dst", timezone_dst, METH_O,
+    {"dst", _PyCFunction_CAST(timezone_dst), METH_O,
      PyDoc_STR("Return None.")},
 
-    {"fromutc", timezone_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(timezone_fromutc), METH_O,
      PyDoc_STR("datetime in UTC -> datetime in local time.")},
 
     {"__getinitargs__", timezone_getinitargs, METH_NOARGS,
@@ -4558,14 +4589,14 @@ static PyMethodDef timezone_methods[] = {
     {NULL, NULL}
 };
 
-static PyObject *
+static PyValue
 timezone_name(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
     if (self->name == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(self->name);
+    return PyValue_FromObject(self->name);
 }
 
 static PyGetSetDef timezone_getset[] = {
@@ -4596,7 +4627,7 @@ static PyTypeObject PyDateTime_TimeZoneType = {
     0,                                /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,               /* tp_flags */
     timezone_new__doc__,              /* tp_doc */
-    0,                                /* tp_traverse */
+    timezone_traverse,                /* tp_traverse */
     0,                                /* tp_clear */
     timezone_richcompare,             /* tp_richcompare */
     0,                                /* tp_weaklistoffset */
@@ -4639,48 +4670,48 @@ look_up_timezone(PyObject *offset, PyObject *name)
 /* Accessor properties.
  */
 
-static PyObject *
+static PyValue
 time_hour(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_HOUR(self));
+    return PyValue_FromLongLong(TIME_GET_HOUR(self));
 }
 
-static PyObject *
+static PyValue
 time_minute(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_MINUTE(self));
+    return PyValue_FromLongLong(TIME_GET_MINUTE(self));
 }
 
 /* The name time_second conflicted with some platform header file. */
-static PyObject *
+static PyValue
 py_time_second(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_SECOND(self));
+    return PyValue_FromLongLong(TIME_GET_SECOND(self));
 }
 
-static PyObject *
+static PyValue
 time_microsecond(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_MICROSECOND(self));
+    return PyValue_FromLongLong(TIME_GET_MICROSECOND(self));
 }
 
-static PyObject *
+static PyValue
 time_tzinfo(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
     PyObject *result = HASTZINFO(self) ? self->tzinfo : Py_None;
-    return Py_NewRef(result);
+    return PyValue_FromObject(result);
 }
 
-static PyObject *
+static PyValue
 time_fold(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_Time *self = PyTime_CAST(op);
-    return PyLong_FromLong(TIME_GET_FOLD(self));
+    return PyValue_FromLongLong(TIME_GET_FOLD(self));
 }
 
 static PyGetSetDef time_getset[] = {
@@ -4847,6 +4878,17 @@ datetime_time_strptime_impl(PyTypeObject *type, PyObject *string,
 /*
  * Destructor.
  */
+
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+time_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_Time *self = PyTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
 
 static void
 time_dealloc(PyObject *op)
@@ -5414,7 +5456,7 @@ static PyTypeObject PyDateTime_TimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_time__doc__,                       /* tp_doc */
-    0,                                          /* tp_traverse */
+    time_traverse,                              /* tp_traverse */
     0,                                          /* tp_clear */
     time_richcompare,                           /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -5442,47 +5484,47 @@ static PyTypeObject PyDateTime_TimeType = {
  * from date.
  */
 
-static PyObject *
+static PyValue
 datetime_hour(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_HOUR(self));
+    return PyValue_FromLongLong(DATE_GET_HOUR(self));
 }
 
-static PyObject *
+static PyValue
 datetime_minute(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_MINUTE(self));
+    return PyValue_FromLongLong(DATE_GET_MINUTE(self));
 }
 
-static PyObject *
+static PyValue
 datetime_second(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_SECOND(self));
+    return PyValue_FromLongLong(DATE_GET_SECOND(self));
 }
 
-static PyObject *
+static PyValue
 datetime_microsecond(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_MICROSECOND(self));
+    return PyValue_FromLongLong(DATE_GET_MICROSECOND(self));
 }
 
-static PyObject *
+static PyValue
 datetime_tzinfo(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
     PyObject *result = HASTZINFO(self) ? self->tzinfo : Py_None;
-    return Py_NewRef(result);
+    return PyValue_FromObject(result);
 }
 
-static PyObject *
+static PyValue
 datetime_fold(PyObject *op, void *Py_UNUSED(closure))
 {
     PyDateTime_DateTime *self = PyDateTime_CAST(op);
-    return PyLong_FromLong(DATE_GET_FOLD(self));
+    return PyValue_FromLongLong(DATE_GET_FOLD(self));
 }
 
 static PyGetSetDef datetime_getset[] = {
@@ -6260,6 +6302,17 @@ error:
 /*
  * Destructor.
  */
+
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+datetime_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_DateTime *self = PyDateTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
 
 static void
 datetime_dealloc(PyObject *op)
@@ -7402,7 +7455,7 @@ static PyTypeObject PyDateTime_DateTimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_datetime__doc__,                   /* tp_doc */
-    0,                                          /* tp_traverse */
+    datetime_traverse,                          /* tp_traverse */
     0,                                          /* tp_clear */
     datetime_richcompare,                       /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -7583,6 +7636,17 @@ traverse_state(datetime_state *st, visitproc visit, void *arg)
 {
     /* heap types */
     Py_VISIT(st->isocalendar_date_type);
+
+    /* Atomic objects do not matter to the cycle collector, but a tracing
+       collector must reach them. */
+    Py_VISIT(st->us_per_ms);
+    Py_VISIT(st->us_per_second);
+    Py_VISIT(st->us_per_minute);
+    Py_VISIT(st->us_per_hour);
+    Py_VISIT(st->us_per_day);
+    Py_VISIT(st->us_per_week);
+    Py_VISIT(st->seconds_per_day);
+    Py_VISIT(st->epoch);
 
     Py_VISIT(st->time_struct_time);
     Py_VISIT(st->time_strftime);

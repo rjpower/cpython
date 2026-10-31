@@ -13,29 +13,9 @@ extern "C" {
 #include "pycore_object.h"           // _Py_REF_IS_MERGED()
 #include "pycore_pyatomic_ft_wrappers.h"
 
-#ifdef Py_GIL_DISABLED
+// Called from deallocators.  The reference count is constant.
+#  define _PyWeakref_ASSERT_DEAD(obj) ((void)0)
 
-#define WEAKREF_LIST_LOCK(obj) \
-    _PyInterpreterState_GET()  \
-        ->weakref_locks[((uintptr_t)obj) % NUM_WEAKREF_LIST_LOCKS]
-
-// Lock using the referenced object
-#define LOCK_WEAKREFS(obj) \
-    PyMutex_LockFlags(&WEAKREF_LIST_LOCK(obj), _Py_LOCK_DONT_DETACH)
-#define UNLOCK_WEAKREFS(obj) PyMutex_Unlock(&WEAKREF_LIST_LOCK(obj))
-
-// Lock using a weakref
-#define LOCK_WEAKREFS_FOR_WR(wr) \
-    PyMutex_LockFlags(wr->weakrefs_lock, _Py_LOCK_DONT_DETACH)
-#define UNLOCK_WEAKREFS_FOR_WR(wr) PyMutex_Unlock(wr->weakrefs_lock)
-
-#define FT_CLEAR_WEAKREFS(obj, weakref_list)    \
-    do {                                        \
-        assert(Py_REFCNT(obj) == 0);            \
-        PyObject_ClearWeakRefs(obj);            \
-    } while (0)
-
-#else
 
 #define LOCK_WEAKREFS(obj)
 #define UNLOCK_WEAKREFS(obj)
@@ -43,31 +23,16 @@ extern "C" {
 #define LOCK_WEAKREFS_FOR_WR(wr)
 #define UNLOCK_WEAKREFS_FOR_WR(wr)
 
-#define FT_CLEAR_WEAKREFS(obj, weakref_list)        \
-    do {                                            \
-        assert(Py_REFCNT(obj) == 0);                \
-        if (weakref_list != NULL) {                 \
-            PyObject_ClearWeakRefs(obj);            \
-        }                                           \
+// A deallocator clears the weak references to the object it destroys.  The
+// header flag says whether the weak reference table holds a list for it.
+#define FT_CLEAR_WEAKREFS(obj)                                      \
+    do {                                                            \
+        _PyWeakref_ASSERT_DEAD(obj);                                \
+        if (_PyObject_CAST(obj)->ob_flags & _Py_HAS_WEAKREFS_FLAG) { \
+            PyObject_ClearWeakRefs(obj);                            \
+        }                                                           \
     } while (0)
 
-#endif
-
-static inline int _is_dead(PyObject *obj)
-{
-    // Explanation for the Py_REFCNT() check: when a weakref's target is part
-    // of a long chain of deallocations which triggers the trashcan mechanism,
-    // clearing the weakrefs can be delayed long after the target's refcount
-    // has dropped to zero.  In the meantime, code accessing the weakref will
-    // be able to "see" the target object even though it is supposed to be
-    // unreachable.  See issue gh-60806.
-#if defined(Py_GIL_DISABLED)
-    Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&obj->ob_ref_shared);
-    return shared == _Py_REF_SHARED(0, _Py_REF_MERGED);
-#else
-    return (Py_REFCNT(obj) == 0);
-#endif
-}
 
 static inline PyObject* _PyWeakref_GET_REF(PyObject *ref_obj)
 {
@@ -81,13 +46,6 @@ static inline PyObject* _PyWeakref_GET_REF(PyObject *ref_obj)
     }
 
     LOCK_WEAKREFS(obj);
-#ifdef Py_GIL_DISABLED
-    if (ref->wr_object == Py_None) {
-        // clear_weakref() was called
-        UNLOCK_WEAKREFS(obj);
-        return NULL;
-    }
-#endif
     if (_Py_TryIncref(obj)) {
         UNLOCK_WEAKREFS(obj);
         return obj;
@@ -99,27 +57,25 @@ static inline PyObject* _PyWeakref_GET_REF(PyObject *ref_obj)
 static inline int _PyWeakref_IS_DEAD(PyObject *ref_obj)
 {
     assert(PyWeakref_Check(ref_obj));
-    int ret = 0;
     PyWeakReference *ref = _Py_CAST(PyWeakReference*, ref_obj);
-    PyObject *obj = FT_ATOMIC_LOAD_PTR(ref->wr_object);
-    if (obj == Py_None) {
-        // clear_weakref() was called
-        ret = 1;
-    }
-    else {
-        LOCK_WEAKREFS(obj);
-        // See _PyWeakref_GET_REF() for the rationale of this test
-#ifdef Py_GIL_DISABLED
-        ret = (ref->wr_object == Py_None) || _is_dead(obj);
-#else
-        ret = _is_dead(obj);
-#endif
-        UNLOCK_WEAKREFS(obj);
-    }
-    return ret;
+    // The collector clears weak references to an object before it is
+    // swept, so a reference is dead exactly when it has been cleared.
+    return FT_ATOMIC_LOAD_PTR(ref->wr_object) == Py_None;
 }
 
 extern Py_ssize_t _PyWeakref_GetWeakrefCount(PyObject *obj);
+
+// The address of the head of obj's list of weak references, which stays
+// valid while obj lives: an entry in the weak reference table
+// (Objects/weakrefobject.c), or a static builtin type's per-interpreter
+// list.  If obj has no entry, NULL, or with create set a new entry, or NULL
+// with MemoryError.
+extern PyWeakReference **_PyWeakref_ListPtr(PyObject *obj, int create);
+
+// Remove the entry of obj, which has _Py_HAS_WEAKREFS_FLAG, from the weak
+// reference table: its block is being freed.  Any reference still in its
+// list is cleared without its callback.
+extern void _PyWeakref_DropList(PyObject *obj);
 
 // Clear all the weak references to obj but leave their callbacks uncalled and
 // intact.

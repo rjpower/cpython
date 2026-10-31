@@ -45,7 +45,6 @@ def _perf_env(**env_vars):
     )
     if env_vars:
         env.update(env_vars)
-    env["PYTHON_JIT"] = "0"
     return env
 
 
@@ -119,7 +118,7 @@ class TestPerfTrampoline(unittest.TestCase):
                 sys.activate_stack_trampoline("perf")
                 eval(compile("pass", "bad\\ud800file", "exec"))
                 """
-        assert_python_ok("-c", code, PYTHON_JIT="0")
+        assert_python_ok("-c", code)
 
     def test_trampoline_works_with_forks(self):
         code = """if 1:
@@ -285,14 +284,14 @@ class TestPerfTrampoline(unittest.TestCase):
                 sys.activate_stack_trampoline("perf")
                 sys.activate_stack_trampoline("perf")
                 """
-        assert_python_ok("-c", code, PYTHON_JIT="0")
+        assert_python_ok("-c", code)
 
     def test_sys_api_with_invalid_trampoline(self):
         code = """if 1:
                 import sys
                 sys.activate_stack_trampoline("invalid")
                 """
-        rc, out, err = assert_python_failure("-c", code, PYTHON_JIT="0")
+        rc, out, err = assert_python_failure("-c", code)
         self.assertIn("invalid backend: invalid", err.decode())
 
     def test_sys_api_get_status(self):
@@ -303,7 +302,7 @@ class TestPerfTrampoline(unittest.TestCase):
                 sys.deactivate_stack_trampoline()
                 assert sys.is_stack_trampoline_active() is False
                 """
-        assert_python_ok("-c", code, PYTHON_JIT="0")
+        assert_python_ok("-c", code)
 
     def test_sys_api_perf_jit_backend(self):
         code = """if 1:
@@ -313,7 +312,7 @@ class TestPerfTrampoline(unittest.TestCase):
                 sys.deactivate_stack_trampoline()
                 assert sys.is_stack_trampoline_active() is False
                 """
-        assert_python_ok("-c", code, PYTHON_JIT="0")
+        assert_python_ok("-c", code)
 
     def test_sys_api_with_existing_perf_jit_trampoline(self):
         code = """if 1:
@@ -321,28 +320,7 @@ class TestPerfTrampoline(unittest.TestCase):
                 sys.activate_stack_trampoline("perf_jit")
                 sys.activate_stack_trampoline("perf_jit")
                 """
-        assert_python_ok("-c", code, PYTHON_JIT="0")
-
-    @unittest.skipUnless(
-        "-D_Py_JIT" in (sysconfig.get_config_var("PY_CORE_CFLAGS") or "").split(),
-        "requires a real JIT (_Py_JIT)",
-    )
-    def test_sys_api_perf_jit_backend_in_subinterpreter(self):
-        # gh-157247: a subinterpreter must not bypass the JIT/perf exclusion.
-        code = """if 1:
-                import sys
-                from contextlib import closing
-                from concurrent import interpreters
-
-                assert sys._jit.is_enabled(), "expected the JIT to be enabled"
-
-                with closing(interpreters.create()) as interp:
-                    interp.exec(
-                        "import sys; sys.activate_stack_trampoline('perf_jit')")
-                """
-        rc, out, err = assert_python_failure("-c", code, PYTHON_JIT="1")
-        self.assertIn(
-            b"Cannot activate the perf trampoline if the JIT is active", err)
+        assert_python_ok("-c", code)
 
 
 def is_unwinding_reliable_with_frame_pointers():

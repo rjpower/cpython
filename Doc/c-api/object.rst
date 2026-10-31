@@ -197,6 +197,18 @@ Object Protocol
    .. versionadded:: 3.13
 
 
+.. c:function:: int PyObject_GetOptionalAttrValue(PyValue o, PyObject *attr_name, PyValue *result)
+
+   :c:func:`PyObject_GetOptionalAttr` on values: *o* may be an inline int
+   or float, and the attribute is returned in *\*result* as a value, so an
+   inline one is not boxed.  Return ``1`` if the attribute is found, ``0``
+   with *\*result* set to ``PyValue_NULL`` and no exception if it is not
+   (no :exc:`AttributeError` is made for it), and ``-1`` with *\*result*
+   set to ``PyValue_NULL`` on another error.
+   :c:func:`PyObject_GetOptionalAttr` is this function with the result
+   boxed.
+
+
 .. c:function:: int PyObject_GetOptionalAttrString(PyObject *obj, const char *attr_name, PyObject **result);
 
    This is the same as :c:func:`PyObject_GetOptionalAttr`, but *attr_name* is
@@ -205,10 +217,13 @@ Object Protocol
 
    .. versionadded:: 3.13
 
-.. c:function:: PyObject* PyObject_GenericGetAttr(PyObject *o, PyObject *name)
+.. c:function:: PyValue PyObject_GenericGetAttr(PyObject *o, PyObject *name)
 
    Generic attribute getter function that is meant to be put into a type
-   object's ``tp_getattro`` slot.  It looks for a descriptor in the dictionary
+   object's ``tp_getattro`` slot, which it matches: the attribute is
+   returned as a value, or ``PyValue_NULL`` with an exception set.  Code
+   that wants an object calls :c:func:`PyObject_GetAttr`.
+   It looks for a descriptor in the dictionary
    of classes in the object's MRO as well as an attribute in the object's
    :attr:`~object.__dict__` (if present).  As outlined in :ref:`descriptors`,
    data descriptors take preference over instance attributes, while non-data
@@ -259,11 +274,13 @@ Object Protocol
       Must not be called with NULL value if an exception is set.
 
 
-.. c:function:: int PyObject_GenericSetAttr(PyObject *o, PyObject *name, PyObject *value)
+.. c:function:: int PyObject_GenericSetAttr(PyObject *o, PyObject *name, PyValue value)
 
    Generic attribute setter and deleter function that is meant
    to be put into a type object's :c:member:`~PyTypeObject.tp_setattro`
-   slot.  It looks for a data descriptor in the
+   slot, which it matches: the value is stored as it is, and
+   ``PyValue_NULL`` deletes the attribute (``None`` is stored).
+   It looks for a data descriptor in the
    dictionary of classes in the object's MRO, and if found it takes preference
    over setting or deleting the attribute in the instance dictionary. Otherwise, the
    attribute is set or deleted in the object's :attr:`~object.__dict__` (if present).
@@ -292,7 +309,7 @@ Object Protocol
    used internally to create a key object for lookup.
 
 
-.. c:function:: PyObject* PyObject_GenericGetDict(PyObject *o, void *context)
+.. c:function:: PyValue PyObject_GenericGetDict(PyObject *o, void *context)
 
    A generic implementation for the getter of a ``__dict__`` descriptor. It
    creates the dictionary if necessary.
@@ -303,15 +320,17 @@ Object Protocol
    dictionary, it may be more efficient to call :c:func:`PyObject_GetAttr`
    when accessing an attribute on the object.
 
-   On failure, returns ``NULL`` with an exception set.
+   Returns the dictionary as a value; on failure, returns ``PyValue_NULL``
+   with an exception set.
 
    .. versionadded:: 3.3
 
 
-.. c:function:: int PyObject_GenericSetDict(PyObject *o, PyObject *value, void *context)
+.. c:function:: int PyObject_GenericSetDict(PyObject *o, PyValue value, void *context)
 
    A generic implementation for the setter of a ``__dict__`` descriptor. This
-   implementation does not allow the dictionary to be deleted.
+   implementation does not allow the dictionary to be deleted
+   (``PyValue_NULL``), and refuses a value that is not a dictionary.
 
    .. versionadded:: 3.3
 
@@ -626,7 +645,8 @@ Object Protocol
 
 .. c:function:: int PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
 
-   Visit the managed dictionary of *obj*.
+   Visit the managed dictionary of *obj*: the attribute slots, or the
+   dictionary if it exists.
 
    This function must only be called in a traverse function of the type which
    has the :c:macro:`Py_TPFLAGS_MANAGED_DICT` flag set.
@@ -635,7 +655,8 @@ Object Protocol
 
 .. c:function:: void PyObject_ClearManagedDict(PyObject *obj)
 
-   Clear the managed dictionary of *obj*.
+   Clear the managed dictionary of *obj*: the attribute slots, or the
+   dictionary if it exists.  Afterwards *obj* has no attributes.
 
    This function must only be called in a clear function of the type which
    has the :c:macro:`Py_TPFLAGS_MANAGED_DICT` flag set.

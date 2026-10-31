@@ -543,6 +543,11 @@ class TestNamedTuple(unittest.TestCase):
         self.assertEqual(Dot(1)._replace(d=999), (999,))
         self.assertEqual(Dot(1)._fields, ('d',))
 
+    # The register IR names a slot in a 12-bit field: a code object has at
+    # most 4095 locals and temporaries, and __new__ takes a parameter per
+    # field.
+    @unittest.skip("too many local variables and temporaries: a namedtuple "
+                   "with more than about 4,000 fields is a SyntaxError")
     @support.requires_resource('cpu')
     def test_large_size(self):
         n = support.exceeds_recursion_limit()

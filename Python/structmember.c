@@ -32,15 +32,17 @@ _PyMember_GetOffset(PyObject *obj, PyMemberDef *mp)
     return addr;
 }
 
-PyObject *
-PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
+/* The member's value.  Numbers come inline where they fit, and a
+   _Py_T_VALUE field is read as it is, so a read makes no box. */
+PyValue
+PyMember_GetOneValue(const char *obj_addr, PyMemberDef *l)
 {
     PyObject *v;
     if (l->flags & Py_RELATIVE_OFFSET) {
         PyErr_SetString(
             PyExc_SystemError,
             "PyMember_GetOne used with Py_RELATIVE_OFFSET");
-        return NULL;
+        return PyValue_NULL;
     }
 
     const void *addr = _PyMember_GetOffset((PyObject *)obj_addr, l);
@@ -49,38 +51,27 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         v = PyBool_FromLong(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
         break;
     case Py_T_BYTE:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
-        break;
+        return PyValue_FromInt32(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
     case Py_T_UBYTE:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_UCHAR_RELAXED(*(unsigned char*)addr));
-        break;
+        return PyValue_FromInt32(FT_ATOMIC_LOAD_UCHAR_RELAXED(*(unsigned char*)addr));
     case Py_T_SHORT:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_SHORT_RELAXED(*(short*)addr));
-        break;
+        return PyValue_FromInt32(FT_ATOMIC_LOAD_SHORT_RELAXED(*(short*)addr));
     case Py_T_USHORT:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_USHORT_RELAXED(*(unsigned short*)addr));
-        break;
+        return PyValue_FromInt32(FT_ATOMIC_LOAD_USHORT_RELAXED(*(unsigned short*)addr));
     case Py_T_INT:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_INT_RELAXED(*(int*)addr));
-        break;
+        return PyValue_FromLongLong(FT_ATOMIC_LOAD_INT_RELAXED(*(int*)addr));
     case Py_T_UINT:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_UINT_RELAXED(*(unsigned int*)addr));
-        break;
+        return PyValue_FromUnsignedLongLong(FT_ATOMIC_LOAD_UINT_RELAXED(*(unsigned int*)addr));
     case Py_T_LONG:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_LONG_RELAXED(*(long*)addr));
-        break;
+        return PyValue_FromLongLong(FT_ATOMIC_LOAD_LONG_RELAXED(*(long*)addr));
     case Py_T_ULONG:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_ULONG_RELAXED(*(unsigned long*)addr));
-        break;
+        return PyValue_FromUnsignedLongLong(FT_ATOMIC_LOAD_ULONG_RELAXED(*(unsigned long*)addr));
     case Py_T_PYSSIZET:
-        v = PyLong_FromSsize_t(FT_ATOMIC_LOAD_SSIZE_RELAXED(*(Py_ssize_t*)addr));
-        break;
+        return PyValue_FromLongLong(FT_ATOMIC_LOAD_SSIZE_RELAXED(*(Py_ssize_t*)addr));
     case Py_T_FLOAT:
-        v = PyFloat_FromDouble((double)FT_ATOMIC_LOAD_FLOAT_RELAXED(*(float*)addr));
-        break;
+        return PyValue_FromDouble((double)FT_ATOMIC_LOAD_FLOAT_RELAXED(*(float*)addr));
     case Py_T_DOUBLE:
-        v = PyFloat_FromDouble(FT_ATOMIC_LOAD_DOUBLE_RELAXED(*(double*)addr));
-        break;
+        return PyValue_FromDouble(FT_ATOMIC_LOAD_DOUBLE_RELAXED(*(double*)addr));
     case Py_T_STRING:
         if (*(char**)addr == NULL) {
             v = Py_NewRef(Py_None);
@@ -99,42 +90,34 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
     case _Py_T_OBJECT:
         v = FT_ATOMIC_LOAD_PTR(*(PyObject **) addr);
         if (v != NULL) {
-#ifdef Py_GIL_DISABLED
-            if (!_Py_TryIncrefCompare((PyObject **) addr, v)) {
-                Py_BEGIN_CRITICAL_SECTION((PyObject *) obj_addr);
-                v = FT_ATOMIC_LOAD_PTR(*(PyObject **) addr);
-                Py_XINCREF(v);
-                Py_END_CRITICAL_SECTION();
-            }
-#else
             Py_INCREF(v);
-#endif
         }
         if (v == NULL) {
             v = Py_None;
         }
         break;
+    case _Py_T_VALUE: {
+        PyValue value = *(PyValue *)addr;
+        return PyValue_IsNull(value) ? PyValue_FromObject(Py_None) : value;
+    }
+    case _Py_T_VALUE_EX: {
+        PyValue value = *(PyValue *)addr;
+        if (PyValue_IsNull(value)) {
+            PyErr_Format(PyExc_AttributeError,
+                         "'%T' object has no attribute '%s'",
+                         (PyObject *)obj_addr, l->name);
+            return PyValue_NULL;
+        }
+        return value;
+    }
     case Py_T_OBJECT_EX:
         v = member_get_object(addr, obj_addr, l);
-#ifndef Py_GIL_DISABLED
         Py_XINCREF(v);
-#else
-        if (v != NULL) {
-            if (!_Py_TryIncrefCompare((PyObject **) addr, v)) {
-                Py_BEGIN_CRITICAL_SECTION((PyObject *) obj_addr);
-                v = member_get_object(addr, obj_addr, l);
-                Py_XINCREF(v);
-                Py_END_CRITICAL_SECTION();
-            }
-        }
-#endif
         break;
     case Py_T_LONGLONG:
-        v = PyLong_FromLongLong(FT_ATOMIC_LOAD_LLONG_RELAXED(*(long long *)addr));
-        break;
+        return PyValue_FromLongLong(FT_ATOMIC_LOAD_LLONG_RELAXED(*(long long *)addr));
     case Py_T_ULONGLONG:
-        v = PyLong_FromUnsignedLongLong(FT_ATOMIC_LOAD_ULLONG_RELAXED(*(unsigned long long *)addr));
-        break;
+        return PyValue_FromUnsignedLongLong(FT_ATOMIC_LOAD_ULLONG_RELAXED(*(unsigned long long *)addr));
     case _Py_T_NONE:
         // doesn't require free-threading code path
         v = Py_NewRef(Py_None);
@@ -143,7 +126,14 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
         v = NULL;
     }
-    return v;
+    return PyValue_FromResult(v);
+}
+
+PyObject *
+PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
+{
+    // NULL means an error here, so PyValue_Object()'s NULL is one too.
+    return PyValue_Object(PyMember_GetOneValue(obj_addr, l));
 }
 
 #define WARN(msg)                                               \
@@ -152,8 +142,23 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         return -1;                                              \
     } while (0)
 
+/* An unsigned field's store of an inline int, VAL, with today's
+   acceptance of a negative int. */
+#define STORE_UNSIGNED(STORE, CTYPE, VAL)                               \
+    do {                                                                \
+        STORE(*(CTYPE *)addr, (CTYPE)(VAL));                            \
+        if ((VAL) < 0) {                                                \
+            WARN("Writing negative value into unsigned field");         \
+        }                                                               \
+    } while (0)
+
+/* PyMember_SetOne() with the value as a PyValue; PyValue_NULL deletes.  An
+   inline int or float is stored without a box.  A box is made for a
+   _Py_T_OBJECT or Py_T_OBJECT_EX field, which holds an object, and stored
+   with no call in between; and, as the value converters do, for the
+   TypeError of an inline float given to an integer field. */
 int
-PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
+PyMember_SetOneValue(char *addr, PyMemberDef *l, PyValue v)
 {
     PyObject *oldv;
     if (l->flags & Py_RELATIVE_OFFSET) {
@@ -171,26 +176,28 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_AttributeError, "readonly attribute");
         return -1;
     }
-    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT) {
+    if (PyValue_IsNull(v) && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT
+        && l->type != _Py_T_VALUE_EX)
+    {
         PyErr_SetString(PyExc_TypeError,
                         "can't delete numeric/char attribute");
         return -1;
     }
     switch (l->type) {
     case Py_T_BOOL:{
-        if (!PyBool_Check(v)) {
+        if (!PyValue_IsObject(v) || !PyBool_Check(PyValue_ObjectBorrow(v))) {
             PyErr_SetString(PyExc_TypeError,
                             "attribute value type must be bool");
             return -1;
         }
-        if (v == Py_True)
+        if (PyValue_ObjectBorrow(v) == Py_True)
             FT_ATOMIC_STORE_CHAR_RELAXED(*(char*)addr, 1);
         else
             FT_ATOMIC_STORE_CHAR_RELAXED(*(char*)addr, 0);
         break;
         }
     case Py_T_BYTE:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_CHAR_RELAXED(*(char*)addr, (char)long_val);
@@ -201,7 +208,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_UBYTE:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_UCHAR_RELAXED(*(unsigned char*)addr, (unsigned char)long_val);
@@ -210,7 +217,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_SHORT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_SHORT_RELAXED(*(short*)addr, (short)long_val);
@@ -219,7 +226,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_USHORT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_USHORT_RELAXED(*(unsigned short*)addr, (unsigned short)long_val);
@@ -228,7 +235,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_INT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_INT_RELAXED(*(int *)addr, (int)long_val);
@@ -239,13 +246,19 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     case Py_T_UINT: {
         /* XXX: For compatibility, accept negative int values
            as well. */
-        v = _PyNumber_Index(v);
-        if (v == NULL) {
+        if (PyValue_IsInlineInt(v)) {
+            long long_val = PyValue_Int32(v);
+            STORE_UNSIGNED(FT_ATOMIC_STORE_UINT_RELAXED, unsigned int, long_val);
+            break;
+        }
+        PyObject *o = PyValue_Object(v);
+        o = o == NULL ? NULL : _PyNumber_Index(o);
+        if (o == NULL) {
             return -1;
         }
-        if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
-            Py_DECREF(v);
+        if (_PyLong_IsNegative((PyLongObject *)o)) {
+            long long_val = PyLong_AsLong(o);
+            Py_DECREF(o);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -253,8 +266,8 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long ulong_val = PyLong_AsUnsignedLong(v);
-            Py_DECREF(v);
+            unsigned long ulong_val = PyLong_AsUnsignedLong(o);
+            Py_DECREF(o);
             if (ulong_val == (unsigned long)-1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -266,7 +279,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
     }
     case Py_T_LONG: {
-        const long long_val = PyLong_AsLong(v);
+        const long long_val = PyLong_AsLongValue(v);
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_LONG_RELAXED(*(long*)addr, long_val);
@@ -275,13 +288,19 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     case Py_T_ULONG: {
         /* XXX: For compatibility, accept negative int values
            as well. */
-        v = _PyNumber_Index(v);
-        if (v == NULL) {
+        if (PyValue_IsInlineInt(v)) {
+            long long_val = PyValue_Int32(v);
+            STORE_UNSIGNED(FT_ATOMIC_STORE_ULONG_RELAXED, unsigned long, long_val);
+            break;
+        }
+        PyObject *o = PyValue_Object(v);
+        o = o == NULL ? NULL : _PyNumber_Index(o);
+        if (o == NULL) {
             return -1;
         }
-        if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
-            Py_DECREF(v);
+        if (_PyLong_IsNegative((PyLongObject *)o)) {
+            long long_val = PyLong_AsLong(o);
+            Py_DECREF(o);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -289,8 +308,8 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long ulong_val = PyLong_AsUnsignedLong(v);
-            Py_DECREF(v);
+            unsigned long ulong_val = PyLong_AsUnsignedLong(o);
+            Py_DECREF(o);
             if (ulong_val == (unsigned long)-1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -299,33 +318,56 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         break;
     }
     case Py_T_PYSSIZET: {
-        const Py_ssize_t ssize_val = PyLong_AsSsize_t(v);
+        const Py_ssize_t ssize_val = PyLong_AsSsize_tValue(v);
         if ((ssize_val == (Py_ssize_t)-1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_SSIZE_RELAXED(*(Py_ssize_t*)addr, ssize_val);
         break;
     }
     case Py_T_FLOAT:{
-        double double_val = PyFloat_AsDouble(v);
+        double double_val = PyFloat_AsDoubleValue(v);
         if ((double_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_FLOAT_RELAXED(*(float*)addr, (float)double_val);
         break;
         }
     case Py_T_DOUBLE: {
-        const double double_val = PyFloat_AsDouble(v);
+        const double double_val = PyFloat_AsDoubleValue(v);
         if ((double_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_DOUBLE_RELAXED(*(double *) addr, double_val);
         break;
     }
+    case _Py_T_VALUE:
+        *(PyValue *)addr = v;
+        break;
+    case _Py_T_VALUE_EX: {
+        PyValue old;
+        Py_BEGIN_CRITICAL_SECTION(obj);
+        old = *(PyValue *)addr;
+        *(PyValue *)addr = v;
+        Py_END_CRITICAL_SECTION();
+        if (PyValue_IsNull(v) && PyValue_IsNull(old)) {
+            // Deleting an attribute that is already deleted
+            PyErr_SetString(PyExc_AttributeError, l->name);
+            return -1;
+        }
+        break;
+    }
     case _Py_T_OBJECT:
-    case Py_T_OBJECT_EX:
+    case Py_T_OBJECT_EX: {
+        // The field holds an object: an inline value's box is stored with
+        // no call in between, so nothing collects while only this frame
+        // holds it.
+        PyObject *o = PyValue_Object(v);
+        if (o == NULL && !PyValue_IsNull(v)) {
+            return -1;
+        }
         Py_BEGIN_CRITICAL_SECTION(obj);
         oldv = *(PyObject **)addr;
-        FT_ATOMIC_STORE_PTR_RELEASE(*(PyObject **)addr, Py_XNewRef(v));
+        FT_ATOMIC_STORE_PTR_RELEASE(*(PyObject **)addr, Py_XNewRef(o));
         Py_END_CRITICAL_SECTION();
-        if (v == NULL && oldv == NULL && l->type == Py_T_OBJECT_EX) {
+        if (o == NULL && oldv == NULL && l->type == Py_T_OBJECT_EX) {
             // Raise an exception when attempting to delete an already deleted
             // attribute.
             // Differently from Py_T_OBJECT_EX, _Py_T_OBJECT does not raise an
@@ -336,11 +378,14 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         }
         Py_XDECREF(oldv);
         break;
+    }
     case Py_T_CHAR: {
-        const char *string;
-        Py_ssize_t len;
+        const char *string = NULL;
+        Py_ssize_t len = 0;
 
-        string = PyUnicode_AsUTF8AndSize(v, &len);
+        if (PyValue_IsObject(v)) {
+            string = PyUnicode_AsUTF8AndSize(PyValue_ObjectBorrow(v), &len);
+        }
         if (string == NULL || len != 1) {
             PyErr_BadArgument();
             return -1;
@@ -353,20 +398,26 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_TypeError, "readonly attribute");
         return -1;
     case Py_T_LONGLONG:{
-        long long value = PyLong_AsLongLong(v);
+        long long value = PyLong_AsLongLongValue(v);
         if ((value == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_LLONG_RELAXED(*(long long*)addr, value);
         break;
         }
     case Py_T_ULONGLONG: {
-        v = _PyNumber_Index(v);
-        if (v == NULL) {
+        if (PyValue_IsInlineInt(v)) {
+            long long_val = PyValue_Int32(v);
+            STORE_UNSIGNED(FT_ATOMIC_STORE_ULLONG_RELAXED, unsigned long long, (long long)long_val);
+            break;
+        }
+        PyObject *o = PyValue_Object(v);
+        o = o == NULL ? NULL : _PyNumber_Index(o);
+        if (o == NULL) {
             return -1;
         }
-        if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
-            Py_DECREF(v);
+        if (_PyLong_IsNegative((PyLongObject *)o)) {
+            long long_val = PyLong_AsLong(o);
+            Py_DECREF(o);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -374,8 +425,8 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long long ulonglong_val = PyLong_AsUnsignedLongLong(v);
-            Py_DECREF(v);
+            unsigned long long ulonglong_val = PyLong_AsUnsignedLongLong(o);
+            Py_DECREF(o);
             if (ulonglong_val == (unsigned long long)-1 && PyErr_Occurred()) {
                 return -1;
             }
@@ -389,4 +440,11 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         return -1;
     }
     return 0;
+}
+
+int
+PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
+{
+    return PyMember_SetOneValue(addr, l, v == NULL ? PyValue_NULL
+                                                  : PyValue_FromObject(v));
 }

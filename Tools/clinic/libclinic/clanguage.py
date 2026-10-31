@@ -303,9 +303,11 @@ class CLanguage(Language):
         self,
         f: Function,
         codegen: CodeGen,
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], bool]:
+        """Return the templates, and whether the parser returns a PyValue."""
         args = ParseArgsCodeGen(f, codegen)
-        return args.parse_args(self)
+        templates = args.parse_args(self)
+        return templates, args.returns_value()
 
     def render_function(
         self,
@@ -322,7 +324,7 @@ class CLanguage(Language):
         parameters = f.render_parameters
         converters = [p.converter for p in parameters]
 
-        templates = self.output_templates(f, codegen)
+        templates, data.value_return = self.output_templates(f, codegen)
 
         f_self = parameters[0]
         selfless = parameters[1:]
@@ -341,6 +343,16 @@ class CLanguage(Language):
                     unlock = 'Py_END_CRITICAL_SECTION2();'
             data.lock.append(lock)
             data.unlock.append(unlock)
+
+        if f.gc_precise:
+            # The frame is precise, so the collector does not scan it: a
+            # one-slot span anchors self from entry to the single exit.
+            data.declarations.append(
+                "PyValue _gc_slots[1];\n_PyValueRoot _gc_span;")
+            data.initializers.append(
+                "_PyThreadState_PushValueSpan(_PyThreadState_GET(), "
+                "&_gc_span, _gc_slots);\n"
+                "_PyValueSpan_AppendObject(&_gc_span, (PyObject *){self_name});")
 
         last_group = 0
         first_optional = len(selfless)
@@ -412,10 +424,13 @@ class CLanguage(Language):
             f.return_converter.render(f, data)
         template_dict['impl_return_type'] = f.return_converter.type
         # tp_init returns int, a slot function returns what its slot
-        # declares, every other parser returns an object.
+        # declares, a METH_O or METH_FASTCALL function returns a value, and
+        # every other parser returns an object.
         if f.kind is SLOT:
             assert f.slot is not None
             template_dict['return_type'] = f.slot.return_type
+        elif data.value_return:
+            template_dict['return_type'] = 'PyValue'
         else:
             template_dict['return_type'] = (
                 'int' if f.kind is METHOD_INIT else 'PyObject *')
@@ -455,6 +470,9 @@ class CLanguage(Language):
 
         template_dict['return_conversion'] = libclinic.format_escape("".join(data.return_conversion).rstrip())
         template_dict['post_parsing'] = libclinic.format_escape("".join(data.post_parsing).rstrip())
+        if f.gc_precise:
+            data.cleanup.append(
+                "_PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);\n")
         template_dict['cleanup'] = libclinic.format_escape("".join(data.cleanup))
 
         template_dict['return_value'] = data.return_value

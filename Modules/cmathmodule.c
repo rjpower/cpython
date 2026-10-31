@@ -43,11 +43,11 @@ else if (errno == ERANGE) {
     goto exit;
 }
 else {
-    return_value = PyComplex_FromCComplex(_return_value);
-}
-""".strip())
+    %s}
+""".strip() % self.result_assignment(
+            "PyComplex_FromCComplex(_return_value)", data))
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=8b27adb674c08321]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=f3dbee2e7486c8a4]*/
 
 #if (FLT_RADIX != 2 && FLT_RADIX != 16)
 #error "Modules/cmathmodule.c expects FLT_RADIX to be 2 or 16"

@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -21,15 +20,14 @@ static int
 _opcode_stack_effect_impl(PyObject *module, int opcode, PyObject *oparg,
                           PyObject *jump);
 
-static PyObject *
-_opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_stack_effect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -52,7 +50,7 @@ _opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     int opcode;
     PyObject *oparg = Py_None;
@@ -64,7 +62,7 @@ _opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -72,18 +70,24 @@ _opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         goto skip_optional_posonly;
     }
     noptargs--;
-    oparg = args[1];
+    oparg = PyValue_Object(args[1]);
+    if (oparg == NULL) {
+        goto exit;
+    }
 skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    jump = args[2];
+    jump = PyValue_Object(args[2]);
+    if (jump == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     _return_value = _opcode_stack_effect_impl(module, opcode, oparg, jump);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -101,15 +105,14 @@ PyDoc_STRVAR(_opcode_is_valid__doc__,
 static int
 _opcode_is_valid_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_is_valid(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -132,7 +135,7 @@ _opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -141,7 +144,7 @@ _opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -149,7 +152,7 @@ _opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -167,15 +170,14 @@ PyDoc_STRVAR(_opcode_has_arg__doc__,
 static int
 _opcode_has_arg_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_arg(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -198,7 +200,7 @@ _opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -207,7 +209,7 @@ _opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -215,7 +217,7 @@ _opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -233,15 +235,14 @@ PyDoc_STRVAR(_opcode_has_const__doc__,
 static int
 _opcode_has_const_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_const(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -264,7 +265,7 @@ _opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -273,7 +274,7 @@ _opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -281,7 +282,7 @@ _opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -299,15 +300,14 @@ PyDoc_STRVAR(_opcode_has_name__doc__,
 static int
 _opcode_has_name_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_name(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -330,7 +330,7 @@ _opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -339,7 +339,7 @@ _opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -347,7 +347,7 @@ _opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -365,15 +365,14 @@ PyDoc_STRVAR(_opcode_has_jump__doc__,
 static int
 _opcode_has_jump_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_jump(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -396,7 +395,7 @@ _opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -405,7 +404,7 @@ _opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -413,7 +412,7 @@ _opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -436,15 +435,14 @@ PyDoc_STRVAR(_opcode_has_free__doc__,
 static int
 _opcode_has_free_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_free(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -467,7 +465,7 @@ _opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -476,7 +474,7 @@ _opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -484,7 +482,7 @@ _opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -502,15 +500,14 @@ PyDoc_STRVAR(_opcode_has_local__doc__,
 static int
 _opcode_has_local_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_local(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -533,7 +530,7 @@ _opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -542,7 +539,7 @@ _opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -550,7 +547,7 @@ _opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -568,15 +565,14 @@ PyDoc_STRVAR(_opcode_has_exc__doc__,
 static int
 _opcode_has_exc_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_exc(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -599,7 +595,7 @@ _opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int opcode;
     int _return_value;
 
@@ -608,7 +604,7 @@ _opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = PyLong_AsIntValue(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -616,7 +612,7 @@ _opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -714,66 +710,26 @@ _opcode_get_special_method_names(PyObject *module, PyObject *Py_UNUSED(ignored))
     return _opcode_get_special_method_names_impl(module);
 }
 
-PyDoc_STRVAR(_opcode_get_executor__doc__,
-"get_executor($module, /, code, offset)\n"
+PyDoc_STRVAR(_opcode_get_ir_formats__doc__,
+"get_ir_formats($module, /)\n"
 "--\n"
 "\n"
-"Return the executor object at offset in code if exists, None otherwise.");
+"Return the formats of the handlers of the register IR.\n"
+"\n"
+"Item h describes handler h: None if there is none, else (flags, roles,\n"
+"imm, fb, base), where roles holds the roles of fields A to D, imm and fb\n"
+"say where the oparg and the feedback index are, and base is the opcode\n"
+"that the handler stands for.");
 
-#define _OPCODE_GET_EXECUTOR_METHODDEF    \
-    {"get_executor", _PyCFunction_CAST(_opcode_get_executor), METH_FASTCALL|METH_KEYWORDS, _opcode_get_executor__doc__},
+#define _OPCODE_GET_IR_FORMATS_METHODDEF    \
+    {"get_ir_formats", (PyCFunction)_opcode_get_ir_formats, METH_NOARGS, _opcode_get_ir_formats__doc__},
 
 static PyObject *
-_opcode_get_executor_impl(PyObject *module, PyObject *code, int offset);
+_opcode_get_ir_formats_impl(PyObject *module);
 
 static PyObject *
-_opcode_get_executor(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+_opcode_get_ir_formats(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
-    PyObject *return_value = NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 2
-    static struct {
-        PyGC_Head _this_is_not_used;
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(code), &_Py_ID(offset), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"code", "offset", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "get_executor",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject *code;
-    int offset;
-
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
-        goto exit;
-    }
-    code = args[0];
-    offset = PyLong_AsInt(args[1]);
-    if (offset == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    return_value = _opcode_get_executor_impl(module, code, offset);
-
-exit:
-    return return_value;
+    return _opcode_get_ir_formats_impl(module);
 }
-/*[clinic end generated code: output=a11f02989c3175d7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bf04dd41cbce89f8 input=a9049054013a1b77]*/

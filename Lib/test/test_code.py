@@ -213,7 +213,7 @@ from test.support import (cpython_only,
                           gc_collect, Py_GIL_DISABLED, late_deletion)
 from test.support.script_helper import assert_python_ok
 from test.support import threading_helper, import_helper
-from test.support.bytecode_helper import instructions_with_positions
+from test.support.bytecode_helper import encode_words, instructions_with_positions
 from opcode import opmap, opname
 try:
     import _testinternalcapi
@@ -268,9 +268,32 @@ class CodeTest(unittest.TestCase):
         def create_closure(__class__):
             return (lambda: __class__).__closure__
 
+        def shift_stack_slots(c, by):
+            # A new free variable moves the evaluation stack up by one slot,
+            # so every word that names a stack slot must follow it.
+            import _opcode
+            formats = _opcode.get_ir_formats()
+            words = []
+            for i in range(0, len(c.co_code), 8):
+                word = int.from_bytes(c.co_code[i:i+8], 'little')
+                handler = word & 0xFFFF
+                flags, roles, *_ = formats[handler]
+                self.assertFalse(flags & _opcode.IR_JUMPS)
+                fields = [(word >> shift) & 0xFFF for shift in (16, 28, 40, 52)]
+                for k, role in enumerate(roles):
+                    is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE) \
+                              or role >= _opcode.IR_ROLE_IN0
+                    if is_slot and fields[k] >= c.co_nlocals:
+                        fields[k] += by
+                words.append((handler, *fields))
+            return encode_words(*words)
+
         def new_code(c):
             '''A new code object with a __class__ cell added to freevars'''
-            return c.replace(co_freevars=c.co_freevars + ('__class__',), co_code=bytes([COPY_FREE_VARS, 1])+c.co_code)
+            self.assertEqual(c.co_freevars, ())
+            return c.replace(co_freevars=('__class__',),
+                             co_code=encode_words((COPY_FREE_VARS, 1))
+                                     + shift_stack_slots(c, 1))
 
         def add_foreign_method(cls, name, f):
             code = new_code(f.__code__)
@@ -482,16 +505,58 @@ class CodeTest(unittest.TestCase):
         def foo():
             pass
 
-        # assert that opcode 127 is invalid
-        self.assertEqual(opname[127], '<127>')
+        # Every handler below len(opname) is named, so the first one past
+        # it is invalid: change the first word's handler (its low 16 bits)
+        # to it; the constructor rejects words whose handler does not exist
+        bad = len(opname)
+        msg = f"word 0 has no handler {bad}"
+        with self.assertRaisesRegex(ValueError, msg):
+            foo.__code__.replace(
+                co_code=bad.to_bytes(2, 'little') + foo.__code__.co_code[2:])
 
-        # change first opcode to 0x7f (=127)
-        foo.__code__ = foo.__code__.replace(
-            co_code=b'\x7f' + foo.__code__.co_code[1:])
+    def test_runtime_handlers_not_pristine(self):
+        import marshal
 
-        msg = "unknown opcode 127"
-        with self.assertRaisesRegex(SystemError, msg):
-            foo()
+        def f():
+            return "unique pristine marshal payload"
+
+        code = f.__code__
+        payload = marshal.dumps(code)
+        self.assertEqual(payload.count(code.co_code), 1)
+        for name in ("INSTRUMENTED_LINE", "BINARY_OP_ADD_INT",
+                     "INTERPRETER_EXIT", "EXIT_INIT_CHECK"):
+            with self.subTest(handler=name):
+                raw = opname.index(name).to_bytes(2, "little") + code.co_code[2:]
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    code.replace(co_code=raw)
+                # Marshal calls _PyCode_New directly, bypassing replace's
+                # front end. Never execute the deliberately malformed word.
+                with self.assertRaisesRegex(ValueError, "not allowed in pristine code"):
+                    marshal.loads(payload.replace(code.co_code, raw, 1))
+
+    def test_code_units_padded(self):
+        # Cython passes zeroed code in 2-byte units that only spans its line
+        # table; the constructor pads it to whole words of CACHE
+        def foo():
+            pass
+
+        code = foo.__code__.replace(co_code=bytes(12))
+        self.assertEqual(code.co_code, bytes(16))
+        with self.assertRaisesRegex(ValueError, "co_code is malformed"):
+            foo.__code__.replace(co_code=bytes(3))
+
+    def test_replace_inline_constant(self):
+        # The assembler loads a compact int or a float with an inline
+        # constant handler; replacing the constant keeps the code valid
+        def f():
+            x = 1000
+            y = 2.5
+            return x, y
+
+        consts = tuple("spam" if c == 1000 else b"eggs" if c == 2.5 else c
+                       for c in f.__code__.co_consts)
+        f.__code__ = f.__code__.replace(co_consts=consts)
+        self.assertEqual(f(), ("spam", b"eggs"))
 
     @requires_debug_ranges()
     def test_co_positions_artificial_instructions(self):
@@ -1407,6 +1472,104 @@ def bug93662():
 
 class CodeLocationTest(unittest.TestCase):
 
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_safe_addr2line_with_monitoring(self):
+        self.check_safe_addr2line(_testinternalcapi.code_safe_addr2line)
+
+    def check_safe_addr2line(self, lookup, *, check_bounds=True):
+        source = textwrap.dedent("""
+            def loop():
+                total = 0
+                for value in (1, 2, 3):
+                    total = (
+                        total + value
+                    )
+                return total
+
+            def inner():
+                yield 1
+
+            def send():
+                yield from inner()
+
+            def handled(value):
+                try:
+                    return 10 // value
+                except ZeroDivisionError:
+                    return -1
+        """)
+        previous = _testinternalcapi.set_ir_max_forward(0)
+        try:
+            namespace = {}
+            exec(compile(source, "<safe-line-lookup>", "exec"), namespace)
+        finally:
+            _testinternalcapi.set_ir_max_forward(previous)
+        cases = ((namespace["loop"], lambda f: self.assertEqual(f(), 6), 3),
+                 (namespace["send"], lambda f: self.assertEqual(list(f()), [1]), 2),
+                 (namespace["handled"], lambda f: (
+                     self.assertEqual(f(2), 5), self.assertEqual(f(0), -1)), 0))
+        mon = sys.monitoring
+        tool = mon.PROFILER_ID
+        mon.use_tool_id(tool, "safe line lookup")
+        current = None
+        expected = {}
+        handlers = []
+        observed = []
+
+        def callback(code, offset):
+            if code is current:
+                self.assertNotEqual(handlers[offset], "IR_JUMP")
+                if not observed:
+                    gc_collect()
+                self.assertEqual(lookup(code, offset), expected[offset])
+                observed.append(offset)
+
+        mon.register_callback(tool, mon.events.INSTRUCTION, callback)
+        try:
+            for func, run, jumps in cases:
+                current = code = func.__code__
+                handlers = [word[0] for word in _testinternalcapi.get_ir(code)]
+                self.assertEqual(handlers.count("IR_JUMP"), jumps)
+                expected = {index: -1 if line is None else line
+                            for start, end, line in code.co_lines()
+                            for index in range(start, end)}
+                self.assertEqual(len(expected), len(handlers))
+                observed = []
+
+                def check(phase):
+                    for index, line in expected.items():
+                        self.assertEqual(lookup(code, index), line,
+                                         (phase, func.__name__, index,
+                                          handlers[index], "immutable line lookup"))
+                    for index in (-1, -23):
+                        self.assertEqual(lookup(code, index), code.co_firstlineno)
+                    if check_bounds:
+                        for index in (len(handlers), len(handlers) + 1, 2**31 - 1):
+                            self.assertEqual(lookup(code, index), -1)
+
+                check("before")
+                try:
+                    mon.set_local_events(tool, code,
+                                         mon.events.LINE | mon.events.INSTRUCTION)
+                    check("monitored")
+                    run(func)
+                    self.assertTrue(observed)
+                finally:
+                    mon.set_local_events(tool, code, 0)
+                check("disabled")
+        finally:
+            mon.register_callback(tool, mon.events.INSTRUCTION, None)
+            mon.free_tool_id(tool)
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_safe_addr2line_empty(self):
+        def f():
+            pass
+        code = f.__code__.replace(co_code=b"", co_linetable=b"")
+        self.assertEqual(_testinternalcapi.code_safe_addr2line(code, 0), -1)
+        self.assertEqual(_testinternalcapi.code_safe_addr2line(code, -1),
+                         code.co_firstlineno)
+
     def check_positions(self, func):
         pos1 = list(func.__code__.co_positions())
         pos2 = list(positions_from_location_table(func.__code__))
@@ -1444,13 +1607,11 @@ class CodeLocationTest(unittest.TestCase):
         f.__code__ = f.__code__.replace(
             co_stacksize=1,
             co_firstlineno=42,
-            co_code=bytes(
-                [
-                    dis.opmap["RESUME"], 0,
-                    dis.opmap["CACHE"], 0,
-                    dis.opmap["LOAD_COMMON_CONSTANT"], 0,
-                    dis.opmap["RAISE_VARARGS"], 1,
-                ]
+            co_code=encode_words(
+                ("RESUME", 0),
+                ("NOP",),
+                ("LOAD_COMMON_CONSTANT", 0, 0),
+                ("RAISE_VARARGS", 0, 1),
             ),
             co_linetable=bytes(
                 [
@@ -1542,7 +1703,7 @@ class CodeLocationTest(unittest.TestCase):
 
         self.assertEqual(
             get_line_branches(afunc),
-            [(1,1,3)])
+            [(1,2,3)])
 
 if check_impl_detail(cpython=True) and ctypes is not None:
     import ctypes.util

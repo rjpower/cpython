@@ -48,7 +48,7 @@ PyAPI_FUNC(int) PyMutex_IsLocked(PyMutex *m);
 // If the mutex is currently locked, the calling thread will be parked until
 // the mutex is unlocked. If the current thread holds the GIL, then the GIL
 // will be released while the thread is parked.
-static inline void
+Py_GC_PRECISE static inline void
 _PyMutex_Lock(PyMutex *m)
 {
     uint8_t expected = _Py_UNLOCKED;
@@ -59,7 +59,7 @@ _PyMutex_Lock(PyMutex *m)
 #define PyMutex_Lock _PyMutex_Lock
 
 // Unlocks the mutex.
-static inline void
+Py_GC_PRECISE static inline void
 _PyMutex_Unlock(PyMutex *m)
 {
     uint8_t expected = _Py_LOCKED;

@@ -1,14 +1,18 @@
 #include "Python.h"
 #include "pycore_code.h"            // write_location_entry_start()
 #include "pycore_compile.h"
-#include "pycore_instruction_sequence.h"
+#include "pycore_dict.h"              // _PyDict_NextValue()
+#include "pycore_flowgraph.h"
+#include "pycore_ir.h"                // IR_WORD()
+#include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
-#include "pycore_opcode_metadata.h" // is_pseudo_target, _PyOpcode_Caches
+#include "pycore_pyerrors.h"        // _PyErr_RaiseSyntaxError()
+#include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
+#include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_symtable.h"        // _Py_SourceLocation
 
 #include <stdbool.h>
 
-#define DEFAULT_CODE_SIZE 128
 #define DEFAULT_LNOTAB_SIZE 16
 #define DEFAULT_CNOTAB_SIZE 32
 
@@ -23,8 +27,6 @@
     }
 
 typedef _Py_SourceLocation location;
-typedef _PyInstruction instruction;
-typedef _PyInstructionSequence instr_sequence;
 
 static inline bool
 same_location(location a, location b)
@@ -35,22 +37,17 @@ same_location(location a, location b)
            a.end_col_offset == b.end_col_offset;
 }
 
-static int
-instr_size(instruction *instr)
-{
-    int opcode = instr->i_opcode;
-    int oparg = instr->i_oparg;
-    assert(!IS_PSEUDO_INSTR(opcode));
-    assert(OPCODE_HAS_ARG(opcode) || oparg == 0);
-    int extended_args = (0xFFFFFF < oparg) + (0xFFFF < oparg) + (0xFF < oparg);
-    int caches = _PyOpcode_Caches[opcode];
-    return extended_args + 1 + caches;
-}
-
+/* The assembler encodes the ops of the register CFG (Python/regcfg.c),
+ * whose slots compaction has assigned.  It sets each op's handler, the
+ * generic one before relaxation; its feedback index, or -1; the index of
+ * its word, or of the next for an op without one; and its number of words:
+ * 1, 0 for an op that a pass deleted, or with the words that a relaxed loop
+ * adds more. */
 struct assembler {
-    PyBytesWriter *a_bytecode_writer; /* writer containing bytecode */
-    PyObject *a_bytecode;      /* bytes containing bytecode */
-    int a_offset;              /* offset into bytecode */
+    int a_nwords;
+    int a_nfb;                 /* feedback entries, entry 0 included */
+    PyObject *a_bytecode;      /* bytes containing the words */
+    PyObject *a_fbinit;        /* bytes containing the feedback table */
     PyBytesWriter *a_except_table_writer; /* writer containing exception table */
     PyObject *a_except_table;  /* bytes containing exception table */
     int a_except_table_off;    /* offset into exception table */
@@ -64,12 +61,7 @@ struct assembler {
 static int
 assemble_init(struct assembler *a, int firstlineno)
 {
-    memset(a, 0, sizeof(struct assembler));
     a->a_lineno = firstlineno;
-    a->a_bytecode_writer = PyBytesWriter_Create(DEFAULT_CODE_SIZE);
-    if (a->a_bytecode_writer == NULL) {
-        goto error;
-    }
     a->a_linetable_writer = PyBytesWriter_Create(DEFAULT_CNOTAB_SIZE);
     if (a->a_linetable_writer == NULL) {
         goto error;
@@ -80,8 +72,6 @@ assemble_init(struct assembler *a, int firstlineno)
     }
     return SUCCESS;
 error:
-    PyBytesWriter_Discard(a->a_bytecode_writer);
-    a->a_bytecode_writer = NULL;
     PyBytesWriter_Discard(a->a_linetable_writer);
     a->a_linetable_writer = NULL;
     PyBytesWriter_Discard(a->a_except_table_writer);
@@ -92,10 +82,10 @@ error:
 static void
 assemble_free(struct assembler *a)
 {
-    PyBytesWriter_Discard(a->a_bytecode_writer);
     PyBytesWriter_Discard(a->a_linetable_writer);
     PyBytesWriter_Discard(a->a_except_table_writer);
     Py_XDECREF(a->a_bytecode);
+    Py_XDECREF(a->a_fbinit);
     Py_XDECREF(a->a_linetable);
     Py_XDECREF(a->a_except_table);
 }
@@ -137,8 +127,7 @@ assemble_emit_exception_table_item(struct assembler *a, int value, int msb)
 
 static int
 assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
-                                    int handler_offset,
-                                    _PyExceptHandlerInfo *handler)
+                                    _PyRegCfg *cfg, int h)
 {
     Py_ssize_t len = PyBytesWriter_GetSize(a->a_except_table_writer);
     if (a->a_except_table_off + MAX_SIZE_OF_ENTRY >= len) {
@@ -146,49 +135,43 @@ assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
     }
     int size = end-start;
     assert(end > start);
-    int target = handler_offset;
-    int depth = handler->h_startdepth - 1;
-    if (handler->h_preserve_lasti > 0) {
-        depth -= 1;
-    }
-    assert(depth >= 0);
-    int depth_lasti = (depth<<1) | handler->h_preserve_lasti;
+    _PyRegBlock *handler = &cfg->blocks[h];
+    int target = handler->word;
+    /* The handler starts with the exception on top of the stack, at depth
+     * startdepth - 1, and lasti, if it keeps it, below: the entry names
+     * the slot of the exception, whose temporary is canonical. */
+    int exc_slot = cfg->nlocalsplus + handler->startdepth - 1;
+    assert(exc_slot - handler->preserve_lasti >= cfg->nlocalsplus);
+    int slot_lasti = (exc_slot<<1) | handler->preserve_lasti;
     assemble_emit_exception_table_item(a, start, (1<<7));
     assemble_emit_exception_table_item(a, size, 0);
     assemble_emit_exception_table_item(a, target, 0);
-    assemble_emit_exception_table_item(a, depth_lasti, 0);
+    assemble_emit_exception_table_item(a, slot_lasti, 0);
     return SUCCESS;
 }
 
 static int
-assemble_exception_table(struct assembler *a, instr_sequence *instrs)
+assemble_exception_table(struct assembler *a, _PyRegCfg *cfg)
 {
     int ioffset = 0;
-    _PyExceptHandlerInfo handler;
-    handler.h_label = -1;
-    handler.h_startdepth = -1;
-    handler.h_preserve_lasti = -1;
+    int handler = -1;
     int start = -1;
-    for (int i = 0; i < instrs->s_used; i++) {
-        instruction *instr = &instrs->s_instrs[i];
-        if (instr->i_except_handler_info.h_label != handler.h_label) {
-            if (handler.h_label >= 0) {
-                int handler_offset = instrs->s_instrs[handler.h_label].i_offset;
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->except != handler) {
+            if (handler >= 0 && ioffset > start) {
                 RETURN_IF_ERROR(
                     assemble_emit_exception_table_entry(a, start, ioffset,
-                                                        handler_offset,
-                                                        &handler));
+                                                        cfg, handler));
             }
             start = ioffset;
-            handler = instr->i_except_handler_info;
+            handler = op->except;
         }
-        ioffset += instr_size(instr);
+        ioffset += op->nwords;
     }
-    if (handler.h_label >= 0) {
-        int handler_offset = instrs->s_instrs[handler.h_label].i_offset;
+    if (handler >= 0 && ioffset > start) {
         RETURN_IF_ERROR(assemble_emit_exception_table_entry(a, start, ioffset,
-                                                            handler_offset,
-                                                            &handler));
+                                                            cfg, handler));
     }
     return SUCCESS;
 }
@@ -341,115 +324,33 @@ assemble_emit_location(struct assembler* a, location loc, int isize)
 }
 
 static int
-assemble_location_info(struct assembler *a, instr_sequence *instrs,
-                       int firstlineno)
+assemble_location_info(struct assembler *a, _PyRegCfg *cfg, int firstlineno)
 {
     a->a_lineno = firstlineno;
     location loc = NO_LOCATION;
-    for (int i = instrs->s_used-1; i >= 0; i--) {
-        instruction *instr = &instrs->s_instrs[i];
-        if (same_location(instr->i_loc, NEXT_LOCATION)) {
-            if (IS_TERMINATOR_OPCODE(instr->i_opcode)) {
-                instr->i_loc = NO_LOCATION;
-            }
-            else {
-                assert(i < instrs->s_used-1);
-                instr->i_loc = instr[1].i_loc;
-            }
-        }
-    }
     int size = 0;
-    for (int i = 0; i < instrs->s_used; i++) {
-        instruction *instr = &instrs->s_instrs[i];
-        if (!same_location(loc, instr->i_loc)) {
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (!same_location(loc, op->loc)) {
                 RETURN_IF_ERROR(assemble_emit_location(a, loc, size));
-                loc = instr->i_loc;
+                loc = op->loc;
                 size = 0;
         }
-        size += instr_size(instr);
+        size += op->nwords;
     }
     RETURN_IF_ERROR(assemble_emit_location(a, loc, size));
     return SUCCESS;
 }
 
-static void
-write_instr(_Py_CODEUNIT *codestr, instruction *instr, int ilen)
-{
-    int opcode = instr->i_opcode;
-    assert(!IS_PSEUDO_INSTR(opcode));
-    int oparg = instr->i_oparg;
-    assert(OPCODE_HAS_ARG(opcode) || oparg == 0);
-    int caches = _PyOpcode_Caches[opcode];
-    switch (ilen - caches) {
-        case 4:
-            codestr->op.code = EXTENDED_ARG;
-            codestr->op.arg = (oparg >> 24) & 0xFF;
-            codestr++;
-            _Py_FALLTHROUGH;
-        case 3:
-            codestr->op.code = EXTENDED_ARG;
-            codestr->op.arg = (oparg >> 16) & 0xFF;
-            codestr++;
-            _Py_FALLTHROUGH;
-        case 2:
-            codestr->op.code = EXTENDED_ARG;
-            codestr->op.arg = (oparg >> 8) & 0xFF;
-            codestr++;
-            _Py_FALLTHROUGH;
-        case 1:
-            codestr->op.code = opcode;
-            codestr->op.arg = oparg & 0xFF;
-            codestr++;
-            break;
-        default:
-            Py_UNREACHABLE();
-    }
-    while (caches--) {
-        codestr->op.code = CACHE;
-        codestr->op.arg = 0;
-        codestr++;
-    }
-}
-
-/* assemble_emit_instr()
-   Extend the bytecode with a new instruction.
-   Update lnotab if necessary.
-*/
-
 static int
-assemble_emit_instr(struct assembler *a, instruction *instr)
-{
-    Py_ssize_t len = PyBytesWriter_GetSize(a->a_bytecode_writer);
-    _Py_CODEUNIT *code;
-
-    int size = instr_size(instr);
-    if (a->a_offset + size >= len / (int)sizeof(_Py_CODEUNIT)) {
-        if (len > PY_SSIZE_T_MAX / 2) {
-            PyErr_NoMemory();
-            return ERROR;
-        }
-        RETURN_IF_ERROR(PyBytesWriter_Resize(a->a_bytecode_writer, len * 2));
-    }
-    code = (_Py_CODEUNIT *)PyBytesWriter_GetData(a->a_bytecode_writer) + a->a_offset;
-    a->a_offset += size;
-    write_instr(code, instr, size);
-    return SUCCESS;
-}
-
-static int
-assemble_emit(struct assembler *a, instr_sequence *instrs,
-              int first_lineno, PyObject *const_cache)
+assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
+              PyObject *const_cache)
 {
     RETURN_IF_ERROR(assemble_init(a, first_lineno));
 
-    for (int i = 0; i < instrs->s_used; i++) {
-        instruction *instr = &instrs->s_instrs[i];
-        RETURN_IF_ERROR(assemble_emit_instr(a, instr));
-    }
+    RETURN_IF_ERROR(assemble_location_info(a, cfg, a->a_lineno));
 
-    RETURN_IF_ERROR(assemble_location_info(a, instrs, a->a_lineno));
-
-    RETURN_IF_ERROR(assemble_exception_table(a, instrs));
+    RETURN_IF_ERROR(assemble_exception_table(a, cfg));
 
     a->a_except_table = PyBytesWriter_FinishWithSize(a->a_except_table_writer,
                                                      a->a_except_table_off);
@@ -466,35 +367,27 @@ assemble_emit(struct assembler *a, instr_sequence *instrs,
         return ERROR;
     }
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_linetable));
-
-    a->a_bytecode = PyBytesWriter_FinishWithSize(a->a_bytecode_writer,
-                                                 a->a_offset * sizeof(_Py_CODEUNIT));
-    a->a_bytecode_writer = NULL;
-    if (a->a_bytecode == NULL) {
-        return ERROR;
-    }
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_bytecode));
+    RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_fbinit));
     return SUCCESS;
 }
 
 static PyObject *
 dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
 {
-    PyObject *tuple, *k, *v;
+    PyObject *tuple;
+    PyValue k, v;
     Py_ssize_t pos = 0, size = PyDict_GET_SIZE(dict);
 
     tuple = PyTuple_New(size);
     if (tuple == NULL)
         return NULL;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
-        Py_ssize_t i = PyLong_AsSsize_t(v);
-        if (i == -1 && PyErr_Occurred()) {
-            Py_DECREF(tuple);
-            return NULL;
-        }
+    // The values are int32 indices, so nothing is boxed.
+    while (_PyDict_NextValue(dict, &pos, &k, &v, NULL)) {
+        Py_ssize_t i = PyValue_Int32(v);
         assert((i - offset) < size);
         assert((i - offset) >= 0);
-        PyTuple_SET_ITEM(tuple, i - offset, Py_NewRef(k));
+        PyTuple_SET_VALUE(tuple, i - offset, k);
     }
     return tuple;
 }
@@ -507,10 +400,11 @@ static int
 compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                         int flags, PyObject *names, PyObject *kinds)
 {
-    PyObject *k, *v;
+    PyValue kv, v;
+    PyObject *k;
     Py_ssize_t pos = 0;
 
-    // Set the locals kinds.  Arg vars fill the first portion of the list.
+    // Set the locals kinds.  The names are strings and the offsets int32.  Arg vars fill the first portion of the list.
     struct {
         int count;
         _PyLocals_Kind kind;
@@ -527,11 +421,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         max = argvarkinds[i].count < 0
             ? INT_MAX
             : max + argvarkinds[i].count;
-        while (pos < max && PyDict_Next(umd->u_varnames, &pos, &k, &v)) {
-            int offset = PyLong_AsInt(v);
-            if (offset == -1 && PyErr_Occurred()) {
-                return ERROR;
-            }
+        while (pos < max && _PyDict_NextValue(umd->u_varnames, &pos, &kv, &v, NULL)) {
+            k = PyValue_ObjectBorrow(kv);
+            int offset = PyValue_Int32(v);
             assert(offset >= 0);
             assert(offset < nlocalsplus);
 
@@ -559,7 +451,8 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     // This counter mirrors the fix done in fix_cell_offsets().
     int numdropped = 0, cellvar_offset = -1;
     pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &k, &v)) {
+    while (_PyDict_NextValue(umd->u_cellvars, &pos, &kv, &v, NULL)) {
+        k = PyValue_ObjectBorrow(kv);
         int has_name = PyDict_Contains(umd->u_varnames, k);
         RETURN_IF_ERROR(has_name);
         if (has_name) {
@@ -568,10 +461,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             continue;
         }
 
-        cellvar_offset = PyLong_AsInt(v);
-        if (cellvar_offset == -1 && PyErr_Occurred()) {
-            return ERROR;
-        }
+        cellvar_offset = PyValue_Int32(v);
         assert(cellvar_offset >= 0);
         cellvar_offset += nlocals - numdropped;
         assert(cellvar_offset < nlocalsplus);
@@ -579,11 +469,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     }
 
     pos = 0;
-    while (PyDict_Next(umd->u_freevars, &pos, &k, &v)) {
-        int offset = PyLong_AsInt(v);
-        if (offset == -1 && PyErr_Occurred()) {
-            return ERROR;
-        }
+    while (_PyDict_NextValue(umd->u_freevars, &pos, &kv, &v, NULL)) {
+        k = PyValue_ObjectBorrow(kv);
+        int offset = PyValue_Int32(v);
         assert(offset >= 0);
         offset += nlocals - numdropped;
         assert(offset < nlocalsplus);
@@ -652,6 +540,7 @@ makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_
         .flags = code_flags,
 
         .code = a->a_bytecode,
+        .fbinit = a->a_fbinit,
         .firstlineno = umd->u_firstlineno,
         .linetable = a->a_linetable,
 
@@ -693,108 +582,318 @@ error:
 }
 
 
-// The offset (in code units) of the END_SEND from the SEND in the `yield from` sequence.
-#define END_SEND_OFFSET 6
+/* Words: choosing handlers, feedback entries, layout and encoding */
+
+static const uint8_t fb_kind[256] = {
+#define FB_KIND(OP, TYPE, KIND) [OP] = KIND,
+    _PyFb_FAMILIES(FB_KIND)
+    _PyFb_BRANCHES(FB_KIND)
+#undef FB_KIND
+};
+
+#ifndef NDEBUG
+static const uint8_t has_fb_entry[256] = {
+#define FB_HAS(OP, TYPE, KIND) [OP] = 1,
+    _PyFb_FAMILIES(FB_HAS)
+    _PyFb_BRANCHES(FB_HAS)
+#undef FB_HAS
+};
+#endif
+
+/* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
+int _PyIR_MaxForward = IR_MAX_FORWARD;
+
+/* The words of a relaxed FOR_ITER and of a relaxed SEND, its own included.
+ * A relaxed FOR_ITER at word w exits by distance 1, so that
+ *
+ *     w + 1   IR_JUMP to w + 4, the body
+ *     w + 2   IR_JUMP to END_FOR, where a generator returns
+ *     w + 3   IR_JUMP past END_FOR, where an exhausted iterator goes
+ *
+ * and a relaxed SEND at w has w + 1, to w + 3, and w + 2, to END_SEND. */
+#define RELAXED_FOR_ITER_WORDS 4
+#define RELAXED_SEND_WORDS 3
 
 static int
-resolve_jump_offsets(instr_sequence *instrs)
+too_large(const char *what, int value)
 {
-    /* Compute the size of each instruction and fixup jump args.
-     * Replace instruction index with position in bytecode.
-     */
+    PyErr_Format(PyExc_SystemError,
+                 "%s %d does not fit in the register IR", what, value);
+    return ERROR;
+}
 
-    for (int i = 0; i < instrs->s_used; i++) {
-        instruction *instr = &instrs->s_instrs[i];
-        if (OPCODE_HAS_JUMP(instr->i_opcode)) {
-            instr->i_target = instr->i_oparg;
+/* The generic handler of op: its opcode, a form that pushes its constant
+ * inline, or for BINARY_OP the handler of its operation. */
+static int
+choose_handler(_PyRegOp *op, PyObject *consts)
+{
+    int opcode = op->opcode;
+    int oparg = op->oparg;
+    if (opcode == BINARY_OP) {
+        if (oparg > NB_OPARG_LAST) {
+            return too_large("BINARY_OP operation", oparg);
+        }
+        return _PyIR_BINARY_OP_FIRST + oparg;
+    }
+    if (opcode == LOAD_SMALL_INT) {
+        return LOAD_SMALL_INT_INLINE;
+    }
+    if (opcode == LOAD_CONST) {
+        PyObject *value = PyList_GET_ITEM(consts, oparg);
+        if (_PyLong_CheckExactAndCompact(value)) {
+            return LOAD_CONST_INLINE_INT;
+        }
+        if (PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value))) {
+            return LOAD_CONST_INLINE_FLOAT;
         }
     }
+    return opcode;
+}
 
-    int extended_arg_recompile;
+/* The word that op jumps to.  END_ASYNC_FOR names the SEND of its loop,
+ * which starts its block; its target is the END_SEND where that SEND
+ * exits, which sys.monitoring needs. */
+static int
+jump_target(_PyRegCfg *cfg, _PyRegOp *op)
+{
+    assert(op->target >= 0);
+    _PyRegBlock *b = &cfg->blocks[op->target];
+    if (op->opcode == END_ASYNC_FOR) {
+        _PyRegOp *send = &cfg->ops[b->start];
+        assert(send->opcode == SEND);
+        return cfg->blocks[send->target].word;
+    }
+    return b->word;
+}
 
-    do {
-        int totsize = 0;
-        for (int i = 0; i < instrs->s_used; i++) {
-            instruction *instr = &instrs->s_instrs[i];
-            instr->i_offset = totsize;
-            int isize = instr_size(instr);
-            totsize += isize;
+/* The oparg that the handlers of op read: the word index of the target of
+ * a jump, the distance from the next word to the exit of FOR_ITER and
+ * SEND, otherwise the oparg of the stack instruction. */
+static int
+handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+    if (fmt->flags & _PyIR_JUMPS) {
+        return jump_target(cfg, op);
+    }
+    if (fmt->flags & _PyIR_FORWARD) {
+        if (op->nwords > 1) {
+            return 1;
         }
-        extended_arg_recompile = 0;
+        return jump_target(cfg, op) - (op->word + 1);
+    }
+    return op->oparg;
+}
 
-        int offset = 0;
-        for (int i = 0; i < instrs->s_used; i++) {
-            instruction *instr = &instrs->s_instrs[i];
-            int isize = instr_size(instr);
-            /* jump offsets are computed relative to
-             * the instruction pointer after fetching
-             * the jump instruction.
-             */
-            offset += isize;
-            if (OPCODE_HAS_JUMP(instr->i_opcode)) {
-                instruction *target = &instrs->s_instrs[instr->i_target];
-                instr->i_oparg = target->i_offset;
-                if (instr->i_opcode == END_ASYNC_FOR) {
-                    // sys.monitoring needs to be able to find the matching END_SEND
-                    // but the target is the SEND, so we adjust it here.
-                    instr->i_oparg = offset - instr->i_oparg - END_SEND_OFFSET;
-                }
-                else if (instr->i_oparg < offset) {
-                    assert(IS_BACKWARDS_JUMP_OPCODE(instr->i_opcode));
-                    instr->i_oparg = offset - instr->i_oparg;
-                }
-                else {
-                    assert(!IS_BACKWARDS_JUMP_OPCODE(instr->i_opcode));
-                    instr->i_oparg = instr->i_oparg - offset;
-                }
-                if (instr_size(instr) != isize) {
-                    extended_arg_recompile = 1;
-                }
-            }
+/* Choose the handlers and place the feedback entries.  Sites past the
+ * IR_FIELD_MAX-th share entry 0, which never specialises; those whose
+ * handler would read its static operand from its entry take the NOFB form,
+ * which carries it in the word. */
+static int
+assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts)
+{
+    a->a_nfb = 1;
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        op->fb = -1;
+        if (op->opcode == _PyReg_DEAD) {
+            op->nwords = 0;
+            continue;
         }
-    /* XXX: This is an awful hack that could hurt performance, but
-        on the bright side it should work until we come up
-        with a better solution.
-
-        The issue is that in the first loop instr_size() is
-        called, and it requires i_oparg be set appropriately.
-        There is a bootstrap problem because i_oparg is
-        calculated in the second loop above.
-
-        So we loop until we stop seeing new EXTENDED_ARGs.
-        The only EXTENDED_ARGs that could be popping up are
-        ones in jump instructions.  So this should converge
-        fairly quickly.
-    */
-    } while (extended_arg_recompile);
+        assert(!IS_PSEUDO_INSTR(op->opcode));
+        assert(IS_VALID_OPCODE(op->opcode));
+        op->handler = choose_handler(op, consts);
+        if (op->handler < 0) {
+            return ERROR;
+        }
+        op->nwords = 1;
+        const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+        if (fmt->fb == _PyIR_LOC_NONE) {
+            continue;
+        }
+        assert(has_fb_entry[op->opcode]);
+        assert(fb_kind[op->opcode] != FB_COUNTER);
+        if (a->a_nfb <= IR_FIELD_MAX) {
+            op->fb = a->a_nfb++;
+            continue;
+        }
+        op->fb = 0;
+        if (fmt->imm == _PyIR_LOC_FBARG && fmt->nofb != 0) {
+            op->handler = fmt->nofb;
+            op->fb = -1;
+        }
+    }
     return SUCCESS;
 }
 
+/* Place the words, relaxing each FOR_ITER and SEND whose exit is too far,
+ * until none is: relaxing only moves exits further away. */
 static int
-resolve_unconditional_jumps(instr_sequence *instrs)
+layout(struct assembler *a, _PyRegCfg *cfg)
 {
-    /* Resolve directions of unconditional jumps */
+    for (;;) {
+        int word = 0;
+        for (int b = 0; b < cfg->nblocks; b++) {
+            _PyRegBlock *blk = &cfg->blocks[b];
+            blk->word = word;
+            for (int i = blk->start; i < blk->end; i++) {
+                cfg->ops[i].word = word;
+                word += cfg->ops[i].nwords;
+            }
+        }
+        a->a_nwords = word;
+        if (word > IR_CD_MAX) {
+            // Jump targets would not fit
+            return too_large("word count", word);
+        }
+        if (word <= _PyIR_MaxForward) {
+            return SUCCESS;
+        }
+        int changed = 0;
+        for (int i = 0; i < cfg->nops; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if ((op->opcode != FOR_ITER && op->opcode != SEND) || op->nwords > 1) {
+                continue;
+            }
+            int distance = jump_target(cfg, op) - (op->word + 1);
+            if (distance > _PyIR_MaxForward) {
+                op->nwords = op->opcode == FOR_ITER
+                    ? RELAXED_FOR_ITER_WORDS : RELAXED_SEND_WORDS;
+                changed = 1;
+            }
+        }
+        if (!changed) {
+            return SUCCESS;
+        }
+    }
+}
 
-    for (int i = 0; i < instrs->s_used; i++) {
-        instruction *instr = &instrs->s_instrs[i];
-        bool is_forward = (instr->i_oparg > i);
-        switch(instr->i_opcode) {
-            case JUMP:
-                assert(is_pseudo_target(JUMP, JUMP_FORWARD));
-                assert(is_pseudo_target(JUMP, JUMP_BACKWARD));
-                instr->i_opcode = is_forward ? JUMP_FORWARD : JUMP_BACKWARD;
-                break;
-            case JUMP_NO_INTERRUPT:
-                assert(is_pseudo_target(JUMP_NO_INTERRUPT, JUMP_FORWARD));
-                assert(is_pseudo_target(JUMP_NO_INTERRUPT, JUMP_BACKWARD_NO_INTERRUPT));
-                instr->i_opcode = is_forward ?
-                    JUMP_FORWARD : JUMP_BACKWARD_NO_INTERRUPT;
-                break;
-            default:
-                if (OPCODE_HAS_JUMP(instr->i_opcode) &&
-                    IS_PSEUDO_INSTR(instr->i_opcode)) {
-                    Py_UNREACHABLE();
+/* The word of op.  Unreachable code never runs, and fields that do not fit
+ * there become 0. */
+static int
+encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
+{
+    if (!_PyIR_HasProperty(op->handler, _PyIR_H_PRISTINE)) {
+        return too_large("handler", op->handler);
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+    _PyRegSlots slots;
+    _PyRegCfg_OpSlots(cfg, op, &slots);
+    int oparg = handler_oparg(cfg, op);
+    // Every role's value, then a pick per field.  DST is meaningless when
+    // fmt->dst is _PyIR_NO_DST.
+    int values[_PyIR_ROLE_IN0 + 4] = {
+        [_PyIR_ROLE_NONE] = 0,
+        [_PyIR_ROLE_DST] = slots.dst,
+        [_PyIR_ROLE_BASE] = slots.base,
+        [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : 0,
+        [_PyIR_ROLE_IMM] = oparg,
+        [_PyIR_ROLE_IN0] = slots.in[0],
+        [_PyIR_ROLE_IN0 + 1] = slots.in[1],
+        [_PyIR_ROLE_IN0 + 2] = slots.in[2],
+        [_PyIR_ROLE_IN0 + 3] = slots.in[3],
+    };
+    uint32_t fields[4];
+    for (int r = 0; r < 4; r++) {
+        int role = fmt->roles[r];
+        assert(role < _PyIR_ROLE_IN0 + 4);
+        int value = values[role];
+        if (role != _PyIR_ROLE_IMM && (value < 0 || value > IR_FIELD_MAX)) {
+            // Only unreachable code names slots past the frame, since the
+            // slot count is checked first.
+            assert(!reachable);
+            value = 0;
+        }
+        fields[r] = (uint32_t)value;
+    }
+    if (fmt->imm == _PyIR_LOC_CD) {
+        if (oparg < 0 || oparg > IR_CD_MAX) {
+            if (reachable) {
+                return too_large("oparg", oparg);
+            }
+            oparg = 0;
+        }
+        fields[2] = oparg & IR_FIELD_MAX;
+        fields[3] = oparg >> 12;
+    }
+    else if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
+        int r = fmt->imm - _PyIR_LOC_A;
+        if (oparg < 0 || oparg > IR_FIELD_MAX) {
+            if (reachable) {
+                return too_large("oparg", oparg);
+            }
+            fields[r] = 0;
+        }
+    }
+    if (!_PyIR_MakeWord(op->handler, fields[0], fields[1], fields[2],
+                        fields[3], word))
+    {
+        return too_large("handler", op->handler);
+    }
+    return SUCCESS;
+}
+
+static inline _PyIRWord
+jump_word(int target)
+{
+    return IR_WORD(IR_JUMP, 0, 0, target & IR_FIELD_MAX, target >> 12);
+}
+
+/* The words and the feedback table, in a->a_bytecode and a->a_fbinit */
+static int
+assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
+               int nlocalsplus, int stacksize)
+{
+    assert(nlocalsplus + stacksize <= IR_MAX_SLOTS);
+    RETURN_IF_ERROR(assign_handlers(a, cfg, consts));
+    RETURN_IF_ERROR(layout(a, cfg));
+
+    a->a_bytecode = PyBytes_FromStringAndSize(NULL,
+                                              a->a_nwords * sizeof(_PyIRWord));
+    // Entry 0 exists only with others
+    int nfb = a->a_nfb > 1 ? a->a_nfb : 0;
+    a->a_fbinit = PyBytes_FromStringAndSize(NULL, nfb * sizeof(uint32_t));
+    if (a->a_bytecode == NULL || a->a_fbinit == NULL) {
+        return ERROR;
+    }
+    _PyIRWord *words = (_PyIRWord *)PyBytes_AS_STRING(a->a_bytecode);
+    uint32_t *fbinit = (uint32_t *)PyBytes_AS_STRING(a->a_fbinit);
+    if (nfb) {
+        fbinit[0] = _PyIR_FBINIT(FB_COUNTER, 0);
+    }
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *blk = &cfg->blocks[b];
+        for (int i = blk->start; i < blk->end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            int w = op->word;
+            if (op->nwords == 0) {
+                continue;
+            }
+            RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
+            if (op->fb > 0) {
+                int kind = fb_kind[op->opcode];
+                int arg = 0;
+                if (kind != FB_BRANCH) {
+                    arg = handler_oparg(cfg, op);
+                    if (arg < 0 || arg > IR_CD_MAX) {
+                        return too_large("oparg", arg);
+                    }
                 }
+                fbinit[op->fb] = _PyIR_FBINIT(kind, arg);
+            }
+            if (op->nwords > 1) {
+                int exit = jump_target(cfg, op);
+                if (op->opcode == FOR_ITER) {
+                    words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
+                    words[w + 2] = jump_word(exit);
+                    words[w + 3] = jump_word(exit + 1);
+                }
+                else {
+                    assert(op->opcode == SEND);
+                    words[w + 1] = jump_word(w + RELAXED_SEND_WORDS);
+                    words[w + 2] = jump_word(exit);
+                }
+            }
         }
     }
     return SUCCESS;
@@ -802,24 +901,33 @@ resolve_unconditional_jumps(instr_sequence *instrs)
 
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cache,
-                           PyObject *consts, int maxdepth, instr_sequence *instrs,
+                           PyObject *consts, _PyRegCfg *cfg,
                            int nlocalsplus, int code_flags, PyObject *filename)
 {
-    if (_PyInstructionSequence_ApplyLabelMap(instrs) < 0) {
-        return NULL;
-    }
-    if (resolve_unconditional_jumps(instrs) < 0) {
-        return NULL;
-    }
-    if (resolve_jump_offsets(instrs) < 0) {
-        return NULL;
-    }
     PyCodeObject *co = NULL;
-
+    // co_stacksize keeps its meaning for tools: the slots for temporaries,
+    // which compaction may make fewer than the deepest stack
+    int stacksize = cfg->ntemps;
+    if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
+        // An instruction names a slot in a 12-bit field (note 06, 2.3), so
+        // the locals, cells, free variables and temporaries of one code
+        // object are limited, as upstream limits the number of arguments.
+        PyObject *msg = PyUnicode_FromString(
+            "too many local variables and temporaries");
+        if (msg != NULL) {
+            _PyErr_RaiseSyntaxError(msg, filename, umd->u_firstlineno, 1,
+                                    umd->u_firstlineno, 1);
+        }
+        return NULL;
+    }
     struct assembler a;
-    int res = assemble_emit(&a, instrs, umd->u_firstlineno, const_cache);
+    memset(&a, 0, sizeof(a));
+    int res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);
     if (res == SUCCESS) {
-        co = makecode(umd, &a, const_cache, consts, maxdepth, nlocalsplus,
+        res = assemble_emit(&a, cfg, umd->u_firstlineno, const_cache);
+    }
+    if (res == SUCCESS) {
+        co = makecode(umd, &a, const_cache, consts, stacksize, nlocalsplus,
                       code_flags, filename);
     }
     assemble_free(&a);

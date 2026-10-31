@@ -32,23 +32,31 @@ PyDoc_STRVAR(dict_fromkeys__doc__,
 static PyObject *
 dict_fromkeys_impl(PyTypeObject *type, PyObject *iterable, PyObject *value);
 
-static PyObject *
-dict_fromkeys(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_fromkeys(PyObject *type, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *iterable;
     PyObject *value = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("fromkeys", nargs, 1, 2)) {
         goto exit;
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    value = args[1];
+    value = PyValue_Object(args[1]);
+    if (value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = dict_fromkeys_impl((PyTypeObject *)type, iterable, value);
+    _return_value = dict_fromkeys_impl((PyTypeObject *)type, iterable, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -79,17 +87,21 @@ PyDoc_STRVAR(dict___contains____doc__,
 "True if the dictionary has the specified key, else False.");
 
 #define DICT___CONTAINS___METHODDEF    \
-    {"__contains__", (PyCFunction)dict___contains__, METH_O|METH_COEXIST, dict___contains____doc__},
+    {"__contains__", _PyCFunction_CAST(dict___contains__), METH_O|METH_COEXIST, dict___contains____doc__},
 
 static PyObject *
-dict___contains___impl(PyDictObject *self, PyObject *key);
+dict___contains___impl(PyDictObject *self, PyValue key);
 
-static PyObject *
-dict___contains__(PyObject *self, PyObject *key)
+static PyValue
+dict___contains__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue key;
+    PyObject *_return_value;
 
-    return_value = dict___contains___impl((PyDictObject *)self, key);
+    key = arg;
+    _return_value = dict___contains___impl((PyDictObject *)self, key);
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -103,15 +115,16 @@ PyDoc_STRVAR(dict_get__doc__,
 #define DICT_GET_METHODDEF    \
     {"get", _PyCFunction_CAST(dict_get), METH_FASTCALL, dict_get__doc__},
 
-static PyObject *
-dict_get_impl(PyDictObject *self, PyObject *key, PyObject *default_value);
+static PyValue
+dict_get_impl(PyDictObject *self, PyValue key, PyValue default_value);
 
-static PyObject *
-dict_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject *key;
-    PyObject *default_value = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValue key;
+    PyValue default_value = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
@@ -122,7 +135,8 @@ dict_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     default_value = args[1];
 skip_optional:
-    return_value = dict_get_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_get_impl((PyDictObject *)self, key, default_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -139,16 +153,16 @@ PyDoc_STRVAR(dict_setdefault__doc__,
 #define DICT_SETDEFAULT_METHODDEF    \
     {"setdefault", _PyCFunction_CAST(dict_setdefault), METH_FASTCALL, dict_setdefault__doc__},
 
-static PyObject *
-dict_setdefault_impl(PyDictObject *self, PyObject *key,
-                     PyObject *default_value);
+static PyValue
+dict_setdefault_impl(PyDictObject *self, PyValue key, PyValue default_value);
 
-static PyObject *
-dict_setdefault(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_setdefault(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject *key;
-    PyObject *default_value = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValue key;
+    PyValue default_value = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("setdefault", nargs, 1, 2)) {
         goto exit;
@@ -160,8 +174,9 @@ dict_setdefault(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     default_value = args[1];
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = dict_setdefault_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_setdefault_impl((PyDictObject *)self, key, default_value);
     Py_END_CRITICAL_SECTION();
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -197,15 +212,16 @@ PyDoc_STRVAR(dict_pop__doc__,
 #define DICT_POP_METHODDEF    \
     {"pop", _PyCFunction_CAST(dict_pop), METH_FASTCALL, dict_pop__doc__},
 
-static PyObject *
-dict_pop_impl(PyDictObject *self, PyObject *key, PyObject *default_value);
+static PyValue
+dict_pop_impl(PyDictObject *self, PyValue key, PyValue default_value);
 
-static PyObject *
-dict_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+dict_pop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject *key;
-    PyObject *default_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue key;
+    PyValue default_value = PyValue_NULL;
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("pop", nargs, 1, 2)) {
         goto exit;
@@ -216,7 +232,8 @@ dict_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     default_value = args[1];
 skip_optional:
-    return_value = dict_pop_impl((PyDictObject *)self, key, default_value);
+    _return_value = dict_pop_impl((PyDictObject *)self, key, default_value);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -356,4 +373,4 @@ frozendict_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return frozendict_copy_impl((PyFrozenDictObject *)self);
 }
-/*[clinic end generated code: output=46d2d00147dd7917 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=3c27c29e03abeca5 input=a9049054013a1b77]*/

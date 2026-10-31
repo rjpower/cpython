@@ -2,6 +2,8 @@
 preserve
 [clinic start generated code]*/
 
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+
 PyDoc_STRVAR(test_empty_function__doc__,
 "test_empty_function($module, /)\n"
 "--\n"
@@ -25,19 +27,19 @@ PyDoc_STRVAR(my_int_func__doc__,
 "\n");
 
 #define MY_INT_FUNC_METHODDEF    \
-    {"my_int_func", (PyCFunction)my_int_func, METH_O, my_int_func__doc__},
+    {"my_int_func", _PyCFunction_CAST(my_int_func), METH_O, my_int_func__doc__},
 
 static int
 my_int_func_impl(PyObject *module, int arg);
 
-static PyObject *
-my_int_func(PyObject *module, PyObject *arg_)
+static PyValue
+my_int_func(PyObject *module, PyValue arg_)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int arg;
     int _return_value;
 
-    arg = PyLong_AsInt(arg_);
+    arg = PyLong_AsIntValue(arg_);
     if (arg == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -45,7 +47,7 @@ my_int_func(PyObject *module, PyObject *arg_)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -57,28 +59,27 @@ PyDoc_STRVAR(my_int_sum__doc__,
 "\n");
 
 #define MY_INT_SUM_METHODDEF    \
-    {"my_int_sum", (PyCFunction)(void(*)(void))my_int_sum, METH_FASTCALL, my_int_sum__doc__},
+    {"my_int_sum", _PyCFunction_CAST(my_int_sum), METH_FASTCALL, my_int_sum__doc__},
 
 static int
 my_int_sum_impl(PyObject *module, int x, int y);
 
-static PyObject *
-my_int_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+my_int_sum(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int x;
     int y;
     int _return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "my_int_sum expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("my_int_sum", nargs, 2, 2)) {
         goto exit;
     }
-    x = PyLong_AsInt(args[0]);
+    x = PyLong_AsIntValue(args[0]);
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    y = PyLong_AsInt(args[1]);
+    y = PyLong_AsIntValue(args[1]);
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -86,7 +87,7 @@ my_int_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -98,28 +99,27 @@ PyDoc_STRVAR(my_float_sum__doc__,
 "\n");
 
 #define MY_FLOAT_SUM_METHODDEF    \
-    {"my_float_sum", (PyCFunction)(void(*)(void))my_float_sum, METH_FASTCALL, my_float_sum__doc__},
+    {"my_float_sum", _PyCFunction_CAST(my_float_sum), METH_FASTCALL, my_float_sum__doc__},
 
 static float
 my_float_sum_impl(PyObject *module, float x, float y);
 
-static PyObject *
-my_float_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+my_float_sum(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     float x;
     float y;
     float _return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "my_float_sum expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("my_float_sum", nargs, 2, 2)) {
         goto exit;
     }
-    x = (float) PyFloat_AsDouble(args[0]);
+    x = (float) PyFloat_AsDoubleValue(args[0]);
     if (x == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    y = (float) PyFloat_AsDouble(args[1]);
+    y = (float) PyFloat_AsDoubleValue(args[1]);
     if (y == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
@@ -127,7 +127,7 @@ my_float_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble((double)_return_value);
+    return_value = PyValue_FromDouble((double)_return_value);
 
 exit:
     return return_value;
@@ -139,28 +139,27 @@ PyDoc_STRVAR(my_double_sum__doc__,
 "\n");
 
 #define MY_DOUBLE_SUM_METHODDEF    \
-    {"my_double_sum", (PyCFunction)(void(*)(void))my_double_sum, METH_FASTCALL, my_double_sum__doc__},
+    {"my_double_sum", _PyCFunction_CAST(my_double_sum), METH_FASTCALL, my_double_sum__doc__},
 
 static double
 my_double_sum_impl(PyObject *module, double x, double y);
 
-static PyObject *
-my_double_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+my_double_sum(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double x;
     double y;
     double _return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "my_double_sum expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("my_double_sum", nargs, 2, 2)) {
         goto exit;
     }
-    x = PyFloat_AsDouble(args[0]);
+    x = PyFloat_AsDoubleValue(args[0]);
     if (x == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    y = PyFloat_AsDouble(args[1]);
+    y = PyFloat_AsDoubleValue(args[1]);
     if (y == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
@@ -168,7 +167,7 @@ my_double_sum(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -181,29 +180,35 @@ PyDoc_STRVAR(get_file_descriptor__doc__,
 "Get a file descriptor.");
 
 #define GET_FILE_DESCRIPTOR_METHODDEF    \
-    {"get_file_descriptor", (PyCFunction)get_file_descriptor, METH_O, get_file_descriptor__doc__},
+    {"get_file_descriptor", _PyCFunction_CAST(get_file_descriptor), METH_O, get_file_descriptor__doc__},
 
 static int
 get_file_descriptor_impl(PyObject *module, int fd);
 
-static PyObject *
-get_file_descriptor(PyObject *module, PyObject *arg)
+static PyValue
+get_file_descriptor(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int _return_value;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
     _return_value = get_file_descriptor_impl(module, fd);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=03fd7811c056dc74 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5a8d05658bc902db input=a9049054013a1b77]*/

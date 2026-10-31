@@ -25,8 +25,7 @@ Data members:
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
-#include "pycore_object.h"        // _PyObject_DebugTypeStats()
-#include "pycore_optimizer.h"     // _PyDumpExecutors()
+#include "pycore_object.h"
 #include "pycore_pathconfig.h"    // _PyPathConfig_ComputeSysPath0()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pylifecycle.h"   // _PyErr_WriteUnraisableDefaultHook()
@@ -586,8 +585,8 @@ sys_audit_impl(PyObject *module, const char *event, PyObject *args)
 }
 
 
-static PyObject *
-sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *keywords)
+static PyValue
+sys_breakpointhook(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *keywords)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     assert(!_PyErr_Occurred(tstate));
@@ -598,7 +597,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     }
     else if (!strcmp(envar, "0")) {
         /* The breakpoint is explicitly no-op'd. */
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
     /* According to POSIX the string returned by getenv() might be invalidated
      * or the string content might be overwritten by a subsequent call to
@@ -607,7 +606,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     envar = _PyMem_RawStrdup(envar);
     if (envar == NULL) {
         _PyErr_NoMemory(tstate);
-        return NULL;
+        return PyValue_NULL;
     }
     const char *last_dot = strrchr(envar, '.');
     const char *attrname = NULL;
@@ -628,7 +627,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     }
     if (modulepath == NULL) {
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *module = PyImport_Import(modulepath);
@@ -639,7 +638,7 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
             goto warn;
         }
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *hook = PyObject_GetAttrString(module, attrname);
@@ -650,12 +649,11 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
             goto warn;
         }
         PyMem_RawFree(envar);
-        return NULL;
+        return PyValue_NULL;
     }
     PyMem_RawFree(envar);
-    PyObject *retval = PyObject_Vectorcall(hook, args, nargs, keywords);
-    Py_DECREF(hook);
-    return retval;
+    return PyObject_VectorcallValue(PyValue_FromObject(hook), args, nargs,
+                                    keywords);
 
   warn:
     /* If any of the imports went wrong, then warn and ignore. */
@@ -666,10 +664,10 @@ sys_breakpointhook(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
     PyMem_RawFree(envar);
     if (status < 0) {
         /* Printing the warning raised an exception. */
-        return NULL;
+        return PyValue_NULL;
     }
     /* The warning was (probably) issued. */
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(breakpointhook_doc,
@@ -753,8 +751,8 @@ Print an object to sys.stdout and also save it in builtins._
 [clinic start generated code]*/
 
 static PyObject *
-sys_displayhook(PyObject *module, PyObject *o)
-/*[clinic end generated code: output=347477d006df92ed input=08ba730166d7ef72]*/
+sys_displayhook_impl(PyObject *module, PyObject *o)
+/*[clinic end generated code: output=4d4b3b8da55d7592 input=08ba730166d7ef72]*/
 {
     PyObject *outf;
     PyObject *builtins;
@@ -895,8 +893,8 @@ The unraisable argument has the following attributes:
 [clinic start generated code]*/
 
 static PyObject *
-sys_unraisablehook(PyObject *module, PyObject *unraisable)
-/*[clinic end generated code: output=bb92838b32abaa14 input=ec3af148294af8d3]*/
+sys_unraisablehook_impl(PyObject *module, PyObject *unraisable)
+/*[clinic end generated code: output=c445b65a0d2768b2 input=ec3af148294af8d3]*/
 {
     return _PyErr_WriteUnraisableDefaultHook(unraisable);
 }
@@ -1147,8 +1145,8 @@ in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys_settrace(PyObject *module, PyObject *function)
-/*[clinic end generated code: output=999d12e9d6ec4678 input=8107feb01c5f1c4e]*/
+sys_settrace_impl(PyObject *module, PyObject *function)
+/*[clinic end generated code: output=fef648b3869c06f6 input=8107feb01c5f1c4e]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (function == Py_None) {
@@ -1178,8 +1176,8 @@ in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys__settraceallthreads(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=161cca30207bf3ca input=e5750f5dc01142eb]*/
+sys__settraceallthreads_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=dd77e5bb32aadf4a input=e5750f5dc01142eb]*/
 {
     PyObject* argument = NULL;
     Py_tracefunc func = NULL;
@@ -1229,8 +1227,8 @@ chapter in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys_setprofile(PyObject *module, PyObject *function)
-/*[clinic end generated code: output=1c3503105939db9c input=055d0d7961413a62]*/
+sys_setprofile_impl(PyObject *module, PyObject *function)
+/*[clinic end generated code: output=1e118df26fc8fc65 input=055d0d7961413a62]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (function == Py_None) {
@@ -1260,8 +1258,8 @@ chapter in the library manual.
 [clinic start generated code]*/
 
 static PyObject *
-sys__setprofileallthreads(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=2d61319e27b309fe input=9a3dc3352c63b471]*/
+sys__setprofileallthreads_impl(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=df4046aaabf669ff input=9a3dc3352c63b471]*/
 {
     PyObject* argument = NULL;
     Py_tracefunc func = NULL;
@@ -1908,7 +1906,7 @@ sys_set_int_max_str_digits_impl(PyObject *module, int maxdigits)
 size_t
 _PySys_GetSizeOf(PyObject *o)
 {
-    PyObject *res = NULL;
+    PyValue res = PyValue_NULL;
     PyObject *method;
     Py_ssize_t size;
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1927,15 +1925,16 @@ _PySys_GetSizeOf(PyObject *o)
         }
     }
     else {
-        res = _PyObject_CallNoArgs(method);
+        // The size is an int, which is inline: reading it makes no box.
+        res = _PyObject_VectorcallValueTstate(
+            tstate, PyValue_FromObject(method), NULL, 0, NULL);
         Py_DECREF(method);
     }
 
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return (size_t)-1;
 
-    size = PyLong_AsSsize_t(res);
-    Py_DECREF(res);
+    size = PyLong_AsSsize_tValue(res);
     if (size == -1 && _PyErr_Occurred(tstate))
         return (size_t)-1;
 
@@ -1945,29 +1944,21 @@ _PySys_GetSizeOf(PyObject *o)
         return (size_t)-1;
     }
 
-    size_t presize = 0;
-    if (!Py_IS_TYPE(o, &PyType_Type) ||
-         PyType_HasFeature((PyTypeObject *)o, Py_TPFLAGS_HEAPTYPE))
-    {
-        /* Add the size of the pre-header if "o" is not a static type */
-        presize = _PyType_PreHeaderSize(Py_TYPE(o));
-    }
-
-    return (size_t)size + presize;
+    return (size_t)size;
 }
 
 /*[clinic input]
-sys.getsizeof
+sys.getsizeof -> value
 
     object as o: object
-    default as dflt: object = NULL
+    default as dflt: value = NULL
 
 Return the size of object in bytes.
 [clinic start generated code]*/
 
-static PyObject *
-sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
-/*[clinic end generated code: output=c9dee8179ae2a973 input=fd71e98f0e3ae131]*/
+static PyValue
+sys_getsizeof_impl(PyObject *module, PyObject *o, PyValue dflt)
+/*[clinic end generated code: output=881d912327af3994 input=0207b0cda72c5f2c]*/
 {
     size_t size;
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1976,52 +1967,20 @@ sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
 
     if (size == (size_t)-1 && _PyErr_Occurred(tstate)) {
         /* Has a default value been given */
-        if (dflt != NULL && _PyErr_ExceptionMatches(tstate, PyExc_TypeError)) {
+        if (!PyValue_IsNull(dflt) &&
+            _PyErr_ExceptionMatches(tstate, PyExc_TypeError))
+        {
             _PyErr_Clear(tstate);
-            return Py_NewRef(dflt);
+            return dflt;
         }
         else
-            return NULL;
+            return PyValue_NULL;
     }
 
-    return PyLong_FromSize_t(size);
+    return PyValue_FromUnsignedLongLong(size);
 }
 
-/*[clinic input]
-sys.getrefcount -> Py_ssize_t
 
-    object:  object
-    /
-
-Return the reference count of object.
-
-The count returned is generally one higher than you might expect,
-because it includes the (temporary) reference as an argument to
-getrefcount().
-[clinic start generated code]*/
-
-static Py_ssize_t
-sys_getrefcount_impl(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=5fd477f2264b85b2 input=bf474efd50a21535]*/
-{
-    return Py_REFCNT(object);
-}
-
-#ifdef Py_REF_DEBUG
-/*[clinic input]
-sys.gettotalrefcount -> Py_ssize_t
-[clinic start generated code]*/
-
-static Py_ssize_t
-sys_gettotalrefcount_impl(PyObject *module)
-/*[clinic end generated code: output=4103886cf17c25bc input=53b744faa5d2e4f6]*/
-{
-    /* It may make sense to return the total for the current interpreter
-       or have a second function that does so. */
-    return _Py_GetGlobalRefTotal();
-}
-
-#endif /* Py_REF_DEBUG */
 
 /*[clinic input]
 sys.getallocatedblocks -> Py_ssize_t
@@ -2177,15 +2136,10 @@ sys__debugmallocstats_impl(PyObject *module)
         fputc('\n', stderr);
     }
 #endif
-    _PyObject_DebugTypeStats(stderr);
 
     Py_RETURN_NONE;
 }
 
-#ifdef Py_TRACE_REFS
-/* Defined in objects.c because it uses static globals in that file */
-extern PyObject *_Py_GetObjects(PyObject *, PyObject *);
-#endif
 
 
 /*[clinic input]
@@ -2220,15 +2174,6 @@ static PyObject *
 sys__clear_internal_caches_impl(PyObject *module)
 /*[clinic end generated code: output=0ee128670a4966d6 input=253e741ca744f6e8]*/
 {
-#ifdef _Py_TIER2
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    _Py_Executors_InvalidateAll(interp, 0);
-#endif
-#ifdef Py_GIL_DISABLED
-    if (_Py_ClearUnusedTLBC(_PyInterpreterState_GET()) < 0) {
-        return NULL;
-    }
-#endif
     PyType_ClearCache();
     Py_RETURN_NONE;
 }
@@ -2344,15 +2289,6 @@ sys_activate_stack_trampoline_impl(PyObject *module, const char *backend)
 /*[clinic end generated code: output=5783cdeb51874b43 input=a12df928758a82b4]*/
 {
 #ifdef PY_HAVE_PERF_TRAMPOLINE
-#ifdef _Py_JIT
-    // Perf state is process-wide, and only the main interpreter can enable
-    // the JIT. Check it even when called from a subinterpreter (gh-157247).
-    if (_PyInterpreterState_Main()->jit) {
-        PyErr_SetString(PyExc_ValueError, "Cannot activate the perf trampoline if the JIT is active");
-        return NULL;
-    }
-#endif
-
     if (strcmp(backend, "perf") == 0) {
         _PyPerf_Callbacks cur_cb;
         _PyPerfTrampoline_GetCallbacks(&cur_cb);
@@ -2542,31 +2478,6 @@ error:
 
 
 /*[clinic input]
-sys._dump_tracelets
-
-    outpath: object
-
-Dump the graph of tracelets in graphviz format
-[clinic start generated code]*/
-
-static PyObject *
-sys__dump_tracelets_impl(PyObject *module, PyObject *outpath)
-/*[clinic end generated code: output=a7fe265e2bc3b674 input=5bff6880cd28ffd1]*/
-{
-    FILE *out = Py_fopen(outpath, "wb");
-    if (out == NULL) {
-        return NULL;
-    }
-    int err = _PyDumpExecutors(out);
-    fclose(out);
-    if (err) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-
-/*[clinic input]
 sys._getframemodulename
 
     depth: int = 0
@@ -2591,10 +2502,10 @@ sys__getframemodulename_impl(PyObject *module, int depth)
     while (f && (_PyFrame_IsIncomplete(f) || depth-- > 0)) {
         f = f->previous;
     }
-    if (f == NULL || PyStackRef_IsNull(f->f_funcobj)) {
+    if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
         Py_RETURN_NONE;
     }
-    PyObject *func = PyStackRef_AsPyObjectBorrow(f->f_funcobj);
+    PyObject *func = PyValue_ObjectBorrow(f->f_funcobj);
     PyObject *r = PyFunction_GetModule(func);
     if (!r) {
         PyErr_Clear();
@@ -2643,11 +2554,7 @@ static int
 sys__is_gil_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=57732cf53f5b9120 input=7e9c47f15a00e809]*/
 {
-#ifdef Py_GIL_DISABLED
-    return _PyEval_IsGILEnabled(_PyThreadState_GET());
-#else
     return 1;
-#endif
 }
 
 
@@ -2905,11 +2812,6 @@ static PyMethodDef sys_methods[] = {
     SYS_GETUNICODEINTERNEDSIZE_METHODDEF
     SYS_GETFILESYSTEMENCODING_METHODDEF
     SYS_GETFILESYSTEMENCODEERRORS_METHODDEF
-#ifdef Py_TRACE_REFS
-    {"getobjects", _Py_GetObjects, METH_VARARGS},
-#endif
-    SYS_GETTOTALREFCOUNT_METHODDEF
-    SYS_GETREFCOUNT_METHODDEF
     SYS_GETRECURSIONLIMIT_METHODDEF
     SYS_GETSIZEOF_METHODDEF
     SYS__GETFRAME_METHODDEF
@@ -2958,7 +2860,6 @@ static PyMethodDef sys_methods[] = {
 #endif
     SYS__GET_CPU_COUNT_CONFIG_METHODDEF
     SYS__IS_GIL_ENABLED_METHODDEF
-    SYS__DUMP_TRACELETS_METHODDEF
     {NULL, NULL}  // sentinel
 };
 
@@ -3424,7 +3325,6 @@ exc_info() -- return information about the current thread's active exception\n\
 exit() -- exit the interpreter by raising SystemExit\n\
 getdlopenflags() -- returns flags to be used for dlopen() calls\n\
 getprofile() -- get the global profiling function\n\
-getrefcount() -- return the reference count for an object (plus one :-)\n\
 getrecursionlimit() -- return the max recursion depth for the interpreter\n\
 getsizeof() -- return the size of an object in bytes\n\
 gettrace() -- get the global debug tracing function\n\
@@ -3583,16 +3483,7 @@ set_flags_from_config(PyInterpreterState *interp, PyObject *flags)
     SetFlag(config->warn_default_encoding);
     SetFlagObj(PyBool_FromLong(config->safe_path));
     SetFlag(config->int_max_str_digits);
-#ifdef Py_GIL_DISABLED
-    if (config->enable_gil == _PyConfig_GIL_DEFAULT) {
-        SetFlagObj(Py_NewRef(Py_None));
-    }
-    else {
-        SetFlag(config->enable_gil);
-    }
-#else
     SetFlagObj(PyLong_FromLong(1));
-#endif
     SetFlag(config->thread_inherit_context);
     SetFlag(config->context_aware_warnings);
     SetFlag(config->lazy_imports);
@@ -3758,13 +3649,8 @@ make_impl_info(PyObject *version_info)
         goto error;
 #endif
 
-    // PEP-734
-#if defined(__wasi__) || defined(__EMSCRIPTEN__)
-    // It is not enabled on WASM builds just yet
+    // The experimental collector supports only the main interpreter.
     value = Py_False;
-#else
-    value = Py_True;
-#endif
     res = PyDict_SetItemString(impl_info, "supports_isolated_interpreters", value);
     if (res < 0) {
         goto error;
@@ -3803,11 +3689,7 @@ make_abi_info(void)
     }
     Py_DECREF(value);
 
-#ifdef Py_GIL_DISABLED
-    value = Py_True;
-#else
     value = Py_False;
-#endif
     if (PyDict_SetItem(abi_info, &_Py_ID(free_threaded), value) < 0) {
         goto error;
     }
@@ -4308,11 +4190,7 @@ _jit_is_available_impl(PyObject *module)
 /*[clinic end generated code: output=6849a9cd2ff4aac9 input=d009d751ae64c9ef]*/
 {
     (void)module;
-#ifdef _Py_TIER2
-    return true;
-#else
     return false;
-#endif
 }
 
 /*[clinic input]
@@ -4326,7 +4204,7 @@ _jit_is_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=55865f8de993fe42 input=0524151e857f4f3a]*/
 {
     (void)module;
-    return _PyInterpreterState_GET()->jit;
+    return false;
 }
 
 /*[clinic input]
@@ -4340,7 +4218,7 @@ _jit_is_active_impl(PyObject *module)
 /*[clinic end generated code: output=7facca06b10064d4 input=081ee32563dc2086]*/
 {
     (void)module;
-    return _PyThreadState_GET()->current_executor != NULL;
+    return false;
 }
 
 static PyMethodDef _jit_methods[] = {
@@ -4376,9 +4254,6 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
     if (sysmod == NULL) {
         return _PyStatus_ERR("failed to create a module object");
     }
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(sysmod, Py_MOD_GIL_NOT_USED);
-#endif
 
     PyModule_AddIntMacro(sysmod, EXIT_SUCCESS);
     PyModule_AddIntMacro(sysmod, EXIT_FAILURE);

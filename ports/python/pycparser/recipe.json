@@ -1,0 +1,10 @@
+{
+  "name": "pycparser",
+  "version": "3.12",
+  "kind": "pure-wheel",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/b6/ae/315bbeee126a769cbde43cf4908acb4b40408d8bf8bbf334dd7368d8dadf/pycparser-3.12-py3-none-any.whl",
+    "sha256": "a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e"
+  },
+  "tests": [{"script": "tests/smoke.py"}]
+}

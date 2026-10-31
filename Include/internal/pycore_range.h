@@ -15,6 +15,10 @@ typedef struct {
     long len;
 } _PyRangeIterObject;
 
+/* v in r for a range r: 1, 0, or -1 if the bounds of r are not all compact
+   ints, without an exception set. */
+extern int _PyRange_ContainsInt32(PyObject *r, int32_t v);
+
 #ifdef __cplusplus
 }
 #endif

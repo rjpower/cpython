@@ -8,7 +8,6 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST()
 #include "pycore_format.h"        // F_LJUST
-#include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_global_objects.h"// _Py_GET_GLOBAL_OBJECT()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_DigitValue
@@ -66,11 +65,7 @@ set_ob_shash(PyBytesObject *a, Py_hash_t hash)
 {
 _Py_COMP_DIAG_PUSH
 _Py_COMP_DIAG_IGNORE_DEPR_DECLS
-#ifdef Py_GIL_DISABLED
-    _Py_atomic_store_ssize_relaxed(&a->ob_shash, hash);
-#else
     a->ob_shash = hash;
-#endif
 _Py_COMP_DIAG_POP
 }
 
@@ -79,10 +74,6 @@ _Py_COMP_DIAG_POP
 static inline void
 set_ob_shash_unsafe(PyBytesObject *a, Py_hash_t hash)
 {
-    // Don't test _PyObject_IsUniquelyReferenced(), so the function can be
-    // called by bytes_resize_inplace().
-    assert(Py_REFCNT(a) == 1);
-
 _Py_COMP_DIAG_PUSH
 _Py_COMP_DIAG_IGNORE_DEPR_DECLS
     a->ob_shash = hash;
@@ -3061,9 +3052,20 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
     }
     char *str = PyBytesWriter_GetData(writer);
 
-    PyObject *const *items = PySequence_Fast_ITEMS(x);
+    PyValue *items = PySequence_Fast_ITEMS(x);
     for (Py_ssize_t i = 0; i < size; i++) {
-        Py_ssize_t value = PyLong_AsSsize_t(items[i]);
+        Py_ssize_t value;
+        if (PyValue_IsInlineInt(items[i])) {
+            value = PyValue_Int32(items[i]);
+        }
+        else if (PyValue_IsInline(items[i])) {
+            // A float: PyLong_AsSsize_t() would raise TypeError.
+            PyBytesWriter_Discard(writer);
+            return 0;
+        }
+        else {
+            value = PyLong_AsSsize_t(PyValue_ObjectBorrow(items[i]));
+        }
         if (value == -1 && PyErr_Occurred()) {
             PyBytesWriter_Discard(writer);
             PyErr_Clear();
@@ -3100,21 +3102,20 @@ _PyBytes_FromIterator(PyObject *it, PyObject *x)
     char *str = PyBytesWriter_GetData(writer);
 
     /* Run the iterator to exhaustion */
+    PyValue it_value = PyValue_FromObject(it);
     for (i = 0; ; i++) {
-        PyObject *item;
+        PyValue item;
         Py_ssize_t value;
 
         /* Get the next item */
-        item = PyIter_Next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred())
-                goto error;
+        int status = PyIter_NextValue(it_value, &item);
+        if (status < 0)
+            goto error;
+        if (status == 0)
             break;
-        }
 
         /* Interpret it as an int (__index__) */
-        value = PyNumber_AsSsize_t(item, NULL);
-        Py_DECREF(item);
+        value = PyNumber_AsSsize_tValue(item, NULL);
         if (value == -1 && PyErr_Occurred())
             goto error;
 
@@ -3241,21 +3242,27 @@ Construct an immutable array of bytes from:\n\
 static PyObject *bytes_iter(PyObject *seq);
 
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 bytes_iteritem(PyObject *obj, Py_ssize_t index)
 {
     PyBytesObject *a = _PyBytes_CAST(obj);
     if (index >= Py_SIZE(a)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
-    PyObject *l = _PyLong_FromUnsignedChar((unsigned char)a->ob_sval[index]);
-    return (_PyObjectIndexPair) { .object = l, .index = index + 1 };
+    PyValue l = PyValue_FromInt32((unsigned char)a->ob_sval[index]);
+    return (_PyValueIndexPair) { .value = l, .index = index + 1 };
 }
 
 #ifdef Py_DEBUG
 void
 _PyBytes_CheckOverflow(PyObject *self, void *addr, const char *type_name)
 {
+    /* The sweep deallocates in heap order: a PyBytesWriter's canary byte
+       can still replace the null byte, because the writer's owner, which
+       discards it, may be deallocated after the object. */
+    if (self->ob_flags & _Py_GC_DEAD_FLAG) {
+        return;
+    }
     // Make sure that the trailing null byte was not modified
     char *data = PyBytes_AS_STRING(self);
     Py_ssize_t size = PyBytes_GET_SIZE(self);
@@ -3340,42 +3347,9 @@ PyBytes_Concat(PyObject **pv, PyObject *w)
         return;
     }
 
-    if (_PyObject_IsUniquelyReferenced(*pv) && PyBytes_CheckExact(*pv)) {
-        /* Only one reference, so we can resize in place */
-        Py_ssize_t oldsize;
-        Py_buffer wb;
-
-        if (PyObject_GetBuffer(w, &wb, PyBUF_SIMPLE) != 0) {
-            PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
-                         Py_TYPE(w)->tp_name, Py_TYPE(*pv)->tp_name);
-            Py_CLEAR(*pv);
-            return;
-        }
-
-        oldsize = PyBytes_GET_SIZE(*pv);
-        if (oldsize > PY_SSIZE_T_MAX - wb.len) {
-            PyErr_NoMemory();
-            goto error;
-        }
-        if (_PyBytes_Resize(pv, oldsize + wb.len) < 0)
-            goto error;
-
-        memcpy(PyBytes_AS_STRING(*pv) + oldsize, wb.buf, wb.len);
-        PyBuffer_Release(&wb);
-        return;
-
-      error:
-        PyBuffer_Release(&wb);
-        Py_CLEAR(*pv);
-        return;
-    }
-
-    else {
-        /* Multiple references, need to create new object */
-        PyObject *v;
-        v = _PyBytes_Concat(*pv, w);
-        Py_SETREF(*pv, v);
-    }
+    // *pv may be shared, so the result is a new object.
+    PyObject *v = _PyBytes_Concat(*pv, w);
+    Py_SETREF(*pv, v);
 }
 
 void
@@ -3394,9 +3368,6 @@ int
 _PyBytes_IsMutable(PyObject *self)
 {
     assert(PyBytes_Check(self));
-    // Do not use _PyObject_IsUniquelyReferenced(): this function is called
-    // by bytearray and PyBytesWriter which can be used by multiple threads.
-    assert(Py_REFCNT(self) == 1);
     assert(!_Py_IsImmortal(self));
 
     // Check that the object is not a singleton
@@ -3423,9 +3394,7 @@ static inline int
 bytes_resize_inplace(PyObject **pv, Py_ssize_t newsize)
 {
     PyObject *v = *pv;
-    // Do not test _PyObject_IsUniquelyReferenced(). The function is used by
-    // PyBytesWriter_FinishWithSize() and its caller can have its own lock.
-    assert(Py_REFCNT(v) == 1);
+    // The caller, PyBytesWriter_FinishWithSize(), owns the object.
     assert(PyBytes_GET_SIZE(v) >= 1);
     assert(newsize >= 1);
     assert(get_ob_shash((PyBytesObject *)v) == -1);
@@ -3439,16 +3408,10 @@ bytes_resize_inplace(PyObject **pv, Py_ssize_t newsize)
         return -1;
     }
 
-#ifdef Py_TRACE_REFS
-    _Py_ForgetReference(v);
-#endif
     _PyReftracerTrack(v, PyRefTracer_DESTROY);
 
     PyObject *result = PyObject_Realloc(v, PyBytesObject_SIZE + newsize);
     if (result == NULL) {
-#ifdef Py_TRACE_REFS
-        _Py_AddToAllObjects(v);
-#endif
         _PyReftracerTrack(v, PyRefTracer_CREATE);
 
         PyErr_NoMemory();
@@ -3515,26 +3478,20 @@ _PyBytes_ResizeKeepOnError(PyObject **pv, Py_ssize_t newsize)
         return 0;
     }
 
-    if (!_PyObject_IsUniquelyReferenced(v)
-        // Return a copy if the hash value was already computed
-        || get_ob_shash((PyBytesObject *)v) != -1)
-    {
-        // Allocate and then copy so we don't get a shared immortal
-        // one-character singleton!
-        PyObject *result = bytes_alloc(newsize);
-        if (!result) {
-            return -1;
-        }
-
-        memcpy(PyBytes_AS_STRING(result), PyBytes_AS_STRING(v),
-               Py_MIN(oldsize, newsize));
-        *pv = result;
-        Py_DECREF(v);
-        assert(_PyBytes_IsMutable(*pv));
-        return 0;
+    // Without reference counts the object may be shared, so it is resized
+    // by copying. Allocate and then copy so we don't get a shared immortal
+    // one-character singleton!
+    PyObject *result = bytes_alloc(newsize);
+    if (!result) {
+        return -1;
     }
 
-    return bytes_resize_inplace(pv, newsize);
+    memcpy(PyBytes_AS_STRING(result), PyBytes_AS_STRING(v),
+           Py_MIN(oldsize, newsize));
+    *pv = result;
+    Py_DECREF(v);
+    assert(_PyBytes_IsMutable(*pv));
+    return 0;
 }
 
 
@@ -3578,7 +3535,7 @@ striter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 striter_next(PyObject *op)
 {
     striterobject *it = _striterobject_CAST(op);
@@ -3587,17 +3544,17 @@ striter_next(PyObject *op)
     assert(it != NULL);
     seq = it->it_seq;
     if (seq == NULL)
-        return NULL;
+        return PyValue_NULL;
     assert(PyBytes_Check(seq));
 
     if (it->it_index < PyBytes_GET_SIZE(seq)) {
-        return _PyLong_FromUnsignedChar(
+        return PyValue_FromInt32(
             (unsigned char)seq->ob_sval[it->it_index++]);
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -3631,12 +3588,12 @@ striter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
-static PyObject *
-striter_setstate(PyObject *op, PyObject *state)
+static PyValue
+striter_setstate(PyObject *op, PyValue state_value)
 {
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     striterobject *it = _striterobject_CAST(op);
     if (it->it_seq != NULL) {
         if (index < 0)
@@ -3645,7 +3602,7 @@ striter_setstate(PyObject *op, PyObject *state)
             index = PyBytes_GET_SIZE(it->it_seq); /* iterator exhausted */
         it->it_index = index;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -3653,7 +3610,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef striter_methods[] = {
     {"__length_hint__", striter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__",      striter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__",    striter_setstate, METH_O, setstate_doc},
+    {"__setstate__",    _PyCFunction_CAST(striter_setstate), METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -3789,10 +3746,6 @@ byteswriter_check_consistency(PyBytesWriter *writer)
     if (obj != NULL) {
         if (writer->use_bytearray) {
             assert(PyByteArray_CheckExact(obj));
-            // Do not use _PyObject_IsUniquelyReferenced(): the caller can have
-            // its own lock to prevent a writer from being used by two threads
-            // at the same time.
-            assert(Py_REFCNT(obj) == 1);
             PyByteArrayObject *bytearray = (PyByteArrayObject*)obj;
             obj = bytearray->ob_bytes_object;
             assert(obj != NULL);
@@ -3917,18 +3870,17 @@ byteswriter_create(Py_ssize_t size, int use_bytearray)
         return NULL;
     }
 
-    PyBytesWriter *writer = _Py_FREELIST_POP_MEM(bytes_writers);
+    PyBytesWriter *writer = (PyBytesWriter *)PyMem_Malloc(sizeof(PyBytesWriter));
     if (writer == NULL) {
-        writer = (PyBytesWriter *)PyMem_Malloc(sizeof(PyBytesWriter));
-        if (writer == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
+        PyErr_NoMemory();
+        return NULL;
     }
     writer->obj = NULL;
     writer->size = size;
     writer->use_bytearray = use_bytearray;
     writer->overallocate = !use_bytearray;
+    // The writer is PyMem storage, so the collector must visit its owner slot.
+    _PyGC_AddRoot(&writer->root, &writer->obj, 1);
 
     Py_ssize_t allocated = sizeof(writer->small_buffer) - 1;
     if (size > allocated) {
@@ -3973,13 +3925,16 @@ PyBytesWriter_Discard(PyBytesWriter *writer)
     }
 
     assert(byteswriter_check_consistency(writer));
-    if (writer->obj != NULL) {
 #ifdef Py_DEBUG
+    if (writer->obj != NULL) {
         byteswriter_reset_trailing_byte(writer);
+    }
 #endif
+    _PyGC_RemoveRoot(&writer->root);
+    if (writer->obj != NULL) {
         Py_DECREF(writer->obj);
     }
-    _Py_FREELIST_FREE(bytes_writers, writer, PyMem_Free);
+    PyMem_Free(writer);
 }
 
 
@@ -4048,7 +4003,9 @@ byteswriter_finish_with_size(PyBytesWriter *writer, Py_ssize_t final_size)
     }
 
     assert(writer->obj == NULL);
-    _Py_FREELIST_FREE(bytes_writers, writer, PyMem_Free);
+    // Unlinking and freeing the writer cannot collect the returned object.
+    _PyGC_RemoveRoot(&writer->root);
+    PyMem_Free(writer);
     return result;
 
 error:

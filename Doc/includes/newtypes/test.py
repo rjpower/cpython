@@ -178,11 +178,7 @@ Test cyclic gc(?)
 >>> x = object()
 >>> s.x = x
 >>> del s
->>> sys.getrefcount(x)
-3
 >>> ignore = gc.collect()
->>> sys.getrefcount(x)
-2
 
 >>> gc.enable()
 """

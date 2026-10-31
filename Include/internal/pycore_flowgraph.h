@@ -26,13 +26,16 @@ int _PyCfg_OptimizeCodeUnit(struct _PyCfgBuilder *g, PyObject *consts, PyObject 
 
 struct _PyCfgBuilder* _PyCfg_FromInstructionSequence(_PyInstructionSequence *seq);
 int _PyCfg_ToInstructionSequence(struct _PyCfgBuilder *g, _PyInstructionSequence *seq);
-int _PyCfg_OptimizedCfgToInstructionSequence(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
-                                             int *stackdepth, int *nlocalsplus,
-                                             _PyInstructionSequence *seq);
+struct _PyRegCfg;
+/* Finish the code unit's CFG and convert it into the register CFG
+ * (Python/regcfg.c), with its passes run and its slots assigned. */
+int _PyCfg_OptimizedCfgToRegCfg(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
+                                int *stackdepth, int *nlocalsplus,
+                                struct _PyRegCfg **result);
 
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *u, PyObject *const_cache,
-                           PyObject *consts, int maxdepth, _PyInstructionSequence *instrs,
+                           PyObject *consts, struct _PyRegCfg *cfg,
                            int nlocalsplus, int code_flags, PyObject *filename);
 
 // Export for '_testinternalcapi' shared extension

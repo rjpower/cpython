@@ -46,7 +46,6 @@ typedef struct {
     PyDateTime_TZInfo base;
     PyObject *key;
     PyObject *file_repr;
-    PyObject *weakreflist;
     size_t num_transitions;
     size_t num_ttinfos;
     int64_t *trans_list_utc;
@@ -364,11 +363,37 @@ zoneinfo_ZoneInfo_impl(PyTypeObject *type, PyObject *key)
 }
 
 static int
+traverse_ttinfo(const _ttinfo *ttinfo, visitproc visit, void *arg)
+{
+    Py_VISIT(ttinfo->utcoff);
+    Py_VISIT(ttinfo->dstoff);
+    Py_VISIT(ttinfo->tzname);
+    return 0;
+}
+
+static int
 zoneinfo_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PyZoneInfo_ZoneInfo *self = PyZoneInfo_ZoneInfo_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->key);
+    /* The rest are timedeltas and strings, which cannot form cycles, kept
+       in PyMem arrays.  Only the tracing mark needs them. */
+    Py_VISIT(self->file_repr);
+    int err;
+    if (self->_ttinfos != NULL) {
+        for (size_t i = 0; i < self->num_ttinfos; ++i) {
+            if ((err = traverse_ttinfo(&self->_ttinfos[i], visit, arg))) {
+                return err;
+            }
+        }
+    }
+    if ((err = traverse_ttinfo(&self->tzrule_after.std, visit, arg))) {
+        return err;
+    }
+    if (!self->tzrule_after.std_only) {
+        return traverse_ttinfo(&self->tzrule_after.dst, visit, arg);
+    }
     return 0;
 }
 
@@ -388,7 +413,7 @@ zoneinfo_dealloc(PyObject *obj_self)
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
 
-    FT_CLEAR_WEAKREFS(obj_self, self->weakreflist);
+    FT_CLEAR_WEAKREFS(obj_self);
 
     if (self->trans_list_utc != NULL) {
         PyMem_Free(self->trans_list_utc);
@@ -639,26 +664,30 @@ zoneinfo_ZoneInfo_tzname_impl(PyObject *self, PyTypeObject *cls,
 
 #define GET_DT_TZINFO PyDateTime_DATE_GET_TZINFO
 
-static PyObject *
-zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
+static PyValue
+zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
 {
+    PyObject *dt = PyValue_Object(arg);
+    if (dt == NULL) {
+        return PyValue_NULL;
+    }
     if (!PyDateTime_Check(dt)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return NULL;
+        return PyValue_NULL;
     }
     if (GET_DT_TZINFO(dt) != obj_self) {
         PyErr_SetString(PyExc_ValueError,
                         "fromutc: dt.tzinfo "
                         "is not self");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyZoneInfo_ZoneInfo *self = PyZoneInfo_ZoneInfo_CAST(obj_self);
 
     int64_t timestamp;
     if (get_local_timestamp(dt, &timestamp)) {
-        return NULL;
+        return PyValue_NULL;
     }
     size_t num_trans = self->num_transitions;
 
@@ -716,7 +745,7 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
 
     PyObject *tmp = PyNumber_Add(dt, tti->utcoff);
     if (tmp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (fold) {
@@ -728,18 +757,18 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
             PyObject *replace = PyObject_GetAttrString(tmp, "replace");
             Py_DECREF(tmp);
             if (replace == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
             PyObject *args = PyTuple_New(0);
             if (args == NULL) {
                 Py_DECREF(replace);
-                return NULL;
+                return PyValue_NULL;
             }
             PyObject *kwargs = PyDict_New();
             if (kwargs == NULL) {
                 Py_DECREF(replace);
                 Py_DECREF(args);
-                return NULL;
+                return PyValue_NULL;
             }
 
             dt = NULL;
@@ -752,14 +781,14 @@ zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
             Py_DECREF(replace);
 
             if (dt == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
     else {
         dt = tmp;
     }
-    return dt;
+    return PyValue_FromResult(dt);
 }
 
 static PyObject *
@@ -1135,7 +1164,9 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
     }
 
     // Build _ttinfo objects from utcoff, dstoff and abbr
-    self->_ttinfos = PyMem_Malloc(self->num_ttinfos * sizeof(_ttinfo));
+    // Zeroed: building the entries allocates, and a collection that runs
+    // then traverses them.
+    self->_ttinfos = PyMem_Calloc(self->num_ttinfos, sizeof(_ttinfo));
     if (self->_ttinfos == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -2657,7 +2688,7 @@ static PyMethodDef zoneinfo_methods[] = {
     ZONEINFO_ZONEINFO_UTCOFFSET_METHODDEF
     ZONEINFO_ZONEINFO_DST_METHODDEF
     ZONEINFO_ZONEINFO_TZNAME_METHODDEF
-    {"fromutc", zoneinfo_fromutc, METH_O,
+    {"fromutc", _PyCFunction_CAST(zoneinfo_fromutc), METH_O,
      PyDoc_STR("Given a datetime with local time in UTC, retrieve an adjusted "
                "datetime in local time.")},
     {"__reduce__", zoneinfo_reduce, METH_NOARGS,
@@ -2673,10 +2704,6 @@ static PyMemberDef zoneinfo_members[] = {
      .type = Py_T_OBJECT_EX,
      .flags = Py_READONLY,
      .doc = NULL},
-    {.name = "__weaklistoffset__",
-     .offset = offsetof(PyZoneInfo_ZoneInfo, weakreflist),
-     .type = Py_T_PYSSIZET,
-     .flags = Py_READONLY},
     {NULL}, /* Sentinel */
 };
 
@@ -2697,7 +2724,8 @@ static PyType_Spec zoneinfo_spec = {
     .name = "zoneinfo.ZoneInfo",
     .basicsize = sizeof(PyZoneInfo_ZoneInfo),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = zoneinfo_slots,
 };
 

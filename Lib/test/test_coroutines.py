@@ -1713,64 +1713,6 @@ class CoroutineTest(unittest.TestCase):
         self.assertEqual(buffer, [i for i in range(1, 21)] +
                                  ['what?', 'end'])
 
-    def test_for_2(self):
-        tup = (1, 2, 3)
-        refs_before = sys.getrefcount(tup)
-
-        async def foo():
-            async for i in tup:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError, "async for' requires an object.*__aiter__.*tuple"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(tup), refs_before)
-
-    def test_for_3(self):
-        class I:
-            def __aiter__(self):
-                return self
-
-        aiter = I()
-        refs_before = sys.getrefcount(aiter)
-
-        async def foo():
-            async for i in aiter:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError,
-                r"that does not implement __anext__"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(aiter), refs_before)
-
-    def test_for_4(self):
-        class I:
-            def __aiter__(self):
-                return self
-
-            def __anext__(self):
-                return ()
-
-        aiter = I()
-        refs_before = sys.getrefcount(aiter)
-
-        async def foo():
-            async for i in aiter:
-                print('never going to happen')
-
-        with self.assertRaisesRegex(
-                TypeError,
-                "async for' received an invalid object.*__anext__.*tuple"):
-
-            run_async(foo())
-
-        self.assertEqual(sys.getrefcount(aiter), refs_before)
-
     def test_for_6(self):
         I = 0
 
@@ -1800,8 +1742,6 @@ class CoroutineTest(unittest.TestCase):
 
         manager = Manager()
         iterable = Iterable()
-        mrefs_before = sys.getrefcount(manager)
-        irefs_before = sys.getrefcount(iterable)
 
         async def main():
             nonlocal I
@@ -1817,9 +1757,6 @@ class CoroutineTest(unittest.TestCase):
             # directly does not throw any warnings.
             run_async(main())
         self.assertEqual(I, 111011)
-
-        self.assertEqual(sys.getrefcount(manager), mrefs_before)
-        self.assertEqual(sys.getrefcount(iterable), irefs_before)
 
         ##############
 
@@ -2340,6 +2277,7 @@ class CoroutineTest(unittest.TestCase):
             pass
         with self.assertWarns(RuntimeWarning):
             frame = f().cr_frame
+            support.gc_collect()  # For other GCs.
         frame.clear()
 
     def test_bpo_45813_2(self):
@@ -2494,6 +2432,33 @@ class OriginTrackingTest(unittest.TestCase):
         finally:
             sys.set_coroutine_origin_tracking_depth(orig_depth)
 
+    def test_origin_tracking_during_collection(self):
+        _testinternalcapi = import_helper.import_module('_testinternalcapi')
+
+        async def corofn():
+            return 'origin-data'
+
+        orig_depth = sys.get_coroutine_origin_tracking_depth()
+        orig_stress = _testinternalcapi.gc_get_stress()
+        try:
+            sys.set_coroutine_origin_tracking_depth(2)
+            # Collect while the constructor is still building the origin tuple.
+            _testinternalcapi.gc_set_stress(1)
+            try:
+                coro = corofn()
+            finally:
+                _testinternalcapi.gc_set_stress(orig_stress)
+            with contextlib.closing(coro):
+                self.assertEqual(len(coro.cr_origin), 2)
+                self.assertEqual(coro.cr_origin[0][0], __file__)
+                self.assertEqual(coro.cr_origin[0][2],
+                                 'test_origin_tracking_during_collection')
+                with self.assertRaises(StopIteration) as result:
+                    coro.send(None)
+                self.assertEqual(result.exception.value, 'origin-data')
+        finally:
+            sys.set_coroutine_origin_tracking_depth(orig_depth)
+
     def test_origin_tracking_warning(self):
         async def corofn():
             pass
@@ -2572,6 +2537,29 @@ class OriginTrackingTest(unittest.TestCase):
         finally:
             warnings._warn_unawaited_coroutine = orig_wuc
 
+    def test_unawaited_warning_with_restricted_builtins(self):
+        import gc
+
+        async def corofn(cycle):
+            pass
+
+        collect = eval('lambda: collect()',
+                       {'__builtins__': {}, 'collect': gc.collect})
+        with support.disable_gc(), warnings.catch_warnings(record=True) as w, \
+             support.catch_unraisable_exception() as cm:
+            warnings.simplefilter('always', RuntimeWarning)
+            # Keep the coroutine in a cycle so collection, rather than
+            # reference counting, selects the frame delivering its warning.
+            cycle = []
+            coro = corofn(cycle)
+            cycle.append(coro)
+            del coro, cycle
+            collect()
+            self.assertIsNone(cm.unraisable)
+            self.assertEqual(len(w), 1)
+            self.assertIs(w[0].category, RuntimeWarning)
+            self.assertIn('was never awaited', str(w[0].message))
+
 
 class UnawaitedWarningDuringShutdownTest(unittest.TestCase):
     # https://bugs.python.org/issue32591#msg310726
@@ -2612,6 +2600,16 @@ class CAPITest(unittest.TestCase):
         from _testcapi import awaitType as at
         future = at(iter([1]))
         self.assertEqual(next(future.__await__()), 1)
+
+    def test_tp_await_keeps_iterator(self):
+        # The awaitable holds the only reference to its iterator.
+        from _testcapi import awaitType as at
+        future = at(iter([object() for _ in range(3)]))
+        support.gc_collect()
+        # Reuse any freed memory, so a dangling reference shows.
+        junk = [bytes([0xa0]) * 64 for _ in range(10000)]
+        self.assertEqual(len(list(future.__await__())), 3)
+        del junk
 
     def test_tp_await_3(self):
         from _testcapi import awaitType as at

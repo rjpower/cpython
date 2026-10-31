@@ -972,27 +972,6 @@ always available. Unless explicitly noted otherwise, all variables are read-only
    .. versionadded:: 3.15
 
 
-.. function:: getrefcount(object)
-
-   Return the reference count of the *object*.  The count returned is generally one
-   higher than you might expect, because it includes the (temporary) reference as
-   an argument to :func:`getrefcount`.
-
-   Note that the returned value may not actually reflect how many
-   references to the object are actually held.  For example, some
-   objects are :term:`immortal` and have a very high refcount that does not
-   reflect the actual number of references.  Consequently, do not rely
-   on the returned value to be accurate, other than a value of 0 or 1.
-
-   .. impl-detail::
-
-      :term:`Immortal <immortal>` objects with a large reference count can be
-      identified via :func:`_is_immortal`.
-
-   .. versionchanged:: 3.12
-      Immortal objects have very large refcounts that do not match
-      the actual number of references to the object.
-
 .. function:: getrecursionlimit()
 
    Return the current value of the recursion limit, the maximum depth of the Python
@@ -1300,8 +1279,10 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    *supports_isolated_interpreters* is a boolean value, whether
    this implementation supports multiple isolated interpreters.
-   It is ``True`` for CPython on most platforms.  Platforms with
-   this support implement the low-level :mod:`!_interpreters` module.
+   It is ``False`` in this experimental runtime, which supports only
+   the main interpreter.  The low-level :mod:`!_interpreters` module
+   remains available for main-interpreter inspection; successful import
+   does not imply support for creating another interpreter.
 
    .. seealso::
 
@@ -1413,57 +1394,26 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    .. impl-detail::
 
-      JIT compilation is an *experimental implementation detail* of CPython.
       ``sys._jit`` is not guaranteed to exist or behave the same way in all
-      Python implementations, versions, or build configurations.
+      Python implementations, versions, or build configurations.  This
+      CPython has no JIT compiler, so all three functions return ``False``.
 
    .. versionadded:: 3.14
 
    .. function:: _jit.is_available()
 
       Return ``True`` if the current Python executable supports JIT compilation,
-      and ``False`` otherwise.  This can be controlled by building CPython with
-      the ``--experimental-jit`` option on Windows, and the
-      :option:`--enable-experimental-jit` option on all other platforms.
+      and ``False`` otherwise.
 
    .. function:: _jit.is_enabled()
 
       Return ``True`` if JIT compilation is enabled for the current Python
       process (implies :func:`sys._jit.is_available`), and ``False`` otherwise.
-      If JIT compilation is available, this can be controlled by setting the
-      :envvar:`PYTHON_JIT` environment variable to ``0`` (disabled) or ``1``
-      (enabled) at interpreter startup.
 
    .. function:: _jit.is_active()
 
       Return ``True`` if the topmost Python frame is currently executing JIT
       code (implies :func:`sys._jit.is_enabled`), and ``False`` otherwise.
-
-      .. note::
-
-         This function is intended for testing and debugging the JIT itself.
-         It should be avoided for any other purpose.
-
-      .. note::
-
-         Due to the nature of tracing JIT compilers, repeated calls to this
-         function may give surprising results. For example, branching on its
-         return value will likely lead to unexpected behavior (if doing so
-         causes JIT code to be entered or exited):
-
-         .. code-block:: pycon
-
-            >>> for warmup in range(BIG_NUMBER):
-            ...     # This line is "hot", and is eventually JIT-compiled:
-            ...     if sys._jit.is_active():
-            ...         # This line is "cold", and is run in the interpreter:
-            ...         assert sys._jit.is_active()
-            ...
-            Traceback (most recent call last):
-              File "<stdin>", line 5, in <module>
-                assert sys._jit.is_active()
-                       ~~~~~~~~~~~~~~~~~~^^
-            AssertionError
 
 .. data:: last_exc
 
@@ -2093,8 +2043,6 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    Activate the stack profiler trampoline *backend*.
    The only supported backend is ``"perf"``.
-
-   Stack trampolines cannot be activated if the JIT is active.
 
    .. availability:: Linux.
 

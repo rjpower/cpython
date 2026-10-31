@@ -46,6 +46,11 @@ enum {
 // -1 indicating an infinite wait.
 //
 // `park_arg`, which can be NULL, is passed to the unpark operation.
+// The caller owns the storage behind address, expected and park_arg for the
+// complete call, including reattachment.  Park itself holds no object roots:
+// the caller must anchor any Python objects in that storage.  In particular,
+// a precise caller must register a writable object output slot before parking
+// and keep it registered until the call returns.
 //
 // If `detach` is true, then the thread will detach/release the GIL while
 // waiting.

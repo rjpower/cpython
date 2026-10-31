@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/opcode_metadata_generator.py
++++ b/Tools/cases_generator/opcode_metadata_generator.py
+@@ -233,7 +233,7 @@
+     out.emit("const char *_PyOpcode_OpName[IR_NUM_HANDLERS] = {\n")
+     ids = {**domain.opmap, **domain.handlers}
+     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+-        if domain.kinds[name] & HandlerKind.METADATA:
++        if domain.kinds[name] & HandlerKind.METADATA and name != "IR_JUMP":
+             out.emit(f'[{handler}] = "{name}",\n')
+     out.emit("};\n")
+     out.emit("#endif\n\n")

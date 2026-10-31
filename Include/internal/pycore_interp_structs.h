@@ -14,7 +14,6 @@ extern "C" {
 #include "pycore_structs.h"       // PyHamtObject
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_typedefs.h"      // _PyRuntimeState
-#include "pycore_uop.h"           // _PyBloomFilter
 
 #define CODE_MAX_WATCHERS 8
 #define CONTEXT_MAX_WATCHERS 8
@@ -22,11 +21,6 @@ extern "C" {
 #define TYPE_MAX_WATCHERS 8
 
 
-#ifdef Py_GIL_DISABLED
-// This should be prime but otherwise the choice is arbitrary. A larger value
-// increases concurrency at the expense of memory.
-#  define NUM_WEAKREF_LIST_LOCKS 127
-#endif
 
 typedef int (*_Py_pending_call_func)(void *);
 
@@ -139,9 +133,6 @@ typedef struct atexit_callback {
 } atexit_callback;
 
 struct atexit_state {
-#ifdef Py_GIL_DISABLED
-    PyMutex ll_callbacks_lock;
-#endif
     atexit_callback *ll_callbacks;
 
     // XXX The rest of the state could be moved to the atexit module state
@@ -156,22 +147,7 @@ struct atexit_state {
 
 /****** Garbage collector **********/
 
-/* GC information is stored BEFORE the object structure. */
-typedef struct {
-    // Tagged pointer to next object in the list.
-    // 0 means the object is not tracked
-    _Py_ALIGNED_DEF(_PyObject_MIN_ALIGNMENT, uintptr_t) _gc_next;
-
-    // Tagged pointer to previous object in the list.
-    // Lowest two bits are used for flags documented later.
-    // Those bits are made available by the struct's minimum alignment.
-    uintptr_t _gc_prev;
-} PyGC_Head;
-
-#define _PyGC_Head_UNUSED PyGC_Head
-
 struct gc_generation {
-    PyGC_Head head;
     int threshold; /* collection threshold */
     int count; /* count of allocations or collections of younger
                   generations */
@@ -195,13 +171,8 @@ struct gc_generation_stats {
     Py_ssize_t heap_size;
 };
 
-#ifdef Py_GIL_DISABLED
-#define GC_YOUNG_STATS_SIZE 1
-#define GC_OLD_STATS_SIZE 1
-#else
 #define GC_YOUNG_STATS_SIZE 11
 #define GC_OLD_STATS_SIZE 3
-#endif
 struct gc_young_stats_buffer {
     struct gc_generation_stats items[GC_YOUNG_STATS_SIZE];
     int8_t index;
@@ -227,21 +198,10 @@ struct _gc_runtime_state {
     int enabled;
     int debug;
     /* linked lists of container objects */
-#ifndef Py_GIL_DISABLED
     struct gc_generation generations[NUM_GENERATIONS];
-#else
-    struct gc_generation young;
-    struct gc_generation old[2];
-#endif
     /* a permanent generation which won't be collected */
     struct gc_generation permanent_generation;
     struct gc_stats *generation_stats;
-#ifdef Py_GIL_DISABLED
-    /* Protects generation_stats between gc_get_stats_impl() (reader) and
-       gc_collect_main() (writer); both resolve the stats slot (buffer index)
-       under this lock so they agree on which slot to touch (gh-151646). */
-    PyMutex stats_mutex;
-#endif
     /* true if we are currently running the collector */
     int collecting;
     // The frame that started the current collection. It might be NULL even when
@@ -267,30 +227,66 @@ struct _gc_runtime_state {
        the first time. */
     Py_ssize_t long_lived_pending;
 
-#ifdef Py_GIL_DISABLED
-    /* True if gc.freeze() has been used. */
-    int freeze_active;
-#else
-    PyGC_Head *generation0;
+    /* The tracing verifier (Python/gc_trace.c): when to run it, and its
+       registered static types and last results. */
+    int trace_mode;
+    struct _gc_trace_state *trace;
+    struct _PyGCRoot *trace_roots;
+
+    /* The live tracing collector (Python/gc_live.c).  PyObject_Malloc() and
+       PyMem_Malloc() add to alloc_bytes; an object allocation collects when
+       it passes alloc_limit.  alloc_limit is alloc_threshold after a
+       collection, and further while a collection cannot run. */
+    Py_ssize_t alloc_bytes;
+    Py_ssize_t alloc_limit;
+    Py_ssize_t alloc_threshold;
+    /* Set while the sweep calls tp_dealloc: PyObject_Free() leaves the
+       blocks of dead objects for the sweep to free afterwards. */
+    int sweeping;
+    /* The block of the object whose tp_dealloc the sweep is calling: its
+       PyObject_Free() returns at once, without looking the block up. */
+    void *sweep_block;
+#ifdef Py_DEBUG
+    /* The object whose tp_dealloc the sweep is calling, for the check that
+       a dealloc neither allocates an object nor runs Python code. */
+    PyObject *sweep_op;
 #endif
+    struct _gc_live_state *live;
+    /* The interpreter's queue of weak reference callbacks, finalizers and
+       destroy calls, run FIFO from the head (Python/gc_live.c, note 13).
+       In this struct, not in *live, so that splicing onto it needs
+       nothing allocated. */
+    struct _PyGCLiveCall *queue_head;
+    struct _PyGCLiveCall *queue_tail;
+    /* Initialising, open or closed (gc_live.c); nothing runs from a queue
+       that is not open. */
+    int queue_phase;
+    /* One attached thread drains the queue, including while its callback
+       releases the GIL.  Read and written with this interpreter's GIL. */
+    int queue_draining;
+    /* The main interpreter's count, by call kind, of the calls of
+       never-opened isolated interpreters that their close discarded. */
+    Py_ssize_t queue_discarded[4];
+    /* Set while the queue is open and non-empty; the interpreter's threads
+       see it when they take the GIL. */
+    int queue_ready;
+    /* The collections between their mark and the routing of their calls
+       whose domain includes this interpreter, under the head lock; its
+       deletion waits for none (note 13 section 3.2), on *queue_unpinned. */
+    Py_ssize_t queue_pins;
+    PyEvent *queue_unpinned;
 };
 
-#ifndef Py_GIL_DISABLED
+/* No automatic collection until _PyGC_Init() has set alloc_limit. */
 #define GC_GENERATION_INIT \
     .generations = { \
         { .threshold = 2000, }, \
         { .threshold = 10, }, \
         { .threshold = 10, }, \
     }, \
-    .heap_size = 0,
-#else
-#define GC_GENERATION_INIT \
-    .young = { .threshold = 2000, }, \
-    .old = { \
-        { .threshold = 10, }, \
-        { .threshold = 10, }, \
-    },
-#endif
+    .heap_size = 0, \
+    .alloc_limit = PY_SSIZE_T_MAX, \
+    .alloc_threshold = 32 * 1024 * 1024,
 
 #include "pycore_gil.h"           // struct _gil_runtime_state
 
@@ -362,9 +358,6 @@ struct _import_state {
     PyObject *lazy_pending_submodules;
     // Avoid pending-child work for ordinary cached imports.
     int has_lazy_submodules;
-#ifdef Py_GIL_DISABLED
-    PyMutex lazy_mutex;
-#endif
     /* The global import lock. */
     _PyRecursiveMutex lock;
     /* diagnostic info in PyImport_ImportModuleLevelObject() */
@@ -398,10 +391,6 @@ struct codecs_state {
     // A dict mapping error handling strategies to functions to implement them.
     PyObject *error_registry;
 
-#ifdef Py_GIL_DISABLED
-    // Used to safely delete a specific item from search_path.
-    PyMutex search_path_mutex;
-#endif
 
     // Whether or not the rest of the state is initialized.
     int initialized;
@@ -424,8 +413,7 @@ struct _stoptheworld_state {
     PyThreadState *requester; // Thread that requested the pause (may be NULL).
 };
 
-/* Tracks some rare events per-interpreter, used by the optimizer to turn on/off
-   specific optimizations. */
+/* Tracks some rare events per-interpreter. */
 typedef struct _rare_events {
     /* Setting an object's class, obj.__class__ = ... */
     uint8_t set_class;
@@ -440,25 +428,8 @@ typedef struct _rare_events {
 } _rare_events;
 
 // Optimization configuration for the interpreter.
-// This groups all thresholds and optimization flags for both JIT and interpreter.
 typedef struct _PyOptimizationConfig {
-    // Interpreter optimization thresholds
-    uint16_t jump_backward_initial_value;
-    uint16_t jump_backward_initial_backoff;
-
-    uint16_t resume_initial_value;
-    uint16_t resume_initial_backoff;
-
-    // JIT optimization thresholds
-    uint16_t side_exit_initial_value;
-    uint16_t side_exit_initial_backoff;
-
-    // Trace fitness thresholds
-    uint16_t fitness_initial;
-
-    // Optimization flags
     bool specialization_enabled;
-    bool uops_optimize_enabled;
 } _PyOptimizationConfig;
 
 struct
@@ -514,10 +485,6 @@ struct _func_version_cache_item {
 };
 
 struct _py_func_state {
-#ifdef Py_GIL_DISABLED
-    // Protects next_version
-    PyMutex mutex;
-#endif
 
     uint32_t next_version;
     // Borrowed references to function and code objects whose
@@ -733,9 +700,6 @@ typedef struct wrapperbase pytype_slotdef;
 
 
 struct _Py_interp_cached_objects {
-#ifdef Py_GIL_DISABLED
-    PyMutex interned_mutex;
-#endif
     PyObject *interned_strings;
 
     /* object.__reduce__ */
@@ -751,9 +715,6 @@ struct _Py_interp_cached_objects {
     PyTypeObject *constevaluator_type;
 
     /* Descriptors for __dict__ and __weakref__ */
-#ifdef Py_GIL_DISABLED
-    PyMutex descriptor_mutex;
-#endif
     PyObject *dict_descriptor;
     PyObject *weakref_descriptor;
 };
@@ -761,8 +722,7 @@ struct _Py_interp_cached_objects {
 struct _Py_interp_static_objects {
     struct {
         int _not_used;
-        // hamt_empty is here instead of global because of its weakreflist.
-        _PyGC_Head_UNUSED _hamt_empty_gc_not_used;
+        // hamt_empty is here instead of global because of its weak references.
         PyHamtObject hamt_empty;
         PyBaseExceptionObject last_resort_memory_error;
     } singletons;
@@ -771,59 +731,6 @@ struct _Py_interp_static_objects {
 #include "pycore_instruments.h"   // PY_MONITORING_TOOL_IDS
 
 
-#ifdef Py_GIL_DISABLED
-
-// A min-heap of indices
-typedef struct _PyIndexHeap {
-    int32_t *values;
-
-    // Number of items stored in values
-    Py_ssize_t size;
-
-    // Maximum number of items that can be stored in values
-    Py_ssize_t capacity;
-} _PyIndexHeap;
-
-// An unbounded pool of indices. Indices are allocated starting from 0. They
-// may be released back to the pool once they are no longer in use.
-typedef struct _PyIndexPool {
-    PyMutex mutex;
-
-    // Min heap of indices available for allocation
-    _PyIndexHeap free_indices;
-
-    // Next index to allocate if no free indices are available
-    int32_t next_index;
-
-    // Generation counter incremented on thread creation/destruction
-    // Used for TLBC cache invalidation in remote debugging
-    uint32_t tlbc_generation;
-} _PyIndexPool;
-
-typedef union _Py_unique_id_entry {
-    // Points to the next free type id, when part of the freelist
-    union _Py_unique_id_entry *next;
-
-    // Stores the object when the id is assigned
-    PyObject *obj;
-} _Py_unique_id_entry;
-
-struct _Py_unique_id_pool {
-    PyMutex mutex;
-
-    // combined table of object with allocated unique ids and unallocated ids.
-    _Py_unique_id_entry *table;
-
-    // Next entry to allocate inside 'table' or NULL
-    _Py_unique_id_entry *freelist;
-
-    // size of 'table'
-    Py_ssize_t size;
-};
-
-#endif
-
-typedef _Py_CODEUNIT *(*_PyJitEntryFuncPtr)(struct _PyExecutorObject *exec, _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate);
 
 #define _PyInterpreterGuard_GUARDS_NOT_ALLOWED UINTPTR_MAX
 
@@ -953,12 +860,8 @@ struct _is {
     struct _stoptheworld_state stoptheworld;
     struct _qsbr_shared qsbr;
 
-#if defined(Py_GIL_DISABLED)
+#if defined(WITH_MIMALLOC)
     struct _mimalloc_interp_state mimalloc;
-    struct _brc_state brc;  // biased reference counting state
-    struct _Py_unique_id_pool unique_ids;  // object ids for per-thread refcounts
-    PyMutex weakref_locks[NUM_WEAKREF_LIST_LOCKS];
-    _PyIndexPool tlbc_indices;
 #endif
     // Per-interpreter list of tasks, any lingering tasks from thread
     // states gets added here and removed from the corresponding
@@ -1002,20 +905,9 @@ struct _is {
     struct ast_state ast;
     struct types_state types;
     struct callable_cache callable_cache;
-    _PyStackRef common_consts[NUM_COMMON_CONSTANTS];
-    bool jit;
-    bool compiling;
+    PyValue common_consts[NUM_COMMON_CONSTANTS];
 
-    // Optimization configuration (thresholds and flags for JIT and interpreter)
     _PyOptimizationConfig opt_config;
-    _PyBloomFilter *executor_blooms;             // Contiguous bloom filter array
-    struct _PyExecutorObject **executor_ptrs;    // Corresponding executor pointer array
-    size_t executor_count;                       // Number of valid executors
-    size_t executor_capacity;                    // Array capacity
-    struct _PyExecutorObject *executor_deletion_list_head;
-    struct _PyExecutorObject *cold_executor;
-    struct _PyExecutorObject *cold_dynamic_executor;
-    size_t executor_creation_counter;
     _rare_events rare_events;
     PyDict_WatchCallback builtins_dict_watcher;
 
@@ -1033,13 +925,6 @@ struct _is {
 
     Py_ssize_t _interactive_src_count;
 
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    uint64_t next_stackref;
-    _Py_hashtable_t *open_stackrefs_table;
-#  ifdef Py_STACKREF_CLOSE_DEBUG
-    _Py_hashtable_t *closed_stackrefs_table;
-#  endif
-#endif
 
 #ifdef Py_STATS
     // true if recording of pystats is on, this is used when new threads
@@ -1047,10 +932,6 @@ struct _is {
     int pystats_enabled;
     // allocated when (and if) stats are first enabled
     PyStats *pystats_struct;
-#ifdef Py_GIL_DISABLED
-    // held when pystats related interpreter state is being updated
-    PyMutex pystats_mutex;
-#endif
 #endif
 
     // The number of remaining finalization guards.

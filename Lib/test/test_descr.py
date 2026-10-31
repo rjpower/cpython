@@ -1,4 +1,5 @@
 import builtins
+import collections
 import copyreg
 import gc
 import itertools
@@ -16,6 +17,7 @@ import weakref
 from copy import deepcopy
 from contextlib import redirect_stdout
 from test import support
+from test.support import import_helper
 from test.support.script_helper import assert_python_ok
 
 try:
@@ -5572,6 +5574,42 @@ class MiscTests(unittest.TestCase):
         self.assertRegex(out, "after=Base2")
         self.assertRegex(out, "mykey2=from Base2")
 
+    def test_instance_lookup_reentrant_mro(self):
+        # As above, for an instance: the plan's MRO lookup runs __eq__ on a
+        # non-string class-dict key, which changes the class's bases.
+        code = textwrap.dedent("""
+        class MyKey(object):
+            def __hash__(self):
+                return hash('mykey')
+
+            def __eq__(self, other):
+                X.__bases__ = (Base2,)
+
+        class Base(object):
+            mykey = 'from Base'
+            mykey2 = 'from Base'
+
+        class Base2(object):
+            mykey = 'from Base2'
+            mykey2 = 'from Base2'
+
+        X = type('X', (Base,), {MyKey(): 5})
+        x = X()
+        print(f"mykey={x.mykey}")
+        print(f"after={','.join(c.__name__ for c in X.__bases__)}")
+        print(f"mykey2={x.mykey2}")
+        for i in range(100):
+            assert x.mykey2 == 'from Base2'
+        x.mykey2 = 'own'
+        print(f"own={x.mykey2}")
+        """)
+        _, out, err = assert_python_ok("-c", code)
+        out = out.decode()
+        self.assertRegex(out, "mykey=from Base")
+        self.assertRegex(out, "after=Base2")
+        self.assertRegex(out, "mykey2=from Base2")
+        self.assertRegex(out, "own=own")
+
 
 class PicklingTests(unittest.TestCase):
 
@@ -6346,6 +6384,768 @@ class TestGenericDescriptors(unittest.TestCase):
             weakref_descriptor.__get__(SlotClass(), SlotClass)
         with self.assertRaises(AttributeError):
             weakref_descriptor.__get__(IntSubclass(), IntSubclass)
+
+
+class IntSub(int):
+    pass
+
+
+def _values():
+    # Values made at run time: the int32 bounds and one past each, the
+    # special floats, True and an int subclass instance.  Each is read back
+    # by identity, which an inline value has by its bits and a heap value
+    # (2**31, NaN, the subclass instance) by its object.
+    one = int("1")
+    return [2**31 - one, -2**31 * one, 2**31 * one, -2**31 - one,
+            -0.0 * one, math.inf * one, -math.inf * one, math.nan * one,
+            True, IntSub(5), 12345 * one, 2.5 * one]
+
+
+def _fail_each_allocation(_testcapi, action, check=None):
+    # Fail each allocation of action() in turn, from the first, with every
+    # one after it, after a collection; call check() after each failure,
+    # with the allocator restored.  Returns the number of allocations of the
+    # passing run and the exceptions of the failed ones.
+    errors = []
+    # set_nomemory(n) fails the allocations after the first n.
+    for n in range(100):
+        gc.collect()
+        error = None
+        _testcapi.set_nomemory(n, 0)
+        try:
+            action()
+        except BaseException as exc:
+            error = exc
+        finally:
+            _testcapi.remove_mem_hooks()
+        if error is None:
+            return n, errors
+        errors.append(error)
+        if check is not None:
+            check()
+    raise AssertionError("the action never passed")
+
+
+_DESCRIPTOR_MUTATION = """if 1:
+    import gc
+
+    class D:
+        def __get__(self, obj, owner):
+            del owner.d
+            gc.collect()
+            return self.base + len("ab")
+    class C:
+        pass
+    C.d = D()
+    vars(C)["d"].base = 100000
+    assert C().d == 100002
+    assert "d" not in vars(C)
+
+    def first(self):
+        vars(P)["p"].__init__(second)
+        gc.collect()
+        return 2.5 * len("ab")
+    def second(self):
+        return 7
+    class P:
+        p = property(first)
+    del first
+    assert P().p == 5.0
+    assert P().p == 7
+
+    def removing(self):
+        del Q.p
+        gc.collect()
+        return 100000 + len("abc")
+    class Q:
+        p = property(removing)
+    del removing
+    assert Q().p == 100003
+    assert "p" not in vars(Q)
+    print("ok")
+"""
+
+
+class ValueAttributeTests(unittest.TestCase):
+    """6d rung 2: the attribute slots return and take values, so a value
+    passes through each path unboxed, and comes back the same."""
+
+    def test_identity(self):
+        class C:
+            @property
+            def p(self):
+                return 12345
+        class G:
+            def __getattribute__(self, name):
+                return 12345
+        self.assertIs(C().p, 12345)
+        self.assertIs(G().anything, 12345)
+
+    def test_paths(self):
+        for v in _values():
+            with self.subTest(v=v):
+                class P:
+                    @property
+                    def p(self):
+                        return v
+                    @p.setter
+                    def p(self, value):
+                        self.stored = value
+                class GA:
+                    def __getattribute__(self, name):
+                        return v
+                class GH:
+                    def __getattr__(self, name):
+                        return v
+                class D:
+                    def __get__(self, obj, owner=None):
+                        return v
+                    def __set__(self, obj, value):
+                        obj.__dict__["set"] = value
+                class H:
+                    d = D()
+                    def __setattr__(self, name, value):
+                        object.__setattr__(self, name, value)
+                class S:
+                    __slots__ = ("s",)
+                NT = collections.namedtuple("NT", "a b")
+
+                o = P()
+                self.assertIs(o.p, v)
+                o.p = v
+                self.assertIs(o.stored, v)
+                self.assertIs(GA().x, v)
+                self.assertIs(GH().x, v)
+                h = H()
+                self.assertIs(h.d, v)
+                h.d = v
+                self.assertIs(h.set, v)
+                h.x = v
+                self.assertIs(h.x, v)
+                self.assertIs(getattr(h, "x", None), v)
+                s = S()
+                s.s = v
+                self.assertIs(s.s, v)
+                self.assertIs(NT(v, 1).a, v)
+                P.cls = v
+                self.assertIs(P.cls, v)
+                self.assertIs(P().cls, v)
+                setattr(o, "y", v)
+                self.assertIs(o.y, v)
+
+    def test_wrappers(self):
+        # The explicit wrapper calls box only what a PyObject * parameter
+        # takes.
+        self.assertEqual(property(lambda s: s + 1).__get__(3, int), 4)
+        calls = []
+        p = property(lambda s: 0, lambda s, v: calls.append(("set", s, v)),
+                     lambda s: calls.append(("del", s)))
+        self.assertIs(p.__get__(None, 3), p)
+        p.__set__(3, 2.5)
+        p.__delete__(3)
+        self.assertEqual(calls, [("set", 3, 2.5), ("del", 3)])
+        with self.assertRaisesRegex(TypeError, "not 'int'"):
+            object.__getattribute__(object(), 3)
+        with self.assertRaisesRegex(TypeError, "not 'int'"):
+            object.__setattr__(object(), 3, 1)
+        with self.assertRaisesRegex(TypeError, "not 'float'"):
+            object.__delattr__(object(), 2.5)
+        self.assertEqual(int.__dict__["real"].__get__(100000, int), 100000)
+        self.assertEqual(float.__dict__["real"].__get__(2.5, float), 2.5)
+
+    def test_wrapper_nomemory(self):
+        # The wrapper boxes its inline argument (rung 3 removes the box).
+        # The same call on a heap int makes no allocation and passes under
+        # the same injection, so each MemoryError arises at the box.
+        _testcapi = import_helper.import_module("_testcapi")
+        get = int.__dict__["real"].__get__
+        inline = 100000 + int("1")
+        heap = 2**40 + int("1")
+        count, errors = _fail_each_allocation(_testcapi,
+                                              lambda: get(inline, int))
+        control, _ = _fail_each_allocation(_testcapi, lambda: get(heap, int))
+        self.assertGreater(count, control)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(get(inline, int), inline)
+
+    def test_nomemory_boxes(self):
+        # Test 6: the box of an inline value at the error path, at the
+        # compatibility forms' results and at a native object field.  Each
+        # allocation of the action fails in turn with every one after it;
+        # the same action on a heap value is the control, so the inline
+        # action's extra allocations are its box.  Each failure is a
+        # MemoryError, leaves the destination as it was, and the action
+        # passes once the roots have unwound.
+        _testcapi = import_helper.import_module("_testcapi")
+        _testlimitedcapi = import_helper.import_module("_testlimitedcapi")
+        pv = _testcapi.pyvalue
+        n = 100000 + int("2")
+        heap = 2**40 + int("2")
+        class O:
+            pass
+        def owner(v):
+            o = O()
+            o.a = v
+            return o
+        def miss(v):
+            try:
+                v.missing
+            except AttributeError as exc:
+                return exc
+        exc = AttributeError()
+        exc.obj = "previous"
+        def unchanged():
+            self.assertEqual(exc.obj, "previous")
+        cases = [
+            ("error path", miss, None),
+            ("PyObject_GetAttr",
+             lambda v: _testlimitedcapi.object_getattr(v, "a"), None),
+            ("PyObject_GetOptionalAttr",
+             lambda v: _testcapi.object_getoptionalattr(v, "a"), None),
+            ("_Py_T_OBJECT store",
+             lambda v: pv.MemberSetOneValue(exc, "obj", v), unchanged),
+        ]
+        for name, action, check in cases:
+            for inline in (n, 2.5 * n):
+                with self.subTest(name=name, inline=inline):
+                    if name.startswith("PyObject_Get"):
+                        args = owner(inline), owner(heap)
+                    else:
+                        args = inline, heap
+                    count, errors = _fail_each_allocation(
+                        _testcapi, lambda: action(args[0]), check)
+                    if check is not None:
+                        exc.obj = "previous"
+                    control, _ = _fail_each_allocation(
+                        _testcapi, lambda: action(args[1]), check)
+                    self.assertGreater(count, control)
+                    for error in errors:
+                        self.assertIsInstance(error, MemoryError)
+                    if check is not None:
+                        exc.obj = "previous"
+        self.assertEqual(miss(n).obj, n)
+        self.assertEqual(_testlimitedcapi.object_getattr(owner(n), "a"), n)
+        pv.MemberSetOneValue(exc, "obj", n)
+        self.assertEqual(exc.obj, n)
+
+    def test_descriptor_mutation_collecting(self):
+        # Test 5: a __get__ that deletes itself from its class, a getter
+        # that replaces its property's fget, and one that removes its
+        # property, each collecting before it returns.  The lookup's roots
+        # hold the descriptor and the function being run, the only holders
+        # once the class lets go; under kill on debug builds a missed root
+        # would abort.
+        rc, out, err = assert_python_ok("-c", _DESCRIPTOR_MUTATION)
+        self.assertEqual(out.split(), [b"ok"])
+        if support.Py_DEBUG:
+            rc, out, err = assert_python_ok("-c", _DESCRIPTOR_MUTATION,
+                                            PYTHON_GCVERIFY="kill")
+            self.assertEqual(out.split(), [b"ok"])
+
+    def test_errors(self):
+        n = 100000 + int("1")
+        for owner in (n, 2.5 * n):
+            with self.subTest(owner=owner):
+                with self.assertRaises(AttributeError) as cm:
+                    owner.missing
+                self.assertEqual(cm.exception.name, "missing")
+                self.assertIs(cm.exception.obj, owner)
+                with self.assertRaises(AttributeError) as cm:
+                    owner.missing = 1
+                self.assertEqual(cm.exception.name, "missing")
+                self.assertIs(cm.exception.obj, owner)
+                with self.assertRaises(AttributeError):
+                    del owner.missing
+                with self.assertRaisesRegex(AttributeError, "not writable"):
+                    owner.real = 1
+                self.assertIsNone(getattr(owner, "missing", None))
+                self.assertFalse(hasattr(owner, "missing"))
+                self.assertTrue(hasattr(owner, "real"))
+
+    def test_type_dict_stores(self):
+        class C:
+            x = 1
+        class D(C):
+            pass
+        def read(cls):
+            return cls.x
+        def read_instance(cls):
+            return cls().x
+        for _ in range(100):    # warm the caches and the specialised sites
+            self.assertEqual(read(C), 1)
+            self.assertEqual(read(D), 1)
+            self.assertEqual(read_instance(D), 1)
+        C.x = 2.5
+        self.assertEqual(read(C), 2.5)
+        self.assertEqual(read(D), 2.5)
+        self.assertEqual(read_instance(D), 2.5)
+        D.x = 12345
+        self.assertIs(read(D), 12345)
+        self.assertEqual(read(C), 2.5)
+        del D.x
+        self.assertEqual(read(D), 2.5)
+        del C.x
+        for cls in (C, D):
+            with self.assertRaises(AttributeError):
+                read(cls)
+            with self.assertRaises(AttributeError):
+                read_instance(cls)
+
+    def test_forwarding(self):
+        import threading
+        v = 12345 * int("1")
+        class C:
+            pass
+        c = C()
+        c.x = v
+        proxy = weakref.proxy(c)
+        local = threading.local()
+        local.x = v
+        module = types.ModuleType("m")
+        module.__getattr__ = lambda name: v if name == "x" else (
+            (_ for _ in ()).throw(AttributeError(name)))
+        class G:
+            x = v
+            def __class_getitem__(cls, item):
+                return types.GenericAlias(cls, item)
+        owners = [proxy, local, module, G[int]]
+        try:
+            import _testmultiphase
+        except ImportError:
+            pass
+        else:
+            e = _testmultiphase.Example()
+            e.x = v
+            owners.append(e)
+        try:
+            import xxlimited
+        except ImportError:
+            pass
+        else:
+            o = xxlimited.Xxo()
+            o.x = v
+            owners.append(o)
+        for owner in owners:
+            with self.subTest(owner=type(owner)):
+                self.assertIs(owner.x, v)
+                self.assertIs(getattr(owner, "x", None), v)
+                self.assertTrue(hasattr(owner, "x"))
+                self.assertFalse(hasattr(owner, "missing"))
+                self.assertIsNone(getattr(owner, "missing", None))
+        proxy.y = 2.5
+        self.assertEqual(c.y, 2.5)
+        import io
+        class Pickler(pickle.Pickler):
+            pass
+        pickler = Pickler(io.BytesIO())
+        pickler.persistent_id = v
+        self.assertIs(pickler.persistent_id, v)
+        pickler.attr = v
+        self.assertIs(pickler.attr, v)
+
+
+class ValueCallTests(unittest.TestCase):
+    """6d rung 3: tp_call returns a value, so a call's result passes
+    through each path unboxed, and comes back the same."""
+
+    def test_identity(self):
+        nan = math.nan * int("1")
+        for v in (12345, -0.0, nan):
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self):
+                        return v
+                self.assertIs(C()(), v)
+        class P:
+            x = 12345
+        self.assertIs(object.__getattribute__(P(), "x"), 12345)
+        self.assertIs(int.__add__(5, 3), 8)
+
+    def test_paths(self):
+        import functools
+        import operator
+        for v in _values():
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self, *args, **kwargs):
+                        return v
+                    def m(self, *args):
+                        return v
+                class N:
+                    def __new__(cls):
+                        return v
+                class O:
+                    a = v
+                c = C()
+                f = lambda *args, **kwargs: v
+                call = lambda o, *args: type(o).__call__(o, *args)
+                # _PyObject_MakeTpCall(), slot_tp_call() and wrap_call()
+                self.assertIs(c(), v)
+                self.assertIs(c(1, k=2), v)
+                self.assertIs(call(c), v)
+                self.assertIs(N(), v)
+                # PyObject_Call() and the module types' tp_call
+                p = functools.partial(c, 1)
+                self.assertIs(p(2, k=3), v)
+                self.assertIs(call(p, 2), v)
+                self.assertIs(call(functools.partial(f, k=1)), v)
+                mc = operator.methodcaller("m", 1)
+                self.assertIs(mc(c), v)
+                self.assertIs(call(mc, c), v)
+                self.assertIs(call(operator.itemgetter(0), [v]), v)
+                self.assertIs(call(operator.itemgetter(0), (v,)), v)
+                self.assertIs(call(operator.attrgetter("a"), O()), v)
+                self.assertEqual(call(operator.itemgetter(0, 1), [v, 1]),
+                                 (v, 1))
+                self.assertIs(staticmethod(f)(), v)
+                self.assertIs(call(staticmethod(f)), v)
+                self.assertIs(weakref.proxy(c)(), v)
+                alias = types.GenericAlias(f, (int,))
+                self.assertIs(alias(), v)
+                self.assertIs(call(alias), v)
+                for maxsize in (0, None, 128):
+                    cached = functools.lru_cache(maxsize=maxsize)(f)
+                    self.assertIs(cached(1), v)     # miss
+                    self.assertIs(cached(1), v)     # hit, or a miss at 0
+                    self.assertIs(call(cached, 1), v)
+                # The wrappers of the C slots
+                self.assertIs(iter([v]).__next__(), v)
+                self.assertIs(type(c).__dict__["m"].__get__(c, C)(), v)
+                self.assertIs(object.__getattribute__(O(), "a"), v)
+
+    def test_wrapper_results(self):
+        one = int("1")
+        top = 2**31 - one
+        self.assertIs(int.__add__(top - 1, 1), top)
+        self.assertEqual(int.__add__(top, 1), 2**31)
+        self.assertIs(int.__sub__(-top, 1), -2**31)
+        self.assertEqual(int.__sub__(-2**31, one), -2**31 - 1)
+        self.assertIs(int.__neg__(top), -top)
+        self.assertIs(float.__mul__(-0.0, one + 0.0), -0.0)
+        self.assertIs(float.__mul__(math.inf, 2.0), math.inf)
+        self.assertTrue(math.isnan(float.__sub__(math.inf, math.inf)))
+        self.assertIs([1, 2].__len__(), 2)
+        self.assertIs((12345 * one).__hash__(), 12345)
+        self.assertIs((5 * one).__lt__(6), True)
+        self.assertIs((5 * one).__eq__("5"), NotImplemented)
+        self.assertIs([7 * one].__getitem__(0), 7)
+        self.assertIs(divmod(7, 2)[0], 3)
+
+    def test_starred_calls(self):
+        # CALL_FUNCTION_EX passes the callee to the call as a value: a
+        # result comes back the same, and an inline callee is not callable,
+        # cold and after the call site specialises.
+        n = 100000 + int("1")
+        def calls(f, a, k):
+            return f(*a), f(*a, **k), f(*list(a))
+        for v in _values():
+            with self.subTest(v=v):
+                class C:
+                    def __call__(self, *args, **kwargs):
+                        return v
+                for _ in range(20):
+                    self.assertEqual([r is v for r in calls(C(), (1,), {"k": 2})],
+                                     [True] * 3)
+        forms = [lambda f: f(*(1,)), lambda f: f(*(1,), **{"k": 2}),
+                 lambda f: f(*[1])]
+        for callee in (n, 2.5 * n):
+            message = f"'{type(callee).__name__}' object is not callable"
+            for form in forms:
+                with self.subTest(callee=callee, form=forms.index(form)):
+                    for _ in range(20):
+                        with self.assertRaisesRegex(TypeError, message):
+                            form(callee)
+
+    def test_init_result(self):
+        for v in (5, 2.5, "s"):
+            with self.subTest(v=v):
+                class C:
+                    def __init__(self):
+                        return v
+                with self.assertRaisesRegex(
+                        TypeError,
+                        rf"__init__\(\) should return None, not "
+                        rf"'{type(v).__name__}'"):
+                    C()
+
+
+class ValueGetsetTests(unittest.TestCase):
+    """6d rung 4: a getset getter returns a value, so a number getter makes
+    no object, and a stored value comes back the same."""
+
+    def test_identity(self):
+        import datetime
+        n = int("1")
+        self.assertIs(memoryview(b"ab").ndim, 1)
+        self.assertIs(memoryview(b"ab").itemsize, 1)
+        self.assertIs(datetime.date(2020, 1, 2).day, 2)
+        self.assertIs(memoryview(bytearray(100000 + n)).nbytes, 100001)
+        self.assertIs(datetime.time(microsecond=999999).microsecond, 999999)
+        self.assertIs((2.5 * n).imag, 0.0)
+        self.assertIs((-2.5 * n).real, -2.5)
+        big = 2**70 * n
+        self.assertIs(big.imag, 0)
+        self.assertIs(big.denominator, 1)
+        self.assertIs(big.real, big)
+        nan = math.nan * n
+        self.assertIs(nan.real, nan)
+        def f():
+            pass
+        self.assertEqual(f.__name__, "f")
+        self.assertIs(f.__name__, f.__name__)
+        for v in (100000 + n, 2.5 * n, 2**31 * n, nan):
+            with self.subTest(v=v):
+                cell = types.CellType(v)
+                self.assertIs(cell.cell_contents, v)
+
+    def test_dict_entries(self):
+        # The type's and the module's dict-backed getters return the value
+        # stored, through its descriptor's __get__ when it has one.
+        n = int("1")
+        class C:
+            __doc__ = 100000 + n
+        self.assertIs(C.__doc__, 100001)
+        class D:
+            pass
+        D.__doc__ = 2.5 * n
+        self.assertIs(D.__doc__, 2.5)
+        class Get:
+            def __get__(self, obj, owner):
+                return 12345 * n
+        class E:
+            __doc__ = Get()
+        self.assertIs(E.__doc__, 12345)
+        m = types.ModuleType("m")
+        m.__annotations__ = {"x": int}
+        self.assertEqual(m.__annotations__, {"x": int})
+        self.assertIsNone(types.ModuleType("m2").__annotate__)
+
+    def test_dict(self):
+        # PyObject_GenericGetDict() returns the dict as a value; its identity
+        # is unchanged.
+        class C:
+            pass
+        c = C()
+        c.x = 100000 + int("1")
+        d = c.__dict__
+        self.assertIs(c.__dict__, d)
+        self.assertIs(d["x"], 100001)
+        def f():
+            pass
+        self.assertIs(f.__dict__, f.__dict__)
+
+
+class ValueSetterTests(unittest.TestCase):
+    """6d rung 4: a getset setter takes a value.  A number setter reads it
+    with the value form of today's conversion; a setter that keeps or
+    passes on an object boxes it at its top; deletion is PyValue_NULL."""
+
+    def test_number_setters(self):
+        # OSError's characters_written keeps PyNumber_AsSsize_t()'s protocol
+        # (__index__, overflow as ValueError) through its value form.
+        n = 100000 + int("1")
+        class Index:
+            def __index__(self):
+                return 7
+        e = OSError()
+        e.characters_written = n
+        self.assertIs(e.characters_written, n)
+        e.characters_written = Index()
+        self.assertEqual(e.characters_written, 7)
+        e.characters_written = True
+        self.assertEqual(e.characters_written, 1)
+        with self.assertRaises(ValueError):
+            e.characters_written = 2**70
+        with self.assertRaises(TypeError):
+            e.characters_written = 2.5
+        del e.characters_written
+        with self.assertRaises(AttributeError):
+            del e.characters_written
+        with self.assertRaises(AttributeError):
+            e.characters_written
+
+    def test_decimal_context(self):
+        # The context setters keep PyLong_AsSsize_t()'s protocol: an int
+        # only, no __index__, overflow as OverflowError; Context() passes
+        # its arguments to the same setters.
+        decimal = import_helper.import_module("_decimal")
+        n = 100000 + int("1")
+        class Index:
+            def __index__(self):
+                return 7
+        c = decimal.Context()
+        c.prec = n
+        self.assertEqual(c.prec, n)
+        c.prec = True
+        self.assertEqual(c.prec, 1)
+        with self.assertRaises(OverflowError):
+            c.prec = 2**70
+        with self.assertRaises(TypeError):
+            c.prec = 2.5
+        with self.assertRaises(TypeError):
+            c.prec = Index()
+        with self.assertRaises(AttributeError):
+            del c.prec
+        c = decimal.Context(prec=n, Emin=-n, Emax=n, capitals=0, clamp=1)
+        self.assertEqual((c.prec, c.Emin, c.Emax, c.capitals, c.clamp),
+                         (n, -n, n, 0, 1))
+
+    def test_object_setters(self):
+        # A setter that keeps an object boxes an inline value; its errors
+        # name the value's type.
+        def f():
+            pass
+        with self.assertRaises(TypeError):
+            f.__name__ = 5
+        with self.assertRaises(TypeError):
+            f.__qualname__ = 2.5
+        f.__doc__ = 100000 + int("1")
+        self.assertEqual(f.__doc__, 100001)
+        class C:
+            pass
+        for v, name in ((5, "int"), (2.5, "float")):
+            with self.subTest(v=v):
+                with self.assertRaisesRegex(TypeError,
+                                            f"not a '{name}'"):
+                    C().__dict__ = v
+
+    def test_cell(self):
+        # cell_contents stores the value: an inline one comes back the same.
+        n = int("1")
+        cell = types.CellType()
+        for v in (100000 + n, 2.5 * n, 2**31 * n, math.nan * n):
+            with self.subTest(v=v):
+                cell.cell_contents = v
+                self.assertIs(cell.cell_contents, v)
+        del cell.cell_contents
+        with self.assertRaises(ValueError):
+            cell.cell_contents
+
+    def test_deletion(self):
+        # Each setter that allows deletion receives it.
+        n = 100000 + int("1")
+        def f(a=1, *, b=2):
+            pass
+        del f.__defaults__
+        self.assertIsNone(f.__defaults__)
+        del f.__kwdefaults__
+        self.assertIsNone(f.__kwdefaults__)
+        f.__annotations__ = {"x": n}
+        del f.__annotations__
+        self.assertEqual(f.__annotations__, {})
+        class C:
+            pass
+        C.__annotations__ = {"x": n}
+        self.assertEqual(C.__annotations__, {"x": n})
+        del C.__annotations__
+        C.__abstractmethods__ = 2.5 * n
+        self.assertEqual(C.__abstractmethods__, 2.5 * n)
+        del C.__abstractmethods__
+        with self.assertRaises(AttributeError):
+            C.__abstractmethods__
+        m = types.ModuleType("m")
+        m.__annotations__ = {"x": n}
+        del m.__annotations__
+        with self.assertRaises(AttributeError):
+            del m.__annotations__
+        with self.assertRaises(TypeError):
+            del f.__name__
+
+    def test_dict_entries(self):
+        # The dict-backed setters store the value as it is.
+        n = int("1")
+        class C:
+            pass
+        C.__annotations__ = 100000 + n
+        self.assertIs(C.__annotations__, 100001)
+        C.__abstractmethods__ = 0
+        self.assertFalse(C.__flags__ & (1 << 20))
+        m = types.ModuleType("m")
+        m.__annotations__ = 2.5 * n
+        self.assertIs(m.__annotations__, 2.5)
+
+    def test_wrapped_dict_entries(self):
+        # classmethod's and staticmethod's __annotations__ and __annotate__,
+        # and a type's __abstractmethods__, keep the value in a dict as it
+        # is; deleting a classmethod's entry falls back to the wrapped
+        # function's attribute, and deleting it twice raises.
+        n = int("1")
+        def f():
+            pass
+        f.__annotations__ = {"x": int}
+        for wrap in classmethod, staticmethod:
+            with self.subTest(wrap=wrap.__name__):
+                w = wrap(f)
+                w.__annotations__ = 100000 + n
+                self.assertIs(w.__annotations__, 100001)
+                w.__annotate__ = 2.5 * n
+                self.assertIs(w.__annotate__, 2.5)
+                del w.__annotations__
+                with self.assertRaises(AttributeError):
+                    del w.__annotations__
+                self.assertEqual(w.__annotations__, {"x": int})
+        class C:
+            pass
+        C.__abstractmethods__ = 100000 + n
+        self.assertIs(C.__abstractmethods__, 100001)
+        C.__abstractmethods__ = 2.5 * n
+        self.assertIs(C.__abstractmethods__, 2.5)
+        del C.__abstractmethods__
+        with self.assertRaises(AttributeError):
+            C.__abstractmethods__
+
+    def test_dict_nomemory(self):
+        # PyObject_GenericGetDict() fails to make the dict, in both layouts:
+        # a managed dict (_PyObject_EnterDictMode) and a dict at
+        # tp_dictoffset (ensure_nonmanaged_dict).  Each failure is a
+        # MemoryError, and the attributes stored before read back.
+        _testcapi = import_helper.import_module("_testcapi")
+        n = 100000 + int("1")
+        class C:
+            pass
+        o = C()
+        o.a = n
+        count, errors = _fail_each_allocation(
+            _testcapi, lambda: o.__dict__,
+            lambda: self.assertEqual(o.a, n))
+        self.assertGreater(len(errors), 0)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(o.__dict__, {"a": n})
+        def f():
+            pass
+        count, errors = _fail_each_allocation(_testcapi, lambda: f.__dict__)
+        self.assertGreater(len(errors), 0)
+        for error in errors:
+            self.assertIsInstance(error, MemoryError)
+        self.assertEqual(f.__dict__, {})
+
+    def test_field_nomemory(self):
+        # A setter storing into a PyObject * field boxes an inline value at
+        # its top.  Each allocation fails in turn; the same store of a heap
+        # value is the control, so the inline store's extra allocation is
+        # its box.  Each failure is a MemoryError and leaves the field as
+        # it was.
+        _testcapi = import_helper.import_module("_testcapi")
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        n = 100000 + int("2")
+        heap = 2**40 + int("2")
+        o = _testinternalcapi.SetterBox()
+        def unchanged():
+            self.assertEqual(o.field, "previous")
+        for inline in (n, 2.5 * n):
+            with self.subTest(inline=inline):
+                o.field = "previous"
+                count, errors = _fail_each_allocation(
+                    _testcapi, lambda: setattr(o, "field", inline), unchanged)
+                self.assertEqual(o.field, inline)
+                o.field = "previous"
+                control, _ = _fail_each_allocation(
+                    _testcapi, lambda: setattr(o, "field", heap), unchanged)
+                self.assertGreater(count, control)
+                for error in errors:
+                    self.assertIsInstance(error, MemoryError)
 
 
 if __name__ == "__main__":

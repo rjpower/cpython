@@ -84,6 +84,7 @@ class ThreadPoolMixin(ExecutorMixin):
         return threading.Event()
 
 
+@support.requires_subinterpreters
 @support.skip_if_sanitizer("gh-129824: data races in InterpreterPool tests", thread=True)
 class InterpreterPoolMixin(ExecutorMixin):
     executor_type = futures.InterpreterPoolExecutor

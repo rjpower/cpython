@@ -1,0 +1,140 @@
+--- a/src/cffi/recompiler.py
++++ b/src/cffi/recompiler.py
+@@ -8,10 +8,9 @@ VERSION_EMBEDDED = 0x2701
+ VERSION_CHAR16CHAR32 = 0x2801
+ 
+ FREE_THREADED_BUILD = sysconfig.get_config_var("Py_GIL_DISABLED")
+-USE_LIMITED_API = ((sys.platform != 'win32' or sys.version_info < (3, 0) or
+-                   sys.version_info >= (3, 5)) and
+-                   # free-threaded build doesn't support the stable ABI until Python 3.15
+-                   (not FREE_THREADED_BUILD or sys.version_info >= (3, 15)))
++# This CPython has no limited C API and no stable ABI: Python.h rejects
++# Py_LIMITED_API and '.abi3.so' is not an extension suffix.
++USE_LIMITED_API = False
+ 
+ class GlobalExpr:
+     def __init__(self, name, address, type_op, size=0, check_value=0):
+@@ -698,8 +697,18 @@ class Recompiler:
+         #
+         prnt('#ifndef PYPY_VERSION')        # ------------------------------
+         #
+-        prnt('static PyObject *')
+-        prnt('_cffi_f_%s(PyObject *self, PyObject *%s)' % (name, argname))
++        # A METH_O function takes and returns a PyValue; METH_NOARGS and
++        # METH_VARARGS functions keep the object form.
++        if numargs == 1:
++            prnt('static PyValue')
++            prnt('_cffi_f_%s(PyObject *self, PyValue arg0_value)' % (name,))
++            errcode = 'return PyValue_NULL'
++            ret = 'PyValue_FromResult(%s)'
++        else:
++            prnt('static PyObject *')
++            prnt('_cffi_f_%s(PyObject *self, PyObject *%s)' % (name, argname))
++            errcode = 'return NULL'
++            ret = '%s'
+         prnt('{')
+         #
+         context = 'argument of %s' % name
+@@ -724,6 +733,10 @@ class Recompiler:
+             result_decl = None
+             result_code = ''
+         #
++        if numargs == 1:
++            prnt('  PyObject *arg0 = PyValue_Object(arg0_value);')
++            prnt('  if (arg0 == NULL)')
++            prnt('    return PyValue_NULL;')
+         if len(tp.args) > 1:
+             rng = range(len(tp.args))
+             for i in rng:
+@@ -737,7 +750,7 @@ class Recompiler:
+         #
+         for i, type in enumerate(tp.args):
+             self._convert_funcarg_to_c(type, 'arg%d' % i, 'x%d' % i,
+-                                       'return NULL')
++                                       errcode)
+             prnt()
+         #
+         prnt('  Py_BEGIN_ALLOW_THREADS')
+@@ -757,12 +770,12 @@ class Recompiler:
+                  self._convert_expr_from_c(tp.result, 'result', 'result type'))
+             for freeline in freelines:
+                 prnt('  ' + freeline)
+-            prnt('  return pyresult;')
++            prnt('  return %s;' % (ret % 'pyresult',))
+         else:
+             for freeline in freelines:
+                 prnt('  ' + freeline)
+             prnt('  Py_INCREF(Py_None);')
+-            prnt('  return Py_None;')
++            prnt('  return %s;' % (ret % 'Py_None',))
+         prnt('}')
+         #
+         prnt('#else')        # ------------------------------
+--- a/src/cffi/vengine_cpy.py
++++ b/src/cffi/vengine_cpy.py
+@@ -351,8 +351,18 @@ class VCPythonEngine:
+             argname = 'arg0'
+         else:
+             argname = 'args'
+-        prnt('static PyObject *')
+-        prnt('_cffi_f_%s(PyObject *self, PyObject *%s)' % (name, argname))
++        # A METH_O function takes and returns a PyValue; METH_NOARGS and
++        # METH_VARARGS functions keep the object form.
++        if numargs == 1:
++            prnt('static PyValue')
++            prnt('_cffi_f_%s(PyObject *self, PyValue arg0_value)' % (name,))
++            errcode = 'return PyValue_NULL'
++            ret = 'PyValue_FromResult(%s)'
++        else:
++            prnt('static PyObject *')
++            prnt('_cffi_f_%s(PyObject *self, PyObject *%s)' % (name, argname))
++            errcode = 'return NULL'
++            ret = '%s'
+         prnt('{')
+         #
+         context = 'argument of %s' % name
+@@ -374,6 +384,10 @@ class VCPythonEngine:
+         else:
+             result_code = ''
+         #
++        if numargs == 1:
++            prnt('  PyObject *arg0 = PyValue_Object(arg0_value);')
++            prnt('  if (arg0 == NULL)')
++            prnt('    return PyValue_NULL;')
+         if len(tp.args) > 1:
+             rng = range(len(tp.args))
+             for i in rng:
+@@ -386,7 +400,7 @@ class VCPythonEngine:
+         #
+         for i, type in enumerate(tp.args):
+             self._convert_funcarg_to_c(type, 'arg%d' % i, 'x%d' % i,
+-                                       'return NULL')
++                                       errcode)
+             prnt()
+         #
+         prnt('  Py_BEGIN_ALLOW_THREADS')
+@@ -406,12 +420,12 @@ class VCPythonEngine:
+                  self._convert_expr_from_c(tp.result, 'result', 'result type'))
+             for freeline in freelines:
+                 prnt('  ' + freeline)
+-            prnt('  return pyresult;')
++            prnt('  return %s;' % (ret % 'pyresult',))
+         else:
+             for freeline in freelines:
+                 prnt('  ' + freeline)
+             prnt('  Py_INCREF(Py_None);')
+-            prnt('  return Py_None;')
++            prnt('  return %s;' % (ret % 'Py_None',))
+         prnt('}')
+         prnt()
+ 
+@@ -425,7 +439,8 @@ class VCPythonEngine:
+             meth = 'METH_O'
+         else:
+             meth = 'METH_VARARGS'
+-        self._prnt('  {"%s", _cffi_f_%s, %s, NULL},' % (name, name, meth))
++        self._prnt('  {"%s", _PyCFunction_CAST(_cffi_f_%s), %s, NULL},'
++                   % (name, name, meth))
+ 
+     _loading_cpy_function = _loaded_noop
+ 

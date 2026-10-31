@@ -299,7 +299,6 @@ LDLIBRARYDIR=   @LDLIBRARYDIR@
 INSTSONAME=	@INSTSONAME@
 LIBRARY_DEPS=	@LIBRARY_DEPS@
 LINK_PYTHON_DEPS=@LINK_PYTHON_DEPS@
-JIT_OBJS=	@JIT_SHIM_O@
 PY_ENABLE_SHARED=	@PY_ENABLE_SHARED@
 STATIC_LIBPYTHON=	@STATIC_LIBPYTHON@
 
@@ -453,7 +452,6 @@ PYTHON_OBJS=	\
 		Python/ast_preprocess.o \
 		Python/ast_unparse.o \
 		Python/bltinmodule.o \
-		Python/brc.o \
 		Python/ceval.o \
 		Python/codecs.o \
 		Python/codegen.o \
@@ -467,9 +465,10 @@ PYTHON_OBJS=	\
 		Python/frame.o \
 		Python/frozenmain.o \
 		Python/future.o \
-		Python/gc.o \
-		Python/gc_free_threading.o \
-		Python/gc_gil.o \
+		Python/gc_live.o \
+		Python/gc_trace.o \
+		Python/gc_walk.o \
+		Python/gc_capture.o \
 		Python/getargs.o \
 		Python/getcompiler.o \
 		Python/getcopyright.o \
@@ -480,15 +479,13 @@ PYTHON_OBJS=	\
 		Python/hashtable.o \
 		Python/import.o \
 		Python/importdl.o \
-		Python/index_pool.o \
 		Python/initconfig.o \
 		Python/interpconfig.o \
 		Python/instrumentation.o \
 		Python/instruction_sequence.o \
 		Python/intrinsics.o \
-		Python/jit.o \
+		Python/ir.o \
 		Python/jit_publish.o \
-		$(JIT_OBJS) \
 		Python/legacy_tracing.o \
 		Python/lock.o \
 		Python/marshal.o \
@@ -496,9 +493,6 @@ PYTHON_OBJS=	\
 		Python/mysnprintf.o \
 		Python/mystrtoul.o \
 		Python/object_stack.o \
-		Python/optimizer.o \
-		Python/optimizer_analysis.o \
-		Python/optimizer_symbols.o \
 		Python/parking_lot.o \
 		Python/pathconfig.o \
 		Python/preconfig.o \
@@ -513,11 +507,13 @@ PYTHON_OBJS=	\
 		Python/pythonrun.o \
 		Python/pytime.o \
 		Python/qsbr.o \
+		Python/regcfg.o \
+		Python/regcfg_passes.o \
 		Python/bootstrap_hash.o \
 		Python/specialize.o \
 		Python/slots.o \
 		Python/slots_generated.o \
-		Python/stackrefs.o \
+		Python/pyvalue.o \
 		Python/structmember.o \
 		Python/symtable.o \
 		Python/sysmodule.o \
@@ -525,7 +521,6 @@ PYTHON_OBJS=	\
 		Python/traceback.o \
 		Python/tracemalloc.o \
 		Python/typecache.o \
-		Python/uniqueid.o \
 		Python/getopt.o \
 		Python/pystrcmp.o \
 		Python/pystrtod.o \
@@ -584,6 +579,8 @@ OBJECT_OBJS=	\
 		Objects/rangeobject.o \
 		Objects/sentinelobject.o \
 		Objects/setobject.o \
+		Objects/shapeobject.o \
+		Objects/lookupplan.o \
 		Objects/sliceobject.o \
 		Objects/structseq.o \
 		Objects/templateobject.o \
@@ -622,7 +619,7 @@ LINK_PYTHON_OBJS=@LINK_PYTHON_OBJS@
 # On some systems, object files that reference DTrace probes need to be modified
 # in-place by dtrace(1).
 DTRACE_DEPS = \
-	Python/ceval.o Python/gc.o Python/import.o Python/sysmodule.o
+	Python/ceval.o Python/import.o Python/sysmodule.o
 
 ##########################################################################
 # pyexpat's expat library
@@ -797,7 +794,7 @@ list-targets:
 	@grep -E '^[A-Za-z][-A-Za-z0-9]+:' Makefile | awk -F : '{print $$1}'
 
 .PHONY: build_all
-build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) platform sharedmods \
+build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) Python/gc_inline.stamp platform sharedmods \
 		gdbhooks Programs/_testembed scripts checksharedmods rundsymutil $(BUILD_DETAILS)
 
 .PHONY: build_wasm
@@ -984,8 +981,38 @@ clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c
 # Objects linked into the interpreter only, not into libpython.
 PLATFORM_MAIN_OBJS=	@PLATFORM_MAIN_OBJS@
 
+# root_check's C mode (Include/internal/pycore_gc_walk.h) over every core
+# source file that marks a function Py_GC_PRECISE: the interpreter does not
+# link while a marked function fails the check.
+GC_PRECISE_CHECK=Tools/cases_generator/root_check_c.py
+Python/gc_precise.stamp: $(LIBRARY_OBJS) $(srcdir)/$(GC_PRECISE_CHECK)
+	@files=`cd $(srcdir) && { grep -l -r -w --include='*.c' Py_GC_PRECISE Objects Python Modules Parser; \
+		grep -l -r -w --include='*.h' Py_GC_PRECISE Objects Python Modules Parser Include; } || true`; \
+	if test -n "$$files"; then \
+		(cd $(srcdir) && $(PYTHON_FOR_REGEN) $(GC_PRECISE_CHECK) $$files) || exit 1; \
+	fi
+	@touch $@
+
+# The inline audit (Tools/build/gc_inline_audit.py) over the linked
+# interpreter image: nothing the C mode has not checked is inlined into a
+# precise function.  Without readelf (no ELF), there is no precise section
+# to audit.
+GC_INLINE_AUDIT=$(srcdir)/Tools/build/gc_inline_audit.py
+Python/gc_inline.stamp: $(BUILDPYTHON) $(GC_INLINE_AUDIT) $(srcdir)/$(GC_PRECISE_CHECK)
+	@$(MAKE) check-gc-inline
+	@touch $@
+
+.PHONY: check-gc-inline
+check-gc-inline: $(BUILDPYTHON)
+	@if test "$(PY_ENABLE_SHARED)" = 1; then image=$(INSTSONAME); else image=$(BUILDPYTHON); fi; \
+	if command -v readelf >/dev/null 2>&1; then \
+		$(PYTHON_FOR_REGEN) $(GC_INLINE_AUDIT) $$image; \
+	else \
+		echo "check-gc-inline: no readelf, not audited"; \
+	fi
+
 # Build the interpreter
-$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS)
+$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS) Python/gc_precise.stamp
 	$(LINKCC) $(PY_CORE_EXE_LDFLAGS) $(LINKFORSHARED) -o $@ Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_OBJS) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 platform: $(PYTHON_FOR_BUILD_DEPS) pybuilddir.txt
@@ -1203,6 +1230,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/fileobject.h \
 		$(srcdir)/Include/fileutils.h \
 		$(srcdir)/Include/floatobject.h \
+		$(srcdir)/Include/pyvalue.h \
 		$(srcdir)/Include/frameobject.h \
 		$(srcdir)/Include/genericaliasobject.h \
 		$(srcdir)/Include/import.h \
@@ -1336,7 +1364,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_backoff.h \
 		$(srcdir)/Include/internal/pycore_bitutils.h \
 		$(srcdir)/Include/internal/pycore_blocks_output_buffer.h \
-		$(srcdir)/Include/internal/pycore_brc.h \
 		$(srcdir)/Include/internal/pycore_bytes_methods.h \
 		$(srcdir)/Include/internal/pycore_bytesobject.h \
 		$(srcdir)/Include/internal/pycore_call.h \
@@ -1360,15 +1387,16 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_dtoa.h \
 		$(srcdir)/Include/internal/pycore_exceptions.h \
 		$(srcdir)/Include/internal/pycore_faulthandler.h \
+		$(srcdir)/Include/internal/pycore_feedback.h \
 		$(srcdir)/Include/internal/pycore_fileutils.h \
 		$(srcdir)/Include/internal/pycore_floatobject.h \
 		$(srcdir)/Include/internal/pycore_flowgraph.h \
 		$(srcdir)/Include/internal/pycore_format.h \
 		$(srcdir)/Include/internal/pycore_frame.h \
-		$(srcdir)/Include/internal/pycore_freelist.h \
-		$(srcdir)/Include/internal/pycore_freelist_state.h \
 		$(srcdir)/Include/internal/pycore_function.h \
 		$(srcdir)/Include/internal/pycore_gc.h \
+		$(srcdir)/Include/internal/pycore_gc_trace.h \
+		$(srcdir)/Include/internal/pycore_gc_walk.h \
 		$(srcdir)/Include/internal/pycore_genobject.h \
 		$(srcdir)/Include/internal/pycore_getopt.h \
 		$(srcdir)/Include/internal/pycore_gil.h \
@@ -1380,7 +1408,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_hashtable.h \
 		$(srcdir)/Include/internal/pycore_import.h \
 		$(srcdir)/Include/internal/pycore_importdl.h \
-		$(srcdir)/Include/internal/pycore_index_pool.h \
 		$(srcdir)/Include/internal/pycore_initconfig.h \
 		$(srcdir)/Include/internal/pycore_instruments.h \
 		$(srcdir)/Include/internal/pycore_instruction_sequence.h \
@@ -1390,8 +1417,9 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_interpframe_structs.h \
 		$(srcdir)/Include/internal/pycore_interpolation.h \
 		$(srcdir)/Include/internal/pycore_intrinsics.h \
+		$(srcdir)/Include/internal/pycore_ir.h \
+		$(srcdir)/Include/internal/pycore_ir_metadata.h \
 		$(srcdir)/Include/internal/pycore_iterobject.h \
-		$(srcdir)/Include/internal/pycore_jit.h \
 		$(srcdir)/Include/internal/pycore_lazyimportobject.h \
 		$(srcdir)/Include/internal/pycore_list.h \
 		$(srcdir)/Include/internal/pycore_llist.h \
@@ -1412,7 +1440,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_obmalloc_init.h \
 		$(srcdir)/Include/internal/pycore_opcode_metadata.h \
 		$(srcdir)/Include/internal/pycore_opcode_utils.h \
-		$(srcdir)/Include/internal/pycore_optimizer.h \
 		$(srcdir)/Include/internal/pycore_parking_lot.h \
 		$(srcdir)/Include/internal/pycore_parser.h \
 		$(srcdir)/Include/internal/pycore_pathconfig.h \
@@ -1431,19 +1458,22 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_pythread.h \
 		$(srcdir)/Include/internal/pycore_qsbr.h \
 		$(srcdir)/Include/internal/pycore_range.h \
+		$(srcdir)/Include/internal/pycore_regcfg.h \
 		$(srcdir)/Include/internal/pycore_runtime.h \
 		$(srcdir)/Include/internal/pycore_runtime_init.h \
 		$(srcdir)/Include/internal/pycore_runtime_init_generated.h \
 		$(srcdir)/Include/internal/pycore_runtime_structs.h \
 		$(srcdir)/Include/internal/pycore_semaphore.h \
 		$(srcdir)/Include/internal/pycore_setobject.h \
+		$(srcdir)/Include/internal/pycore_shape.h \
+		$(srcdir)/Include/internal/pycore_lookup.h \
 		$(srcdir)/Include/internal/pycore_signal.h \
 		$(srcdir)/Include/internal/pycore_sliceobject.h \
 		$(srcdir)/Include/internal/pycore_slots.h \
 		$(srcdir)/Include/internal/pycore_slots_generated.h \
 		$(srcdir)/Include/internal/pycore_stats.h \
 		$(srcdir)/Include/internal/pycore_strhex.h \
-		$(srcdir)/Include/internal/pycore_stackref.h \
+		$(srcdir)/Include/internal/pycore_value.h \
 		$(srcdir)/Include/internal/pycore_structs.h \
 		$(srcdir)/Include/internal/pycore_structseq.h \
 		$(srcdir)/Include/internal/pycore_symtable.h \
@@ -1464,10 +1494,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_unicodeobject.h \
 		$(srcdir)/Include/internal/pycore_unicodeobject_generated.h \
 		$(srcdir)/Include/internal/pycore_unionobject.h \
-		$(srcdir)/Include/internal/pycore_uniqueid.h \
-		$(srcdir)/Include/internal/pycore_uop.h \
 		$(srcdir)/Include/internal/pycore_uop_ids.h \
-		$(srcdir)/Include/internal/pycore_uop_metadata.h \
 		$(srcdir)/Include/internal/pycore_wasm_trampoline.h \
 		$(srcdir)/Include/internal/pycore_warnings.h \
 		$(srcdir)/Include/internal/pycore_weakref.h \
@@ -2140,21 +2167,14 @@ Objects/mimalloc/page.o: $(srcdir)/Objects/mimalloc/page-queue.c
 
 .PHONY: regen-cases
 regen-cases: \
-        regen-opcode-ids regen-opcode-targets regen-uop-ids regen-opcode-metadata-py \
-		regen-generated-cases regen-executor-cases regen-optimizer-cases regen-record-functions \
-		regen-opcode-metadata regen-uop-metadata regen-test-cases regen-test-opcode-targets
+        regen-opcode-ids regen-uop-ids regen-opcode-metadata-py \
+		regen-opcode-metadata regen-ir-cases regen-ir-metadata
 
 .PHONY: regen-opcode-ids
 regen-opcode-ids:
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/opcode_id_generator.py \
 	    -o $(srcdir)/Include/opcode_ids.h.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Include/opcode_ids.h $(srcdir)/Include/opcode_ids.h.new
-
-.PHONY: regen-opcode-targets
-regen-opcode-targets:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/target_generator.py \
-	    -o $(srcdir)/Python/opcode_targets.h.new $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Python/opcode_targets.h $(srcdir)/Python/opcode_targets.h.new
 
 .PHONY: regen-uop-ids
 regen-uop-ids:
@@ -2168,85 +2188,47 @@ regen-opcode-metadata-py:
 	    -o $(srcdir)/Lib/_opcode_metadata.py.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Lib/_opcode_metadata.py $(srcdir)/Lib/_opcode_metadata.py.new
 
-.PHONY: regen-generated-cases
-regen-generated-cases:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/tier1_generator.py \
-	    -o $(srcdir)/Python/generated_cases.c.h.new $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Python/generated_cases.c.h $(srcdir)/Python/generated_cases.c.h.new
-
-.PHONY: regen-record-functions
-regen-record-functions:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/record_function_generator.py \
-	    -o $(srcdir)/Python/record_functions.c.h.new $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Python/record_functions.c.h $(srcdir)/Python/record_functions.c.h.new
-
-.PHONY: regen-test-cases
-regen-test-cases:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/tier1_generator.py \
-	    -o $(srcdir)/Modules/_testinternalcapi/test_cases.c.h.new $(srcdir)/Python/bytecodes.c \
-		$(srcdir)/Modules/_testinternalcapi/testbytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Modules/_testinternalcapi/test_cases.c.h $(srcdir)/Modules/_testinternalcapi/test_cases.c.h.new
-
-.PHONY: regen-test-opcode-targets
-regen-test-opcode-targets:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/target_generator.py \
-	    -o $(srcdir)/Modules/_testinternalcapi/test_targets.h.new $(srcdir)/Python/bytecodes.c \
-		$(srcdir)/Modules/_testinternalcapi/testbytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Modules/_testinternalcapi/test_targets.h $(srcdir)/Modules/_testinternalcapi/test_targets.h.new
-
-.PHONY: regen-executor-cases
-regen-executor-cases:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/tier2_generator.py \
-	    -o $(srcdir)/Python/executor_cases.c.h.new $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Python/executor_cases.c.h $(srcdir)/Python/executor_cases.c.h.new
-
-.PHONY: regen-optimizer-cases
-regen-optimizer-cases:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/optimizer_generator.py \
-	    -o $(srcdir)/Python/optimizer_cases.c.h.new \
-	    $(srcdir)/Python/optimizer_bytecodes.c \
-	    $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Python/optimizer_cases.c.h $(srcdir)/Python/optimizer_cases.c.h.new
-
 .PHONY: regen-opcode-metadata
 regen-opcode-metadata:
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/opcode_metadata_generator.py \
 	    -o $(srcdir)/Include/internal/pycore_opcode_metadata.h.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Include/internal/pycore_opcode_metadata.h $(srcdir)/Include/internal/pycore_opcode_metadata.h.new
 
-.PHONY: regen-uop-metadata
-regen-uop-metadata:
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/uop_metadata_generator.py -o \
-	    $(srcdir)/Include/internal/pycore_uop_metadata.h.new $(srcdir)/Python/bytecodes.c
-	$(UPDATE_FILE) $(srcdir)/Include/internal/pycore_uop_metadata.h $(srcdir)/Include/internal/pycore_uop_metadata.h.new
+# The register IR interpreter (Include/internal/pycore_ir.h)
+.PHONY: regen-ir-cases
+regen-ir-cases:
+	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/ir_generator.py \
+	    -o $(srcdir)/Python/generated_ir_cases.c.h.new \
+	    -t $(srcdir)/Python/ir_targets.h.new $(srcdir)/Python/bytecodes.c
+	$(UPDATE_FILE) $(srcdir)/Python/generated_ir_cases.c.h $(srcdir)/Python/generated_ir_cases.c.h.new
+	$(UPDATE_FILE) $(srcdir)/Python/ir_targets.h $(srcdir)/Python/ir_targets.h.new
 
-Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/instruction_sequence.o: \
+.PHONY: regen-ir-metadata
+regen-ir-metadata:
+	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/ir_metadata_generator.py \
+	    -o $(srcdir)/Include/internal/pycore_ir_metadata.h.new $(srcdir)/Python/bytecodes.c
+	$(UPDATE_FILE) $(srcdir)/Include/internal/pycore_ir_metadata.h $(srcdir)/Include/internal/pycore_ir_metadata.h.new
+
+Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/instruction_sequence.o Python/regcfg.o Python/regcfg_passes.o: \
                 $(srcdir)/Include/internal/pycore_compile.h \
                 $(srcdir)/Include/internal/pycore_flowgraph.h \
                 $(srcdir)/Include/internal/pycore_instruction_sequence.h \
+                $(srcdir)/Include/internal/pycore_ir_metadata.h \
                 $(srcdir)/Include/internal/pycore_opcode_metadata.h \
-                $(srcdir)/Include/internal/pycore_opcode_utils.h
+                $(srcdir)/Include/internal/pycore_opcode_utils.h \
+                $(srcdir)/Include/internal/pycore_regcfg.h
 
 Python/ceval.o: \
+		$(srcdir)/Python/ceval.h \
 		$(srcdir)/Python/ceval_macros.h \
 		$(srcdir)/Python/condvar.h \
-		$(srcdir)/Python/generated_cases.c.h \
-		$(srcdir)/Python/executor_cases.c.h \
-		$(srcdir)/Python/opcode_targets.h \
-		$(srcdir)/Python/record_functions.c.h
+		$(srcdir)/Python/generated_ir_cases.c.h \
+		$(srcdir)/Python/ir_targets.h \
+		$(srcdir)/Include/internal/pycore_ir.h \
+		$(srcdir)/Include/internal/pycore_ir_metadata.h
 
 Python/flowgraph.o: \
 		$(srcdir)/Include/internal/pycore_opcode_metadata.h
-
-Python/optimizer.o: \
-		$(srcdir)/Python/executor_cases.c.h \
-		$(srcdir)/Include/internal/pycore_opcode_metadata.h \
-		$(srcdir)/Include/internal/pycore_optimizer.h
-
-Python/optimizer_analysis.o: \
-		$(srcdir)/Include/internal/pycore_opcode_metadata.h \
-		$(srcdir)/Include/internal/pycore_optimizer.h \
-		$(srcdir)/Python/optimizer_cases.c.h
 
 Python/frozen.o: $(FROZEN_FILES_OUT)
 
@@ -2261,7 +2243,6 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	mv $@.tmp $@
 
 Python/ceval.o: $(srcdir)/Include/pydtrace.h
-Python/gc.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h
 
 Python/pydtrace.o: $(srcdir)/Include/pydtrace.d $(DTRACE_DEPS)
@@ -3172,6 +3153,9 @@ config.status:	$(srcdir)/configure
 
 .PRECIOUS: config.status $(BUILDPYTHON) Makefile Makefile.pre
 
+Python/gc_capture.o: $(srcdir)/Python/gc_capture.S
+	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
+
 Python/asm_trampoline_x86_64.o: $(srcdir)/Python/asm_trampoline_x86_64.S
 	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
 
@@ -3195,42 +3179,6 @@ Python/asm_trampoline_universal2.o: $(srcdir)/Python/asm_trampoline_aarch64.S $(
 		Python/asm_trampoline_x86_64-apple-darwin.o
 	rm -f Python/asm_trampoline_arm64-apple-darwin.o \
 	  Python/asm_trampoline_x86_64-apple-darwin.o
-
-JIT_SHIM_BUILD_OBJS=	@JIT_SHIM_BUILD_O@
-JIT_UNWIND_INFO_H=	$(if $(JIT_OBJS),jit_unwind_info.h $(patsubst jit_stencils-%.h,jit_unwind_info-%.h,@JIT_STENCILS_H@))
-JIT_BUILD_TARGETS=	jit_stencils.h @JIT_STENCILS_H@ $(JIT_UNWIND_INFO_H) $(JIT_SHIM_BUILD_OBJS)
-JIT_TARGETS=	$(JIT_BUILD_TARGETS) $(filter-out $(JIT_SHIM_BUILD_OBJS),$(JIT_OBJS))
-JIT_GENERATED_STAMP=	.jit-stamp
-
-JIT_DEPS = \
-		$(srcdir)/Tools/jit/*.c \
-		$(srcdir)/Tools/jit/*.h \
-		$(srcdir)/Tools/jit/*.py \
-		$(srcdir)/Python/executor_cases.c.h \
-		pyconfig.h
-
-$(JIT_GENERATED_STAMP): $(JIT_DEPS)
-	@REGEN_JIT_COMMAND@
-	@touch $@
-
-$(JIT_BUILD_TARGETS): $(JIT_GENERATED_STAMP)
-	@if test ! -f "$@"; then \
-		rm -f $(JIT_GENERATED_STAMP); \
-		$(MAKE) $(JIT_GENERATED_STAMP); \
-		test -f "$@"; \
-	fi
-
-jit_shim-universal2-apple-darwin.o: jit_shim-aarch64-apple-darwin.o jit_shim-x86_64-apple-darwin.o
-	lipo -create -output $@ jit_shim-aarch64-apple-darwin.o jit_shim-x86_64-apple-darwin.o
-
-Python/jit.o: $(srcdir)/Python/jit.c @JIT_STENCILS_H@
-	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
-
-Python/jit_unwind.o: $(srcdir)/Python/jit_unwind.c $(JIT_UNWIND_INFO_H)
-	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
-
-.PHONY: regen-jit
-regen-jit: $(JIT_TARGETS)
 
 # Some make's put the object file in the current directory
 .c.o:
@@ -3310,9 +3258,8 @@ docclean:
 # data.  The PGO data is only valid if source code remains unchanged.
 .PHONY: clean-retain-profile
 clean-retain-profile: pycremoval
-	# Keep the generated JIT shim objects with the rest of the JIT generated
-	# files: they are regenerated as a group and tracked by .jit-stamp.
-	find . -name '*.[oa]' ! -name 'jit_shim*.o' -exec rm -f {} ';'
+	find . -name '*.[oa]' -exec rm -f {} ';'
+	rm -f Python/gc_precise.stamp Python/gc_inline.stamp
 	find . -name '*.s[ol]' -exec rm -f {} ';'
 	find . -name '*.so.[0-9]*.[0-9]*' -exec rm -f {} ';'
 	find . -name '*.lto' -exec rm -f {} ';'
@@ -3353,13 +3300,8 @@ clean-profile: clean-retain-profile clean-bolt
 		$(MAKE) profile-removal; \
 	fi
 
-# gh-141808: The JIT stencils are deliberately kept in clean-profile
-.PHONY: clean-jit-stencils
-clean-jit-stencils:
-	-rm -f $(JIT_TARGETS) $(JIT_GENERATED_STAMP) jit_stencils*.h jit_unwind_info*.h jit_shim*.o
-
 .PHONY: clean
-clean: clean-profile clean-jit-stencils
+clean: clean-profile
 
 .PHONY: clobber
 clobber: clean
@@ -3504,7 +3446,7 @@ MODULE__SOCKET_DEPS=$(srcdir)/Modules/socketmodule.h $(srcdir)/Modules/addrinfo.
 MODULE__SSL_DEPS=$(srcdir)/Modules/_ssl.h $(srcdir)/Modules/_openssl_mem.h $(srcdir)/Modules/_ssl/cert.c $(srcdir)/Modules/_ssl/debughelpers.c $(srcdir)/Modules/_ssl/misc.c $(srcdir)/Modules/_ssl_data_111.h $(srcdir)/Modules/_ssl_data_300.h $(srcdir)/Modules/socketmodule.h
 MODULE__TESTCAPI_DEPS=$(srcdir)/Modules/_testcapi/parts.h $(srcdir)/Modules/_testcapi/util.h
 MODULE__TESTLIMITEDCAPI_DEPS=$(srcdir)/Modules/_testlimitedcapi/testcapi_long.h $(srcdir)/Modules/_testlimitedcapi/parts.h $(srcdir)/Modules/_testlimitedcapi/util.h
-MODULE__TESTINTERNALCAPI_DEPS=$(srcdir)/Modules/_testinternalcapi/parts.h $(srcdir)/Parser/tokenizer/source.h $(srcdir)/Parser/tokenizer/types.h $(srcdir)/Python/ceval.h $(srcdir)/Modules/_testinternalcapi/test_targets.h $(srcdir)/Modules/_testinternalcapi/test_cases.c.h
+MODULE__TESTINTERNALCAPI_DEPS=$(srcdir)/Modules/_testinternalcapi/parts.h $(srcdir)/Parser/tokenizer/source.h $(srcdir)/Parser/tokenizer/types.h $(srcdir)/Python/ceval.h
 MODULE__SQLITE3_DEPS=$(srcdir)/Modules/_sqlite/connection.h $(srcdir)/Modules/_sqlite/cursor.h $(srcdir)/Modules/_sqlite/microprotocols.h $(srcdir)/Modules/_sqlite/module.h $(srcdir)/Modules/_sqlite/prepare_protocol.h $(srcdir)/Modules/_sqlite/row.h $(srcdir)/Modules/_sqlite/util.h
 MODULE__ZSTD_DEPS=$(srcdir)/Modules/_zstd/_zstdmodule.h $(srcdir)/Modules/_zstd/buffer.h $(srcdir)/Modules/_zstd/zstddict.h
 

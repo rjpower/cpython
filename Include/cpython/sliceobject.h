@@ -7,11 +7,13 @@
 /*
 A slice object containing start, stop, and step data members (the
 names are from range).  After much talk with Guido, it was decided to
-let these be any arbitrary python type.  Py_None stands for omitted values.
+let these be any arbitrary python type.  None stands for omitted values.
+Like every container, a slice holds values (Include/pyvalue.h): an int
+bound is usually an inline int, not an object.
 */
 typedef struct {
     PyObject_HEAD
-    PyObject *start, *stop, *step;      /* not NULL */
+    PyValue start, stop, step;          /* not PyValue_NULL */
 } PySliceObject;
 
 PyAPI_FUNC(PyObject *) _PySlice_FromIndices(Py_ssize_t start, Py_ssize_t stop);

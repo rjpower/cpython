@@ -129,39 +129,52 @@ mapping_getoptionalitem(PyObject *self, PyObject *args)
     }
 }
 
-static PyObject *
-pyiter_next(PyObject *self, PyObject *iter)
+static PyValue
+pyiter_next(PyObject *self, PyValue iter_value)
 {
+    PyObject *iter = PyValue_Object(iter_value);
+    if (iter == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *item = PyIter_Next(iter);
     if (item == NULL && !PyErr_Occurred()) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return item;
+    return PyValue_FromResult(item);
 }
 
-static PyObject *
-pyiter_nextitem(PyObject *self, PyObject *iter)
+static PyValue
+pyiter_nextitem(PyObject *self, PyValue iter_value)
 {
+    PyObject *iter = PyValue_Object(iter_value);
+    if (iter == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *item;
     int rc = PyIter_NextItem(iter, &item);
     if (rc < 0) {
         assert(PyErr_Occurred());
         assert(item == NULL);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(!PyErr_Occurred());
     if (item == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return item;
+    return PyValue_FromResult(item);
 }
 
 
-static PyObject *
-sequence_fast_get_size(PyObject *self, PyObject *obj)
+static PyValue
+sequence_fast_get_size(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    return PyLong_FromSsize_t(PySequence_Fast_GET_SIZE(obj));
+    return PyValue_FromResult(
+        PyLong_FromSsize_t(PySequence_Fast_GET_SIZE(obj)));
 }
 
 
@@ -222,10 +235,10 @@ static PyMethodDef test_methods[] = {
     {"mapping_getoptionalitem", mapping_getoptionalitem, METH_VARARGS},
     {"mapping_getoptionalitemstring", mapping_getoptionalitemstring, METH_VARARGS},
 
-    {"PyIter_Next", pyiter_next, METH_O},
-    {"PyIter_NextItem", pyiter_nextitem, METH_O},
+    {"PyIter_Next", _PyCFunction_CAST(pyiter_next), METH_O},
+    {"PyIter_NextItem", _PyCFunction_CAST(pyiter_nextitem), METH_O},
 
-    {"sequence_fast_get_size", sequence_fast_get_size, METH_O},
+    {"sequence_fast_get_size", _PyCFunction_CAST(sequence_fast_get_size), METH_O},
     {"sequence_fast_get_item", sequence_fast_get_item, METH_VARARGS},
     {"object_setattr_null_exc", object_setattr_null_exc, METH_VARARGS},
     {"object_setattrstring_null_exc", object_setattrstring_null_exc, METH_VARARGS},

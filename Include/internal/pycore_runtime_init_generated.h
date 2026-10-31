@@ -1663,6 +1663,7 @@ extern "C" {
     INIT_ID(co_code), \
     INIT_ID(co_consts), \
     INIT_ID(co_exceptiontable), \
+    INIT_ID(co_fbinit), \
     INIT_ID(co_filename), \
     INIT_ID(co_firstlineno), \
     INIT_ID(co_flags), \
@@ -1994,7 +1995,6 @@ extern "C" {
     INIT_ID(other), \
     INIT_ID(out_fd), \
     INIT_ID(outgoing), \
-    INIT_ID(outpath), \
     INIT_ID(overlapped), \
     INIT_ID(owner), \
     INIT_ID(pad), \

@@ -19,7 +19,7 @@ PyAPI_DATA(PyObject) _Py_EllipsisObject; /* Don't use this directly */
 PyAPI_DATA(PyTypeObject) PySlice_Type;
 PyAPI_DATA(PyTypeObject) PyEllipsis_Type;
 
-#define PySlice_Check(op) Py_IS_TYPE((op), &PySlice_Type)
+#define PySlice_Check(op) _Py_IS_ROOT_SHAPE((op), &PySlice_Type)
 
 PyAPI_FUNC(PyObject *) PySlice_New(PyObject* start, PyObject* stop,
                                   PyObject* step);

@@ -16,21 +16,32 @@ static PyObject *
 _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
                                      PyObject *func_args, PyObject *kwargs);
 
-static PyObject *
-_testcapi_pyobject_fastcalldict(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_pyobject_fastcalldict(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *func_args;
     PyObject *__clinic_kwargs;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pyobject_fastcalldict", nargs, 3, 3)) {
         goto exit;
     }
-    func = args[0];
-    func_args = args[1];
-    __clinic_kwargs = args[2];
-    return_value = _testcapi_pyobject_fastcalldict_impl(module, func, func_args, __clinic_kwargs);
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        goto exit;
+    }
+    func_args = PyValue_Object(args[1]);
+    if (func_args == NULL) {
+        goto exit;
+    }
+    __clinic_kwargs = PyValue_Object(args[2]);
+    if (__clinic_kwargs == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_pyobject_fastcalldict_impl(module, func, func_args, __clinic_kwargs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -48,21 +59,32 @@ static PyObject *
 _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
                                    PyObject *func_args, PyObject *kwnames);
 
-static PyObject *
-_testcapi_pyobject_vectorcall(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_pyobject_vectorcall(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *func_args;
     PyObject *__clinic_kwnames;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pyobject_vectorcall", nargs, 3, 3)) {
         goto exit;
     }
-    func = args[0];
-    func_args = args[1];
-    __clinic_kwnames = args[2];
-    return_value = _testcapi_pyobject_vectorcall_impl(module, func, func_args, __clinic_kwnames);
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        goto exit;
+    }
+    func_args = PyValue_Object(args[1]);
+    if (func_args == NULL) {
+        goto exit;
+    }
+    __clinic_kwnames = PyValue_Object(args[2]);
+    if (__clinic_kwnames == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_pyobject_vectorcall_impl(module, func, func_args, __clinic_kwnames);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -80,25 +102,36 @@ static PyObject *
 _testcapi_pyvectorcall_call_impl(PyObject *module, PyObject *func,
                                  PyObject *argstuple, PyObject *kwargs);
 
-static PyObject *
-_testcapi_pyvectorcall_call(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_pyvectorcall_call(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *argstuple;
     PyObject *__clinic_kwargs = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pyvectorcall_call", nargs, 2, 3)) {
         goto exit;
     }
-    func = args[0];
-    argstuple = args[1];
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        goto exit;
+    }
+    argstuple = PyValue_Object(args[1]);
+    if (argstuple == NULL) {
+        goto exit;
+    }
     if (nargs < 3) {
         goto skip_optional;
     }
-    __clinic_kwargs = args[2];
+    __clinic_kwargs = PyValue_Object(args[2]);
+    if (__clinic_kwargs == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _testcapi_pyvectorcall_call_impl(module, func, argstuple, __clinic_kwargs);
+    _return_value = _testcapi_pyvectorcall_call_impl(module, func, argstuple, __clinic_kwargs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -111,24 +144,32 @@ PyDoc_STRVAR(_testcapi_VectorCallClass_set_vectorcall__doc__,
 "Set self\'s vectorcall function for `type` to one that returns \"vectorcall\"");
 
 #define _TESTCAPI_VECTORCALLCLASS_SET_VECTORCALL_METHODDEF    \
-    {"set_vectorcall", (PyCFunction)_testcapi_VectorCallClass_set_vectorcall, METH_O, _testcapi_VectorCallClass_set_vectorcall__doc__},
+    {"set_vectorcall", _PyCFunction_CAST(_testcapi_VectorCallClass_set_vectorcall), METH_O, _testcapi_VectorCallClass_set_vectorcall__doc__},
 
 static PyObject *
 _testcapi_VectorCallClass_set_vectorcall_impl(PyObject *self,
                                               PyTypeObject *type);
 
-static PyObject *
-_testcapi_VectorCallClass_set_vectorcall(PyObject *self, PyObject *arg)
+static PyValue
+_testcapi_VectorCallClass_set_vectorcall(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *type;
+    PyObject *_return_value;
 
-    if (!PyObject_TypeCheck(arg, &PyType_Type)) {
-        _PyArg_BadArgument("set_vectorcall", "argument", (&PyType_Type)->tp_name, arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("set_vectorcall", "argument", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        type = (PyTypeObject *)_arg;
     }
-    type = (PyTypeObject *)arg;
-    return_value = _testcapi_VectorCallClass_set_vectorcall_impl(self, type);
+    _return_value = _testcapi_VectorCallClass_set_vectorcall_impl(self, type);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -149,11 +190,12 @@ PyDoc_STRVAR(_testcapi_make_vectorcall_class__doc__,
 static PyObject *
 _testcapi_make_vectorcall_class_impl(PyObject *module, PyTypeObject *base);
 
-static PyObject *
-_testcapi_make_vectorcall_class(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_make_vectorcall_class(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("make_vectorcall_class", nargs, 0, 1)) {
         goto exit;
@@ -161,13 +203,20 @@ _testcapi_make_vectorcall_class(PyObject *module, PyObject *const *args, Py_ssiz
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!PyObject_TypeCheck(args[0], &PyType_Type)) {
-        _PyArg_BadArgument("make_vectorcall_class", "argument 1", (&PyType_Type)->tp_name, args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("make_vectorcall_class", "argument 1", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        base = (PyTypeObject *)_arg;
     }
-    base = (PyTypeObject *)args[0];
 skip_optional:
-    return_value = _testcapi_make_vectorcall_class_impl(module, base);
+    _return_value = _testcapi_make_vectorcall_class_impl(module, base);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -180,30 +229,36 @@ PyDoc_STRVAR(_testcapi_has_vectorcall_flag__doc__,
 "Return true iff Py_TPFLAGS_HAVE_VECTORCALL is set on the class.");
 
 #define _TESTCAPI_HAS_VECTORCALL_FLAG_METHODDEF    \
-    {"has_vectorcall_flag", (PyCFunction)_testcapi_has_vectorcall_flag, METH_O, _testcapi_has_vectorcall_flag__doc__},
+    {"has_vectorcall_flag", _PyCFunction_CAST(_testcapi_has_vectorcall_flag), METH_O, _testcapi_has_vectorcall_flag__doc__},
 
 static int
 _testcapi_has_vectorcall_flag_impl(PyObject *module, PyTypeObject *type);
 
-static PyObject *
-_testcapi_has_vectorcall_flag(PyObject *module, PyObject *arg)
+static PyValue
+_testcapi_has_vectorcall_flag(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *type;
     int _return_value;
 
-    if (!PyObject_TypeCheck(arg, &PyType_Type)) {
-        _PyArg_BadArgument("has_vectorcall_flag", "argument", (&PyType_Type)->tp_name, arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("has_vectorcall_flag", "argument", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        type = (PyTypeObject *)_arg;
     }
-    type = (PyTypeObject *)arg;
     _return_value = _testcapi_has_vectorcall_flag_impl(module, type);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=210ae67caab177ba input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d8a6201eff0354a9 input=a9049054013a1b77]*/

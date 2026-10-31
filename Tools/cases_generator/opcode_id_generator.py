@@ -14,6 +14,7 @@ from generators_common import (
     ROOT,
     write_header,
 )
+from ir_generator import HandlerDomain, build_handler_domain
 from cwriter import CWriter
 from typing import TextIO
 
@@ -22,8 +23,10 @@ DEFAULT_OUTPUT = ROOT / "Include/opcode_ids.h"
 
 
 def generate_opcode_header(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, domain: HandlerDomain,
+    outfile: TextIO
 ) -> None:
+    domain.require_analysis(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     with out.header_guard("Py_OPCODE_IDS_H"):
@@ -32,13 +35,14 @@ def generate_opcode_header(
         def write_define(name: str, op: int) -> None:
             out.emit(f"#define {name:<38} {op:>3}\n")
 
-        for op, name in sorted([(op, name) for (name, op) in analysis.opmap.items()]):
+        for op, name in sorted([(op, name) for (name, op) in domain.opmap.items()]):
             write_define(name, op)
 
         out.emit("\n")
-        write_define("HAVE_ARGUMENT", analysis.have_arg)
-        write_define("MIN_SPECIALIZED_OPCODE", analysis.opmap["RESUME"]+1)
-        write_define("MIN_INSTRUMENTED_OPCODE", analysis.min_instrumented)
+        write_define("IR_NUM_HANDLERS", domain.count)
+        write_define("HAVE_ARGUMENT", domain.have_arg)
+        write_define("MIN_SPECIALIZED_OPCODE", domain.opmap["RESUME"]+1)
+        write_define("MIN_INSTRUMENTED_OPCODE", domain.min_instrumented)
 
 
 arg_parser = argparse.ArgumentParser(
@@ -59,5 +63,6 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_opcode_header(args.input, data, outfile)
+        generate_opcode_header(args.input, data, domain, outfile)

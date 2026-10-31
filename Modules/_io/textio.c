@@ -728,7 +728,6 @@ struct textio
     /* Cache raw object if it's a FileIO object */
     PyObject *raw;
 
-    PyObject *weakreflist;
     PyObject *dict;
 
     _PyIO_State *state;
@@ -762,15 +761,16 @@ buffer_access_safe(textio *self)
     return Py_NewRef(self->buffer);
 }
 
-static PyObject *
+/* The buffer's attribute as a value, for the getters that forward it. */
+static PyValue
 buffer_getattr(textio *self, PyObject *attr_name)
 {
     PyObject *buffer = buffer_access_safe(self);
     if (buffer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *res = PyObject_GetAttr(buffer, attr_name);
+    PyValue res = PyObject_GetAttrValue(PyValue_FromObject(buffer), attr_name);
     Py_DECREF(buffer);
     return res;
 }
@@ -1547,7 +1547,7 @@ textiowrapper_dealloc(PyObject *op)
         return;
     self->ok = 0;
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     (void)textiowrapper_clear(op);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1573,23 +1573,22 @@ textiowrapper_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get_impl(textio *self);
 
 /* This macro takes some shortcuts to make the common case faster. */
 #define CHECK_CLOSED(self) \
     do { \
         int r; \
-        PyObject *_res; \
+        PyValue _res; \
         if (Py_IS_TYPE(self, self->state->PyTextIOWrapper_Type)) { \
             if (self->raw != NULL) \
                 r = _PyFileIO_closed(self->raw); \
             else { \
                 _res = _io_TextIOWrapper_closed_get_impl(self); \
-                if (_res == NULL) \
+                if (PyValue_IsNull(_res)) \
                     return NULL; \
-                r = PyObject_IsTrue(_res); \
-                Py_DECREF(_res); \
+                r = PyObject_IsTrueValue(_res); \
                 if (r < 0) \
                     return NULL; \
             } \
@@ -1627,6 +1626,17 @@ _io_TextIOWrapper_closed_get_impl(textio *self);
         PyErr_SetString(PyExc_ValueError, \
              "underlying buffer has been detached"); \
         return -1; \
+    }
+
+#define CHECK_ATTACHED_VALUE(self) \
+    if (self->ok <= 0) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on uninitialized object"); \
+        return PyValue_NULL; \
+    } else if (self->detached) { \
+        PyErr_SetString(PyExc_ValueError, \
+             "underlying buffer has been detached"); \
+        return PyValue_NULL; \
     }
 
 
@@ -3268,11 +3278,10 @@ _io_TextIOWrapper_close_impl(textio *self)
     int r;
     CHECK_ATTACHED(self);
 
-    res = _io_TextIOWrapper_closed_get_impl(self);
-    if (res == NULL)
+    PyValue closed = _io_TextIOWrapper_closed_get_impl(self);
+    if (PyValue_IsNull(closed))
         return NULL;
-    r = PyObject_IsTrue(res);
-    Py_DECREF(res);
+    r = PyObject_IsTrueValue(closed);
     if (r < 0)
         return NULL;
 
@@ -3313,14 +3322,14 @@ _io_TextIOWrapper_close_impl(textio *self)
 _io.TextIOWrapper.__next__ as textiowrapper_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 textiowrapper_iternext_impl(textio *self)
-/*[clinic end generated code: output=f365c4287cd43a1f input=c5b4c79faf0c98cb]*/
+/*[clinic end generated code: output=dd5d97ab97536d9e input=c5b4c79faf0c98cb]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
     PyObject *line;
 
-    CHECK_ATTACHED(self);
+    CHECK_ATTACHED_VALUE(self);
 
     self->telling = 0;
     if (Py_IS_TYPE(self, self->state->PyTextIOWrapper_Type)) {
@@ -3334,33 +3343,33 @@ textiowrapper_iternext_impl(textio *self)
                          "readline() should have returned a str object, "
                          "not '%.200s'", Py_TYPE(line)->tp_name);
             Py_DECREF(line);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyUnicode_GET_LENGTH(line) == 0) {
         /* Reached EOF or would have blocked */
         Py_DECREF(line);
         Py_CLEAR(self->snapshot);
         self->telling = self->seekable;
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 /*[clinic input]
 @critical_section
 @getter
-_io.TextIOWrapper.name
+_io.TextIOWrapper.name -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_name_get_impl(textio *self)
-/*[clinic end generated code: output=8c2f1d6d8756af40 input=26ecec9b39e30e07]*/
+/*[clinic end generated code: output=c06c5f1d04533f18 input=8ad79c84a09a3cf8]*/
 {
     return buffer_getattr(self, &_Py_ID(name));
 }
@@ -3368,12 +3377,12 @@ _io_TextIOWrapper_name_get_impl(textio *self)
 /*[clinic input]
 @critical_section
 @getter
-_io.TextIOWrapper.closed
+_io.TextIOWrapper.closed -> value
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_closed_get_impl(textio *self)
-/*[clinic end generated code: output=b49b68f443a85e3c input=7dfcf43f63c7003d]*/
+/*[clinic end generated code: output=99d3489cda9d1e41 input=f8bce2615bc838a3]*/
 {
     /* If partially constructed or deconstructed, return that the underlying
        buffer is closed.
@@ -3382,7 +3391,7 @@ _io_TextIOWrapper_closed_get_impl(textio *self)
        attribute is often called in re-initalization, as part of repr in error
        cases, and when the I/O stack is garbage collected. */
     if (self->ok <= 0) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
 
     return buffer_getattr(self, &_Py_ID(closed));
@@ -3531,7 +3540,6 @@ static PyMemberDef textiowrapper_members[] = {
     {"line_buffering", Py_T_BOOL, offsetof(textio, line_buffering), Py_READONLY},
     {"write_through", Py_T_BOOL, offsetof(textio, write_through), Py_READONLY},
     {"_finalizing", Py_T_BOOL, offsetof(textio, finalizing), 0},
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(textio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(textio, dict), Py_READONLY},
     {NULL}
 };
@@ -3564,6 +3572,6 @@ PyType_Spec _Py_textiowrapper_spec = {
     .name = "_io.TextIOWrapper",
     .basicsize = sizeof(textio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = textiowrapper_slots,
 };

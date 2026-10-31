@@ -10,7 +10,7 @@
 #include "pycore_exceptions.h"    // _PyExc_InitTypes()
 #include "pycore_fileutils.h"     // _Py_ResetForceASCII()
 #include "pycore_floatobject.h"   // _PyFloat_InitTypes()
-#include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
+#include "pycore_gc_trace.h"      // _PyGC_CLEAR_LOCAL()
 #include "pycore_global_objects_fini_generated.h"  // _PyStaticObjects_CheckAll()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpolation.h" // _PyInterpolation_InitTypes()
@@ -18,7 +18,6 @@
 #include "pycore_moduleobject.h"  // _PyModule_InitModuleDictWatcher()
 #include "pycore_object.h"        // _PyDebug_PrintTotalRefs()
 #include "pycore_obmalloc.h"      // _PyMem_init_obmalloc()
-#include "pycore_optimizer.h"     // _Py_Executors_InvalidateAll
 #include "pycore_parking_lot.h"   // _PyParkingLot
 #include "pycore_pathconfig.h"    // _PyPathConfig_UpdateGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
@@ -27,8 +26,8 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_setobject.h"     // _PySet_NextEntry()
-#include "pycore_stackref.h"      // PyStackRef_FromPyObjectBorrow()
+#include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_value.h"         // PyValue_FromObject()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_traceback.h"     // PyUnstable_TracebackThreads()
@@ -36,7 +35,6 @@
 #include "pycore_typeobject.h"    // _PyTypes_InitTypes()
 #include "pycore_typevarobject.h" // _Py_clear_generic_types()
 #include "pycore_unicodeobject.h" // _PyUnicode_InitTypes()
-#include "pycore_uniqueid.h"      // _PyObject_FinalizeUniqueIdPool()
 #include "pycore_warnings.h"      // _PyWarnings_InitState()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
@@ -595,15 +593,6 @@ init_interp_settings(PyInterpreterState *interp,
         return _PyStatus_ERR("per-interpreter obmalloc does not support "
                              "single-phase init extension modules");
     }
-#ifdef Py_GIL_DISABLED
-    if (!_Py_IsMainInterpreter(interp) &&
-        !config->check_multi_interp_extensions)
-    {
-        return _PyStatus_ERR("The free-threaded build does not support "
-                             "single-phase init extension modules in "
-                             "subinterpreters");
-    }
-#endif
 
     if (config->allow_fork) {
         interp->feature_flags |= Py_RTFLAGS_FORK;
@@ -632,6 +621,19 @@ init_interp_settings(PyInterpreterState *interp,
         return _PyStatus_ERR("invalid interpreter config 'gil' value");
     }
 
+    /* The interpreters that share the main interpreter's object allocator
+       are collected together and route their collector calls to each
+       other's queues, which assumes one GIL among them (note 13 section
+       7.2; an intentional compatibility break, boil/PROCESS.md 0.2).  The
+       main interpreter has its own GIL by definition. */
+    if (config->use_main_obmalloc && config->gil == PyInterpreterConfig_OWN_GIL
+        && !_Py_IsMainInterpreter(interp))
+    {
+        return _PyStatus_ERR("an interpreter that shares the main "
+                             "interpreter's object allocator must share "
+                             "its GIL");
+    }
+
     return _PyStatus_OK();
 }
 
@@ -654,14 +656,9 @@ init_interp_create_gil(PyThreadState *tstate, int gil)
 }
 
 static int
-builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyObject *key, PyObject *new_value)
+builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyValue key, PyValue new_value)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-#ifdef _Py_TIER2
-    if (interp->rare_events.builtin_dict < _Py_MAX_ALLOWED_BUILTINS_MODIFICATIONS) {
-        _Py_Executors_InvalidateAll(interp, 1);
-    }
-#endif
     RARE_EVENT_INTERP_INC(interp, builtin_dict);
     return 0;
 }
@@ -901,7 +898,7 @@ pycore_init_builtins(PyThreadState *tstate)
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         assert(common_objs[i] != NULL);
         _Py_SetImmortal(common_objs[i]);
-        interp->common_consts[i] = PyStackRef_FromPyObjectBorrow(common_objs[i]);
+        interp->common_consts[i] = PyValue_FromObject(common_objs[i]);
     }
 
     PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append));
@@ -1023,6 +1020,9 @@ pycore_interp_init(PyThreadState *tstate)
     if (_PyStatus_EXCEPTION(status)) {
         goto done;
     }
+
+    // Python code can run here from now on, so the collector's queue can.
+    status = _PyGC_LiveOpenQueue(interp);
 
 done:
     /* sys.modules['sys'] contains a strong reference to the module */
@@ -1520,37 +1520,6 @@ init_interp_main(PyThreadState *tstate)
 #endif
     }
 
-    // Turn on experimental tier 2 (uops-based) optimizer
-    // This is also needed when the JIT is enabled
-#ifdef _Py_TIER2
-    if (is_main_interp) {
-        int enabled = 1;
-#if _Py_TIER2 & 2
-        enabled = 0;
-#endif
-        char *env = Py_GETENV("PYTHON_JIT");
-        if (env && *env != '\0') {
-            // PYTHON_JIT=0|1 overrides the default
-            enabled = *env != '0';
-        }
-        if (enabled) {
-#ifdef _Py_JIT
-            // perf profiler works fine with tier 2 interpreter, so
-            // only checking for a "real JIT".
-            if (config->perf_profiling > 0) {
-                (void)PyErr_WarnEx(
-                    PyExc_RuntimeWarning,
-                    "JIT deactivated as perf profiling support is active",
-                    0);
-            } else
-#endif
-            {
-                interp->jit = true;
-            }
-        }
-    }
-#endif
-
     if (!is_main_interp) {
         // The main interpreter is handled in Py_Main(), for now.
         if (config->sys_path_0 != NULL) {
@@ -1577,8 +1546,8 @@ init_interp_main(PyThreadState *tstate)
     }
 
 
-    interp->dict_state.watchers[0] = &builtins_dict_watcher;
-    if (PyDict_Watch(0, interp->builtins) != 0) {
+    interp->dict_state.core_watchers[BUILTINS_WATCHER_ID] = &builtins_dict_watcher;
+    if (PyDict_Watch(BUILTINS_WATCHER_ID, interp->builtins) != 0) {
         return _PyStatus_ERR("failed to set builtin dict watcher");
     }
 
@@ -1794,10 +1763,26 @@ finalize_remove_modules(PyObject *modules, int verbose)
 
     if (PyDict_CheckExact(modules)) {
         Py_ssize_t pos = 0;
-        PyObject *key, *value;
-        while (PyDict_Next(modules, &pos, &key, &value)) {
+        PyValue key_value, value_value;
+        PyObject *key = NULL, *value = NULL;
+        // An inline value is not a module, and needs no box to say so.
+        while (_PyDict_NextValue(modules, &pos, &key_value, &value_value, NULL)) {
+            if (PyValue_IsInline(value_value)) {
+                continue;
+            }
+            key = PyValue_Object(key_value);
+            if (key == NULL) {
+                PyErr_FormatUnraisable("Exception ignored while removing modules");
+                continue;
+            }
+            value = PyValue_ObjectBorrow(value_value);
             CLEAR_MODULE(key, value);
         }
+        // The last module must not outlive its removal in this frame.
+        _PyGC_CLEAR_LOCAL(key);
+        _PyGC_CLEAR_LOCAL(value);
+        _PyGC_CLEAR_LOCAL(key_value);
+        _PyGC_CLEAR_LOCAL(value_value);
     }
     else {
         PyObject *iterator = PyObject_GetIter(modules);
@@ -1911,19 +1896,6 @@ finalize_modules(PyThreadState *tstate)
 {
     PyInterpreterState *interp = tstate->interp;
 
-    // Invalidate all executors and turn off JIT:
-    interp->jit = false;
-    interp->compiling = false;
-#ifdef _Py_TIER2
-    _Py_Executors_InvalidateAll(interp, 0);
-    PyMem_Free(interp->executor_blooms);
-    PyMem_Free(interp->executor_ptrs);
-    interp->executor_blooms = NULL;
-    interp->executor_ptrs = NULL;
-    interp->executor_count = 0;
-    interp->executor_capacity = 0;
-#endif
-
     // Stop watching __builtin__ modifications
     if (PyDict_Unwatch(0, interp->builtins) < 0) {
         // might happen if interp is cleared before watching the __builtin__
@@ -1987,6 +1959,10 @@ finalize_modules(PyThreadState *tstate)
         Py_DECREF(weaklist);
     }
 
+    // What the cleared modules held dies here under reference counting,
+    // while sys.stdout and the builtins still work for its finalizers.
+    _PyGC_CollectNoFail(tstate);
+
     // Clear sys and builtins modules dict
     finalize_clear_sys_builtins_dict(interp, verbose);
 
@@ -2004,8 +1980,10 @@ finalize_modules(PyThreadState *tstate)
     // destructor.
     _PyImport_ClearModules(interp);
 
-    // Collect garbage once more
-    _PyGC_CollectNoFail(tstate);
+    // Each collection marks the whole heap, and the last one,
+    // in interpreter_clear(), follows soon: no Python code needs to run in
+    // between, and these objects are not finalized later than the ones
+    // that interpreter_clear() releases.
 }
 
 
@@ -2094,9 +2072,6 @@ finalize_interp_types(PyInterpreterState *interp)
     _PyTypes_FiniTypes(interp);
 
     _PyTypes_Fini(interp);
-#ifdef Py_GIL_DISABLED
-    _PyObject_FinalizeUniqueIdPool(interp);
-#endif
 
     _PyCode_Fini(interp);
 
@@ -2105,13 +2080,6 @@ finalize_interp_types(PyInterpreterState *interp)
     _PyUnicode_ClearInterned(interp);
 
     _PyUnicode_Fini(interp);
-
-#ifndef Py_GIL_DISABLED
-    // With Py_GIL_DISABLED:
-    // the freelists for the current thread state have already been cleared.
-    struct _Py_freelists *freelists = _Py_freelists_GET();
-    _PyObject_ClearFreeLists(freelists, 1);
-#endif
 
 #ifdef Py_DEBUG
     _PyStaticObjects_CheckAll(interp);
@@ -2232,11 +2200,7 @@ resolve_final_tstate(_PyRuntimeState *runtime)
     return main_tstate;
 }
 
-#ifdef Py_GIL_DISABLED
-#define ASSERT_WORLD_STOPPED(interp) assert(interp->runtime->stoptheworld.world_stopped)
-#else
 #define ASSERT_WORLD_STOPPED(interp)
-#endif
 
 static int
 interp_has_threads(PyInterpreterState *interp)
@@ -2286,7 +2250,7 @@ runtime_has_subinterpreters(_PyRuntimeState *runtime)
     return interp->next != NULL;
 }
 
-static void
+static int
 make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
 {
     assert(tstate != NULL);
@@ -2365,6 +2329,14 @@ make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
         _PyEval_StopTheWorldAll(interp->runtime);
 
         HEAD_LOCK(interp->runtime);
+        if (interp->gc.queue_draining) {
+            /* No finalization guard has been latched for this interpreter.
+               Do not commit teardown beneath a running callback. */
+            HEAD_UNLOCK(interp->runtime);
+            _PyEval_StartTheWorldAll(interp->runtime);
+            PyMutex_Unlock(&interp->ceval.pending.mutex);
+            return -1;
+        }
         int has_subinterpreters = subinterpreters
                                     ? runtime_has_subinterpreters(interp->runtime)
                                     : 0;
@@ -2391,6 +2363,27 @@ make_pre_finalization_calls(PyThreadState *tstate, int subinterpreters)
     assert(PyMutex_IsLocked(&interp->ceval.pending.mutex));
     assert(_Py_atomic_load_uintptr(&interp->finalization_guards) == _PyInterpreterGuard_GUARDS_NOT_ALLOWED);
     ASSERT_WORLD_STOPPED(interp);
+    return 0;
+}
+
+static int
+reject_busy_finalization(PyThreadState *tstate, PyThreadState *entry,
+                         int was_finalizing, int restore_entry)
+{
+    /* resolve_final_tstate() may create a state on this unsupported path.
+       Do not return with a leaked temporary state or claim to roll it back. */
+    if (!_Py_IsMainThread()) {
+        Py_FatalError("busy finalization requires the main thread");
+    }
+    if (!restore_entry) {
+        /* Preparation may already have deleted the entry's interpreter. */
+        Py_FatalError("busy finalization cannot restore a foreign interpreter");
+    }
+    tstate->interp->finalizing = was_finalizing;
+    if (_PyThreadState_GET() != entry) {
+        PyThreadState_Swap(entry);
+    }
+    return -1;
 }
 
 static int
@@ -2404,25 +2397,27 @@ _Py_Finalize(_PyRuntimeState *runtime)
     }
 
     /* Get final thread state pointer. */
+    PyThreadState *entry = _PyThreadState_GET();
+    int entry_in_main = entry == NULL || _Py_IsMainInterpreter(entry->interp);
     PyThreadState *tstate = resolve_final_tstate(runtime);
+    int was_finalizing = tstate->interp->finalizing;
+    if (tstate->interp->gc.queue_draining) {
+        return reject_busy_finalization(tstate, entry, was_finalizing, 1);
+    }
 
     // Block some operations.
     tstate->interp->finalizing = 1;
 
     // This call stops the world and takes the pending calls lock.
-    make_pre_finalization_calls(tstate, /*subinterpreters=*/1);
+    if (make_pre_finalization_calls(tstate, /*subinterpreters=*/1) < 0) {
+        return reject_busy_finalization(tstate, entry, was_finalizing,
+                                         entry_in_main);
+    }
 
     assert(_PyThreadState_GET() == tstate);
 
     /* Copy the core config, PyInterpreterState_Delete() free
        the core config memory */
-#ifdef Py_REF_DEBUG
-    int show_ref_count = tstate->interp->config.show_ref_count;
-#endif
-#ifdef Py_TRACE_REFS
-    int dump_refs = tstate->interp->config.dump_refs;
-    wchar_t *dump_refs_file = tstate->interp->config.dump_refs_file;
-#endif
 #ifdef WITH_PYMALLOC
     int malloc_stats = tstate->interp->config.malloc_stats;
 #endif
@@ -2543,29 +2538,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
     /* dump hash stats */
     _PyHash_Fini();
 
-#ifdef Py_TRACE_REFS
-    /* Display all objects still alive -- this can invoke arbitrary
-     * __repr__ overrides, so requires a mostly-intact interpreter.
-     * Alas, a lot of stuff may still be alive now that will be cleaned
-     * up later.
-     */
-
-    FILE *dump_refs_fp = NULL;
-    if (dump_refs_file != NULL) {
-        dump_refs_fp = _Py_wfopen(dump_refs_file, L"w");
-        if (dump_refs_fp == NULL) {
-            fprintf(stderr, "PYTHONDUMPREFSFILE: cannot create file: %ls\n", dump_refs_file);
-        }
-    }
-
-    if (dump_refs) {
-        _Py_PrintReferences(tstate->interp, stderr);
-    }
-
-    if (dump_refs_fp != NULL) {
-        _Py_PrintReferences(tstate->interp, dump_refs_fp);
-    }
-#endif /* Py_TRACE_REFS */
 
     /* At this point there's almost no other Python code that will run,
        nor interpreter state needed.  The only possibility is the
@@ -2583,18 +2555,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
 
     finalize_interp_clear(tstate);
 
-#ifdef Py_TRACE_REFS
-    /* Display addresses (& refcnts) of all objects still alive.
-     * An address can be used to find the repr of the object, printed
-     * above by _Py_PrintReferences. */
-    if (dump_refs) {
-        _Py_PrintReferenceAddresses(tstate->interp, stderr);
-    }
-    if (dump_refs_fp != NULL) {
-        _Py_PrintReferenceAddresses(tstate->interp, dump_refs_fp);
-        fclose(dump_refs_fp);
-    }
-#endif /* Py_TRACE_REFS */
 
 #ifdef WITH_PYMALLOC
     if (malloc_stats) {
@@ -2604,12 +2564,6 @@ _Py_Finalize(_PyRuntimeState *runtime)
 
     finalize_interp_delete(tstate->interp);
 
-#ifdef Py_REF_DEBUG
-    if (show_ref_count) {
-        _PyDebug_PrintTotalRefs();
-    }
-    _Py_FinalizeRefTotal(runtime);
-#endif
     _Py_FinalizeAllocatedBlocks(runtime);
 
     call_ll_exitfuncs(runtime);
@@ -2627,7 +2581,11 @@ Py_FinalizeEx(void)
 void
 Py_Finalize(void)
 {
-    (void)_Py_Finalize(&_PyRuntime);
+    if (_Py_Finalize(&_PyRuntime) < 0
+        && _PyRuntimeState_GetInitialized(&_PyRuntime))
+    {
+        Py_FatalError("cannot finalize while GC callbacks are running");
+    }
 }
 
 
@@ -2648,6 +2606,7 @@ static PyStatus
 new_interpreter(PyThreadState **tstate_p,
                 const PyInterpreterConfig *config, long whence)
 {
+    *tstate_p = NULL;
     PyStatus status;
 
     status = _PyRuntime_Initialize();
@@ -2658,6 +2617,11 @@ new_interpreter(PyThreadState **tstate_p,
 
     if (!_PyRuntimeState_GetInitialized(runtime)) {
         return _PyStatus_ERR("Py_Initialize must be called first");
+    }
+
+    if (_PyInterpreterState_Main() != NULL) {
+        // Reject before changing GIL-state checks or the caller's attachment.
+        return _PyStatus_ERR("subinterpreters are not supported");
     }
 
     /* Issue #10915, #15751: The GIL API doesn't work with multiple
@@ -2788,7 +2752,7 @@ Py_NewInterpreter(void)
     const PyInterpreterConfig config = _PyInterpreterConfig_LEGACY_INIT;
     PyStatus status = new_interpreter(&tstate, &config, whence);
     if (_PyStatus_EXCEPTION(status)) {
-        Py_ExitStatusException(status);
+        return NULL;
     }
     return tstate;
 }
@@ -2815,10 +2779,15 @@ Py_EndInterpreter(PyThreadState *tstate)
     if (tstate->current_frame != tstate->base_frame) {
         Py_FatalError("thread still has a frame");
     }
+    if (interp->gc.queue_draining) {
+        Py_FatalError("cannot end an interpreter while GC callbacks are running");
+    }
     interp->finalizing = 1;
 
     // This call stops the world and takes the pending calls lock.
-    make_pre_finalization_calls(tstate, /*subinterpreters=*/0);
+    if (make_pre_finalization_calls(tstate, /*subinterpreters=*/0) < 0) {
+        Py_FatalError("cannot end an interpreter while GC callbacks are running");
+    }
 
     ASSERT_WORLD_STOPPED(interp);
     /* Remaining daemon threads will automatically exit
@@ -3409,11 +3378,7 @@ _Py_FatalError_DumpTracebacks(int fd, PyInterpreterState *interp,
     PUTS(fd, "\n");
 
     /* display the current Python stack */
-#ifndef Py_GIL_DISABLED
     PyUnstable_DumpTracebackThreads(fd, interp, tstate, 0);
-#else
-    PyUnstable_DumpTraceback(fd, tstate);
-#endif
 }
 
 /* Print the current exception (if an exception is set) with its traceback,
@@ -3545,26 +3510,12 @@ fatal_error_exit(int status)
 static inline int
 acquire_dict_lock_for_dump(PyObject *obj)
 {
-#ifdef Py_GIL_DISABLED
-    PyMutex *mutex = &obj->ob_mutex;
-    if (_PyMutex_LockTimed(mutex, 0, 0) == PY_LOCK_ACQUIRED) {
-        return 1;
-    }
-    return 0;
-#else
     return 1;
-#endif
 }
 
 static inline void
 release_dict_lock_for_dump(PyObject *obj)
 {
-#ifdef Py_GIL_DISABLED
-    PyMutex *mutex = &obj->ob_mutex;
-    // We can not call PyMutex_Unlock because it's not async-signal-safe.
-    // So not to wake up other threads, we just use a simple atomic store in here.
-    _Py_atomic_store_uint8(&mutex->_bits, _Py_UNLOCKED);
-#endif
 }
 
 // Dump the list of extension modules of sys.modules, excluding stdlib modules
@@ -3585,11 +3536,13 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
     }
 
     Py_ssize_t pos;
+    PyValue key_value, value_value;
     PyObject *key, *value;
 
     // Avoid PyDict_GetItemString() which calls PyUnicode_FromString(),
     // memory cannot be allocated on the heap in a signal handler.
-    // Iterate on the dict instead.
+    // Iterate on the dict instead, and on its values rather than objects,
+    // since an object made for an inline value would allocate too.
     PyObject *stdlib_module_names = NULL;
     if (interp->sysdict != NULL) {
         pos = 0;
@@ -3597,10 +3550,14 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             // If we cannot acquire the lock, just don't dump the list of extension modules.
             return;
         }
-        while (_PyDict_Next(interp->sysdict, &pos, &key, &value, NULL)) {
+        while (_PyDict_NextValue(interp->sysdict, &pos, &key_value, &value_value, NULL)) {
+            if (PyValue_IsInline(key_value) || PyValue_IsInline(value_value)) {
+                continue;
+            }
+            key = PyValue_ObjectBorrow(key_value);
             if (PyUnicode_Check(key)
                && PyUnicode_CompareWithASCIIString(key, "stdlib_module_names") == 0) {
-                stdlib_module_names = value;
+                stdlib_module_names = PyValue_ObjectBorrow(value_value);
                 break;
             }
         }
@@ -3620,7 +3577,12 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
         // If we cannot acquire the lock, just don't dump the list of extension modules.
         return;
     }
-    while (_PyDict_Next(modules, &pos, &key, &value, NULL)) {
+    while (_PyDict_NextValue(modules, &pos, &key_value, &value_value, NULL)) {
+        if (PyValue_IsInline(key_value) || PyValue_IsInline(value_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        value = PyValue_ObjectBorrow(value_value);
         if (!PyUnicode_Check(key)) {
             continue;
         }
@@ -3633,10 +3595,15 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             int is_stdlib_ext = 0;
 
             Py_ssize_t i = 0;
-            PyObject *item;
+            PyValue item_value;
             Py_hash_t hash;
             // if stdlib_module_names is not NULL, it is always a frozenset.
-            while (_PySet_NextEntry(stdlib_module_names, &i, &item, &hash)) {
+            // This runs in a fatal error handler: no element is boxed.
+            while (_PySet_NextValue(stdlib_module_names, &i, &item_value, &hash)) {
+                if (PyValue_IsInline(item_value)) {
+                    continue;
+                }
+                PyObject *item = PyValue_ObjectBorrow(item_value);
                 if (!PyUnicode_Check(item)) {
                     continue;
                 }

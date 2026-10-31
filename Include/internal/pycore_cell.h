@@ -3,7 +3,8 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_object.h"
-#include "pycore_stackref.h"
+#include "pycore_structs.h"       // _PyGCValueRange
+#include "pycore_value.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,60 +14,39 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-// Sets the cell contents to `value` and return previous contents. Steals a
-// reference to `value`.
-static inline PyObject *
-PyCell_SwapTakeRef(PyCellObject *cell, PyObject *value)
+static inline _PyGCValueRange
+_PyCell_GCValues(PyCellObject *cell)
 {
-    PyObject *old_value;
+    _PyGCValueRange values = {&cell->ob_ref, 1};
+    return values;
+}
+
+// Sets the cell contents to the canonical value v and returns the previous
+// contents.
+static inline PyValue
+_PyCell_SwapValue(PyCellObject *cell, PyValue v)
+{
+    PyValue old_value;
     Py_BEGIN_CRITICAL_SECTION(cell);
     old_value = cell->ob_ref;
-    FT_ATOMIC_STORE_PTR_RELEASE(cell->ob_ref, value);
+    cell->ob_ref = v;
     Py_END_CRITICAL_SECTION();
     return old_value;
 }
 
-static inline void
-PyCell_SetTakeRef(PyCellObject *cell, PyObject *value)
+// The cell contents, PyValue_NULL when empty.
+static inline PyValue
+_PyCell_GetValue(PyCellObject *cell)
 {
-    PyObject *old_value = PyCell_SwapTakeRef(cell, value);
-    Py_XDECREF(old_value);
+    return PyCell_GET_VALUE((PyObject *)cell);
 }
 
-// Gets the cell contents. Returns a new reference.
+// The cell contents as an object: a new box if inline, NULL when empty, or
+// NULL with an exception set if boxing fails.
 static inline PyObject *
 PyCell_GetRef(PyCellObject *cell)
 {
-    PyObject *res;
-    Py_BEGIN_CRITICAL_SECTION(cell);
-#ifdef Py_GIL_DISABLED
-    res = _Py_XNewRefWithLock(cell->ob_ref);
-#else
-    res = Py_XNewRef(cell->ob_ref);
-#endif
-    Py_END_CRITICAL_SECTION();
-    return res;
-}
-
-static inline _PyStackRef
-_PyCell_GetStackRef(PyCellObject *cell)
-{
-    PyObject *value;
-#ifdef Py_GIL_DISABLED
-    value = _PyObject_CAST(_Py_atomic_load_ptr(&cell->ob_ref));
-    if (value == NULL) {
-        return PyStackRef_NULL;
-    }
-    _PyStackRef ref;
-    if (_Py_TryIncrefCompareStackRef(&cell->ob_ref, value, &ref)) {
-        return ref;
-    }
-#endif
-    value = PyCell_GetRef(cell);
-    if (value == NULL) {
-        return PyStackRef_NULL;
-    }
-    return PyStackRef_FromPyObjectSteal(value);
+    return PyValue_Object(_PyCell_GetValue(cell));
 }
 
 #ifdef __cplusplus

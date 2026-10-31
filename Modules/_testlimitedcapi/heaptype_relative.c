@@ -1,11 +1,3 @@
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifdef Py_GIL_DISABLED
-   // Cannot test the limited C API
-#else
-   // Need limited C API version 3.15 for _DuringGC functions
-#  define Py_LIMITED_API 0x030f0000
-#endif
-
 #include "parts.h"
 #include <stddef.h>               // max_align_t
 #include <string.h>               // memset
@@ -78,38 +70,38 @@ make_sized_heaptypes(PyObject *module, PyObject *args)
     return result;
 }
 
-static PyObject *
+static PyValue
 var_heaptype_set_data_to_3s(
     PyObject *self, PyTypeObject *defining_class,
-    PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+    const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     void *data_ptr = PyObject_GetTypeData(self, defining_class);
     assert(data_ptr == PyObject_GetTypeData_DuringGC(self, defining_class));
     if (!data_ptr) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t data_size = PyType_GetTypeDataSize(defining_class);
     if (data_size < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     memset(data_ptr, 3, data_size);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 var_heaptype_get_data(PyObject *self, PyTypeObject *defining_class,
-                      PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+                      const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     void *data_ptr = PyObject_GetTypeData(self, defining_class);
     assert(data_ptr == PyObject_GetTypeData_DuringGC(self, defining_class));
     if (!data_ptr) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t data_size = PyType_GetTypeDataSize(defining_class);
     if (data_size < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBytes_FromStringAndSize(data_ptr, data_size);
+    return PyValue_FromResult(PyBytes_FromStringAndSize(data_ptr, data_size));
 }
 
 static PyMethodDef var_heaptype_methods[] = {
@@ -219,15 +211,19 @@ heaptype_with_member_get_memb(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyMember_GetOne((const char *)self, def);
 }
 
-static PyObject *
-heaptype_with_member_set_memb(PyObject *self, PyObject *value)
+static PyValue
+heaptype_with_member_set_memb(PyObject *self, PyValue arg)
 {
+    PyObject *value = PyValue_Object(arg);
+    if (value == NULL) {
+        return PyValue_NULL;
+    }
     PyMemberDef *def = heaptype_with_member_extract_and_check_memb(self);
     int r = PyMember_SetOne((char *)self, def, value);
     if (r < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 static PyObject *
@@ -244,15 +240,19 @@ heaptype_with_member_get_memb_relative(PyObject *self, PyObject *Py_UNUSED(ignor
     return PyMember_GetOne((const char *)self, &def);
 }
 
-static PyObject *
-heaptype_with_member_set_memb_relative(PyObject *self, PyObject *value)
+static PyValue
+heaptype_with_member_set_memb_relative(PyObject *self, PyValue arg)
 {
+    PyObject *value = PyValue_Object(arg);
+    if (value == NULL) {
+        return PyValue_NULL;
+    }
     PyMemberDef def = {"memb", Py_T_BYTE, sizeof(PyObject), Py_RELATIVE_OFFSET};
     int r = PyMember_SetOne((char *)self, &def, value);
     if (r < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 typedef struct {
@@ -334,10 +334,10 @@ static PyType_Spec HeapCTypeWithRelativeWeakref_spec = {
 
 static PyMethodDef heaptype_with_member_methods[] = {
     {"get_memb", heaptype_with_member_get_memb, METH_NOARGS},
-    {"set_memb", heaptype_with_member_set_memb, METH_O},
+    {"set_memb", _PyCFunction_CAST(heaptype_with_member_set_memb), METH_O},
     {"get_memb_offset", get_memb_offset, METH_NOARGS},
     {"get_memb_relative", heaptype_with_member_get_memb_relative, METH_NOARGS},
-    {"set_memb_relative", heaptype_with_member_set_memb_relative, METH_O},
+    {"set_memb_relative", _PyCFunction_CAST(heaptype_with_member_set_memb_relative), METH_O},
     {NULL},
 };
 

@@ -48,7 +48,7 @@ extern PyObject ** _Py_VaBuildStack(
 extern PyObject* _PyModule_CreateInitialized(PyModuleDef*, int apiver);
 
 extern int _PyArg_UnpackStack(
-    PyObject *const *args,
+    const PyValue *args,
     Py_ssize_t nargs,
     const char *name,
     Py_ssize_t min,
@@ -68,15 +68,15 @@ PyAPI_FUNC(void) _PyArg_BadArgument(
 // to "struct _PyArg_Parser *parser" cache.
 // Export for '_dbm' shared extension.
 PyAPI_FUNC(int) _PyArg_ParseStackAndKeywords(
-    PyObject *const *args,
+    const PyValue *args,
     Py_ssize_t nargs,
     PyObject *kwnames,
     struct _PyArg_Parser *,
     ...);
 
 // Export for 'math' shared extension
-PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
-    PyObject *const *args,
+PyAPI_FUNC(const PyValue *) _PyArg_UnpackKeywords(
+    const PyValue *args,
     Py_ssize_t nargs,
     PyObject *kwargs,
     PyObject *kwnames,
@@ -85,7 +85,7 @@ PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
     int maxpos,
     int minkw,
     int varpos,
-    PyObject **buf);
+    PyValue *buf);
 #define _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, parser, minpos, maxpos, minkw, varpos, buf) \
     (((minkw) == 0 && (kwargs) == NULL && (kwnames) == NULL && \
       (minpos) <= (nargs) && ((varpos) || (nargs) <= (maxpos)) && (args) != NULL) ? \

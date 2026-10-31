@@ -29,6 +29,8 @@ class SlotSpec:
     @property
     def error_value(self) -> str:
         """The value returned by the slot function on error."""
+        if self.return_type == 'PyValue':
+            return 'PyValue_NULL'
         return 'NULL' if self.return_type.endswith('*') else '-1'
 
     def make_return_converter(self) -> CReturnConverter:
@@ -47,7 +49,7 @@ SLOTS: Final[dict[str, SlotSpec]] = {
     '__imul__': SlotSpec(return_converter='object'),
     '__len__': SlotSpec(return_converter='Py_ssize_t'),
     '__mul__': SlotSpec(return_converter='object'),
-    '__next__': SlotSpec(return_converter='object'),
+    '__next__': SlotSpec(return_converter='value'),
     '__repr__': SlotSpec(return_converter='object'),
     '__setitem__': SlotSpec(return_converter='int'),
     '__str__': SlotSpec(return_converter='object'),

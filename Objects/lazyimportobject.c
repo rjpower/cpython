@@ -180,23 +180,23 @@ lazy_import_dealloc(PyObject *op)
 }
 
 /* Specialize the error message for failed attribute lookups. */
-static PyObject *
+static PyValue
 lazy_import_getattro(PyObject *op, PyObject *name)
 {
-    PyObject *value = _PyObject_GenericGetAttrWithDict(
+    PyValue value = _PyObject_GenericGetAttrWithDict(
         op, name, NULL, /* suppress */ 1);
-    if (value != NULL || PyErr_Occurred()) {
+    if (!PyValue_IsNull(value) || PyErr_Occurred()) {
         return value;
     }
     PyObject *lz_name = lazy_import_name(PyLazyImportObject_CAST(op));
     if (lz_name == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyErr_Format(PyExc_AttributeError,
                  "cannot access attribute %R on unresolved lazy import %R",
                  name, lz_name);
     Py_DECREF(lz_name);
-    return NULL;
+    return PyValue_NULL;
 }
 
 // The dotted name of the object that resolving the placeholder returns.
@@ -307,7 +307,7 @@ lazy_import_add_exception_cause(PyThreadState *tstate, PyLazyImportObject *lz)
     if (name == NULL) {
         goto done;
     }
-    int lineno = PyCode_Addr2Line(lz->lz_code, lz->lz_instr_offset * 2);
+    int lineno = PyCode_Addr2Line(lz->lz_code, lz->lz_instr_offset);
     const char *filename = PyUnicode_AsUTF8(lz->lz_code->co_filename);
     if (filename == NULL) {
         goto done;

@@ -11,7 +11,7 @@
 typedef struct {
     PyObject_HEAD
     int flags;          /* state flags */
-    Py_ssize_t exports; /* number of direct memoryview exports */
+    Py_ssize_t exports; /* registered memoryviews and internal consumer exports */
     Py_buffer master; /* snapshot buffer obtained from the original exporter */
 } _PyManagedBufferObject;
 
@@ -31,7 +31,6 @@ typedef struct {
     int flags;                    /* state flags */
     Py_ssize_t exports;           /* number of buffer re-exports */
     Py_buffer view;               /* private copy of the exporter's view */
-    PyObject *weakreflist;
     Py_ssize_t ob_array[1];       /* shape, strides, suboffsets */
 } PyMemoryViewObject;
 

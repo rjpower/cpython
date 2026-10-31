@@ -1,0 +1,9 @@
+{"case": "other_event", "state": [0, true, [0, 0], 0], "before": [1, 2, 3, 4, 5], "after": [], "second": [2, 3]}
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py", line 114, in <module>
+    child(sys.argv[2])
+    ~~~~~^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py", line 76, in child
+    assert first == expected, ("lost existing instruction membership", expected, first)
+           ^^^^^^^^^^^^^^^^^
+AssertionError: ('lost existing instruction membership', [1, 2, 3, 4, 5], [])

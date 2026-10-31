@@ -1,0 +1,20 @@
+# Member paths that traverse_audit.py --check accepts unvisited: a type with
+# no tp_traverse, a partial one, or one that names neither the member nor
+# its release.  One line per type: "path variable member...: reason", where
+# variable is the type's PyTypeObject or PyType_Spec and the members are the
+# paths as the report prints them.  Triage: boil/design/work/audit-1.md and
+# audit-2.md.
+Modules/_testbuffer.c NDArray_Type head->base.obj staticbuf.base.obj: borrowed: consumer cached views copy obj from the visited owner acquisition, whose mbuf_traverse visits master.obj; after owner release cached metadata is inactive and must not be traversed; producer ndbuf_new sets base.obj to NULL
+Modules/_testcapi/heaptype.c HeapCTypeWithDict_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector
+Modules/_testcapi/heaptype.c HeapCTypeWithDict2_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector
+Modules/_testcapi/heaptype.c HeapCTypeWithNegativeDict_spec dict: runtime-managed: dict word at tp_dictoffset is marked by the collector
+Objects/moduleobject.c PyModuleDef_Type m_copy: static data: module defs are static, and the data-segment scan reads m_base.m_copy
+Modules/_collectionsmodule.c dequeiter_spec b->data: borrowed: b points to a block of the iterator's deque, which the traverse visits; deque_traverse visits every item in the blocks' data, and the iterator reads b only after checking deque->state
+Modules/_collectionsmodule.c dequereviter_spec b->data: borrowed: as dequeiter_spec; b points to a block of the visited deque, whose traverse visits the blocks' data
+Modules/_elementtree.c element_spec extra->_children: alias: extra->_children is the inline storage; while children == _children (until the first spill to a PyMem array) the traverse's children[0..length) is _children[0..length), and after a spill _children is unused
+Modules/_functoolsmodule.c partial_type_spec placeholder: borrowed: placeholder is the module state's singleton, stored without a reference; the partial visits its type, the type its ht_module, and the module's traverse visits state->placeholder
+Modules/_functoolsmodule.c lru_list_elem_type_spec next prev: borrowed: prev and next are upstream's borrowed links; every link in the list is visited by lru_cache_tp_traverse's walk, and the cache dict holds each link as a value
+Modules/_functoolsmodule.c lru_cache_type_spec prev: borrowed: root's prev is a borrowed link; the traverse walks the list by next and visits every link
+Modules/_sqlite/connection.c connection_spec DataError DatabaseError Error IntegrityError InterfaceError InternalError NotSupportedError OperationalError ProgrammingError Warning: borrowed: Warning, Error, InterfaceError, DatabaseError, DataError, OperationalError, IntegrityError, InternalError, ProgrammingError and NotSupportedError are the module state's classes, stored without a reference; the connection visits its type, the type its ht_module, and the module's traverse visits the state's classes
+Objects/enumobject.c PyEnum_Type one: static: one is _PyLong_GetOne(), a small int in _PyRuntime
+Python/symtable.c PySTEntry_Type ste_parent ste_table->st_blocks ste_table->st_cur ste_table->st_filename ste_table->st_global ste_table->st_private ste_table->st_stack ste_table->st_top: borrowed: ste_table points to the compiler's struct symtable (st_blocks, st_cur, st_filename, st_global, st_private, st_stack, st_top), a PyMem block held from the C stack for the build, and dangles after _PySymtable_Free while the entry lives on, so the entry must not visit through it; ste_parent is set only for inlined comprehensions, to st_cur, which st_blocks holds for the build, and is read only during analysis

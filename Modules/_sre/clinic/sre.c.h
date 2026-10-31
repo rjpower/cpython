@@ -3,10 +3,8 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(_sre_getcodesize__doc__,
@@ -42,19 +40,19 @@ PyDoc_STRVAR(_sre_ascii_iscased__doc__,
 "\n");
 
 #define _SRE_ASCII_ISCASED_METHODDEF    \
-    {"ascii_iscased", (PyCFunction)_sre_ascii_iscased, METH_O, _sre_ascii_iscased__doc__},
+    {"ascii_iscased", _PyCFunction_CAST(_sre_ascii_iscased), METH_O, _sre_ascii_iscased__doc__},
 
 static int
 _sre_ascii_iscased_impl(PyObject *module, int character);
 
-static PyObject *
-_sre_ascii_iscased(PyObject *module, PyObject *arg)
+static PyValue
+_sre_ascii_iscased(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int character;
     int _return_value;
 
-    character = PyLong_AsInt(arg);
+    character = PyLong_AsIntValue(arg);
     if (character == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -62,7 +60,7 @@ _sre_ascii_iscased(PyObject *module, PyObject *arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -74,19 +72,19 @@ PyDoc_STRVAR(_sre_unicode_iscased__doc__,
 "\n");
 
 #define _SRE_UNICODE_ISCASED_METHODDEF    \
-    {"unicode_iscased", (PyCFunction)_sre_unicode_iscased, METH_O, _sre_unicode_iscased__doc__},
+    {"unicode_iscased", _PyCFunction_CAST(_sre_unicode_iscased), METH_O, _sre_unicode_iscased__doc__},
 
 static int
 _sre_unicode_iscased_impl(PyObject *module, int character);
 
-static PyObject *
-_sre_unicode_iscased(PyObject *module, PyObject *arg)
+static PyValue
+_sre_unicode_iscased(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int character;
     int _return_value;
 
-    character = PyLong_AsInt(arg);
+    character = PyLong_AsIntValue(arg);
     if (character == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -94,7 +92,7 @@ _sre_unicode_iscased(PyObject *module, PyObject *arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -106,19 +104,19 @@ PyDoc_STRVAR(_sre_ascii_tolower__doc__,
 "\n");
 
 #define _SRE_ASCII_TOLOWER_METHODDEF    \
-    {"ascii_tolower", (PyCFunction)_sre_ascii_tolower, METH_O, _sre_ascii_tolower__doc__},
+    {"ascii_tolower", _PyCFunction_CAST(_sre_ascii_tolower), METH_O, _sre_ascii_tolower__doc__},
 
 static int
 _sre_ascii_tolower_impl(PyObject *module, int character);
 
-static PyObject *
-_sre_ascii_tolower(PyObject *module, PyObject *arg)
+static PyValue
+_sre_ascii_tolower(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int character;
     int _return_value;
 
-    character = PyLong_AsInt(arg);
+    character = PyLong_AsIntValue(arg);
     if (character == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -126,7 +124,7 @@ _sre_ascii_tolower(PyObject *module, PyObject *arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -138,19 +136,19 @@ PyDoc_STRVAR(_sre_unicode_tolower__doc__,
 "\n");
 
 #define _SRE_UNICODE_TOLOWER_METHODDEF    \
-    {"unicode_tolower", (PyCFunction)_sre_unicode_tolower, METH_O, _sre_unicode_tolower__doc__},
+    {"unicode_tolower", _PyCFunction_CAST(_sre_unicode_tolower), METH_O, _sre_unicode_tolower__doc__},
 
 static int
 _sre_unicode_tolower_impl(PyObject *module, int character);
 
-static PyObject *
-_sre_unicode_tolower(PyObject *module, PyObject *arg)
+static PyValue
+_sre_unicode_tolower(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int character;
     int _return_value;
 
-    character = PyLong_AsInt(arg);
+    character = PyLong_AsIntValue(arg);
     if (character == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -158,7 +156,7 @@ _sre_unicode_tolower(PyObject *module, PyObject *arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -178,15 +176,14 @@ _sre_SRE_Pattern_prefixmatch_impl(PatternObject *self, PyTypeObject *cls,
                                   PyObject *string, Py_ssize_t pos,
                                   Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -209,28 +206,31 @@ _sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -243,10 +243,9 @@ _sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const 
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -254,7 +253,8 @@ _sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const 
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_prefixmatch_impl((PatternObject *)self, cls, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_prefixmatch_impl((PatternObject *)self, cls, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -274,15 +274,14 @@ _sre_SRE_Pattern_fullmatch_impl(PatternObject *self, PyTypeObject *cls,
                                 PyObject *string, Py_ssize_t pos,
                                 Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -305,28 +304,31 @@ _sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *a
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -339,10 +341,9 @@ _sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *a
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -350,7 +351,8 @@ _sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *a
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_fullmatch_impl((PatternObject *)self, cls, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_fullmatch_impl((PatternObject *)self, cls, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -372,15 +374,14 @@ _sre_SRE_Pattern_search_impl(PatternObject *self, PyTypeObject *cls,
                              PyObject *string, Py_ssize_t pos,
                              Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -403,28 +404,31 @@ _sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -437,10 +441,9 @@ _sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -448,7 +451,8 @@ _sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_search_impl((PatternObject *)self, cls, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_search_impl((PatternObject *)self, cls, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -467,15 +471,14 @@ static PyObject *
 _sre_SRE_Pattern_findall_impl(PatternObject *self, PyObject *string,
                               Py_ssize_t pos, Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_findall(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -498,28 +501,31 @@ _sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -532,10 +538,9 @@ _sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -543,7 +548,8 @@ _sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_findall_impl((PatternObject *)self, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_findall_impl((PatternObject *)self, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -565,15 +571,14 @@ _sre_SRE_Pattern_finditer_impl(PatternObject *self, PyTypeObject *cls,
                                PyObject *string, Py_ssize_t pos,
                                Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -596,28 +601,31 @@ _sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -630,10 +638,9 @@ _sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *ar
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -641,7 +648,8 @@ _sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_finditer_impl((PatternObject *)self, cls, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_finditer_impl((PatternObject *)self, cls, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -660,15 +668,14 @@ _sre_SRE_Pattern_scanner_impl(PatternObject *self, PyTypeObject *cls,
                               PyObject *string, Py_ssize_t pos,
                               Py_ssize_t endpos);
 
-static PyObject *
-_sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -691,28 +698,31 @@ _sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *arg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t pos = 0;
     Py_ssize_t endpos = PY_SSIZE_T_MAX;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
+    if (!PyValue_IsNull(args[1])) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[1]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue ivalue = PyNumber_IndexValue(args[1]);
+            if (!PyValue_IsNull(ivalue)) {
+                ival = PyLong_AsSsize_tValue(ivalue);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -725,10 +735,9 @@ _sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *arg
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -736,7 +745,8 @@ _sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *arg
         endpos = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_scanner_impl((PatternObject *)self, cls, string, pos, endpos);
+    _return_value = _sre_SRE_Pattern_scanner_impl((PatternObject *)self, cls, string, pos, endpos);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -755,15 +765,14 @@ static PyObject *
 _sre_SRE_Pattern_split_impl(PatternObject *self, PyObject *string,
                             Py_ssize_t maxsplit);
 
-static PyObject *
-_sre_SRE_Pattern_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_split(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -786,26 +795,29 @@ _sre_SRE_Pattern_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *string;
     Py_ssize_t maxsplit = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    string = args[0];
+    string = PyValue_Object(args[0]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -813,7 +825,8 @@ _sre_SRE_Pattern_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         maxsplit = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_split_impl((PatternObject *)self, string, maxsplit);
+    _return_value = _sre_SRE_Pattern_split_impl((PatternObject *)self, string, maxsplit);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -832,15 +845,14 @@ static PyObject *
 _sre_SRE_Pattern_sub_impl(PatternObject *self, PyTypeObject *cls,
                           PyObject *repl, PyObject *string, Py_ssize_t count);
 
-static PyObject *
-_sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -863,28 +875,34 @@ _sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *repl;
     PyObject *string;
     Py_ssize_t count = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    repl = args[0];
-    string = args[1];
+    repl = PyValue_Object(args[0]);
+    if (repl == NULL) {
+        goto exit;
+    }
+    string = PyValue_Object(args[1]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -892,7 +910,8 @@ _sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
         count = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_sub_impl((PatternObject *)self, cls, repl, string, count);
+    _return_value = _sre_SRE_Pattern_sub_impl((PatternObject *)self, cls, repl, string, count);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -912,15 +931,14 @@ _sre_SRE_Pattern_subn_impl(PatternObject *self, PyTypeObject *cls,
                            PyObject *repl, PyObject *string,
                            Py_ssize_t count);
 
-static PyObject *
-_sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -943,28 +961,34 @@ _sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *repl;
     PyObject *string;
     Py_ssize_t count = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    repl = args[0];
-    string = args[1];
+    repl = PyValue_Object(args[0]);
+    if (repl == NULL) {
+        goto exit;
+    }
+    string = PyValue_Object(args[1]);
+    if (string == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -972,7 +996,8 @@ _sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
         count = ival;
     }
 skip_optional_pos:
-    return_value = _sre_SRE_Pattern_subn_impl((PatternObject *)self, cls, repl, string, count);
+    _return_value = _sre_SRE_Pattern_subn_impl((PatternObject *)self, cls, repl, string, count);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1001,18 +1026,26 @@ PyDoc_STRVAR(_sre_SRE_Pattern___deepcopy____doc__,
 "\n");
 
 #define _SRE_SRE_PATTERN___DEEPCOPY___METHODDEF    \
-    {"__deepcopy__", (PyCFunction)_sre_SRE_Pattern___deepcopy__, METH_O, _sre_SRE_Pattern___deepcopy____doc__},
+    {"__deepcopy__", _PyCFunction_CAST(_sre_SRE_Pattern___deepcopy__), METH_O, _sre_SRE_Pattern___deepcopy____doc__},
 
 static PyObject *
 _sre_SRE_Pattern___deepcopy___impl(PatternObject *self, PyObject *memo);
 
-static PyObject *
-_sre_SRE_Pattern___deepcopy__(PyObject *self, PyObject *memo)
+static PyValue
+_sre_SRE_Pattern___deepcopy__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *memo;
+    PyObject *_return_value;
 
-    return_value = _sre_SRE_Pattern___deepcopy___impl((PatternObject *)self, memo);
+    memo = PyValue_Object(arg);
+    if (memo == NULL) {
+        goto exit;
+    }
+    _return_value = _sre_SRE_Pattern___deepcopy___impl((PatternObject *)self, memo);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -1031,22 +1064,27 @@ static PyObject *
 _sre_SRE_Pattern__fail_after_impl(PatternObject *self, int count,
                                   PyObject *exception);
 
-static PyObject *
-_sre_SRE_Pattern__fail_after(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_SRE_Pattern__fail_after(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int count;
     PyObject *exception;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_fail_after", nargs, 2, 2)) {
         goto exit;
     }
-    count = PyLong_AsInt(args[0]);
+    count = PyLong_AsIntValue(args[0]);
     if (count == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    exception = args[1];
-    return_value = _sre_SRE_Pattern__fail_after_impl((PatternObject *)self, count, exception);
+    exception = PyValue_Object(args[1]);
+    if (exception == NULL) {
+        goto exit;
+    }
+    _return_value = _sre_SRE_Pattern__fail_after_impl((PatternObject *)self, count, exception);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1068,15 +1106,14 @@ _sre_compile_impl(PyObject *module, PyObject *pattern, int flags,
                   PyObject *code, Py_ssize_t groups, PyObject *groupindex,
                   PyObject *indexgroup);
 
-static PyObject *
-_sre_compile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_compile(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1099,52 +1136,74 @@ _sre_compile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
+    PyValue argsbuf[6];
     PyObject *pattern;
     int flags;
     PyObject *code;
     Py_ssize_t groups;
     PyObject *groupindex;
     PyObject *indexgroup;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 6, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    pattern = args[0];
-    flags = PyLong_AsInt(args[1]);
+    pattern = PyValue_Object(args[0]);
+    if (pattern == NULL) {
+        goto exit;
+    }
+    flags = PyLong_AsIntValue(args[1]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyList_Check(args[2])) {
-        _PyArg_BadArgument("compile", "argument 'code'", "list", args[2]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyList_Check(_arg)) {
+            _PyArg_BadArgument("compile", "argument 'code'", "list", _arg);
+            goto exit;
+        }
+        code = _arg;
     }
-    code = args[2];
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[3]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[3]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         groups = ival;
     }
-    if (!PyDict_Check(args[4])) {
-        _PyArg_BadArgument("compile", "argument 'groupindex'", "dict", args[4]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[4]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyDict_Check(_arg)) {
+            _PyArg_BadArgument("compile", "argument 'groupindex'", "dict", _arg);
+            goto exit;
+        }
+        groupindex = _arg;
     }
-    groupindex = args[4];
-    if (!PyTuple_Check(args[5])) {
-        _PyArg_BadArgument("compile", "argument 'indexgroup'", "tuple", args[5]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[5]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("compile", "argument 'indexgroup'", "tuple", _arg);
+            goto exit;
+        }
+        indexgroup = _arg;
     }
-    indexgroup = args[5];
-    return_value = _sre_compile_impl(module, pattern, flags, code, groups, groupindex, indexgroup);
+    _return_value = _sre_compile_impl(module, pattern, flags, code, groups, groupindex, indexgroup);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1167,23 +1226,34 @@ PyDoc_STRVAR(_sre_template__doc__,
 static PyObject *
 _sre_template_impl(PyObject *module, PyObject *pattern, PyObject *template);
 
-static PyObject *
-_sre_template(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_template(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *pattern;
     PyObject *template;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("template", nargs, 2, 2)) {
         goto exit;
     }
-    pattern = args[0];
-    if (!PyList_Check(args[1])) {
-        _PyArg_BadArgument("template", "argument 2", "list", args[1]);
+    pattern = PyValue_Object(args[0]);
+    if (pattern == NULL) {
         goto exit;
     }
-    template = args[1];
-    return_value = _sre_template_impl(module, pattern, template);
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyList_Check(_arg)) {
+            _PyArg_BadArgument("template", "argument 2", "list", _arg);
+            goto exit;
+        }
+        template = _arg;
+    }
+    _return_value = _sre_template_impl(module, pattern, template);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1201,15 +1271,14 @@ PyDoc_STRVAR(_sre_SRE_Match_expand__doc__,
 static PyObject *
 _sre_SRE_Match_expand_impl(MatchObject *self, PyObject *template);
 
-static PyObject *
-_sre_SRE_Match_expand(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Match_expand(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1232,16 +1301,21 @@ _sre_SRE_Match_expand(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *template;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    template = args[0];
-    return_value = _sre_SRE_Match_expand_impl((MatchObject *)self, template);
+    template = PyValue_Object(args[0]);
+    if (template == NULL) {
+        goto exit;
+    }
+    _return_value = _sre_SRE_Match_expand_impl((MatchObject *)self, template);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1259,19 +1333,21 @@ PyDoc_STRVAR(_sre_SRE_Match_group__doc__,
     {"group", _PyCFunction_CAST(_sre_SRE_Match_group), METH_FASTCALL, _sre_SRE_Match_group__doc__},
 
 static PyObject *
-_sre_SRE_Match_group_impl(MatchObject *self, PyObject * const *args,
+_sre_SRE_Match_group_impl(MatchObject *self, const PyValue *args,
                           Py_ssize_t args_length);
 
-static PyObject *
-_sre_SRE_Match_group(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_SRE_Match_group(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *__clinic_args;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *__clinic_args;
     Py_ssize_t args_length;
+    PyObject *_return_value;
 
     __clinic_args = args;
     args_length = nargs;
-    return_value = _sre_SRE_Match_group_impl((MatchObject *)self, __clinic_args, args_length);
+    _return_value = _sre_SRE_Match_group_impl((MatchObject *)self, __clinic_args, args_length);
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -1291,15 +1367,14 @@ PyDoc_STRVAR(_sre_SRE_Match_groups__doc__,
 static PyObject *
 _sre_SRE_Match_groups_impl(MatchObject *self, PyObject *default_value);
 
-static PyObject *
-_sre_SRE_Match_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Match_groups(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1322,9 +1397,10 @@ _sre_SRE_Match_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *default_value = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1334,9 +1410,13 @@ _sre_SRE_Match_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    default_value = args[0];
+    default_value = PyValue_Object(args[0]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _sre_SRE_Match_groups_impl((MatchObject *)self, default_value);
+    _return_value = _sre_SRE_Match_groups_impl((MatchObject *)self, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1357,15 +1437,14 @@ PyDoc_STRVAR(_sre_SRE_Match_groupdict__doc__,
 static PyObject *
 _sre_SRE_Match_groupdict_impl(MatchObject *self, PyObject *default_value);
 
-static PyObject *
-_sre_SRE_Match_groupdict(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Match_groupdict(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1388,9 +1467,10 @@ _sre_SRE_Match_groupdict(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *default_value = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1400,9 +1480,13 @@ _sre_SRE_Match_groupdict(PyObject *self, PyObject *const *args, Py_ssize_t nargs
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    default_value = args[0];
+    default_value = PyValue_Object(args[0]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _sre_SRE_Match_groupdict_impl((MatchObject *)self, default_value);
+    _return_value = _sre_SRE_Match_groupdict_impl((MatchObject *)self, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1420,10 +1504,10 @@ PyDoc_STRVAR(_sre_SRE_Match_start__doc__,
 static Py_ssize_t
 _sre_SRE_Match_start_impl(MatchObject *self, PyObject *group);
 
-static PyObject *
-_sre_SRE_Match_start(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_SRE_Match_start(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *group = NULL;
     Py_ssize_t _return_value;
 
@@ -1433,13 +1517,16 @@ _sre_SRE_Match_start(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    group = args[0];
+    group = PyValue_Object(args[0]);
+    if (group == NULL) {
+        goto exit;
+    }
 skip_optional:
     _return_value = _sre_SRE_Match_start_impl((MatchObject *)self, group);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -1457,10 +1544,10 @@ PyDoc_STRVAR(_sre_SRE_Match_end__doc__,
 static Py_ssize_t
 _sre_SRE_Match_end_impl(MatchObject *self, PyObject *group);
 
-static PyObject *
-_sre_SRE_Match_end(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_SRE_Match_end(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *group = NULL;
     Py_ssize_t _return_value;
 
@@ -1470,13 +1557,16 @@ _sre_SRE_Match_end(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    group = args[0];
+    group = PyValue_Object(args[0]);
+    if (group == NULL) {
+        goto exit;
+    }
 skip_optional:
     _return_value = _sre_SRE_Match_end_impl((MatchObject *)self, group);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -1494,11 +1584,12 @@ PyDoc_STRVAR(_sre_SRE_Match_span__doc__,
 static PyObject *
 _sre_SRE_Match_span_impl(MatchObject *self, PyObject *group);
 
-static PyObject *
-_sre_SRE_Match_span(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_sre_SRE_Match_span(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *group = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("span", nargs, 0, 1)) {
         goto exit;
@@ -1506,9 +1597,13 @@ _sre_SRE_Match_span(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    group = args[0];
+    group = PyValue_Object(args[0]);
+    if (group == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _sre_SRE_Match_span_impl((MatchObject *)self, group);
+    _return_value = _sre_SRE_Match_span_impl((MatchObject *)self, group);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1537,18 +1632,26 @@ PyDoc_STRVAR(_sre_SRE_Match___deepcopy____doc__,
 "\n");
 
 #define _SRE_SRE_MATCH___DEEPCOPY___METHODDEF    \
-    {"__deepcopy__", (PyCFunction)_sre_SRE_Match___deepcopy__, METH_O, _sre_SRE_Match___deepcopy____doc__},
+    {"__deepcopy__", _PyCFunction_CAST(_sre_SRE_Match___deepcopy__), METH_O, _sre_SRE_Match___deepcopy____doc__},
 
 static PyObject *
 _sre_SRE_Match___deepcopy___impl(MatchObject *self, PyObject *memo);
 
-static PyObject *
-_sre_SRE_Match___deepcopy__(PyObject *self, PyObject *memo)
+static PyValue
+_sre_SRE_Match___deepcopy__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *memo;
+    PyObject *_return_value;
 
-    return_value = _sre_SRE_Match___deepcopy___impl((MatchObject *)self, memo);
+    memo = PyValue_Object(arg);
+    if (memo == NULL) {
+        goto exit;
+    }
+    _return_value = _sre_SRE_Match___deepcopy___impl((MatchObject *)self, memo);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -1563,14 +1666,14 @@ PyDoc_STRVAR(_sre_SRE_Scanner_prefixmatch__doc__,
 static PyObject *
 _sre_SRE_Scanner_prefixmatch_impl(ScannerObject *self, PyTypeObject *cls);
 
-static PyObject *
-_sre_SRE_Scanner_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Scanner_prefixmatch(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "prefixmatch() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _sre_SRE_Scanner_prefixmatch_impl((ScannerObject *)self, cls);
+    return PyValue_FromResult(_sre_SRE_Scanner_prefixmatch_impl((ScannerObject *)self, cls));
 }
 
 PyDoc_STRVAR(_sre_SRE_Scanner_search__doc__,
@@ -1584,17 +1687,17 @@ PyDoc_STRVAR(_sre_SRE_Scanner_search__doc__,
 static PyObject *
 _sre_SRE_Scanner_search_impl(ScannerObject *self, PyTypeObject *cls);
 
-static PyObject *
-_sre_SRE_Scanner_search(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sre_SRE_Scanner_search(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "search() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _sre_SRE_Scanner_search_impl((ScannerObject *)self, cls);
+    return PyValue_FromResult(_sre_SRE_Scanner_search_impl((ScannerObject *)self, cls));
 }
 
 #ifndef _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
     #define _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
 #endif /* !defined(_SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF) */
-/*[clinic end generated code: output=2e6c222a2eb0875e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=59d2b3a870e1cde1 input=a9049054013a1b77]*/

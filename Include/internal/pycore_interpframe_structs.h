@@ -12,7 +12,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_structs.h"       // _PyStackRef
+#include "pycore_structs.h"       // PyValue
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
 #ifdef __cplusplus
@@ -27,29 +27,41 @@ enum _frameowner {
 };
 
 struct _PyInterpreterFrame {
-    _PyStackRef f_executable; /* Deferred or strong reference (code object or None) */
+    PyValue f_executable; /* Deferred or strong reference (code object or None) */
     struct _PyInterpreterFrame *previous;
-    _PyStackRef f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
+    /* Slot 0: co_nlocalsplus locals, cells and free variables, then
+     * co_stacksize temporaries.  Every slot holds a value or NULL; a
+     * temporary that no instruction has written or that an instruction
+     * consumed is NULL.  The slots of a frame on the frame stack are on the
+     * thread's value stack; a generator and a frame object keep them in
+     * owned_slots. */
+    PyValue *base;
+    /* For a frame on the frame stack, the top of the value stack before it
+     * was pushed, which popping it restores */
+    PyValue *saved_top;
+    PyValue f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL. Only valid if not on C stack */
-    _Py_CODEUNIT *instr_ptr; /* Instruction currently executing (or about to begin) */
-    _PyStackRef *stackpointer;
-#ifdef Py_GIL_DISABLED
-    /* Index of thread-local bytecode containing instr_ptr. */
-    int32_t tlbc_index;
-#endif
-    uint16_t return_offset;  /* Only relevant during a function call */
+    _PyInstr *instr_ptr; /* Instruction currently executing (or about to begin) */
+    /* Word 0 and feedback entry 0 of the IR block that instr_ptr points
+     * into: the bases of jump targets and feedback indices. */
+    _PyInstr *ir_words;
+    char *ir_feedback;
+    /* The slot that receives the value when control comes back to this
+     * frame: the dst of the call it is making, or for a suspended
+     * generator the slot of the value it yielded, where the value sent in
+     * goes. */
+    uint16_t return_slot;
     char owner;
     uint8_t visited:1;
     uint8_t external:1; /* Set when the frame was pushed by something other than the VM */
 #ifdef Py_DEBUG
-    uint8_t stackpointer_valid:1;
     uint8_t lltrace:5;
 #endif
-    /* Locals and stack */
-    _PyStackRef localsplus[1];
+    /* The slots of a frame that owns them, which base then points to */
+    PyValue owned_slots[1];
 };
 
 
@@ -57,8 +69,6 @@ struct _PyInterpreterFrame {
    and coroutine objects. */
 #define _PyGenObject_HEAD(prefix)                                           \
     PyObject_HEAD                                                           \
-    /* List of weak reference. */                                           \
-    PyObject *prefix##_weakreflist;                                         \
     /* Name of the generator. */                                            \
     PyObject *prefix##_name;                                                \
     /* Qualified name of the generator. */                                  \

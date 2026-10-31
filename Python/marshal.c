@@ -11,11 +11,12 @@
 #include "pycore_code.h"             // _PyCode_New()
 #include "pycore_hashtable.h"        // _Py_hashtable_t
 #include "pycore_long.h"             // _PyLong_IsZero()
-#include "pycore_object.h"           // _PyObject_IsUniquelyReferenced
+#include "pycore_object.h"
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
-#include "pycore_setobject.h"        // _PySet_NextEntryRef()
+#include "pycore_setobject.h"        // _PySet_NextValue()
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_InternImmortal()
+#include "pycore_value.h"            // _PyObject_ValueIdentity()
 
 #include "marshal.h"                 // Py_MARSHAL_VERSION
 
@@ -103,7 +104,8 @@ module marshal
 /* State of an object which can be the target of a TYPE_REF (version 3+),
    see w_ref() and w_resolve_refs().
 
-   WFILE.hashtable maps the object to its index in WFILE.refs, shifted left
+   WFILE.hashtable maps the object's identity (w_key()), so that the boxes
+   of one inline value are one object, to its index in WFILE.refs, shifted left
    by W_ENTRY_SHIFT bits, plus the flags:
    - W_ENTRY_ACTIVE: the object is being written (used to detect recursion,
      see w_complete());
@@ -495,6 +497,14 @@ w_add_refpos(WFILE *p)
    Return 1 if the object has been dealt with (TYPE_REF written or error),
    0 if the caller has to write it.
  */
+/* The key of v in WFILE.hashtable: its identity, which the boxes of one
+   inline value share (see "Identity" in Include/pyvalue.h). */
+static inline void *
+w_key(PyObject *v)
+{
+    return (void *)_PyObject_ValueIdentity(v);
+}
+
 static int
 w_ref(PyObject *v, WFILE *p)
 {
@@ -503,17 +513,7 @@ w_ref(PyObject *v, WFILE *p)
     if (p->version < 3 || p->hashtable == NULL)
         return 0; /* not writing object references */
 
-    /* An object with only one reference cannot occur twice in the object
-     * graph, so there is no need to remember it.  This is only a shortcut:
-     * an object occurring twice has at least two references each time it is
-     * seen, so it is never skipped and the output does not depend on this
-     * test.
-     */
-    if (_PyObject_IsUniquelyReferenced(v)) {
-        return 0;
-    }
-
-    entry = _Py_hashtable_get_entry(p->hashtable, v);
+    entry = _Py_hashtable_get_entry(p->hashtable, w_key(v));
     if (entry != NULL) {
         /* write the reference index to the stream */
         uintptr_t w = (uintptr_t)entry->value;
@@ -562,9 +562,7 @@ w_ref(PyObject *v, WFILE *p)
         {
             value |= W_ENTRY_ACTIVE;
         }
-        if (_Py_hashtable_set(p->hashtable, Py_NewRef(v),
-                              (void *)value) < 0) {
-            Py_DECREF(v);
+        if (_Py_hashtable_set(p->hashtable, w_key(v), (void *)value) < 0) {
             PyErr_NoMemory();
             goto err;
         }
@@ -635,11 +633,8 @@ w_complete(PyObject *v, WFILE *p)
     if (p->version < 3 || p->hashtable == NULL) {
         return;
     }
-    if (_PyObject_IsUniquelyReferenced(v)) {
-        return;
-    }
 
-    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(p->hashtable, v);
+    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(p->hashtable, w_key(v));
     if (entry == NULL) {
         return;
     }
@@ -689,6 +684,18 @@ w_object(PyObject *v, WFILE *p)
         w_complex_object(v, p);
 
     p->depth--;
+}
+
+/* w_object() of a value: an inline int or float is written from a box. */
+static void
+w_value(PyValue v, WFILE *p)
+{
+    PyObject *op = PyValue_Object(v);
+    if (op == NULL) {
+        p->error = true;
+        return;
+    }
+    w_object(op, p);
 }
 
 static void
@@ -833,6 +840,7 @@ w_complex_object(PyObject *v, WFILE *p)
     }
     else if (PyAnySet_CheckExact(v)) {
         PyObject *value;
+        PyValue element;
         Py_ssize_t pos = 0;
         Py_hash_t hash;
 
@@ -862,10 +870,14 @@ w_complex_object(PyObject *v, WFILE *p)
         Py_ssize_t i = 0;
         bool changed = false;
         Py_BEGIN_CRITICAL_SECTION(v);
-        while (_PySet_NextEntryRef(v, &pos, &value, &hash)) {
+        while (_PySet_NextValue(v, &pos, &element, &hash)) {
             if (i == n) {
                 changed = true;
-                Py_DECREF(value);
+                break;
+            }
+            value = PyValue_Object(element);
+            if (value == NULL) {
+                p->error = true;
                 break;
             }
             PyObject *dump = _PyMarshal_WriteObjectToString(value,
@@ -924,6 +936,14 @@ w_complex_object(PyObject *v, WFILE *p)
             p->error = true;
             return;
         }
+        PyObject *co_fbinit = PyBytes_FromStringAndSize(
+            (const char *)_PyCode_FBINIT(co),
+            co->co_nfeedback * sizeof(uint32_t));
+        if (co_fbinit == NULL) {
+            Py_DECREF(co_code);
+            p->error = true;
+            return;
+        }
         W_TYPE(TYPE_CODE, p);
         w_long(co->co_argcount, p);
         w_long(co->co_posonlyargcount, p);
@@ -931,6 +951,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_long(co->co_stacksize, p);
         w_long(co->co_flags, p);
         w_object(co_code, p);
+        w_object(co_fbinit, p);
         w_object(co->co_consts, p);
         w_object(co->co_names, p);
         w_object(co->co_localsplusnames, p);
@@ -942,6 +963,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_object(co->co_linetable, p);
         w_object(co->co_exceptiontable, p);
         Py_DECREF(co_code);
+        Py_DECREF(co_fbinit);
         w_complete(v, p);
     }
     else if (PyObject_CheckBuffer(v)) {
@@ -968,9 +990,9 @@ w_complex_object(PyObject *v, WFILE *p)
         }
         PySliceObject *slice = (PySliceObject *)v;
         W_TYPE(TYPE_SLICE, p);
-        w_object(slice->start, p);
-        w_object(slice->stop, p);
-        w_object(slice->step, p);
+        w_value(slice->start, p);
+        w_value(slice->stop, p);
+        w_value(slice->step, p);
         w_complete(v, p);
     }
     else {
@@ -980,20 +1002,13 @@ w_complex_object(PyObject *v, WFILE *p)
     }
 }
 
-static void
-w_decref_entry(void *key)
-{
-    PyObject *entry_key = (PyObject *)key;
-    Py_XDECREF(entry_key);
-}
-
 static int
 w_init_refs(WFILE *wf, int version)
 {
     if (version >= 3) {
         wf->hashtable = _Py_hashtable_new_full(_Py_hashtable_hash_ptr,
                                                _Py_hashtable_compare_direct,
-                                               w_decref_entry, NULL, NULL);
+                                               NULL, NULL, NULL);
         if (wf->hashtable == NULL) {
             PyErr_NoMemory();
             return -1;
@@ -1823,6 +1838,7 @@ r_object(RFILE *p)
             int stacksize;
             int flags;
             PyObject *code = NULL;
+            PyObject *fbinit = NULL;
             PyObject *consts = NULL;
             PyObject *names = NULL;
             PyObject *localsplusnames = NULL;
@@ -1865,6 +1881,9 @@ r_object(RFILE *p)
             code = r_object(p);
             if (code == NULL)
                 goto code_error;
+            fbinit = r_object(p);
+            if (fbinit == NULL)
+                goto code_error;
             consts = r_object(p);
             if (consts == NULL)
                 goto code_error;
@@ -1903,6 +1922,7 @@ r_object(RFILE *p)
                 .flags = flags,
 
                 .code = code,
+                .fbinit = fbinit,
                 .firstlineno = firstlineno,
                 .linetable = linetable,
 
@@ -1938,6 +1958,7 @@ r_object(RFILE *p)
                     "NULL object in marshal data for code object");
             }
             Py_XDECREF(code);
+            Py_XDECREF(fbinit);
             Py_XDECREF(consts);
             Py_XDECREF(names);
             Py_XDECREF(localsplusnames);

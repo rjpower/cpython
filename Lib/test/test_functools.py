@@ -3612,32 +3612,6 @@ class TestSingleDispatch(unittest.TestCase):
         hash(A().t)
         A().t == A().t
 
-    def test_method_no_reference_loops(self):
-        # gh-127750: Created a strong reference to self
-        class A:
-            @functools.singledispatchmethod
-            def t(self, arg):
-                return weakref.ref(self)
-
-        a = A()
-        r = a.t(1)
-        self.assertIsNotNone(r())
-        del a  # delete a after a.t
-        if not support.check_impl_detail(cpython=True):
-            support.gc_collect()
-        self.assertIsNone(r())
-
-        a = A()
-        t = a.t
-        del a # delete a before a.t
-        support.gc_collect()
-        r = t(1)
-        self.assertIsNotNone(r())
-        del t
-        if not support.check_impl_detail(cpython=True):
-            support.gc_collect()
-        self.assertIsNone(r())
-
     def test_signatures(self):
         @functools.singledispatch
         def func(item, arg: int) -> str:

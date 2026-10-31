@@ -589,10 +589,42 @@ class TestSysConfig(unittest.TestCase, VirtualEnvironmentMixin):
             self.assertTrue('linux' in suffix, suffix)
         if re.match('(i[3-6]86|x86_64)$', machine):
             if ctypes.sizeof(ctypes.c_char_p()) == 4:
-                expected_suffixes = 'i386-linux-gnu.so', 'x86_64-linux-gnux32.so', 'i386-linux-musl.so'
+                expected_suffixes = ('i386-boil2-linux-gnu.so',
+                                     'x86_64-boil2-linux-gnux32.so',
+                                     'i386-boil2-linux-musl.so')
             else: # 8 byte pointer size
-                expected_suffixes = 'x86_64-linux-gnu.so', 'x86_64-linux-musl.so'
+                expected_suffixes = ('x86_64-boil2-linux-gnu.so',
+                                     'x86_64-boil2-linux-musl.so')
             self.assertEndsWith(suffix, expected_suffixes)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux-specific test')
+    @unittest.skipIf(not _imp.extension_suffixes(), "stub loader has no suffixes")
+    def test_upstream_extension_not_loaded(self):
+        # The value ABI is not upstream's: an extension built by upstream
+        # CPython, whose suffix lacks "-boil2", must not import, nor one
+        # built for the first value ABI, whose suffix has "-boil".
+        import importlib.machinery
+        import _testcapi
+        soabi = sysconfig.get_config_var('SOABI')
+        self.assertIn('-boil2-', soabi)
+        upstream = '.' + soabi.replace('-boil2-', '-') + '.so'
+        value_v1 = '.' + soabi.replace('-boil2-', '-boil-') + '.so'
+        for suffix in (upstream, value_v1):
+            self.assertNotIn(suffix, importlib.machinery.EXTENSION_SUFFIXES)
+        code = 'import sys; sys.path.insert(0, sys.argv[1]); import _upstream_ext'
+        for suffix, error in ((upstream, 'ModuleNotFoundError'),
+                              (value_v1, 'ModuleNotFoundError'),
+                              (sysconfig.get_config_var('EXT_SUFFIX'),
+                               'does not define module export function')):
+            with self.subTest(suffix=suffix), temp_dir() as tmp:
+                # Any shared object will do: with the upstream suffix it is
+                # not found, with ours it is loaded and has no PyInit.
+                shutil.copy(_testcapi.__file__,
+                            os.path.join(tmp, '_upstream_ext' + suffix))
+                res = subprocess.run([sys.executable, '-I', '-c', code, tmp],
+                                     capture_output=True, text=True)
+                self.assertNotEqual(res.returncode, 0)
+                self.assertIn(error, res.stderr)
 
     @unittest.skipIf(sysconfig.get_config_var('PY_BUILTIN_HASHLIB_HASHES') is None,
                      'PY_BUILTIN_HASHLIB_HASHES required for this test')
@@ -624,12 +656,6 @@ class TestSysConfig(unittest.TestCase, VirtualEnvironmentMixin):
         Py_DEBUG = sysconfig.get_config_var('Py_DEBUG')
         self.assertIn(Py_DEBUG, (0, 1))
         self.assertEqual(Py_DEBUG, support.Py_DEBUG)
-
-    def test_always_set_py_gil_disabled(self):
-        self.assertIn('Py_GIL_DISABLED', sysconfig.get_config_vars())
-        Py_GIL_DISABLED = sysconfig.get_config_var('Py_GIL_DISABLED')
-        self.assertIn(Py_GIL_DISABLED, (0, 1))
-        self.assertEqual(Py_GIL_DISABLED, support.Py_GIL_DISABLED)
 
     def test_abiflags(self):
         # If this test fails on some platforms, maintainers should update the

@@ -106,6 +106,29 @@ class CProfileTest(ProfileTest):
         profiler.disable()
         profiler.clear()
 
+    def test_dead_profiler_keeps_profile_function(self):
+        # A profiler still flagged as enabled whose sys.monitoring tool was
+        # freed by someone else, as test_enable_in_external_timer's cleanup
+        # does, holds no hook.  Destroying it must not remove the thread's
+        # profile function, which belongs to whoever set it.
+        import _lsprof
+
+        prof = _lsprof.Profiler()
+        prof.enable()
+        sys.monitoring.free_tool_id(sys.monitoring.PROFILER_ID)
+
+        def hook(frame, event, arg):
+            pass
+
+        old = sys.getprofile()
+        sys.setprofile(hook)
+        try:
+            del prof
+            support.gc_collect()
+            self.assertIs(sys.getprofile(), hook)
+        finally:
+            sys.setprofile(old)
+
     def test_profile_enable_disable(self):
         prof = self.profilerclass()
         # Make sure we clean ourselves up if the test fails for some reason.

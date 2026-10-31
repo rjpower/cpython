@@ -1,6 +1,7 @@
 #include "Python.h"
 #include <stddef.h>               // offsetof()
 #include "pycore_object.h"
+#include "pycore_unicodeobject.h" // _PyUnicodeWriter
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 #include "_iomodule.h"
 
@@ -42,7 +43,6 @@ typedef struct {
     PyObject *writenl;
 
     PyObject *dict;
-    PyObject *weakreflist;
     _PyIO_State *module_state;
 } stringio;
 
@@ -80,6 +80,20 @@ static int _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwarg
         PyErr_SetString(PyExc_ValueError, \
             "I/O operation on closed file"); \
         return -1; \
+    }
+
+#define CHECK_INITIALIZED_VALUE(self) \
+    if (self->ok <= 0) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on uninitialized object"); \
+        return PyValue_NULL; \
+    }
+
+#define CHECK_CLOSED_VALUE(self) \
+    if (self->closed) { \
+        PyErr_SetString(PyExc_ValueError, \
+            "I/O operation on closed file"); \
+        return PyValue_NULL; \
     }
 
 #define ENSURE_REALIZED(self) \
@@ -425,17 +439,19 @@ _io_StringIO_readline_impl(stringio *self, Py_ssize_t size)
 _io.StringIO.__next__ as stringio_iternext
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 stringio_iternext_impl(stringio *self)
-/*[clinic end generated code: output=51eb3991b1c79c41 input=b6cf3e73fab6b42e]*/
+/*[clinic end generated code: output=f32ecf9b32199b79 input=b6cf3e73fab6b42e]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
     PyObject *line;
 
-    CHECK_INITIALIZED(self);
-    CHECK_CLOSED(self);
-    ENSURE_REALIZED(self);
+    CHECK_INITIALIZED_VALUE(self);
+    CHECK_CLOSED_VALUE(self);
+    if (realize(self) < 0) {
+        return PyValue_NULL;
+    }
 
     if (Py_IS_TYPE(self, self->module_state->PyStringIO_Type)) {
         /* Skip method call overhead for speed */
@@ -449,20 +465,20 @@ stringio_iternext_impl(stringio *self)
                          "readline() should have returned a str object, "
                          "not '%.200s'", Py_TYPE(line)->tp_name);
             Py_DECREF(line);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (line == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (PyUnicode_GET_LENGTH(line) == 0) {
         /* Reached EOF */
         Py_DECREF(line);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return line;
+    return PyValue_FromObject(line);
 }
 
 /*[clinic input]
@@ -636,6 +652,11 @@ stringio_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->writenl);
     Py_VISIT(self->decoder);
     Py_VISIT(self->dict);
+    // The accumulating writer lives in PyMem memory, which the tracing
+    // mark does not scan; the string it builds is not a cycle member.
+    if (self->writer != NULL) {
+        Py_VISIT(((_PyUnicodeWriter *)self->writer)->buffer);
+    }
     return 0;
 }
 
@@ -663,7 +684,7 @@ stringio_dealloc(PyObject *op)
     }
     PyUnicodeWriter_Discard(self->writer);
     (void)stringio_clear(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -1099,7 +1120,6 @@ static PyGetSetDef stringio_getset[] = {
 };
 
 static struct PyMemberDef stringio_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(stringio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(stringio, dict), Py_READONLY},
     {NULL},
 };
@@ -1122,6 +1142,6 @@ PyType_Spec _Py_stringio_spec = {
     .name = "_io.StringIO",
     .basicsize = sizeof(stringio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = stringio_slots,
 };

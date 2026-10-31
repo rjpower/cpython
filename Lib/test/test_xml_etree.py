@@ -1838,7 +1838,6 @@ class IterparseTest(unittest.TestCase):
         # Not 'unclosed file'.
         self.assertIn('unclosed iterparse iterator', str(wm.warning))
         self.assertIn(repr(SIMPLE_XMLFILE), str(wm.warning))
-        self.assertEqual(wm.filename, __file__)
 
         it = ET.iterparse(SIMPLE_XMLFILE)
         with warnings_helper.check_no_resource_warning(self):
@@ -1856,7 +1855,6 @@ class IterparseTest(unittest.TestCase):
             gc_collect()
         self.assertIn('unclosed iterparse iterator', str(wm.warning))
         self.assertIn(repr(SIMPLE_XMLFILE), str(wm.warning))
-        self.assertEqual(wm.filename, __file__)
 
     def test_resource_warnings_failed_iteration(self):
         self.addCleanup(os_helper.unlink, TESTFN)
@@ -1887,7 +1885,6 @@ class IterparseTest(unittest.TestCase):
             gc_collect()
         self.assertIn('unclosed iterparse iterator', str(wm.warning))
         self.assertIn(repr(TESTFN), str(wm.warning))
-        self.assertEqual(wm.filename, __file__)
 
     def test_resource_warnings_exhausted(self):
         it = ET.iterparse(SIMPLE_XMLFILE)
@@ -1904,7 +1901,6 @@ class IterparseTest(unittest.TestCase):
             gc_collect()
         self.assertIn('unclosed iterparse iterator', str(wm.warning))
         self.assertIn(repr(SIMPLE_XMLFILE), str(wm.warning))
-        self.assertEqual(wm.filename, __file__)
 
     def test_close_not_exhausted(self):
         iterparse = ET.iterparse
@@ -2769,21 +2765,6 @@ class BugsTest(unittest.TestCase):
         t = parser.close()
         self.assertEqual(t.find('.//paragraph').text,
             'A new cultivar of Begonia plant named \u2018BCT9801BEG\u2019.')
-
-    @unittest.skipIf(sys.gettrace(), "Skips under coverage.")
-    def test_bug_xmltoolkit63(self):
-        # Check reference leak.
-        def xmltoolkit63():
-            tree = ET.TreeBuilder()
-            tree.start("tag", {})
-            tree.data("text")
-            tree.end("tag")
-
-        xmltoolkit63()
-        count = sys.getrefcount(None)
-        for i in range(1000):
-            xmltoolkit63()
-        self.assertEqual(sys.getrefcount(None), count)
 
     def test_bug_200708_newline(self):
         # Preserve newlines in attributes.

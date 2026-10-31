@@ -5,7 +5,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_structs.h"       // _Py_CODEUNIT
+#include "pycore_structs.h"       // _PyInstr
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
 #ifdef __cplusplus
@@ -37,32 +37,32 @@ int _PyMonitoring_GetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringE
 // these are exported only for other re-generated interpreters to call
 PyAPI_FUNC(int)
 _Py_call_instrumentation(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr);
+    _PyInterpreterFrame *frame, _PyInstr *instr);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
-                              _Py_CODEUNIT *instr, _Py_CODEUNIT *prev);
+                              _PyInstr *instr, _PyInstr *prev);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_instruction(
-    PyThreadState *tstate, _PyInterpreterFrame* frame, _Py_CODEUNIT *instr);
+    PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
 
-PyAPI_FUNC(_Py_CODEUNIT *)
+PyAPI_FUNC(_PyInstr *)
 _Py_call_instrumentation_jump(
-    _Py_CODEUNIT *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *src, _Py_CODEUNIT *dest);
+    _PyInstr *instr, PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_arg(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg);
 
 PyAPI_FUNC(int)
 _Py_call_instrumentation_2args(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
 
 PyAPI_FUNC(void)
 _Py_call_instrumentation_exc2(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _Py_CODEUNIT *instr, PyObject *arg0, PyObject *arg1);
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
 
 PyAPI_DATA(PyObject) _PyInstrumentation_MISSING;
 PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;
@@ -85,13 +85,11 @@ typedef struct _Py_GlobalMonitors {
     uint8_t tools[_PY_MONITORING_UNGROUPED_EVENTS];
 } _Py_GlobalMonitors;
 
-/* Ancillary data structure used for instrumentation.
-   Line instrumentation creates this with sufficient
-   space for one entry per code unit. The total size
-   of the data will be `bytes_per_entry * Py_SIZE(code)` */
+/* Per-word absolute lines and canonical displaced opcodes.  A zero token
+ * means that the word is not eligible for LINE instrumentation. */
 typedef struct {
-    uint8_t bytes_per_entry;
-    uint8_t data[1];
+    uint16_t *original_opcodes;
+    int lines[1];
 } _PyCoLineInstrumentationData;
 
 
@@ -113,22 +111,37 @@ typedef struct _PyCoMonitoringData {
     uint8_t *line_tools;
     /* Information to support instruction events */
     /* The underlying instructions, which can themselves be instrumented */
-    uint8_t *per_instruction_opcodes;
+    uint16_t *per_instruction_opcodes;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
 } _PyCoMonitoringData;
 
-extern int
-_Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
+PyAPI_FUNC(int)
+_Py_Instrumentation_GetLine(_PyCoLineInstrumentationData *line_data, int index);
 
-static inline uint8_t
+static inline uint16_t
 _PyCode_GetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index)
 {
-    return line_data->data[index*line_data->bytes_per_entry];
+    return line_data->original_opcodes[index];
 }
 
-// Exported for external JIT support
-PyAPI_FUNC(uint8_t) _PyCode_Deinstrument(uint8_t opcode);
+static inline void
+_PyCode_SetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index,
+                          uint16_t opcode)
+{
+    line_data->original_opcodes[index] = opcode;
+}
+
+static inline void
+_PyCode_SetMonitoringLine(_PyCoLineInstrumentationData *line_data, int index,
+                          int line)
+{
+    assert(line >= -1);
+    line_data->lines[index] = line;
+}
+
+// Exported for external JIT support. Invalid scalar IDs return -1.
+PyAPI_FUNC(int) _PyCode_Deinstrument(int opcode);
 
 #ifdef __cplusplus
 }

@@ -3,12 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(batched_new__doc__,
 "batched(iterable, n, *, strict=False)\n"
@@ -43,7 +42,6 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -66,26 +64,28 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
+    PyValue argsbuf[3];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyObject *iterable;
     Py_ssize_t n;
     int strict = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(fastargs[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -95,7 +95,7 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    strict = PyObject_IsTrue(fastargs[2]);
+    strict = PyObject_IsTrueValue(fastargs[2]);
     if (strict < 0) {
         goto exit;
     }
@@ -131,7 +131,10 @@ pairwise_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("pairwise", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
     return_value = pairwise_new_impl(type, iterable);
 
 exit:
@@ -162,7 +165,6 @@ itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -185,23 +187,29 @@ itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *it;
     PyObject *keyfunc = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    it = fastargs[0];
+    it = PyValue_Object(fastargs[0]);
+    if (it == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    keyfunc = fastargs[1];
+    keyfunc = PyValue_Object(fastargs[1]);
+    if (keyfunc == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = itertools_groupby_impl(type, it, keyfunc);
 
@@ -228,12 +236,21 @@ itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("_grouper", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(PyTuple_GET_ITEM(args, 0), clinic_state_by_cls()->groupby_type)) {
-        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, PyTuple_GET_ITEM(args, 0));
+    {
+        PyObject *_arg = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, clinic_state_by_cls()->groupby_type)) {
+            _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, _arg);
+            goto exit;
+        }
+        parent = _arg;
+    }
+    tgtkey = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (tgtkey == NULL) {
         goto exit;
     }
-    parent = PyTuple_GET_ITEM(args, 0);
-    tgtkey = PyTuple_GET_ITEM(args, 1);
     return_value = itertools__grouper_impl(type, parent, tgtkey);
 
 exit:
@@ -266,13 +283,25 @@ itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("teedataobject", PyTuple_GET_SIZE(args), 3, 3)) {
         goto exit;
     }
-    it = PyTuple_GET_ITEM(args, 0);
-    if (!PyList_Check(PyTuple_GET_ITEM(args, 1))) {
-        _PyArg_BadArgument("teedataobject", "argument 2", "list", PyTuple_GET_ITEM(args, 1));
+    it = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (it == NULL) {
         goto exit;
     }
-    values = PyTuple_GET_ITEM(args, 1);
-    next = PyTuple_GET_ITEM(args, 2);
+    {
+        PyObject *_arg = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyList_Check(_arg)) {
+            _PyArg_BadArgument("teedataobject", "argument 2", "list", _arg);
+            goto exit;
+        }
+        values = _arg;
+    }
+    next = PyValue_Object(PyTuple_GET_VALUE(args, 2));
+    if (next == NULL) {
+        goto exit;
+    }
     return_value = itertools_teedataobject_impl(type, it, values, next);
 
 exit:
@@ -302,7 +331,10 @@ itertools__tee(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("_tee", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
     return_value = itertools__tee_impl(type, iterable);
 
 exit:
@@ -321,39 +353,43 @@ PyDoc_STRVAR(itertools_tee__doc__,
 static PyObject *
 itertools_tee_impl(PyObject *module, PyObject *iterable, Py_ssize_t n);
 
-static PyObject *
-itertools_tee(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+itertools_tee(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *iterable;
     Py_ssize_t n = 2;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("tee", nargs, 1, 2)) {
         goto exit;
     }
-    iterable = args[0];
+    iterable = PyValue_Object(args[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         n = ival;
-        if (n < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "n cannot be negative");
-            goto exit;
-        }
+            if (n < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "n cannot be negative");
+                goto exit;
+            }
     }
 skip_optional:
-    return_value = itertools_tee_impl(module, iterable, n);
+    _return_value = itertools_tee_impl(module, iterable, n);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -382,7 +418,10 @@ itertools_cycle(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("cycle", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
     return_value = itertools_cycle_impl(type, iterable);
 
 exit:
@@ -415,8 +454,14 @@ itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("dropwhile", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    func = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (func == NULL) {
+        goto exit;
+    }
+    seq = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = itertools_dropwhile_impl(type, func, seq);
 
 exit:
@@ -447,8 +492,14 @@ itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("takewhile", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    func = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (func == NULL) {
+        goto exit;
+    }
+    seq = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = itertools_takewhile_impl(type, func, seq);
 
 exit:
@@ -479,8 +530,14 @@ itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("starmap", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    func = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (func == NULL) {
+        goto exit;
+    }
+    seq = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = itertools_starmap_impl(type, func, seq);
 
 exit:
@@ -494,28 +551,36 @@ PyDoc_STRVAR(itertools_chain_from_iterable__doc__,
 "Alternative chain() constructor taking a single iterable argument that evaluates lazily.");
 
 #define ITERTOOLS_CHAIN_FROM_ITERABLE_METHODDEF    \
-    {"from_iterable", (PyCFunction)itertools_chain_from_iterable, METH_O|METH_CLASS, itertools_chain_from_iterable__doc__},
+    {"from_iterable", _PyCFunction_CAST(itertools_chain_from_iterable), METH_O|METH_CLASS, itertools_chain_from_iterable__doc__},
 
 static PyObject *
 itertools_chain_from_iterable_impl(PyTypeObject *type, PyObject *arg);
 
-static PyObject *
-itertools_chain_from_iterable(PyObject *type, PyObject *arg)
+static PyValue
+itertools_chain_from_iterable(PyObject *type, PyValue arg_)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
 
-    return_value = itertools_chain_from_iterable_impl((PyTypeObject *)type, arg);
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = itertools_chain_from_iterable_impl((PyTypeObject *)type, arg);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 chain_next_impl(chainobject *self);
 
-static PyObject *
+static PyValue
 chain_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = chain_next_impl((chainobject *)self);
@@ -524,13 +589,13 @@ chain_next(PyObject *self)
     return return_value;
 }
 
-static PyObject *
+static PyValue
 product_next_impl(productobject *self);
 
-static PyObject *
+static PyValue
 product_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = product_next_impl((productobject *)self);
@@ -559,7 +624,6 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -582,34 +646,36 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *iterable;
     Py_ssize_t r;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(fastargs[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         r = ival;
-        if (r < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "r cannot be negative");
-            goto exit;
-        }
+            if (r < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "r cannot be negative");
+                goto exit;
+            }
     }
     return_value = itertools_combinations_impl(type, iterable, r);
 
@@ -617,13 +683,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 combinations_next_impl(combinationsobject *self);
 
-static PyObject *
+static PyValue
 combinations_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = combinations_next_impl((combinationsobject *)self);
@@ -653,7 +719,6 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -676,34 +741,36 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *iterable;
     Py_ssize_t r;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(fastargs[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         r = ival;
-        if (r < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "r cannot be negative");
-            goto exit;
-        }
+            if (r < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "r cannot be negative");
+                goto exit;
+            }
     }
     return_value = itertools_combinations_with_replacement_impl(type, iterable, r);
 
@@ -711,13 +778,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 cwr_next_impl(cwrobject *self);
 
-static PyObject *
+static PyValue
 cwr_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = cwr_next_impl((cwrobject *)self);
@@ -746,7 +813,6 @@ itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -769,23 +835,29 @@ itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *iterable;
     PyObject *robj = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    robj = fastargs[1];
+    robj = PyValue_Object(fastargs[1]);
+    if (robj == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = itertools_permutations_impl(type, iterable, robj);
 
@@ -793,13 +865,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 permutations_next_impl(permutationsobject *self);
 
-static PyObject *
+static PyValue
 permutations_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = permutations_next_impl((permutationsobject *)self);
@@ -826,7 +898,6 @@ itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -849,25 +920,31 @@ itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
+    PyValue argsbuf[3];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *iterable;
     PyObject *binop = Py_None;
     PyObject *initial = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = PyValue_Object(fastargs[0]);
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[1]) {
-        binop = fastargs[1];
+    if (!PyValue_IsNull(fastargs[1])) {
+        binop = PyValue_Object(fastargs[1]);
+        if (binop == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -876,7 +953,10 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    initial = fastargs[2];
+    initial = PyValue_Object(fastargs[2]);
+    if (initial == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = itertools_accumulate_impl(type, iterable, binop, initial);
 
@@ -884,13 +964,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 accumulate_next_impl(accumulateobject *self);
 
-static PyObject *
+static PyValue
 accumulate_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = accumulate_next_impl((accumulateobject *)self);
@@ -919,7 +999,6 @@ itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -942,19 +1021,25 @@ itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *seq1;
     PyObject *seq2;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    seq1 = fastargs[0];
-    seq2 = fastargs[1];
+    seq1 = PyValue_Object(fastargs[0]);
+    if (seq1 == NULL) {
+        goto exit;
+    }
+    seq2 = PyValue_Object(fastargs[1]);
+    if (seq2 == NULL) {
+        goto exit;
+    }
     return_value = itertools_compress_impl(type, seq1, seq2);
 
 exit:
@@ -987,8 +1072,14 @@ itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("filterfalse", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    func = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (func == NULL) {
+        goto exit;
+    }
+    seq = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (seq == NULL) {
+        goto exit;
+    }
     return_value = itertools_filterfalse_impl(type, func, seq);
 
 exit:
@@ -1020,7 +1111,6 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1043,14 +1133,14 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *long_cnt = NULL;
     PyObject *long_step = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1058,13 +1148,19 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        long_cnt = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        long_cnt = PyValue_Object(fastargs[0]);
+        if (long_cnt == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    long_step = fastargs[1];
+    long_step = PyValue_Object(fastargs[1]);
+    if (long_step == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = itertools_count_impl(type, long_cnt, long_step);
 
@@ -1072,13 +1168,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 zip_longest_next_impl(ziplongestobject *self);
 
-static PyObject *
+static PyValue
 zip_longest_next(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = zip_longest_next_impl((ziplongestobject *)self);
@@ -1086,4 +1182,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=4b55088ac24582b7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f4fb255285d50e2c input=a9049054013a1b77]*/

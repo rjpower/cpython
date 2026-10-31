@@ -132,6 +132,7 @@ any DWARF information available for them).
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyPerf_Callbacks
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_gc_walk.h"       // _PyGC_RegisterCodeRange()
 #include "pycore_mmap.h"          // _PyAnnotateMemoryMap()
 #include "pycore_runtime.h"       // _PyRuntime
 
@@ -167,9 +168,9 @@ static void invalidate_icache(char* begin, char*end) {
  * are passed in the same order as the function requires. This results in
  * shorter, more efficient ASM code for trampoline.
  */
-typedef PyObject *(*py_evaluator)(PyThreadState *, _PyInterpreterFrame *,
-                                  int throwflag);
-typedef PyObject *(*py_trampoline)(PyThreadState *, _PyInterpreterFrame *, int,
+typedef PyValue (*py_evaluator)(PyThreadState *, _PyInterpreterFrame *,
+                                int throwflag);
+typedef PyValue (*py_trampoline)(PyThreadState *, _PyInterpreterFrame *, int,
                                    py_evaluator);
 
 extern void *_Py_trampoline_func_start;  // Start of the template of the
@@ -384,6 +385,17 @@ new_code_arena(void)
         return -1;
     }
 
+#if defined(_PyGC_WALK) && defined(__x86_64__)
+    // The trampolines have no unwind information; the collector's stack
+    // walk reads their frames by the frame pointer.  If the range table is
+    // full, a walk through one falls back.
+    _PyGCFrameDesc desc;
+    if (_PyGC_FramePointerDescriptor(&desc) == 0) {
+        (void)_PyGC_RegisterCodeRange((uintptr_t)memory,
+                                      (uintptr_t)memory + mem_size,
+                                      _PyGC_FRAME_CORE, 0, &desc);
+    }
+#endif
     new_arena->start_addr = memory;
     new_arena->current_addr = memory;
     new_arena->size = mem_size;
@@ -401,6 +413,9 @@ free_code_arenas(void)
     code_arena_t *prev;
     perf_code_arena = NULL;  // invalid static pointer
     while (cur) {
+#ifdef _PyGC_WALK
+        _PyGC_UnregisterCodeRange((uintptr_t)cur->start_addr);
+#endif
         munmap(cur->start_addr, cur->size);
         prev = cur->prev;
         PyMem_RawFree(cur);
@@ -434,7 +449,7 @@ compile_trampoline(void)
     return code_arena_new_code(perf_code_arena);
 }
 
-static PyObject *
+static PyValue
 py_trampoline_evaluator(PyThreadState *ts, _PyInterpreterFrame *frame,
                         int throw)
 {

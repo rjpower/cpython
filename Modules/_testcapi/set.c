@@ -1,11 +1,15 @@
 #include "parts.h"
 #include "util.h"
 
-static PyObject *
-set_get_size(PyObject *self, PyObject *obj)
+static PyValue
+set_get_size(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_SIZE(PySet_GET_SIZE(obj));
+    RETURN_SIZE_VALUE(PySet_GET_SIZE(obj));
 }
 
 
@@ -32,7 +36,7 @@ test_set_type_size(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 
 static PyMethodDef test_methods[] = {
-    {"set_get_size", set_get_size, METH_O},
+    {"set_get_size", _PyCFunction_CAST(set_get_size), METH_O},
     {"test_set_type_size", test_set_type_size, METH_NOARGS},
     {NULL},
 };

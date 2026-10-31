@@ -6,7 +6,6 @@ import re
 import sys
 import logging
 import warnings
-import weakref
 import inspect
 import types
 
@@ -1517,19 +1516,6 @@ test case
         with self.assertRaises(TypeError):
             self.assertRaises((ValueError, object))
 
-    def testAssertRaisesRefcount(self):
-        # bpo-23890: assertRaises() must not keep objects alive longer
-        # than expected
-        def func() :
-            try:
-                raise ValueError
-            except ValueError:
-                raise ValueError
-
-        refcount = sys.getrefcount(func)
-        self.assertRaises(ValueError, func)
-        self.assertEqual(refcount, sys.getrefcount(func))
-
     def testAssertRaisesRegex(self):
         class ExceptionMock(Exception):
             pass
@@ -2394,14 +2380,6 @@ test case
             klass('test_something').run(result)
             self.assertEqual(len(result.errors), 1)
             self.assertEqual(result.testsRun, 1)
-
-    @support.cpython_only
-    def testNoCycles(self):
-        case = unittest.TestCase()
-        wr = weakref.ref(case)
-        with support.disable_gc():
-            del case
-            self.assertFalse(wr())
 
     def test_no_exception_leak(self):
         # Issue #19880: TestCase.run() should not keep a reference

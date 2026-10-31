@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -137,15 +136,14 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
               int buffering, const char *encoding, const char *errors,
               const char *newline, int closefd, PyObject *opener);
 
-static PyObject *
-_io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_open(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -168,7 +166,7 @@ _io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
+    PyValue argsbuf[8];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *file;
     const char *mode = "r";
@@ -178,31 +176,41 @@ _io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
     const char *newline = NULL;
     int closefd = 1;
     PyObject *opener = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    file = args[0];
+    file = PyValue_Object(args[0]);
+    if (file == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        if (!PyUnicode_Check(args[1])) {
-            _PyArg_BadArgument("open", "argument 'mode'", "str", args[1]);
-            goto exit;
-        }
-        mode = _PyUnicode_AsUTF8NoNUL(args[1]);
-        if (mode == NULL) {
-            goto exit;
+    if (!PyValue_IsNull(args[1])) {
+        {
+            PyObject *_arg = PyValue_Object(args[1]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("open", "argument 'mode'", "str", _arg);
+                goto exit;
+            }
+            mode = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (mode == NULL) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[2]) {
-        buffering = PyLong_AsInt(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        buffering = PyLong_AsIntValue(args[2]);
         if (buffering == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -210,62 +218,80 @@ _io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        if (args[3] == Py_None) {
-            encoding = NULL;
-        }
-        else if (PyUnicode_Check(args[3])) {
-            encoding = _PyUnicode_AsUTF8NoNUL(args[3]);
-            if (encoding == NULL) {
+    if (!PyValue_IsNull(args[3])) {
+        {
+            PyObject *_arg = PyValue_Object(args[3]);
+            if (_arg == NULL) {
                 goto exit;
             }
-        }
-        else {
-            _PyArg_BadArgument("open", "argument 'encoding'", "str or None", args[3]);
-            goto exit;
+            if (_arg == Py_None) {
+                encoding = NULL;
+            }
+            else if (PyUnicode_Check(_arg)) {
+                encoding = _PyUnicode_AsUTF8NoNUL(_arg);
+                if (encoding == NULL) {
+                    goto exit;
+                }
+            }
+            else {
+                _PyArg_BadArgument("open", "argument 'encoding'", "str or None", _arg);
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[4]) {
-        if (args[4] == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(args[4])) {
-            errors = _PyUnicode_AsUTF8NoNUL(args[4]);
-            if (errors == NULL) {
+    if (!PyValue_IsNull(args[4])) {
+        {
+            PyObject *_arg = PyValue_Object(args[4]);
+            if (_arg == NULL) {
                 goto exit;
             }
-        }
-        else {
-            _PyArg_BadArgument("open", "argument 'errors'", "str or None", args[4]);
-            goto exit;
+            if (_arg == Py_None) {
+                errors = NULL;
+            }
+            else if (PyUnicode_Check(_arg)) {
+                errors = _PyUnicode_AsUTF8NoNUL(_arg);
+                if (errors == NULL) {
+                    goto exit;
+                }
+            }
+            else {
+                _PyArg_BadArgument("open", "argument 'errors'", "str or None", _arg);
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[5]) {
-        if (args[5] == Py_None) {
-            newline = NULL;
-        }
-        else if (PyUnicode_Check(args[5])) {
-            newline = _PyUnicode_AsUTF8NoNUL(args[5]);
-            if (newline == NULL) {
+    if (!PyValue_IsNull(args[5])) {
+        {
+            PyObject *_arg = PyValue_Object(args[5]);
+            if (_arg == NULL) {
                 goto exit;
             }
-        }
-        else {
-            _PyArg_BadArgument("open", "argument 'newline'", "str or None", args[5]);
-            goto exit;
+            if (_arg == Py_None) {
+                newline = NULL;
+            }
+            else if (PyUnicode_Check(_arg)) {
+                newline = _PyUnicode_AsUTF8NoNUL(_arg);
+                if (newline == NULL) {
+                    goto exit;
+                }
+            }
+            else {
+                _PyArg_BadArgument("open", "argument 'newline'", "str or None", _arg);
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[6]) {
-        closefd = PyObject_IsTrue(args[6]);
+    if (!PyValue_IsNull(args[6])) {
+        closefd = PyObject_IsTrueValue(args[6]);
         if (closefd < 0) {
             goto exit;
         }
@@ -273,9 +299,13 @@ _io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
             goto skip_optional_pos;
         }
     }
-    opener = args[7];
+    opener = PyValue_Object(args[7]);
+    if (opener == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _io_open_impl(module, file, mode, buffering, encoding, errors, newline, closefd, opener);
+    _return_value = _io_open_impl(module, file, mode, buffering, encoding, errors, newline, closefd, opener);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -303,26 +333,31 @@ PyDoc_STRVAR(_io_text_encoding__doc__,
 static PyObject *
 _io_text_encoding_impl(PyObject *module, PyObject *encoding, int stacklevel);
 
-static PyObject *
-_io_text_encoding(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_text_encoding(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *encoding;
     int stacklevel = 2;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("text_encoding", nargs, 1, 2)) {
         goto exit;
     }
-    encoding = args[0];
+    encoding = PyValue_Object(args[0]);
+    if (encoding == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    stacklevel = PyLong_AsInt(args[1]);
+    stacklevel = PyLong_AsIntValue(args[1]);
     if (stacklevel == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _io_text_encoding_impl(module, encoding, stacklevel);
+    _return_value = _io_text_encoding_impl(module, encoding, stacklevel);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -343,15 +378,14 @@ PyDoc_STRVAR(_io_open_code__doc__,
 static PyObject *
 _io_open_code_impl(PyObject *module, PyObject *path);
 
-static PyObject *
-_io_open_code(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_open_code(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -374,22 +408,30 @@ _io_open_code(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *path;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("open_code", "argument 'path'", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("open_code", "argument 'path'", "str", _arg);
+            goto exit;
+        }
+        path = _arg;
     }
-    path = args[0];
-    return_value = _io_open_code_impl(module, path);
+    _return_value = _io_open_code_impl(module, path);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=4570f4466d711d60 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=57deeaa887ff4ea7 input=a9049054013a1b77]*/

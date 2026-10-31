@@ -34,13 +34,16 @@ struct _frame {
      * "support" for the borrowed references, ensuring that they remain valid.
      */
     PyObject *f_overwritten_fast_locals;
-    PyObject *f_weakreflist;    /* List of weak references */
     /* The frame data, if this frame object owns the frame */
     PyObject *_f_frame_data[1];
 };
 
 // Exported for external JIT support
 PyAPI_FUNC(PyFrameObject *) _PyFrame_New_NoTrack(PyCodeObject *code);
+
+/* Fixed strong fields, without the register/value array. */
+extern int _PyFrame_VisitHeader(_PyInterpreterFrame *frame,
+                                visitproc visit, void *arg);
 
 
 /* other API */

@@ -1,5 +1,6 @@
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -205,6 +206,24 @@ ste_dealloc(PyObject *op)
     PyObject_Free(ste);
 }
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members. */
+static int
+ste_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PySTEntryObject *ste = (PySTEntryObject *)op;
+    Py_VISIT(ste->ste_id);
+    Py_VISIT(ste->ste_name);
+    Py_VISIT(ste->ste_function_name);
+    Py_VISIT(ste->ste_symbols);
+    Py_VISIT(ste->ste_varnames);
+    Py_VISIT(ste->ste_children);
+    Py_VISIT(ste->ste_directives);
+    Py_VISIT(ste->ste_annotation_block);
+    Py_VISIT(ste->ste_mangled_names);
+    return 0;
+}
+
 #define OFF(x) offsetof(PySTEntryObject, x)
 
 static PyMemberDef ste_memberlist[] = {
@@ -241,7 +260,7 @@ PyTypeObject PySTEntry_Type = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,                         /* tp_flags */
     0,                                          /* tp_doc */
-    0,                                          /* tp_traverse */
+    ste_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -544,15 +563,13 @@ _PySymtable_LookupOptional(struct symtable *st, void *key,
 long
 _PyST_GetSymbol(PySTEntryObject *ste, PyObject *name)
 {
-    PyObject *v;
-    if (PyDict_GetItemRef(ste->ste_symbols, name, &v) < 0) {
-        return -1;
+    PyValue v;
+    int found = _PyDict_GetItemValue(ste->ste_symbols,
+                                     PyValue_FromObject(name), &v);
+    if (found <= 0) {
+        return found;
     }
-    if (v == NULL) {
-        return 0;
-    }
-    long symbol = PyLong_AsLong(v);
-    Py_DECREF(v);
+    long symbol = PyLong_AsLongValue(v);
     if (symbol < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "invalid symbol");
@@ -602,10 +619,10 @@ error_at_directive(PySTEntryObject *ste, PyObject *name)
         assert(PyUnicode_CheckExact(PyTuple_GET_ITEM(data, 0)));
         if (PyUnicode_Compare(PyTuple_GET_ITEM(data, 0), name) == 0) {
             PyErr_RangedSyntaxLocationObject(ste->ste_table->st_filename,
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 1)),
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 2)) + 1,
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 3)),
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 4)) + 1);
+                                             PyLong_AsLongValue(PyTuple_GET_VALUE(data, 1)),
+                                             PyLong_AsLongValue(PyTuple_GET_VALUE(data, 2)) + 1,
+                                             PyLong_AsLongValue(PyTuple_GET_VALUE(data, 3)),
+                                             PyLong_AsLongValue(PyTuple_GET_VALUE(data, 4)) + 1);
 
             return 0;
         }
@@ -663,14 +680,11 @@ error_at_directive(PySTEntryObject *ste, PyObject *name)
 
 #define SET_SCOPE(DICT, NAME, I) \
     do { \
-        PyObject *o = PyLong_FromLong(I); \
-        if (!o) \
-            return 0; \
-        if (PyDict_SetItem((DICT), (NAME), o) < 0) { \
-            Py_DECREF(o); \
+        if (_PyDict_SetItemValue((PyDictObject *)(DICT), \
+                                 PyValue_FromObject(NAME), \
+                                 PyValue_FromLongLong(I)) < 0) { \
             return 0; \
         } \
-        Py_DECREF(o); \
     } while(0)
 
 /* Decide on scope of name, given flags.
@@ -829,28 +843,28 @@ is_free_in_any_child(PySTEntryObject *entry, PyObject *key)
 static int
 symtable_add_flag(PyObject *dict, PyObject *name, int flag)
 {
-    PyObject *o = PyDict_GetItemWithError(dict, name);
+    PyValue key = PyValue_FromObject(name);
+    PyValue o;
+    int found = _PyDict_GetItemValue(dict, key, &o);
     long val;
-    if (o != NULL) {
-        val = PyLong_AsLong(o);
+    if (found > 0) {
+        val = PyLong_AsLongValue(o);
         if (val == -1 && PyErr_Occurred()) {
             return 0;
         }
         val |= flag;
     }
-    else if (PyErr_Occurred()) {
+    else if (found < 0) {
         return 0;
     }
     else {
         val = flag;
     }
-    o = PyLong_FromLong(val);
-    if (o == NULL) {
+    o = PyValue_FromLongLong(val);
+    if (PyValue_IsNull(o)) {
         return 0;
     }
-    int rc = PyDict_SetItem(dict, name, o);
-    Py_DECREF(o);
-    return rc >= 0;
+    return _PyDict_SetItemValue((PyDictObject *)dict, key, o) >= 0;
 }
 
 static int
@@ -858,25 +872,27 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                                 PyObject *comp_free, PyObject *outer_newfree,
                                 PyObject *inlined_cells)
 {
-    PyObject *k, *v;
+    PyObject *k;
     Py_ssize_t pos = 0;
 
     assert(comp->ste_type == InlinedComprehensionBlock);
     assert(comp->ste_parent != NULL);
 
-    while (PyDict_Next(comp->ste_symbols, &pos, &k, &v)) {
-        long comp_flags = PyLong_AsLong(v);
-        if (comp_flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(comp->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        k = PyValue_ObjectBorrow(name_value);
+        long comp_flags = PyValue_Int32(flags_value);
         int scope = SYMBOL_TO_SCOPE(comp_flags);
         if (scope == CELL) {
             if (PySet_Add(inlined_cells, k) < 0) {
                 goto error;
             }
         }
-        PyObject *existing = PyDict_GetItemWithError(ste->ste_symbols, k);
-        if (existing == NULL && PyErr_Occurred()) {
+        PyValue existing;
+        int has_existing = _PyDict_GetItemValue(ste->ste_symbols,
+                                                name_value, &existing);
+        if (has_existing < 0) {
             goto error;
         }
         // These names are not allowed to be free through a class (see
@@ -896,8 +912,8 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
             continue;
         }
         int is_def_bound = 0;
-        if (existing) {
-            long flags = PyLong_AsLong(existing);
+        if (has_existing) {
+            long flags = PyLong_AsLongValue(existing);
             if (flags == -1 && PyErr_Occurred()) {
                 goto error;
             }
@@ -929,7 +945,7 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                 }
             }
         }
-        else if (!existing) {
+        else if (!has_existing) {
             assert(scope != FREE || PySet_Contains(comp_free, k) == 1);
         }
     }
@@ -951,18 +967,16 @@ error:
 static int
 analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
 {
-    PyObject *name, *v, *v_cell;
+    PyObject *name;
     int success = 0;
     Py_ssize_t pos = 0;
 
-    v_cell = PyLong_FromLong(CELL);
-    if (!v_cell)
-        return 0;
-    while (PyDict_Next(scopes, &pos, &name, &v)) {
-        long scope = PyLong_AsLong(v);
-        if (scope == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    PyValue v_cell = PyValue_FromLongLong(CELL);
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(scopes, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long scope = PyValue_Int32(flags_value);
         if (scope != LOCAL)
             continue;
         int contains = PySet_Contains(free, name);
@@ -982,14 +996,13 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
            from free. It is safe to replace the value of name
            in the dict, because it will not cause a resize.
          */
-        if (PyDict_SetItem(scopes, name, v_cell) < 0)
+        if (_PyDict_SetItemValue((PyDictObject *)scopes, name_value, v_cell) < 0)
             goto error;
         if (PySet_Discard(free, name) < 0)
             goto error;
     }
     success = 1;
  error:
-    Py_DECREF(v_cell);
     return success;
 }
 
@@ -1026,80 +1039,75 @@ update_symbols(PyObject *symbols, PyObject *scopes,
                int classflag)
 {
     PyObject *name = NULL, *itr = NULL;
-    PyObject *v = NULL, *v_scope = NULL, *v_new = NULL, *v_free = NULL;
     Py_ssize_t pos = 0;
 
     /* Update scope information for all symbols in this scope */
-    while (PyDict_Next(symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
+        PyValue v_scope;
+        int found = _PyDict_GetItemValue(scopes, name_value, &v_scope);
+        if (found < 0) {
             return 0;
         }
-        if (PyDict_GetItemRef(scopes, name, &v_scope) < 0) {
-            return 0;
-        }
-        if (!v_scope) {
+        if (!found) {
             PyErr_SetObject(PyExc_KeyError, name);
             return 0;
         }
-        long scope = PyLong_AsLong(v_scope);
-        Py_DECREF(v_scope);
+        long scope = PyLong_AsLongValue(v_scope);
         if (scope == -1 && PyErr_Occurred()) {
             return 0;
         }
         flags |= (scope << SCOPE_OFFSET);
-        v_new = PyLong_FromLong(flags);
-        if (!v_new)
+        PyValue v_new = PyValue_FromLongLong(flags);
+        if (PyValue_IsNull(v_new))
             return 0;
-        if (PyDict_SetItem(symbols, name, v_new) < 0) {
-            Py_DECREF(v_new);
+        if (_PyDict_SetItemValue((PyDictObject *)symbols, name_value, v_new) < 0) {
             return 0;
         }
-        Py_DECREF(v_new);
     }
 
     /* Record not yet resolved free variables from children (if any) */
-    v_free = PyLong_FromLong(FREE << SCOPE_OFFSET);
-    if (!v_free)
-        return 0;
+    PyValue v_free = PyValue_FromLongLong(FREE << SCOPE_OFFSET);
 
     itr = PyObject_GetIter(free);
     if (itr == NULL) {
-        Py_DECREF(v_free);
         return 0;
     }
 
     while ((name = PyIter_Next(itr))) {
-        v = PyDict_GetItemWithError(symbols, name);
+        PyValue v;
+        int found = _PyDict_GetItemValue(symbols, PyValue_FromObject(name), &v);
+        if (found < 0) {
+            goto error;
+        }
 
         /* Handle symbol that already exists in this scope */
-        if (v) {
+        if (found) {
             /* Handle a free variable in a method of
                the class that has the same name as a local
                or global in the class scope.
             */
             if  (classflag) {
-                long flags = PyLong_AsLong(v);
+                long flags = PyLong_AsLongValue(v);
                 if (flags == -1 && PyErr_Occurred()) {
                     goto error;
                 }
                 flags |= DEF_FREE_CLASS;
-                v_new = PyLong_FromLong(flags);
-                if (!v_new) {
+                PyValue v_new = PyValue_FromLongLong(flags);
+                if (PyValue_IsNull(v_new)) {
                     goto error;
                 }
-                if (PyDict_SetItem(symbols, name, v_new) < 0) {
-                    Py_DECREF(v_new);
+                if (_PyDict_SetItemValue((PyDictObject *)symbols,
+                                         PyValue_FromObject(name), v_new) < 0) {
                     goto error;
                 }
-                Py_DECREF(v_new);
             }
             /* It's a cell, or already free in this scope */
             Py_DECREF(name);
             continue;
-        }
-        else if (PyErr_Occurred()) {
-            goto error;
         }
         /* Handle global symbol */
         if (bound) {
@@ -1113,7 +1121,8 @@ update_symbols(PyObject *symbols, PyObject *scopes,
             }
         }
         /* Propagate new free symbol up the lexical stack */
-        if (PyDict_SetItem(symbols, name, v_free) < 0) {
+        if (_PyDict_SetItemValue((PyDictObject *)symbols,
+                                 PyValue_FromObject(name), v_free) < 0) {
             goto error;
         }
         Py_DECREF(name);
@@ -1125,10 +1134,8 @@ update_symbols(PyObject *symbols, PyObject *scopes,
     }
 
     Py_DECREF(itr);
-    Py_DECREF(v_free);
     return 1;
 error:
-    Py_XDECREF(v_free);
     Py_XDECREF(itr);
     Py_XDECREF(name);
     return 0;
@@ -1164,7 +1171,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
               PyObject *global, PyObject *type_params,
               PySTEntryObject *class_entry)
 {
-    PyObject *name, *v, *local = NULL, *scopes = NULL, *newbound = NULL;
+    PyObject *name, *local = NULL, *scopes = NULL, *newbound = NULL;
     PyObject *newglobal = NULL, *newfree = NULL, *inlined_cells = NULL;
     PyObject *temp;
     int success = 0;
@@ -1223,11 +1230,11 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     /* Record bindings and global/nonlocal declarations first so child
        blocks see this scope's locals. Uses are classified after children
        so inlined comprehensions can add USE flags to this table. */
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    // The names are strings and the flags int32: nothing is boxed.
+    PyValue name_value, flags_value;
+    while (_PyDict_NextValue(ste->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
         if (!(flags & (DEF_GLOBAL | DEF_NONLOCAL | DEF_BOUND))) {
             continue;
         }
@@ -1315,11 +1322,9 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
 
     /* Complete the classification. */
     pos = 0;
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    while (_PyDict_NextValue(ste->ste_symbols, &pos, &name_value, &flags_value, NULL)) {
+        name = PyValue_ObjectBorrow(name_value);
+        long flags = PyValue_Int32(flags_value);
         int contains = PyDict_Contains(scopes, name);
         if (contains < 0) {
             goto error;
@@ -1545,14 +1550,16 @@ static int
 symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _symtable_entry *ste,
                         _Py_SourceLocation loc)
 {
-    PyObject *o;
+    PyValue o;
     long val = 0;
     PyObject *mangled = _Py_MaybeMangle(st->st_private, st->st_cur, name);
 
     if (!mangled)
         return 0;
-    if ((o = PyDict_GetItemWithError(ste->ste_symbols, mangled))) {
-        val = PyLong_AsLong(o);
+    int found = _PyDict_GetItemValue(ste->ste_symbols,
+                                     PyValue_FromObject(mangled), &o);
+    if (found > 0) {
+        val = PyLong_AsLongValue(o);
         if (val == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -1568,7 +1575,7 @@ symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _s
             goto error;
         }
     }
-    else if (PyErr_Occurred()) {
+    else if (found < 0) {
         goto error;
     }
 

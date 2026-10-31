@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -34,18 +33,26 @@ PyDoc_STRVAR(_csv_Dialect___reduce_ex____doc__,
 "Raise an exception to avoid pickling.");
 
 #define _CSV_DIALECT___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", (PyCFunction)_csv_Dialect___reduce_ex__, METH_O, _csv_Dialect___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(_csv_Dialect___reduce_ex__), METH_O, _csv_Dialect___reduce_ex____doc__},
 
 static PyObject *
 _csv_Dialect___reduce_ex___impl(DialectObj *self, PyObject *protocol);
 
-static PyObject *
-_csv_Dialect___reduce_ex__(PyObject *self, PyObject *protocol)
+static PyValue
+_csv_Dialect___reduce_ex__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *protocol;
+    PyObject *_return_value;
 
-    return_value = _csv_Dialect___reduce_ex___impl((DialectObj *)self, protocol);
+    protocol = PyValue_Object(arg);
+    if (protocol == NULL) {
+        goto exit;
+    }
+    _return_value = _csv_Dialect___reduce_ex___impl((DialectObj *)self, protocol);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -88,13 +95,13 @@ exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 Reader_iternext_impl(ReaderObj *self);
 
-static PyObject *
+static PyValue
 Reader_iternext(PyObject *self)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = Reader_iternext_impl((ReaderObj *)self);
@@ -136,11 +143,17 @@ _csv_reader(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("reader", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (iterable == NULL) {
+        goto exit;
+    }
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect = PyTuple_GET_ITEM(args, 1);
+    dialect = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (dialect == NULL) {
+        goto exit;
+    }
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -189,11 +202,17 @@ _csv_writer(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("writer", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    output_file = PyTuple_GET_ITEM(args, 0);
+    output_file = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (output_file == NULL) {
+        goto exit;
+    }
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect = PyTuple_GET_ITEM(args, 1);
+    dialect = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (dialect == NULL) {
+        goto exit;
+    }
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -260,11 +279,17 @@ _csv_register_dialect(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("register_dialect", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    name_obj = PyTuple_GET_ITEM(args, 0);
+    name_obj = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (name_obj == NULL) {
+        goto exit;
+    }
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect_obj = PyTuple_GET_ITEM(args, 1);
+    dialect_obj = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (dialect_obj == NULL) {
+        goto exit;
+    }
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -296,15 +321,14 @@ PyDoc_STRVAR(_csv_unregister_dialect__doc__,
 static PyObject *
 _csv_unregister_dialect_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_csv_unregister_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_unregister_dialect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -327,16 +351,21 @@ _csv_unregister_dialect(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *name;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    name = args[0];
-    return_value = _csv_unregister_dialect_impl(module, name);
+    name = PyValue_Object(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    _return_value = _csv_unregister_dialect_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -354,15 +383,14 @@ PyDoc_STRVAR(_csv_get_dialect__doc__,
 static PyObject *
 _csv_get_dialect_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_csv_get_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_get_dialect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -385,16 +413,21 @@ _csv_get_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *name;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    name = args[0];
-    return_value = _csv_get_dialect_impl(module, name);
+    name = PyValue_Object(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    _return_value = _csv_get_dialect_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -415,15 +448,14 @@ PyDoc_STRVAR(_csv_field_size_limit__doc__,
 static PyObject *
 _csv_field_size_limit_impl(PyObject *module, PyObject *new_limit);
 
-static PyObject *
-_csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_field_size_limit(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -446,9 +478,10 @@ _csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *new_limit = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -458,11 +491,15 @@ _csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    new_limit = args[0];
+    new_limit = PyValue_Object(args[0]);
+    if (new_limit == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _csv_field_size_limit_impl(module, new_limit);
+    _return_value = _csv_field_size_limit_impl(module, new_limit);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7e3a92d524d88023 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f9a1ab634dafa55b input=a9049054013a1b77]*/

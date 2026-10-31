@@ -61,6 +61,10 @@ class CRenderData:
         self.return_conversion: list[str] = []
         self.converter_retval = "_return_value"
 
+        # Does the parser return a PyValue rather than an object?  Then a
+        # return converter converts the impl's result to a value.
+        self.value_return = False
+
         # The C statements required to do some operations
         # after the end of parsing but before cleaning up.
         # These operations may be, for example, memory deallocations which

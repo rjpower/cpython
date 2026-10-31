@@ -1,0 +1,12 @@
+gate 0 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default at 878647973ba
+Using random seed: 176796579
+0:00:00 load avg: 2.51 mem:   47.9 MiB Run 9 tests in parallel using 2 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:33 load avg: 2.20 mem:  199.1 MiB running (1): test_capi (30.6 sec)
+
+== Tests result: SUCCESS ==
+
+Total duration: 50.6 sec
+Total tests: run=1,924 (filtered) skipped=50
+Total test files: run=9/9 (filtered)
+Result: SUCCESS
+gate 0 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default

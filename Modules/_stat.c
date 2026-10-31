@@ -11,12 +11,6 @@
  *
  */
 
-// Need limited C API version 3.13 for PyModule_Add() on Windows
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
-#endif
-
 #include "Python.h"
 
 #ifdef HAVE_SYS_TYPES_H
@@ -290,11 +284,15 @@ typedef unsigned short mode_t;
 
 
 static mode_t
-_PyLong_AsMode_t(PyObject *op)
+_PyLong_AsMode_t(PyValue v)
 {
     unsigned long value;
     mode_t mode;
 
+    PyObject *op = PyValue_Object(v);
+    if (op == NULL) {
+        return (mode_t)-1;
+    }
     if (PyLong_Check(op)) {
         value = PyLong_AsUnsignedLong(op);
     }
@@ -321,13 +319,13 @@ _PyLong_AsMode_t(PyObject *op)
 
 
 #define stat_S_ISFUNC(isfunc, doc)                             \
-    static PyObject *                                          \
-    stat_ ##isfunc (PyObject *self, PyObject *omode)           \
+    static PyValue                                             \
+    stat_ ##isfunc (PyObject *self, PyValue omode)             \
     {                                                          \
        mode_t mode = _PyLong_AsMode_t(omode);                   \
        if ((mode == (mode_t)-1) && PyErr_Occurred())           \
-           return NULL;                                        \
-       return PyBool_FromLong(isfunc(mode));                   \
+           return PyValue_NULL;                                \
+       return PyValue_FromObject(isfunc(mode) ? Py_True : Py_False); \
     }                                                          \
     PyDoc_STRVAR(stat_ ## isfunc ## _doc, doc)
 
@@ -375,26 +373,26 @@ stat_S_ISFUNC(S_ISWHT,
 PyDoc_STRVAR(stat_S_IMODE_doc,
 "Return the portion of the file's mode that can be set by os.chmod().");
 
-static PyObject *
-stat_S_IMODE(PyObject *self, PyObject *omode)
+static PyValue
+stat_S_IMODE(PyObject *self, PyValue omode)
 {
     mode_t mode = _PyLong_AsMode_t(omode);
     if ((mode == (mode_t)-1) && PyErr_Occurred())
-        return NULL;
-    return PyLong_FromUnsignedLong(mode & S_IMODE);
+        return PyValue_NULL;
+    return PyValue_FromUnsignedLongLong(mode & S_IMODE);
 }
 
 
 PyDoc_STRVAR(stat_S_IFMT_doc,
 "Return the portion of the file's mode that describes the file type.");
 
-static PyObject *
-stat_S_IFMT(PyObject *self, PyObject *omode)
+static PyValue
+stat_S_IFMT(PyObject *self, PyValue omode)
 {
     mode_t mode = _PyLong_AsMode_t(omode);
     if ((mode == (mode_t)-1) && PyErr_Occurred())
-        return NULL;
-    return PyLong_FromUnsignedLong(mode & S_IFMT);
+        return PyValue_NULL;
+    return PyValue_FromUnsignedLongLong(mode & S_IFMT);
 }
 
 /* file type chars according to
@@ -449,36 +447,36 @@ fileperm(mode_t mode, char *buf)
 PyDoc_STRVAR(stat_filemode_doc,
 "Convert a file's mode to a string of the form '-rwxrwxrwx'");
 
-static PyObject *
-stat_filemode(PyObject *self, PyObject *omode)
+static PyValue
+stat_filemode(PyObject *self, PyValue omode)
 {
     char buf[10];
     mode_t mode;
 
     mode = _PyLong_AsMode_t(omode);
     if ((mode == (mode_t)-1) && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
     buf[0] = filetype(mode);
     fileperm(mode, &buf[1]);
-    return PyUnicode_FromStringAndSize(buf, 10);
+    return PyValue_FromResult(PyUnicode_FromStringAndSize(buf, 10));
 }
 
 
 static PyMethodDef stat_methods[] = {
-    {"S_ISDIR",         stat_S_ISDIR,  METH_O, stat_S_ISDIR_doc},
-    {"S_ISCHR",         stat_S_ISCHR,  METH_O, stat_S_ISCHR_doc},
-    {"S_ISBLK",         stat_S_ISBLK,  METH_O, stat_S_ISBLK_doc},
-    {"S_ISREG",         stat_S_ISREG,  METH_O, stat_S_ISREG_doc},
-    {"S_ISFIFO",        stat_S_ISFIFO, METH_O, stat_S_ISFIFO_doc},
-    {"S_ISLNK",         stat_S_ISLNK,  METH_O, stat_S_ISLNK_doc},
-    {"S_ISSOCK",        stat_S_ISSOCK, METH_O, stat_S_ISSOCK_doc},
-    {"S_ISDOOR",        stat_S_ISDOOR, METH_O, stat_S_ISDOOR_doc},
-    {"S_ISPORT",        stat_S_ISPORT, METH_O, stat_S_ISPORT_doc},
-    {"S_ISWHT",         stat_S_ISWHT,  METH_O, stat_S_ISWHT_doc},
-    {"S_IMODE",         stat_S_IMODE,  METH_O, stat_S_IMODE_doc},
-    {"S_IFMT",          stat_S_IFMT,   METH_O, stat_S_IFMT_doc},
-    {"filemode",        stat_filemode, METH_O, stat_filemode_doc},
+    {"S_ISDIR",         _PyCFunction_CAST(stat_S_ISDIR),  METH_O, stat_S_ISDIR_doc},
+    {"S_ISCHR",         _PyCFunction_CAST(stat_S_ISCHR),  METH_O, stat_S_ISCHR_doc},
+    {"S_ISBLK",         _PyCFunction_CAST(stat_S_ISBLK),  METH_O, stat_S_ISBLK_doc},
+    {"S_ISREG",         _PyCFunction_CAST(stat_S_ISREG),  METH_O, stat_S_ISREG_doc},
+    {"S_ISFIFO",        _PyCFunction_CAST(stat_S_ISFIFO), METH_O, stat_S_ISFIFO_doc},
+    {"S_ISLNK",         _PyCFunction_CAST(stat_S_ISLNK),  METH_O, stat_S_ISLNK_doc},
+    {"S_ISSOCK",        _PyCFunction_CAST(stat_S_ISSOCK), METH_O, stat_S_ISSOCK_doc},
+    {"S_ISDOOR",        _PyCFunction_CAST(stat_S_ISDOOR), METH_O, stat_S_ISDOOR_doc},
+    {"S_ISPORT",        _PyCFunction_CAST(stat_S_ISPORT), METH_O, stat_S_ISPORT_doc},
+    {"S_ISWHT",         _PyCFunction_CAST(stat_S_ISWHT),  METH_O, stat_S_ISWHT_doc},
+    {"S_IMODE",         _PyCFunction_CAST(stat_S_IMODE),  METH_O, stat_S_IMODE_doc},
+    {"S_IFMT",          _PyCFunction_CAST(stat_S_IFMT),   METH_O, stat_S_IFMT_doc},
+    {"filemode",        _PyCFunction_CAST(stat_filemode), METH_O, stat_filemode_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

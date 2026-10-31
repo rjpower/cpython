@@ -14,13 +14,10 @@ typedef struct {
     uint16_t value_and_backoff;
 } _Py_BackoffCounter;
 
-/* Each instruction in a code object is a fixed-width value,
- * currently 2 bytes: 1-byte opcode + 1-byte oparg.  The EXTENDED_ARG
- * opcode allows for larger values but the current limit is 3 uses
- * of EXTENDED_ARG (see Python/compile.c), for a maximum
- * 32-bit value.  This aligns with the note in Python/compile.c
- * (compiler_addop_i_line) indicating that the max oparg value is
- * 2**32 - 1, rather than INT_MAX.
+/* A code unit of the stack bytecode: 1-byte opcode + 1-byte oparg.  Code
+ * objects hold IR words instead (_PyIRWord, Include/internal/pycore_ir.h);
+ * only the thread-local bytecode arrays of the free-threaded build still
+ * use this type.
  */
 typedef union {
     uint16_t cache;
@@ -28,8 +25,13 @@ typedef union {
         uint8_t code;
         uint8_t arg;
     } op;
-    _Py_BackoffCounter counter;  // First cache entry of specializable op
 } _Py_CODEUNIT;
+
+/* A word of the register IR; see pycore_ir.h. */
+typedef uint64_t _PyIRWord;
+
+/* What an interpreter instruction pointer points at */
+typedef _PyIRWord _PyInstr;
 
 
 /* Abstract tree node. */
@@ -42,7 +44,6 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     PyHamtNode *h_root;
-    PyObject *h_weakreflist;
     Py_ssize_t h_count;
 } PyHamtObject;
 
@@ -54,32 +55,31 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
-// Define this to get precise tracking of stackrefs.
-// #define Py_STACKREF_DEBUG 1
+/* Initialized strong value slots.  This is a view, not a root registration
+ * or a promise that aliases outside the range can follow moving objects. */
+typedef struct {
+    PyValue *base;
+    Py_ssize_t n;
+} _PyGCValueRange;
 
-// Define this to get precise tracking of closed stackrefs.
-// This will use unbounded memory, as it can only grow.
-// Use this to track double closes in short-lived programs
-// #define Py_STACKREF_CLOSE_DEBUG 1
-
-
-typedef union _PyStackRef {
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    uint64_t index;
-#else
-    uintptr_t bits;
-#endif
-} _PyStackRef;
-
-// A stackref that can be stored in a regular C local variable and be visible
-// to the GC in the free threading build.
-// Used in combination with _PyThreadState_PushCStackRef().
-typedef struct _PyCStackRef {
-    _PyStackRef ref;
-#ifdef Py_GIL_DISABLED
-    struct _PyCStackRef *next;
-#endif
-} _PyCStackRef;
+// Values that a C frame holds, linked into the thread state so that the
+// collector visits them: the way a function whose own C frame the collector
+// does not scan (Py_GC_PRECISE) holds values across a
+// collecting call.  The collector visits base[0] to base[n - 1].  A
+// one-value root (_PyThreadState_PushValueRoot()) is a span of one over its
+// own value; a span (_PyThreadState_PushValueSpan()) is over a buffer of
+// the caller's and is filled only by _PyValueSpan_Append().
+typedef struct _PyValueRoot {
+    union {
+        PyValue value;
+        // A box of an inline value (PyValue_Object()), which as a PyValue
+        // would be the inline value again.
+        PyObject *object;
+    };
+    PyValue *base;
+    Py_ssize_t n;
+    struct _PyValueRoot *next;
+} _PyValueRoot;
 
 
 #ifdef __cplusplus

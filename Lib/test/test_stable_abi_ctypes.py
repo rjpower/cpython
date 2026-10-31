@@ -1020,11 +1020,6 @@ if feature_macros['PY_HAVE_THREAD_NATIVE_ID']:
     SYMBOL_NAMES += (
         'PyThread_get_thread_native_id',
     )
-if feature_macros['Py_REF_DEBUG']:
-    SYMBOL_NAMES += (
-        '_Py_NegativeRefcount',
-        '_Py_RefTotal',
-    )
 if feature_macros['Py_TRACE_REFS']:
     SYMBOL_NAMES += (
     )
@@ -1036,12 +1031,10 @@ if feature_macros['USE_STACKCHECK']:
 EXPECTED_FEATURE_MACROS = set(['HAVE_FORK',
  'MS_WINDOWS',
  'PY_HAVE_THREAD_NATIVE_ID',
- 'Py_REF_DEBUG',
  'Py_TRACE_REFS',
  'USE_STACKCHECK'])
 WINDOWS_FEATURE_MACROS = {'HAVE_FORK': False,
  'MS_WINDOWS': True,
  'PY_HAVE_THREAD_NATIVE_ID': True,
- 'Py_REF_DEBUG': 'maybe',
  'Py_TRACE_REFS': 'maybe',
  'USE_STACKCHECK': 'maybe'}

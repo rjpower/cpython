@@ -3,6 +3,7 @@
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
 #include "pycore_flowgraph.h"
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_long.h"          // _PY_IS_SMALL_INT()
@@ -11,7 +12,8 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_stackref.h"        // PyStackRef_AsPyObjectBorrow()
+#include "pycore_regcfg.h"          // _PyRegCfg_Build()
+#include "pycore_value.h"           // PyValue_ObjectBorrow()
 
 #include <stdbool.h>
 
@@ -798,6 +800,13 @@ get_stack_effects(int opcode, int oparg, int jump, stack_effects *effects)
         effects->net = 0;
         return 0;
     }
+    if ((opcode == JUMP_IF_FALSE_OR_POP || opcode == JUMP_IF_TRUE_OR_POP)
+        && jump == 0)
+    {
+        // The value is popped where the jump falls through
+        effects->net = -1;
+        return 0;
+    }
     effects->net = pushed - popped;
     return 0;
 }
@@ -1335,7 +1344,7 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
     }
     if (opcode == LOAD_COMMON_CONSTANT) {
         assert(oparg < NUM_COMMON_CONSTANTS);
-        return PyStackRef_AsPyObjectBorrow(
+        return PyValue_Object(
             _PyInterpreterState_GET()->common_consts[oparg]);
     }
 
@@ -2662,6 +2671,44 @@ remove_redundant_nops_and_jumps(cfg_builder *g)
     return SUCCESS;
 }
 
+/* POP_JUMP_IF_FALSE and _TRUE test the truth of any value, so the TO_BOOL
+ * before a conditional jump goes, and a UNARY_NOT before it inverts it.
+ * This runs after the peepholes, which fold TO_BOOL into the instruction
+ * that produces its value where they can. */
+static void
+fold_truth_tests(basicblock *entryblock)
+{
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        cfg_instr *jump = basicblock_last_instr(b);
+        if (jump == NULL ||
+            (jump->i_opcode != POP_JUMP_IF_FALSE &&
+             jump->i_opcode != POP_JUMP_IF_TRUE)) {
+            continue;
+        }
+        for (int i = b->b_iused - 2; i >= 0; i--) {
+            cfg_instr *inst = &b->b_instr[i];
+            if (inst->i_opcode == UNARY_NOT) {
+                jump->i_opcode = jump->i_opcode == POP_JUMP_IF_FALSE
+                                     ? POP_JUMP_IF_TRUE : POP_JUMP_IF_FALSE;
+            }
+            else if (inst->i_opcode != TO_BOOL && inst->i_opcode != NOP) {
+                break;
+            }
+            INSTR_SET_OP0(inst, NOP);
+        }
+    }
+    // UNARY_NOT tests the truth of any value, as the jumps do
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        for (int i = 0; i + 1 < b->b_iused; i++) {
+            if (b->b_instr[i].i_opcode == TO_BOOL
+                && b->b_instr[i + 1].i_opcode == UNARY_NOT)
+            {
+                INSTR_SET_OP0(&b->b_instr[i], NOP);
+            }
+        }
+    }
+}
+
 /* Perform optimizations on a control flow graph.
    The consts object should still be in list form to allow new constants
    to be appended.
@@ -2682,64 +2729,11 @@ optimize_cfg(cfg_builder *g, PyObject *consts, PyObject *const_cache,
     for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
         RETURN_IF_ERROR(optimize_basic_block(const_cache, b, consts, consts_index));
     }
+    fold_truth_tests(g->g_entryblock);
     RETURN_IF_ERROR(remove_redundant_nops_and_pairs(g->g_entryblock));
     RETURN_IF_ERROR(remove_unreachable(g->g_entryblock));
     RETURN_IF_ERROR(remove_redundant_nops_and_jumps(g));
     assert(no_redundant_jumps(g));
-    return SUCCESS;
-}
-
-static void
-make_super_instruction(cfg_instr *inst1, cfg_instr *inst2, int super_op)
-{
-    int32_t line1 = inst1->i_loc.lineno;
-    int32_t line2 = inst2->i_loc.lineno;
-    /* Skip if instructions are on different lines */
-    if (line1 >= 0 && line2 >= 0 && line1 != line2) {
-        return;
-    }
-    if (inst1->i_oparg >= 16 || inst2->i_oparg >= 16) {
-        return;
-    }
-    INSTR_SET_OP1(inst1, super_op, (inst1->i_oparg << 4) | inst2->i_oparg);
-    INSTR_SET_OP0(inst2, NOP);
-}
-
-static int
-insert_superinstructions(cfg_builder *g)
-{
-    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
-
-        for (int i = 0; i < b->b_iused; i++) {
-            cfg_instr *inst = &b->b_instr[i];
-            int nextop = i+1 < b->b_iused ? b->b_instr[i+1].i_opcode : 0;
-            switch(inst->i_opcode) {
-                case LOAD_FAST:
-                    if (nextop == LOAD_FAST) {
-                        make_super_instruction(inst, &b->b_instr[i + 1], LOAD_FAST_LOAD_FAST);
-                    }
-                    break;
-                case LOAD_FAST_BORROW:
-                    if (nextop == LOAD_FAST_BORROW) {
-                        make_super_instruction(inst, &b->b_instr[i + 1],
-                                               LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-                    }
-                    break;
-                case STORE_FAST:
-                    switch (nextop) {
-                        case LOAD_FAST:
-                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_LOAD_FAST);
-                            break;
-                        case STORE_FAST:
-                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_STORE_FAST);
-                            break;
-                    }
-                    break;
-            }
-        }
-    }
-    RETURN_IF_ERROR(remove_redundant_nops(g));
-    assert(no_redundant_nops(g));
     return SUCCESS;
 }
 
@@ -3636,18 +3630,103 @@ convert_pseudo_conditional_jumps(cfg_builder *g)
                             .i_target = NULL,
                             .i_except = except,
                 };
+                // The jump tests the truth of the copy: see fold_truth_tests()
                 RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &copy));
-                cfg_instr to_bool = {
-                            .i_opcode = TO_BOOL,
-                            .i_oparg = 0,
-                            .i_loc = loc,
-                            .i_target = NULL,
-                            .i_except = except,
-                };
-                RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &to_bool));
             }
         }
     }
+    return SUCCESS;
+}
+
+/* A COPY of a local loaded earlier in the block becomes a second load of
+ * the local, which the assembler can fold into the instruction that
+ * consumes the copy, as the jump of "x and y", the LOAD_ATTR of
+ * "o.a += 1" or the subscript of "a[i] += 1".  Nothing between the load
+ * and the copy may write the local or run other code, so that the second
+ * load reads what the first did.  This runs before optimize_load_fast(),
+ * which decides whether each load borrows. */
+static int
+copy_local_as_load(basicblock *entryblock)
+{
+    // Per stack position, the local that a load pushed there, or -1
+    int *stack = NULL;
+    int astack = 0;
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        int sp = 0;
+        for (int i = 0; i < b->b_iused; i++) {
+            cfg_instr *instr = &b->b_instr[i];
+            int opcode = instr->i_opcode;
+            int oparg = instr->i_oparg;
+            if (opcode == COPY && oparg <= sp && stack[sp - oparg] >= 0) {
+                INSTR_SET_OP1(instr, LOAD_FAST, stack[sp - oparg]);
+                opcode = LOAD_FAST;
+                oparg = instr->i_oparg;
+            }
+            int popped = _PyOpcode_num_popped(opcode, oparg);
+            int pushed = _PyOpcode_num_pushed(opcode, oparg);
+            if (popped < 0 || pushed < 0 || popped > sp) {
+                // Not simulated: forget the block's loads
+                sp = 0;
+                continue;
+            }
+            if (OPCODE_HAS_ESCAPES(opcode) || OPCODE_HAS_ERROR(opcode)) {
+                for (int k = 0; k < sp; k++) {
+                    stack[k] = -1;
+                }
+            }
+            else if (OPCODE_HAS_LOCAL(opcode) && opcode != LOAD_FAST
+                     && opcode != LOAD_FAST_CHECK)
+            {
+                for (int k = 0; k < sp; k++) {
+                    if (stack[k] == oparg) {
+                        stack[k] = -1;
+                    }
+                }
+            }
+            if (opcode == COPY || opcode == SWAP) {
+                // COPY copies a value that is not a load; SWAP permutes
+                int bottom = sp - oparg;
+                if (opcode == SWAP) {
+                    int top = stack[sp - 1];
+                    stack[sp - 1] = stack[bottom];
+                    stack[bottom] = top;
+                    continue;
+                }
+                if (sp + 1 > astack) {
+                    astack = 2 * (sp + 1);
+                    int *grown = PyMem_Realloc(stack, astack * sizeof(int));
+                    if (grown == NULL) {
+                        PyMem_Free(stack);
+                        PyErr_NoMemory();
+                        return ERROR;
+                    }
+                    stack = grown;
+                }
+                stack[sp++] = -1;
+                continue;
+            }
+            sp -= popped;
+            if (sp + pushed > astack) {
+                astack = 2 * (sp + pushed);
+                int *grown = PyMem_Realloc(stack, astack * sizeof(int));
+                if (grown == NULL) {
+                    PyMem_Free(stack);
+                    PyErr_NoMemory();
+                    return ERROR;
+                }
+                stack = grown;
+            }
+            for (int k = 0; k < pushed; k++) {
+                stack[sp++] = -1;
+            }
+            if ((opcode == LOAD_FAST || opcode == LOAD_FAST_CHECK)
+                && pushed == 1)
+            {
+                stack[sp - 1] = oparg;
+            }
+        }
+    }
+    PyMem_Free(stack);
     return SUCCESS;
 }
 
@@ -3864,27 +3943,26 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
         fixed[i] = nlocals + i;
     }
 
-    PyObject *varname, *cellindex;
+    // The names are strings and the indices int32: nothing is boxed.
+    PyValue name_value, cellindex;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &varname, &cellindex)) {
-        PyObject *varindex;
-        if (PyDict_GetItemRef(umd->u_varnames, varname, &varindex) < 0) {
+    while (_PyDict_NextValue(umd->u_cellvars, &pos, &name_value, &cellindex, NULL)) {
+        PyValue varindex;
+        int found = _PyDict_GetItemValue(umd->u_varnames, name_value,
+                                         &varindex);
+        if (found < 0) {
             goto error;
         }
-        if (varindex == NULL) {
+        if (!found) {
             continue;
         }
 
-        int argoffset = PyLong_AsInt(varindex);
-        Py_DECREF(varindex);
+        int argoffset = PyLong_AsIntValue(varindex);
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
-        int oldindex = PyLong_AsInt(cellindex);
-        if (oldindex == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+        int oldindex = PyValue_Int32(cellindex);
         fixed[oldindex] = argoffset;
     }
     return fixed;
@@ -4136,13 +4214,72 @@ _PyCfg_ToInstructionSequence(cfg_builder *g, _PyInstructionSequence *seq)
 }
 
 
-int
-_PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
-                                     _PyCompile_CodeUnitMetadata *umd,
-                                     int *stackdepth, int *nlocalsplus,
-                                     _PyInstructionSequence *seq)
+/* Hand the blocks to the register CFG (Python/regcfg.c), in layout order,
+ * with jump targets and exception handlers as block indices. */
+static int
+cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
+              _PyRegCfg **result)
 {
+    int nblocks = 0;
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        // b_predecessors is not needed any more: it numbers the blocks
+        b->b_predecessors = nblocks++;
+    }
+    uint8_t *is_handler = PyMem_Calloc(Py_MAX(nblocks, 1), 1);
+    if (is_handler == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        for (int i = 0; i < b->b_iused; i++) {
+            basicblock *h = b->b_instr[i].i_except;
+            if (h != NULL) {
+                is_handler[h->b_predecessors] = 1;
+            }
+        }
+    }
+    _PyRegCfg *cfg = _PyRegCfg_New(nlocalsplus, maxdepth);
+    if (cfg == NULL) {
+        PyMem_Free(is_handler);
+        return ERROR;
+    }
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+        int handler_depth = is_handler[b->b_predecessors] ? b->b_startdepth : -1;
+        if (_PyRegCfg_AddBlock(cfg, handler_depth, b->b_preserve_lasti,
+                               b->b_startdepth) < 0)
+        {
+            goto error;
+        }
+        for (int i = 0; i < b->b_iused; i++) {
+            cfg_instr *instr = &b->b_instr[i];
+            int target = HAS_TARGET(instr->i_opcode)
+                ? instr->i_target->b_predecessors : -1;
+            int except = instr->i_except != NULL
+                ? instr->i_except->b_predecessors : -1;
+            if (_PyRegCfg_AddInstr(cfg, instr->i_opcode, instr->i_oparg,
+                                   instr->i_loc, target, except) < 0)
+            {
+                goto error;
+            }
+        }
+    }
+    PyMem_Free(is_handler);
+    *result = cfg;
+    return SUCCESS;
+error:
+    PyMem_Free(is_handler);
+    _PyRegCfg_Free(cfg);
+    return ERROR;
+}
+
+int
+_PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
+                            int *stackdepth, int *nlocalsplus,
+                            _PyRegCfg **result)
+{
+    *result = NULL;
     RETURN_IF_ERROR(convert_pseudo_conditional_jumps(g));
+    RETURN_IF_ERROR(copy_local_as_load(g->g_entryblock));
 
     *stackdepth = calculate_stackdepth(g);
     if (*stackdepth < 0) {
@@ -4168,17 +4305,18 @@ _PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
      */
     RETURN_IF_ERROR(optimize_load_fast(g));
 
-    /* Superinstructions are inserted after optimize_load_fast() so that a
-     * LOAD_FAST which can be borrowed is converted to LOAD_FAST_BORROW
-     * instead of being fused into a STORE_FAST_LOAD_FAST. Fusing adjacent
-     * instructions does not change which references are borrowed. */
-    RETURN_IF_ERROR(insert_superinstructions(g));
+    /* No superinstructions: the register CFG folds the loads into the
+     * instructions that consume them (Python/regcfg_passes.c). */
+    RETURN_IF_ERROR(remove_redundant_nops(g));
+    assert(no_redundant_nops(g));
 
-    /* Can't modify the bytecode after computing jump offsets. */
-    if (_PyCfg_ToInstructionSequence(g, seq) < 0) {
+    _PyRegCfg *cfg;
+    RETURN_IF_ERROR(cfg_to_regcfg(g, *nlocalsplus, *stackdepth, &cfg));
+    if (_PyRegCfg_Build(cfg) < 0) {
+        _PyRegCfg_Free(cfg);
         return ERROR;
     }
-
+    *result = cfg;
     return SUCCESS;
 }
 
@@ -4271,7 +4409,7 @@ _PyCompile_OptimizeCfg(PyObject *seq, PyObject *consts, int nlocals)
         goto error;
     }
 
-    if (insert_superinstructions(g) < 0) {
+    if (remove_redundant_nops(g) < 0) {
         goto error;
     }
 

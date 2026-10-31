@@ -103,6 +103,7 @@ class FunctionalTest(unittest.TestCase):
         self.assertEqual(stdout, f"24{os.linesep}42{os.linesep}".encode("utf-8"))
         self.assertEqual(stderr, b"")
 
+    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
     def test_thread_created_in_atexit_subinterpreter(self):
@@ -138,6 +139,7 @@ class FunctionalTest(unittest.TestCase):
             os.close(read)
             os.close(write)
 
+@support.requires_subinterpreters
 @support.cpython_only
 class SubinterpreterTest(unittest.TestCase):
 

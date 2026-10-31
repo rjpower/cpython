@@ -9,7 +9,6 @@ typedef struct {
     PyMethodDef *m_ml; /* Description of the C function to call */
     PyObject    *m_self; /* Passed as 'self' arg to the C func, can be NULL */
     PyObject    *m_module; /* The __module__ attribute, can be anything */
-    PyObject    *m_weakreflist; /* List of weak references */
     vectorcallfunc vectorcall;
 } PyCFunctionObject;
 
@@ -31,7 +30,7 @@ typedef struct {
 
 PyAPI_DATA(PyTypeObject) PyCMethod_Type;
 
-#define PyCMethod_CheckExact(op) Py_IS_TYPE((op), &PyCMethod_Type)
+#define PyCMethod_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyCMethod_Type)
 #define PyCMethod_Check(op) PyObject_TypeCheck((op), &PyCMethod_Type)
 
 

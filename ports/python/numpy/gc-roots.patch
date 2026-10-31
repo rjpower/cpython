@@ -1,0 +1,958 @@
+--- a/numpy/_core/src/multiarray/alloc.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/alloc.c	2026-10-26 11:49:35.856896428 -0700
+@@ -434,6 +434,63 @@
+ };
+ /* singleton capsule of the default handler */
+ PyObject *PyDataMem_DefaultHandler;
++
++/*
++ * The data of an array whose dtype holds references, when the default
++ * handler is current.  It is a PyMem block: the tracing collector of a
++ * --with-gc CPython scans a PyMem block that an array found only through the
++ * C stack points to, as while a ufunc fills a new object array, and the
++ * array's own traverse is not yet trusted then.
++ */
++static void *
++pymem_data_malloc(void *NPY_UNUSED(ctx), size_t size)
++{
++    void *result = PyMem_Malloc(size);
++    if (result != NULL) {
++        PyTraceMalloc_Untrack(PYMEM_DOMAIN_RAW, (npy_uintp)result);
++    }
++    return result;
++}
++
++static void *
++pymem_data_calloc(void *NPY_UNUSED(ctx), size_t nelem, size_t elsize)
++{
++    void *result = PyMem_Calloc(nelem, elsize);
++    if (result != NULL) {
++        PyTraceMalloc_Untrack(PYMEM_DOMAIN_RAW, (npy_uintp)result);
++    }
++    return result;
++}
++
++static void *
++pymem_data_realloc(void *NPY_UNUSED(ctx), void *ptr, size_t new_size)
++{
++    void *result = PyMem_Realloc(ptr, new_size);
++    if (result != NULL) {
++        PyTraceMalloc_Untrack(PYMEM_DOMAIN_RAW, (npy_uintp)result);
++    }
++    return result;
++}
++
++static void
++pymem_data_free(void *NPY_UNUSED(ctx), void *ptr, size_t NPY_UNUSED(size))
++{
++    PyMem_Free(ptr);
++}
++
++PyDataMem_Handler pymem_reference_handler = {
++    "pymem_reference_allocator",
++    1,
++    {
++        NULL,
++        pymem_data_malloc,
++        pymem_data_calloc,
++        pymem_data_realloc,
++        pymem_data_free
++    }
++};
++/* singleton capsule of pymem_reference_handler */
++PyObject *npy_PyMemReferenceHandler;
+ PyObject *current_handler;
+ 
+ int uo_index=0;   /* user_override index */
+--- a/numpy/_core/src/multiarray/alloc.h	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/alloc.h	2026-10-26 11:49:35.856896428 -0700
+@@ -45,6 +45,8 @@
+ }
+ 
+ extern PyDataMem_Handler default_handler;
++extern PyDataMem_Handler pymem_reference_handler;
++extern PyObject *npy_PyMemReferenceHandler;
+ extern PyObject *current_handler; /* PyContextVar/PyCapsule */
+ 
+ NPY_NO_EXPORT PyObject *
+--- a/numpy/_core/src/multiarray/array_converter.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/array_converter.c	2026-10-26 11:09:59.352481701 -0700
+@@ -428,6 +428,22 @@
+ }
+ 
+ 
++static int
++array_converter_traverse(PyArrayArrayConverterObject *self, visitproc visit,
++                         void *arg)
++{
++    creation_item *item = self->items;
++    for (int i = 0; i < self->narrs; i++, item++) {
++        Py_VISIT(item->array);
++        Py_VISIT(item->object);
++        Py_VISIT(item->DType);
++        Py_VISIT(item->descr);
++    }
++    Py_VISIT(self->wrap);
++    Py_VISIT(self->wrap_type);
++    return 0;
++}
++
+ static Py_ssize_t
+ array_converter_length(PyArrayArrayConverterObject *self)
+ {
+@@ -472,6 +488,7 @@
+     .tp_itemsize = sizeof(creation_item),
+     .tp_new = array_converter_new,
+     .tp_dealloc = (destructor)array_converter_dealloc,
++    .tp_traverse = (traverseproc)array_converter_traverse,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+     .tp_getset = array_converter_getsets,
+     .tp_methods = array_converter_methods,
+--- a/numpy/_core/src/multiarray/array_method.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/array_method.c	2026-10-26 09:40:28.387507443 -0700
+@@ -516,11 +516,26 @@
+ }
+ 
+ 
++/* Not GC types, but the tracing collector traverses them. */
++static int
++arraymethod_traverse(PyObject *self, visitproc visit, void *arg)
++{
++    PyArrayMethodObject *meth = (PyArrayMethodObject *)self;
++    if (meth->wrapped_meth != NULL) {
++        Py_VISIT(meth->wrapped_meth);
++        for (int i = 0; i < meth->nin + meth->nout; i++) {
++            Py_VISIT(meth->wrapped_dtypes[i]);
++        }
++    }
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyArrayMethod_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy._ArrayMethod",
+     .tp_basicsize = sizeof(PyArrayMethodObject),
+     .tp_dealloc = arraymethod_dealloc,
++    .tp_traverse = arraymethod_traverse,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+ };
+ 
+@@ -985,11 +1000,25 @@
+ };
+ 
+ 
++static int
++boundarraymethod_traverse(PyObject *self, visitproc visit, void *arg)
++{
++    PyBoundArrayMethodObject *meth = (PyBoundArrayMethodObject *)self;
++    if (meth->method != NULL && meth->dtypes != NULL) {
++        for (int i = 0; i < meth->method->nin + meth->method->nout; i++) {
++            Py_VISIT(meth->dtypes[i]);
++        }
++    }
++    Py_VISIT(meth->method);
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyBoundArrayMethod_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy._BoundArrayMethod",
+     .tp_basicsize = sizeof(PyBoundArrayMethodObject),
+     .tp_dealloc = boundarraymethod_dealloc,
++    .tp_traverse = boundarraymethod_traverse,
+     .tp_repr = (reprfunc)boundarraymethod_repr,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+     .tp_methods = boundarraymethod_methods,
+--- a/numpy/_core/src/multiarray/arrayfunction_override.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/arrayfunction_override.c	2026-10-26 09:40:28.387507443 -0700
+@@ -429,6 +429,20 @@
+ }
+ 
+ 
++/* Not a GC type, but the tracing collector traverses it. */
++static int
++dispatcher_traverse(PyArray_ArrayFunctionDispatcherObject *self,
++                    visitproc visit, void *arg)
++{
++    Py_VISIT(self->relevant_arg_func);
++    Py_VISIT(self->default_impl);
++    Py_VISIT(self->dict);
++    Py_VISIT(self->dispatcher_name);
++    Py_VISIT(self->public_name);
++    return 0;
++}
++
++
+ static void
+ fix_name_if_typeerror(PyArray_ArrayFunctionDispatcherObject *self)
+ {
+@@ -762,6 +776,7 @@
+      /* We have a dict, so in theory could traverse, but in practice... */
+      .tp_dictoffset = offsetof(PyArray_ArrayFunctionDispatcherObject, dict),
+      .tp_dealloc = (destructor)dispatcher_dealloc,
++     .tp_traverse = (traverseproc)dispatcher_traverse,
+      .tp_new = (newfunc)dispatcher_new,
+      .tp_str = (reprfunc)dispatcher_str,
+      .tp_repr = (reprfunc)dispatcher_repr,
+--- a/numpy/_core/src/multiarray/arrayobject.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/arrayobject.c	2026-10-26 11:13:52.613004146 -0700
+@@ -461,6 +461,48 @@
+     return 0;
+ }
+ 
++/*
++ * Visit the references that the tracing collector of a --with-gc CPython
++ * cannot otherwise see.  ndarray is not a GC type, so the cycle collector
++ * never calls this for an ndarray itself.
++ */
++static int
++array_traverse(PyArrayObject *self, visitproc visit, void *arg)
++{
++    PyArrayObject_fields *fa = (PyArrayObject_fields *)self;
++    Py_VISIT(fa->descr);
++    Py_VISIT(fa->base);
++    Py_VISIT(fa->mem_handler);
++    if (fa->data == NULL || fa->descr == NULL || !PyDataType_REFCHK(fa->descr)) {
++        return 0;
++    }
++    /* Visit the objects that the items hold, in C order. */
++    int nd = fa->nd;
++    npy_intp index[NPY_MAXDIMS] = {0};
++    for (int i = 0; i < nd; i++) {
++        if (fa->dimensions[i] == 0) {
++            return 0;
++        }
++    }
++    for (;;) {
++        char *item = fa->data;
++        for (int i = 0; i < nd; i++) {
++            item += index[i] * fa->strides[i];
++        }
++        int err = npy_descr_visit_item(fa->descr, item, visit, arg);
++        if (err) {
++            return err;
++        }
++        int i = nd - 1;
++        while (i >= 0 && ++index[i] == fa->dimensions[i]) {
++            index[i--] = 0;
++        }
++        if (i < 0) {
++            return 0;
++        }
++    }
++}
++
+ static void
+ array_dealloc(PyArrayObject *self)
+ {
+@@ -1266,13 +1308,19 @@
+     .tp_basicsize = sizeof(PyArrayObject_fields),
+     /* methods */
+     .tp_dealloc = (destructor)array_dealloc,
++    .tp_traverse = (traverseproc)array_traverse,
+     .tp_repr = (reprfunc)array_repr,
+     .tp_as_number = &array_as_number,
+     .tp_as_sequence = &array_as_sequence,
+     .tp_as_mapping = &array_as_mapping,
+     .tp_str = (reprfunc)array_str,
+     .tp_as_buffer = &array_as_buffer,
+-    .tp_flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_SEQUENCE),
++    /*
++     * The dealloc reads the descr and the memory handler to clear and free
++     * the data; the tracing collector must not free them first.
++     */
++    .tp_flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_SEQUENCE
++                 | Py_TPFLAGS_DEALLOC_READS_REFERENTS),
+ 
+     .tp_richcompare = (richcmpfunc)array_richcompare,
+     .tp_weaklistoffset = offsetof(PyArrayObject_fields, weakreflist),
+--- a/numpy/_core/src/multiarray/convert_datatype.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/convert_datatype.c	2026-10-26 10:08:03.982627650 -0700
+@@ -3534,9 +3534,24 @@
+     return res;
+ }
+ 
++/*
++ * A new ArrayMethod with its fields zeroed: arraymethod_traverse reads
++ * wrapped_meth, which these methods never set.
++ */
++static PyArrayMethodObject *
++new_zeroed_arraymethod(void)
++{
++    PyArrayMethodObject *method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    if (method != NULL) {
++        memset((char *)method + offsetof(PyArrayMethodObject, name), 0,
++               sizeof(PyArrayMethodObject) - offsetof(PyArrayMethodObject, name));
++    }
++    return method;
++}
++
+ static int
+ initialize_void_and_object_globals(void) {
+-    PyArrayMethodObject *method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    PyArrayMethodObject *method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3551,7 +3566,7 @@
+     method->nout = 1;
+     npy_static_pydata.VoidToGenericMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3566,7 +3581,7 @@
+     method->nout = 1;
+     npy_static_pydata.GenericToVoidMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+@@ -3583,7 +3598,7 @@
+     method->get_strided_loop = &object_to_any_get_loop;
+     npy_static_pydata.ObjectToGenericMethod = (PyObject *)method;
+ 
+-    method = PyObject_New(PyArrayMethodObject, &PyArrayMethod_Type);
++    method = new_zeroed_arraymethod();
+     if (method == NULL) {
+         PyErr_NoMemory();
+         return -1;
+--- a/numpy/_core/src/multiarray/ctors.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/ctors.c	2026-10-26 11:49:35.857896434 -0700
+@@ -817,6 +817,10 @@
+         if (fa->mem_handler == NULL) {
+             goto fail;
+         }
++        if (fa->mem_handler == PyDataMem_DefaultHandler
++                && PyDataType_REFCHK(descr)) {
++            Py_SETREF(fa->mem_handler, Py_NewRef(npy_PyMemReferenceHandler));
++        }
+         /*
+          * Allocate something even for zero-space arrays
+          * e.g. shape=(0,) -- otherwise buffer exposure
+--- a/numpy/_core/src/multiarray/descriptor.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/descriptor.c	2026-10-26 11:13:52.614004153 -0700
+@@ -2039,6 +2039,89 @@
+ }
+ 
+ /*
++ * The references of a descriptor, for the tracing collector of a --with-gc
++ * CPython.  Descriptors are not GC objects; dtypemeta.c installs this on
++ * every DType class without a traverse of its own.
++ */
++NPY_NO_EXPORT int
++arraydescr_traverse(PyObject *op, visitproc visit, void *arg)
++{
++    PyArray_Descr *self = (PyArray_Descr *)op;
++    Py_VISIT(self->typeobj);
++    Py_VISIT(self->metadata);
++    if (!PyDataType_ISLEGACY(self)) {
++        return 0;
++    }
++    _PyArray_LegacyDescr *lself = (_PyArray_LegacyDescr *)self;
++    Py_VISIT(lself->names);
++    Py_VISIT(lself->fields);
++    if (lself->subarray != NULL) {
++        Py_VISIT(lself->subarray->base);
++        Py_VISIT(lself->subarray->shape);
++    }
++    return 0;
++}
++
++/*
++ * Visit the objects that one item of this dtype holds: an object, or the
++ * objects of its fields or subarray.  Neither allocates.
++ */
++NPY_NO_EXPORT int
++npy_descr_visit_item(PyArray_Descr *descr, char *item, visitproc visit,
++                     void *arg)
++{
++    if (!PyDataType_REFCHK(descr)) {
++        return 0;
++    }
++    if (descr->type_num == NPY_OBJECT) {
++        PyObject *obj;
++        memcpy(&obj, item, sizeof(obj));
++        Py_VISIT(obj);
++        return 0;
++    }
++    if (!PyDataType_ISLEGACY(descr)) {
++        return 0;
++    }
++    _PyArray_LegacyDescr *ldescr = (_PyArray_LegacyDescr *)descr;
++    if (ldescr->subarray != NULL) {
++        PyArray_Descr *base = ldescr->subarray->base;
++        npy_intp count = base->elsize ? descr->elsize / base->elsize : 0;
++        for (npy_intp i = 0; i < count; i++) {
++            int err = npy_descr_visit_item(base, item + i * base->elsize,
++                                           visit, arg);
++            if (err) {
++                return err;
++            }
++        }
++        return 0;
++    }
++    if (ldescr->names == NULL || !PyTuple_Check(ldescr->names)
++            || ldescr->fields == NULL || !PyDict_Check(ldescr->fields)) {
++        return 0;
++    }
++    Py_ssize_t pos = 0;
++    PyObject *key, *value;
++    while (PyDict_Next(ldescr->fields, &pos, &key, &value)) {
++        /* (dtype, offset[, title]); a title key repeats a field. */
++        if (!PyTuple_Check(value) || PyTuple_GET_SIZE(value) < 2
++                || (PyTuple_GET_SIZE(value) == 3
++                    && PyTuple_GET_ITEM(value, 2) == key)) {
++            continue;
++        }
++        PyArray_Descr *fdescr = (PyArray_Descr *)PyTuple_GET_ITEM(value, 0);
++        npy_intp offset = PyLong_AsSsize_t(PyTuple_GET_ITEM(value, 1));
++        if (offset < 0) {
++            continue;
++        }
++        int err = npy_descr_visit_item(fdescr, item + offset, visit, arg);
++        if (err) {
++            return err;
++        }
++    }
++    return 0;
++}
++
++/*
+  * should never be called for builtin-types unless
+  * there is a reference-count problem
+  */
+@@ -3939,6 +4022,7 @@
+         .tp_name = "numpy.dtype",
+         .tp_basicsize = sizeof(PyArray_Descr),
+         .tp_dealloc = (destructor)arraydescr_dealloc,
++        .tp_traverse = arraydescr_traverse,
+         .tp_repr = (reprfunc)arraydescr_repr,
+         .tp_as_number = &descr_as_number,
+         .tp_as_sequence = &descr_as_sequence,
+--- a/numpy/_core/src/multiarray/descriptor.h	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/descriptor.h	2026-10-26 11:13:52.614004153 -0700
+@@ -24,6 +24,13 @@
+ PyArray_ExtractDTypeAndDescriptor(PyArray_Descr *dtype,
+         PyArray_Descr **out_descr, PyArray_DTypeMeta **out_DType);
+ 
++NPY_NO_EXPORT int
++arraydescr_traverse(PyObject *op, visitproc visit, void *arg);
++
++NPY_NO_EXPORT int
++npy_descr_visit_item(PyArray_Descr *descr, char *item, visitproc visit,
++                     void *arg);
++
+ NPY_NO_EXPORT PyObject *arraydescr_protocol_typestr_get(
+         PyArray_Descr *, void *);
+ NPY_NO_EXPORT PyObject *arraydescr_protocol_descr_get(
+--- a/numpy/_core/src/multiarray/dtypemeta.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/dtypemeta.c	2026-10-26 11:09:33.733314490 -0700
+@@ -33,10 +33,60 @@
+ 
+ 
+ 
++/*
++ * The tracing collector does not see a DType's references: legacy DTypes
++ * live in PyMem memory and are traversed as static types, and dt_slots is
++ * PyMem memory that no traverse visits.  Each field is a root instead,
++ * including the legacy cast dict in the ArrFuncs copy.
++ */
++#define NPY_DT_ROOT_FIELDS 9
++
++static void
++dtypemeta_root_fields(PyArray_DTypeMeta *DType, PyObject ***fields)
++{
++    NPY_DType_Slots *slots = NPY_DT_SLOTS(DType);
++    fields[0] = (PyObject **)&DType->singleton;
++    fields[1] = (PyObject **)&DType->scalar_type;
++    fields[2] = &slots->castingimpls;
++    fields[3] = (PyObject **)&slots->within_dtype_castingimpl;
++    fields[4] = (PyObject **)&slots->sort_meth;
++    fields[5] = (PyObject **)&slots->argsort_meth;
++    fields[6] = (PyObject **)&slots->real_meth;
++    fields[7] = (PyObject **)&slots->imag_meth;
++    fields[8] = &slots->f.castdict;
++}
++
++static int
++dtypemeta_add_roots(PyArray_DTypeMeta *DType)
++{
++    PyObject **fields[NPY_DT_ROOT_FIELDS];
++    dtypemeta_root_fields(DType, fields);
++    for (int i = 0; i < NPY_DT_ROOT_FIELDS; i++) {
++        if (PyGC_AddRoot(fields[i]) < 0) {
++            while (--i >= 0) {
++                PyGC_RemoveRoot(fields[i]);
++            }
++            return -1;
++        }
++    }
++    return 0;
++}
++
++static void
++dtypemeta_remove_roots(PyArray_DTypeMeta *DType)
++{
++    PyObject **fields[NPY_DT_ROOT_FIELDS];
++    dtypemeta_root_fields(DType, fields);
++    for (int i = 0; i < NPY_DT_ROOT_FIELDS; i++) {
++        PyGC_RemoveRoot(fields[i]);
++    }
++}
++
+ static void
+ dtypemeta_dealloc(PyArray_DTypeMeta *self) {
+     /* Do not accidentally delete a statically defined DType: */
+     assert(((PyTypeObject *)self)->tp_flags & Py_TPFLAGS_HEAPTYPE);
++    dtypemeta_remove_roots(self);
+ 
+     Py_XDECREF(self->scalar_type);
+     Py_XDECREF(self->singleton);
+@@ -215,6 +265,15 @@
+         PyErr_NoMemory();
+         return -1;
+     }
++    if (dtypemeta_add_roots(DType) < 0) {
++        PyMem_Free(DType->dt_slots);
++        DType->dt_slots = NULL;
++        return -1;
++    }
++    /* A non-GC type does not inherit tp_traverse. */
++    if (((PyTypeObject *)DType)->tp_traverse == NULL) {
++        ((PyTypeObject *)DType)->tp_traverse = arraydescr_traverse;
++    }
+ 
+     /* Set default values (where applicable) */
+     NPY_DT_SLOTS(DType)->discover_descr_from_pyobject =
+@@ -1264,6 +1323,7 @@
+             .tp_flags = Py_TPFLAGS_DEFAULT,
+             .tp_base = NULL,  /* set below */
+             .tp_new = (newfunc)legacy_dtype_default_new,
++            .tp_traverse = arraydescr_traverse,
+             .tp_doc = NULL,  /* set in python */
+         },},
+         .flags = NPY_DT_LEGACY,
+@@ -1280,6 +1340,10 @@
+         Py_DECREF(dtype_class);
+         return NULL;
+     }
++    if (dtypemeta_add_roots(dtype_class) < 0) {
++        Py_DECREF(dtype_class);
++        return NULL;
++    }
+     dt_slots->castingimpls = PyDict_New();
+     if (dt_slots->castingimpls == NULL) {
+         Py_DECREF(dtype_class);
+--- a/numpy/_core/src/multiarray/flagsobject.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/flagsobject.c	2026-10-26 11:09:59.352481701 -0700
+@@ -698,11 +698,19 @@
+     }
+ }
+ 
++static int
++arrayflags_traverse(PyArrayFlagsObject *self, visitproc visit, void *arg)
++{
++    Py_VISIT(self->arr);
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyArrayFlags_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy._core.multiarray.flagsobj",
+     .tp_basicsize = sizeof(PyArrayFlagsObject),
+     .tp_dealloc = (destructor)arrayflags_dealloc,
++    .tp_traverse = (traverseproc)arrayflags_traverse,
+     .tp_repr = (reprfunc)arrayflags_print,
+     .tp_as_mapping = &arrayflags_as_mapping,
+     .tp_str = (reprfunc)arrayflags_print,
+--- a/numpy/_core/src/multiarray/iterators.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/iterators.c	2026-10-26 16:52:37.343888307 -0700
+@@ -1093,11 +1093,21 @@
+     {NULL, NULL, NULL, NULL, NULL},
+ };
+ 
++/* The references of the iterators, for the tracing collector of a
++   --with-gc CPython.  None of the iterators is a GC type. */
++static int
++arrayiter_traverse(PyArrayIterObject *it, visitproc visit, void *arg)
++{
++    Py_VISIT(it->ao);
++    return 0;
++}
++
+ NPY_NO_EXPORT PyTypeObject PyArrayIter_Type = {
+     PyVarObject_HEAD_INIT(NULL, 0)
+     .tp_name = "numpy.flatiter",
+     .tp_basicsize = sizeof(PyArrayIterObject),
+     .tp_dealloc = (destructor)arrayiter_dealloc,
++    .tp_traverse = (traverseproc)arrayiter_traverse,
+     .tp_free = PyObject_Free,
+     .tp_as_mapping = &iter_as_mapping,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+@@ -1428,6 +1438,16 @@
+     Py_TYPE(multi)->tp_free((PyObject *)multi);
+ }
+ 
++static int
++arraymultiter_traverse(PyArrayMultiIterObject *multi, visitproc visit,
++                       void *arg)
++{
++    for (int i = 0; i < multi->numiter; i++) {
++        Py_VISIT(multi->iters[i]);
++    }
++    return 0;
++}
++
+ static PyObject *
+ arraymultiter_size_get(PyArrayMultiIterObject *self, void *NPY_UNUSED(ignored))
+ {
+@@ -1522,6 +1542,7 @@
+     .tp_name = "numpy.broadcast",
+     .tp_basicsize = sizeof(PyArrayMultiIterObject),
+     .tp_dealloc = (destructor)arraymultiter_dealloc,
++    .tp_traverse = (traverseproc)arraymultiter_traverse,
+     .tp_free = PyObject_Free,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+     .tp_iternext = (iternextfunc)arraymultiter_next,
+@@ -1786,13 +1807,25 @@
+     return NULL;
+ }
+ 
+-static void neighiter_dealloc(PyArrayNeighborhoodIterObject* iter)
++static int
++neighiter_traverse(PyArrayNeighborhoodIterObject *iter, visitproc visit,
++                   void *arg)
+ {
+-    if (iter->mode == NPY_NEIGHBORHOOD_ITER_CONSTANT_PADDING) {
+-        if (PyArray_ISOBJECT(iter->_internal_iter->ao)) {
+-            Py_DECREF(*(PyObject**)iter->constant);
+-        }
++    Py_VISIT(iter->ao);
++    Py_VISIT(iter->_internal_iter);
++    if (iter->mode == NPY_NEIGHBORHOOD_ITER_CONSTANT_PADDING
++            && iter->_internal_iter != NULL
++            && PyArray_ISOBJECT(iter->_internal_iter->ao)) {
++        Py_VISIT(*(PyObject **)iter->constant);
+     }
++    return 0;
++}
++
++static void neighiter_dealloc(PyArrayNeighborhoodIterObject* iter)
++{
++    /* The object padding constant is not decref'd: nothing is reference
++       counted, and the array whose dtype says it is an object may already
++       be swept. */
+     PyDataMem_FREE(iter->constant);
+     Py_DECREF(iter->_internal_iter);
+ 
+@@ -1805,6 +1838,7 @@
+     .tp_name = "numpy.neigh_internal_iter",
+     .tp_basicsize = sizeof(PyArrayNeighborhoodIterObject),
+     .tp_dealloc = (destructor)neighiter_dealloc,
++    .tp_traverse = (traverseproc)neighiter_traverse,
+     .tp_free = PyObject_Free,
+     .tp_flags = Py_TPFLAGS_DEFAULT,
+ };
+--- a/numpy/_core/src/multiarray/mapping.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/mapping.c	2026-10-26 11:11:12.773960908 -0700
+@@ -29,6 +29,7 @@
+ /* TODO: Only for `NpyIter_GetTransferFlags` until it is public */
+ #define NPY_ITERATOR_IMPLEMENTATION_CODE
+ #include "nditer_impl.h"
++#include "nditer_pywrap.h"
+ 
+ #include "umathmodule.h"
+ 
+@@ -3466,6 +3467,21 @@
+     PyObject_Free(mit);
+ }
+ 
++/* The references, for the tracing collector of a --with-gc CPython. */
++static int
++arraymapiter_traverse(PyArrayMapIterObject *mit, visitproc visit, void *arg)
++{
++    Py_VISIT(mit->array);
++    Py_VISIT(mit->subspace);
++    Py_VISIT(mit->extra_op);
++    if (npyiter_traverse_operands(mit->outer, visit, arg)
++            || npyiter_traverse_operands(mit->subspace_iter, visit, arg)
++            || npyiter_traverse_operands(mit->extra_op_iter, visit, arg)) {
++        return -1;
++    }
++    return 0;
++}
++
+ /*
+  * The mapiter object must be created new each time.  It does not work
+  * to bind to a new array, and continue.
+@@ -3482,6 +3498,8 @@
+     .tp_name = "numpy.mapiter",
+     .tp_basicsize = sizeof(PyArrayMapIterObject),
+     .tp_dealloc = (destructor)arraymapiter_dealloc,
++    .tp_traverse = (traverseproc)arraymapiter_traverse,
+     .tp_free = PyObject_Free,
+-    .tp_flags = Py_TPFLAGS_DEFAULT,
++    /* The dealloc resolves writebacks into the indexed array. */
++    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DEALLOC_READS_REFERENTS,
+ };
+--- a/numpy/_core/src/multiarray/multiarraymodule.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/multiarraymodule.c	2026-10-26 11:49:35.857896434 -0700
+@@ -5295,6 +5295,11 @@
+     if (PyDataMem_DefaultHandler == NULL) {
+         return -1;
+     }
++    npy_PyMemReferenceHandler = PyCapsule_New(
++            &pymem_reference_handler, MEM_HANDLER_CAPSULE_NAME, NULL);
++    if (npy_PyMemReferenceHandler == NULL) {
++        return -1;
++    }
+ #ifdef Py_GIL_DISABLED
+     if (PyUnstable_SetImmortal(PyDataMem_DefaultHandler) == 0) {
+         PyErr_SetString(PyExc_RuntimeError,
+--- a/numpy/_core/src/multiarray/nditer_api.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/nditer_api.c	2026-10-26 11:32:55.526432847 -0700
+@@ -17,6 +17,8 @@
+ #include "nditer_impl.h"
+ #include "templ_common.h"
+ #include "ctors.h"
++#include "descriptor.h"
++#include "nditer_pywrap.h"
+ 
+ 
+ /*NUMPY_API
+@@ -1742,7 +1744,7 @@
+             buffer = NULL;
+             if (!npy_mul_sizes_with_overflow(
+                         &alloc_size, itemsize, buffersize)) {
+-                buffer = PyArray_malloc(alloc_size);
++                buffer = NPY_ITER_BUFFER_MALLOC(op_dtype[iop], alloc_size);
+             }
+             if (buffer == NULL) {
+                 if (errmsg == NULL) {
+@@ -1765,7 +1767,7 @@
+ fail:
+     for (i = 0; i < iop; ++i) {
+         if (buffers[i] != NULL) {
+-            PyArray_free(buffers[i]);
++            NPY_ITER_BUFFER_FREE(op_dtype[i], buffers[i]);
+             buffers[i] = NULL;
+         }
+     }
+@@ -2329,3 +2331,46 @@
+     return NPY_FALSE;
+ }
+ #undef NPY_ITERATOR_IMPLEMENTATION_CODE
++
++
++/*
++ * For the tracing collector of a --with-gc CPython: visit the operands, their
++ * dtypes and the objects that the buffers hold.  A cast to an object dtype
++ * fills a buffer with new objects that nothing else refers to.  Cleared
++ * buffer items are NULL.
++ */
++NPY_NO_EXPORT int
++npyiter_traverse_operands(NpyIter *iter, visitproc visit, void *arg)
++{
++    if (iter == NULL) {
++        return 0;
++    }
++    int nop = NIT_NOP(iter);
++    PyArrayObject **operands = NIT_OPERANDS(iter);
++    PyArray_Descr **dtypes = NIT_DTYPES(iter);
++    for (int iop = 0; iop < nop; iop++) {
++        Py_VISIT(operands[iop]);
++        Py_VISIT(dtypes[iop]);
++    }
++    if (!(NIT_ITFLAGS(iter) & NPY_ITFLAG_BUFFER)) {
++        return 0;
++    }
++    NpyIter_BufferData *bufferdata = NIT_BUFFERDATA(iter);
++    char **buffers = NBF_BUFFERS(bufferdata);
++    NpyIter_TransferInfo *transferinfo = NBF_TRANSFERINFO(bufferdata);
++    npy_intp size = NBF_SIZE(bufferdata);
++    for (int iop = 0; iop < nop; iop++) {
++        if (buffers[iop] == NULL || transferinfo[iop].clear.func == NULL) {
++            continue;
++        }
++        npy_intp itemsize = dtypes[iop]->elsize;
++        for (npy_intp i = 0; i < size; i++) {
++            int err = npy_descr_visit_item(
++                    dtypes[iop], buffers[iop] + i * itemsize, visit, arg);
++            if (err) {
++                return err;
++            }
++        }
++    }
++    return 0;
++}
+--- a/numpy/_core/src/multiarray/nditer_constr.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/nditer_constr.c	2026-10-26 11:32:55.527432853 -0700
+@@ -573,7 +573,8 @@
+                 }
+                 else {
+                     itemsize = dtypes[iop]->elsize;
+-                    buffers[iop] = PyArray_malloc(itemsize*buffersize);
++                    buffers[iop] = NPY_ITER_BUFFER_MALLOC(dtypes[iop],
++                                                          itemsize*buffersize);
+                     if (buffers[iop] == NULL) {
+                         out_of_memory = 1;
+                     }
+@@ -691,7 +692,9 @@
+         /* buffers */
+         buffers = NBF_BUFFERS(bufferdata);
+         for (iop = 0; iop < nop; ++iop, ++buffers) {
+-            PyArray_free(*buffers);
++            if (*buffers != NULL) {
++                NPY_ITER_BUFFER_FREE(dtype[iop], *buffers);
++            }
+         }
+ 
+         NpyIter_TransferInfo *transferinfo = NBF_TRANSFERINFO(bufferdata);
+--- a/numpy/_core/src/multiarray/nditer_impl.h	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/nditer_impl.h	2026-10-26 11:32:55.525432840 -0700
+@@ -273,6 +273,17 @@
+     Py_intptr_t bd_flexdata;
+ };
+ 
++/*
++ * A buffer for a dtype that holds references is a PyMem block: the tracing
++ * collector of a --with-gc CPython scans a PyMem block that the C stack
++ * reaches, here through the iterator, which is one too.  A cast to an object
++ * dtype fills the buffer with objects that nothing else refers to.
++ */
++#define NPY_ITER_BUFFER_MALLOC(dtype, size) \
++        (PyDataType_REFCHK(dtype) ? PyMem_Malloc(size) : PyArray_malloc(size))
++#define NPY_ITER_BUFFER_FREE(dtype, buffer) \
++        (PyDataType_REFCHK(dtype) ? PyMem_Free(buffer) : PyArray_free(buffer))
++
+ #define NBF_BUFFERSIZE(bufferdata) ((bufferdata)->buffersize)
+ #define NBF_SIZE(bufferdata) ((bufferdata)->size)
+ #define NBF_BUFITEREND(bufferdata) ((bufferdata)->bufiterend)
+--- a/numpy/_core/src/multiarray/nditer_pywrap.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/nditer_pywrap.c	2026-10-26 11:26:38.717000351 -0700
+@@ -21,6 +21,7 @@
+ #include "conversion_utils.h"
+ #include "ctors.h"
+ #include "npy_pycompat.h"
++#include "nditer_pywrap.h"
+ 
+ /* Functions not part of the public NumPy C API */
+ npy_bool npyiter_has_writeback(NpyIter *iter);
+@@ -1196,6 +1197,15 @@
+ }
+ 
+ 
++/* The references, for the tracing collector of a --with-gc CPython; nditer
++   is not a GC type. */
++static int
++npyiter_traverse(NewNpyArrayIterObject *self, visitproc visit, void *arg)
++{
++    Py_VISIT(self->nested_child);
++    return npyiter_traverse_operands(self->iter, visit, arg);
++}
++
+ static void
+ npyiter_dealloc(NewNpyArrayIterObject *self)
+ {
+@@ -2535,9 +2545,11 @@
+     .tp_name = "numpy.nditer",
+     .tp_basicsize = sizeof(NewNpyArrayIterObject),
+     .tp_dealloc = (destructor)npyiter_dealloc,
++    .tp_traverse = (traverseproc)npyiter_traverse,
+     .tp_as_sequence = &npyiter_as_sequence,
+     .tp_as_mapping = &npyiter_as_mapping,
+-    .tp_flags = Py_TPFLAGS_DEFAULT,
++    /* The dealloc flushes the buffers into the operands. */
++    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DEALLOC_READS_REFERENTS,
+     .tp_iternext = (iternextfunc)npyiter_next,
+     .tp_methods = npyiter_methods,
+     .tp_members = npyiter_members,
+--- a/numpy/_core/src/multiarray/nditer_pywrap.h	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/nditer_pywrap.h	2026-10-26 11:26:38.717000351 -0700
+@@ -5,4 +5,9 @@
+ NpyIter_NestedIters(PyObject *NPY_UNUSED(self),
+                     PyObject *args, PyObject *kwds);
+ 
++/* Visit an iterator's operands, their dtypes and the objects in its
++   buffers (nditer_api.c). */
++NPY_NO_EXPORT int
++npyiter_traverse_operands(NpyIter *iter, visitproc visit, void *arg);
++
+ #endif  /* NUMPY_CORE_SRC_MULTIARRAY_NDITER_PYWRAP_H_ */
+--- a/numpy/_core/src/multiarray/scalartypes.c.src	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/scalartypes.c.src	2026-10-26 11:15:27.299622152 -0700
+@@ -3463,6 +3463,18 @@
+ };
+ 
+ 
++/* The references, for the tracing collector of a --with-gc CPython. */
++static int
++void_traverse(PyVoidScalarObject *v, visitproc visit, void *arg)
++{
++    Py_VISIT(v->descr);
++    Py_VISIT(v->base);
++    if (v->obval != NULL && v->descr != NULL) {
++        return npy_descr_visit_item((PyArray_Descr *)v->descr, v->obval, visit, arg);
++    }
++    return 0;
++}
++
+ static void
+ void_dealloc(PyVoidScalarObject *v)
+ {
+@@ -4552,6 +4564,7 @@
+     PyUnicodeArrType_Type.tp_str = unicodetype_str;
+ 
+     PyVoidArrType_Type.tp_methods = voidtype_methods;
++    PyVoidArrType_Type.tp_traverse = (traverseproc)void_traverse;
+     PyVoidArrType_Type.tp_getset = voidtype_getsets;
+     PyVoidArrType_Type.tp_as_mapping = &voidtype_as_mapping;
+     PyVoidArrType_Type.tp_as_sequence = &voidtype_as_sequence;
+--- a/numpy/_core/src/multiarray/stringdtype/dtype.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/multiarray/stringdtype/dtype.c	2026-10-26 11:09:59.351481694 -0700
+@@ -20,6 +20,7 @@
+ #include "npy_import.h"
+ #include "multiarraymodule.h"
+ #include "npy_sort.h"
++#include "descriptor.h"
+ 
+ /*
+  * Internal helper to create new instances
+@@ -860,6 +861,13 @@
+     return new_stringdtype_instance(na_object, coerce);
+ }
+ 
++static int
++stringdtype_traverse(PyObject *op, visitproc visit, void *arg)
++{
++    Py_VISIT(((PyArray_StringDTypeObject *)op)->na_object);
++    return arraydescr_traverse(op, visit, arg);
++}
++
+ static void
+ stringdtype_dealloc(PyArray_StringDTypeObject *self)
+ {
+@@ -1020,6 +1028,7 @@
+                 .tp_basicsize = sizeof(PyArray_StringDTypeObject),
+                 .tp_new = stringdtype_new,
+                 .tp_dealloc = (destructor)stringdtype_dealloc,
++                .tp_traverse = stringdtype_traverse,
+                 .tp_repr = (reprfunc)stringdtype_repr,
+                 .tp_str = (reprfunc)stringdtype_repr,
+                 .tp_methods = PyArray_StringDType_methods,
+--- a/numpy/_core/src/umath/ufunc_object.c	2026-10-10 10:53:37.000000000 -0700
++++ b/numpy/_core/src/umath/ufunc_object.c	2026-10-26 09:40:28.386507436 -0700
+@@ -5571,6 +5571,8 @@
+         Py_VISIT(self->identity_value);
+     }
+     Py_VISIT(self->dict);
++    Py_VISIT(self->userloops);
++    Py_VISIT(self->_loops);
+     return 0;
+ }
+ 

@@ -1612,8 +1612,8 @@ def _get_code_position(code, instruction_index):
     if instruction_index < 0:
         return (None, None, None, None)
     positions_gen = code.co_positions()
-    # The nth entry in code.co_positions() corresponds to instruction (2*n)th since Python 3.10+
-    return next(itertools.islice(positions_gen, instruction_index // 2, None))
+    # The nth entry in code.co_positions() is that of the nth word
+    return next(itertools.islice(positions_gen, instruction_index, None))
 
 def getframeinfo(frame, context=1):
     """Get information about a frame or traceback object.

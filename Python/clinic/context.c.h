@@ -20,23 +20,31 @@ static PyObject *
 _contextvars_Context_get_impl(PyContext *self, PyObject *key,
                               PyObject *default_value);
 
-static PyObject *
-_contextvars_Context_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_contextvars_Context_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *default_value = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
-    key = args[0];
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    default_value = args[1];
+    default_value = PyValue_Object(args[1]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _contextvars_Context_get_impl((PyContext *)self, key, default_value);
+    _return_value = _contextvars_Context_get_impl((PyContext *)self, key, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -136,11 +144,12 @@ PyDoc_STRVAR(_contextvars_ContextVar_get__doc__,
 static PyObject *
 _contextvars_ContextVar_get_impl(PyContextVar *self, PyObject *default_value);
 
-static PyObject *
-_contextvars_ContextVar_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_contextvars_ContextVar_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *default_value = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("get", nargs, 0, 1)) {
         goto exit;
@@ -148,9 +157,13 @@ _contextvars_ContextVar_get(PyObject *self, PyObject *const *args, Py_ssize_t na
     if (nargs < 1) {
         goto skip_optional;
     }
-    default_value = args[0];
+    default_value = PyValue_Object(args[0]);
+    if (default_value == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = _contextvars_ContextVar_get_impl((PyContextVar *)self, default_value);
+    _return_value = _contextvars_ContextVar_get_impl((PyContextVar *)self, default_value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -169,18 +182,26 @@ PyDoc_STRVAR(_contextvars_ContextVar_set__doc__,
 "its previous value via the `ContextVar.reset()` method.");
 
 #define _CONTEXTVARS_CONTEXTVAR_SET_METHODDEF    \
-    {"set", (PyCFunction)_contextvars_ContextVar_set, METH_O, _contextvars_ContextVar_set__doc__},
+    {"set", _PyCFunction_CAST(_contextvars_ContextVar_set), METH_O, _contextvars_ContextVar_set__doc__},
 
 static PyObject *
 _contextvars_ContextVar_set_impl(PyContextVar *self, PyObject *value);
 
-static PyObject *
-_contextvars_ContextVar_set(PyObject *self, PyObject *value)
+static PyValue
+_contextvars_ContextVar_set(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *value;
+    PyObject *_return_value;
 
-    return_value = _contextvars_ContextVar_set_impl((PyContextVar *)self, value);
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
+    _return_value = _contextvars_ContextVar_set_impl((PyContextVar *)self, value);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -194,18 +215,26 @@ PyDoc_STRVAR(_contextvars_ContextVar_reset__doc__,
 "`ContextVar.set()` that created the token was used.");
 
 #define _CONTEXTVARS_CONTEXTVAR_RESET_METHODDEF    \
-    {"reset", (PyCFunction)_contextvars_ContextVar_reset, METH_O, _contextvars_ContextVar_reset__doc__},
+    {"reset", _PyCFunction_CAST(_contextvars_ContextVar_reset), METH_O, _contextvars_ContextVar_reset__doc__},
 
 static PyObject *
 _contextvars_ContextVar_reset_impl(PyContextVar *self, PyObject *token);
 
-static PyObject *
-_contextvars_ContextVar_reset(PyObject *self, PyObject *token)
+static PyValue
+_contextvars_ContextVar_reset(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *token;
+    PyObject *_return_value;
 
-    return_value = _contextvars_ContextVar_reset_impl((PyContextVar *)self, token);
+    token = PyValue_Object(arg);
+    if (token == NULL) {
+        goto exit;
+    }
+    _return_value = _contextvars_ContextVar_reset_impl((PyContextVar *)self, token);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -240,23 +269,34 @@ static PyObject *
 token_exit_impl(PyContextToken *self, PyObject *type, PyObject *val,
                 PyObject *tb);
 
-static PyObject *
-token_exit(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+token_exit(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *type;
     PyObject *val;
     PyObject *tb;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    type = args[0];
-    val = args[1];
-    tb = args[2];
-    return_value = token_exit_impl((PyContextToken *)self, type, val, tb);
+    type = PyValue_Object(args[0]);
+    if (type == NULL) {
+        goto exit;
+    }
+    val = PyValue_Object(args[1]);
+    if (val == NULL) {
+        goto exit;
+    }
+    tb = PyValue_Object(args[2]);
+    if (tb == NULL) {
+        goto exit;
+    }
+    _return_value = token_exit_impl((PyContextToken *)self, type, val, tb);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=90ec3e4375804e9b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=61c848fe03a91e95 input=a9049054013a1b77]*/

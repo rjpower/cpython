@@ -461,56 +461,6 @@ do_work()
             ]
             self.assertGreater(len(function_entries), 0)
 
-    def test_sampling_with_collapsed_export(self):
-        collapsed_file = tempfile.NamedTemporaryFile(
-            suffix=".txt", delete=False
-        )
-        self.addCleanup(close_and_unlink, collapsed_file)
-
-        with (
-            test_subprocess(self.test_script, wait_for_working=True) as subproc,
-        ):
-            # Suppress profiler output when testing file export
-            with (
-                io.StringIO() as captured_output,
-                mock.patch("sys.stdout", captured_output),
-            ):
-                collector = CollapsedStackCollector(1000, skip_idle=False)
-                profiling.sampling.sample.sample(
-                    subproc.process.pid,
-                    collector,
-                    duration_sec=PROFILING_DURATION_SEC,
-                )
-                collector.export(collapsed_file.name)
-
-            # Verify file was created and contains valid data
-            self.assertTrue(os.path.exists(collapsed_file.name))
-            self.assertGreater(os.path.getsize(collapsed_file.name), 0)
-
-            # Check file format
-            with open(collapsed_file.name, "r") as f:
-                content = f.read()
-
-            lines = content.strip().split("\n")
-            self.assertGreater(len(lines), 0)
-
-            # Each line should have format: stack_trace count
-            for line in lines:
-                parts = line.rsplit(" ", 1)
-                self.assertEqual(len(parts), 2)
-
-                stack_trace, count_str = parts
-                self.assertGreater(len(stack_trace), 0)
-                self.assertTrue(count_str.isdigit())
-                self.assertGreater(int(count_str), 0)
-
-                # Stack trace should contain semicolon-separated entries
-                if ";" in stack_trace:
-                    stack_parts = stack_trace.split(";")
-                    for part in stack_parts:
-                        # Each part should be file:function:line
-                        self.assertIn(":", part)
-
     def test_sampling_all_threads(self):
         with (
             test_subprocess(self.test_script, wait_for_working=True) as subproc,

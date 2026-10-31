@@ -137,7 +137,7 @@ interpolation_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
 static PyMethodDef interpolation_methods[] = {
     {"__reduce__", interpolation_reduce, METH_NOARGS,
         PyDoc_STR("__reduce__() -> (cls, state)")},
-    {"__class_getitem__", Py_GenericAlias,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue),
         METH_O|METH_CLASS, PyDoc_STR("Interpolations are generic over the types of their values")},
     {NULL, NULL},
 };

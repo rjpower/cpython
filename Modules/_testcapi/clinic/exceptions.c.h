@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -15,7 +14,28 @@ PyDoc_STRVAR(_testcapi_err_set_raised__doc__,
 "\n");
 
 #define _TESTCAPI_ERR_SET_RAISED_METHODDEF    \
-    {"err_set_raised", (PyCFunction)_testcapi_err_set_raised, METH_O, _testcapi_err_set_raised__doc__},
+    {"err_set_raised", _PyCFunction_CAST(_testcapi_err_set_raised), METH_O, _testcapi_err_set_raised__doc__},
+
+static PyObject *
+_testcapi_err_set_raised_impl(PyObject *module, PyObject *exc);
+
+static PyValue
+_testcapi_err_set_raised(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *exc;
+    PyObject *_return_value;
+
+    exc = PyValue_Object(arg);
+    if (exc == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_err_set_raised_impl(module, exc);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_testcapi_err_givenexceptionmatches__doc__,
 "err_givenexceptionmatches($module, err, exc, /)\n"
@@ -30,19 +50,27 @@ static PyObject *
 _testcapi_err_givenexceptionmatches_impl(PyObject *module, PyObject *err,
                                          PyObject *exc);
 
-static PyObject *
-_testcapi_err_givenexceptionmatches(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_err_givenexceptionmatches(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *err;
     PyObject *exc;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("err_givenexceptionmatches", nargs, 2, 2)) {
         goto exit;
     }
-    err = args[0];
-    exc = args[1];
-    return_value = _testcapi_err_givenexceptionmatches_impl(module, err, exc);
+    err = PyValue_Object(args[0]);
+    if (err == NULL) {
+        goto exit;
+    }
+    exc = PyValue_Object(args[1]);
+    if (exc == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_err_givenexceptionmatches_impl(module, err, exc);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -60,26 +88,31 @@ PyDoc_STRVAR(_testcapi_exception_print__doc__,
 static PyObject *
 _testcapi_exception_print_impl(PyObject *module, PyObject *exc, int legacy);
 
-static PyObject *
-_testcapi_exception_print(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_exception_print(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc;
     int legacy = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("exception_print", nargs, 1, 2)) {
         goto exit;
     }
-    exc = args[0];
+    exc = PyValue_Object(args[0]);
+    if (exc == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    legacy = PyObject_IsTrue(args[1]);
+    legacy = PyObject_IsTrueValue(args[1]);
     if (legacy < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _testcapi_exception_print_impl(module, exc, legacy);
+    _return_value = _testcapi_exception_print_impl(module, exc, legacy);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -100,15 +133,14 @@ _testcapi_make_exception_with_doc_impl(PyObject *module, const char *name,
                                        const char *doc, PyObject *base,
                                        PyObject *dict);
 
-static PyObject *
-_testcapi_make_exception_with_doc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testcapi_make_exception_with_doc(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -131,51 +163,71 @@ _testcapi_make_exception_with_doc(PyObject *module, PyObject *const *args, Py_ss
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     const char *name;
     const char *doc = NULL;
     PyObject *base = NULL;
     PyObject *dict = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("make_exception_with_doc", "argument 'name'", "str", args[0]);
-        goto exit;
-    }
-    name = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (name == NULL) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("make_exception_with_doc", "argument 'name'", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        if (!PyUnicode_Check(args[1])) {
-            _PyArg_BadArgument("make_exception_with_doc", "argument 'doc'", "str", args[1]);
-            goto exit;
+    if (!PyValue_IsNull(args[1])) {
+        {
+            PyObject *_arg = PyValue_Object(args[1]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("make_exception_with_doc", "argument 'doc'", "str", _arg);
+                goto exit;
+            }
+            doc = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (doc == NULL) {
+                goto exit;
+            }
         }
-        doc = _PyUnicode_AsUTF8NoNUL(args[1]);
-        if (doc == NULL) {
+        if (!--noptargs) {
+            goto skip_optional_pos;
+        }
+    }
+    if (!PyValue_IsNull(args[2])) {
+        base = PyValue_Object(args[2]);
+        if (base == NULL) {
             goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[2]) {
-        base = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    dict = PyValue_Object(args[3]);
+    if (dict == NULL) {
+        goto exit;
     }
-    dict = args[3];
 skip_optional_pos:
-    return_value = _testcapi_make_exception_with_doc_impl(module, name, doc, base, dict);
+    _return_value = _testcapi_make_exception_with_doc_impl(module, name, doc, base, dict);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -192,19 +244,27 @@ PyDoc_STRVAR(_testcapi_exc_set_object__doc__,
 static PyObject *
 _testcapi_exc_set_object_impl(PyObject *module, PyObject *exc, PyObject *obj);
 
-static PyObject *
-_testcapi_exc_set_object(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_exc_set_object(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc;
     PyObject *obj;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("exc_set_object", nargs, 2, 2)) {
         goto exit;
     }
-    exc = args[0];
-    obj = args[1];
-    return_value = _testcapi_exc_set_object_impl(module, exc, obj);
+    exc = PyValue_Object(args[0]);
+    if (exc == NULL) {
+        goto exit;
+    }
+    obj = PyValue_Object(args[1]);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_exc_set_object_impl(module, exc, obj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -222,19 +282,27 @@ static PyObject *
 _testcapi_exc_set_object_fetch_impl(PyObject *module, PyObject *exc,
                                     PyObject *obj);
 
-static PyObject *
-_testcapi_exc_set_object_fetch(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_exc_set_object_fetch(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc;
     PyObject *obj;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("exc_set_object_fetch", nargs, 2, 2)) {
         goto exit;
     }
-    exc = args[0];
-    obj = args[1];
-    return_value = _testcapi_exc_set_object_fetch_impl(module, exc, obj);
+    exc = PyValue_Object(args[0]);
+    if (exc == NULL) {
+        goto exit;
+    }
+    obj = PyValue_Object(args[1]);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_exc_set_object_fetch_impl(module, exc, obj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -252,19 +320,21 @@ static PyObject *
 _testcapi_err_setstring_impl(PyObject *module, PyObject *exc,
                              const char *value, Py_ssize_t value_length);
 
-static PyObject *
-_testcapi_err_setstring(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_err_setstring(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc;
     const char *value;
     Py_ssize_t value_length;
+    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "Oz#:err_setstring",
         &exc, &value, &value_length)) {
         goto exit;
     }
-    return_value = _testcapi_err_setstring_impl(module, exc, value, value_length);
+    _return_value = _testcapi_err_setstring_impl(module, exc, value, value_length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -283,20 +353,22 @@ _testcapi_err_setfromerrnowithfilename_impl(PyObject *module, int error,
                                             PyObject *exc, const char *value,
                                             Py_ssize_t value_length);
 
-static PyObject *
-_testcapi_err_setfromerrnowithfilename(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_err_setfromerrnowithfilename(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int error;
     PyObject *exc;
     const char *value;
     Py_ssize_t value_length;
+    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "iOz#:err_setfromerrnowithfilename",
         &error, &exc, &value, &value_length)) {
         goto exit;
     }
-    return_value = _testcapi_err_setfromerrnowithfilename_impl(module, error, exc, value, value_length);
+    _return_value = _testcapi_err_setfromerrnowithfilename_impl(module, error, exc, value, value_length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -313,22 +385,27 @@ PyDoc_STRVAR(_testcapi_raise_exception__doc__,
 static PyObject *
 _testcapi_raise_exception_impl(PyObject *module, PyObject *exc, int num_args);
 
-static PyObject *
-_testcapi_raise_exception(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_raise_exception(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exc;
     int num_args;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("raise_exception", nargs, 2, 2)) {
         goto exit;
     }
-    exc = args[0];
-    num_args = PyLong_AsInt(args[1]);
+    exc = PyValue_Object(args[0]);
+    if (exc == NULL) {
+        goto exit;
+    }
+    num_args = PyLong_AsIntValue(args[1]);
     if (num_args == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _testcapi_raise_exception_impl(module, exc, num_args);
+    _return_value = _testcapi_raise_exception_impl(module, exc, num_args);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -363,18 +440,20 @@ static PyObject *
 _testcapi_fatal_error_impl(PyObject *module, const char *message,
                            int release_gil);
 
-static PyObject *
-_testcapi_fatal_error(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_fatal_error(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *message;
     int release_gil = 0;
+    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "y|p:fatal_error",
         &message, &release_gil)) {
         goto exit;
     }
-    return_value = _testcapi_fatal_error_impl(module, message, release_gil);
+    _return_value = _testcapi_fatal_error_impl(module, message, release_gil);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -392,21 +471,32 @@ static PyObject *
 _testcapi_set_exc_info_impl(PyObject *module, PyObject *new_type,
                             PyObject *new_value, PyObject *new_tb);
 
-static PyObject *
-_testcapi_set_exc_info(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_set_exc_info(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *new_type;
     PyObject *new_value;
     PyObject *new_tb;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_exc_info", nargs, 3, 3)) {
         goto exit;
     }
-    new_type = args[0];
-    new_value = args[1];
-    new_tb = args[2];
-    return_value = _testcapi_set_exc_info_impl(module, new_type, new_value, new_tb);
+    new_type = PyValue_Object(args[0]);
+    if (new_type == NULL) {
+        goto exit;
+    }
+    new_value = PyValue_Object(args[1]);
+    if (new_value == NULL) {
+        goto exit;
+    }
+    new_tb = PyValue_Object(args[2]);
+    if (new_tb == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_set_exc_info_impl(module, new_type, new_value, new_tb);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -418,7 +508,28 @@ PyDoc_STRVAR(_testcapi_set_exception__doc__,
 "\n");
 
 #define _TESTCAPI_SET_EXCEPTION_METHODDEF    \
-    {"set_exception", (PyCFunction)_testcapi_set_exception, METH_O, _testcapi_set_exception__doc__},
+    {"set_exception", _PyCFunction_CAST(_testcapi_set_exception), METH_O, _testcapi_set_exception__doc__},
+
+static PyObject *
+_testcapi_set_exception_impl(PyObject *module, PyObject *new_exc);
+
+static PyValue
+_testcapi_set_exception(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *new_exc;
+    PyObject *_return_value;
+
+    new_exc = PyValue_Object(arg);
+    if (new_exc == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_set_exception_impl(module, new_exc);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_testcapi_traceback_print__doc__,
 "traceback_print($module, traceback, file, /)\n"
@@ -433,19 +544,27 @@ static PyObject *
 _testcapi_traceback_print_impl(PyObject *module, PyObject *traceback,
                                PyObject *file);
 
-static PyObject *
-_testcapi_traceback_print(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_traceback_print(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *traceback;
     PyObject *file;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("traceback_print", nargs, 2, 2)) {
         goto exit;
     }
-    traceback = args[0];
-    file = args[1];
-    return_value = _testcapi_traceback_print_impl(module, traceback, file);
+    traceback = PyValue_Object(args[0]);
+    if (traceback == NULL) {
+        goto exit;
+    }
+    file = PyValue_Object(args[1]);
+    if (file == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_traceback_print_impl(module, traceback, file);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -464,21 +583,29 @@ static PyObject *
 _testcapi_unstable_exc_prep_reraise_star_impl(PyObject *module,
                                               PyObject *orig, PyObject *excs);
 
-static PyObject *
-_testcapi_unstable_exc_prep_reraise_star(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_unstable_exc_prep_reraise_star(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *orig;
     PyObject *excs;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unstable_exc_prep_reraise_star", nargs, 2, 2)) {
         goto exit;
     }
-    orig = args[0];
-    excs = args[1];
-    return_value = _testcapi_unstable_exc_prep_reraise_star_impl(module, orig, excs);
+    orig = PyValue_Object(args[0]);
+    if (orig == NULL) {
+        goto exit;
+    }
+    excs = PyValue_Object(args[1]);
+    if (excs == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_unstable_exc_prep_reraise_star_impl(module, orig, excs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=93dfd0e1ca2253b6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=834dddf3e89b2150 input=a9049054013a1b77]*/

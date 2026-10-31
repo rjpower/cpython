@@ -398,7 +398,7 @@ class TestDict(TestCase):
     def test_racing_dict_update_and_method_lookup(self):
         # gh-144295: test race between dict modifications and method lookups.
         # Uses BytesIO because the race requires a type without Py_TPFLAGS_INLINE_VALUES
-        # for the _PyDict_GetMethodStackRef code path.
+        # for the _PyDict_GetMethodValue code path.
         import io
         obj = io.BytesIO()
 

@@ -1,4 +1,5 @@
-// Test wrappers for the per-type lookup cache (pycore_typecache.h).
+// Test wrappers for the per-type lookup cache (pycore_typecache.h) and the
+// lookup plans it holds (pycore_lookup.h).
 //
 // Insertion is exercised indirectly through normal attribute access (which
 // calls _PyType_Lookup); only Lookup and Invalidate need direct wrappers.
@@ -6,9 +7,11 @@
 #include "parts.h"
 
 #include "pycore_critical_section.h"
+#include "pycore_pymem.h"         // _PyMem_SizeClass()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectSteal()
+#include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
+#include "pycore_lookup.h"        // _PyShape_LookupPlan()
 
 
 static int
@@ -48,37 +51,342 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
     if (name == NULL) {
         return NULL;
     }
+    PyTypeObject *type = (PyTypeObject *)type_obj;
     struct _PyTypeCacheLookupResult r =
-        _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
+        _PyTypeCache_Lookup(type, _Py_TYPE_ROOT_SHAPE(type), name);
     Py_DECREF(name);
     PyObject *value;
-    if (PyStackRef_IsNull(r.value)) {
+    if (PyValue_IsNull(r.plan.value)) {
         value = Py_NewRef(Py_None);
     }
     else {
-        value = PyStackRef_AsPyObjectSteal(r.value);
+        value = PyValue_Object(r.plan.value);
+        if (value == NULL) {
+            return NULL;
+        }
     }
     return Py_BuildValue("(iNk)",
                          r.cache_hit, value,
                          (unsigned long)r.version_tag);
 }
 
-static PyObject *
-type_cache_invalidate(PyObject *Py_UNUSED(self), PyObject *type_obj)
+static PyValue
+type_cache_invalidate(PyObject *Py_UNUSED(self), PyValue arg)
 {
+    PyObject *type_obj = PyValue_Object(arg);
+    if (type_obj == NULL) {
+        return PyValue_NULL;
+    }
     if (require_type(type_obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_BEGIN_CRITICAL_SECTION_MUTEX(&_PyInterpreterState_GET()->types.mutex);
     _PyTypeCache_Invalidate((PyTypeObject *)type_obj);
     Py_END_CRITICAL_SECTION();
+    return PyValue_FromObject(Py_None);
+}
+
+static PyObject *
+value_or_none(PyValue v)
+{
+    return PyValue_IsNull(v) ? Py_NewRef(Py_None) : PyValue_Object(v);
+}
+
+static int
+ready_name(PyObject *obj, PyObject **name)
+{
+    if (!PyUnicode_Check(*name)) {
+        PyErr_SetString(PyExc_TypeError, "name must be a str");
+        return -1;
+    }
+    if (!_PyType_IsReady(Py_TYPE(obj)) && PyType_Ready(Py_TYPE(obj)) < 0) {
+        return -1;
+    }
+    // Not interned here: a non-interned name must stay uncacheable.
+    Py_INCREF(*name);
+    return 0;
+}
+
+// lookup_plan(obj, name) -> (kind, fallback, slot_kind, cacheable, member,
+//                            type_version, offset, value_or_None)
+static PyObject *
+lookup_plan(PyObject *Py_UNUSED(self), PyObject *args)
+{
+    PyObject *obj, *name;
+    if (!PyArg_ParseTuple(args, "OO", &obj, &name) || ready_name(obj, &name) < 0) {
+        return NULL;
+    }
+    _PyLookupPlan plan;
+    _PyShape_LookupPlan(_PyObject_SHAPE(obj), name, &plan);
+    Py_DECREF(name);
+    PyObject *value = value_or_none(plan.value);
+    if (value == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(ssiiikkN)",
+                         _PyLookup_KindName(plan.kind),
+                         _PyLookup_KindName(plan.fallback),
+                         (int)plan.slot_kind,
+                         (plan.flags & _Py_LOOKUP_CACHEABLE) != 0,
+                         (plan.flags & _Py_LOOKUP_MEMBER) != 0,
+                         (unsigned long)plan.type_version,
+                         (unsigned long)plan.offset, value);
+}
+
+// lookup_store_plan(obj, name, delete=False[, value]) -> (outcome, cacheable,
+//     member, offset, has_shape_to, slot_kind), for a store of VALUE's kind
+//     (BOXED if omitted)
+static PyObject *
+lookup_store_plan(PyObject *Py_UNUSED(self), PyObject *args)
+{
+    PyObject *obj, *name, *value = NULL;
+    int delete = 0;
+    if (!PyArg_ParseTuple(args, "OO|pO", &obj, &name, &delete, &value)
+        || ready_name(obj, &name) < 0)
+    {
+        return NULL;
+    }
+    uint8_t value_kind = value == NULL ? _Py_SLOT_BOXED
+                         : _PyValue_SlotKind(PyValue_FromObject(value));
+    _PyStorePlan plan;
+    _PyShape_LookupStorePlan(_PyObject_SHAPE(obj), name,
+                             delete ? _Py_STORE_DELETE : _Py_STORE_SET,
+                             value_kind, &plan);
+    Py_DECREF(name);
+    return Py_BuildValue("(siikii)",
+                         _PyLookup_OutcomeName(plan.outcome),
+                         (plan.flags & _Py_LOOKUP_CACHEABLE) != 0,
+                         (plan.flags & _Py_LOOKUP_MEMBER) != 0,
+                         (unsigned long)plan.offset,
+                         plan.shape_to != NULL,
+                         (int)plan.slot_kind);
+}
+
+// shape(obj) -> (type, index_or_None, ((name, kind), ...)); holes are None
+static PyObject *
+shape(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    _PyShape *sh = _PyObject_SHAPE(obj);
+    int index = _PyShape_Index(sh);
+    PyObject *slots = PyTuple_New(sh->nslots);
+    if (slots == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < sh->nslots; i++) {
+        PyObject *item = sh->slots[i].name == NULL
+            ? Py_NewRef(Py_None)
+            : Py_BuildValue("(Oi)", sh->slots[i].name, (int)sh->slots[i].kind);
+        if (item == NULL) {
+            Py_DECREF(slots);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(slots, i, item);
+    }
+    if (index == _Py_SHAPE_INDEX_DICT) {
+        return Py_BuildValue("(OON)", (PyObject *)sh->type, Py_None, slots);
+    }
+    return Py_BuildValue("(OiN)", (PyObject *)sh->type, index, slots);
+}
+
+// shape_address(obj) -> the address of obj's shape, and shape_version(obj)
+// -> its version (note 09 section 5: a generalisation renews it)
+static PyObject *
+shape_address(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    return PyLong_FromVoidPtr(_PyObject_SHAPE(obj));
+}
+
+static PyObject *
+shape_version(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    return PyLong_FromUnsignedLong(_PyObject_SHAPE(obj)->type_version);
+}
+
+// shape_generalisations() -> (generalisations, shapes re-versioned)
+static PyObject *
+shape_generalisations(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
+{
+    uint64_t n, reversioned;
+    _PyShape_GeneraliseCounts(&n, &reversioned);
+    return Py_BuildValue("(KK)", (unsigned long long)n,
+                         (unsigned long long)reversioned);
+}
+
+// dict_mode_counts() -> None without Py_STATS, else (enabled, counts): whether
+// the interpreter collects statistics, and its entries into dictionary mode
+// by reason
+static PyObject *
+dict_mode_counts(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
+{
+#ifdef Py_STATS
+    static const char *const names[_Py_DICT_MODE_NREASONS] = {
+        [_Py_DICT_MODE_STR_NAME] = "str_name",
+        [_Py_DICT_MODE_CAPACITY] = "capacity",
+        [_Py_DICT_MODE_SHAPE_LIMIT] = "shape_limit",
+        [_Py_DICT_MODE_CLASS_ASSIGNED] = "class_assigned",
+        [_Py_DICT_MODE_DICT_ASSIGNED] = "dict_assigned",
+        [_Py_DICT_MODE_DICT_DELETED] = "dict_deleted",
+        [_Py_DICT_MODE_ON_REQUEST] = "on_request",
+    };
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    PyStats *stats = interp->pystats_struct;
+    PyObject *counts = PyDict_New();
+    if (counts == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < _Py_DICT_MODE_NREASONS; i++) {
+        uint64_t n = stats == NULL ? 0 : stats->object_stats.dict_mode[i];
+        PyObject *v = PyLong_FromUnsignedLongLong(n);
+        if (v == NULL || PyDict_SetItemString(counts, names[i], v) < 0) {
+            Py_XDECREF(v);
+            Py_DECREF(counts);
+            return NULL;
+        }
+        Py_DECREF(v);
+    }
+    return Py_BuildValue("(NN)", PyBool_FromLong(interp->pystats_enabled),
+                         counts);
+#else
     Py_RETURN_NONE;
+#endif
+}
+
+// set_next_type_version(tag) -> the interpreter's next heap-type tag, then
+// sets it; 0 means the tags are exhausted
+static PyValue
+set_next_type_version(PyObject *Py_UNUSED(self), PyValue arg)
+{
+    // METH_O passes the value: a small int is inline.
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    unsigned long tag = PyLong_AsUnsignedLong(arg_o);
+    if (tag == (unsigned long)-1 && PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    unsigned int old = interp->types.next_version_tag;
+    interp->types.next_version_tag = (unsigned int)tag;
+    return PyValue_FromResult(PyLong_FromUnsignedLong(old));
+}
+
+// type_slot_capacity(type) -> the slots of each instance, or None for a type
+// without inline values
+static PyObject *
+type_slot_capacity(PyObject *Py_UNUSED(self), PyObject *type)
+{
+    if (require_type(type) < 0) {
+        return NULL;
+    }
+    PyTypeObject *tp = (PyTypeObject *)type;
+    if (!(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        Py_RETURN_NONE;
+    }
+    return PyLong_FromLong(_PyType_Shapes(tp)->capacity);
+}
+
+// mem_size_class(n) -> the bytes of the block a request of n bytes gets,
+// as the capacity rule counts them (_PyMem_SizeClass())
+static PyValue
+mem_size_class(PyObject *Py_UNUSED(self), PyValue arg)
+{
+    // METH_O passes the value: a small int is inline.
+    PyObject *arg_o = PyValue_Object(arg);
+    if (arg_o == NULL) {
+        return PyValue_NULL;
+    }
+    Py_ssize_t n = PyLong_AsSsize_t(arg_o);
+    if (n < 0) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_ValueError, "negative size");
+        }
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyLong_FromSize_t(_PyMem_SizeClass((size_t)n)));
+}
+
+// object_slots(obj) -> the values of obj's attribute slots, NULL as None:
+// all of them in shape mode, slot 0 alone in dictionary mode, whose other
+// slots may lie outside the object after a __class__ assignment
+static PyObject *
+object_slots(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    PyTypeObject *tp = Py_TYPE(obj);
+    if (!(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        PyErr_SetString(PyExc_TypeError, "no attribute slots");
+        return NULL;
+    }
+    int n = _PyShape_IsDictMode(_PyObject_SHAPE(obj))
+            ? 1 : _PyType_Shapes(tp)->capacity;
+    PyValue *slots = _PyObject_Slots(obj);
+    PyObject *res = PyTuple_New(n);
+    if (res == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < n; i++) {
+        PyValue v = PyValue_IsNull(slots[i]) ? PyValue_FromObject(Py_None)
+                                             : slots[i];
+        PyTuple_SET_VALUE(res, i, v);
+    }
+    return res;
+}
+
+// object_dict_ptr(obj) -> (has_pointer, dict_or_None, error_pending):
+// _PyObject_GetDictPtr(), which sets no exception
+static PyObject *
+object_dict_ptr(PyObject *Py_UNUSED(self), PyObject *obj)
+{
+    PyObject **dictptr = _PyObject_GetDictPtr(obj);
+    int pending = PyErr_Occurred() != NULL;
+    PyErr_Clear();
+    PyObject *dict = dictptr != NULL && *dictptr != NULL ? *dictptr : Py_None;
+    return Py_BuildValue("(OOO)", dictptr != NULL ? Py_True : Py_False,
+                         dict, pending ? Py_True : Py_False);
+}
+
+// set_conversion_collect(flag) -> the old flag: whether conversion to
+// dictionary mode collects just before it publishes the dict
+static PyObject *
+set_conversion_collect(PyObject *Py_UNUSED(self), PyObject *flag)
+{
+    int value = PyObject_IsTrue(flag);
+    if (value < 0) {
+        return NULL;
+    }
+    int old = _PyShape_ConversionCollect;
+    _PyShape_ConversionCollect = value;
+    return PyBool_FromLong(old);
+}
+
+// type_cache_size(type) -> bytes of the type's cache table
+static PyObject *
+type_cache_size(PyObject *Py_UNUSED(self), PyObject *type)
+{
+    if (require_type(type) < 0) {
+        return NULL;
+    }
+    return PyLong_FromSize_t(_PyTypeCache_SizeOf((PyTypeObject *)type));
 }
 
 
 static PyMethodDef test_methods[] = {
     {"type_cache_lookup", type_cache_lookup, METH_VARARGS},
-    {"type_cache_invalidate", type_cache_invalidate, METH_O},
+    {"type_cache_invalidate", _PyCFunction_CAST(type_cache_invalidate), METH_O},
+    {"lookup_plan", lookup_plan, METH_VARARGS},
+    {"lookup_store_plan", lookup_store_plan, METH_VARARGS},
+    {"shape", shape, METH_O},
+    {"shape_address", shape_address, METH_O},
+    {"shape_version", shape_version, METH_O},
+    {"shape_generalisations", shape_generalisations, METH_NOARGS},
+    {"dict_mode_counts", dict_mode_counts, METH_NOARGS},
+    {"set_next_type_version", _PyCFunction_CAST(set_next_type_version), METH_O},
+    {"type_cache_size", type_cache_size, METH_O},
+    {"type_slot_capacity", type_slot_capacity, METH_O},
+    {"mem_size_class", _PyCFunction_CAST(mem_size_class), METH_O},
+    {"object_slots", object_slots, METH_O},
+    {"set_conversion_collect", set_conversion_collect, METH_O},
+    {"object_dict_ptr", object_dict_ptr, METH_O},
     {NULL},
 };
 

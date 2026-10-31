@@ -334,6 +334,28 @@ class ClinicWholeFileTest(TestCase):
         """
         self.expect_failure(block, err, lineno=8)
 
+    def test_value_return_custom_conversion_fn(self):
+        # A long-family return converter with its own object conversion and
+        # none for a value keeps its conversion in a parser which returns a
+        # value.
+        block = """
+            /*[python input]
+            class mine_return_converter(long_return_converter):
+                conversion_fn = 'mine_from_long'
+            [python start generated code]*/
+            /*[clinic input]
+            output preset block
+            module m
+            m.f -> mine
+                a: object
+                /
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("PyValue_FromResult(mine_from_long(_return_value))",
+                      generated)
+        self.assertNotIn("PyValue_FromLongLong", generated)
+
     def test_ambiguous_group_and_optional_parameters(self):
         err = ("Function 'my_test_func' has an ambiguous group configuration: "
                "a call with 2 argument(s) can be parsed in more than one way.")
@@ -477,11 +499,35 @@ class ClinicWholeFileTest(TestCase):
             "\\n");
 
             #define FN_METHODDEF    \\
-                {"fn", (PyCFunction)fn, METH_O, fn__doc__},
+                {"fn", _PyCFunction_CAST(fn), METH_O, fn__doc__},
 
             static PyObject *
-            fn(PyObject *module, PyObject *a)
-            /*[clinic end generated code: output=be6798b148ab4e53 input=524ce2e021e4eba6]*/
+            fn_impl(PyObject *module, PyObject *a);
+
+            static PyValue
+            fn(PyObject *module, PyValue arg);
+
+            static PyValue
+            fn(PyObject *module, PyValue arg)
+            {
+                PyValue return_value = PyValue_NULL;
+                PyObject *a;
+                PyObject *_return_value;
+
+                a = PyValue_Object(arg);
+                if (a == NULL) {
+                    goto exit;
+                }
+                _return_value = fn_impl(module, a);
+                return_value = PyValue_FromResult(_return_value);
+
+            exit:
+                return return_value;
+            }
+
+            static PyObject *
+            fn_impl(PyObject *module, PyObject *a)
+            /*[clinic end generated code: output=55b7b756d8b26545 input=524ce2e021e4eba6]*/
         """)
         block = dedent("""
             /*[clinic input]
@@ -828,18 +874,19 @@ class ClinicWholeFileTest(TestCase):
             #endif
         """
         generated = self.clinic.parse(dedent(block))
+        # tp_iternext returns the item as a value.
         self.assertIn(dedent("""
-            static PyObject *
+            static PyValue
             Foo_next(PyObject *self)
             {
                 return Foo_next_impl((FooObject *)self);
             }
         """), generated)
         self.assertIn(dedent("""
-            static PyObject *
+            static PyValue
             foo_iternext(PyObject *self)
             {
-                PyObject *return_value = NULL;
+                PyValue return_value = PyValue_NULL;
 
                 Py_BEGIN_CRITICAL_SECTION(self);
                 return_value = foo_iternext_impl((FooObject *)self);
@@ -848,11 +895,55 @@ class ClinicWholeFileTest(TestCase):
                 return return_value;
             }
         """), generated)
-        self.assertIn("#if defined(CONDITION)\n\nstatic PyObject *\n"
+        self.assertIn("#if defined(CONDITION)\n\nstatic PyValue\n"
                       "foo_iternext_cond_impl(FooObject *self);", generated)
         # A slot function is not stored in a PyMethodDef.
         for text in "METHODDEF", "PyDoc_", "#ifndef":
             self.assertNotIn(text, generated)
+
+    def test_gc_precise(self):
+        block = """
+            /*[clinic input]
+            output everything block
+            module m
+            [clinic start generated code]*/
+            /*[clinic input]
+            @gc_precise
+            m.f
+
+                a: object = None
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        # The parser and the impl are both precise, and the parser anchors
+        # self in a span from entry to its one exit.
+        self.assertIn("Py_GC_PRECISE static PyValue\nm_f(", generated)
+        self.assertIn("Py_GC_PRECISE static PyObject *\nm_f_impl(", generated)
+        self.assertIn(
+            "    _PyThreadState_PushValueSpan(_PyThreadState_GET(), "
+            "&_gc_span, _gc_slots);\n"
+            "    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);\n"
+            "\n"
+            "    args = _PyArg_UnpackKeywords(", generated)
+        self.assertIn(
+            "exit:\n"
+            "    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);\n"
+            "\n"
+            "    return return_value;\n", generated)
+
+    def test_gc_precise_needs_cleanup_block(self):
+        # A parser with no arguments returns the impl's result directly.
+        block = """
+            /*[clinic input]
+            module m
+            [clinic start generated code]*/
+            /*[clinic input]
+            @gc_precise
+            m.f
+            [clinic start generated code]*/
+        """
+        self.expect_failure(block, "@gc_precise needs a parser that returns "
+                            "through its cleanup block")
 
     def test_slot_with_parameters_and_return_type(self):
         # Check the machinery with slots which take arguments or return
@@ -971,8 +1062,8 @@ class ClinicWholeFileTest(TestCase):
                       "|| defined(FOO_PROPERTY_SETTER)",
                       generated)
         self.assertIn('#  define FOO_PROPERTY_GETSETDEF {"property", '
-                      '(getter)FOO_PROPERTY_GETTER, '
-                      '(setter)FOO_PROPERTY_SETTER, FOO_PROPERTY_DOCSTR},',
+                      'FOO_PROPERTY_GETTER, '
+                      'FOO_PROPERTY_SETTER, FOO_PROPERTY_DOCSTR},',
                       generated)
 
     def test_getset_several_implementations(self):
@@ -1048,7 +1139,7 @@ class ClinicWholeFileTest(TestCase):
             [clinic start generated code]*/
         """
         generated = self.clinic.parse(dedent(block))
-        self.assertIn("if (arg == NULL) {", generated)
+        self.assertIn("if (PyValue_IsNull(arg)) {", generated)
         self.assertIn("\"attribute 'property' of '%.100s' objects "
                       "cannot be deleted\"", generated)
 
@@ -1068,7 +1159,43 @@ class ClinicWholeFileTest(TestCase):
             [clinic start generated code]*/
         """
         generated = self.clinic.parse(dedent(block))
-        self.assertNotIn("if (arg == NULL) {", generated)
+        self.assertNotIn("if (PyValue_IsNull(arg)) {", generated)
+        # The value is converted, boxing included, only if the attribute
+        # is not deleted, so a deletion reaches the impl as NULL.
+        self.assertIn("    if (!PyValue_IsNull(arg)) {\n"
+                      "        value = PyValue_Object(arg);\n", generated)
+
+    def test_setter_value(self):
+        # The setter takes a value.  A converter with a value form reads it
+        # without a box; any other converter boxes it once and converts
+        # the box as an object.
+        block = """
+            /*[clinic input]
+            output everything block
+            class Foo "FooObject *" "&Foo_Type"
+            [clinic start generated code]*/
+            /*[clinic input]
+            @setter
+            Foo.num
+                value: int
+            [clinic start generated code]*/
+            /*[clinic input]
+            @setter
+            Foo.flags
+                value: unsigned_int(bitwise=True)
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("Foo_num_set(PyObject *self, PyValue arg, "
+                      "void *Py_UNUSED(context))", generated)
+        self.assertIn("value = PyLong_AsIntValue(arg);", generated)
+        self.assertIn("Foo_flags_set(PyObject *self, PyValue arg, "
+                      "void *Py_UNUSED(context))", generated)
+        self.assertIn("        PyObject *_arg = PyValue_Object(arg);\n"
+                      "        if (_arg == NULL) {\n"
+                      "            goto exit;\n"
+                      "        }\n", generated)
+        self.assertEqual(generated.count("PyValue_Object("), 1)
 
     def test_getset_duplicate(self):
         # Only a setter defines the new value.
@@ -1120,8 +1247,52 @@ class ClinicWholeFileTest(TestCase):
         # C basename.
         generated = self.clinic.parse(dedent(block))
         self.assertIn('#define FOO_PROPERTY_GETSETDEF {"property", '
-                      '(getter)foo_get_get, (setter)foo_set_set, NULL},',
+                      'foo_get_get, foo_set_set, NULL},',
                       generated)
+
+    def test_getter_returns_value(self):
+        # A getter returns a value: an object from the impl is converted,
+        # a return converter builds the number as a value, and a "value"
+        # return converter passes the impl's value through.
+        block = """
+            /*[clinic input]
+            output everything block
+            output methoddef_ifndef buffer
+            class Foo "FooObject *" "&Foo_Type"
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.obj
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.num -> int
+            [clinic start generated code]*/
+            /*[clinic input]
+            @getter
+            Foo.val -> value
+            [clinic start generated code]*/
+            /*[clinic input]
+            dump buffer
+            [clinic start generated code]*/
+        """
+        generated = self.clinic.parse(dedent(block))
+        self.assertIn("static PyValue\n"
+                      "Foo_obj_get(PyObject *self, void *Py_UNUSED(context))\n"
+                      "{\n"
+                      "    return PyValue_FromResult("
+                      "Foo_obj_get_impl((FooObject *)self));\n"
+                      "}\n",
+                      generated)
+        self.assertIn("return_value = PyValue_FromLongLong("
+                      "(long long)_return_value);", generated)
+        self.assertNotIn("PyLong_FromLong", generated)
+        self.assertIn("static PyValue\nFoo_val_get_impl(FooObject *self)",
+                      generated)
+        self.assertIn("return_value = Foo_val_get_impl((FooObject *)self);",
+                      generated)
+        self.assertIn('#define FOO_OBJ_GETSETDEF {"obj", Foo_obj_get, '
+                      'NULL, NULL},', generated)
 
 
 class ParseFileUnitTest(TestCase):
@@ -3347,7 +3518,7 @@ class ClinicParserTest(TestCase):
         self.assertIs(function.kind, FunctionKind.SLOT)
         self.assertIs(function.slot, SLOTS["__next__"])
         self.assertEqual(function.c_basename, "Foo_next")
-        self.assertEqual(function.return_converter.type, "PyObject *")
+        self.assertEqual(function.return_converter.type, "PyValue")
         self.assertEqual(list(function.parameters), ["self"])
 
     def test_slot_coexist_is_a_method(self):
@@ -4004,7 +4175,7 @@ class ClinicExternalTest(TestCase):
             # Verify by checking the checksum.
             checksum = (
                 "/*[clinic end generated code: "
-                "output=a2957bc4d43a3c2f input=9543a8d2da235301]*/\n"
+                "output=998da0cb5ffd0da2 input=9543a8d2da235301]*/\n"
             )
             with open(fn, encoding='utf-8') as f:
                 generated = f.read()
@@ -4287,6 +4458,7 @@ class ClinicExternalTest(TestCase):
             "unsigned_long",
             "unsigned_long_long",
             "unsigned_short",
+            "value",
         )
         finale = dedent("""
             Return converters:
@@ -4301,6 +4473,7 @@ class ClinicExternalTest(TestCase):
                 size_t()
                 unsigned_int()
                 unsigned_long()
+                value()
 
             All converters also accept (c_default=None, py_default=None, annotation=None).
             All return converters also accept (py_default=None).
@@ -4587,11 +4760,35 @@ class ClinicExternalTest(TestCase):
             "\\n");
 
             #define FUNC_METHODDEF    \\
-                {"func", (PyCFunction)func, METH_O, func__doc__},
+                {"func", _PyCFunction_CAST(func), METH_O, func__doc__},
 
             static PyObject *
-            func(PyObject *module, PyObject *a)
-            /*[clinic end generated code: output=3dde2d13002165b9 input=a9049054013a1b77]*/
+            func_impl(PyObject *module, PyObject *a);
+
+            static PyValue
+            func(PyObject *module, PyValue arg);
+
+            static PyValue
+            func(PyObject *module, PyValue arg)
+            {
+                PyValue return_value = PyValue_NULL;
+                PyObject *a;
+                PyObject *_return_value;
+
+                a = PyValue_Object(arg);
+                if (a == NULL) {
+                    goto exit;
+                }
+                _return_value = func_impl(module, a);
+                return_value = PyValue_FromResult(_return_value);
+
+            exit:
+                return return_value;
+            }
+
+            static PyObject *
+            func_impl(PyObject *module, PyObject *a)
+            /*[clinic end generated code: output=6cbdfd8fe90f0746 input=a9049054013a1b77]*/
         """)
         with os_helper.temp_dir() as tmp_dir:
             in_fn = os.path.join(tmp_dir, "test.c")
@@ -5250,13 +5447,6 @@ class ClinicFunctionalTest(unittest.TestCase):
 
     def test_gh_32092_kw_pass(self):
         ac_tester.gh_32092_kw_pass(1, 2, 3)
-
-    def test_gh_99233_refcount(self):
-        arg = '*A unique string is not referenced by anywhere else.*'
-        arg_refcount_origin = sys.getrefcount(arg)
-        ac_tester.gh_99233_refcount(arg)
-        arg_refcount_after = sys.getrefcount(arg)
-        self.assertEqual(arg_refcount_origin, arg_refcount_after)
 
     def test_gh_99240_double_free(self):
         err = re.escape(

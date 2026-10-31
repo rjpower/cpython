@@ -279,14 +279,17 @@ PyAPI_FUNC(PyObject *) PyObject_CallMethodObjArgs(
 PyAPI_FUNC(Py_ssize_t) PyVectorcall_NARGS(size_t nargsf);
 
 /* Call "callable" (which must support vectorcall) with positional arguments
-   "tuple" and keyword arguments "dict". "dict" may also be NULL */
-PyAPI_FUNC(PyObject *) PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *dict);
+   "tuple" and keyword arguments "dict". "dict" may also be NULL.  It is a
+   tp_call function, so the result is a value. */
+PyAPI_FUNC(PyValue) PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *dict);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030C0000
 #define PY_VECTORCALL_ARGUMENTS_OFFSET \
     (_Py_STATIC_CAST(size_t, 1) << (8 * sizeof(size_t) - 1))
 
-/* Perform a PEP 590-style vector call on 'callable' */
+/* Perform a PEP 590-style vector call on 'callable'.  The arguments are
+   canonicalised and the result boxed: PyObject_VectorcallValue() is the
+   call on values. */
 PyAPI_FUNC(PyObject *) PyObject_Vectorcall(
     PyObject *callable,
     PyObject *const *args,

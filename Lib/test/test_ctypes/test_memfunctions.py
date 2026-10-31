@@ -1,6 +1,5 @@
 import sys
 import unittest
-from test import support
 from ctypes import (POINTER, sizeof, cast,
                     create_string_buffer, string_at,
                     create_unicode_buffer, wstring_at,
@@ -57,7 +56,6 @@ class MemFunctionsTest(unittest.TestCase):
         self.assertEqual(cast(a, POINTER(c_byte))[:7:7],
                              [97])
 
-    @support.refcount_test
     def test_string_at(self):
         s = string_at(b"foo bar")
         self.assertTrue(s, "foo bar")

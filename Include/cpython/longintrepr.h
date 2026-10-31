@@ -118,9 +118,14 @@ Py_DEPRECATED(3.14) PyAPI_FUNC(PyLongObject*) _PyLong_FromDigits(
 #define _PyLong_NON_SIZE_BITS 3
 
 
+/* The type of op, read without Py_TYPE(), which does not take a const
+   pointer. */
+#define _PyLong_CONST_TYPE(op) \
+    (((const _PyShape *)((op)->ob_base.ob_header & _Py_HEADER_SHAPE_MASK))->type)
+
 static inline int
 _PyLong_IsCompact(const PyLongObject* op) {
-    assert(PyType_HasFeature(op->ob_base.ob_type, Py_TPFLAGS_LONG_SUBCLASS));
+    assert(PyType_HasFeature(_PyLong_CONST_TYPE(op), Py_TPFLAGS_LONG_SUBCLASS));
     return op->long_value.lv_tag < (2 << _PyLong_NON_SIZE_BITS);
 }
 
@@ -130,7 +135,7 @@ static inline Py_ssize_t
 _PyLong_CompactValue(const PyLongObject *op)
 {
     Py_ssize_t sign;
-    assert(PyType_HasFeature(op->ob_base.ob_type, Py_TPFLAGS_LONG_SUBCLASS));
+    assert(PyType_HasFeature(_PyLong_CONST_TYPE(op), Py_TPFLAGS_LONG_SUBCLASS));
     assert(PyUnstable_Long_IsCompact(op));
     sign = 1 - (op->long_value.lv_tag & _PyLong_SIGN_MASK);
     if (sign == 0) {

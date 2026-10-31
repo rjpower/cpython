@@ -496,6 +496,34 @@ garbage collection runs.
    .. versionadded:: 3.10
 
 
+.. c:function:: int PyGC_AddRoot(PyObject **ref)
+
+   Register *ref*, the address of a :c:expr:`PyObject*` variable that no
+   :c:member:`~PyTypeObject.tp_traverse` visits, such as a field of memory
+   from :c:func:`PyMem_Malloc`, as a root: the object it points to when a
+   collection runs, if any, stays alive.  Such an object would otherwise be
+   freed.
+
+   The caller must have an :term:`attached thread state`.
+   Return ``0`` on success, or ``-1`` with :exc:`MemoryError` set.
+
+
+.. c:function:: void PyGC_RemoveRoot(PyObject **ref)
+
+   Remove the root that :c:func:`PyGC_AddRoot` registered for *ref*.  Call it
+   before the memory that holds *ref* is freed.
+
+   The caller must have an :term:`attached thread state`.
+
+
+.. c:macro:: Py_HAVE_PYGC_ADDROOT
+
+   Defined in every build that has :c:func:`PyGC_AddRoot` and
+   :c:func:`PyGC_RemoveRoot`, so that code that also builds against other
+   interpreters can register its roots wherever the functions exist, and
+   not only under ``--with-gc``.
+
+
 Querying Garbage Collector State
 --------------------------------
 

@@ -170,13 +170,6 @@ struct _ts {
      */
     unsigned long native_thread_id;
 
-    /* List of objects that still need to be cleaned up, singly linked
-     * via their gc headers' gc_next pointers. The list is populated by
-     * _PyTrash_thread_deposit_object and cleaned up by
-     * _PyTrash_thread_destroy_chain.
-     */
-    PyObject *delete_later;
-
     /* Tagged pointer to top-most critical section, or zero if there is no
      * active critical section. Critical sections are only used in
      * `--disable-gil` builds (i.e., when Py_GIL_DISABLED is defined to 1). In the
@@ -195,6 +188,9 @@ struct _ts {
     /* Unique thread state id. */
     uint64_t id;
 
+    /* Each chunk holds two stacks that grow towards each other: the value
+     * stack of frame slots from the start, up to datastack_top, and the
+     * frame stack of frame headers from the end, down to datastack_limit. */
     _PyStackChunk *datastack_chunk;
     PyObject **datastack_top;
     PyObject **datastack_limit;
@@ -214,11 +210,6 @@ struct _ts {
 
     /* The thread's exception stack entry.  (Always the last entry.) */
     _PyErr_StackItem exc_state;
-
-    PyObject *current_executor;
-
-    /* Internal to the JIT */
-    struct _PyExitData *jit_exit;
 
     uint64_t dict_global_version;
 
@@ -326,7 +317,9 @@ PyAPI_FUNC(void) PyThreadState_DeleteCurrent(void);
 
 /* Frame evaluation API */
 
-typedef PyObject* (*_PyFrameEvalFunction)(PyThreadState *tstate, struct _PyInterpreterFrame *, int);
+/* A frame evaluation function returns the frame's result as a value, or
+   PyValue_NULL with an exception set. */
+typedef PyValue (*_PyFrameEvalFunction)(PyThreadState *tstate, struct _PyInterpreterFrame *, int);
 
 PyAPI_FUNC(_PyFrameEvalFunction) _PyInterpreterState_GetEvalFrameFunc(
     PyInterpreterState *interp);

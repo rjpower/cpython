@@ -62,8 +62,8 @@ a CodecInfo object).
 [clinic start generated code]*/
 
 static PyObject *
-_codecs_register(PyObject *module, PyObject *search_function)
-/*[clinic end generated code: output=d1bf21e99db7d6d3 input=2321d8c8c0420dfc]*/
+_codecs_register_impl(PyObject *module, PyObject *search_function)
+/*[clinic end generated code: output=1bf54fb56e08273c input=2321d8c8c0420dfc]*/
 {
     if (PyCodec_Register(search_function))
         return NULL;
@@ -82,8 +82,8 @@ If the search function is not registered, do nothing.
 [clinic start generated code]*/
 
 static PyObject *
-_codecs_unregister(PyObject *module, PyObject *search_function)
-/*[clinic end generated code: output=1f0edee9cf246399 input=dd7c004c652d345e]*/
+_codecs_unregister_impl(PyObject *module, PyObject *search_function)
+/*[clinic end generated code: output=152ad4557d970e0b input=dd7c004c652d345e]*/
 {
     if (PyCodec_Unregister(search_function) < 0) {
         return NULL;

@@ -174,6 +174,12 @@ is_frame_valid(
     if ((void*)code_object_addr == NULL) {
         return 0;  // Frame being cleared
     }
+    // An executable is always an object pointer. Anything else, such as an
+    // inline int, means the sample read a frame that had been popped and
+    // whose memory now holds another frame's stack values.
+    if (code_object_addr >= _PyValue_PTR_LIMIT) {
+        return 0;
+    }
 
     void* frame = (void*)frame_addr;
 
@@ -208,21 +214,14 @@ parse_frame_buffer(
     }
 
     uintptr_t instruction_pointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.instr_ptr);
-
-    // Get tlbc_index for free threading builds
-    int32_t tlbc_index = 0;
-#ifdef Py_GIL_DISABLED
-    if (unwinder->debug_offsets.interpreter_frame.tlbc_index != 0) {
-        tlbc_index = GET_MEMBER(int32_t, frame, unwinder->debug_offsets.interpreter_frame.tlbc_index);
-    }
-#endif
+    uintptr_t ir_words = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.ir_words);
 
     *address_of_code_object = code_object;
 
     CodeObjectContext code_ctx = {
         .code_addr = code_object,
         .instruction_pointer = instruction_pointer,
-        .tlbc_index = tlbc_index,
+        .ir_words = ir_words,
     };
     return parse_code_object(unwinder, result, &code_ctx);
 }
@@ -258,7 +257,6 @@ parse_frame_from_chunks(
     PyObject **result,
     uintptr_t address,
     uintptr_t *previous_frame,
-    uintptr_t *stackpointer,
     StackChunkList *chunks
 ) {
     void *frame_ptr = find_frame_in_chunks(chunks, address);
@@ -270,7 +268,6 @@ parse_frame_from_chunks(
 
     char *frame = (char *)frame_ptr;
     *previous_frame = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.previous);
-    *stackpointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.stackpointer);
     uintptr_t code_object = GET_MEMBER_NO_TAG(uintptr_t, frame_ptr, unwinder->debug_offsets.interpreter_frame.executable);
     int frame_valid = is_frame_valid(unwinder, (uintptr_t)frame, code_object);
     if (frame_valid != 1) {
@@ -278,19 +275,12 @@ parse_frame_from_chunks(
     }
 
     uintptr_t instruction_pointer = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.instr_ptr);
-
-    // Get tlbc_index for free threading builds
-    int32_t tlbc_index = 0;
-#ifdef Py_GIL_DISABLED
-    if (unwinder->debug_offsets.interpreter_frame.tlbc_index != 0) {
-        tlbc_index = GET_MEMBER(int32_t, frame, unwinder->debug_offsets.interpreter_frame.tlbc_index);
-    }
-#endif
+    uintptr_t ir_words = GET_MEMBER(uintptr_t, frame, unwinder->debug_offsets.interpreter_frame.ir_words);
 
     CodeObjectContext code_ctx = {
         .code_addr = code_object,
         .instruction_pointer = instruction_pointer,
-        .tlbc_index = tlbc_index,
+        .ir_words = ir_words,
     };
     return parse_code_object(unwinder, result, &code_ctx);
 }
@@ -316,7 +306,6 @@ process_frame_chain(
         int parse_result = 0;
         PyObject *frame = NULL;
         uintptr_t next_frame_addr = 0;
-        uintptr_t stackpointer = 0;
         last_frame_addr = frame_addr;
 
         if (++frame_count > MAX_FRAME_CHAIN_DEPTH) {
@@ -328,7 +317,7 @@ process_frame_chain(
 
         if (ctx->chunks && ctx->chunks->count > 0) {
             parse_result = parse_frame_from_chunks(
-                unwinder, &frame, frame_addr, &next_frame_addr, &stackpointer, ctx->chunks);
+                unwinder, &frame, frame_addr, &next_frame_addr, ctx->chunks);
             if (parse_result == 0) {
                 goto parsed_frame;
             }

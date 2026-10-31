@@ -2,11 +2,15 @@
 #include "util.h"
 
 
-static PyObject *
-tuple_get_size(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+tuple_get_size(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     NULLABLE(obj);
-    RETURN_SIZE(PyTuple_GET_SIZE(obj));
+    RETURN_SIZE_VALUE(PyTuple_GET_SIZE(obj));
 }
 
 static PyObject *
@@ -119,7 +123,10 @@ tuple_fromarray(PyObject* Py_UNUSED(module), PyObject *args)
 
     PyObject **items;
     if (src != Py_None) {
-        items = &PyTuple_GET_ITEM(src, 0);
+        items = tuple_objects(src);
+        if (items == NULL) {
+            return NULL;
+        }
         if (size == UNINITIALIZED_SIZE) {
             size = PyTuple_GET_SIZE(src);
         }
@@ -127,12 +134,14 @@ tuple_fromarray(PyObject* Py_UNUSED(module), PyObject *args)
     else {
         items = NULL;
     }
-    return PyTuple_FromArray(items, size);
+    PyObject *res = PyTuple_FromArray(items, size);
+    PyMem_Free(items);
+    return res;
 }
 
 
 static PyMethodDef test_methods[] = {
-    {"tuple_get_size", tuple_get_size, METH_O},
+    {"tuple_get_size", _PyCFunction_CAST(tuple_get_size), METH_O},
     {"tuple_get_item", tuple_get_item, METH_VARARGS},
     {"tuple_set_item", tuple_set_item, METH_VARARGS},
     {"_tuple_resize", _tuple_resize, METH_VARARGS},

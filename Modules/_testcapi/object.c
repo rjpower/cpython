@@ -34,114 +34,95 @@ call_pyobject_print(PyObject *self, PyObject * args)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-pyobject_print_null(PyObject *self, PyObject *filename)
+static PyValue
+pyobject_print_null(PyObject *self, PyValue filename_value)
 {
+    PyObject *filename = PyValue_Object(filename_value);
+    if (filename == NULL) {
+        return PyValue_NULL;
+    }
     FILE *fp;
 
     fp = Py_fopen(filename, "w+");
     if (fp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyObject_Print(NULL, fp, 0) < 0) {
         fclose(fp);
-        return NULL;
+        return PyValue_NULL;
     }
 
     fclose(fp);
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-pyobject_print_noref_object(PyObject *self, PyObject *filename)
+static PyValue
+pyobject_print_os_error(PyObject *self, PyValue filename_value)
 {
-    PyObject *test_string;
-    FILE *fp;
-    char correct_string[100];
-
-    test_string = PyUnicode_FromString("Spam spam spam");
-    if (test_string == NULL) {
-        return NULL;
+    PyObject *filename = PyValue_Object(filename_value);
+    if (filename == NULL) {
+        return PyValue_NULL;
     }
-
-    Py_SET_REFCNT(test_string, 0);
-
-    PyOS_snprintf(correct_string, 100, "<refcnt %zd at %p>",
-                  Py_REFCNT(test_string), (void *)test_string);
-
-    fp = Py_fopen(filename, "w+");
-    if (fp == NULL) {
-        Py_SET_REFCNT(test_string, 1);
-        Py_DECREF(test_string);
-        return NULL;
-    }
-
-    if (PyObject_Print(test_string, fp, 0) < 0){
-        fclose(fp);
-        Py_SET_REFCNT(test_string, 1);
-        Py_DECREF(test_string);
-        return NULL;
-    }
-
-    fclose(fp);
-
-    Py_SET_REFCNT(test_string, 1);
-    Py_DECREF(test_string);
-
-    return PyUnicode_FromString(correct_string);
-}
-
-static PyObject *
-pyobject_print_os_error(PyObject *self, PyObject *filename)
-{
     PyObject *test_string;
     FILE *fp;
 
     test_string = PyUnicode_FromString("Spam spam spam");
     if (test_string == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // open file in read mode to induce OSError
     fp = Py_fopen(filename, "r");
     if (fp == NULL) {
         Py_DECREF(test_string);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyObject_Print(test_string, fp, 0) < 0) {
         fclose(fp);
         Py_DECREF(test_string);
-        return NULL;
+        return PyValue_NULL;
     }
 
     fclose(fp);
     Py_DECREF(test_string);
 
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-pyobject_clear_weakrefs_no_callbacks(PyObject *self, PyObject *obj)
+static PyValue
+pyobject_clear_weakrefs_no_callbacks(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     PyUnstable_Object_ClearWeakRefsNoCallbacks(obj);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
-pyobject_enable_deferred_refcount(PyObject *self, PyObject *obj)
+static PyValue
+pyobject_enable_deferred_refcount(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int result = PyUnstable_Object_EnableDeferredRefcount(obj);
-    return PyLong_FromLong(result);
+    return PyValue_FromResult(PyLong_FromLong(result));
 }
 
-static PyObject *
-pyobject_is_unique_temporary(PyObject *self, PyObject *obj)
+static PyValue
+pyobject_is_unique_temporary(PyObject *self, PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     int result = PyUnstable_Object_IsUniqueReferencedTemporary(obj);
-    return PyLong_FromLong(result);
+    return PyValue_FromResult(PyLong_FromLong(result));
 }
 
 static PyObject *
@@ -153,151 +134,27 @@ pyobject_is_unique_temporary_new_object(PyObject *self, PyObject *unused)
     return PyLong_FromLong(result);
 }
 
-static int MyObject_dealloc_called = 0;
-
-static void
-MyObject_dealloc(PyObject *op)
+static PyValue
+clear_managed_dict(PyObject *self, PyValue obj_value)
 {
-    // PyUnstable_TryIncRef should return 0 if object is being deallocated
-    assert(Py_REFCNT(op) == 0);
-    assert(!PyUnstable_TryIncRef(op));
-    assert(Py_REFCNT(op) == 0);
-
-    MyObject_dealloc_called++;
-    Py_TYPE(op)->tp_free(op);
-}
-
-static PyTypeObject MyType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "MyType",
-    .tp_basicsize = sizeof(PyObject),
-    .tp_dealloc = MyObject_dealloc,
-};
-
-static PyObject *
-test_py_try_inc_ref(PyObject *self, PyObject *unused)
-{
-    if (PyType_Ready(&MyType) < 0) {
-        return NULL;
-    }
-
-    MyObject_dealloc_called = 0;
-
-    PyObject *op = PyObject_New(PyObject, &MyType);
-    if (op == NULL) {
-        return NULL;
-    }
-
-    PyUnstable_EnableTryIncRef(op);
-#ifdef Py_GIL_DISABLED
-    // PyUnstable_EnableTryIncRef sets the shared flags to
-    // `_Py_REF_MAYBE_WEAKREF` if the flags are currently zero to ensure that
-    // the shared reference count is merged on deallocation.
-    assert((op->ob_ref_shared & _Py_REF_SHARED_FLAG_MASK) >= _Py_REF_MAYBE_WEAKREF);
-#endif
-
-    if (!PyUnstable_TryIncRef(op)) {
-        PyErr_SetString(PyExc_AssertionError, "PyUnstable_TryIncRef failed");
-        Py_DECREF(op);
-        return NULL;
-    }
-    Py_DECREF(op);  // undo try-incref
-    Py_DECREF(op);  // dealloc
-    assert(MyObject_dealloc_called == 1);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-test_py_set_immortal(PyObject *self, PyObject *unused)
-{
-    // the object is allocated on C stack as otherwise,
-    // it would trip the refleak checker when the object
-    // is made immortal and leak memory, for the same
-    // reason we cannot call PyObject_Init() on it.
-    PyObject object = {0};
-#ifdef Py_GIL_DISABLED
-    object.ob_tid = _Py_ThreadId();
-    object.ob_gc_bits = 0;
-    object.ob_ref_local = 1;
-    object.ob_ref_shared = 0;
-#else
-    object.ob_refcnt = 1;
-#endif
-    object.ob_type = &PyBaseObject_Type;
-
-    assert(!PyUnstable_IsImmortal(&object));
-    int rc = PyUnstable_SetImmortal(&object);
-    assert(rc == 1);
-    assert(PyUnstable_IsImmortal(&object));
-    Py_DECREF(&object);  // should not dealloc
-    assert(PyUnstable_IsImmortal(&object));
-
-    // Check already immortal object
-    rc = PyUnstable_SetImmortal(&object);
-    assert(rc == 0);
-
-    // Check unicode objects
-    PyObject *unicode = PyUnicode_FromString("test");
-    assert(!PyUnstable_IsImmortal(unicode));
-    rc = PyUnstable_SetImmortal(unicode);
-    assert(rc == 0);
-    assert(!PyUnstable_IsImmortal(unicode));
-    Py_DECREF(unicode);
-    Py_RETURN_NONE;
-}
-
-#ifdef Py_REF_DEBUG
-static PyObject *
-negative_refcount(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *obj = PyUnicode_FromString("negative_refcount");
+    PyObject *obj = PyValue_Object(obj_value);
     if (obj == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    assert(Py_REFCNT(obj) == 1);
-
-    Py_SET_REFCNT(obj,  0);
-    /* Py_DECREF() must call _Py_NegativeRefcount() and abort Python */
-    Py_DECREF(obj);
-
-    Py_RETURN_NONE;
-}
-
-
-static PyObject *
-decref_freed_object(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *obj = PyUnicode_FromString("decref_freed_object");
-    if (obj == NULL) {
-        return NULL;
-    }
-    assert(Py_REFCNT(obj) == 1);
-
-    // Deallocate the memory
-    Py_DECREF(obj);
-    // obj is a now a dangling pointer
-
-    // gh-109496: If Python is built in debug mode, Py_DECREF() must call
-    // _Py_NegativeRefcount() and abort Python.
-    Py_DECREF(obj);
-
-    Py_RETURN_NONE;
-}
-#endif
-
-
-static PyObject *
-clear_managed_dict(PyObject *self, PyObject *obj)
-{
     PyObject_ClearManagedDict(obj);
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
 
-static PyObject *
-is_uniquely_referenced(PyObject *self, PyObject *op)
+static PyValue
+is_uniquely_referenced(PyObject *self, PyValue op_value)
 {
-    return PyBool_FromLong(PyUnstable_Object_IsUniquelyReferenced(op));
+    PyObject *op = PyValue_Object(op_value);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(
+        PyBool_FromLong(PyUnstable_Object_IsUniquelyReferenced(op)));
 }
 
 
@@ -336,40 +193,41 @@ pysentinel_new(PyObject *self, PyObject *args)
     return PySentinel_New(name, module_name, repr);
 }
 
-static PyObject *
-pysentinel_check(PyObject *self, PyObject *obj)
+static PyValue
+pysentinel_check(PyObject *self, PyValue obj_value)
 {
-    return PyBool_FromLong(PySentinel_Check(obj));
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyBool_FromLong(PySentinel_Check(obj)));
 }
 
-static PyObject *
-pysentinel_checkexact(PyObject *self, PyObject *obj)
+static PyValue
+pysentinel_checkexact(PyObject *self, PyValue obj_value)
 {
-    return PyBool_FromLong(PySentinel_CheckExact(obj));
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(PyBool_FromLong(PySentinel_CheckExact(obj)));
 }
 
 
 static PyMethodDef test_methods[] = {
     {"call_pyobject_print", call_pyobject_print, METH_VARARGS},
-    {"pyobject_print_null", pyobject_print_null, METH_O},
-    {"pyobject_print_noref_object", pyobject_print_noref_object, METH_O},
-    {"pyobject_print_os_error", pyobject_print_os_error, METH_O},
-    {"pyobject_clear_weakrefs_no_callbacks", pyobject_clear_weakrefs_no_callbacks, METH_O},
-    {"pyobject_enable_deferred_refcount", pyobject_enable_deferred_refcount, METH_O},
-    {"pyobject_is_unique_temporary", pyobject_is_unique_temporary, METH_O},
+    {"pyobject_print_null", _PyCFunction_CAST(pyobject_print_null), METH_O},
+    {"pyobject_print_os_error", _PyCFunction_CAST(pyobject_print_os_error), METH_O},
+    {"pyobject_clear_weakrefs_no_callbacks", _PyCFunction_CAST(pyobject_clear_weakrefs_no_callbacks), METH_O},
+    {"pyobject_enable_deferred_refcount", _PyCFunction_CAST(pyobject_enable_deferred_refcount), METH_O},
+    {"pyobject_is_unique_temporary", _PyCFunction_CAST(pyobject_is_unique_temporary), METH_O},
     {"pyobject_is_unique_temporary_new_object", pyobject_is_unique_temporary_new_object, METH_NOARGS},
-    {"test_py_try_inc_ref", test_py_try_inc_ref, METH_NOARGS},
-    {"test_py_set_immortal", test_py_set_immortal, METH_NOARGS},
-#ifdef Py_REF_DEBUG
-    {"negative_refcount", negative_refcount, METH_NOARGS},
-    {"decref_freed_object", decref_freed_object, METH_NOARGS},
-#endif
-    {"clear_managed_dict", clear_managed_dict, METH_O, NULL},
-    {"is_uniquely_referenced", is_uniquely_referenced, METH_O},
+    {"clear_managed_dict", _PyCFunction_CAST(clear_managed_dict), METH_O, NULL},
+    {"is_uniquely_referenced", _PyCFunction_CAST(is_uniquely_referenced), METH_O},
     {"pyobject_dump", pyobject_dump, METH_VARARGS},
     {"pysentinel_new", pysentinel_new, METH_VARARGS},
-    {"pysentinel_check", pysentinel_check, METH_O},
-    {"pysentinel_checkexact", pysentinel_checkexact, METH_O},
+    {"pysentinel_check", _PyCFunction_CAST(pysentinel_check), METH_O},
+    {"pysentinel_checkexact", _PyCFunction_CAST(pysentinel_checkexact), METH_O},
     {NULL},
 };
 

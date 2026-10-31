@@ -1,4 +1,5 @@
 import unittest
+from test import support
 from test.support import import_helper
 from collections import UserList
 _testcapi = import_helper.import_module('_testcapi')
@@ -253,6 +254,7 @@ class CAPITest(unittest.TestCase):
         lst = []
         lst.append(DelAppend(lst, 'zombie'))
         self.assertEqual(list_setslice(lst, 0, len(lst), NULL), 0)
+        support.gc_collect()  # For other GCs.
         self.assertEqual(lst, ['zombie'])
 
         # Item finalizer modify the list (remove an list item)
@@ -260,6 +262,7 @@ class CAPITest(unittest.TestCase):
         lst.append(DelAppend(lst, 'zombie'))
         lst.extend("abc")
         self.assertEqual(list_setslice(lst, 0, 1, NULL), 0)
+        support.gc_collect()  # For other GCs.
         self.assertEqual(lst, ['a', 'b', 'c', 'zombie'])
 
         # CRASHES setslice(NULL, 0, 0, [])
@@ -325,6 +328,7 @@ class CAPITest(unittest.TestCase):
         lst = []
         lst.append(DelAppend(lst, 'zombie'))
         list_clear(lst)
+        support.gc_collect()  # For other GCs.
         self.assertEqual(lst, ['zombie'])
 
         # CRASHES list_clear(NULL)

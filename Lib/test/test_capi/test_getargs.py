@@ -1118,12 +1118,6 @@ class Object_TestCase(unittest.TestCase):
         self.assertRaises(TypeError, getargs_U, None)
 
 
-# Bug #6012
-class Test6012(unittest.TestCase):
-    def test(self):
-        self.assertEqual(_testcapi.argparsing("Hello", "World"), 1)
-
-
 class SkipitemTest(unittest.TestCase):
 
     # u, and Z raises DeprecationWarning
@@ -1429,6 +1423,7 @@ class ParseTupleAndKeywords_Test(unittest.TestCase):
                     "argument 1 must be sequence of length 1, not 0"):
                 parse(([],), {}, '(' + f + ')', ['a'])
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testinternalcapi is None, 'needs _testinternalcapi')
     def test_gh_119213(self):
         rc, out, err = script_helper.assert_python_ok("-c", """if True:

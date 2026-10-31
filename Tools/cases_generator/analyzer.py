@@ -1,28 +1,30 @@
 from dataclasses import dataclass
 import itertools
+import call_effects
 import lexer
 import parser
 import re
-from typing import Optional, Callable, Iterator
+import root_check
+from typing import Optional, Callable
 
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, MacroIfStmt
-
-MAX_CACHED_REGISTER = 3
 
 @dataclass
 class EscapingCall:
     stmt: SimpleStmt
     call: lexer.Token
-    kills: lexer.Token | None
 
 @dataclass
 class Properties:
+    # The calls that may run Python code; the stack is synced before them
     escaping_calls: dict[SimpleStmt, EscapingCall]
+    # Those and the allocating calls (call_effects.py): a collection may
+    # start at any of them, so values in C locals need roots across them
+    collecting_calls: dict[SimpleStmt, EscapingCall]
     escapes: bool
     error_with_pop: bool
     error_without_pop: bool
     deopts: bool
-    deopts_periodic: bool
     oparg: bool
     jumps: bool
     eval_breaker: bool
@@ -34,20 +36,30 @@ class Properties:
     uses_locals: bool
     has_free: bool
     side_exit: bool
-    side_exit_at_end: bool
     pure: bool
     uses_opcode: bool
-    needs_guard_ip: bool
-    unpredictable_jump: bool
-    records_value: bool
     tier: int | None = None
-    const_oparg: int = -1
     needs_prev: bool = False
     no_save_ip: bool = False
+    inline_ok: bool = False
+    # The IR binds this instruction in window style (see ir_generator.py).
+    window: bool = False
+    # Assigns `frame`: what follows runs in another frame.
+    switches_frame: bool = False
+    # Annotated `returns`: pops its frame, and pushes its outputs to the
+    # caller's.
+    returns: bool = False
+    # Annotated `stores_early`: the body stores the output that goes to the
+    # caller's frame with IR_RETURN_EARLY() before the frame switch, so the
+    # caller's slot holds it while the source frame is unlinked and cleared
+    # (boil/design/11-precise-roots.md section 4.4).  The output stays
+    # declared for the stack effects; no store is generated for it.
+    stores_early: bool = False
 
     def dump(self, indent: str) -> None:
         simple_properties = self.__dict__.copy()
         del simple_properties["escaping_calls"]
+        del simple_properties["collecting_calls"]
         text = "escaping_calls:\n"
         for tkns in self.escaping_calls.values():
             text += f"{indent}    {tkns}\n"
@@ -57,15 +69,17 @@ class Properties:
     @staticmethod
     def from_list(properties: list["Properties"]) -> "Properties":
         escaping_calls: dict[SimpleStmt, EscapingCall] = {}
+        collecting_calls: dict[SimpleStmt, EscapingCall] = {}
         for p in properties:
             escaping_calls.update(p.escaping_calls)
+            collecting_calls.update(p.collecting_calls)
         return Properties(
             escaping_calls=escaping_calls,
+            collecting_calls=collecting_calls,
             escapes = any(p.escapes for p in properties),
             error_with_pop=any(p.error_with_pop for p in properties),
             error_without_pop=any(p.error_without_pop for p in properties),
             deopts=any(p.deopts for p in properties),
-            deopts_periodic=any(p.deopts_periodic for p in properties),
             oparg=any(p.oparg for p in properties),
             jumps=any(p.jumps for p in properties),
             eval_breaker=any(p.eval_breaker for p in properties),
@@ -78,13 +92,14 @@ class Properties:
             uses_opcode=any(p.uses_opcode for p in properties),
             has_free=any(p.has_free for p in properties),
             side_exit=any(p.side_exit for p in properties),
-            side_exit_at_end=any(p.side_exit_at_end for p in properties),
             pure=all(p.pure for p in properties),
             needs_prev=any(p.needs_prev for p in properties),
             no_save_ip=all(p.no_save_ip for p in properties),
-            needs_guard_ip=any(p.needs_guard_ip for p in properties),
-            unpredictable_jump=any(p.unpredictable_jump for p in properties),
-            records_value=any(p.records_value for p in properties),
+            inline_ok=all(p.inline_ok for p in properties),
+            window=any(p.window for p in properties),
+            switches_frame=any(p.switches_frame for p in properties),
+            returns=any(p.returns for p in properties),
+            stores_early=any(p.stores_early for p in properties),
         )
 
     @property
@@ -93,11 +108,11 @@ class Properties:
 
 SKIP_PROPERTIES = Properties(
     escaping_calls={},
+    collecting_calls={},
     escapes=False,
     error_with_pop=False,
     error_without_pop=False,
     deopts=False,
-    deopts_periodic=False,
     oparg=False,
     jumps=False,
     eval_breaker=False,
@@ -110,12 +125,9 @@ SKIP_PROPERTIES = Properties(
     uses_opcode=False,
     has_free=False,
     side_exit=False,
-    side_exit_at_end=False,
     pure=True,
     no_save_ip=False,
-    needs_guard_ip=False,
-    unpredictable_jump=False,
-    records_value=False,
+    inline_ok=True,
 )
 
 
@@ -197,10 +209,14 @@ class Uop:
     properties: Properties
     _size: int = -1
     implicitly_created: bool = False
-    replicated = range(0)
-    replicates: "Uop | None" = None
     # Size of the instruction(s), only set for uops containing the INSTRUCTION_SIZE macro
     instruction_size: int | None = None
+    # Scalar stack inputs that the body converts to PyObject *
+    object_inputs: tuple[str, ...] = ()
+    # Scalar stack inputs that the body asserts to be objects
+    asserted_objects: tuple[str, ...] = ()
+    # Outputs that the body assigns from an input, `out = in;`
+    aliased_outputs: tuple[str, ...] = ()
 
     def dump(self, indent: str) -> None:
         print(
@@ -216,7 +232,7 @@ class Uop:
         return self._size
 
     def why_not_viable(self) -> str | None:
-        if self.name == "_SAVE_RETURN_OFFSET":
+        if self.name == "_SAVE_RETURN_SLOT":
             return None  # Adjusts next_instr, but only in tier 1 code
         if "INSTRUMENTED" in self.name:
             return "is instrumented"
@@ -234,6 +250,16 @@ class Uop:
 
     def is_viable(self) -> bool:
         return self.why_not_viable() is None
+
+    def is_guard(self) -> bool:
+        """A guard only inspects its inputs: it may exit, but it does not
+        escape and leaves the stack unchanged."""
+        return (
+            (self.properties.deopts or self.properties.side_exit)
+            and not self.properties.escapes
+            and len(self.stack.inputs) == len(self.stack.outputs)
+            and all(item.peek for item in self.stack.inputs)
+        )
 
     def is_super(self) -> bool:
         for tkn in self.body.tokens():
@@ -270,7 +296,6 @@ class Instruction:
     _properties: Properties | None
     is_target: bool = False
     family: Optional["Family"] = None
-    opcode: int = -1
 
     @property
     def properties(self) -> Properties:
@@ -306,7 +331,6 @@ class PseudoInstruction:
     targets: list[Instruction]
     as_sequence: bool
     flags: list[str]
-    opcode: int = -1
 
     def dump(self, indent: str) -> None:
         print(indent, self.name, "->", " or ".join([t.name for t in self.targets]))
@@ -322,16 +346,6 @@ class Family:
     size: str
     members: list[Instruction]
 
-    def get_member_record_names(self) -> tuple[str, ...]:
-        seen: set[str] = set()
-        names: list[str] = []
-        for member in self.members:
-            for part in member.parts:
-                if part.properties.records_value and part.name not in seen:
-                    seen.add(part.name)
-                    names.append(part.name)
-        return tuple(names)
-
     def dump(self, indent: str) -> None:
         print(indent, self.name, "= ", ", ".join([m.name for m in self.members]))
 
@@ -343,9 +357,9 @@ class Analysis:
     families: dict[str, Family]
     pseudos: dict[str, PseudoInstruction]
     labels: dict[str, Label]
-    opmap: dict[str, int]
-    have_arg: int
-    min_instrumented: int
+    # Instructions annotated `ir_only`: handlers of the register IR that
+    # have no opcode, kept apart so that the opcode tables do not see them.
+    ir_only: dict[str, Instruction]
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -420,7 +434,6 @@ def analyze_stack(
         for input in inputs:
             if (
                 variable_used(op, input.name)
-                or variable_used(op, "DECREF_INPUTS")
                 or (not input.peek and input.name in output_names)
             ):
                 input.used = True
@@ -521,163 +534,6 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
     )
 
 
-NON_ESCAPING_FUNCTIONS = (
-    "PyCFunction_GET_FLAGS",
-    "PyCFunction_GET_FUNCTION",
-    "PyCFunction_GET_SELF",
-    "PyCell_GetRef",
-    "PyCell_New",
-    "PyCell_SwapTakeRef",
-    "PyExceptionInstance_Class",
-    "PyException_GetCause",
-    "PyException_GetContext",
-    "PyException_GetTraceback",
-    "PyFloat_AS_DOUBLE",
-    "PyFloat_FromDouble",
-    "PyFunction_GET_CODE",
-    "PyFunction_GET_GLOBALS",
-    "PyList_GET_ITEM",
-    "PyList_GET_SIZE",
-    "PyList_SET_ITEM",
-    "PyLong_AsLong",
-    "PyLong_FromLong",
-    "PyLong_FromSsize_t",
-    "PySlice_New",
-    "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_FromPyObjectNewMortal",
-    "PyStackRef_AsPyObjectSteal",
-    "PyStackRef_Borrow",
-    "PyStackRef_CLEAR",
-    "PyStackRef_CLOSE_SPECIALIZED",
-    "PyStackRef_DUP",
-    "PyStackRef_DupImmortal",
-    "PyStackRef_False",
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_FromPyObjectNew",
-    "PyStackRef_FromPyObjectSteal",
-    "PyStackRef_IsExactly",
-    "PyStackRef_FromPyObjectStealMortal",
-    "PyStackRef_IsNone",
-    "PyStackRef_Is",
-    "PyStackRef_IsHeapSafe",
-    "PyStackRef_IsTrue",
-    "PyStackRef_IsFalse",
-    "PyStackRef_IsNull",
-    "PyStackRef_MakeHeapSafe",
-    "PyStackRef_None",
-    "PyStackRef_RefcountOnObject",
-    "PyStackRef_TYPE",
-    "PyStackRef_True",
-    "PyBytes_GET_SIZE",
-    "PyDict_GET_SIZE",
-    "PySet_GET_SIZE",
-    "PyTuple_GET_ITEM",
-    "PyTuple_GET_SIZE",
-    "PyType_HasFeature",
-    "PyUnicode_Concat",
-    "PyUnicode_GET_LENGTH",
-    "PyUnicode_READ_CHAR",
-    "PyUnicode_IS_COMPACT_ASCII",
-    "PyUnicode_1BYTE_DATA",
-    "Py_ARRAY_LENGTH",
-    "Py_FatalError",
-    "Py_INCREF",
-    "Py_IS_TYPE",
-    "Py_NewRef",
-    "Py_REFCNT",
-    "Py_SIZE",
-    "Py_TYPE",
-    "Py_UNREACHABLE",
-    "Py_Unicode_GET_LENGTH",
-    "_PyCode_CODE",
-    "_PyDictValues_AddToInsertionOrder",
-    "_PyErr_Occurred",
-    "_PyFrame_GetBytecode",
-    "_PyFrame_GetCode",
-    "_PyFrame_IsIncomplete",
-    "_PyFrame_PushUnchecked",
-    "_PyFrame_SetStackPointer",
-    "_PyFrame_StackPush",
-    "_PyFrame_StackAssertInvalid",
-    "_PyFunction_SetVersion",
-    "_PyGen_GetGeneratorFromFrame",
-    "gen_try_set_executing",
-    "_PyInterpreterState_GET",
-    "_PyList_AppendTakeRef",
-    "_PyList_ITEMS",
-    "_PyLong_CompactValue",
-    "_PyLong_DigitCount",
-    "_PyLong_IsCompact",
-    "_PyLong_IsNegative",
-    "_PyLong_IsNonNegativeCompact",
-    "_PyLong_IsZero",
-    "_PyLong_BothAreCompact",
-    "_PyCompactLong_Add",
-    "_PyCompactLong_Multiply",
-    "_PyCompactLong_Subtract",
-    "_PyManagedDictPointer_IsValues",
-    "_PyObject_GC_IS_SHARED",
-    "_PyObject_GC_IS_TRACKED",
-    "_PyObject_GC_MAY_BE_TRACKED",
-    "_PyObject_GC_TRACK",
-    "_PyObject_GetManagedDict",
-    "_PyObject_InlineValues",
-    "_PyObject_IsUniquelyReferenced",
-    "_PyObject_ManagedDictPointer",
-    "_PyThreadState_HasStackSpace",
-    "_PyTuple_FromStackRefStealOnSuccess",
-    "_PyTuple_ITEMS",
-    "_PyType_HasFeature",
-    "_PyType_NewManagedObject",
-    "_PyUnicode_Equal",
-    "_PyUnicode_JoinArray",
-    "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
-    "_Py_ID",
-    "_Py_IsImmortal",
-    "_Py_IsOwnedByCurrentThread",
-    "_Py_LeaveRecursiveCallPy",
-    "_Py_LeaveRecursiveCallTstate",
-    "_Py_NewRef",
-    "_Py_SINGLETON",
-    "_Py_STR",
-    "_Py_TryIncrefCompare",
-    "_Py_TryIncrefCompareStackRef",
-    "_Py_atomic_compare_exchange_uint8",
-    "_Py_atomic_load_ptr_acquire",
-    "_Py_atomic_load_uintptr_relaxed",
-    "_Py_set_eval_breaker_bit",
-    "advance_backoff_counter",
-    "assert",
-    "backoff_counter_triggers",
-    "initial_temperature_backoff_counter",
-    "JUMP_TO_LABEL",
-    "restart_backoff_counter",
-    "_Py_ReachedRecursionLimit",
-    "PyStackRef_IsTaggedInt",
-    "PyStackRef_TagInt",
-    "PyStackRef_UntagInt",
-    "PyStackRef_IncrementTaggedIntNoOverflow",
-    "PyStackRef_IsNullOrInt",
-    "PyStackRef_IsError",
-    "PyStackRef_IsValid",
-    "PyStackRef_Wrap",
-    "PyStackRef_Unwrap",
-    "_PyLong_CheckExactAndCompact",
-    "_PyExecutor_FromExit",
-    "_PyJit_TryInitializeTracing",
-    "_Py_unset_eval_breaker_bit",
-    "_Py_set_eval_breaker_bit",
-    "trigger_backoff_counter",
-    "_PyThreadState_PopCStackRefSteal",
-    "doesnt_escape",
-    "_Py_GatherStats_GetIter",
-    "_PyStolenTuple_Free",
-    "PyObject_GC_UnTrack",
-    "_PyErr_ExceptionMatches",
-)
-
-
 def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, EscapingCall]) -> None:
     error: lexer.Token | None = None
     calls = {e.call for e in escapes.values()}
@@ -692,7 +548,7 @@ def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, Escapi
             in_if = 0
             tkn_iter = iter(stmt.contents)
             for tkn in tkn_iter:
-                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "ERROR_IF", "EXIT_IF", "HANDLE_PENDING_AND_DEOPT_IF", "AT_END_EXIT_IF"):
+                if tkn.kind == "IDENTIFIER" and tkn.text in ("DEOPT_IF", "ERROR_IF", "EXIT_IF"):
                     in_if = 1
                     next(tkn_iter)
                 elif tkn.kind == "LPAREN":
@@ -709,7 +565,10 @@ def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, Escapi
     if error is not None:
         raise analysis_error(f"Escaping call '{error.text} in condition", error)
 
-def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, EscapingCall]) -> None:
+def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, EscapingCall],
+                                 collecting: bool = False) -> None:
+    """Note in result the first call of stmt that may run Python code, or,
+    if collecting, the first that may start a collection (call_effects.py)"""
     tokens = stmt.contents
     for idx, tkn in enumerate(tokens):
         try:
@@ -724,16 +583,14 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
             #if not tkn.text.startswith(("Py", "_Py", "monitor")):
             #    continue
-            if tkn.text.startswith(("sym_", "optimize_", "PyJitRef")):
-                # Optimize functions
-                continue
             if tkn.text.endswith("Check"):
                 continue
             if tkn.text.startswith("Py_Is"):
                 continue
             if tkn.text.endswith("CheckExact"):
                 continue
-            if tkn.text in NON_ESCAPING_FUNCTIONS:
+            effect = call_effects.kind(tkn.text)
+            if effect == "none" or (effect == "alloc" and not collecting):
                 continue
         elif tkn.kind == "RPAREN":
             prev = tokens[idx-1]
@@ -742,27 +599,21 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
         elif tkn.kind != "RBRACKET":
             continue
-        if tkn.text in ("PyStackRef_CLOSE", "PyStackRef_XCLOSE"):
-            if len(tokens) <= idx+2:
-                raise analysis_error("Unexpected end of file", next_tkn)
-            kills = tokens[idx+2]
-            if kills.kind != "IDENTIFIER":
-                raise analysis_error(f"Expected identifier, got '{kills.text}'", kills)
-        else:
-            kills = None
-        result[stmt] = EscapingCall(stmt, tkn, kills)
+        result[stmt] = EscapingCall(stmt, tkn)
 
 
-def find_escaping_api_calls(instr: parser.CodeDef) -> dict[SimpleStmt, EscapingCall]:
+def find_escaping_api_calls(instr: parser.CodeDef,
+                            collecting: bool = False) -> dict[SimpleStmt, EscapingCall]:
     result: dict[SimpleStmt, EscapingCall] = {}
 
     def visit(stmt: Stmt) -> None:
         if not isinstance(stmt, SimpleStmt):
             return
-        escaping_call_in_simple_stmt(stmt, result)
+        escaping_call_in_simple_stmt(stmt, result, collecting)
 
     instr.block.accept(visit)
-    check_escaping_calls(instr, result)
+    if not collecting:
+        check_escaping_calls(instr, result)
     return result
 
 
@@ -819,7 +670,7 @@ def stmt_is_simple_exit(stmt: Stmt) -> bool:
     if len(tokens) < 4:
         return False
     return (
-        tokens[0].text in ("ERROR_IF", "DEOPT_IF", "EXIT_IF", "AT_END_EXIT_IF")
+        tokens[0].text in ("ERROR_IF", "DEOPT_IF", "EXIT_IF")
         and
         tokens[1].text == "("
         and
@@ -844,9 +695,6 @@ def stmt_escapes(stmt: Stmt) -> bool:
     if isinstance(stmt, BlockStmt):
         return stmt_list_escapes(stmt.body)
     elif isinstance(stmt, SimpleStmt):
-        for tkn in stmt.contents:
-            if tkn.text == "DECREF_INPUTS":
-                return True
         d: dict[SimpleStmt, EscapingCall] = {}
         escaping_call_in_simple_stmt(stmt, d)
         return bool(d)
@@ -865,65 +713,52 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
-def stmt_has_jump_on_unpredictable_path_body(stmts: list[Stmt] | None, branches_seen: int) -> tuple[bool, int]:
-    if not stmts:
-        return False, branches_seen
-    predict = False
-    seen = 0
-    for st in stmts:
-        predict_body, seen_body = stmt_has_jump_on_unpredictable_path(st, branches_seen)
-        predict = predict or predict_body
-        seen += seen_body
-    return predict, seen
+def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
+    """The outputs that a statement `out = in;` makes alias an input."""
+    innames = {i.name for i in op.inputs if isinstance(i, parser.StackEffect)}
+    outnames = {o.name for o in op.outputs} - innames
+    tokens = [t for t in op.block.tokens() if t.kind != "COMMENT"]
+    found: list[str] = []
+    for i in range(len(tokens) - 3):
+        if (tokens[i].text in outnames and tokens[i + 1].kind == "EQUALS"
+                and tokens[i + 2].text in innames and tokens[i + 3].kind == "SEMI"
+                and (i == 0 or tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE"))
+                and tokens[i].text not in found):
+            found.append(tokens[i].text)
+    return tuple(found)
 
-def stmt_has_jump_on_unpredictable_path(stmt: Stmt, branches_seen: int) -> tuple[bool, int]:
-    if isinstance(stmt, BlockStmt):
-        return stmt_has_jump_on_unpredictable_path_body(stmt.body, branches_seen)
-    elif isinstance(stmt, SimpleStmt):
-        for tkn in stmt.contents:
-            if tkn.text == "JUMPBY":
-                return True, branches_seen
-        return False, branches_seen
-    elif isinstance(stmt, IfStmt):
-        predict, seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        if stmt.else_body:
-            predict_else, seen_else = stmt_has_jump_on_unpredictable_path(stmt.else_body, branches_seen)
-            return predict != predict_else, seen + seen_else + 1
-        return predict, seen + 1
-    elif isinstance(stmt, MacroIfStmt):
-        predict, seen = stmt_has_jump_on_unpredictable_path_body(stmt.body, branches_seen)
-        if stmt.else_body:
-            predict_else, seen_else = stmt_has_jump_on_unpredictable_path_body(stmt.else_body, branches_seen)
-            return predict != predict_else, seen + seen_else
-        return predict, seen
-    elif isinstance(stmt, ForStmt):
-        unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        return unpredictable, branches_seen + 1
-    elif isinstance(stmt, WhileStmt):
-        unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(stmt.body, branches_seen)
-        return unpredictable, branches_seen + 1
-    else:
-        assert False, f"Unexpected statement type {stmt}"
+
+def switches_frame(op: parser.CodeDef) -> bool:
+    """Whether op assigns `frame`, directly or through DISPATCH_INLINED."""
+    tokens = [t for t in op.tokens if t.kind != "COMMENT"]
+    for i, tkn in enumerate(tokens):
+        if tkn.kind != "IDENTIFIER":
+            continue
+        if tkn.text == "DISPATCH_INLINED":
+            return True
+        if (tkn.text == "frame" and i + 1 < len(tokens)
+                and tokens[i + 1].kind == "EQUALS"
+                and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
+            return True
+    return False
 
 
 def compute_properties(op: parser.CodeDef) -> Properties:
     escaping_calls = find_escaping_api_calls(op)
+    collecting_calls = find_escaping_api_calls(op, collecting=True)
     has_free = (
         variable_used(op, "PyCell_New")
         or variable_used(op, "PyCell_GetRef")
-        or variable_used(op, "PyCell_SetTakeRef")
-        or variable_used(op, "PyCell_SwapTakeRef")
-        or variable_used(op, "_PyCell_GetStackRef")
+        or variable_used(op, "PyCell_SET_VALUE")
+        or variable_used(op, "_PyCell_SwapValue")
+        or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")
     exits_if = variable_used(op, "EXIT_IF")
-    exit_if_at_end = variable_used(op, "AT_END_EXIT_IF")
-    deopts_periodic = variable_used(op, "HANDLE_PENDING_AND_DEOPT_IF")
-    exits_and_deopts = sum((deopts_if, exits_if, deopts_periodic))
-    if exits_and_deopts > 1:
+    if deopts_if and exits_if:
         tkn = op.tokens[0]
         raise lexer.make_syntax_error(
-            "Op cannot contain more than one of EXIT_IF, DEOPT_IF and HANDLE_PENDING_AND_DEOPT_IF",
+            "Op cannot contain both EXIT_IF and DEOPT_IF",
             tkn.filename,
             tkn.line,
             tkn.column,
@@ -934,21 +769,29 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     escapes = stmt_escapes(op.block)
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
-    unpredictable, branches_seen = stmt_has_jump_on_unpredictable_path(op.block, 0)
-    unpredictable_jump = False if isinstance(op, parser.LabelDef) else (unpredictable and branches_seen > 0)
+    inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
+    window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
+    returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
+    stores_early = (not isinstance(op, parser.LabelDef)
+                    and "stores_early" in op.annotations)
+    if stores_early and not variable_used(op, "IR_RETURN_EARLY"):
+        raise analysis_error(
+            f"{op.name} is `stores_early` but its body has no IR_RETURN_EARLY()",
+            op.tokens[0])
     return Properties(
         escaping_calls=escaping_calls,
+        collecting_calls=collecting_calls,
         escapes=escapes,
         error_with_pop=error_with_pop,
         error_without_pop=error_without_pop,
         deopts=deopts_if,
-        deopts_periodic=deopts_periodic,
         side_exit=exits_if,
-        side_exit_at_end=exit_if_at_end,
         oparg=oparg_used(op),
-        jumps=variable_used(op, "JUMPBY"),
+        jumps=variable_used(op, "JUMPBY") or variable_used(op, "JUMPTO"),
         eval_breaker="CHECK_PERIODIC" in op.name,
-        needs_this=variable_used(op, "this_instr"),
+        needs_this=(variable_used(op, "this_instr")
+                    or variable_used(op, "FB_COUNTER")
+                    or variable_used(op, "FB_BRANCH")),
         always_exits=always_exits(op),
         sync_sp=variable_used(op, "SYNC_SP") or variable_used(op, "SAVE_STACK") or variable_used(op, "RELOAD_STACK"),
         uses_co_consts=variable_used(op, "FRAME_CO_CONSTS"),
@@ -958,86 +801,88 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         has_free=has_free,
         pure=pure,
         no_save_ip=no_save_ip,
+        inline_ok=inline_ok,
         tier=tier_variable(op),
         needs_prev=variable_used(op, "prev_instr"),
-        needs_guard_ip=(isinstance(op, parser.InstDef)
-                        and (unpredictable_jump and "replaced" not in op.annotations))
-                       or variable_used(op, "LOAD_IP")
-                       or variable_used(op, "DISPATCH_INLINED"),
-        unpredictable_jump=unpredictable_jump,
-        records_value=variable_used(op, "RECORD_VALUE")
+        window=window,
+        switches_frame=switches_frame(op),
+        returns=returns,
+        stores_early=stores_early,
     )
 
-def expand(items: list[StackItem], oparg: int) -> list[StackItem]:
-    # Only replace array item with scalar if no more than one item is an array
-    index = -1
-    for i, item in enumerate(items):
-        if "oparg" in item.size:
-            if index >= 0:
-                return items
-            index = i
-    if index < 0:
-        return items
-    try:
-        count = int(eval(items[index].size.replace("oparg", str(oparg))))
-    except ValueError:
-        return items
-    return items[:index] + [
-        StackItem(items[index].name + f"_{i}", "", items[index].peek, items[index].used) for i in range(count)
-        ] + items[index+1:]
+VALUE_TO_OBJECT = (
+    "PyValue_ObjectBorrow",
+)
 
-def scalarize_stack(stack: StackEffect, oparg: int) -> StackEffect:
-    stack.inputs = expand(stack.inputs, oparg)
-    stack.outputs = expand(stack.outputs, oparg)
-    return stack
+
+def find_object_inputs(
+    op: parser.InstDef, stack: StackEffect
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Find the scalar stack inputs that op converts to PyObject *, and those
+    that it asserts to be objects.
+
+    Only a conversion whose whole argument is the input's name counts.
+    Conversions inside assert() are ignored, since they vanish from release
+    builds. Arrays are left to the C helpers that convert their elements.
+
+    An input that op asserts to be an object, with
+    `assert(PyValue_IsObject(name))`, can never hold an inline value by
+    construction of the bytecode, so it needs no test.
+    """
+    scalars = {item.name for item in stack.inputs if not item.is_array()}
+    found: list[str] = []
+    asserted: list[str] = []
+    tokens = list(op.block.tokens())
+    i = 0
+    while i < len(tokens):
+        tkn = tokens[i]
+        if tkn.text == "assert":
+            start = i
+            depth = 0
+            i += 1
+            while i < len(tokens):
+                if tokens[i].kind == lexer.LPAREN:
+                    depth += 1
+                elif tokens[i].kind == lexer.RPAREN:
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            texts = [t.text for t in tokens[start:i + 1]]
+            if (len(texts) == 7 and texts[2] == "PyValue_IsObject"
+                    and texts[4] in scalars):
+                asserted.append(texts[4])
+        elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
+            arg, close = tokens[i + 2], tokens[i + 3]
+            if arg.text in scalars and close.kind == lexer.RPAREN and arg.text not in found:
+                found.append(arg.text)
+        i += 1
+    return (
+        tuple(name for name in found if name not in asserted),
+        tuple(asserted),
+    )
+
 
 def make_uop(
     name: str,
     op: parser.InstDef,
     inputs: list[parser.InputEffect],
-    uops: dict[str, Uop],
 ) -> Uop:
-    result = Uop(
+    stack = analyze_stack(op)
+    object_inputs, asserted_objects = find_object_inputs(op, stack)
+    return Uop(
         name=name,
         context=op.context,
         annotations=op.annotations,
-        stack=analyze_stack(op),
+        stack=stack,
         caches=analyze_caches(inputs),
         local_stores=find_variable_stores(op),
         body=op.block,
         properties=compute_properties(op),
+        object_inputs=object_inputs,
+        asserted_objects=asserted_objects,
+        aliased_outputs=find_aliased_outputs(op),
     )
-    for anno in op.annotations:
-        if anno.startswith("replicate"):
-            text = anno[10:-1]
-            start, stop = text.split(":")
-            result.replicated = range(int(start), int(stop))
-            break
-    else:
-        return result
-    for oparg in result.replicated:
-        name_x = name + "_" + str(oparg)
-        properties = compute_properties(op)
-        properties.oparg = False
-        stack = analyze_stack(op)
-        if not variable_used(op, "oparg"):
-            stack = scalarize_stack(stack, oparg)
-        else:
-            properties.const_oparg = oparg
-        rep = Uop(
-            name=name_x,
-            context=op.context,
-            annotations=op.annotations,
-            stack=stack,
-            caches=analyze_caches(inputs),
-            local_stores=find_variable_stores(op),
-            body=op.block,
-            properties=properties,
-        )
-        rep.replicates = result
-        uops[name_x] = rep
-
-    return result
 
 
 def add_op(op: parser.InstDef, uops: dict[str, Uop]) -> None:
@@ -1047,7 +892,7 @@ def add_op(op: parser.InstDef, uops: dict[str, Uop]) -> None:
             raise override_error(
                 op.name, op.context, uops[op.name].context, op.tokens[0]
             )
-    uops[op.name] = make_uop(op.name, op, op.inputs, uops)
+    uops[op.name] = make_uop(op.name, op, op.inputs)
 
 
 def add_instruction(
@@ -1077,7 +922,7 @@ def desugar_inst(
                 uop_index = len(parts)
                 # Place holder for the uop.
                 parts.append(Skip(0))
-    uop = make_uop("_" + inst.name, inst, op_inputs, uops)
+    uop = make_uop("_" + inst.name, inst, op_inputs)
     uop.implicitly_created = True
     uops[inst.name] = uop
     if uop_index < 0:
@@ -1091,7 +936,6 @@ def add_macro(
     macro: parser.Macro, instructions: dict[str, Instruction], uops: dict[str, Uop]
 ) -> None:
     parts: list[Part] = []
-    seen_real_uop = False
     for part in macro.uops:
         match part:
             case parser.OpName():
@@ -1102,16 +946,7 @@ def add_macro(
                         raise analysis_error(
                             f"No Uop named {part.name}", macro.tokens[0]
                         )
-                    uop = uops[part.name]
-                    if uop.properties.records_value:
-                        if seen_real_uop:
-                            raise analysis_error(
-                                f"Recording uop {part.name} must precede all "
-                                f"non-recording, non-specializing uops in macro",
-                                macro.tokens[0])
-                    elif "specializing" not in uop.annotations:
-                        seen_real_uop = True
-                    parts.append(uop)
+                    parts.append(uops[part.name])
             case parser.CacheEffect():
                 parts.append(Skip(part.size))
             case _:
@@ -1157,91 +992,6 @@ def add_label(
 ) -> None:
     properties = compute_properties(label)
     labels[label.name] = Label(label.name, label.spilled, label.block, properties)
-
-
-def assign_opcodes(
-    instructions: dict[str, Instruction],
-    families: dict[str, Family],
-    pseudos: dict[str, PseudoInstruction],
-) -> tuple[dict[str, int], int, int]:
-    """Assigns opcodes, then returns the opmap,
-    have_arg and min_instrumented values"""
-    instmap: dict[str, int] = {}
-
-    # 0 is reserved for cache entries. This helps debugging.
-    instmap["CACHE"] = 0
-
-    # 17 is reserved as it is the initial value for the specializing counter.
-    # This helps catch cases where we attempt to execute a cache.
-    instmap["RESERVED"] = 17
-
-    # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
-    instmap["RESUME"] = 128
-
-    # This is an historical oddity.
-    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
-
-    instmap["INSTRUMENTED_LINE"] = 253
-    instmap["ENTER_EXECUTOR"] = 254
-    instmap["TRACE_RECORD"] = 255
-
-    instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
-
-    specialized: set[str] = set()
-    no_arg: list[str] = []
-    has_arg: list[str] = []
-
-    for family in families.values():
-        specialized.update(inst.name for inst in family.members)
-
-    for inst in instructions.values():
-        name = inst.name
-        if name in specialized:
-            continue
-        if name in instrumented:
-            continue
-        if inst.properties.oparg:
-            has_arg.append(name)
-        else:
-            no_arg.append(name)
-
-    # Specialized ops appear in their own section
-    # Instrumented opcodes are at the end of the valid range
-    min_internal = instmap["RESUME"] + 1
-    min_instrumented = 254 - len(instrumented)
-    assert min_internal + len(specialized) < min_instrumented
-
-    next_opcode = 1
-
-    def add_instruction(name: str) -> None:
-        nonlocal next_opcode
-        if name in instmap:
-            return  # Pre-defined name
-        while next_opcode in instmap.values():
-            next_opcode += 1
-        instmap[name] = next_opcode
-        next_opcode += 1
-
-    for name in sorted(no_arg):
-        add_instruction(name)
-    for name in sorted(has_arg):
-        add_instruction(name)
-    # For compatibility
-    next_opcode = min_internal
-    for name in sorted(specialized):
-        add_instruction(name)
-    next_opcode = min_instrumented
-    for name in instrumented:
-        add_instruction(name)
-
-    for name in instructions:
-        instructions[name].opcode = instmap[name]
-
-    for op, name in enumerate(sorted(pseudos), 256):
-        instmap[name] = op
-        pseudos[name].opcode = op
-
-    return instmap, len(no_arg), min_instrumented
 
 
 def get_instruction_size_for_uop(instructions: dict[str, Instruction], uop: Uop) -> int | None:
@@ -1310,6 +1060,17 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
                 add_label(node, labels)
             case _:
                 pass
+    for code in [*uops.values(), *labels.values()]:
+        for tkn, msg in root_check.check_uop(code):
+            raise analysis_error(msg, tkn)
+    ir_only: dict[str, Instruction] = {}
+    for name, inst in list(instructions.items()):
+        if any(isinstance(part, Uop) and "ir_only" in part.annotations
+               for part in inst.parts):
+            ir_only[name] = instructions.pop(name)
+            for part in inst.parts:
+                if isinstance(part, Uop) and "ir_only" in part.annotations:
+                    uops.pop(part.name if part.name in uops else name, None)
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
     # Special case BINARY_OP_INPLACE_ADD_UNICODE
@@ -1320,63 +1081,9 @@ def analyze_forest(forest: list[parser.AstNode]) -> Analysis:
         inst = instructions["BINARY_OP_INPLACE_ADD_UNICODE"]
         inst.family = families["BINARY_OP"]
         families["BINARY_OP"].members.append(inst)
-    opmap, first_arg, min_instrumented = assign_opcodes(instructions, families, pseudos)
     return Analysis(
-        instructions, uops, families, pseudos, labels, opmap, first_arg, min_instrumented
+        instructions, uops, families, pseudos, labels, ir_only
     )
-
-
-#Simple heuristic for size to avoid too much stencil duplication
-def is_large(uop: Uop) -> bool:
-    return len(list(uop.body.tokens())) > 120
-
-
-def get_uop_cache_depths(uop: Uop) -> Iterator[tuple[int, int, int]]:
-    if uop.name == "_SPILL_OR_RELOAD":
-        for inputs in range(MAX_CACHED_REGISTER+1):
-            for outputs in range(MAX_CACHED_REGISTER+1):
-                if inputs != outputs:
-                    yield inputs, outputs, inputs
-        return
-    if uop.name in ("_DEOPT", "_HANDLE_PENDING_AND_DEOPT", "_EXIT_TRACE", "_DYNAMIC_EXIT"):
-        for i in range(MAX_CACHED_REGISTER+1):
-            yield i, 0, 0
-        return
-    if uop.name in ("_START_EXECUTOR", "_JUMP_TO_TOP", "_COLD_EXIT"):
-        yield 0, 0, 0
-        return
-    if uop.name == "_ERROR_POP_N":
-        yield 0, 0, 0
-        return
-    ideal_inputs = 0
-    has_array = False
-    for item in reversed(uop.stack.inputs):
-        if item.size:
-            has_array = True
-            break
-        ideal_inputs += 1
-    ideal_outputs = 0
-    for item in reversed(uop.stack.outputs):
-        if item.size:
-            has_array = True
-            break
-        ideal_outputs += 1
-    if ideal_inputs > MAX_CACHED_REGISTER:
-        ideal_inputs = MAX_CACHED_REGISTER
-    if ideal_outputs > MAX_CACHED_REGISTER:
-        ideal_outputs = MAX_CACHED_REGISTER
-    at_end = uop.properties.sync_sp or uop.properties.side_exit_at_end
-    exit_depth = ideal_outputs if at_end else ideal_inputs
-    if uop.properties.escapes or uop.properties.sync_sp or has_array or is_large(uop):
-        yield ideal_inputs, ideal_outputs, exit_depth
-        return
-    for inputs in range(MAX_CACHED_REGISTER + 1):
-        outputs = ideal_outputs - ideal_inputs + inputs
-        if outputs < ideal_outputs:
-            outputs = ideal_outputs
-        elif outputs > MAX_CACHED_REGISTER:
-            continue
-        yield inputs, outputs, outputs if at_end else inputs
 
 
 def analyze_files(filenames: list[str]) -> Analysis:

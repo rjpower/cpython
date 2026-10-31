@@ -419,11 +419,12 @@ class ListTest(list_tests.CommonTest):
            iterable doesn't prematurely free the iterable"""
 
         def foo(x):
-            self.assertEqual(sys.getrefcount(x), 1)
             r = 0
             for i in x:
                 r += i
                 x = None
+                # Only the loop's iterator holds the list now.
+                support.gc_collect()
             return r
 
         self.assertEqual(foo(list(range(10))), 45)

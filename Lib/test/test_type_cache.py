@@ -271,7 +271,8 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         self._assign_valid_version_or_skip(H)
 
         def to_bool_1(instance):
-            not instance
+            # UNARY_NOT tests truth itself: TO_BOOL remains for "not not"
+            not not instance
 
         self._check_specialization(to_bool_1, H(), "TO_BOOL", should_specialize=True)
         del to_bool_1
@@ -279,7 +280,7 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         self._no_more_versions(H)
 
         def to_bool_2(instance):
-            not instance
+            not not instance
 
         self._check_specialization(to_bool_2, H(), "TO_BOOL", should_specialize=False)
 
@@ -440,6 +441,83 @@ class PerTypeLookupCacheTests(unittest.TestCase):
         hit, value, _ = self.type_cache_lookup(A, "x")
         self.assertEqual(hit, 1)
         self.assertEqual(value, "a")
+
+
+@support.cpython_only
+class PlanCacheTests(unittest.TestCase):
+    """The cache holds plans keyed by (shape, name), beside the root
+    entries of the raw MRO lookup."""
+
+    lookup_plan = staticmethod(_testinternalcapi.lookup_plan)
+    type_cache_size = staticmethod(_testinternalcapi.type_cache_size)
+
+    def test_many_names_resize(self):
+        names = [sys.intern(f"a{i}") for i in range(300)]
+        C = type("C", (), {name: i for i, name in enumerate(names)})
+        o = C()
+        size = self.type_cache_size(C)
+        for i, name in enumerate(names):
+            self.assertEqual(getattr(o, name), i)
+        self.assertGreater(self.type_cache_size(C), size)
+        for i, name in enumerate(names):
+            kind, _, _, cacheable, _, _, _, value = self.lookup_plan(o, name)
+            self.assertEqual((kind, cacheable, value), ("CLASS_VALUE", 1, i))
+            self.assertEqual(getattr(o, name), i)
+
+    def test_absent_entries(self):
+        class C:
+            pass
+        o = C()
+        for _ in range(2):
+            with self.assertRaises(AttributeError):
+                o.missing
+            self.assertEqual(self.lookup_plan(o, "missing")[:4],
+                             ("ABSENT", "ABSENT", 0, 1))
+        C.missing = 1
+        self.assertEqual(o.missing, 1)
+        self.assertEqual(self.lookup_plan(o, "missing")[0], "CLASS_VALUE")
+
+    def test_one_name_several_shapes(self):
+        class C:
+            pass
+        a, b, c = C(), C(), C()
+        a.x, a.y = 1, 2
+        b.y, b.x = 3, 4
+        plans = [self.lookup_plan(o, "x") for o in (a, b, c)]
+        self.assertEqual([p[0] for p in plans], ["SLOT", "SLOT", "ABSENT"])
+        shape_of = _testinternalcapi.get_object_shape
+        self.assertNotEqual(shape_of(a), shape_of(b))
+        # A slot is the field's position in its shape: x is a's first
+        # field and b's second.
+        self.assertEqual(plans[1][6] - plans[0][6], 8)
+        self.assertEqual((a.x, b.x), (1, 4))
+        with self.assertRaises(AttributeError):
+            c.x
+        # Repeated lookups give the cached plans.
+        self.assertEqual([self.lookup_plan(o, "x") for o in (a, b, c)], plans)
+
+    def test_version_exhaustion(self):
+        class C:
+            x = 0
+        o = C()
+        o.y = 1
+        for i in range(1001):
+            C.x = i
+            type_assign_version(C)
+        self.assertEqual(type_get_version(C), 0)
+        for name, kind in (("x", "CLASS_VALUE"), ("y", "SLOT")):
+            plan = self.lookup_plan(o, name)
+            self.assertEqual((plan[0], plan[3], plan[5]), (kind, 0, 0))
+        self.assertEqual((o.x, o.y), (1000, 1))
+        C.x = "new"
+        self.assertEqual(o.x, "new")
+
+    def test_non_string_class_dict_key(self):
+        with self.assertWarnsRegex(RuntimeWarning, "non-string key"):
+            C = type("C", (), {1: "one", "x": "x"})
+        plan = self.lookup_plan(C(), "x")
+        self.assertEqual((plan[0], plan[3]), ("CLASS_VALUE", 0))
+        self.assertEqual(C().x, "x")
 
 
 if __name__ == "__main__":

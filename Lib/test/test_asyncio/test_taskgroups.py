@@ -11,6 +11,7 @@ from asyncio import taskgroups
 import unittest
 import warnings
 
+from test import support
 from test.test_asyncio.utils import await_without_task
 
 # To prevent a warning "test altered the execution environment"
@@ -37,24 +38,6 @@ def no_other_refs():
     while coro.cr_frame != frame:
         coro = coro.cr_await
     return [coro]
-
-
-def set_gc_state(enabled):
-    was_enabled = gc.isenabled()
-    if enabled:
-        gc.enable()
-    else:
-        gc.disable()
-    return was_enabled
-
-
-@contextlib.contextmanager
-def disable_gc():
-    was_enabled = set_gc_state(enabled=False)
-    try:
-        yield
-    finally:
-        set_gc_state(enabled=was_enabled)
 
 
 class BaseTestTaskGroup:
@@ -977,69 +960,6 @@ class BaseTestTaskGroup:
         self.assertIsNotNone(exc)
         self.assertListEqual(gc.get_referrers(exc), no_other_refs())
 
-
-    async def test_exception_refcycles_errors(self):
-        """Test that TaskGroup deletes self._errors, and __aexit__ args"""
-        tg = asyncio.TaskGroup()
-        exc = None
-
-        class _Done(Exception):
-            pass
-
-        try:
-            async with tg:
-                raise _Done
-        except* _Done as excs:
-            exc = excs.exceptions[0]
-
-        self.assertIsInstance(exc, _Done)
-        self.assertListEqual(gc.get_referrers(exc), no_other_refs())
-
-
-    async def test_exception_refcycles_parent_task(self):
-        """Test that TaskGroup deletes self._parent_task"""
-        tg = asyncio.TaskGroup()
-        exc = None
-
-        class _Done(Exception):
-            pass
-
-        async def coro_fn():
-            async with tg:
-                raise _Done
-
-        try:
-            async with asyncio.TaskGroup() as tg2:
-                tg2.create_task(coro_fn())
-        except* _Done as excs:
-            exc = excs.exceptions[0].exceptions[0]
-
-        self.assertIsInstance(exc, _Done)
-        self.assertListEqual(gc.get_referrers(exc), no_other_refs())
-
-
-    async def test_exception_refcycles_parent_task_wr(self):
-        """Test that TaskGroup deletes self._parent_task and create_task() deletes task"""
-        tg = asyncio.TaskGroup()
-        exc = None
-
-        class _Done(Exception):
-            pass
-
-        async def coro_fn():
-            async with tg:
-                raise _Done
-
-        with disable_gc():
-            try:
-                async with asyncio.TaskGroup() as tg2:
-                    task_wr = weakref.ref(tg2.create_task(coro_fn()))
-            except* _Done as excs:
-                exc = excs.exceptions[0].exceptions[0]
-
-        self.assertIsNone(task_wr())
-        self.assertIsInstance(exc, _Done)
-        self.assertListEqual(gc.get_referrers(exc), no_other_refs())
 
     async def test_exception_refcycles_propagate_cancellation_error(self):
         """Test that TaskGroup deletes propagate_cancellation_error"""

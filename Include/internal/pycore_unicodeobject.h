@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_fileutils.h"     // _Py_error_handler
+#include "pycore_gc_trace.h"      // _PyGCRoot
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_runtime.h"       // _Py_LATIN1_CHR()
 
@@ -17,8 +18,133 @@ extern "C" {
 #define _Py_MAX_UNICODE 0x10ffff
 
 
-extern int _PyUnicode_IsModifiable(PyObject *unicode);
-extern void _PyUnicodeWriter_InitWithBuffer(
+/* --- Private _PyUnicodeWriter API --------------------------------------- */
+
+typedef struct {
+    PyObject *buffer;
+    // Covers buffer for the whole Init-to-Finish/Dealloc session, even if empty.
+    _PyGCRoot root;
+    unsigned char root_active;
+    void *data;
+    int kind;
+    Py_UCS4 maxchar;
+    Py_ssize_t size;
+    Py_ssize_t pos;
+
+    /* minimum number of allocated characters (default: 0) */
+    Py_ssize_t min_length;
+
+    /* minimum character (default: 127, ASCII) */
+    Py_UCS4 min_char;
+
+    // If non-zero, _PyUnicodeWriter_Finish() needs to check maxchar.
+    int recheck_maxchar;
+
+    /* If non-zero, overallocate the buffer (default: 0). */
+    unsigned char overallocate;
+
+    /* If readonly is 1, buffer is a shared string (cannot be modified)
+       and size is set to 0. */
+    unsigned char readonly;
+} _PyUnicodeWriter;
+
+// Initialize a writer at a stable address. Finish or Dealloc must precede
+// another Init; do not copy or move a writer while its root is active.
+//
+// By default, the minimum buffer size is 0 character and overallocation is
+// disabled. Set min_length, min_char and overallocate attributes to control
+// the allocation of the buffer.
+PyAPI_FUNC(void) _PyUnicodeWriter_Init(
+    _PyUnicodeWriter *writer);
+
+// Don't call this function directly, use _PyUnicodeWriter_Prepare() instead.
+PyAPI_FUNC(int) _PyUnicodeWriter_PrepareInternal(
+    _PyUnicodeWriter *writer,
+    Py_ssize_t length,
+    Py_UCS4 maxchar);
+
+// Prepare the buffer to write 'length' characters
+// with the specified maximum character.
+//
+// Return 0 on success. Set an exception and return -1 on error.
+static inline int
+_PyUnicodeWriter_Prepare(_PyUnicodeWriter *writer,
+                         Py_ssize_t length, Py_UCS4 maxchar)
+{
+    assert(0 <= length);
+    if (maxchar <= writer->maxchar && length <= (writer->size - writer->pos)) {
+        return 0;
+    }
+    if (length == 0) {
+        return 0;
+    }
+    return _PyUnicodeWriter_PrepareInternal(writer, length, maxchar);
+}
+
+/* Prepare the buffer to have at least the kind KIND.
+   For example, kind=PyUnicode_2BYTE_KIND ensures that the writer will
+   support characters in range U+000-U+FFFF.
+
+   Return 0 on success, raise an exception and return -1 on error. */
+#define _PyUnicodeWriter_PrepareKind(WRITER, KIND)                    \
+    ((KIND) <= (WRITER)->kind                                         \
+     ? 0                                                              \
+     : _PyUnicodeWriter_PrepareKindInternal((WRITER), (KIND)))
+
+/* Don't call this function directly, use the _PyUnicodeWriter_PrepareKind()
+   macro instead. */
+PyAPI_FUNC(int) _PyUnicodeWriter_PrepareKindInternal(
+    _PyUnicodeWriter *writer,
+    int kind);
+
+/* Append a Unicode character.
+   Return 0 on success, raise an exception and return -1 on error. */
+PyAPI_FUNC(int) _PyUnicodeWriter_WriteChar(
+    _PyUnicodeWriter *writer,
+    Py_UCS4 ch);
+
+/* Append a Unicode string.
+   Return 0 on success, raise an exception and return -1 on error. */
+PyAPI_FUNC(int) _PyUnicodeWriter_WriteStr(
+    _PyUnicodeWriter *writer,
+    PyObject *str);               /* Unicode string */
+
+/* Append a substring of a Unicode string.
+   Return 0 on success, raise an exception and return -1 on error. */
+PyAPI_FUNC(int) _PyUnicodeWriter_WriteSubstring(
+    _PyUnicodeWriter *writer,
+    PyObject *str,              /* Unicode string */
+    Py_ssize_t start,
+    Py_ssize_t end);
+
+/* Append an ASCII-encoded byte string.
+   Return 0 on success, raise an exception and return -1 on error. */
+PyAPI_FUNC(int) _PyUnicodeWriter_WriteASCIIString(
+    _PyUnicodeWriter *writer,
+    const char *str,           /* ASCII-encoded byte string */
+    Py_ssize_t len);           /* number of bytes, or -1 if unknown */
+
+/* Append a latin1-encoded byte string.
+   Return 0 on success, raise an exception and return -1 on error. */
+PyAPI_FUNC(int) _PyUnicodeWriter_WriteLatin1String(
+    _PyUnicodeWriter *writer,
+    const char *str,           /* latin1-encoded byte string */
+    Py_ssize_t len);           /* length in bytes */
+
+/* Finish the writer session, clearing the buffer and root on success or
+   error. Call Init before using the private writer again. Raise an exception
+   and return NULL on error. */
+PyAPI_FUNC(PyObject *) _PyUnicodeWriter_Finish(
+    _PyUnicodeWriter *writer);
+
+/* End a writer session. Also accepts a writer already ended by Finish
+   or Dealloc. The writer must have been initialized. */
+PyAPI_FUNC(void) _PyUnicodeWriter_Dealloc(
+    _PyUnicodeWriter *writer);
+
+
+// Export for '_testinternalcapi' shared extension.
+PyAPI_FUNC(void) _PyUnicodeWriter_InitWithBuffer(
     _PyUnicodeWriter *writer,
     PyObject *buffer);
 extern PyObject* _PyUnicode_Result(PyObject *unicode);
@@ -115,11 +241,8 @@ _PyUnicodeWriter_CanWrite(_PyUnicodeWriter *writer)
     PyObject *buffer = writer->buffer;
     assert(buffer != NULL);
 
-    // Code adapted from _PyUnicode_IsModifiable().
-    // Do not use _PyObject_IsUniquelyReferenced(): the caller can have its own
-    // lock to prevent a writer from being used by two threads at the same
-    // time.
-    assert(Py_REFCNT(buffer) == 1);
+    // The writer owns its buffer, which must not have been hashed or
+    // interned.
     assert(PyUnstable_Unicode_GET_CACHED_HASH(buffer) == -1);
     assert(!PyUnicode_CHECK_INTERNED(buffer));
     assert(!_Py_IsImmortal(buffer));
@@ -130,6 +253,7 @@ _PyUnicodeWriter_CanWrite(_PyUnicodeWriter *writer)
 static inline void
 _PyUnicodeWriter_SetBuffer(_PyUnicodeWriter *writer, PyObject *buffer)
 {
+    assert(writer->root_active);
     assert(writer->pos <= PyUnicode_GET_LENGTH(buffer));
 
     // Py_DECREF() the previous buffer (if any)
@@ -145,6 +269,7 @@ static inline void
 _PyUnicodeWriter_SetReadOnly(_PyUnicodeWriter *writer, PyObject *obj,
                              Py_ssize_t length)
 {
+    assert(writer->root_active);
     assert(writer->buffer == NULL);
     assert(writer->pos == 0);
     // Micro-optimization: pass length as a parameter, as it's usually known
@@ -187,7 +312,7 @@ _PyUnicodeWriter_WriteCharInline(_PyUnicodeWriter *writer, Py_UCS4 ch)
     return 0;
 }
 
-// Export for '_testcapi' shared extension
+// Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(PyObject*) _PyUnicodeWriter_FinishWithSize(
     _PyUnicodeWriter *writer,
     Py_ssize_t size);

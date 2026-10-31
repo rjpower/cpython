@@ -1,0 +1,52 @@
+diff --git a/Cython/Utility/CythonFunction.c b/Cython/Utility/CythonFunction.c
+index d4c5107..ace9973 100644
+--- a/Cython/Utility/CythonFunction.c
++++ b/Cython/Utility/CythonFunction.c
+@@ -943,8 +943,6 @@ static PyMemberDef __pyx_CyFunction_members[] = {
+ #if CYTHON_COMPILING_IN_LIMITED_API
+     {"__weaklistoffset__", T_PYSSIZET, offsetof(__pyx_CyFunctionObject, func_weakreflist),
+         __PYX_SHARED_RELATIVE_OFFSET | READONLY, 0},
+-#else
+-    {"__weaklistoffset__", T_PYSSIZET, offsetof(PyCFunctionObject, m_weakreflist), READONLY, 0},
+ #endif
+ #endif
+     {0, 0, 0,  0, 0}
+@@ -992,8 +990,6 @@ __Pyx_CyFunction_get_annotate(PyObject *op_in, void *context) {
+ 
+ #if CYTHON_COMPILING_IN_LIMITED_API
+ #define __Pyx_CyFunction_weakreflist(cyfunc) ((cyfunc)->func_weakreflist)
+-#else
+-#define __Pyx_CyFunction_weakreflist(cyfunc) (((PyCFunctionObject*)cyfunc)->m_weakreflist)
+ #endif
+ 
+ static PyObject *__Pyx_CyFunction_Init(PyObject *op_in,
+@@ -1011,7 +1007,9 @@ static PyObject *__Pyx_CyFunction_Init(PyObject *op_in,
+     op->func_module = module;
+ #endif
+     op->flags = flags;
++#if CYTHON_COMPILING_IN_LIMITED_API
+     __Pyx_CyFunction_weakreflist(op) = NULL;
++#endif
+ #if !CYTHON_COMPILING_IN_LIMITED_API
+     cf->m_ml = ml;
+     // This is set for the benefit of __Pyx_CyOrPyCFunction_GET_SELF. It is never reassigned, so
+@@ -1127,7 +1125,9 @@ __Pyx_CyFunction_clear(PyObject *m)
+ static void __Pyx__CyFunction_dealloc(PyObject *m)
+ {
+     __pyx_CyFunctionObject *cyfunc = __Pyx_as_CyFunctionObject(m);
++#if CYTHON_COMPILING_IN_LIMITED_API
+     if (__Pyx_CyFunction_weakreflist(cyfunc) != NULL)
++#endif
+         PyObject_ClearWeakRefs(m);
+     __Pyx__CyFunction_clear(cyfunc);
+     __Pyx_PyHeapTypeObject_GC_Del(m);
+@@ -1511,6 +1511,9 @@ static PyType_Spec __pyx_CyFunctionType_spec = {
+ #endif // CYTHON_VECTORCALL
+ #if PY_VERSION_HEX >= 0x030C0000 && !CYTHON_COMPILING_IN_LIMITED_API
+     Py_TPFLAGS_MANAGED_DICT |
++#endif
++#if !CYTHON_COMPILING_IN_LIMITED_API
++    Py_TPFLAGS_MANAGED_WEAKREF |
+ #endif
+     Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION |
+     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE, /*tp_flags*/

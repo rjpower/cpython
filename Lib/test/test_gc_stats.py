@@ -1,3 +1,4 @@
+from test import support
 import gc
 import os
 import textwrap
@@ -23,6 +24,11 @@ except ImportError:
 GC_STATS_FIELDS = (
     "gen", "iid", "ts_start", "ts_stop", "collections", "collected",
     "uncollectable", "candidates", "heap_size", "duration")
+
+
+# The generations whose stats a collection advances.  The tracing collector
+# has one generation and records every collection as the oldest.
+COLLECTED_GENERATIONS = (2,)
 
 
 def get_interpreter_identifiers(gc_stats) -> tuple[int,...]:
@@ -92,6 +98,7 @@ class TestLocalGCStats(unittest.TestCase):
             os.getpid(), all_interpreters=False)
         check_gc_stats_fields(self, stats)
 
+    @support.requires_subinterpreters
     def test_all_interpreters_filter_for_local_process(self):
         interpreters = import_helper.import_module("concurrent.interpreters")
         source = """
@@ -288,13 +295,10 @@ class TestGCStats(unittest.TestCase):
 
         for iid in after_iids:
             with self.subTest(f"interpreter id={iid}"):
-                before_last_items = (get_last_item(before_stats, 0, iid),
-                                     get_last_item(before_stats, 1, iid),
-                                     get_last_item(before_stats, 2, iid))
-
-                after_last_items = (get_last_item(after_stats, 0, iid),
-                                    get_last_item(after_stats, 1, iid),
-                                    get_last_item(after_stats, 2, iid))
+                before_last_items = [get_last_item(before_stats, gen, iid)
+                                     for gen in COLLECTED_GENERATIONS]
+                after_last_items = [get_last_item(after_stats, gen, iid)
+                                    for gen in COLLECTED_GENERATIONS]
 
                 for before, after in zip(before_last_items, after_last_items):
                     self._check_gc_stats(before, after)
@@ -302,9 +306,9 @@ class TestGCStats(unittest.TestCase):
     def test_gc_stats_timestamps_for_main_interpreter(self):
         script = textwrap.dedent(self._main_interpreter_script)
         before_stats, after_stats = self._collect_gc_stats(
-            script, False, generations=(0, 1, 2))
+            script, False, generations=COLLECTED_GENERATIONS)
 
-        for generation in range(3):
+        for generation in COLLECTED_GENERATIONS:
             with self.subTest(generation=generation):
                 before = get_last_item(before_stats, generation, self._main_iid)
                 after = get_last_item(after_stats, generation, self._main_iid)
@@ -328,6 +332,7 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
+    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_main_interpreter_if_subinterpreter_exists(self):
         script = textwrap.dedent(self._script.format(True))
@@ -335,6 +340,7 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
+    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_all_interpreters(self):
         script = textwrap.dedent(self._script.format(True))

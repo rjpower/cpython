@@ -249,6 +249,7 @@ class TestTracemallocEnabled(unittest.TestCase):
 
         # destroy the object
         obj = None
+        support.gc_collect()
         size2, peak_size2 = tracemalloc.get_traced_memory()
         self.assertLess(size2, size)
         self.assertGreaterEqual(size - size2, obj_size - max_error)
@@ -283,6 +284,7 @@ class TestTracemallocEnabled(unittest.TestCase):
 
         # Example: allocate a large piece of memory, temporarily
         large_sum = sum(list(range(100000)))
+        support.gc_collect()  # For other GCs.
         size1, peak1 = tracemalloc.get_traced_memory()
 
         # reset_peak() resets peak to traced memory: peak2 < peak1

@@ -63,7 +63,6 @@ Objects/floatobject.c:float_format                               static float_fo
 Objects.longobject.c:_Py_quick_int_allocs                        Py_ssize_t _Py_quick_int_allocs
 Objects.longobject.c:_Py_quick_neg_int_allocs                    Py_ssize_t _Py_quick_neg_int_allocs
 Objects/moduleobject.c:max_module_number                         static Py_ssize_t max_module_number
-Objects/object.c:_Py_RefTotal                                    Py_ssize_t _Py_RefTotal
 Objects/tupleobject.c:_Py_fast_tuple_allocs                      Py_ssize_t _Py_fast_tuple_allocs
 Objects/tupleobject.c:_Py_tuple_zero_allocs                      Py_ssize_t _Py_tuple_zero_allocs
 Objects/typeobject.c:next_version_tag                            static unsigned int next_version_tag

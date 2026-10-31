@@ -38,7 +38,6 @@ typedef struct {
     _Py_COMMON_FIELDS(func_)
     PyObject *func_doc;         /* The __doc__ attribute, can be anything */
     PyObject *func_dict;        /* The __dict__ attribute, a dict or NULL */
-    PyObject *func_weakreflist; /* List of weak references */
     PyObject *func_module;      /* The __module__ attribute, can be anything */
     PyObject *func_annotations; /* Annotations, a dict or NULL */
     PyObject *func_annotate;    /* Callable to fill the annotations dictionary */
@@ -65,7 +64,7 @@ typedef struct {
 
 PyAPI_DATA(PyTypeObject) PyFunction_Type;
 
-#define PyFunction_Check(op) Py_IS_TYPE((op), &PyFunction_Type)
+#define PyFunction_Check(op) _Py_IS_ROOT_SHAPE((op), &PyFunction_Type)
 
 PyAPI_FUNC(PyObject *) PyFunction_New(PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) PyFunction_NewWithQualName(PyObject *, PyObject *, PyObject *);
@@ -98,12 +97,7 @@ static inline PyObject* PyFunction_GET_GLOBALS(PyObject *func) {
 #define PyFunction_GET_GLOBALS(func) PyFunction_GET_GLOBALS(_PyObject_CAST(func))
 
 static inline PyObject* PyFunction_GET_MODULE(PyObject *func) {
-#ifdef Py_GIL_DISABLED
-    return (PyObject *)_Py_atomic_load_ptr_acquire(
-        &_PyFunction_CAST(func)->func_module);
-#else
     return _PyFunction_CAST(func)->func_module;
-#endif
 }
 #define PyFunction_GET_MODULE(func) PyFunction_GET_MODULE(_PyObject_CAST(func))
 
@@ -123,12 +117,7 @@ static inline PyObject* PyFunction_GET_CLOSURE(PyObject *func) {
 #define PyFunction_GET_CLOSURE(func) PyFunction_GET_CLOSURE(_PyObject_CAST(func))
 
 static inline PyObject* PyFunction_GET_ANNOTATIONS(PyObject *func) {
-#ifdef Py_GIL_DISABLED
-    return (PyObject *)_Py_atomic_load_ptr_acquire(
-        &_PyFunction_CAST(func)->func_annotations);
-#else
     return _PyFunction_CAST(func)->func_annotations;
-#endif
 }
 #define PyFunction_GET_ANNOTATIONS(func) PyFunction_GET_ANNOTATIONS(_PyObject_CAST(func))
 

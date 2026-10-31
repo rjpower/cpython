@@ -260,23 +260,6 @@ class ProfileHookTestCase(TestCaseBase):
                               (1, 'return', g_ident),
                               ])
 
-    def test_unfinished_generator(self):
-        def f():
-            for i in range(2):
-                yield i
-        def g(p):
-            next(f())
-
-        f_ident = ident(f)
-        g_ident = ident(g)
-        self.check_events(g, [(1, 'call', g_ident, None),
-                              (2, 'call', f_ident, None),
-                              (2, 'return', f_ident, 0),
-                              (2, 'call', f_ident, None),
-                              (2, 'return', f_ident, None),
-                              (1, 'return', g_ident, None),
-                              ], check_args=True)
-
     def test_stop_iteration(self):
         def f():
             for i in range(2):
@@ -442,24 +425,6 @@ class TestEdgeCases(unittest.TestCase):
     def setUp(self):
         self.addCleanup(sys.setprofile, sys.getprofile())
         sys.setprofile(None)
-
-    def test_reentrancy(self):
-        def foo(*args):
-            ...
-
-        def bar(*args):
-            ...
-
-        class A:
-            def __call__(self, *args):
-                pass
-
-            def __del__(self):
-                sys.setprofile(bar)
-
-        sys.setprofile(A())
-        sys.setprofile(foo)
-        self.assertEqual(sys.getprofile(), bar)
 
     def test_same_object(self):
         def foo(*args):

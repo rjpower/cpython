@@ -159,7 +159,6 @@ Modules/syslogmodule.c	-	S_log_open	-
 ##-----------------------
 ## kept for stable ABI compatibility
 
-Objects/object.c	-	_Py_RefTotal	-
 
 ##-----------------------
 ## one-off temporary state
@@ -363,7 +362,6 @@ Parser/parser.c	-	reserved_keywords	-
 Parser/parser.c	-	soft_keywords	-
 Parser/lexer/lexer.c	-	type_comment_prefix	-
 Python/Python-ast.c	add_ast_annotations	builtin_types	const array of pointers to static builtin types
-Python/ceval.c	-	_PyEval_BinaryOps	-
 Python/ceval.c	-	_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS	-
 Python/ceval.c	-	_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR	-
 Python/codecs.c	-	Py_hexdigits	-
@@ -387,7 +385,8 @@ Python/import.c	-	_PySys_ImplCacheTag	-
 Python/intrinsics.c	-	_PyIntrinsics_UnaryFunctions	-
 Python/intrinsics.c	-	_PyIntrinsics_BinaryFunctions	-
 Python/lock.c	-	TIME_TO_BE_FAIR_NS	-
-Python/opcode_targets.h	-	opcode_targets	-
+Python/ir_targets.h	-	opcode_targets	-
+Python/ir_targets.h	-	ir_body_targets	-
 Python/jit_unwind.c	-	__jit_debug_descriptor	-
 Python/jit_unwind.c	-	_Py_jit_debug_mutex	-
 Python/perf_trampoline.c	-	_Py_perfmap_callbacks	-
@@ -407,11 +406,6 @@ Python/sysmodule.c	-	perf_map_state	-
 Python/sysmodule.c	-	_PySys_ImplCacheTag	-
 Python/sysmodule.c	-	_PySys_ImplName	-
 Python/sysmodule.c	-	whatstrings	-
-Python/optimizer.c	-	_PyUOpExecutor_Type	-
-Python/optimizer.c	-	_PyOptimizer_Default	-
-Python/optimizer.c	-	_ColdExit_Type	-
-Python/optimizer.c	-	Py_FatalErrorExecutor	-
-Python/optimizer.c	-	EMPTY_FILTER	-
 
 ##-----------------------
 ## test code

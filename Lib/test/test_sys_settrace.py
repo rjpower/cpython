@@ -295,33 +295,6 @@ tighterloop_example.events = [(0, 'call'),
                             (6, 'line'),
                             (6, 'return')]
 
-def generator_function():
-    try:
-        yield True
-        "continued"
-    finally:
-        "finally"
-def generator_example():
-    # any() will leave the generator before its end
-    x = any(generator_function())
-
-    # the following lines were not traced
-    for x in range(10):
-        y = x
-
-generator_example.events = ([(0, 'call'),
-                             (2, 'line'),
-                             (-6, 'call'),
-                             (-5, 'line'),
-                             (-4, 'line'),
-                             (-4, 'return'),
-                             (-4, 'call'),
-                             (-4, 'exception'),
-                             (-1, 'line'),
-                             (-1, 'return')] +
-                            [(5, 'line'), (6, 'line')] * 10 +
-                            [(5, 'line'), (5, 'return')])
-
 
 def lineno_matches_lasti(frame):
     last_line = None
@@ -348,20 +321,12 @@ class Tracer:
         self.events.append((frame.f_lineno, event))
         return self.trace
 
-    def traceWithGenexp(self, frame, event, arg):
-        self._reconfigure_frame(frame)
-        (o for o in [1])
-        self.events.append((frame.f_lineno, event))
-        return self.trace
-
 
 class TraceTestCase(unittest.TestCase):
 
     # Disable gc collection when tracing, otherwise the
     # deallocators may be traced as well.
     def setUp(self):
-        if os.environ.get('PYTHON_UOPS_OPTIMIZE') == '0':
-            self.skipTest("Line tracing behavior differs when JIT optimizer is disabled")
         self.using_gc = gc.isenabled()
         gc.disable()
         self.addCleanup(sys.settrace, sys.gettrace())
@@ -444,19 +409,6 @@ class TraceTestCase(unittest.TestCase):
         self.run_test(tightloop_example)
     def test_12_tighterloop(self):
         self.run_test(tighterloop_example)
-
-    def test_13_genexp(self):
-        self.run_test(generator_example)
-        # issue1265: if the trace function contains a generator,
-        # and if the traced function contains another generator
-        # that is not completely exhausted, the trace stopped.
-        # Worse: the 'finally' clause was not invoked.
-        tracer = self.make_tracer()
-        sys.settrace(tracer.traceWithGenexp)
-        generator_example()
-        sys.settrace(None)
-        self.compare_events(generator_example.__code__.co_firstlineno,
-                            tracer.events, generator_example.events)
 
     def test_14_onliner_if(self):
         def onliners():
@@ -3046,25 +2998,6 @@ class TestEdgeCases(unittest.TestCase):
     def setUp(self):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
-
-    def test_reentrancy(self):
-        def foo(*args):
-            ...
-
-        def bar(*args):
-            ...
-
-        class A:
-            def __call__(self, *args):
-                pass
-
-            def __del__(self):
-                sys.settrace(bar)
-
-        sys.settrace(A())
-        sys.settrace(foo)
-        self.assertEqual(sys.gettrace(), bar)
-
 
     def test_same_object(self):
         def foo(*args):

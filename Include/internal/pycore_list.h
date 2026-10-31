@@ -8,49 +8,52 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#ifdef Py_GIL_DISABLED
-#include "pycore_stackref.h"
-#endif
 
 PyAPI_FUNC(PyObject*) _PyList_Extend(PyListObject *, PyObject *);
 PyAPI_FUNC(PyObject) *_PyList_SliceSubscript(PyObject*, PyObject*);
 PyAPI_FUNC(PyObject *) _PyList_BinarySlice(PyObject *, PyObject *, PyObject *);
+// list[start:stop] = value, with start and stop as PySlice_Unpack() gives
+// them for a slice with no step.
+extern int _PyList_StoreSlice(PyObject *, Py_ssize_t, Py_ssize_t, PyObject *);
 PyAPI_FUNC(PyObject *) _PyList_Concat(PyObject *, PyObject *);
-extern void _PyList_DebugMallocStats(FILE *out);
 // _PyList_GetItemRef should be used only when the object is known as a list
 // because it doesn't raise TypeError when the object is not a list, whereas PyList_GetItemRef does.
 PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 
 
-#ifdef Py_GIL_DISABLED
-// Returns -1 in case of races with other threads.
-PyAPI_FUNC(int) _PyList_GetItemRefNoLock(PyListObject *, Py_ssize_t, _PyStackRef *);
-#endif
 
 #define _PyList_ITEMS(op) _Py_RVALUE(_PyList_CAST(op)->ob_item)
 
-PyAPI_FUNC(int)
-_PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem);
+// v in the list op: 1, 0, or -1 with an exception set.
+PyAPI_FUNC(int) _PyList_ContainsValue(PyObject *op, PyValue v);
 
+PyAPI_FUNC(int)
+_PyList_AppendValueListResize(PyListObject *self, PyValue newitem);
+
+// Append a canonical value, which the list keeps as it is.
 // In free-threaded build: self should be locked by the caller, if it should be thread-safe.
 static inline int
-_PyList_AppendTakeRef(PyListObject *self, PyObject *newitem)
+_PyList_AppendValue(PyListObject *self, PyValue newitem)
 {
-    assert(self != NULL && newitem != NULL);
+    assert(self != NULL && !PyValue_IsNull(newitem));
     assert(PyList_Check(self));
     Py_ssize_t len = Py_SIZE(self);
     Py_ssize_t allocated = self->allocated;
     assert((size_t)len + 1 < PY_SSIZE_T_MAX);
     if (allocated > len) {
-#ifdef Py_GIL_DISABLED
-        _Py_atomic_store_ptr_release(&self->ob_item[len], newitem);
-#else
-        PyList_SET_ITEM(self, len, newitem);
-#endif
+        PyList_SET_VALUE(self, len, newitem);
         Py_SET_SIZE(self, len + 1);
         return 0;
     }
-    return _PyList_AppendTakeRefListResize(self, newitem);
+    return _PyList_AppendValueListResize(self, newitem);
+}
+
+// Append the value of an object: a box of an inline value is not kept.
+static inline int
+_PyList_AppendTakeRef(PyListObject *self, PyObject *newitem)
+{
+    assert(newitem != NULL);
+    return _PyList_AppendValue(self, PyValue_FromObject(newitem));
 }
 
 // Repeat the bytes of a buffer in place
@@ -72,9 +75,10 @@ typedef struct {
     PyListObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyListIterObject;
 
-union _PyStackRef;
 
-PyAPI_FUNC(PyObject *)_PyList_FromStackRefStealOnSuccess(const union _PyStackRef *src, Py_ssize_t n);
+struct PyValue;
+
+PyAPI_FUNC(PyObject *)_PyList_FromValues(const struct PyValue *src, Py_ssize_t n);
 PyAPI_FUNC(PyObject *)_PyList_AsTupleAndClear(PyListObject *v);
 
 #ifdef __cplusplus

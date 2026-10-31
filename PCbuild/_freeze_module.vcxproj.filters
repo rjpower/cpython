@@ -181,9 +181,6 @@
     <ClCompile Include="..\Python\gc_free_threading.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Python\gc_gil.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Modules\gcmodule.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -265,9 +262,6 @@
     <ClCompile Include="..\Objects\iterobject.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Python\jit.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Python\jit_publish.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -321,15 +315,6 @@
     </ClCompile>
     <ClCompile Include="..\Objects\odictobject.c">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Python\optimizer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Python\optimizer_analysis.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Python\optimizer_symbols.c">
-      <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Parser\parser.c">
       <Filter>Source Files</Filter>

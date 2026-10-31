@@ -1,5 +1,6 @@
 from test.support import import_helper, Py_GIL_DISABLED, refleak_helper
 import unittest
+import weakref
 
 _testcapi = import_helper.import_module('_testcapi')
 _testlimitedcapi = import_helper.import_module('_testlimitedcapi')
@@ -312,11 +313,11 @@ class TypeTests(unittest.TestCase):
         self.assertEqual(obj.bar, 3)
 
     def test_extension_managed_weakref_nogc_type(self):
-        msg = ("type _testcapi.ManagedWeakrefNoGCType "
-               "has the Py_TPFLAGS_MANAGED_WEAKREF "
-               "flag but not Py_TPFLAGS_HAVE_GC flag")
-        with self.assertRaisesRegex(SystemError, msg):
-            _testcapi.create_managed_weakref_nogc_type()
+        # The weak reference table needs no GC support from the type
+        tp = _testcapi.create_managed_weakref_nogc_type()
+        obj = tp()
+        ref = weakref.ref(obj)
+        self.assertIs(ref(), obj)
 
     def test_type_ready(self):
         # Test PyType_Ready(): calling it on initialized types
@@ -397,8 +398,11 @@ class TypeTests(unittest.TestCase):
 
         def check_type(test_type, static_type, have_gc=False, have_vectorcall=False,
                        is_base_type=True, sequence=False, mapping=False,
-                       match_self=True, items_at_end=False):
+                       match_self=True, items_at_end=False,
+                       managed_weakref=None):
             heap_type = not static_type
+            if managed_weakref is None:
+                managed_weakref = heap_type
 
             flags = type_getflags(test_type)
             check_flag(flags, _Py_TPFLAGS_STATIC_BUILTIN, static_type)
@@ -416,7 +420,7 @@ class TypeTests(unittest.TestCase):
             check_flag(flags, Py_TPFLAGS_MAPPING, mapping)
 
             check_flag(flags, Py_TPFLAGS_INLINE_VALUES, heap_type)
-            check_flag(flags, Py_TPFLAGS_MANAGED_WEAKREF, heap_type)
+            check_flag(flags, Py_TPFLAGS_MANAGED_WEAKREF, managed_weakref)
             check_flag(flags, Py_TPFLAGS_MANAGED_DICT, heap_type)
             check_flag(flags, Py_TPFLAGS_ITEMS_AT_END, items_at_end)
             check_flag(flags, Py_TPFLAGS_METHOD_DESCRIPTOR, False)
@@ -448,8 +452,10 @@ class TypeTests(unittest.TestCase):
                    mapping=True)
         check_type(frozendict, static_type=True, have_gc=True,
                    mapping=True)
-        check_type(set, static_type=True, have_gc=True)
-        check_type(frozenset, static_type=True, have_gc=True)
+        # Weak references live in the weak reference table
+        check_type(set, static_type=True, have_gc=True, managed_weakref=True)
+        check_type(frozenset, static_type=True, have_gc=True,
+                   managed_weakref=True)
 
         # Other types
         check_type(BaseException, static_type=True, have_gc=True,

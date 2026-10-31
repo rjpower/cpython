@@ -57,12 +57,7 @@ struct _PyUnicodeObject_state {
            3: Interned, Immortal, and Static
        This categorization allows the runtime to determine the right
        cleanup mechanism at runtime shutdown. */
-#ifdef Py_GIL_DISABLED
-    // Needs to be accessed atomically, so can't be a bit field.
-    unsigned char interned;
-#else
     unsigned int interned:2;
-#endif
     /* Character size:
 
        - PyUnicode_1BYTE_KIND (1):
@@ -97,11 +92,9 @@ struct _PyUnicodeObject_state {
     unsigned int ascii:1;
     /* The object is statically allocated. */
     unsigned int statically_allocated:1;
-#ifndef Py_GIL_DISABLED
     /* Historical: padding to ensure that PyUnicode_DATA() is always aligned to
        4 bytes (see issue gh-63736 on m68k) */
     unsigned int :24;
-#endif
 };
 
 /* ASCII-only strings created through PyUnicode_New use the PyASCIIObject
@@ -205,11 +198,7 @@ typedef struct {
 
 /* Use only if you know it's a string */
 static inline unsigned int PyUnicode_CHECK_INTERNED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_uint8_relaxed(&_PyASCIIObject_CAST(op)->state.interned);
-#else
     return _PyASCIIObject_CAST(op)->state.interned;
-#endif
 }
 #define PyUnicode_CHECK_INTERNED(op) PyUnicode_CHECK_INTERNED(_PyObject_CAST(op))
 
@@ -301,11 +290,7 @@ static inline Py_ssize_t PyUnicode_GET_LENGTH(PyObject *op) {
 /* Returns the cached hash, or -1 if not cached yet. */
 static inline Py_hash_t
 PyUnstable_Unicode_GET_CACHED_HASH(PyObject *op) {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_ssize_relaxed(&_PyASCIIObject_CAST(op)->hash);
-#else
     return _PyASCIIObject_CAST(op)->hash;
-#endif
 }
 
 /* Write into the canonical representation, this function does not do any sanity
@@ -520,129 +505,6 @@ PyAPI_FUNC(int) PyUnicodeWriter_DecodeUTF8Stateful(
     Py_ssize_t size,            /* size of string */
     const char *errors,         /* error handling */
     Py_ssize_t *consumed);      /* bytes consumed */
-
-
-/* --- Private _PyUnicodeWriter API --------------------------------------- */
-
-typedef struct {
-    PyObject *buffer;
-    void *data;
-    int kind;
-    Py_UCS4 maxchar;
-    Py_ssize_t size;
-    Py_ssize_t pos;
-
-    /* minimum number of allocated characters (default: 0) */
-    Py_ssize_t min_length;
-
-    /* minimum character (default: 127, ASCII) */
-    Py_UCS4 min_char;
-
-    // If non-zero, _PyUnicodeWriter_Finish() needs to check maxchar.
-    int recheck_maxchar;
-
-    /* If non-zero, overallocate the buffer (default: 0). */
-    unsigned char overallocate;
-
-    /* If readonly is 1, buffer is a shared string (cannot be modified)
-       and size is set to 0. */
-    unsigned char readonly;
-} _PyUnicodeWriter;
-
-// Initialize a Unicode writer.
-//
-// By default, the minimum buffer size is 0 character and overallocation is
-// disabled. Set min_length, min_char and overallocate attributes to control
-// the allocation of the buffer.
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(void) _PyUnicodeWriter_Init(
-    _PyUnicodeWriter *writer);
-
-// Don't call this function directly, use _PyUnicodeWriter_Prepare() instead.
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_PrepareInternal(
-    _PyUnicodeWriter *writer,
-    Py_ssize_t length,
-    Py_UCS4 maxchar);
-
-// Prepare the buffer to write 'length' characters
-// with the specified maximum character.
-//
-// Return 0 on success. Set an exception and return -1 on error.
-_Py_DEPRECATED_EXTERNALLY(3.14) static inline int
-_PyUnicodeWriter_Prepare(_PyUnicodeWriter *writer,
-                         Py_ssize_t length, Py_UCS4 maxchar)
-{
-    assert(0 <= length);
-    if (maxchar <= writer->maxchar && length <= (writer->size - writer->pos)) {
-        return 0;
-    }
-    if (length == 0) {
-        return 0;
-    }
-_Py_COMP_DIAG_PUSH
-_Py_COMP_DIAG_IGNORE_DEPR_DECLS
-    return _PyUnicodeWriter_PrepareInternal(writer, length, maxchar);
-_Py_COMP_DIAG_POP
-}
-
-/* Prepare the buffer to have at least the kind KIND.
-   For example, kind=PyUnicode_2BYTE_KIND ensures that the writer will
-   support characters in range U+000-U+FFFF.
-
-   Return 0 on success, raise an exception and return -1 on error. */
-#define _PyUnicodeWriter_PrepareKind(WRITER, KIND)                    \
-    ((KIND) <= (WRITER)->kind                                         \
-     ? 0                                                              \
-     : _PyUnicodeWriter_PrepareKindInternal((WRITER), (KIND)))
-
-/* Don't call this function directly, use the _PyUnicodeWriter_PrepareKind()
-   macro instead. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_PrepareKindInternal(
-    _PyUnicodeWriter *writer,
-    int kind);
-
-/* Append a Unicode character.
-   Return 0 on success, raise an exception and return -1 on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_WriteChar(
-    _PyUnicodeWriter *writer,
-    Py_UCS4 ch);
-
-/* Append a Unicode string.
-   Return 0 on success, raise an exception and return -1 on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_WriteStr(
-    _PyUnicodeWriter *writer,
-    PyObject *str);               /* Unicode string */
-
-/* Append a substring of a Unicode string.
-   Return 0 on success, raise an exception and return -1 on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_WriteSubstring(
-    _PyUnicodeWriter *writer,
-    PyObject *str,              /* Unicode string */
-    Py_ssize_t start,
-    Py_ssize_t end);
-
-/* Append an ASCII-encoded byte string.
-   Return 0 on success, raise an exception and return -1 on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_WriteASCIIString(
-    _PyUnicodeWriter *writer,
-    const char *str,           /* ASCII-encoded byte string */
-    Py_ssize_t len);           /* number of bytes, or -1 if unknown */
-
-/* Append a latin1-encoded byte string.
-   Return 0 on success, raise an exception and return -1 on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(int) _PyUnicodeWriter_WriteLatin1String(
-    _PyUnicodeWriter *writer,
-    const char *str,           /* latin1-encoded byte string */
-    Py_ssize_t len);           /* length in bytes */
-
-/* Get the value of the writer as a Unicode string. Clear the
-   buffer of the writer. Raise an exception and return NULL
-   on error. */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(PyObject *) _PyUnicodeWriter_Finish(
-    _PyUnicodeWriter *writer);
-
-/* Deallocate memory of a writer (clear its internal buffer). */
-_Py_DEPRECATED_EXTERNALLY(3.14) PyAPI_FUNC(void) _PyUnicodeWriter_Dealloc(
-    _PyUnicodeWriter *writer);
 
 
 /* --- Manage the default encoding ---------------------------------------- */

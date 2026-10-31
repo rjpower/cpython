@@ -562,16 +562,20 @@ pysqlite_connection_cursor_impl(pysqlite_Connection *self, PyObject *factory)
     return cursor;
 }
 
-static PyObject *
+static PyValue
 connection_get_row_factory(PyObject *op, void *closure)
 {
     pysqlite_Connection *self = (pysqlite_Connection *)op;
-    return Py_NewRef(self->row_factory);
+    return PyValue_FromObject(self->row_factory);
 }
 
 static int
-connection_set_row_factory(PyObject *op, PyObject *value, void *closure)
+connection_set_row_factory(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = (pysqlite_Connection *)op;
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -582,16 +586,20 @@ connection_set_row_factory(PyObject *op, PyObject *value, void *closure)
     return 0;
 }
 
-static PyObject *
+static PyValue
 connection_get_text_factory(PyObject *op, void *closure)
 {
     pysqlite_Connection *self = (pysqlite_Connection *)op;
-    return Py_NewRef(self->text_factory);
+    return PyValue_FromObject(self->text_factory);
 }
 
 static int
-connection_set_text_factory(PyObject *op, PyObject *value, void *closure)
+connection_set_text_factory(PyObject *op, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = (pysqlite_Connection *)op;
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -655,7 +663,6 @@ blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
     obj->connection = (pysqlite_Connection *)Py_NewRef(self);
     obj->blob = blob;
     obj->offset = 0;
-    obj->in_weakreflist = NULL;
 
     PyObject_GC_Track(obj);
 
@@ -1785,47 +1792,51 @@ int pysqlite_check_thread(pysqlite_Connection* self)
     return 1;
 }
 
-static PyObject *
+static PyValue
 pysqlite_connection_get_isolation_level(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (!pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->isolation_level != NULL) {
-        return PyUnicode_FromString(self->isolation_level);
+        return PyValue_FromResult(PyUnicode_FromString(self->isolation_level));
     }
-    Py_RETURN_NONE;
+    return PyValue_FromObject(Py_None);
 }
 
-static PyObject *
+static PyValue
 pysqlite_connection_get_total_changes(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (!pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(sqlite3_total_changes(self->db));
+    return PyValue_FromLongLong(sqlite3_total_changes(self->db));
 }
 
-static PyObject *
+static PyValue
 pysqlite_connection_get_in_transaction(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (!pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!sqlite3_get_autocommit(self->db)) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(Py_False);
 }
 
 static int
 pysqlite_connection_set_isolation_level(PyObject *op,
-                                        PyObject *isolation_level,
+                                        PyValue isolation_level_v,
                                         void *Py_UNUSED(ignored))
 {
+    PyObject *isolation_level = PyValue_Object(isolation_level_v);
+    if (isolation_level == NULL && !PyValue_IsNull(isolation_level_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (isolation_level == NULL) {
         PyErr_SetString(PyExc_AttributeError, "cannot delete attribute");
@@ -1849,7 +1860,7 @@ pysqlite_connection_set_isolation_level(PyObject *op,
 }
 
 static PyObject *
-pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
+pysqlite_connection_call_object(PyObject *op, PyObject *args, PyObject *kwargs)
 {
     PyObject* sql;
     pysqlite_Statement* statement;
@@ -1871,6 +1882,12 @@ pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
     }
 
     return (PyObject*)statement;
+}
+
+static PyValue
+pysqlite_connection_call(PyObject *op, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromResult(pysqlite_connection_call_object(op, args, kwargs));
 }
 
 /*[clinic input]
@@ -2606,25 +2623,29 @@ getconfig_impl(pysqlite_Connection *self, int op)
     return current;
 }
 
-static PyObject *
+static PyValue
 get_autocommit(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->autocommit == AUTOCOMMIT_ENABLED) {
-        Py_RETURN_TRUE;
+        return PyValue_FromObject(Py_True);
     }
     if (self->autocommit == AUTOCOMMIT_DISABLED) {
-        Py_RETURN_FALSE;
+        return PyValue_FromObject(Py_False);
     }
-    return PyLong_FromLong(LEGACY_TRANSACTION_CONTROL);
+    return PyValue_FromLongLong(LEGACY_TRANSACTION_CONTROL);
 }
 
 static int
-set_autocommit(PyObject *op, PyObject *val, void *Py_UNUSED(closure))
+set_autocommit(PyObject *op, PyValue val_v, void *Py_UNUSED(closure))
 {
+    PyObject *val = PyValue_Object(val_v);
+    if (val == NULL && !PyValue_IsNull(val_v)) {
+        return -1;
+    }
     pysqlite_Connection *self = _pysqlite_Connection_CAST(op);
     if (val == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -2654,10 +2675,10 @@ set_autocommit(PyObject *op, PyObject *val, void *Py_UNUSED(closure))
     return 0;
 }
 
-static PyObject *
+static PyValue
 get_sig(PyObject *Py_UNUSED(self), void *Py_UNUSED(closure))
 {
-    return PyUnicode_FromString("(sql, /)");
+    return PyValue_FromResult(PyUnicode_FromString("(sql, /)"));
 }
 
 

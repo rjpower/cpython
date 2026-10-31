@@ -644,9 +644,6 @@ ac_includes_default="\
 ac_header_c_list=
 ac_subst_vars='LTLIBOBJS
 MODULE_BLOCK
-JIT_SHIM_BUILD_O
-JIT_SHIM_O
-JIT_STENCILS_H
 MODULE_XXLIMITED_3_13_FALSE
 MODULE_XXLIMITED_3_13_TRUE
 MODULE_XXLIMITED_35_FALSE
@@ -916,7 +913,6 @@ LDSHARED
 SHLIB_SUFFIX
 DSYMUTIL_PATH
 DSYMUTIL
-REGEN_JIT_COMMAND
 UNIVERSAL_ARCH_FLAGS
 WASM_STDLIB
 WASM_ASSETS_DIR
@@ -1113,9 +1109,7 @@ enable_shared
 with_static_libpython
 enable_static_libpython_for_interpreter
 enable_profiling
-enable_gil
 with_pydebug
-with_trace_refs
 enable_pystats
 with_assertions
 enable_optimizations
@@ -1125,7 +1119,6 @@ with_strict_overflow
 enable_safety
 enable_slower_safety
 with_frame_pointers
-enable_experimental_jit
 with_dsymutil
 with_address_sanitizer
 with_hwaddress_sanitizer
@@ -1865,8 +1858,6 @@ Optional Features:
                           library)
   --enable-profiling      enable C-level code profiling with gprof (default is
                           no)
-  --disable-gil           enable support for running without the GIL (default
-                          is no)
   --enable-pystats        enable internal statistics gathering (default is no)
   --enable-optimizations  enable expensive, stable optimizations (PGO, etc.)
                           (default is no)
@@ -1876,9 +1867,6 @@ Optional Features:
                           no performance overhead
   --enable-slower-safety  enable usage of the security compiler options with
                           performance overhead
-  --enable-experimental-jit[=no|yes|yes-off|interpreter]
-                          build the experimental just-in-time compiler
-                          (default is no)
   --enable-loadable-sqlite-extensions
                           support loadable extensions in the sqlite3 module,
                           see Doc/library/sqlite3.rst (default is no)
@@ -1923,8 +1911,6 @@ Optional Packages:
                           do not build libpythonMAJOR.MINOR.a and do not
                           install python.o (default is yes)
   --with-pydebug          build with Py_DEBUG defined (default is no)
-  --with-trace-refs       enable tracing references for debugging purpose
-                          (default is no)
   --with-assertions       build with C assertions enabled (default is no)
   --with-lto=[full|thin|no|yes]
                           enable Link-Time-Optimization in any build (default
@@ -7627,6 +7613,7 @@ case $ac_sys_system in #(
     SOABI_PLATFORM=$PLATFORM_TRIPLET
  ;;
 esac
+SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil2-/'`
 
 if test x$SOABI_PLATFORM != x; then
 
@@ -8725,38 +8712,8 @@ fi
 ABIFLAGS=""
 ABI_THREAD=""
 
-# Check for --disable-gil
-# --disable-gil
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --disable-gil" >&5
-printf %s "checking for --disable-gil... " >&6; }
-# Check whether --enable-gil was given.
-if test ${enable_gil+y}
-then :
-  enableval=$enable_gil; if test "x$enable_gil" = xyes
-then :
-  disable_gil=no
-else case e in #(
-  e) disable_gil=yes ;;
-esac
-fi
-else case e in #(
-  e) disable_gil=no
- ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $disable_gil" >&5
-printf "%s\n" "$disable_gil" >&6; }
-
-if test "$disable_gil" = "yes"
-then
-
-printf "%s\n" "#define Py_GIL_DISABLED 1" >>confdefs.h
-
-  # Add "t" for "threaded"
-  ABIFLAGS="${ABIFLAGS}t"
-  ABI_THREAD="t"
-fi
+# There is no free-threaded build (note 06, decision 4), so ABI_THREAD is
+# always empty; it stays for the install paths and sysconfig that name it.
 
 # Check for --with-pydebug
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-pydebug" >&5
@@ -8785,35 +8742,52 @@ esac
 fi
 
 
-# Check for --with-trace-refs
-# --with-trace-refs
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-trace-refs" >&5
-printf %s "checking for --with-trace-refs... " >&6; }
-
-# Check whether --with-trace-refs was given.
-if test ${with_trace_refs+y}
+# The tracing collector owns memory (note 06, step 5).  It scans C stacks
+# conservatively, and zero-initialized locals leave fewer stale pointers in
+# live frames, which keep garbage alive.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -ftrivial-auto-var-init=zero" >&5
+printf %s "checking whether C compiler accepts -ftrivial-auto-var-init=zero... " >&6; }
+if test ${ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero+y}
 then :
-  withval=$with_trace_refs;
+  printf %s "(cached) " >&6
 else case e in #(
-  e) with_trace_refs=no
- ;;
+  e)
+  ax_check_save_flags=$CFLAGS
+  CFLAGS="$CFLAGS -Werror -ftrivial-auto-var-init=zero"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=yes
+else case e in #(
+  e) ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&5
+printf "%s\n" "$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&6; }
+if test "x$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" = xyes
+then :
+
+  CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
+
+else case e in #(
+  e) : ;;
 esac
 fi
 
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_trace_refs" >&5
-printf "%s\n" "$with_trace_refs" >&6; }
-
-if test "$with_trace_refs" = "yes"
-then
-
-printf "%s\n" "#define Py_TRACE_REFS 1" >>confdefs.h
-
-fi
-
-if test "$disable_gil" = "yes" -a "$with_trace_refs" = "yes";
-then
-  as_fn_error $? "--disable-gil cannot be used with --with-trace-refs" "$LINENO" 5
-fi
 
 # Check for --enable-pystats
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --enable-pystats" >&5
@@ -11623,50 +11597,42 @@ fi
                UNIVERSAL_ARCH_FLAGS="-arch ppc -arch i386"
                LIPO_32BIT_FLAGS=""
                ARCH_RUN_32BIT=""
-               ARCH_TRIPLES=`echo {ppc,i386}-apple-darwin`
                ;;
             64-bit)
                UNIVERSAL_ARCH_FLAGS="-arch ppc64 -arch x86_64"
                LIPO_32BIT_FLAGS=""
                ARCH_RUN_32BIT="true"
-               ARCH_TRIPLES=`echo {ppc64,x86_64}-apple-darwin`
                ;;
             all)
                UNIVERSAL_ARCH_FLAGS="-arch i386 -arch ppc -arch ppc64 -arch x86_64"
                LIPO_32BIT_FLAGS="-extract ppc7400 -extract i386"
                ARCH_RUN_32BIT="/usr/bin/arch -i386 -ppc"
-               ARCH_TRIPLES=`echo {i386,ppc,ppc64,x86_64}-apple-darwin`
                ;;
             universal2)
                UNIVERSAL_ARCH_FLAGS="-arch arm64 -arch x86_64"
                LIPO_32BIT_FLAGS=""
                LIPO_INTEL64_FLAGS="-extract x86_64"
                ARCH_RUN_32BIT="true"
-               ARCH_TRIPLES=`echo {aarch64,x86_64}-apple-darwin`
                ;;
             intel)
                UNIVERSAL_ARCH_FLAGS="-arch i386 -arch x86_64"
                LIPO_32BIT_FLAGS="-extract i386"
                ARCH_RUN_32BIT="/usr/bin/arch -i386"
-               ARCH_TRIPLES=`echo {i386,x86_64}-apple-darwin`
                ;;
             intel-32)
                UNIVERSAL_ARCH_FLAGS="-arch i386"
                LIPO_32BIT_FLAGS=""
                ARCH_RUN_32BIT=""
-               ARCH_TRIPLES=i386-apple-darwin
                ;;
             intel-64)
                UNIVERSAL_ARCH_FLAGS="-arch x86_64"
                LIPO_32BIT_FLAGS=""
                ARCH_RUN_32BIT="true"
-               ARCH_TRIPLES=x86_64-apple-darwin
                ;;
             3-way)
                UNIVERSAL_ARCH_FLAGS="-arch i386 -arch ppc -arch x86_64"
                LIPO_32BIT_FLAGS="-extract ppc7400 -extract i386"
                ARCH_RUN_32BIT="/usr/bin/arch -i386 -ppc"
-               ARCH_TRIPLES=`echo {i386,ppc,x86_64}-apple-darwin`
                ;;
             *)
                as_fn_error $? "proper usage is --with-universal-arch=universal2|32-bit|64-bit|all|intel|3-way" "$LINENO" 5
@@ -11781,56 +11747,6 @@ else case e in #(
     esac
  ;;
 esac
-fi
-
-# Check for --enable-experimental-jit:
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --enable-experimental-jit" >&5
-printf %s "checking for --enable-experimental-jit... " >&6; }
-# Check whether --enable-experimental-jit was given.
-if test ${enable_experimental_jit+y}
-then :
-  enableval=$enable_experimental_jit;
-else case e in #(
-  e) enable_experimental_jit=no ;;
-esac
-fi
-
-case $enable_experimental_jit in
-  no)              jit_flags="";          tier2_flags="" ;;
-  yes)             jit_flags="-D_Py_JIT"; tier2_flags="-D_Py_TIER2=1" ;;
-  yes-off)         jit_flags="-D_Py_JIT"; tier2_flags="-D_Py_TIER2=3" ;;
-  interpreter)     jit_flags="";          tier2_flags="-D_Py_TIER2=4" ;;
-  interpreter-off) jit_flags="";          tier2_flags="-D_Py_TIER2=6" ;;  # Secret option
-  *) as_fn_error $? "invalid argument: --enable-experimental-jit=$enable_experimental_jit; expected no|yes|yes-off|interpreter" "$LINENO" 5 ;;
-esac
-if ${tier2_flags:+false} :
-then :
-
-else case e in #(
-  e) as_fn_append CFLAGS_NODIST " $tier2_flags" ;;
-esac
-fi
-if ${jit_flags:+false} :
-then :
-
-else case e in #(
-  e) as_fn_append CFLAGS_NODIST " $jit_flags"
-           REGEN_JIT_COMMAND="\$(PYTHON_FOR_REGEN) \$(srcdir)/Tools/jit/build.py ${ARCH_TRIPLES:-$host} --output-dir . --pyconfig-dir . --cflags=\"$CFLAGS_JIT\" --llvm-version=\"$LLVM_VERSION\" --llvm-tools-install-dir=\"$LLVM_TOOLS_INSTALL_DIR\""
-           if test "x$Py_DEBUG" = xtrue
-then :
-  as_fn_append REGEN_JIT_COMMAND " --debug"
-fi ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $tier2_flags $jit_flags" >&5
-printf "%s\n" "$tier2_flags $jit_flags" >&6; }
-
-if test "$disable_gil" = "yes" -a "$enable_experimental_jit" != "no"; then
-  # GH-133171: This configuration builds the JIT but never actually uses it,
-  # which is surprising (and strictly worse than not building it at all):
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: --enable-experimental-jit does not work correctly with --disable-gil." >&5
-printf "%s\n" "$as_me: WARNING: --enable-experimental-jit does not work correctly with --disable-gil." >&2;}
 fi
 
 case "$ac_cv_cc_name" in
@@ -20418,8 +20334,8 @@ printf "%s\n" "#define WITH_MIMALLOC 1" >>confdefs.h
 
   MIMALLOC_HEADERS='$(MIMALLOC_HEADERS)'
 
-elif test "$disable_gil" = "yes"; then
-  as_fn_error $? "--disable-gil requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
+else
+  as_fn_error $? "the tracing collector requires the mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
 fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_mimalloc" >&5
@@ -29090,7 +29006,6 @@ printf "%s\n" "#define AC_APPLE_UNIVERSAL_BUILD 1" >>confdefs.h
 #
 # * The Python implementation (always 'cpython-' for us)
 # * The major and minor version numbers
-# * --disable-gil (adds a 't')
 # * --with-pydebug (adds a 'd')
 #
 # Thus for example, Python 3.2 built with wide unicode, pydebug, and pymalloc,
@@ -29110,7 +29025,7 @@ SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PL
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $SOABI" >&5
 printf "%s\n" "$SOABI" >&6; }
 
-# Release build, debug build (Py_DEBUG), and trace refs build (Py_TRACE_REFS)
+# Release and debug (Py_DEBUG) builds
 # are ABI compatible
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
@@ -34864,6 +34779,12 @@ esac
 fi
 
 
+# The interpreter runs code objects as the register IR of
+# Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
+
+printf "%s\n" "#define Py_IR_INTERP 1" >>confdefs.h
+
+
 # Check for --with-remote-debug
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-remote-debug" >&5
 printf %s "checking for --with-remote-debug... " >&6; }
@@ -35042,7 +34963,7 @@ else case e in #(
 
 int main(void) {
 // See gh-148284: Clang 22 seems to have interactions with inlining
-// and the stackref buffer which cause 40 kB of stack usage on x86-64
+// and the PyValue buffer which cause 40 kB of stack usage on x86-64
 // in buggy versions of _PyEval_EvalFrameDefault() in computed goto
 // interpreter. The normal usage seen is normally 1-2 kB.
 #if defined(__clang__) && (__clang_major__ == 22)
@@ -35074,6 +34995,13 @@ if test "$block_huge_inlining_in_ceval" = yes && test "$ac_cv_computed_gotos" = 
     # consumption in _PyEval_EvalFrameDefault() on computed goto
     # interpreter.
     CFLAGS_CEVAL="$CFLAGS_CEVAL -finline-max-stacksize=512"
+fi
+if test "$ac_cv_cc_name" = "gcc" && test "$ac_cv_computed_gotos" = yes; then
+    # GCC's global common subexpression elimination keeps values shared
+    # between the handlers of the computed-goto loop live and spills the
+    # interpreter's frame, word pointer and slots to make room.  The GCC
+    # manual advises -fno-gcse for computed gotos.
+    CFLAGS_CEVAL="$CFLAGS_CEVAL -fno-gcse"
 fi
 
 
@@ -36037,15 +35965,11 @@ fi
 then :
 
         colocated_install=yes
-        threading_suffix=""
-        if [ "$ABI_THREAD" = "t" ]; then
-          threading_suffix=-free-threading
-        fi
         debug_suffix=""
         if [ "$Py_DEBUG" = "true" ]; then
           debug_suffix=-debug
         fi
-        BUILD_DETAILS=build-details.$MULTIARCH$threading_suffix$debug_suffix.json
+        BUILD_DETAILS=build-details.$MULTIARCH$debug_suffix.json
 
 else case e in #(
   e)
@@ -39400,58 +39324,6 @@ fi
 
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $py_cv_module_xxlimited_3_13" >&5
 printf "%s\n" "$py_cv_module_xxlimited_3_13" >&6; }
-
-
-# Determine JIT stencils header files based on target platform
-JIT_STENCILS_H=""
-JIT_SHIM_O=""
-JIT_SHIM_BUILD_O=""
-if ${jit_flags:+false} :
-then :
-
-else case e in #(
-  e) if test "${enable_universalsdk}" && test "$UNIVERSAL_ARCHS" = "universal2"; then
-     JIT_STENCILS_H="jit_stencils-aarch64-apple-darwin.h jit_stencils-x86_64-apple-darwin.h"
-     JIT_SHIM_O="jit_shim-universal2-apple-darwin.o"
-     JIT_SHIM_BUILD_O="jit_shim-aarch64-apple-darwin.o jit_shim-x86_64-apple-darwin.o"
-   else
-     case "$host" in
-       aarch64-apple-darwin*)
-         JIT_STENCILS_H="jit_stencils-aarch64-apple-darwin.h"
-         JIT_SHIM_O="jit_shim-aarch64-apple-darwin.o"
-         ;;
-       x86_64-apple-darwin*)
-         JIT_STENCILS_H="jit_stencils-x86_64-apple-darwin.h"
-         JIT_SHIM_O="jit_shim-x86_64-apple-darwin.o"
-         ;;
-       aarch64-pc-windows-msvc)
-         JIT_STENCILS_H="jit_stencils-aarch64-pc-windows-msvc.h"
-         JIT_SHIM_O="jit_shim-aarch64-pc-windows-msvc.o"
-         ;;
-       i686-pc-windows-msvc)
-         JIT_STENCILS_H="jit_stencils-i686-pc-windows-msvc.h"
-         JIT_SHIM_O="jit_shim-i686-pc-windows-msvc.o"
-         ;;
-       x86_64-pc-windows-msvc)
-         JIT_STENCILS_H="jit_stencils-x86_64-pc-windows-msvc.h"
-         JIT_SHIM_O="jit_shim-x86_64-pc-windows-msvc.o"
-         ;;
-       aarch64-*-linux-gnu)
-         JIT_STENCILS_H="jit_stencils-aarch64-unknown-linux-gnu.h"
-         JIT_SHIM_O="jit_shim-aarch64-unknown-linux-gnu.o"
-         ;;
-       x86_64-*-linux-gnu)
-         JIT_STENCILS_H="jit_stencils-x86_64-unknown-linux-gnu.h"
-         JIT_SHIM_O="jit_shim-x86_64-unknown-linux-gnu.o"
-         ;;
-     esac
-     JIT_SHIM_BUILD_O="$JIT_SHIM_O"
-   fi ;;
-esac
-fi
-
-
-
 
 
 # substitute multiline block, must come after last PY_STDLIB_MOD()

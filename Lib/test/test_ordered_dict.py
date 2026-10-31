@@ -934,7 +934,7 @@ class CPythonOrderedDictTests(OrderedDictTests,
         size = support.calcobjsize
         check = self.check_sizeof
 
-        basicsize = size('nQ2P' + '3PnPn2P')
+        basicsize = size('nQP' + '3PnPnP')
         keysize = calcsize('n2BI2n')
 
         entrysize = calcsize('n2P')
@@ -954,7 +954,7 @@ class CPythonOrderedDictTests(OrderedDictTests,
         check(od.items(), size('P'))
         check(od.values(), size('P'))
 
-        itersize = size('iP2n2P')
+        itersize = size('iP2nP')
         check(iter(od), itersize)
         check(iter(od.keys()), itersize)
         check(iter(od.items()), itersize)

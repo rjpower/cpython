@@ -1,0 +1,149 @@
+diff --git a/Cython/Includes/cpython/sequence.pxd b/Cython/Includes/cpython/sequence.pxd
+index e50e4c4..9c40fa6 100644
+--- a/Cython/Includes/cpython/sequence.pxd
++++ b/Cython/Includes/cpython/sequence.pxd
+@@ -115,8 +115,12 @@ cdef extern from "Python.h":
+     # Return the ith element of o, assuming that o was returned by
+     # PySequence_Fast(), o is not NULL, and that i is within bounds.
+ 
+-    PyObject** PySequence_Fast_ITEMS(object o)
+-    # Return the underlying array of PyObject pointers. Assumes that o
++    ctypedef struct PyValue:
++        pass
++
++    PyValue* PySequence_Fast_ITEMS(object o)
++    # Return the underlying array of PyValue (the C API's value type,
++    # which may hold an int or float inline). Assumes that o
+     # was returned by PySequence_Fast() and o is not NULL.
+ 
+     object PySequence_ITEM(object o, Py_ssize_t i)
+diff --git a/Cython/Utility/MatchCase.c b/Cython/Utility/MatchCase.c
+index af29aa7..9227f66 100644
+--- a/Cython/Utility/MatchCase.c
++++ b/Cython/Utility/MatchCase.c
+@@ -353,7 +353,7 @@ static PyObject *__Pyx_MatchCase_TupleSliceToList(PyObject *x, Py_ssize_t start,
+ 
+ ////////////////////// TupleSliceToList //////////////////////////
+ //@requires: OtherSequenceSliceToList
+-//@requires: ObjectHandling.c::ListFromArray
++//@requires: ObjectHandling.c::TupleFromValueArray
+ 
+ // Indices must be positive - there's no wraparound or boundschecking.
+ 
+@@ -361,12 +361,9 @@ static PyObject *__Pyx_MatchCase_TupleSliceToList(PyObject *x, Py_ssize_t start,
+ #if !CYTHON_COMPILING_IN_CPYTHON
+     return __Pyx_MatchCase_OtherSequenceSliceToList(x, start, end);
+ #else
+-    PyObject **array;
+-
+     (void)__Pyx_MatchCase_OtherSequenceSliceToList; // clear unused warning
+ 
+-    array = &PyTuple_GET_ITEM(x, 0);
+-    return __Pyx_PyList_FromArray(array+start, end-start);
++    return __Pyx_PyList_FromValueArray(((PyTupleObject*)x)->ob_item + start, end-start);
+ #endif
+ }
+ 
+diff --git a/Cython/Utility/ObjectHandling.c b/Cython/Utility/ObjectHandling.c
+index 8559eb6..20ad4e3 100644
+--- a/Cython/Utility/ObjectHandling.c
++++ b/Cython/Utility/ObjectHandling.c
+@@ -959,7 +959,6 @@ __Pyx_Py{{Type}}_FromArray(PyObject *const *src, Py_ssize_t n); /* proto */
+ {{endif}}
+ 
+ /////////////// TupleOrListFromArrayImpl //////////////
+-//@requires: CopyObjectArray
+ 
+ {{if Type == 'Tuple'}}
+ #if !(PY_VERSION_HEX >= 0x030F0000 && !CYTHON_COMPILING_IN_LIMITED_API)
+@@ -974,9 +973,7 @@ __Pyx_Py{{Type}}_FromArray(PyObject *const *src, Py_ssize_t n) {
+ 
+     PyObject *res = Py{{Type}}_New(n);
+     if (unlikely(res == NULL)) return NULL;
+-    #if CYTHON_COMPILING_IN_CPYTHON
+-    __Pyx_copy_object_array(src, ((Py{{Type}}Object*)res)->ob_item, n);
+-    #else
++    // The items are values: SET_ITEM stores each canonically.
+     Py_ssize_t i;
+     for (i = 0; i < n; i++) {
+         Py_INCREF(src[i]);
+@@ -985,13 +982,36 @@ __Pyx_Py{{Type}}_FromArray(PyObject *const *src, Py_ssize_t n) {
+             return NULL;
+         }
+     }
+-    #endif
+     return res;
+ }
+ {{if Type == 'Tuple'}}
+ #endif
+ {{endif}}
+ 
++/////////////// TupleFromValueArray.proto ///////////////
++//@substitute: tempita
++
++{{for Type in ['Tuple', 'List']}}
++CYTHON_UNUSED static PyObject *__Pyx_Py{{Type}}_FromValueArray(const PyValue *src, Py_ssize_t n); /* proto */
++{{endfor}}
++
++/////////////// TupleFromValueArray ///////////////
++//@substitute: tempita
++
++// A new tuple or list of the n canonical values at src, such as an argument
++// array or a slice of another tuple's or list's items.
++{{for Type in ['Tuple', 'List']}}
++CYTHON_UNUSED static PyObject *__Pyx_Py{{Type}}_FromValueArray(const PyValue *src, Py_ssize_t n) {
++    Py_ssize_t i;
++    PyObject *res = Py{{Type}}_New(n < 0 ? 0 : n);
++    if (unlikely(res == NULL)) return NULL;
++    for (i = 0; i < n; i++) {
++        Py{{Type}}_SET_VALUE(res, i, src[i]);
++    }
++    return res;
++}
++{{endfor}}
++
+ /////////////// SliceTupleAndList.proto ///////////////
+ 
+ #if CYTHON_COMPILING_IN_CPYTHON
+@@ -1003,8 +1023,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyTuple_GetSlice(PyObject* src, Py_ssize_t
+ #endif
+ 
+ /////////////// SliceTupleAndList ///////////////
+-//@requires: ListFromArray
+-//@requires: TupleFromArray
++//@requires: TupleFromValueArray
+ //@requires: Synchronization.c::CriticalSections
+ 
+ #if CYTHON_COMPILING_IN_CPYTHON
+@@ -1030,7 +1049,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyTuple_GetSlice(
+             PyObject* src, Py_ssize_t start, Py_ssize_t stop) {
+     Py_ssize_t length = PyTuple_GET_SIZE(src);
+     __Pyx_crop_slice(&start, &stop, &length);
+-    return __Pyx_PyTuple_FromArray(((PyTupleObject*)src)->ob_item + start, length);
++    return __Pyx_PyTuple_FromValueArray(((PyTupleObject*)src)->ob_item + start, length);
+ }
+ 
+ static CYTHON_INLINE PyObject* __Pyx_PyList_GetSlice_locked(
+@@ -1041,7 +1060,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyList_GetSlice_locked(
+         // Avoid undefined behaviour when accessing `ob_item` of an empty list.
+         return PyList_New(0);
+     }
+-    return __Pyx_PyList_FromArray(((PyListObject*)src)->ob_item + start, length);
++    return __Pyx_PyList_FromValueArray(((PyListObject*)src)->ob_item + start, length);
+ }
+ 
+ static CYTHON_INLINE PyObject* __Pyx_PyList_GetSlice(
+diff --git a/Cython/Utility/Optimize.c b/Cython/Utility/Optimize.c
+index d4996fd..7f69508 100644
+--- a/Cython/Utility/Optimize.c
++++ b/Cython/Utility/Optimize.c
+@@ -238,7 +238,8 @@ static PyObject* __Pyx__PyList_PopIndex(PyObject* L, PyObject* py_ix, Py_ssize_t
+             PyObject* v = PyList_GET_ITEM(L, cix);
+             Py_SET_SIZE(L, Py_SIZE(L) - 1);
+             size -= 1;
+-            memmove(&PyList_GET_ITEM(L, cix), &PyList_GET_ITEM(L, cix+1), (size_t)(size-cix)*sizeof(PyObject*));
++            // The items are values.
++            memmove(&((PyListObject*)L)->ob_item[cix], &((PyListObject*)L)->ob_item[cix+1], (size_t)(size-cix)*sizeof(PyValue));
+             return v;
+         }
+     }

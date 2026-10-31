@@ -9,8 +9,10 @@ extern "C" {
 #endif
 
 #include "pycore_object.h"               // PyManagedDictPointer
+#include "pycore_shape.h"                // _PyObject_SetShape()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_ACQUIRE
-#include "pycore_stackref.h"             // _PyStackRef
+#include "pycore_value.h"                // PyValue
+#include "pycore_dict_state.h"           // BUILTINS_WATCHER_ID
 #include "pycore_stats.h"
 
 // Unsafe flavor of PyDict_GetItemWithError(): no error checking
@@ -40,12 +42,15 @@ PyAPI_FUNC(int) _PyDict_DelItem_KnownHash(PyObject *mp, PyObject *key,
 PyAPI_FUNC(int) _PyDict_DelItem_KnownHash_LockHeld(PyObject *mp, PyObject *key,
                                               Py_hash_t hash);
 
-extern int _PyDict_Contains_KnownHash(PyObject *, PyObject *, Py_hash_t);
+extern int _PyDict_Contains_KnownHash(PyObject *, PyValue, Py_hash_t);
 
 extern void _PyDict_ClearKeysVersionLockHeld(PyObject *mp);
 
 extern int _PyDict_Next(
     PyObject *mp, Py_ssize_t *pos, PyObject **key, PyObject **value, Py_hash_t *hash);
+// _PyDict_Next() with the key and the value as they are, without boxes.
+extern int _PyDict_NextValue(
+    PyObject *mp, Py_ssize_t *pos, PyValue *key, PyValue *value, Py_hash_t *hash);
 
 extern int _PyDict_HasOnlyStringKeys(PyObject *mp);
 
@@ -58,8 +63,6 @@ PyAPI_FUNC(Py_ssize_t) _PyDict_SizeOf(PyDictObject *);
 
 extern Py_ssize_t _PyDict_SizeOf_LockHeld(PyDictObject *);
 
-#define _PyDict_HasSplitTable(d) ((d)->ma_values != NULL)
-
 /* Like PyDict_Merge, but override can be 0, 1 or 2.  If override is 0,
    the first occurrence of a key wins, if override is 1, the last occurrence
    of a key wins, if override is 2, a KeyError with conflicting key as
@@ -67,7 +70,6 @@ extern Py_ssize_t _PyDict_SizeOf_LockHeld(PyDictObject *);
 */
 PyAPI_FUNC(int) _PyDict_MergeUniq(PyObject *mp, PyObject *other, PyObject **dupkey);
 
-extern void _PyDict_DebugMallocStats(FILE *out);
 
 
 /* _PyDictView */
@@ -82,20 +84,20 @@ extern PyObject* _PyDictView_Intersect(PyObject* self, PyObject *other);
 
 /* other API */
 
+/* Keys and values are canonical PyValues (PyValue_NULL when absent), except
+   the key of a Unicode entry, which is always a str object. */
 typedef struct {
     /* Cached hash code of me_key. */
     Py_hash_t me_hash;
-    PyObject *me_key;
-    PyObject *me_value; /* This field is only meaningful for combined tables */
+    PyValue me_key;
+    PyValue me_value; /* This field is only meaningful for combined tables */
 } PyDictKeyEntry;
 
 typedef struct {
     PyObject *me_key;   /* The key must be Unicode and have hash. */
-    PyObject *me_value; /* This field is only meaningful for combined tables */
+    PyValue me_value;   /* This field is only meaningful for combined tables */
 } PyDictUnicodeEntry;
 
-extern PyDictKeysObject *_PyDict_NewKeysForClass(PyHeapTypeObject *);
-extern void _PyDict_RemoveKeysForClass(PyHeapTypeObject *);
 extern PyObject *_PyDict_FromKeys(PyObject *, PyObject *, PyObject *);
 
 /* Implementations of the `|` and `|=` operators for dict, used by the
@@ -129,14 +131,12 @@ extern void _PyDictKeys_DecRef(PyDictKeysObject *keys);
  * -1 when no entry found, -3 when compare raises error.
  * Exported for external JIT support
  */
-PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
-extern Py_ssize_t _Py_dict_lookup_threadsafe(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
-extern Py_ssize_t _Py_dict_lookup_threadsafe_stackref(PyDictObject *mp, PyObject *key, Py_hash_t hash, _PyStackRef *value_addr);
+PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue *value_addr);
 
-extern int _PyDict_GetMethodStackRef(PyDictObject *dict, PyObject *name, _PyStackRef *method);
+extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *method);
 
 // Exported for external JIT support
-PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndValue(PyDictObject *, PyObject *, PyObject **);
+PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndValue(PyDictObject *, PyObject *, PyValue *);
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndex(PyDictObject *, PyObject *);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyObject *key);
 
@@ -151,26 +151,33 @@ PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyOb
  * Exported for external JIT support
  */
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupAndVersion(PyDictKeysObject* dictkeys, PyObject *key, uint32_t *version);
-PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupSplit(PyDictKeysObject* dictkeys, PyObject *key);
 // Return the borrowed source dictionary, or NULL if absent or on error.
-PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalStackRef(PyDictObject *, PyDictObject *, PyObject *, _PyStackRef *);
+PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, PyObject *, PyValue *);
 
 // Loads the __builtins__ object from the globals dict. Returns a new reference.
 extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
 
-/* Consumes references to key and value */
-PyAPI_FUNC(int) _PyDict_SetItem_Take2(PyDictObject *op, PyObject *key, PyObject *value);
-PyAPI_FUNC(int) _PyDict_SetItem_Take2_KnownHash(PyDictObject *op, PyObject *key, PyObject *value, Py_hash_t hash);
+/* Set the item of the canonical key to the canonical value */
+PyAPI_FUNC(int) _PyDict_SetItemValue(PyDictObject *op, PyValue key, PyValue value);
+PyAPI_FUNC(int) _PyDict_GetItemValue(PyObject *op, PyValue key, PyValue *result);
+PyAPI_FUNC(int) _PyDict_DelItemValue(PyObject *op, PyValue key);
+PyAPI_FUNC(int) _PyDict_ContainsValue(PyObject *op, PyValue key);
+PyAPI_FUNC(PyValue) _PyDict_SubscriptValue(PyObject *self, PyValue key);
 // Exported for external JIT support
-PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
+// Sets dict[name] to value, or deletes it if value is PyValue_NULL.
+PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyValue value);
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *key,
                                                    PyObject *value, Py_hash_t hash);
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash_LockHeld(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
+extern int _PyDict_GetItemValue_KnownHash(PyDictObject *op, PyValue key,
+                                          Py_hash_t hash, PyValue *result);
+extern int _PyDict_SetItemValue_KnownHash(PyObject *op, PyValue key,
+                                          PyValue value, Py_hash_t hash);
 extern int _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key, PyObject **result);
-PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyObject *value);
+PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyValue value);
 
 extern int _PyDict_Pop_KnownHash(
     PyDictObject *dict,
@@ -180,9 +187,6 @@ extern int _PyDict_Pop_KnownHash(
 
 extern void _PyDict_Clear_LockHeld(PyObject *op);
 
-#ifdef Py_GIL_DISABLED
-PyAPI_FUNC(void) _PyDict_EnsureSharedOnRead(PyDictObject *mp);
-#endif
 
 // Export for '_elementtree' shared extension
 PyAPI_FUNC(PyObject*) _PyDict_CopyAsDict(PyObject *op);
@@ -195,7 +199,6 @@ PyAPI_FUNC(PyObject*) _PyDict_CopyAsDict(PyObject *op);
 typedef enum {
     DICT_KEYS_GENERAL = 0,
     DICT_KEYS_UNICODE = 1,
-    DICT_KEYS_SPLIT = 2
 } DictKeysKind;
 
 /* See dictobject.c for actual layout of DictKeysObject */
@@ -211,10 +214,6 @@ struct _dictkeysobject {
     /* Kind of keys */
     uint8_t dk_kind;
 
-#ifdef Py_GIL_DISABLED
-    /* Lock used to protect shared keys */
-    PyMutex dk_mutex;
-#endif
 
     /* Version number -- Reset to 0 by any modification to keys */
     uint32_t dk_version;
@@ -243,35 +242,6 @@ struct _dictkeysobject {
 
     /* "PyDictKeyEntry or PyDictUnicodeEntry dk_entries[USABLE_FRACTION(DK_SIZE(dk))];" array follows:
        see the DK_ENTRIES() / DK_UNICODE_ENTRIES() functions below */
-};
-
-struct _instancekeysobject {
-    PyTypeObject* dsk_owning_type;
-    struct _dictkeysobject dsk_keys;
-};
-
-static inline struct _instancekeysobject *_PyDictKeys_AsSharedKeys(struct _dictkeysobject *keys)
-{
-    assert(keys->dk_kind == DICT_KEYS_SPLIT);
-    return _Py_CONTAINER_OF(keys, struct _instancekeysobject, dsk_keys);
-}
-
-/* This must be no more than 250, for the prefix size to fit in one byte. */
-#define SHARED_KEYS_MAX_SIZE 30
-#define NEXT_LOG2_SHARED_KEYS_MAX_SIZE 6
-
-/* Layout of dict values:
- *
- * The PyObject *values are preceded by an array of bytes holding
- * the insertion order and size.
- * [-1] = prefix size. [-2] = used size. size[-2-n...] = insertion order.
- */
-struct _dictvalues {
-    uint8_t capacity;
-    uint8_t size;
-    uint8_t embedded;
-    uint8_t valid;
-    PyObject *values[1];
 };
 
 #define DK_LOG_SIZE(dk)  _Py_RVALUE((dk)->dk_log2_size)
@@ -304,26 +274,21 @@ static inline PyDictUnicodeEntry* DK_UNICODE_ENTRIES(PyDictKeysObject *dk) {
 #define DICT_UNIQUE_ID_SHIFT (32)
 #define DICT_UNIQUE_ID_MAX ((UINT64_C(1) << (64 - DICT_UNIQUE_ID_SHIFT)) - 1)
 
-/* The first three dict watcher IDs are reserved for CPython,
- * so we don't need to check that they haven't been used */
-#define BUILTINS_WATCHER_ID     0
-#define GLOBALS_WATCHER_ID      1
-#define MODULE_WATCHER_ID       2
-#define FIRST_AVAILABLE_WATCHER 3
-
-
+/* CPython's own watchers (pycore_dict_state.h) get the key and the value as
+   they are.  The others get them as objects: an inline one is boxed for
+   them.  Either may be PyValue_NULL. */
 PyAPI_FUNC(void)
 _PyDict_SendEvent(int watcher_bits,
                   PyDict_WatchEvent event,
                   PyDictObject *mp,
-                  PyObject *key,
-                  PyObject *value);
+                  PyValue key,
+                  PyValue value);
 
-static inline void
+Py_GC_PRECISE static inline void
 _PyDict_NotifyEvent(PyDict_WatchEvent event,
                     PyDictObject *mp,
-                    PyObject *key,
-                    PyObject *value)
+                    PyValue key,
+                    PyValue value)
 {
     assert(Py_REFCNT((PyObject*)mp) > 0);
     int watcher_bits = FT_ATOMIC_LOAD_UINT64_ACQUIRE(mp->_ma_watcher_tag) & DICT_WATCHER_MASK;
@@ -333,63 +298,17 @@ _PyDict_NotifyEvent(PyDict_WatchEvent event,
     }
 }
 
-extern PyDictObject *_PyObject_MaterializeManagedDict(PyObject *obj);
 
 PyAPI_FUNC(PyObject *)_PyDict_FromItems(
         PyObject *const *keys, Py_ssize_t keys_offset,
-        PyObject *const *values, Py_ssize_t values_offset,
+        const PyValue *values, Py_ssize_t values_offset,
         Py_ssize_t length);
 
-static inline uint8_t *
-get_insertion_order_array(PyDictValues *values)
-{
-    return (uint8_t *)&values->values[values->capacity];
-}
+// A dict with room for MINUSED str keys, whose table is the str-keyed kind
+// that the attribute handlers take (_PyDict_NewPresized() makes the general
+// kind above five).
+extern PyObject *_PyDict_NewPresizedUnicode(Py_ssize_t minused);
 
-static inline void
-_PyDictValues_AddToInsertionOrder(PyDictValues *values, Py_ssize_t ix)
-{
-    assert(ix < SHARED_KEYS_MAX_SIZE);
-    int size = values->size;
-    uint8_t *array = get_insertion_order_array(values);
-    assert(size < values->capacity);
-    assert(((uint8_t)ix) == ix);
-    FT_ATOMIC_STORE_UINT8_RELAXED(array[size], (uint8_t)ix);
-    FT_ATOMIC_STORE_UINT8_RELEASE(values->size, size+1);
-}
-
-// Exported for external JIT support
-PyAPI_FUNC(void)
-_PyDict_InsertSplitValue(PyDictObject *mp, PyObject *key, PyObject *value, Py_ssize_t ix);
-
-static inline size_t
-shared_keys_usable_size(PyDictKeysObject *keys)
-{
-    // dk_usable will decrease for each instance that is created and each
-    // value that is added.  dk_nentries will increase for each value that
-    // is added.  We want to always return the right value or larger.
-    // We therefore increase dk_nentries first and we decrease dk_usable
-    // second, and conversely here we read dk_usable first and dk_entries
-    // second (to avoid the case where we read entries before the increment
-    // and read usable after the decrement)
-    Py_ssize_t dk_usable = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_usable);
-    Py_ssize_t dk_nentries = FT_ATOMIC_LOAD_SSIZE_ACQUIRE(keys->dk_nentries);
-    return dk_nentries + dk_usable;
-}
-
-static inline size_t
-_PyInlineValuesSize(PyTypeObject *tp)
-{
-    PyDictKeysObject *keys = ((PyHeapTypeObject*)tp)->ht_cached_keys;
-    assert(keys != NULL);
-    size_t size = shared_keys_usable_size(keys);
-    size_t prefix_size = _Py_SIZE_ROUND_UP(size, sizeof(PyObject *));
-    assert(prefix_size < 256);
-    return prefix_size + (size + 1) * sizeof(PyObject *);
-}
-
-int
-_PyDict_DetachFromObject(PyDictObject *dict, PyObject *obj);
 
 // Enables per-thread ref counting on this dict in the free threading build
 extern void _PyDict_EnablePerThreadRefcounting(PyObject *op);
@@ -397,58 +316,10 @@ extern void _PyDict_EnablePerThreadRefcounting(PyObject *op);
 PyDictObject *_PyObject_MaterializeManagedDict_LockHeld(PyObject *);
 
 // See `_Py_INCREF_TYPE()` in pycore_object.h
-#ifndef Py_GIL_DISABLED
 #  define _Py_INCREF_DICT Py_INCREF
 #  define _Py_DECREF_DICT Py_DECREF
 #  define _Py_INCREF_BUILTINS Py_INCREF
 #  define _Py_DECREF_BUILTINS Py_DECREF
-#else
-static inline Py_ssize_t
-_PyDict_UniqueId(PyDictObject *mp)
-{
-    return (Py_ssize_t)(FT_ATOMIC_LOAD_UINT64_RELAXED(mp->_ma_watcher_tag) >> DICT_UNIQUE_ID_SHIFT);
-}
-
-static inline void
-_Py_INCREF_DICT(PyObject *op)
-{
-    assert(PyAnyDict_Check(op));
-    Py_ssize_t id = _PyDict_UniqueId((PyDictObject *)op);
-    _Py_THREAD_INCREF_OBJECT(op, id);
-}
-
-static inline void
-_Py_DECREF_DICT(PyObject *op)
-{
-    assert(PyAnyDict_Check(op));
-    Py_ssize_t id = _PyDict_UniqueId((PyDictObject *)op);
-    _Py_THREAD_DECREF_OBJECT(op, id);
-}
-
-// Like `_Py_INCREF_DICT`, but also handles non-dict objects because builtins
-// may not be a dict.
-static inline void
-_Py_INCREF_BUILTINS(PyObject *op)
-{
-    if (PyDict_CheckExact(op)) {
-        _Py_INCREF_DICT(op);
-    }
-    else {
-        Py_INCREF(op);
-    }
-}
-
-static inline void
-_Py_DECREF_BUILTINS(PyObject *op)
-{
-    if (PyDict_CheckExact(op)) {
-        _Py_DECREF_DICT(op);
-    }
-    else {
-        Py_DECREF(op);
-    }
-}
-#endif
 
 /* frozendict */
 typedef struct {

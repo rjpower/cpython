@@ -7,13 +7,6 @@ PyAPI_FUNC(void) _Py_NewReferenceNoTotal(PyObject *op);
 PyAPI_FUNC(void) _Py_ResurrectReference(PyObject *op);
 PyAPI_FUNC(void) _Py_ForgetReference(PyObject *op);
 
-#ifdef Py_REF_DEBUG
-/* These are useful as debugging aids when chasing down refleaks. */
-PyAPI_FUNC(Py_ssize_t) _Py_GetGlobalRefTotal(void);
-#  define _Py_GetRefTotal() _Py_GetGlobalRefTotal()
-PyAPI_FUNC(Py_ssize_t) _Py_GetLegacyRefTotal(void);
-PyAPI_FUNC(Py_ssize_t) _PyInterpreterState_GetRefTotal(PyInterpreterState *);
-#endif
 
 
 /********************* String Literals ****************************************/
@@ -169,7 +162,7 @@ struct _typeobject {
     /* More standard operations (here for binary compatibility) */
 
     hashfunc tp_hash;
-    ternaryfunc tp_call;
+    callfunc tp_call;
     reprfunc tp_str;
     getattrofunc tp_getattro;
     setattrofunc tp_setattro;
@@ -219,7 +212,7 @@ struct _typeobject {
     PyObject *tp_mro; /* method resolution order */
     PyObject *tp_cache; /* no longer used */
     void *tp_subclasses;  /* for static builtin types this is an index */
-    PyObject *tp_weaklist; /* not used for static builtin types */
+    PyObject *tp_weaklist; /* no longer used: see the weak reference table */
     destructor tp_del;
 
     /* Type attribute cache version tag. Added in version 2.6.
@@ -248,6 +241,12 @@ struct _typeobject {
     _Py_iteritemfunc _tp_iteritem;
 
     void *_tp_cache;
+
+    /* The shape of every object of this type that has no attributes in
+       slots; the only shape of a type without attribute slots.  Filled by
+       PyType_Ready(), and for the static builtin types also at runtime
+       start, before any static object is used (_PyTypes_InitRootShapes()). */
+    struct _PyShape tp_root_shape;
 };
 
 #define _Py_ATTR_CACHE_UNUSED (30000)  // (see tp_versions_used)
@@ -286,14 +285,11 @@ typedef struct _heaptypeobject {
                                       see add_operators() in typeobject.c . */
     PyBufferProcs as_buffer;
     PyObject *ht_name, *ht_slots, *ht_qualname;
-    struct _dictkeysobject *ht_cached_keys;
+    struct _PyTypeShapes *ht_shapes; // the shapes after the root, if any
     PyObject *ht_module;
     char *_ht_tpname;  // Storage for "tp_name"; see PyType_FromModuleAndSpec
     void *ht_token;  // Storage for the "Py_tp_token" slot
     struct _specialization_cache _spec_cache; // For use by the specializer.
-#ifdef Py_GIL_DISABLED
-    Py_ssize_t unique_id;  // ID used for per-thread refcounting
-#endif
     /* here are optional user slots, followed by the members. */
 } PyHeapTypeObject;
 
@@ -318,11 +314,11 @@ PyAPI_FUNC(void) PyUnstable_Object_ClearWeakRefsNoCallbacks(PyObject *);
 
 /* Same as PyObject_Generic{Get,Set}Attr, but passing the attributes
    dict as the last parameter. */
-PyAPI_FUNC(PyObject *)
+PyAPI_FUNC(PyValue)
 _PyObject_GenericGetAttrWithDict(PyObject *, PyObject *, PyObject *, int);
 PyAPI_FUNC(int)
 _PyObject_GenericSetAttrWithDict(PyObject *, PyObject *,
-                                 PyObject *, PyObject *);
+                                 PyValue, PyObject *);
 
 PyAPI_FUNC(PyObject *) _PyObject_FunctionStr(PyObject *);
 
@@ -376,10 +372,9 @@ PyAPI_FUNC(void) _Py_NO_RETURN _PyObject_AssertFailed(
     const char *function);
 
 
-PyAPI_FUNC(void) _PyTrash_thread_deposit_object(PyThreadState *tstate, PyObject *op);
-PyAPI_FUNC(void) _PyTrash_thread_destroy_chain(PyThreadState *tstate);
-
-/* For backwards compatibility with the old trashcan mechanism */
+/* The trashcan bounded the C stack depth of recursive deallocation.  The
+   collector frees objects in its sweep, which does not recurse, so these
+   remain only so that extension source still compiles. */
 #define Py_TRASHCAN_BEGIN(op, dealloc)
 #define Py_TRASHCAN_END
 
@@ -440,86 +435,3 @@ PyAPI_FUNC(int) PyUnstable_Object_IsUniquelyReferenced(PyObject *);
 
 PyAPI_FUNC(int) PyUnstable_SetImmortal(PyObject *op);
 
-#if defined(Py_GIL_DISABLED)
-PyAPI_FUNC(uintptr_t) _Py_GetThreadLocal_Addr(void);
-
-static inline uintptr_t
-_Py_ThreadId(void)
-{
-    uintptr_t tid;
-#if defined(_MSC_VER) && defined(_M_X64)
-    tid = __readgsqword(48);
-#elif defined(_MSC_VER) && defined(_M_IX86)
-    tid = __readfsdword(24);
-#elif defined(_MSC_VER) && defined(_M_ARM64)
-    tid = __getReg(18);
-#elif defined(__MINGW32__) && defined(_M_X64)
-    tid = __readgsqword(48);
-#elif defined(__MINGW32__) && defined(_M_IX86)
-    tid = __readfsdword(24);
-#elif defined(__MINGW32__) && defined(_M_ARM64)
-    // x18 is the Windows ARM64 platform register and points to the TEB.
-    __asm__ ("mov %0, x18" : "=r" (tid));
-#elif defined(__i386__)
-    __asm__("{movl %%gs:0, %0|mov %0, dword ptr gs:[0]}" : "=r" (tid));  // 32-bit always uses GS
-#elif defined(__MACH__) && defined(__x86_64__)
-    __asm__("{movq %%gs:0, %0|mov %0, qword ptr gs:[0]}" : "=r" (tid));  // x86_64 macOSX uses GS
-#elif defined(__x86_64__)
-    __asm__("{movq %%fs:0, %0|mov %0, qword ptr fs:[0]}" : "=r" (tid));  // x86_64 Linux, BSD uses FS
-#elif defined(__arm__) && __ARM_ARCH >= 7
-    __asm__ ("mrc p15, 0, %0, c13, c0, 3\nbic %0, %0, #3" : "=r" (tid));
-#elif defined(__aarch64__) && defined(__APPLE__)
-    // Use a 64-bit temporary: on arm64_32 (ILP32), uintptr_t is 32 bits
-    // but system registers are 64 bits.
-    uint64_t tp;
-    __asm__ ("mrs %0, tpidrro_el0" : "=r" (tp));
-    tid = (uintptr_t)tp;
-#elif defined (__aarch64__)
-    __asm__ ("mrs %0, tpidr_el0" : "=r" (tid));
-#elif defined(__powerpc64__)
-    #if defined(__clang__) && _Py__has_builtin(__builtin_thread_pointer)
-    tid = (uintptr_t)__builtin_thread_pointer();
-    #else
-    // r13 is reserved for use as system thread ID by the Power 64-bit ABI.
-    register uintptr_t tp __asm__ ("r13");
-    __asm__("" : "=r" (tp));
-    tid = tp;
-    #endif
-#elif defined(__powerpc__)
-    #if defined(__clang__) && _Py__has_builtin(__builtin_thread_pointer)
-    tid = (uintptr_t)__builtin_thread_pointer();
-    #else
-    // r2 is reserved for use as system thread ID by the Power 32-bit ABI.
-    register uintptr_t tp __asm__ ("r2");
-    __asm__ ("" : "=r" (tp));
-    tid = tp;
-    #endif
-#elif defined(__s390__) && defined(__GNUC__)
-    // Both GCC and Clang have supported __builtin_thread_pointer
-    // for s390 from long time ago.
-    tid = (uintptr_t)__builtin_thread_pointer();
-#elif defined(__riscv)
-    #if defined(__clang__) && _Py__has_builtin(__builtin_thread_pointer)
-    tid = (uintptr_t)__builtin_thread_pointer();
-    #else
-    // tp is Thread Pointer provided by the RISC-V ABI.
-    __asm__ ("mv %0, tp" : "=r" (tid));
-    #endif
-#else
-    // Fallback to a portable implementation if we do not have a faster
-    // platform-specific implementation.
-    tid = _Py_GetThreadLocal_Addr();
-#endif
-  return tid;
-}
-
-static inline Py_ALWAYS_INLINE int
-_Py_IsOwnedByCurrentThread(PyObject *ob)
-{
-#ifdef _Py_THREAD_SANITIZER
-    return _Py_atomic_load_uintptr_relaxed(&ob->ob_tid) == _Py_ThreadId();
-#else
-    return ob->ob_tid == _Py_ThreadId();
-#endif
-}
-#endif

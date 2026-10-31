@@ -227,6 +227,8 @@ void          _mi_arena_field_cursor_done(mi_arena_field_cursor_t* current);
 // "segment-map.c"
 void        _mi_segment_map_allocated_at(const mi_segment_t* segment);
 void        _mi_segment_map_freed_at(const mi_segment_t* segment);
+bool        _mi_gc_segmap_reserve(const void* start, size_t size);
+void        _mi_gc_segmap_publish(const mi_segment_t* segment, bool present);
 void        _mi_segment_map_unsafe_destroy(void);
 
 // "segment.c"
@@ -534,6 +536,35 @@ static inline mi_page_t* _mi_heap_get_free_small_page(mi_heap_t* heap, size_t si
   const size_t idx = _mi_wsize_from_size(size);
   mi_assert_internal(idx < MI_PAGES_DIRECT);
   return heap->pages_free_direct[idx];
+}
+
+// CPython: the tracing collector's segment map (segment-map.c).  For each
+// MI_SEGMENT_SIZE-aligned slot of the low 2^48 bytes of the address space it
+// holds the segment that covers the slot, or NULL, so that Python/gc_trace.c
+// finds the segment of any word, including an interior pointer into a huge
+// segment, in two loads.
+#define MI_GC_SEGMAP_ADDRESS_BITS  48
+#define MI_GC_SEGMAP_LEAF_BITS     11
+#define MI_GC_SEGMAP_LEAF_ENTRIES  ((size_t)1 << MI_GC_SEGMAP_LEAF_BITS)
+#define MI_GC_SEGMAP_TOP_ENTRIES \
+  ((size_t)1 << (MI_GC_SEGMAP_ADDRESS_BITS - MI_SEGMENT_SHIFT - MI_GC_SEGMAP_LEAF_BITS))
+
+typedef struct mi_gc_segmap_leaf_s {
+  _Atomic(mi_segment_t*) segment[MI_GC_SEGMAP_LEAF_ENTRIES];
+} mi_gc_segmap_leaf_t;
+
+extern _Atomic(mi_gc_segmap_leaf_t*) _mi_gc_segmap[MI_GC_SEGMAP_TOP_ENTRIES];
+// The bounds of every segment ever entered: a scan reads them once and
+// rejects most words that are not heap addresses with one comparison.
+extern _Atomic(uintptr_t) _mi_gc_segmap_lo;
+extern _Atomic(uintptr_t) _mi_gc_segmap_hi;
+
+static inline mi_segment_t* _mi_gc_segment_of(uintptr_t p) {
+  if (p >> MI_GC_SEGMAP_ADDRESS_BITS) return NULL;
+  const uintptr_t slot = p >> MI_SEGMENT_SHIFT;
+  mi_gc_segmap_leaf_t* leaf = mi_atomic_load_ptr_acquire(mi_gc_segmap_leaf_t, &_mi_gc_segmap[slot >> MI_GC_SEGMAP_LEAF_BITS]);
+  if (leaf == NULL) return NULL;
+  return mi_atomic_load_ptr_acquire(mi_segment_t, &leaf->segment[slot & (MI_GC_SEGMAP_LEAF_ENTRIES - 1)]);
 }
 
 // Segment that contains the pointer

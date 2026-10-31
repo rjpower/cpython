@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -20,15 +19,14 @@ PyDoc_STRVAR(_testinternalcapi_compiler_cleandoc__doc__,
 static PyObject *
 _testinternalcapi_compiler_cleandoc_impl(PyObject *module, PyObject *doc);
 
-static PyObject *
-_testinternalcapi_compiler_cleandoc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testinternalcapi_compiler_cleandoc(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -51,20 +49,28 @@ _testinternalcapi_compiler_cleandoc(PyObject *module, PyObject *const *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *doc;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("compiler_cleandoc", "argument 'doc'", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("compiler_cleandoc", "argument 'doc'", "str", _arg);
+            goto exit;
+        }
+        doc = _arg;
     }
-    doc = args[0];
-    return_value = _testinternalcapi_compiler_cleandoc_impl(module, doc);
+    _return_value = _testinternalcapi_compiler_cleandoc_impl(module, doc);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -106,15 +112,14 @@ _testinternalcapi_compiler_codegen_impl(PyObject *module, PyObject *ast,
                                         PyObject *filename, int optimize,
                                         int compile_mode);
 
-static PyObject *
-_testinternalcapi_compiler_codegen(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testinternalcapi_compiler_codegen(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -137,33 +142,41 @@ _testinternalcapi_compiler_codegen(PyObject *module, PyObject *const *args, Py_s
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     PyObject *ast;
     PyObject *filename;
     int optimize;
     int compile_mode = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    ast = args[0];
-    filename = args[1];
-    optimize = PyLong_AsInt(args[2]);
+    ast = PyValue_Object(args[0]);
+    if (ast == NULL) {
+        goto exit;
+    }
+    filename = PyValue_Object(args[1]);
+    if (filename == NULL) {
+        goto exit;
+    }
+    optimize = PyLong_AsIntValue(args[2]);
     if (optimize == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    compile_mode = PyLong_AsInt(args[3]);
+    compile_mode = PyLong_AsIntValue(args[3]);
     if (compile_mode == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = _testinternalcapi_compiler_codegen_impl(module, ast, filename, optimize, compile_mode);
+    _return_value = _testinternalcapi_compiler_codegen_impl(module, ast, filename, optimize, compile_mode);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -185,15 +198,14 @@ static PyObject *
 _testinternalcapi_optimize_cfg_impl(PyObject *module, PyObject *instructions,
                                     PyObject *consts, int nlocals);
 
-static PyObject *
-_testinternalcapi_optimize_cfg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testinternalcapi_optimize_cfg(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -216,23 +228,31 @@ _testinternalcapi_optimize_cfg(PyObject *module, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     PyObject *instructions;
     PyObject *consts;
     int nlocals;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    instructions = args[0];
-    consts = args[1];
-    nlocals = PyLong_AsInt(args[2]);
+    instructions = PyValue_Object(args[0]);
+    if (instructions == NULL) {
+        goto exit;
+    }
+    consts = PyValue_Object(args[1]);
+    if (consts == NULL) {
+        goto exit;
+    }
+    nlocals = PyLong_AsIntValue(args[2]);
     if (nlocals == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _testinternalcapi_optimize_cfg_impl(module, instructions, consts, nlocals);
+    _return_value = _testinternalcapi_optimize_cfg_impl(module, instructions, consts, nlocals);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -253,15 +273,14 @@ _testinternalcapi_assemble_code_object_impl(PyObject *module,
                                             PyObject *instructions,
                                             PyObject *metadata);
 
-static PyObject *
-_testinternalcapi_assemble_code_object(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_testinternalcapi_assemble_code_object(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -284,20 +303,31 @@ _testinternalcapi_assemble_code_object(PyObject *module, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     PyObject *filename;
     PyObject *instructions;
     PyObject *metadata;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    filename = args[0];
-    instructions = args[1];
-    metadata = args[2];
-    return_value = _testinternalcapi_assemble_code_object_impl(module, filename, instructions, metadata);
+    filename = PyValue_Object(args[0]);
+    if (filename == NULL) {
+        goto exit;
+    }
+    instructions = PyValue_Object(args[1]);
+    if (instructions == NULL) {
+        goto exit;
+    }
+    metadata = PyValue_Object(args[2]);
+    if (metadata == NULL) {
+        goto exit;
+    }
+    _return_value = _testinternalcapi_assemble_code_object_impl(module, filename, instructions, metadata);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -332,15 +362,14 @@ PyDoc_STRVAR(gh_119213_getargs__doc__,
 static PyObject *
 gh_119213_getargs_impl(PyObject *module, PyObject *spam);
 
-static PyObject *
-gh_119213_getargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+gh_119213_getargs(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -363,9 +392,10 @@ gh_119213_getargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *spam = Py_None;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -375,9 +405,13 @@ gh_119213_getargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    spam = args[0];
+    spam = PyValue_Object(args[0]);
+    if (spam == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = gh_119213_getargs_impl(module, spam);
+    _return_value = gh_119213_getargs_impl(module, spam);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -399,4 +433,4 @@ get_next_dict_keys_version(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return get_next_dict_keys_version_impl(module);
 }
-/*[clinic end generated code: output=ecb5d7ac85b153fa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b4621ec331052f74 input=a9049054013a1b77]*/

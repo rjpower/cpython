@@ -9,6 +9,7 @@ from test.support import import_helper, script_helper
 import_helper.import_module('_testinternalcapi')
 
 
+@support.requires_subinterpreters
 class InterpreterTeardownTests(unittest.TestCase):
     def test_destroy_subinterpreter_does_not_abort(self):
         # gh-153176: destroy_interpreter(basic=True) used to call

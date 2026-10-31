@@ -8,7 +8,7 @@ extern "C" {
 
 PyAPI_DATA(PyTypeObject) PyMemoryView_Type;
 
-#define PyMemoryView_Check(op) Py_IS_TYPE((op), &PyMemoryView_Type)
+#define PyMemoryView_Check(op) _Py_IS_ROOT_SHAPE((op), &PyMemoryView_Type)
 
 PyAPI_FUNC(PyObject *) PyMemoryView_FromObject(PyObject *base);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000

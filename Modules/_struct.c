@@ -8,6 +8,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
@@ -69,7 +70,6 @@ typedef struct {
     Py_ssize_t s_len;
     formatcode *s_codes;
     PyObject *s_format;
-    PyObject *weakreflist; /* List of weak references */
     bool init_called;
 } PyStructObject;
 
@@ -2055,7 +2055,7 @@ s_dealloc(PyObject *op)
     PyStructObject *s = PyStructObject_CAST(op);
     PyTypeObject *tp = Py_TYPE(s);
     PyObject_GC_UnTrack(s);
-    FT_CLEAR_WEAKREFS(op, s->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     if (s->s_codes != NULL) {
         PyMem_Free(s->s_codes);
     }
@@ -2224,9 +2224,30 @@ typedef struct {
     PyStructObject *so;
     Py_buffer buf;
     Py_ssize_t index;
+    int releasing;
 } unpackiterobject;
 
 #define unpackiterobject_CAST(op)   ((unpackiterobject *)(op))
+
+static void
+unpackiter_release(unpackiterobject *self)
+{
+    if (self->releasing) {
+        return;
+    }
+    self->releasing = 1;
+    /* The exporter can reach this iterator while releasing its acquisition.
+       Preserve the original view, but make every raw-data user inert first. */
+    Py_CLEAR(self->so);
+    PyBuffer_Release(&self->buf);
+    self->releasing = 0;
+}
+
+static void
+unpackiter_finalize(PyObject *op)
+{
+    unpackiter_release(unpackiterobject_CAST(op));
+}
 
 static void
 unpackiter_dealloc(PyObject *op)
@@ -2235,8 +2256,7 @@ unpackiter_dealloc(PyObject *op)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    Py_XDECREF(self->so);
-    PyBuffer_Release(&self->buf);
+    unpackiter_release(self);
     PyObject_GC_Del(self);
     Py_DECREF(tp);
 }
@@ -2270,31 +2290,31 @@ static PyMethodDef unpackiter_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static PyObject *
+static PyValue
 unpackiter_iternext(PyObject *op)
 {
     unpackiterobject *self = unpackiterobject_CAST(op);
     _structmodulestate *state = get_struct_state_iterinst(self);
     PyObject *result;
     if (self->so == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->index >= self->buf.len) {
         /* Iterator exhausted */
-        Py_CLEAR(self->so);
-        PyBuffer_Release(&self->buf);
-        return NULL;
+        unpackiter_release(self);
+        return PyValue_NULL;
     }
     assert(self->index + self->so->s_size <= self->buf.len);
     result = s_unpack_internal(self->so,
                                (char*)self->buf.buf + self->index,
                                state);
     self->index += self->so->s_size;
-    return result;
+    return PyValue_FromResult(result);
 }
 
 static PyType_Slot unpackiter_type_slots[] = {
     {Py_tp_dealloc, unpackiter_dealloc},
+    {Py_tp_finalize, unpackiter_finalize},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, unpackiter_traverse},
     {Py_tp_iter, PyObject_SelfIter},
@@ -2352,6 +2372,7 @@ Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer)
                      "iterative unpacking requires a buffer of "
                      "a multiple of %zd bytes",
                      self->s_size);
+        unpackiter_release(iter);
         Py_DECREF(iter);
         return NULL;
     }
@@ -2372,7 +2393,7 @@ Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer)
  *
  */
 static int
-s_pack_internal(PyStructObject *soself, PyObject *const *args,
+s_pack_internal(PyStructObject *soself, const PyValue *args,
                 char* buf, _structmodulestate *state)
 {
     formatcode *code;
@@ -2387,7 +2408,11 @@ s_pack_internal(PyStructObject *soself, PyObject *const *args,
         char *res = buf + code->offset;
         Py_ssize_t j = code->repeat;
         while (j--) {
-            PyObject *v = args[i++];
+            // The packing functions read objects.
+            PyObject *v = PyValue_Object(args[i++]);
+            if (v == NULL) {
+                return -1;
+            }
             if (strcmp(e->format, "s") == 0) {
                 Py_ssize_t n;
                 int isstring;
@@ -2471,9 +2496,9 @@ format strings.
 [clinic start generated code]*/
 
 static PyObject *
-Struct_pack_impl(PyStructObject *self, PyObject * const *values,
+Struct_pack_impl(PyStructObject *self, const PyValue *values,
                  Py_ssize_t values_length)
-/*[clinic end generated code: output=5766e18f596cae9e input=295f4b1a97747458]*/
+/*[clinic end generated code: output=e73c1e9ff8f63cd6 input=295f4b1a97747458]*/
 {
     _structmodulestate *state = get_struct_state_structinst(self);
 
@@ -2521,9 +2546,9 @@ more on format strings.
 
 static PyObject *
 Struct_pack_into_impl(PyStructObject *self, Py_buffer *buffer,
-                      Py_ssize_t offset, PyObject * const *values,
+                      Py_ssize_t offset, const PyValue *values,
                       Py_ssize_t values_length)
-/*[clinic end generated code: output=aa9d9a93f5f8f77b input=a2b8749e3843f01b]*/
+/*[clinic end generated code: output=4b013d019689310c input=a2b8749e3843f01b]*/
 {
     _structmodulestate *state = get_struct_state_structinst(self);
 
@@ -2619,7 +2644,6 @@ static struct PyMethodDef s_methods[] = {
 };
 
 static PyMemberDef s_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(PyStructObject, weakreflist), Py_READONLY},
     {"format", Py_T_OBJECT_EX, offsetof(PyStructObject, s_format),
         Py_READONLY, PyDoc_STR("struct format string")},
     {"size", Py_T_PYSSIZET, offsetof(PyStructObject, s_size), Py_READONLY,
@@ -2647,7 +2671,8 @@ static PyType_Spec PyStructType_spec = {
     sizeof(PyStructObject),
     0,
     (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-     Py_TPFLAGS_BASETYPE | Py_TPFLAGS_IMMUTABLETYPE),
+     Py_TPFLAGS_BASETYPE | Py_TPFLAGS_IMMUTABLETYPE |
+     Py_TPFLAGS_MANAGED_WEAKREF),
     PyStructType_slots
 };
 
@@ -2751,9 +2776,9 @@ to the format string.  See help(struct) for more on format strings.
 [clinic start generated code]*/
 
 static PyObject *
-pack_impl(PyObject *module, PyStructObject *s_object,
-          PyObject * const *values, Py_ssize_t values_length)
-/*[clinic end generated code: output=2f874191ddecdec0 input=8144972342391de1]*/
+pack_impl(PyObject *module, PyStructObject *s_object, const PyValue *values,
+          Py_ssize_t values_length)
+/*[clinic end generated code: output=d412db27ad83b0e1 input=8144972342391de1]*/
 {
     return Struct_pack_impl(s_object, values, values_length);
 }
@@ -2777,9 +2802,9 @@ the buffer.  See help(struct) for more on format strings.
 
 static PyObject *
 pack_into_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer,
-               Py_ssize_t offset, PyObject * const *values,
+               Py_ssize_t offset, const PyValue *values,
                Py_ssize_t values_length)
-/*[clinic end generated code: output=e8bf7d422b2088ef input=548c35c57db7436a]*/
+/*[clinic end generated code: output=c468c8ca53e0d4f3 input=548c35c57db7436a]*/
 {
     return Struct_pack_into_impl(s_object, buffer, offset,
                                  values, values_length);

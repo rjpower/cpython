@@ -14,6 +14,7 @@ except ImportError:
 
 import asyncio
 from test.test_asyncio import utils as test_utils
+from test import support
 from test.support import socket_helper
 
 
@@ -1298,24 +1299,6 @@ class StreamTests(test_utils.TestCase):
 
         self.assertEqual(messages[0]['message'],
                     'Unhandled exception in client_connected_cb')
-
-    def test_open_connection_happy_eyeball_refcycles(self):
-        port = socket_helper.find_unused_port()
-        async def main():
-            exc = None
-            try:
-                await asyncio.open_connection(
-                    host="localhost",
-                    port=port,
-                    happy_eyeballs_delay=0.25,
-                )
-            except* OSError as excs:
-                # can't use assertRaises because that clears frames
-                exc = excs.exceptions[0]
-            self.assertIsNotNone(exc)
-            self.assertListEqual(gc.get_referrers(exc), [main_coro])
-        main_coro = main()
-        asyncio.run(main_coro)
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
@@ -48,7 +49,6 @@ typedef struct arrayobject {
     char *ob_item;
     Py_ssize_t allocated;
     const struct arraydescr *ob_descr;
-    PyObject *weakreflist; /* List of weak references */
     Py_ssize_t ob_exports;  /* Number of exported buffers */
 } arrayobject;
 
@@ -784,7 +784,6 @@ newarrayobject_untracked(PyTypeObject *type, Py_ssize_t size,
     }
     op->ob_descr = descr;
     op->allocated = size;
-    op->weakreflist = NULL;
     Py_SET_SIZE(op, size);
     if (size <= 0) {
         op->ob_item = NULL;
@@ -861,7 +860,7 @@ array_dealloc(PyObject *op)
     PyObject_GC_UnTrack(op);
 
     arrayobject *self = arrayobject_CAST(op);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     if (self->ob_item != NULL) {
         PyMem_Free(self->ob_item);
     }
@@ -1740,7 +1739,8 @@ array_array_fromfile_impl(arrayobject *self, PyTypeObject *cls, PyObject *f,
 
     not_enough_bytes = (PyBytes_GET_SIZE(b) != nbytes);
 
-    res = array_array_frombytes((PyObject *)self, b);
+    res = PyValue_Object(array_array_frombytes((PyObject *)self,
+                                               PyValue_FromObject(b)));
     Py_DECREF(b);
     if (res == NULL)
         return NULL;
@@ -2580,19 +2580,19 @@ array_array___reduce_ex___impl(arrayobject *self, PyTypeObject *cls,
     return result;
 }
 
-static PyObject *
+static PyValue
 array_get_typecode(PyObject *op, void *Py_UNUSED(closure))
 {
     arrayobject *a = arrayobject_CAST(op);
     const char *typecode = a->ob_descr->typecode;
-    return PyUnicode_FromString(typecode);
+    return PyValue_FromResult(PyUnicode_FromString(typecode));
 }
 
-static PyObject *
+static PyValue
 array_get_itemsize(PyObject *op, void *Py_UNUSED(closure))
 {
     arrayobject *a = arrayobject_CAST(op);
-    return PyLong_FromLong((long)a->ob_descr->itemsize);
+    return PyValue_FromLongLong((long)a->ob_descr->itemsize);
 }
 
 static PyGetSetDef array_getsets [] = {
@@ -2627,7 +2627,7 @@ static PyMethodDef array_methods[] = {
     ARRAY_ARRAY_TOBYTES_METHODDEF
     ARRAY_ARRAY_TOUNICODE_METHODDEF
     ARRAY_ARRAY___SIZEOF___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("Arrays are generic over the type of their elements")},
     {NULL, NULL}  /* sentinel */
 };
@@ -3028,7 +3028,8 @@ array_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             else if (initial != NULL && (PyByteArray_Check(initial) ||
                                PyBytes_Check(initial))) {
                 PyObject *v;
-                v = array_array_frombytes((PyObject *)a, initial);
+                v = PyValue_Object(array_array_frombytes(
+                    (PyObject *)a, PyValue_FromObject(initial)));
                 if (v == NULL) {
                     Py_DECREF(a);
                     Py_XDECREF(it);
@@ -3155,11 +3156,6 @@ itemsize -- the length in bytes of one array item\n\
 
 static PyObject *array_iter(PyObject *op);
 
-static struct PyMemberDef array_members[] = {
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(arrayobject, weakreflist), Py_READONLY},
-    {NULL},
-};
-
 static PyType_Slot array_slots[] = {
     {Py_tp_dealloc, array_dealloc},
     {Py_tp_repr, array_repr},
@@ -3168,7 +3164,6 @@ static PyType_Slot array_slots[] = {
     {Py_tp_richcompare, array_richcompare},
     {Py_tp_iter, array_iter},
     {Py_tp_methods, array_methods},
-    {Py_tp_members, array_members},
     {Py_tp_getset, array_getsets},
     {Py_tp_alloc, _PyType_AllocNoTrack},
     {Py_tp_new, array_new},
@@ -3201,7 +3196,7 @@ static PyType_Spec array_spec = {
     .basicsize = sizeof(arrayobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
               Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_SEQUENCE),
+              Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = array_slots,
 };
 
@@ -3235,7 +3230,7 @@ array_iter(PyObject *op)
     return (PyObject *)it;
 }
 
-static PyObject *
+static PyValue
 arrayiter_next(PyObject *op)
 {
     arrayiterobject *it = arrayiterobject_CAST(op);
@@ -3246,17 +3241,17 @@ arrayiter_next(PyObject *op)
 #endif
     arrayobject *ao = it->ao;
     if (ao == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 #ifndef NDEBUG
     assert(array_Check(ao, state));
 #endif
     if (it->index < Py_SIZE(ao)) {
-        return (*it->getitem)(ao, it->index++);
+        return PyValue_FromResult((*it->getitem)(ao, it->index++));
     }
     it->ao = NULL;
     Py_DECREF(ao);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void

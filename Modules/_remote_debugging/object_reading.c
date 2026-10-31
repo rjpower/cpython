@@ -34,7 +34,7 @@ read_py_ptr(RemoteUnwinderObject *unwinder, uintptr_t address, uintptr_t *ptr_ad
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read Python pointer");
         return -1;
     }
-    *ptr_addr &= ~Py_TAG_BITS;
+    *ptr_addr &= ~_PyValue_TAG_BITS;
     return 0;
 }
 

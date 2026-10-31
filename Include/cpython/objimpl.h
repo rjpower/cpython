@@ -102,3 +102,15 @@ PyAPI_FUNC(PyObject *) PyUnstable_Object_GC_NewWithExtraData(PyTypeObject *,
  */
 typedef int (*gcvisitobjects_t)(PyObject*, void*);
 PyAPI_FUNC(void) PyUnstable_GC_VisitObjects(gcvisitobjects_t callback, void* arg);
+
+/* Register the address of a PyObject* variable that the collector cannot
+ * otherwise see, such as a field of memory from malloc() or PyMem_Malloc()
+ * that no tp_traverse visits, as a root: the object it points to when a
+ * collection runs, if any, stays alive; the tracing collector would
+ * otherwise free what only such a reference holds.  It needs an
+ * attached thread state.  PyGC_AddRoot() returns 0, or -1 with MemoryError
+ * set.  PyGC_RemoveRoot() removes a root added for the same address. */
+PyAPI_FUNC(int) PyGC_AddRoot(PyObject **ref);
+PyAPI_FUNC(void) PyGC_RemoveRoot(PyObject **ref);
+/* For code that also builds against interpreters without these. */
+#define Py_HAVE_PYGC_ADDROOT 1

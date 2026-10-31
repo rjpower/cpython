@@ -5,8 +5,11 @@
 extern "C" {
 #endif
 
-typedef PyObject *(*getter)(PyObject *, void *);
-typedef int (*setter)(PyObject *, PyObject *, void *);
+/* A getter returns the attribute as a value, or PyValue_NULL with an
+   exception set.  A setter takes the value, PyValue_NULL to delete the
+   attribute, and returns 0, or -1 with an exception set. */
+typedef PyValue (*getter)(PyObject *, void *);
+typedef int (*setter)(PyObject *, PyValue, void *);
 
 struct PyGetSetDef {
     const char *name;
@@ -78,6 +81,8 @@ struct PyMemberDef {
 
 #define Py_T_PYSSIZET  19      /* Py_ssize_t */
 #define _Py_T_NONE     20 // Deprecated. Value is always None.
+#define _Py_T_VALUE    21 // A PyValue, read as its object or None if NULL
+#define _Py_T_VALUE_EX 22 // A PyValue, AttributeError if NULL: a __slots__ slot
 
 /* Flags */
 #define Py_READONLY            (1 << 0)

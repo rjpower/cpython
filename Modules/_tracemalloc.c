@@ -74,8 +74,8 @@ trace the allocation of the object.
 [clinic start generated code]*/
 
 static PyObject *
-_tracemalloc__get_object_traceback(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=41ee0553a658b0aa input=29495f1b21c53212]*/
+_tracemalloc__get_object_traceback_impl(PyObject *module, PyObject *obj)
+/*[clinic end generated code: output=dcfb97aaf8c56b9f input=29495f1b21c53212]*/
 {
     return _PyTraceMalloc_GetObjectTraceback(obj);
 }
@@ -228,9 +228,6 @@ PyInit__tracemalloc(void)
         return NULL;
     }
 
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(mod, Py_MOD_GIL_NOT_USED);
-#endif
 
     return mod;
 }

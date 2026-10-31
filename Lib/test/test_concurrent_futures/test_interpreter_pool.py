@@ -18,7 +18,7 @@ from test.support import script_helper
 import test.test_asyncio.utils as testasyncio_utils
 
 from .executor import ExecutorTest, mul
-from .util import BaseTestCase, InterpreterPoolMixin, setup_module
+from .util import BaseTestCase, ExecutorMixin, InterpreterPoolMixin, setup_module
 
 
 WINDOWS = sys.platform.startswith('win')
@@ -139,11 +139,6 @@ class InterpreterPoolExecutorTest(
         self.assertEqual(before_init, b'\0')
         self.assertEqual(after_init, msg1)
         self.assertEqual(after_run, msg2)
-
-    @unittest.expectedFailure
-    def test_init_script_args(self):
-        with self.assertRaises(ValueError):
-            self.executor_type(initializer='pass', initargs=('spam',))
 
     def test_init_func(self):
         msg = b'step: init'
@@ -458,6 +453,32 @@ class InterpreterPoolExecutorTest(
         # Weak references don't cross between interpreters.
         raise unittest.SkipTest('not applicable')
 
+
+    @unittest.skipUnless(hasattr(_thread, '_get_name'), "missing _thread._get_name")
+    def test_thread_name_prefix_with_thread_get_name(self):
+        def get_thread_name():
+            import _thread
+            return _thread._get_name()
+
+        # Some platforms (Linux) are using 16 bytes to store the thread name,
+        # so only compare the first 15 bytes (without the trailing \n).
+        self.assertStartsWith(self.executor.submit(get_thread_name).result(),
+                              "InterpreterPoolExecutor-"[:15])
+
+
+class InterpreterPoolAvailabilityTests(ExecutorMixin, BaseTestCase):
+    executor_type = InterpreterPoolMixin.executor_type
+    test_max_workers_negative = ExecutorTest.test_max_workers_negative
+
+    def test_thread_name_prefix(self):
+        self.assertStartsWith(self.executor._thread_name_prefix,
+                              "InterpreterPoolExecutor-")
+
+    @unittest.expectedFailure
+    def test_init_script_args(self):
+        with self.assertRaises(ValueError):
+            self.executor_type(initializer='pass', initargs=('spam',))
+
     @support.requires_subprocess()
     def test_import_interpreter_pool_executor(self):
         # Test the import behavior normally if _interpreters is unavailable.
@@ -497,20 +518,6 @@ class InterpreterPoolExecutorTest(
         self.assertEqual(p.stdout.decode(), '')
         self.assertEqual(p.stderr.decode(), '')
 
-    def test_thread_name_prefix(self):
-        self.assertStartsWith(self.executor._thread_name_prefix,
-                              "InterpreterPoolExecutor-")
-
-    @unittest.skipUnless(hasattr(_thread, '_get_name'), "missing _thread._get_name")
-    def test_thread_name_prefix_with_thread_get_name(self):
-        def get_thread_name():
-            import _thread
-            return _thread._get_name()
-
-        # Some platforms (Linux) are using 16 bytes to store the thread name,
-        # so only compare the first 15 bytes (without the trailing \n).
-        self.assertStartsWith(self.executor.submit(get_thread_name).result(),
-                              "InterpreterPoolExecutor-"[:15])
 
 class AsyncioTest(InterpretersMixin, testasyncio_utils.TestCase):
 

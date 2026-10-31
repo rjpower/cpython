@@ -41,8 +41,67 @@ four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
     Py_RETURN_NONE;
 }
 
+/* tp_call returns a value, so the callable fixtures are separate from the
+   PyCFunction ones above. */
+static PyValue
+call_zero(void)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_one(PyObject *self)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_two(PyObject *self, PyObject *args)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+call_three(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+// Using this as a handler should raise a SystemError.
+static PyValue
+call_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+/* A getter returns a value, so the getter fixtures are separate too. */
+static PyValue
+get_zero(void)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+get_one(PyObject *self)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+static PyValue
+get_two(PyObject *self, void *closure)
+{
+    return PyValue_FromObject(Py_None);
+}
+
+// Using this as a getter should raise a SystemError.
+static PyValue
+get_four(PyObject *self, PyObject *a, PyObject *b, PyObject *c)
+{
+    return PyValue_FromObject(Py_None);
+}
+
 static int
-set_two(PyObject *self, PyObject *value)
+set_two(PyObject *self, PyValue value)
 {
     return 0;
 }
@@ -50,8 +109,12 @@ set_two(PyObject *self, PyObject *value)
 static PyObject *last_set_value = NULL;
 
 static int
-set_three(PyObject *self, PyObject *value, void *closure)
+set_three(PyObject *self, PyValue value_v, void *closure)
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     Py_XSETREF(last_set_value, Py_XNewRef(value));
     return 0;
 }
@@ -103,12 +166,12 @@ static PyMethodDef type_methods[] = {
 };
 
 static PyGetSetDef type_getset[] = {
-    {"getset0", .get = _Py_FUNC_CAST(getter, zero)},
-    {"getset1", .get = _Py_FUNC_CAST(getter, one),
+    {"getset0", .get = _Py_FUNC_CAST(getter, get_zero)},
+    {"getset1", .get = _Py_FUNC_CAST(getter, get_one),
                 .set = _Py_FUNC_CAST(setter, set_two)},
-    {"getset2", .get = _Py_FUNC_CAST(getter, two),
+    {"getset2", .get = _Py_FUNC_CAST(getter, get_two),
                 .set = _Py_FUNC_CAST(setter, set_three)},
-    {"getset4", .get = _Py_FUNC_CAST(getter, four),
+    {"getset4", .get = _Py_FUNC_CAST(getter, get_four),
                 .set = _Py_FUNC_CAST(setter, four)},
     {NULL},
 };
@@ -129,15 +192,15 @@ static PyTypeObject FpcastTestType = {
         .tp_name = "_testcapi.FpcastCallable" #N,               \
         .tp_basicsize = sizeof(PyObject),                       \
         .tp_flags = Py_TPFLAGS_DEFAULT,                         \
-        .tp_call = _Py_FUNC_CAST(ternaryfunc, FUNC),            \
+        .tp_call = _Py_FUNC_CAST(callfunc, FUNC),            \
         .tp_new = PyType_GenericNew,                            \
     };
 
-CALLABLE_TYPE(0, zero)
-CALLABLE_TYPE(1, one)
-CALLABLE_TYPE(2, two)
-CALLABLE_TYPE(3, three)
-CALLABLE_TYPE(4, four)
+CALLABLE_TYPE(0, call_zero)
+CALLABLE_TYPE(1, call_one)
+CALLABLE_TYPE(2, call_two)
+CALLABLE_TYPE(3, call_three)
+CALLABLE_TYPE(4, call_four)
 
 #undef CALLABLE_TYPE
 

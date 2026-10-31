@@ -2,7 +2,6 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -31,22 +30,24 @@ PyDoc_STRVAR(_ctypes_set_errno__doc__,
 "\n");
 
 #define _CTYPES_SET_ERRNO_METHODDEF    \
-    {"set_errno", (PyCFunction)_ctypes_set_errno, METH_O, _ctypes_set_errno__doc__},
+    {"set_errno", _PyCFunction_CAST(_ctypes_set_errno), METH_O, _ctypes_set_errno__doc__},
 
 static PyObject *
 _ctypes_set_errno_impl(PyObject *module, int value);
 
-static PyObject *
-_ctypes_set_errno(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_set_errno(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int value;
+    PyObject *_return_value;
 
-    value = PyLong_AsInt(arg);
+    value = PyLong_AsIntValue(arg);
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _ctypes_set_errno_impl(module, value);
+    _return_value = _ctypes_set_errno_impl(module, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -82,22 +83,24 @@ PyDoc_STRVAR(_ctypes_set_last_error__doc__,
 "\n");
 
 #define _CTYPES_SET_LAST_ERROR_METHODDEF    \
-    {"set_last_error", (PyCFunction)_ctypes_set_last_error, METH_O, _ctypes_set_last_error__doc__},
+    {"set_last_error", _PyCFunction_CAST(_ctypes_set_last_error), METH_O, _ctypes_set_last_error__doc__},
 
 static PyObject *
 _ctypes_set_last_error_impl(PyObject *module, int value);
 
-static PyObject *
-_ctypes_set_last_error(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_set_last_error(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int value;
+    PyObject *_return_value;
 
-    value = PyLong_AsInt(arg);
+    value = PyLong_AsIntValue(arg);
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _ctypes_set_last_error_impl(module, value);
+    _return_value = _ctypes_set_last_error_impl(module, value);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -113,22 +116,24 @@ PyDoc_STRVAR(_ctypes__check_HRESULT__doc__,
 "\n");
 
 #define _CTYPES__CHECK_HRESULT_METHODDEF    \
-    {"_check_HRESULT", (PyCFunction)_ctypes__check_HRESULT, METH_O, _ctypes__check_HRESULT__doc__},
+    {"_check_HRESULT", _PyCFunction_CAST(_ctypes__check_HRESULT), METH_O, _ctypes__check_HRESULT__doc__},
 
 static PyObject *
 _ctypes__check_HRESULT_impl(PyObject *module, int hr);
 
-static PyObject *
-_ctypes__check_HRESULT(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes__check_HRESULT(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int hr;
+    PyObject *_return_value;
 
-    hr = PyLong_AsInt(arg);
+    hr = PyLong_AsIntValue(arg);
     if (hr == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _ctypes__check_HRESULT_impl(module, hr);
+    _return_value = _ctypes__check_HRESULT_impl(module, hr);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -153,11 +158,12 @@ PyDoc_STRVAR(_ctypes_FormatError__doc__,
 static PyObject *
 _ctypes_FormatError_impl(PyObject *module, int code);
 
-static PyObject *
-_ctypes_FormatError(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_FormatError(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int code = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("FormatError", nargs, 0, 1)) {
         goto exit;
@@ -165,12 +171,13 @@ _ctypes_FormatError(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    code = PyLong_AsInt(args[0]);
+    code = PyLong_AsIntValue(args[0]);
     if (code == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _ctypes_FormatError_impl(module, code);
+    _return_value = _ctypes_FormatError_impl(module, code);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -195,30 +202,38 @@ PyDoc_STRVAR(_ctypes_LoadLibrary__doc__,
 static PyObject *
 _ctypes_LoadLibrary_impl(PyObject *module, PyObject *nameobj, int load_flags);
 
-static PyObject *
-_ctypes_LoadLibrary(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_LoadLibrary(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *nameobj;
     int load_flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("LoadLibrary", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("LoadLibrary", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("LoadLibrary", "argument 1", "str", _arg);
+            goto exit;
+        }
+        nameobj = _arg;
     }
-    nameobj = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    load_flags = PyLong_AsInt(args[1]);
+    load_flags = PyLong_AsIntValue(args[1]);
     if (load_flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _ctypes_LoadLibrary_impl(module, nameobj, load_flags);
+    _return_value = _ctypes_LoadLibrary_impl(module, nameobj, load_flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -235,21 +250,29 @@ PyDoc_STRVAR(_ctypes_FreeLibrary__doc__,
 "Free the handle of an executable previously loaded by LoadLibrary.");
 
 #define _CTYPES_FREELIBRARY_METHODDEF    \
-    {"FreeLibrary", (PyCFunction)_ctypes_FreeLibrary, METH_O, _ctypes_FreeLibrary__doc__},
+    {"FreeLibrary", _PyCFunction_CAST(_ctypes_FreeLibrary), METH_O, _ctypes_FreeLibrary__doc__},
 
 static PyObject *
 _ctypes_FreeLibrary_impl(PyObject *module, void *hMod);
 
-static PyObject *
-_ctypes_FreeLibrary(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_FreeLibrary(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     void *hMod;
+    PyObject *_return_value;
 
-    if (!_parse_voidp(arg, &hMod)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp(_arg, &hMod)) {
+            goto exit;
+        }
     }
-    return_value = _ctypes_FreeLibrary_impl(module, hMod);
+    _return_value = _ctypes_FreeLibrary_impl(module, hMod);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -271,19 +294,27 @@ PyDoc_STRVAR(_ctypes_CopyComPointer__doc__,
 static PyObject *
 _ctypes_CopyComPointer_impl(PyObject *module, PyObject *p1, PyObject *p2);
 
-static PyObject *
-_ctypes_CopyComPointer(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_CopyComPointer(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *p1;
     PyObject *p2;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CopyComPointer", nargs, 2, 2)) {
         goto exit;
     }
-    p1 = args[0];
-    p2 = args[1];
-    return_value = _ctypes_CopyComPointer_impl(module, p1, p2);
+    p1 = PyValue_Object(args[0]);
+    if (p1 == NULL) {
+        goto exit;
+    }
+    p2 = PyValue_Object(args[1]);
+    if (p2 == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_CopyComPointer_impl(module, p1, p2);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -300,7 +331,29 @@ PyDoc_STRVAR(_ctypes__dyld_shared_cache_contains_path__doc__,
 "Check whether a path is in the shared cache.");
 
 #define _CTYPES__DYLD_SHARED_CACHE_CONTAINS_PATH_METHODDEF    \
-    {"_dyld_shared_cache_contains_path", (PyCFunction)_ctypes__dyld_shared_cache_contains_path, METH_O, _ctypes__dyld_shared_cache_contains_path__doc__},
+    {"_dyld_shared_cache_contains_path", _PyCFunction_CAST(_ctypes__dyld_shared_cache_contains_path), METH_O, _ctypes__dyld_shared_cache_contains_path__doc__},
+
+static PyObject *
+_ctypes__dyld_shared_cache_contains_path_impl(PyObject *module,
+                                              PyObject *name);
+
+static PyValue
+_ctypes__dyld_shared_cache_contains_path(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *name;
+    PyObject *_return_value;
+
+    name = PyValue_Object(arg);
+    if (name == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes__dyld_shared_cache_contains_path_impl(module, name);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #endif /* !defined(MS_WIN32) && defined(__APPLE__) */
 
@@ -318,26 +371,31 @@ PyDoc_STRVAR(_ctypes_dlopen__doc__,
 static PyObject *
 _ctypes_dlopen_impl(PyObject *module, PyObject *name, int mode);
 
-static PyObject *
-_ctypes_dlopen(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_dlopen(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
     int mode = DLOPEN_DEFAULT_MODE;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dlopen", nargs, 1, 2)) {
         goto exit;
     }
-    name = args[0];
+    name = PyValue_Object(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
     if (nargs < 2) {
         goto skip_optional;
     }
-    mode = PyLong_AsInt(args[1]);
+    mode = PyLong_AsIntValue(args[1]);
     if (mode == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _ctypes_dlopen_impl(module, name, mode);
+    _return_value = _ctypes_dlopen_impl(module, name, mode);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -354,21 +412,29 @@ PyDoc_STRVAR(_ctypes_dlclose__doc__,
 "Close a shared library.");
 
 #define _CTYPES_DLCLOSE_METHODDEF    \
-    {"dlclose", (PyCFunction)_ctypes_dlclose, METH_O, _ctypes_dlclose__doc__},
+    {"dlclose", _PyCFunction_CAST(_ctypes_dlclose), METH_O, _ctypes_dlclose__doc__},
 
 static PyObject *
 _ctypes_dlclose_impl(PyObject *module, void *handle);
 
-static PyObject *
-_ctypes_dlclose(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_dlclose(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     void *handle;
+    PyObject *_return_value;
 
-    if (!_parse_voidp(arg, &handle)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp(_arg, &handle)) {
+            goto exit;
+        }
     }
-    return_value = _ctypes_dlclose_impl(module, handle);
+    _return_value = _ctypes_dlclose_impl(module, handle);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -390,28 +456,42 @@ PyDoc_STRVAR(_ctypes_dlsym__doc__,
 static PyObject *
 _ctypes_dlsym_impl(PyObject *module, void *handle, const char *name);
 
-static PyObject *
-_ctypes_dlsym(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_dlsym(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     void *handle;
     const char *name;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dlsym", nargs, 2, 2)) {
         goto exit;
     }
-    if (!_parse_voidp(args[0], &handle)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp(_arg, &handle)) {
+            goto exit;
+        }
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("dlsym", "argument 2", "str", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("dlsym", "argument 2", "str", _arg);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (name == NULL) {
+            goto exit;
+        }
     }
-    name = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (name == NULL) {
-        goto exit;
-    }
-    return_value = _ctypes_dlsym_impl(module, handle, name);
+    _return_value = _ctypes_dlsym_impl(module, handle, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -452,25 +532,39 @@ PyDoc_STRVAR(_ctypes_call_function__doc__,
 static PyObject *
 _ctypes_call_function_impl(PyObject *module, void *func, PyObject *arguments);
 
-static PyObject *
-_ctypes_call_function(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_call_function(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     void *func;
     PyObject *arguments;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("call_function", nargs, 2, 2)) {
         goto exit;
     }
-    if (!_parse_voidp(args[0], &func)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp(_arg, &func)) {
+            goto exit;
+        }
     }
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("call_function", "argument 2", "tuple", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("call_function", "argument 2", "tuple", _arg);
+            goto exit;
+        }
+        arguments = _arg;
     }
-    arguments = args[1];
-    return_value = _ctypes_call_function_impl(module, func, arguments);
+    _return_value = _ctypes_call_function_impl(module, func, arguments);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -488,25 +582,39 @@ static PyObject *
 _ctypes_call_cdeclfunction_impl(PyObject *module, void *func,
                                 PyObject *arguments);
 
-static PyObject *
-_ctypes_call_cdeclfunction(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_call_cdeclfunction(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     void *func;
     PyObject *arguments;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("call_cdeclfunction", nargs, 2, 2)) {
         goto exit;
     }
-    if (!_parse_voidp(args[0], &func)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp(_arg, &func)) {
+            goto exit;
+        }
     }
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("call_cdeclfunction", "argument 2", "tuple", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("call_cdeclfunction", "argument 2", "tuple", _arg);
+            goto exit;
+        }
+        arguments = _arg;
     }
-    arguments = args[1];
-    return_value = _ctypes_call_cdeclfunction_impl(module, func, arguments);
+    _return_value = _ctypes_call_cdeclfunction_impl(module, func, arguments);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -519,7 +627,28 @@ PyDoc_STRVAR(_ctypes_sizeof__doc__,
 "Return the size in bytes of a C instance.");
 
 #define _CTYPES_SIZEOF_METHODDEF    \
-    {"sizeof", (PyCFunction)_ctypes_sizeof, METH_O, _ctypes_sizeof__doc__},
+    {"sizeof", _PyCFunction_CAST(_ctypes_sizeof), METH_O, _ctypes_sizeof__doc__},
+
+static PyObject *
+_ctypes_sizeof_impl(PyObject *module, PyObject *obj);
+
+static PyValue
+_ctypes_sizeof(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
+
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_sizeof_impl(module, obj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_ctypes_alignment__doc__,
 "alignment($module, obj, /)\n"
@@ -530,7 +659,28 @@ PyDoc_STRVAR(_ctypes_alignment__doc__,
 "The argument is a C type or a C instance.");
 
 #define _CTYPES_ALIGNMENT_METHODDEF    \
-    {"alignment", (PyCFunction)_ctypes_alignment, METH_O, _ctypes_alignment__doc__},
+    {"alignment", _PyCFunction_CAST(_ctypes_alignment), METH_O, _ctypes_alignment__doc__},
+
+static PyObject *
+_ctypes_alignment_impl(PyObject *module, PyObject *obj);
+
+static PyValue
+_ctypes_alignment(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
+    PyObject *_return_value;
+
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_alignment_impl(module, obj);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_ctypes_byref__doc__,
 "byref($module, obj, offset=0, /)\n"
@@ -544,30 +694,36 @@ PyDoc_STRVAR(_ctypes_byref__doc__,
 static PyObject *
 _ctypes_byref_impl(PyObject *module, PyObject *obj, Py_ssize_t offset);
 
-static PyObject *
-_ctypes_byref(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_byref(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *obj;
     Py_ssize_t offset = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("byref", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], clinic_state()->PyCData_Type)) {
-        _PyArg_BadArgument("byref", "argument 1", (clinic_state()->PyCData_Type)->tp_name, args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, clinic_state()->PyCData_Type)) {
+            _PyArg_BadArgument("byref", "argument 1", (clinic_state()->PyCData_Type)->tp_name, _arg);
+            goto exit;
+        }
+        obj = _arg;
     }
-    obj = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -576,8 +732,9 @@ _ctypes_byref(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(obj);
-    return_value = _ctypes_byref_impl(module, obj, offset);
+    _return_value = _ctypes_byref_impl(module, obj, offset);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -590,25 +747,33 @@ PyDoc_STRVAR(_ctypes_addressof__doc__,
 "Return the address of the C instance internal buffer");
 
 #define _CTYPES_ADDRESSOF_METHODDEF    \
-    {"addressof", (PyCFunction)_ctypes_addressof, METH_O, _ctypes_addressof__doc__},
+    {"addressof", _PyCFunction_CAST(_ctypes_addressof), METH_O, _ctypes_addressof__doc__},
 
 static PyObject *
 _ctypes_addressof_impl(PyObject *module, PyObject *obj);
 
-static PyObject *
-_ctypes_addressof(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_addressof(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *obj;
+    PyObject *_return_value;
 
-    if (!PyObject_TypeCheck(arg, clinic_state()->PyCData_Type)) {
-        _PyArg_BadArgument("addressof", "argument", (clinic_state()->PyCData_Type)->tp_name, arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, clinic_state()->PyCData_Type)) {
+            _PyArg_BadArgument("addressof", "argument", (clinic_state()->PyCData_Type)->tp_name, _arg);
+            goto exit;
+        }
+        obj = _arg;
     }
-    obj = arg;
     Py_BEGIN_CRITICAL_SECTION(obj);
-    return_value = _ctypes_addressof_impl(module, obj);
+    _return_value = _ctypes_addressof_impl(module, obj);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -620,21 +785,29 @@ PyDoc_STRVAR(_ctypes_PyObj_FromPtr__doc__,
 "\n");
 
 #define _CTYPES_PYOBJ_FROMPTR_METHODDEF    \
-    {"PyObj_FromPtr", (PyCFunction)_ctypes_PyObj_FromPtr, METH_O, _ctypes_PyObj_FromPtr__doc__},
+    {"PyObj_FromPtr", _PyCFunction_CAST(_ctypes_PyObj_FromPtr), METH_O, _ctypes_PyObj_FromPtr__doc__},
 
 static PyObject *
 _ctypes_PyObj_FromPtr_impl(PyObject *module, PyObject *ob);
 
-static PyObject *
-_ctypes_PyObj_FromPtr(PyObject *module, PyObject *arg)
+static PyValue
+_ctypes_PyObj_FromPtr(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *ob;
+    PyObject *_return_value;
 
-    if (!_parse_voidp_object(arg, &ob)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_parse_voidp_object(_arg, &ob)) {
+            goto exit;
+        }
     }
-    return_value = _ctypes_PyObj_FromPtr_impl(module, ob);
+    _return_value = _ctypes_PyObj_FromPtr_impl(module, ob);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -647,7 +820,28 @@ PyDoc_STRVAR(_ctypes_Py_INCREF__doc__,
 "Increment the reference count of the object and return it.");
 
 #define _CTYPES_PY_INCREF_METHODDEF    \
-    {"Py_INCREF", (PyCFunction)_ctypes_Py_INCREF, METH_O, _ctypes_Py_INCREF__doc__},
+    {"Py_INCREF", _PyCFunction_CAST(_ctypes_Py_INCREF), METH_O, _ctypes_Py_INCREF__doc__},
+
+static PyObject *
+_ctypes_Py_INCREF_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+_ctypes_Py_INCREF(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_Py_INCREF_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_ctypes_Py_DECREF__doc__,
 "Py_DECREF($module, obj, /)\n"
@@ -656,7 +850,28 @@ PyDoc_STRVAR(_ctypes_Py_DECREF__doc__,
 "Decrement the reference count of the object and return it.");
 
 #define _CTYPES_PY_DECREF_METHODDEF    \
-    {"Py_DECREF", (PyCFunction)_ctypes_Py_DECREF, METH_O, _ctypes_Py_DECREF__doc__},
+    {"Py_DECREF", _PyCFunction_CAST(_ctypes_Py_DECREF), METH_O, _ctypes_Py_DECREF__doc__},
+
+static PyObject *
+_ctypes_Py_DECREF_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+_ctypes_Py_DECREF(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_Py_DECREF_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_ctypes_resize__doc__,
 "resize($module, obj, size, /)\n"
@@ -669,27 +884,33 @@ PyDoc_STRVAR(_ctypes_resize__doc__,
 static PyObject *
 _ctypes_resize_impl(PyObject *module, CDataObject *obj, Py_ssize_t size);
 
-static PyObject *
-_ctypes_resize(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes_resize(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     CDataObject *obj;
     Py_ssize_t size;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("resize", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], clinic_state()->PyCData_Type)) {
-        _PyArg_BadArgument("resize", "argument 1", (clinic_state()->PyCData_Type)->tp_name, args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, clinic_state()->PyCData_Type)) {
+            _PyArg_BadArgument("resize", "argument 1", (clinic_state()->PyCData_Type)->tp_name, _arg);
+            goto exit;
+        }
+        obj = (CDataObject *)_arg;
     }
-    obj = (CDataObject *)args[0];
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[1]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -697,8 +918,9 @@ _ctypes_resize(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         size = ival;
     }
     Py_BEGIN_CRITICAL_SECTION(obj);
-    return_value = _ctypes_resize_impl(module, obj, size);
+    _return_value = _ctypes_resize_impl(module, obj, size);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -715,23 +937,34 @@ PyDoc_STRVAR(_ctypes__unpickle__doc__,
 static PyObject *
 _ctypes__unpickle_impl(PyObject *module, PyObject *typ, PyObject *state);
 
-static PyObject *
-_ctypes__unpickle(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ctypes__unpickle(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *typ;
     PyObject *state;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_unpickle", nargs, 2, 2)) {
         goto exit;
     }
-    typ = args[0];
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("_unpickle", "argument 2", "tuple", args[1]);
+    typ = PyValue_Object(args[0]);
+    if (typ == NULL) {
         goto exit;
     }
-    state = args[1];
-    return_value = _ctypes__unpickle_impl(module, typ, state);
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("_unpickle", "argument 2", "tuple", _arg);
+            goto exit;
+        }
+        state = _arg;
+    }
+    _return_value = _ctypes__unpickle_impl(module, typ, state);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -744,7 +977,28 @@ PyDoc_STRVAR(_ctypes_buffer_info__doc__,
 "Return buffer interface information.");
 
 #define _CTYPES_BUFFER_INFO_METHODDEF    \
-    {"buffer_info", (PyCFunction)_ctypes_buffer_info, METH_O, _ctypes_buffer_info__doc__},
+    {"buffer_info", _PyCFunction_CAST(_ctypes_buffer_info), METH_O, _ctypes_buffer_info__doc__},
+
+static PyObject *
+_ctypes_buffer_info_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+_ctypes_buffer_info(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = _ctypes_buffer_info_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 #ifndef _CTYPES_GET_LAST_ERROR_METHODDEF
     #define _CTYPES_GET_LAST_ERROR_METHODDEF
@@ -793,4 +1047,4 @@ PyDoc_STRVAR(_ctypes_buffer_info__doc__,
 #ifndef _CTYPES_DLLIST_METHODDEF
     #define _CTYPES_DLLIST_METHODDEF
 #endif /* !defined(_CTYPES_DLLIST_METHODDEF) */
-/*[clinic end generated code: output=615c411ddc01d0a4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e59e4829b61d19b6 input=a9049054013a1b77]*/

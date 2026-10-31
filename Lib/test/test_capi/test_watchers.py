@@ -25,6 +25,10 @@ class TestDictWatchers(unittest.TestCase):
 
     @contextmanager
     def watcher(self, kind=EVENTS):
+        # For other GCs: the dicts that earlier tests watched die at a
+        # collection, not as their test returns, and would report to a
+        # watcher that reuses the ID.
+        gc_collect()
         wid = self.add_watcher(kind)
         try:
             yield wid
@@ -95,6 +99,7 @@ class TestDictWatchers(unittest.TestCase):
         with self.watcher() as wid:
             self.watch(wid, d)
             del d
+            gc_collect()  # For other GCs.
             self.assert_events(["dealloc"])
 
     def test_object_dict(self):
@@ -144,6 +149,7 @@ class TestDictWatchers(unittest.TestCase):
             self.watch(wid, d)
             with catch_unraisable_exception() as cm:
                 del d
+                gc_collect()  # For other GCs.
                 self.assertEqual(str(cm.unraisable.exc_value), "boom!")
 
     def test_two_watchers(self):
@@ -221,6 +227,10 @@ class TestTypeWatchers(unittest.TestCase):
 
     @contextmanager
     def watcher(self, kind=TYPES):
+        # For other GCs: the types that earlier tests watched die at a
+        # collection, not as their test returns, and would report their
+        # destruction to a watcher that reuses the ID.
+        gc_collect()
         wid = self.add_watcher(kind)
         try:
             yield wid
@@ -544,6 +554,7 @@ class TestFuncWatchers(unittest.TestCase):
             # Clear events reference to func
             events = []
             del myfunc
+            gc_collect()  # For other GCs.
             self.assertIn((_testcapi.PYFUNC_EVENT_DESTROY, myfunc_id, None), events)
 
     def test_multiple_watchers(self):
@@ -596,6 +607,7 @@ class TestFuncWatchers(unittest.TestCase):
         with self.add_watcher(watcher):
             with catch_unraisable_exception() as cm:
                 del myfunc
+                gc_collect()  # For other GCs.
 
                 self.assertIsInstance(cm.unraisable.exc_value, MyError)
 

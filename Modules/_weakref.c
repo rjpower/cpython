@@ -1,10 +1,8 @@
 #include "Python.h"
 #include "pycore_dict.h"              // _PyDict_DelItemIf()
-#include "pycore_object.h"            // _PyObject_GET_WEAKREFS_LISTPTR()
+#include "pycore_object.h"            // _PyType_SUPPORTS_WEAKREFS()
 #include "pycore_weakref.h"           // _PyWeakref_IS_DEAD()
 
-#define GET_WEAKREFS_LISTPTR(o) \
-        ((PyWeakReference **) _PyObject_GET_WEAKREFS_LISTPTR(o))
 
 /*[clinic input]
 module _weakref
@@ -72,8 +70,8 @@ Return a list of all weak reference objects pointing to 'object'.
 [clinic start generated code]*/
 
 static PyObject *
-_weakref_getweakrefs(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=25c7731d8e011824 input=00c6d0e5d3206693]*/
+_weakref_getweakrefs_impl(PyObject *module, PyObject *object)
+/*[clinic end generated code: output=5ec268989fb8f035 input=00c6d0e5d3206693]*/
 {
     if (!_PyType_SUPPORTS_WEAKREFS(Py_TYPE(object))) {
         return PyList_New(0);
@@ -84,8 +82,12 @@ _weakref_getweakrefs(PyObject *module, PyObject *object)
         return NULL;
     }
 
+    PyWeakReference **list = _PyWeakref_ListPtr(object, 0);
+    if (list == NULL) {
+        return result;
+    }
     LOCK_WEAKREFS(object);
-    PyWeakReference *current = *GET_WEAKREFS_LISTPTR(object);
+    PyWeakReference *current = *list;
     while (current != NULL) {
         PyObject *curobj = (PyObject *) current;
         if (_Py_TryIncref(curobj)) {

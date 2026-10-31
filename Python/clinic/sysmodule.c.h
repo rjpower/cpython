@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(sys_addaudithook__doc__,
@@ -21,15 +21,14 @@ PyDoc_STRVAR(sys_addaudithook__doc__,
 static PyObject *
 sys_addaudithook_impl(PyObject *module, PyObject *hook);
 
-static PyObject *
-sys_addaudithook(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_addaudithook(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -52,16 +51,21 @@ sys_addaudithook(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *hook;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    hook = args[0];
-    return_value = sys_addaudithook_impl(module, hook);
+    hook = PyValue_Object(args[0]);
+    if (hook == NULL) {
+        goto exit;
+    }
+    _return_value = sys_addaudithook_impl(module, hook);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -79,29 +83,37 @@ PyDoc_STRVAR(sys_audit__doc__,
 static PyObject *
 sys_audit_impl(PyObject *module, const char *event, PyObject *args);
 
-static PyObject *
-sys_audit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+sys_audit(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *event;
     PyObject *__clinic_args = NULL;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("audit", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("audit", "argument 1", "str", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("audit", "argument 1", "str", _arg);
+            goto exit;
+        }
+        event = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (event == NULL) {
+            goto exit;
+        }
     }
-    event = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (event == NULL) {
-        goto exit;
-    }
-    __clinic_args = PyTuple_FromArray(args + 1, nargs - 1);
+    __clinic_args = _PyTuple_FromValues(args + 1, nargs - 1);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    return_value = sys_audit_impl(module, event, __clinic_args);
+    _return_value = sys_audit_impl(module, event, __clinic_args);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for args */
@@ -117,7 +129,28 @@ PyDoc_STRVAR(sys_displayhook__doc__,
 "Print an object to sys.stdout and also save it in builtins._");
 
 #define SYS_DISPLAYHOOK_METHODDEF    \
-    {"displayhook", (PyCFunction)sys_displayhook, METH_O, sys_displayhook__doc__},
+    {"displayhook", _PyCFunction_CAST(sys_displayhook), METH_O, sys_displayhook__doc__},
+
+static PyObject *
+sys_displayhook_impl(PyObject *module, PyObject *o);
+
+static PyValue
+sys_displayhook(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *o;
+    PyObject *_return_value;
+
+    o = PyValue_Object(arg);
+    if (o == NULL) {
+        goto exit;
+    }
+    _return_value = sys_displayhook_impl(module, o);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys_excepthook__doc__,
 "excepthook($module, exctype, value, traceback, /)\n"
@@ -132,21 +165,32 @@ static PyObject *
 sys_excepthook_impl(PyObject *module, PyObject *exctype, PyObject *value,
                     PyObject *traceback);
 
-static PyObject *
-sys_excepthook(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+sys_excepthook(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *exctype;
     PyObject *value;
     PyObject *traceback;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("excepthook", nargs, 3, 3)) {
         goto exit;
     }
-    exctype = args[0];
-    value = args[1];
-    traceback = args[2];
-    return_value = sys_excepthook_impl(module, exctype, value, traceback);
+    exctype = PyValue_Object(args[0]);
+    if (exctype == NULL) {
+        goto exit;
+    }
+    value = PyValue_Object(args[1]);
+    if (value == NULL) {
+        goto exit;
+    }
+    traceback = PyValue_Object(args[2]);
+    if (traceback == NULL) {
+        goto exit;
+    }
+    _return_value = sys_excepthook_impl(module, exctype, value, traceback);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -210,7 +254,28 @@ PyDoc_STRVAR(sys_unraisablehook__doc__,
 "* object: Object causing the exception, can be None.");
 
 #define SYS_UNRAISABLEHOOK_METHODDEF    \
-    {"unraisablehook", (PyCFunction)sys_unraisablehook, METH_O, sys_unraisablehook__doc__},
+    {"unraisablehook", _PyCFunction_CAST(sys_unraisablehook), METH_O, sys_unraisablehook__doc__},
+
+static PyObject *
+sys_unraisablehook_impl(PyObject *module, PyObject *unraisable);
+
+static PyValue
+sys_unraisablehook(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *unraisable;
+    PyObject *_return_value;
+
+    unraisable = PyValue_Object(arg);
+    if (unraisable == NULL) {
+        goto exit;
+    }
+    _return_value = sys_unraisablehook_impl(module, unraisable);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys_exit__doc__,
 "exit($module, status=None, /)\n"
@@ -229,11 +294,12 @@ PyDoc_STRVAR(sys_exit__doc__,
 static PyObject *
 sys_exit_impl(PyObject *module, PyObject *status);
 
-static PyObject *
-sys_exit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+sys_exit(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *status = Py_None;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("exit", nargs, 0, 1)) {
         goto exit;
@@ -241,9 +307,13 @@ sys_exit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    status = args[0];
+    status = PyValue_Object(args[0]);
+    if (status == NULL) {
+        goto exit;
+    }
 skip_optional:
-    return_value = sys_exit_impl(module, status);
+    _return_value = sys_exit_impl(module, status);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -314,23 +384,31 @@ PyDoc_STRVAR(sys_intern__doc__,
 "the previously interned string object with the same value.");
 
 #define SYS_INTERN_METHODDEF    \
-    {"intern", (PyCFunction)sys_intern, METH_O, sys_intern__doc__},
+    {"intern", _PyCFunction_CAST(sys_intern), METH_O, sys_intern__doc__},
 
 static PyObject *
 sys_intern_impl(PyObject *module, PyObject *s);
 
-static PyObject *
-sys_intern(PyObject *module, PyObject *arg)
+static PyValue
+sys_intern(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *s;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("intern", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("intern", "argument", "str", _arg);
+            goto exit;
+        }
+        s = _arg;
     }
-    s = arg;
-    return_value = sys_intern_impl(module, s);
+    _return_value = sys_intern_impl(module, s);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -343,28 +421,34 @@ PyDoc_STRVAR(sys__is_interned__doc__,
 "Return True if the given string is \"interned\".");
 
 #define SYS__IS_INTERNED_METHODDEF    \
-    {"_is_interned", (PyCFunction)sys__is_interned, METH_O, sys__is_interned__doc__},
+    {"_is_interned", _PyCFunction_CAST(sys__is_interned), METH_O, sys__is_interned__doc__},
 
 static int
 sys__is_interned_impl(PyObject *module, PyObject *string);
 
-static PyObject *
-sys__is_interned(PyObject *module, PyObject *arg)
+static PyValue
+sys__is_interned(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
     int _return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("_is_interned", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("_is_interned", "argument", "str", _arg);
+            goto exit;
+        }
+        string = _arg;
     }
-    string = arg;
     _return_value = sys__is_interned_impl(module, string);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -379,22 +463,27 @@ PyDoc_STRVAR(sys__is_immortal__doc__,
 "This function should be used for specialized purposes only.");
 
 #define SYS__IS_IMMORTAL_METHODDEF    \
-    {"_is_immortal", (PyCFunction)sys__is_immortal, METH_O, sys__is_immortal__doc__},
+    {"_is_immortal", _PyCFunction_CAST(sys__is_immortal), METH_O, sys__is_immortal__doc__},
 
 static int
 sys__is_immortal_impl(PyObject *module, PyObject *op);
 
-static PyObject *
-sys__is_immortal(PyObject *module, PyObject *op)
+static PyValue
+sys__is_immortal(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *op;
     int _return_value;
 
+    op = PyValue_Object(arg);
+    if (op == NULL) {
+        goto exit;
+    }
     _return_value = sys__is_immortal_impl(module, op);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -410,7 +499,28 @@ PyDoc_STRVAR(sys_settrace__doc__,
 "in the library manual.");
 
 #define SYS_SETTRACE_METHODDEF    \
-    {"settrace", (PyCFunction)sys_settrace, METH_O, sys_settrace__doc__},
+    {"settrace", _PyCFunction_CAST(sys_settrace), METH_O, sys_settrace__doc__},
+
+static PyObject *
+sys_settrace_impl(PyObject *module, PyObject *function);
+
+static PyValue
+sys_settrace(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *function;
+    PyObject *_return_value;
+
+    function = PyValue_Object(arg);
+    if (function == NULL) {
+        goto exit;
+    }
+    _return_value = sys_settrace_impl(module, function);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys__settraceallthreads__doc__,
 "_settraceallthreads($module, function, /)\n"
@@ -422,7 +532,28 @@ PyDoc_STRVAR(sys__settraceallthreads__doc__,
 "in the library manual.");
 
 #define SYS__SETTRACEALLTHREADS_METHODDEF    \
-    {"_settraceallthreads", (PyCFunction)sys__settraceallthreads, METH_O, sys__settraceallthreads__doc__},
+    {"_settraceallthreads", _PyCFunction_CAST(sys__settraceallthreads), METH_O, sys__settraceallthreads__doc__},
+
+static PyObject *
+sys__settraceallthreads_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+sys__settraceallthreads(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = sys__settraceallthreads_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys_gettrace__doc__,
 "gettrace($module, /)\n"
@@ -454,7 +585,28 @@ PyDoc_STRVAR(sys_setprofile__doc__,
 "chapter in the library manual.");
 
 #define SYS_SETPROFILE_METHODDEF    \
-    {"setprofile", (PyCFunction)sys_setprofile, METH_O, sys_setprofile__doc__},
+    {"setprofile", _PyCFunction_CAST(sys_setprofile), METH_O, sys_setprofile__doc__},
+
+static PyObject *
+sys_setprofile_impl(PyObject *module, PyObject *function);
+
+static PyValue
+sys_setprofile(PyObject *module, PyValue arg)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *function;
+    PyObject *_return_value;
+
+    function = PyValue_Object(arg);
+    if (function == NULL) {
+        goto exit;
+    }
+    _return_value = sys_setprofile_impl(module, function);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys__setprofileallthreads__doc__,
 "_setprofileallthreads($module, function, /)\n"
@@ -466,7 +618,28 @@ PyDoc_STRVAR(sys__setprofileallthreads__doc__,
 "chapter in the library manual.");
 
 #define SYS__SETPROFILEALLTHREADS_METHODDEF    \
-    {"_setprofileallthreads", (PyCFunction)sys__setprofileallthreads, METH_O, sys__setprofileallthreads__doc__},
+    {"_setprofileallthreads", _PyCFunction_CAST(sys__setprofileallthreads), METH_O, sys__setprofileallthreads__doc__},
+
+static PyObject *
+sys__setprofileallthreads_impl(PyObject *module, PyObject *arg);
+
+static PyValue
+sys__setprofileallthreads(PyObject *module, PyValue arg_)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *arg;
+    PyObject *_return_value;
+
+    arg = PyValue_Object(arg_);
+    if (arg == NULL) {
+        goto exit;
+    }
+    _return_value = sys__setprofileallthreads_impl(module, arg);
+    return_value = PyValue_FromResult(_return_value);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(sys_getprofile__doc__,
 "getprofile($module, /)\n"
@@ -502,28 +675,24 @@ PyDoc_STRVAR(sys_setswitchinterval__doc__,
 "A typical value is 0.005 (5 milliseconds).");
 
 #define SYS_SETSWITCHINTERVAL_METHODDEF    \
-    {"setswitchinterval", (PyCFunction)sys_setswitchinterval, METH_O, sys_setswitchinterval__doc__},
+    {"setswitchinterval", _PyCFunction_CAST(sys_setswitchinterval), METH_O, sys_setswitchinterval__doc__},
 
 static PyObject *
 sys_setswitchinterval_impl(PyObject *module, double interval);
 
-static PyObject *
-sys_setswitchinterval(PyObject *module, PyObject *arg)
+static PyValue
+sys_setswitchinterval(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double interval;
+    PyObject *_return_value;
 
-    if (PyFloat_CheckExact(arg)) {
-        interval = PyFloat_AS_DOUBLE(arg);
+    interval = PyFloat_AsDoubleValue(arg);
+    if (interval == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        interval = PyFloat_AsDouble(arg);
-        if (interval == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = sys_setswitchinterval_impl(module, interval);
+    _return_value = sys_setswitchinterval_impl(module, interval);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -568,22 +737,24 @@ PyDoc_STRVAR(sys_setrecursionlimit__doc__,
 "dependent.");
 
 #define SYS_SETRECURSIONLIMIT_METHODDEF    \
-    {"setrecursionlimit", (PyCFunction)sys_setrecursionlimit, METH_O, sys_setrecursionlimit__doc__},
+    {"setrecursionlimit", _PyCFunction_CAST(sys_setrecursionlimit), METH_O, sys_setrecursionlimit__doc__},
 
 static PyObject *
 sys_setrecursionlimit_impl(PyObject *module, int new_limit);
 
-static PyObject *
-sys_setrecursionlimit(PyObject *module, PyObject *arg)
+static PyValue
+sys_setrecursionlimit(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int new_limit;
+    PyObject *_return_value;
 
-    new_limit = PyLong_AsInt(arg);
+    new_limit = PyLong_AsIntValue(arg);
     if (new_limit == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = sys_setrecursionlimit_impl(module, new_limit);
+    _return_value = sys_setrecursionlimit_impl(module, new_limit);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -606,15 +777,14 @@ PyDoc_STRVAR(sys_set_coroutine_origin_tracking_depth__doc__,
 static PyObject *
 sys_set_coroutine_origin_tracking_depth_impl(PyObject *module, int depth);
 
-static PyObject *
-sys_set_coroutine_origin_tracking_depth(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_set_coroutine_origin_tracking_depth(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -637,19 +807,21 @@ sys_set_coroutine_origin_tracking_depth(PyObject *module, PyObject *const *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int depth;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    depth = PyLong_AsInt(args[0]);
+    depth = PyLong_AsIntValue(args[0]);
     if (depth == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = sys_set_coroutine_origin_tracking_depth_impl(module, depth);
+    _return_value = sys_set_coroutine_origin_tracking_depth_impl(module, depth);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -697,15 +869,14 @@ static PyObject *
 sys_set_asyncgen_hooks_impl(PyObject *module, PyObject *firstiter,
                             PyObject *finalizer);
 
-static PyObject *
-sys_set_asyncgen_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_set_asyncgen_hooks(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -728,10 +899,11 @@ sys_set_asyncgen_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *firstiter = NULL;
     PyObject *finalizer = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -741,15 +913,22 @@ sys_set_asyncgen_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        firstiter = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        firstiter = PyValue_Object(args[0]);
+        if (firstiter == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    finalizer = args[1];
+    finalizer = PyValue_Object(args[1]);
+    if (finalizer == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = sys_set_asyncgen_hooks_impl(module, firstiter, finalizer);
+    _return_value = sys_set_asyncgen_hooks_impl(module, firstiter, finalizer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -846,22 +1025,24 @@ PyDoc_STRVAR(sys_setdlopenflags__doc__,
 "os.RTLD_LAZY).");
 
 #define SYS_SETDLOPENFLAGS_METHODDEF    \
-    {"setdlopenflags", (PyCFunction)sys_setdlopenflags, METH_O, sys_setdlopenflags__doc__},
+    {"setdlopenflags", _PyCFunction_CAST(sys_setdlopenflags), METH_O, sys_setdlopenflags__doc__},
 
 static PyObject *
 sys_setdlopenflags_impl(PyObject *module, int new_val);
 
-static PyObject *
-sys_setdlopenflags(PyObject *module, PyObject *arg)
+static PyValue
+sys_setdlopenflags(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int new_val;
+    PyObject *_return_value;
 
-    new_val = PyLong_AsInt(arg);
+    new_val = PyLong_AsIntValue(arg);
     if (new_val == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = sys_setdlopenflags_impl(module, new_val);
+    _return_value = sys_setdlopenflags_impl(module, new_val);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -901,22 +1082,24 @@ PyDoc_STRVAR(sys_mdebug__doc__,
 "\n");
 
 #define SYS_MDEBUG_METHODDEF    \
-    {"mdebug", (PyCFunction)sys_mdebug, METH_O, sys_mdebug__doc__},
+    {"mdebug", _PyCFunction_CAST(sys_mdebug), METH_O, sys_mdebug__doc__},
 
 static PyObject *
 sys_mdebug_impl(PyObject *module, int flag);
 
-static PyObject *
-sys_mdebug(PyObject *module, PyObject *arg)
+static PyValue
+sys_mdebug(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag;
+    PyObject *_return_value;
 
-    flag = PyLong_AsInt(arg);
+    flag = PyLong_AsIntValue(arg);
     if (flag == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = sys_mdebug_impl(module, flag);
+    _return_value = sys_mdebug_impl(module, flag);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -954,15 +1137,14 @@ PyDoc_STRVAR(sys_set_int_max_str_digits__doc__,
 static PyObject *
 sys_set_int_max_str_digits_impl(PyObject *module, int maxdigits);
 
-static PyObject *
-sys_set_int_max_str_digits(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_set_int_max_str_digits(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -985,19 +1167,21 @@ sys_set_int_max_str_digits(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     int maxdigits;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    maxdigits = PyLong_AsInt(args[0]);
+    maxdigits = PyLong_AsIntValue(args[0]);
     if (maxdigits == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = sys_set_int_max_str_digits_impl(module, maxdigits);
+    _return_value = sys_set_int_max_str_digits_impl(module, maxdigits);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1012,18 +1196,17 @@ PyDoc_STRVAR(sys_getsizeof__doc__,
 #define SYS_GETSIZEOF_METHODDEF    \
     {"getsizeof", _PyCFunction_CAST(sys_getsizeof), METH_FASTCALL|METH_KEYWORDS, sys_getsizeof__doc__},
 
-static PyObject *
-sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt);
+static PyValue
+sys_getsizeof_impl(PyObject *module, PyObject *o, PyValue dflt);
 
-static PyObject *
-sys_getsizeof(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_getsizeof(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1046,90 +1229,32 @@ sys_getsizeof(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *o;
-    PyObject *dflt = NULL;
+    PyValue dflt = PyValue_NULL;
+    PyValue _return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    o = args[0];
+    o = PyValue_Object(args[0]);
+    if (o == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     dflt = args[1];
 skip_optional_pos:
-    return_value = sys_getsizeof_impl(module, o, dflt);
+    _return_value = sys_getsizeof_impl(module, o, dflt);
+    return_value = _return_value;
 
 exit:
     return return_value;
 }
-
-PyDoc_STRVAR(sys_getrefcount__doc__,
-"getrefcount($module, object, /)\n"
-"--\n"
-"\n"
-"Return the reference count of object.\n"
-"\n"
-"The count returned is generally one higher than you might expect,\n"
-"because it includes the (temporary) reference as an argument to\n"
-"getrefcount().");
-
-#define SYS_GETREFCOUNT_METHODDEF    \
-    {"getrefcount", (PyCFunction)sys_getrefcount, METH_O, sys_getrefcount__doc__},
-
-static Py_ssize_t
-sys_getrefcount_impl(PyObject *module, PyObject *object);
-
-static PyObject *
-sys_getrefcount(PyObject *module, PyObject *object)
-{
-    PyObject *return_value = NULL;
-    Py_ssize_t _return_value;
-
-    _return_value = sys_getrefcount_impl(module, object);
-    if ((_return_value == -1) && PyErr_Occurred()) {
-        goto exit;
-    }
-    return_value = PyLong_FromSsize_t(_return_value);
-
-exit:
-    return return_value;
-}
-
-#if defined(Py_REF_DEBUG)
-
-PyDoc_STRVAR(sys_gettotalrefcount__doc__,
-"gettotalrefcount($module, /)\n"
-"--\n"
-"\n");
-
-#define SYS_GETTOTALREFCOUNT_METHODDEF    \
-    {"gettotalrefcount", (PyCFunction)sys_gettotalrefcount, METH_NOARGS, sys_gettotalrefcount__doc__},
-
-static Py_ssize_t
-sys_gettotalrefcount_impl(PyObject *module);
-
-static PyObject *
-sys_gettotalrefcount(PyObject *module, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *return_value = NULL;
-    Py_ssize_t _return_value;
-
-    _return_value = sys_gettotalrefcount_impl(module);
-    if ((_return_value == -1) && PyErr_Occurred()) {
-        goto exit;
-    }
-    return_value = PyLong_FromSsize_t(_return_value);
-
-exit:
-    return return_value;
-}
-
-#endif /* defined(Py_REF_DEBUG) */
 
 PyDoc_STRVAR(sys_getallocatedblocks__doc__,
 "getallocatedblocks($module, /)\n"
@@ -1171,15 +1296,14 @@ PyDoc_STRVAR(sys_getunicodeinternedsize__doc__,
 static Py_ssize_t
 sys_getunicodeinternedsize_impl(PyObject *module, int _only_immortal);
 
-static PyObject *
-sys_getunicodeinternedsize(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_getunicodeinternedsize(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1202,7 +1326,7 @@ sys_getunicodeinternedsize(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int _only_immortal = 0;
     Py_ssize_t _return_value;
@@ -1215,7 +1339,7 @@ sys_getunicodeinternedsize(PyObject *module, PyObject *const *args, Py_ssize_t n
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    _only_immortal = PyObject_IsTrue(args[0]);
+    _only_immortal = PyObject_IsTrueValue(args[0]);
     if (_only_immortal < 0) {
         goto exit;
     }
@@ -1224,7 +1348,7 @@ skip_optional_kwonly:
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
     return return_value;
@@ -1250,11 +1374,12 @@ PyDoc_STRVAR(sys__getframe__doc__,
 static PyObject *
 sys__getframe_impl(PyObject *module, int depth);
 
-static PyObject *
-sys__getframe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+sys__getframe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int depth = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_getframe", nargs, 0, 1)) {
         goto exit;
@@ -1262,12 +1387,13 @@ sys__getframe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    depth = PyLong_AsInt(args[0]);
+    depth = PyLong_AsIntValue(args[0]);
     if (depth == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = sys__getframe_impl(module, depth);
+    _return_value = sys__getframe_impl(module, depth);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1329,23 +1455,34 @@ PyDoc_STRVAR(sys_call_tracing__doc__,
 static PyObject *
 sys_call_tracing_impl(PyObject *module, PyObject *func, PyObject *funcargs);
 
-static PyObject *
-sys_call_tracing(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+sys_call_tracing(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *funcargs;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("call_tracing", nargs, 2, 2)) {
         goto exit;
     }
-    func = args[0];
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("call_tracing", "argument 2", "tuple", args[1]);
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
         goto exit;
     }
-    funcargs = args[1];
-    return_value = sys_call_tracing_impl(module, func, funcargs);
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("call_tracing", "argument 2", "tuple", _arg);
+            goto exit;
+        }
+        funcargs = _arg;
+    }
+    _return_value = sys_call_tracing_impl(module, func, funcargs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1556,26 +1693,34 @@ PyDoc_STRVAR(sys_activate_stack_trampoline__doc__,
 "Activate stack profiler trampoline *backend*.");
 
 #define SYS_ACTIVATE_STACK_TRAMPOLINE_METHODDEF    \
-    {"activate_stack_trampoline", (PyCFunction)sys_activate_stack_trampoline, METH_O, sys_activate_stack_trampoline__doc__},
+    {"activate_stack_trampoline", _PyCFunction_CAST(sys_activate_stack_trampoline), METH_O, sys_activate_stack_trampoline__doc__},
 
 static PyObject *
 sys_activate_stack_trampoline_impl(PyObject *module, const char *backend);
 
-static PyObject *
-sys_activate_stack_trampoline(PyObject *module, PyObject *arg)
+static PyValue
+sys_activate_stack_trampoline(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *backend;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("activate_stack_trampoline", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("activate_stack_trampoline", "argument", "str", _arg);
+            goto exit;
+        }
+        backend = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (backend == NULL) {
+            goto exit;
+        }
     }
-    backend = _PyUnicode_AsUTF8NoNUL(arg);
-    if (backend == NULL) {
-        goto exit;
-    }
-    return_value = sys_activate_stack_trampoline_impl(module, backend);
+    _return_value = sys_activate_stack_trampoline_impl(module, backend);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1666,15 +1811,14 @@ PyDoc_STRVAR(sys_remote_exec__doc__,
 static PyObject *
 sys_remote_exec_impl(PyObject *module, int pid, PyObject *script);
 
-static PyObject *
-sys_remote_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_remote_exec(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1697,79 +1841,26 @@ sys_remote_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     int pid;
     PyObject *script;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    pid = PyLong_AsInt(args[0]);
+    pid = PyLong_AsIntValue(args[0]);
     if (pid == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    script = args[1];
-    return_value = sys_remote_exec_impl(module, pid, script);
-
-exit:
-    return return_value;
-}
-
-PyDoc_STRVAR(sys__dump_tracelets__doc__,
-"_dump_tracelets($module, /, outpath)\n"
-"--\n"
-"\n"
-"Dump the graph of tracelets in graphviz format");
-
-#define SYS__DUMP_TRACELETS_METHODDEF    \
-    {"_dump_tracelets", _PyCFunction_CAST(sys__dump_tracelets), METH_FASTCALL|METH_KEYWORDS, sys__dump_tracelets__doc__},
-
-static PyObject *
-sys__dump_tracelets_impl(PyObject *module, PyObject *outpath);
-
-static PyObject *
-sys__dump_tracelets(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
-{
-    PyObject *return_value = NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 1
-    static struct {
-        PyGC_Head _this_is_not_used;
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(outpath), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"outpath", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "_dump_tracelets",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *outpath;
-
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    script = PyValue_Object(args[1]);
+    if (script == NULL) {
         goto exit;
     }
-    outpath = args[0];
-    return_value = sys__dump_tracelets_impl(module, outpath);
+    _return_value = sys_remote_exec_impl(module, pid, script);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1793,15 +1884,14 @@ PyDoc_STRVAR(sys__getframemodulename__doc__,
 static PyObject *
 sys__getframemodulename_impl(PyObject *module, int depth);
 
-static PyObject *
-sys__getframemodulename(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys__getframemodulename(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1824,9 +1914,10 @@ sys__getframemodulename(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int depth = 0;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1836,12 +1927,13 @@ sys__getframemodulename(PyObject *module, PyObject *const *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    depth = PyLong_AsInt(args[0]);
+    depth = PyLong_AsIntValue(args[0]);
     if (depth == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    return_value = sys__getframemodulename_impl(module, depth);
+    _return_value = sys__getframemodulename_impl(module, depth);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -1941,15 +2033,14 @@ PyDoc_STRVAR(sys_set_lazy_imports_filter__doc__,
 static PyObject *
 sys_set_lazy_imports_filter_impl(PyObject *module, PyObject *filter);
 
-static PyObject *
-sys_set_lazy_imports_filter(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_set_lazy_imports_filter(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1972,16 +2063,21 @@ sys_set_lazy_imports_filter(PyObject *module, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *filter;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    filter = args[0];
-    return_value = sys_set_lazy_imports_filter_impl(module, filter);
+    filter = PyValue_Object(args[0]);
+    if (filter == NULL) {
+        goto exit;
+    }
+    _return_value = sys_set_lazy_imports_filter_impl(module, filter);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2027,15 +2123,14 @@ PyDoc_STRVAR(sys_set_lazy_imports__doc__,
 static PyObject *
 sys_set_lazy_imports_impl(PyObject *module, PyObject *mode);
 
-static PyObject *
-sys_set_lazy_imports(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+sys_set_lazy_imports(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2058,16 +2153,21 @@ sys_set_lazy_imports(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *mode;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    mode = args[0];
-    return_value = sys_set_lazy_imports_impl(module, mode);
+    mode = PyValue_Object(args[0]);
+    if (mode == NULL) {
+        goto exit;
+    }
+    _return_value = sys_set_lazy_imports_impl(module, mode);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -2194,10 +2294,6 @@ exit:
     #define SYS_MDEBUG_METHODDEF
 #endif /* !defined(SYS_MDEBUG_METHODDEF) */
 
-#ifndef SYS_GETTOTALREFCOUNT_METHODDEF
-    #define SYS_GETTOTALREFCOUNT_METHODDEF
-#endif /* !defined(SYS_GETTOTALREFCOUNT_METHODDEF) */
-
 #ifndef SYS__STATS_ON_METHODDEF
     #define SYS__STATS_ON_METHODDEF
 #endif /* !defined(SYS__STATS_ON_METHODDEF) */
@@ -2217,4 +2313,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=dbca81c5072bd0e8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f3c6bf5d69fc9166 input=a9049054013a1b77]*/

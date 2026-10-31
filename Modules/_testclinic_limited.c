@@ -1,13 +1,6 @@
-// _testclinic_limited can built with the Py_BUILD_CORE_BUILTIN macro defined
-// if one of the Modules/Setup files asks to build it as "static" (gh-109723).
-#undef Py_BUILD_CORE
-#undef Py_BUILD_CORE_MODULE
-#undef Py_BUILD_CORE_BUILTIN
-
-// For now, AC only supports the limited C API version 3.13
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
+// Argument Clinic's output uses the internal C API.
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
 #endif
 
 /* Always enable assertions */
@@ -146,8 +139,5 @@ PyInit__testclinic_limited(void)
     if (m == NULL) {
         return NULL;
     }
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
-#endif
     return m;
 }

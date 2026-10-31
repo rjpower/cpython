@@ -1828,53 +1828,30 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
     PyObject *exc = _PyErr_GetRaisedException(tstate);
     /* XXX check that it is, indeed, a syntax error. It might not
      * be, though. */
-    PyObject *tmp = PyLong_FromLong(lineno);
-    if (tmp == NULL) {
+    /* The positions are ints, which are inline: storing them makes no box. */
+    PyValue exc_value = PyValue_FromObject(exc);
+    PyValue none = PyValue_FromObject(Py_None);
+    if (PyObject_SetAttrValue(exc_value, &_Py_ID(lineno),
+                              PyValue_FromLongLong(lineno))) {
         _PyErr_Clear(tstate);
     }
-    else {
-        if (PyObject_SetAttr(exc, &_Py_ID(lineno), tmp)) {
-            _PyErr_Clear(tstate);
-        }
-        Py_DECREF(tmp);
-    }
-    tmp = NULL;
-    if (col_offset >= 0) {
-        tmp = PyLong_FromLong(col_offset);
-        if (tmp == NULL) {
-            _PyErr_Clear(tstate);
-        }
-    }
-    if (PyObject_SetAttr(exc, &_Py_ID(offset), tmp ? tmp : Py_None)) {
+    if (PyObject_SetAttrValue(exc_value, &_Py_ID(offset),
+                              col_offset >= 0
+                              ? PyValue_FromLongLong(col_offset) : none)) {
         _PyErr_Clear(tstate);
     }
-    Py_XDECREF(tmp);
+    if (PyObject_SetAttrValue(exc_value, &_Py_ID(end_lineno),
+                              end_lineno >= 0
+                              ? PyValue_FromLongLong(end_lineno) : none)) {
+        _PyErr_Clear(tstate);
+    }
+    if (PyObject_SetAttrValue(exc_value, &_Py_ID(end_offset),
+                              end_col_offset >= 0
+                              ? PyValue_FromLongLong(end_col_offset) : none)) {
+        _PyErr_Clear(tstate);
+    }
 
-    tmp = NULL;
-    if (end_lineno >= 0) {
-        tmp = PyLong_FromLong(end_lineno);
-        if (tmp == NULL) {
-            _PyErr_Clear(tstate);
-        }
-    }
-    if (PyObject_SetAttr(exc, &_Py_ID(end_lineno), tmp ? tmp : Py_None)) {
-        _PyErr_Clear(tstate);
-    }
-    Py_XDECREF(tmp);
-
-    tmp = NULL;
-    if (end_col_offset >= 0) {
-        tmp = PyLong_FromLong(end_col_offset);
-        if (tmp == NULL) {
-            _PyErr_Clear(tstate);
-        }
-    }
-    if (PyObject_SetAttr(exc, &_Py_ID(end_offset), tmp ? tmp : Py_None)) {
-        _PyErr_Clear(tstate);
-    }
-    Py_XDECREF(tmp);
-
-    tmp = NULL;
+    PyObject *tmp = NULL;
     if (filename != NULL) {
         if (PyObject_SetAttr(exc, &_Py_ID(filename), filename)) {
             _PyErr_Clear(tstate);

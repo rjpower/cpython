@@ -1,0 +1,6 @@
+{"phase": "state", "case": "backward_2", "optimize": 0, "__debug__": true, "verify": [0, 0], "stress": 0}
+{"phase": "ast", "case": "backward_2", "tree": "Module(body=[FunctionDef(name='f', args=arguments(), body=[Return(value=Constant(value=1, lineno=8, col_offset=0, end_lineno=8, end_col_offset=1), lineno=8, col_offset=0, end_lineno=8, end_col_offset=1)], lineno=10, col_offset=0, end_lineno=10, end_col_offset=1)])", "core_limit": [0, 0]}
+{"phase": "compiled", "case": "backward_2", "firstlineno": 10, "co_lines": [[0, 1, 10], [1, 3, 8]], "safe_lines": {"0": 10, "1": 8, "2": 8}, "words": [["RESUME", 0, 0, 0, 0], ["LOAD_SMALL_INT_INLINE", 0, 1, 0, 0], ["RETURN_VALUE", 0, 0, 0, 0]], "code_sha256": "36f66d67cfd5486d14a2ecb019ea33e99255b84a913484475bfc1bd4adea9145", "linetable_sha256": "4d6dee8a36ee10436932982cc3d21a0be081a8b8f4b150091552706e147ebbe9", "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/Modules/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so", "capi_sha256": "edde31bdc06236057fd32aa592e02790f921906c417d923ba364d539f3e37b62"}
+{"phase": "enable", "case": "backward_2"}
+{"phase": "enabled", "case": "backward_2"}
+{"phase": "executed", "case": "backward_2", "events": [8]}

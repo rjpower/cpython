@@ -254,7 +254,9 @@ test_api_casts(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     // cast to PyObject*.
     StrongRef strong_ref(obj);
     assert(Py_TYPE(strong_ref) == &PyTuple_Type);
-    assert(Py_REFCNT(strong_ref) == (refcnt + 1));
+    // Nothing is reference counted: Py_REFCNT() is a constant, which
+    // Py_INCREF() does not change.
+    assert(Py_REFCNT(strong_ref) == refcnt);
     Py_INCREF(strong_ref);
     Py_DECREF(strong_ref);
 
@@ -293,6 +295,15 @@ public:
     }
     static void dealloc(PyObject* o) {
         delete static_cast<VirtualPyObject*>(o);
+    }
+    // The collector traces only objects in its heaps, and debug builds stop
+    // when PyObject_Init sees another address, so a C++ object that is a
+    // PyObject gets its storage from the object allocator.
+    static void* operator new(size_t size) {
+        return PyObject_Malloc(size);
+    }
+    static void operator delete(void* p) {
+        PyObject_Free(p);
     }
 
     // Number of "living" instances
@@ -347,7 +358,17 @@ test_virtual_object(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 {
     VirtualPyObject* obj = new VirtualPyObject();
     obj->set_internal_data();
+    // Nothing is reference counted: Py_DECREF does not run tp_dealloc, and
+    // the collector does not own memory allocated by new, so the C++ code
+    // that allocated the object deletes it.
     Py_DECREF(obj);
+    if (VirtualPyObject::instance_count != 1) {
+        return PyErr_Format(
+            PyExc_AssertionError,
+            "instance_count should be 1, got %d",
+            VirtualPyObject::instance_count);
+    }
+    VirtualPyObject::dealloc(obj);
     if (VirtualPyObject::instance_count != 0) {
         return PyErr_Format(
             PyExc_AssertionError,

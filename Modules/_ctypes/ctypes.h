@@ -73,6 +73,7 @@
 
 typedef struct {
     PyTypeObject *DictRemover_Type;
+    PyTypeObject *BoxKeeper_Type;
     PyTypeObject *PyCArg_Type;
     PyTypeObject *PyCField_Type;
     PyTypeObject *PyCThunk_Type;
@@ -404,9 +405,6 @@ typedef struct {
                                    arbitrary object or NULL */
     PyObject *module;
     int flags;                  /* calling convention and such */
-#ifdef Py_GIL_DISABLED
-    PyMutex mutex;              /* critical section mutex */
-#endif
     uint8_t dict_final;
 
     /* pep3118 fields, pointers need PyMem_Free */
@@ -526,7 +524,7 @@ PyCData_get(ctypes_state *st, PyObject *type, GETFUNC getfunc, PyObject *src,
 extern int
 PyCData_set(ctypes_state *st,
           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
-          Py_ssize_t index, Py_ssize_t size, char *ptr);
+          Py_ssize_t index, Py_ssize_t size, Py_ssize_t nbytes, char *ptr);
 
 extern void _ctypes_extend_error(PyObject *exc_class, const char *fmt, ...);
 

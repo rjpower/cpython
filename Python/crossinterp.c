@@ -13,7 +13,7 @@
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_runtime.h"       // _PyRuntime
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_typeobject.h"    // _PyStaticType_InitBuiltin()
 
 
@@ -348,6 +348,9 @@ _xidata_clear(_PyXIData_t *xidata)
         }
         xidata->data = NULL;
     }
+    if (xidata->obj != NULL) {
+        _PyGC_RemoveRoot(&xidata->obj_root);
+    }
     Py_CLEAR(xidata->obj);
 }
 
@@ -365,6 +368,7 @@ _PyXIData_Init(_PyXIData_t *xidata,
         assert(interp != NULL);
         // released in _PyXIData_Clear()
         xidata->obj = Py_NewRef(obj);
+        _PyGC_AddRoot(&xidata->obj_root, &xidata->obj, 1);
     }
     // Ideally every object would know its owning interpreter.
     // Until then, we have to rely on the caller to identify it
@@ -957,15 +961,8 @@ get_script_xidata(PyThreadState *tstate, PyObject *obj, int pure,
             }
             goto error;
         }
-#ifdef Py_GIL_DISABLED
-        // Don't immortalize code constants to avoid memory leaks.
-        ((_PyThreadStateImpl *)tstate)->suppress_co_const_immortalization++;
-#endif
         code = Py_CompileStringExFlags(
                     script, filename, Py_file_input, &cf, optimize);
-#ifdef Py_GIL_DISABLED
-        ((_PyThreadStateImpl *)tstate)->suppress_co_const_immortalization--;
-#endif
         Py_XDECREF(ref);
         if (code == NULL) {
             goto error;

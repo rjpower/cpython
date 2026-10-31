@@ -406,8 +406,8 @@ The argument may be a floating-point number for subsecond precision.
 [clinic start generated code]*/
 
 static PyObject *
-time_sleep(PyObject *module, PyObject *timeout_obj)
-/*[clinic end generated code: output=f46e88f5f5756f65 input=3928b1704a2faa12]*/
+time_sleep_impl(PyObject *module, PyObject *timeout_obj)
+/*[clinic end generated code: output=4e76eaac83fb18b3 input=3928b1704a2faa12]*/
 {
     if (PySys_Audit("time.sleep", "O", timeout_obj) < 0) {
         return NULL;
@@ -1156,8 +1156,8 @@ the timezone or altzone attributes on the time module.
 [clinic start generated code]*/
 
 static PyObject *
-time_mktime(PyObject *module, PyObject *tm_tuple)
-/*[clinic end generated code: output=1b2a224cd309deb7 input=70b93e1c2e57e14e]*/
+time_mktime_impl(PyObject *module, PyObject *tm_tuple)
+/*[clinic end generated code: output=751f0772c8ccbf7a input=70b93e1c2e57e14e]*/
 {
     struct tm tm;
     time_t tt;

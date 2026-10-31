@@ -3,10 +3,8 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_long.h"          // _PyLong_UnsignedInt_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -27,15 +25,14 @@ static PyObject *
 faulthandler_dump_traceback_py_impl(PyObject *module, PyObject *file,
                                     int all_threads, Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_traceback_py(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -58,11 +55,12 @@ faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *file = NULL;
     int all_threads = 1;
     Py_ssize_t max_threads = 100;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -72,14 +70,17 @@ faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        file = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        file = PyValue_Object(args[0]);
+        if (file == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[1]) {
-        all_threads = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        all_threads = PyObject_IsTrueValue(args[1]);
         if (all_threads < 0) {
             goto exit;
         }
@@ -93,10 +94,9 @@ skip_optional_pos:
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -104,7 +104,8 @@ skip_optional_pos:
         max_threads = ival;
     }
 skip_optional_kwonly:
-    return_value = faulthandler_dump_traceback_py_impl(module, file, all_threads, max_threads);
+    _return_value = faulthandler_dump_traceback_py_impl(module, file, all_threads, max_threads);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -122,15 +123,14 @@ PyDoc_STRVAR(faulthandler_dump_c_stack_py__doc__,
 static PyObject *
 faulthandler_dump_c_stack_py_impl(PyObject *module, PyObject *file);
 
-static PyObject *
-faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_c_stack_py(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -153,9 +153,10 @@ faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *file = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -165,9 +166,13 @@ faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    file = args[0];
+    file = PyValue_Object(args[0]);
+    if (file == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = faulthandler_dump_c_stack_py_impl(module, file);
+    _return_value = faulthandler_dump_c_stack_py_impl(module, file);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -188,15 +193,14 @@ faulthandler_py_enable_impl(PyObject *module, PyObject *file,
                             int all_threads, int c_stack,
                             Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_py_enable(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -219,12 +223,13 @@ faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
+    PyValue argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *file = NULL;
     int all_threads = 1;
     int c_stack = 1;
     Py_ssize_t max_threads = 100;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -234,14 +239,17 @@ faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[0]) {
-        file = args[0];
+    if (!PyValue_IsNull(args[0])) {
+        file = PyValue_Object(args[0]);
+        if (file == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[1]) {
-        all_threads = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        all_threads = PyObject_IsTrueValue(args[1]);
         if (all_threads < 0) {
             goto exit;
         }
@@ -249,8 +257,8 @@ faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs
             goto skip_optional_pos;
         }
     }
-    if (args[2]) {
-        c_stack = PyObject_IsTrue(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        c_stack = PyObject_IsTrueValue(args[2]);
         if (c_stack < 0) {
             goto exit;
         }
@@ -264,10 +272,9 @@ skip_optional_pos:
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[3]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[3]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -275,7 +282,8 @@ skip_optional_pos:
         max_threads = ival;
     }
 skip_optional_kwonly:
-    return_value = faulthandler_py_enable_impl(module, file, all_threads, c_stack, max_threads);
+    _return_value = faulthandler_py_enable_impl(module, file, all_threads, c_stack, max_threads);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -347,15 +355,14 @@ faulthandler_dump_traceback_later_impl(PyObject *module,
                                        PyObject *file, int exit,
                                        Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_traceback_later(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -378,25 +385,29 @@ faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ss
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *timeout_obj;
     int repeat = 0;
     PyObject *file = NULL;
     int exit = 0;
     Py_ssize_t max_threads = 100;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    timeout_obj = args[0];
+    timeout_obj = PyValue_Object(args[0]);
+    if (timeout_obj == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        repeat = PyObject_IsTrue(args[1]);
+    if (!PyValue_IsNull(args[1])) {
+        repeat = PyObject_IsTrueValue(args[1]);
         if (repeat < 0) {
             goto exit;
         }
@@ -404,14 +415,17 @@ faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ss
             goto skip_optional_pos;
         }
     }
-    if (args[2]) {
-        file = args[2];
+    if (!PyValue_IsNull(args[2])) {
+        file = PyValue_Object(args[2]);
+        if (file == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        exit = PyObject_IsTrue(args[3]);
+    if (!PyValue_IsNull(args[3])) {
+        exit = PyObject_IsTrueValue(args[3]);
         if (exit < 0) {
             goto exit;
         }
@@ -425,10 +439,9 @@ skip_optional_pos:
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[4]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[4]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -436,7 +449,8 @@ skip_optional_pos:
         max_threads = ival;
     }
 skip_optional_kwonly:
-    return_value = faulthandler_dump_traceback_later_impl(module, timeout_obj, repeat, file, exit, max_threads);
+    _return_value = faulthandler_dump_traceback_later_impl(module, timeout_obj, repeat, file, exit, max_threads);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -481,15 +495,14 @@ faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
                               int all_threads, int chain,
                               Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_register_py(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -512,34 +525,38 @@ faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
+    PyValue argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     int signum;
     PyObject *file = NULL;
     int all_threads = 1;
     int chain = 0;
     Py_ssize_t max_threads = 100;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    signum = PyLong_AsInt(args[0]);
+    signum = PyLong_AsIntValue(args[0]);
     if (signum == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        file = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        file = PyValue_Object(args[1]);
+        if (file == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (args[2]) {
-        all_threads = PyObject_IsTrue(args[2]);
+    if (!PyValue_IsNull(args[2])) {
+        all_threads = PyObject_IsTrueValue(args[2]);
         if (all_threads < 0) {
             goto exit;
         }
@@ -547,8 +564,8 @@ faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nar
             goto skip_optional_pos;
         }
     }
-    if (args[3]) {
-        chain = PyObject_IsTrue(args[3]);
+    if (!PyValue_IsNull(args[3])) {
+        chain = PyObject_IsTrueValue(args[3]);
         if (chain < 0) {
             goto exit;
         }
@@ -562,10 +579,9 @@ skip_optional_pos:
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[4]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[4]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -573,7 +589,8 @@ skip_optional_pos:
         max_threads = ival;
     }
 skip_optional_kwonly:
-    return_value = faulthandler_register_py_impl(module, signum, file, all_threads, chain, max_threads);
+    _return_value = faulthandler_register_py_impl(module, signum, file, all_threads, chain, max_threads);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -590,22 +607,24 @@ PyDoc_STRVAR(faulthandler_unregister_py__doc__,
 "Unregister the handler of the signal \'signum\' registered by register().");
 
 #define FAULTHANDLER_UNREGISTER_PY_METHODDEF    \
-    {"unregister", (PyCFunction)faulthandler_unregister_py, METH_O, faulthandler_unregister_py__doc__},
+    {"unregister", _PyCFunction_CAST(faulthandler_unregister_py), METH_O, faulthandler_unregister_py__doc__},
 
 static PyObject *
 faulthandler_unregister_py_impl(PyObject *module, int signum);
 
-static PyObject *
-faulthandler_unregister_py(PyObject *module, PyObject *arg)
+static PyValue
+faulthandler_unregister_py(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signum;
+    PyObject *_return_value;
 
-    signum = PyLong_AsInt(arg);
+    signum = PyLong_AsIntValue(arg);
     if (signum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = faulthandler_unregister_py_impl(module, signum);
+    _return_value = faulthandler_unregister_py_impl(module, signum);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -625,11 +644,12 @@ PyDoc_STRVAR(faulthandler__sigsegv__doc__,
 static PyObject *
 faulthandler__sigsegv_impl(PyObject *module, int release_gil);
 
-static PyObject *
-faulthandler__sigsegv(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+faulthandler__sigsegv(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int release_gil = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_sigsegv", nargs, 0, 1)) {
         goto exit;
@@ -637,12 +657,13 @@ faulthandler__sigsegv(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    release_gil = PyObject_IsTrue(args[0]);
+    release_gil = PyObject_IsTrueValue(args[0]);
     if (release_gil < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = faulthandler__sigsegv_impl(module, release_gil);
+    _return_value = faulthandler__sigsegv_impl(module, release_gil);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -739,27 +760,41 @@ static PyObject *
 faulthandler__raise_exception_impl(PyObject *module, unsigned int code,
                                    unsigned int flags);
 
-static PyObject *
-faulthandler__raise_exception(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+faulthandler__raise_exception(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned int code;
     unsigned int flags = 0;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_raise_exception", nargs, 1, 2)) {
         goto exit;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[0], &code)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedInt_Converter(_arg, &code)) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[1], &flags)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_PyLong_UnsignedInt_Converter(_arg, &flags)) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = faulthandler__raise_exception_impl(module, code, flags);
+    _return_value = faulthandler__raise_exception_impl(module, code, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -782,4 +817,4 @@ exit:
 #ifndef FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
     #define FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
 #endif /* !defined(FAULTHANDLER__RAISE_EXCEPTION_METHODDEF) */
-/*[clinic end generated code: output=14815a5f8afe813f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c2de3ac93da0b062 input=a9049054013a1b77]*/

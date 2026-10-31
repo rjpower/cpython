@@ -550,12 +550,13 @@ Miscellaneous options
 
      .. versionadded:: 3.3
 
-   * ``-X showrefcount`` to output the total reference count and number of used
-     memory blocks when the program finishes or after each statement in the
-     interactive interpreter. This only works on :ref:`debug builds
-     <debug-build>`.
+   * ``-X showrefcount`` is accepted and has no effect: nothing is reference
+     counted.
 
      .. versionadded:: 3.4
+
+     .. versionchanged:: 3.16
+        It no longer outputs the total reference count.
 
    * ``-X tracemalloc`` to start tracing Python memory allocations using the
      :mod:`tracemalloc` module. By default, only the most recent frame is
@@ -1409,14 +1410,6 @@ conflict.
    See also :option:`-X pathconfig_warnings<-X>`.
 
    .. versionadded:: 3.15
-
-.. envvar:: PYTHON_JIT
-
-   On builds where experimental just-in-time compilation is available, this
-   variable can force the JIT to be disabled (``0``) or enabled (``1``) at
-   interpreter startup.
-
-   .. versionadded:: 3.13
 
 .. envvar:: PYTHON_TLBC
 

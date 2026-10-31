@@ -239,6 +239,7 @@ do_mkstack(PyObject **stack, const char **p_format, va_list *p_va,
             goto error;
         }
         stack[i] = w;
+        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_MKSTACK);
     }
     if (!check_end(p_format, endchar)) {
         goto error;
@@ -767,17 +768,10 @@ int PyABIInfo_Check(PyABIInfo *info, const char *module_name)
 
     /* Free-threading/GIL */
     uint16_t gilflags = info->flags & (PyABIInfo_GIL | PyABIInfo_FREETHREADED);
-#if Py_GIL_DISABLED
-    if (gilflags == PyABIInfo_GIL) {
-        return _abiinfo_raise(module_name,
-                              "incompatible with free-threaded CPython");
-    }
-#else
     if (gilflags == PyABIInfo_FREETHREADED) {
         return _abiinfo_raise(module_name,
                               "only compatible with free-threaded CPython");
     }
-#endif
 
     return 0;
 }

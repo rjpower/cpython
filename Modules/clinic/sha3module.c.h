@@ -3,11 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(py_sha3_new__doc__,
 "sha3_224(data=b\'\', *, usedforsecurity=True, string=None)\n"
@@ -27,7 +26,6 @@ py_sha3_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -50,15 +48,15 @@ py_sha3_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
+    PyValue argsbuf[3];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *data_obj = NULL;
     int usedforsecurity = 1;
     PyObject *string = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -66,8 +64,11 @@ py_sha3_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        data_obj = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        data_obj = PyValue_Object(fastargs[0]);
+        if (data_obj == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -76,8 +77,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (fastargs[1]) {
-        usedforsecurity = PyObject_IsTrue(fastargs[1]);
+    if (!PyValue_IsNull(fastargs[1])) {
+        usedforsecurity = PyObject_IsTrueValue(fastargs[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -85,7 +86,10 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = fastargs[2];
+    string = PyValue_Object(fastargs[2]);
+    if (string == NULL) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = py_sha3_new_impl(type, data_obj, usedforsecurity, string);
 
@@ -105,14 +109,14 @@ PyDoc_STRVAR(_sha3_sha3_224_copy__doc__,
 static PyObject *
 _sha3_sha3_224_copy_impl(SHA3object *self, PyTypeObject *cls);
 
-static PyObject *
-_sha3_sha3_224_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sha3_sha3_224_copy(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _sha3_sha3_224_copy_impl((SHA3object *)self, cls);
+    return PyValue_FromResult(_sha3_sha3_224_copy_impl((SHA3object *)self, cls));
 }
 
 PyDoc_STRVAR(_sha3_sha3_224_digest__doc__,
@@ -158,18 +162,26 @@ PyDoc_STRVAR(_sha3_sha3_224_update__doc__,
 "Update this hash object\'s state with the provided bytes-like object.");
 
 #define _SHA3_SHA3_224_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)_sha3_sha3_224_update, METH_O, _sha3_sha3_224_update__doc__},
+    {"update", _PyCFunction_CAST(_sha3_sha3_224_update), METH_O, _sha3_sha3_224_update__doc__},
 
 static PyObject *
 _sha3_sha3_224_update_impl(SHA3object *self, PyObject *data);
 
-static PyObject *
-_sha3_sha3_224_update(PyObject *self, PyObject *data)
+static PyValue
+_sha3_sha3_224_update(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *data;
+    PyObject *_return_value;
 
-    return_value = _sha3_sha3_224_update_impl((SHA3object *)self, data);
+    data = PyValue_Object(arg);
+    if (data == NULL) {
+        goto exit;
+    }
+    _return_value = _sha3_sha3_224_update_impl((SHA3object *)self, data);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -185,15 +197,14 @@ PyDoc_STRVAR(_sha3_shake_128_digest__doc__,
 static PyObject *
 _sha3_shake_128_digest_impl(SHA3object *self, Py_ssize_t length);
 
-static PyObject *
-_sha3_shake_128_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sha3_shake_128_digest(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -216,8 +227,9 @@ _sha3_shake_128_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t length;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -226,22 +238,22 @@ _sha3_shake_128_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
-        if (length < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "length cannot be negative");
-            goto exit;
-        }
+            if (length < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "length cannot be negative");
+                goto exit;
+            }
     }
-    return_value = _sha3_shake_128_digest_impl((SHA3object *)self, length);
+    _return_value = _sha3_shake_128_digest_impl((SHA3object *)self, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -259,15 +271,14 @@ PyDoc_STRVAR(_sha3_shake_128_hexdigest__doc__,
 static PyObject *
 _sha3_shake_128_hexdigest_impl(SHA3object *self, Py_ssize_t length);
 
-static PyObject *
-_sha3_shake_128_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sha3_shake_128_hexdigest(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -290,8 +301,9 @@ _sha3_shake_128_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t length;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -300,24 +312,24 @@ _sha3_shake_128_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t narg
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[0]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         length = ival;
-        if (length < 0) {
-            PyErr_SetString(PyExc_ValueError,
-                            "length cannot be negative");
-            goto exit;
-        }
+            if (length < 0) {
+                PyErr_SetString(PyExc_ValueError,
+                                "length cannot be negative");
+                goto exit;
+            }
     }
-    return_value = _sha3_shake_128_hexdigest_impl((SHA3object *)self, length);
+    _return_value = _sha3_shake_128_hexdigest_impl((SHA3object *)self, length);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=78284adde71d590c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=20788aae08b3ca60 input=a9049054013a1b77]*/

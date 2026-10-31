@@ -1,0 +1,9 @@
+--- a/deinstrument
++++ b/deinstrument
+@@ -4,5 +4,5 @@
+     if (!_PyIR_HasProperty(opcode, _PyIR_H_METADATA)) {
+         return -1;
+     }
+-    return _PyIR_Deinstrument[_PyIR_BaseOpcode(opcode)];
++    return _PyIR_Deinstrument[opcode];
+ }

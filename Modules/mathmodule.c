@@ -65,6 +65,8 @@ raised for division by zero and mod by zero.
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyObject_LookupSpecial()
 #include "pycore_pymath.h"        // _PY_SHORT_FLOAT_REPR
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_value.h"         // _PyValue_FloatCheckExact()
 /* For DBL_EPSILON in _math.h */
 #include <float.h>
 /* For _Py_log1p with workarounds for buggy handling of zeros. */
@@ -190,27 +192,80 @@ tl_to_d(TripleLength total)
 static const double pi = 3.141592653589793238462643383279502884197;
 static const double logpi = 1.144729885849400174143427351353058711647;
 
-/* Version of PyFloat_AsDouble() with in-line fast paths
-   for exact floats and integers.  Gives a substantial
+/* Version of PyFloat_AsDoubleValue() with in-line fast paths
+   for inline floats and integers.  Gives a substantial
    speed improvement for extracting float arguments.
 */
 
-#define ASSIGN_DOUBLE(target_var, obj, error_label)        \
-    if (PyFloat_CheckExact(obj)) {                         \
-        target_var = PyFloat_AS_DOUBLE(obj);               \
+#define ASSIGN_DOUBLE(target_var, value, error_label)      \
+    if (PyValue_IsInlineFloat(value)) {                    \
+        target_var = PyValue_Double(value);                \
     }                                                      \
-    else if (PyLong_CheckExact(obj)) {                     \
-        target_var = PyLong_AsDouble(obj);                 \
-        if (target_var == -1.0 && PyErr_Occurred()) {      \
-            goto error_label;                              \
-        }                                                  \
+    else if (PyValue_IsInlineInt(value)) {                 \
+        target_var = (double)PyValue_Int32(value);         \
     }                                                      \
     else {                                                 \
-        target_var = PyFloat_AsDouble(obj);                \
+        target_var = PyFloat_AsDoubleValue(value);         \
         if (target_var == -1.0 && PyErr_Occurred()) {      \
             goto error_label;                              \
         }                                                  \
     }
+
+/* The double of v, an exact float, inline or boxed. */
+static inline double
+value_float_as_double(PyValue v)
+{
+    assert(_PyValue_FloatCheckExact(v));
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_Double(v);
+    }
+    return PyFloat_AS_DOUBLE(PyValue_ObjectBorrow(v));
+}
+
+/* PyLong_AsLongAndOverflow() of v, an int, inline or not. */
+static inline long
+value_as_long_and_overflow(PyValue v, int *overflow)
+{
+    if (PyValue_IsInlineInt(v)) {
+        *overflow = 0;
+        return PyValue_Int32(v);
+    }
+    return PyLong_AsLongAndOverflow(PyValue_ObjectBorrow(v), overflow);
+}
+
+/* PyLong_AsDouble() of v, an int, inline or not. */
+static inline double
+value_long_as_double(PyValue v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return (double)PyValue_Int32(v);
+    }
+    return PyLong_AsDouble(PyValue_ObjectBorrow(v));
+}
+
+/* The int whose value is x, which is integral, infinite or a NaN, as
+   PyLong_FromDouble() makes it, but without allocating if it fits in an
+   inline int. */
+static PyValue
+value_from_integral_double(double x)
+{
+    if (-2147483648.0 <= x && x <= 2147483647.0) {
+        return PyValue_FromInt32((int32_t)x);
+    }
+    return PyValue_FromResult(PyLong_FromDouble(x));
+}
+
+/* The tuple (a, b), or NULL with an exception set if a or b is
+   PyValue_NULL (a NaN that could not be boxed). */
+static PyObject *
+value_pair(PyValue a, PyValue b)
+{
+    if (PyValue_IsNull(a) || PyValue_IsNull(b)) {
+        return NULL;
+    }
+    PyValue items[2] = {a, b};
+    return _PyTuple_FromValues(items, 2);
+}
 
 #ifndef _Py_HAVE_ACOSPI
 /*
@@ -931,14 +986,14 @@ is_error(double x, int raise_edom)
    care about right now.
 */
 
-static PyObject *
-math_1(PyObject *arg, double (*func) (double), int can_overflow,
+static PyValue
+math_1(PyValue arg, double (*func) (double), int can_overflow,
        const char *err_msg)
 {
     double x, r;
-    x = PyFloat_AsDouble(arg);
+    x = PyFloat_AsDoubleValue(arg);
     if (x == -1.0 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     errno = 0;
     r = (*func)(x);
     if (isnan(r) && !isnan(x))
@@ -949,13 +1004,13 @@ math_1(PyObject *arg, double (*func) (double), int can_overflow,
                             "math range error"); /* overflow */
         else
             goto domain_err; /* singularity */
-        return NULL;
+        return PyValue_NULL;
     }
     if (isfinite(r) && errno && is_error(r, 1))
         /* this branch unnecessary on most platforms */
-        return NULL;
+        return PyValue_NULL;
 
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 
 domain_err:
     if (err_msg) {
@@ -968,20 +1023,20 @@ domain_err:
 	else {
 		PyErr_SetString(PyExc_ValueError, "math domain error");
 	}
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* variant of math_1, to be used when the function being wrapped is known to
    set errno properly (that is, errno = EDOM for invalid or divide-by-zero,
    errno = ERANGE for overflow). */
 
-static PyObject *
-math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
+static PyValue
+math_1a(PyValue arg, double (*func) (double), const char *err_msg)
 {
     double x, r;
-    x = PyFloat_AsDouble(arg);
+    x = PyFloat_AsDoubleValue(arg);
     if (x == -1.0 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     errno = 0;
     r = (*func)(x);
     if (errno && is_error(r, err_msg ? 0 : 1)) {
@@ -993,9 +1048,9 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
                 PyMem_Free(buf);
             }
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 }
 
 /*
@@ -1025,20 +1080,20 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
    OverflowError.
 */
 
-static PyObject *
-math_2(PyObject *const *args, Py_ssize_t nargs,
+static PyValue
+math_2(const PyValue *args, Py_ssize_t nargs,
        double (*func) (double, double), const char *funcname)
 {
     double x, y, r;
     if (!_PyArg_CheckPositional(funcname, nargs, 2, 2))
-        return NULL;
-    x = PyFloat_AsDouble(args[0]);
+        return PyValue_NULL;
+    x = PyFloat_AsDoubleValue(args[0]);
     if (x == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    y = PyFloat_AsDouble(args[1]);
+    y = PyFloat_AsDoubleValue(args[1]);
     if (y == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     errno = 0;
     r = (*func)(x, y);
@@ -1055,37 +1110,37 @@ math_2(PyObject *const *args, Py_ssize_t nargs,
             errno = 0;
     }
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
 #define FUNC1(funcname, func, can_overflow, docstring)                  \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+    static PyValue math_##funcname(PyObject *self, PyValue args) {     \
         return math_1(args, func, can_overflow, NULL);                  \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
 #define FUNC1D(funcname, func, can_overflow, docstring, err_msg)        \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+    static PyValue math_##funcname(PyObject *self, PyValue args) {     \
         return math_1(args, func, can_overflow, err_msg);               \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
 #define FUNC1A(funcname, func, docstring)                               \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+    static PyValue math_##funcname(PyObject *self, PyValue args) {     \
         return math_1a(args, func, NULL);                               \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
 #define FUNC1AD(funcname, func, docstring, err_msg)                     \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+    static PyValue math_##funcname(PyObject *self, PyValue args) {     \
         return math_1a(args, func, err_msg);                            \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
 #define FUNC2(funcname, func, docstring) \
-    static PyObject * math_##funcname(PyObject *self, PyObject *const *args, Py_ssize_t nargs) { \
+    static PyValue math_##funcname(PyObject *self, const PyValue *args, Py_ssize_t nargs) { \
         return math_2(args, nargs, func, #funcname); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
@@ -1143,9 +1198,9 @@ FUNC1(cbrt, cbrt, 0,
       "Return the cube root of x.")
 
 /*[clinic input]
-math.ceil
+math.ceil -> value
 
-    x as number: object
+    x as number: value
     /
 
 Return the ceiling of x as an Integral.
@@ -1153,29 +1208,39 @@ Return the ceiling of x as an Integral.
 This is the smallest integer >= x.
 [clinic start generated code]*/
 
-static PyObject *
-math_ceil(PyObject *module, PyObject *number)
-/*[clinic end generated code: output=6c3b8a78bc201c67 input=2725352806399cab]*/
+static PyValue
+math_ceil_impl(PyObject *module, PyValue number)
+/*[clinic end generated code: output=e3a170a57d8aea7a input=b2c242684a67061b]*/
 {
     double x;
 
-    if (PyFloat_CheckExact(number)) {
-        x = PyFloat_AS_DOUBLE(number);
+    if (PyValue_IsInlineFloat(number)) {
+        x = PyValue_Double(number);
+    }
+    else if (PyValue_IsInlineInt(number)) {
+        // int.__ceil__() returns the int itself.
+        return number;
     }
     else {
-        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(number, &_Py_ID(__ceil__));
-        if (result != NULL) {
-            return result;
+        PyObject *obj = PyValue_ObjectBorrow(number);
+        if (PyFloat_CheckExact(obj)) {
+            x = PyFloat_AS_DOUBLE(obj);
         }
-        else if (PyErr_Occurred()) {
-            return NULL;
-        }
-        x = PyFloat_AsDouble(number);
-        if (x == -1.0 && PyErr_Occurred()) {
-            return NULL;
+        else {
+            PyObject *result = _PyObject_MaybeCallSpecialNoArgs(obj, &_Py_ID(__ceil__));
+            if (result != NULL) {
+                return PyValue_FromObject(result);
+            }
+            else if (PyErr_Occurred()) {
+                return PyValue_NULL;
+            }
+            x = PyFloat_AsDouble(obj);
+            if (x == -1.0 && PyErr_Occurred()) {
+                return PyValue_NULL;
+            }
         }
     }
-    return PyLong_FromDouble(ceil(x));
+    return value_from_integral_double(ceil(x));
 }
 
 FUNC2(copysign, copysign,
@@ -1216,9 +1281,9 @@ FUNC1(fabs, fabs, 0,
       "Return the absolute value of the float x.")
 
 /*[clinic input]
-math.floor
+math.floor -> value
 
-    x as number: object
+    x as number: value
     /
 
 Return the floor of x as an Integral.
@@ -1226,29 +1291,39 @@ Return the floor of x as an Integral.
 This is the largest integer <= x.
 [clinic start generated code]*/
 
-static PyObject *
-math_floor(PyObject *module, PyObject *number)
-/*[clinic end generated code: output=c6a65c4884884b8a input=63af6b5d7ebcc3d6]*/
+static PyValue
+math_floor_impl(PyObject *module, PyValue number)
+/*[clinic end generated code: output=bcca415e8b9d7689 input=c26fd8c6144008e4]*/
 {
     double x;
 
-    if (PyFloat_CheckExact(number)) {
-        x = PyFloat_AS_DOUBLE(number);
+    if (PyValue_IsInlineFloat(number)) {
+        x = PyValue_Double(number);
+    }
+    else if (PyValue_IsInlineInt(number)) {
+        // int.__floor__() returns the int itself.
+        return number;
     }
     else {
-        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(number, &_Py_ID(__floor__));
-        if (result != NULL) {
-            return result;
+        PyObject *obj = PyValue_ObjectBorrow(number);
+        if (PyFloat_CheckExact(obj)) {
+            x = PyFloat_AS_DOUBLE(obj);
         }
-        else if (PyErr_Occurred()) {
-            return NULL;
-        }
-        x = PyFloat_AsDouble(number);
-        if (x == -1.0 && PyErr_Occurred()) {
-            return NULL;
+        else {
+            PyObject *result = _PyObject_MaybeCallSpecialNoArgs(obj, &_Py_ID(__floor__));
+            if (result != NULL) {
+                return PyValue_FromObject(result);
+            }
+            else if (PyErr_Occurred()) {
+                return PyValue_NULL;
+            }
+            x = PyFloat_AsDouble(obj);
+            if (x == -1.0 && PyErr_Occurred()) {
+                return PyValue_NULL;
+            }
         }
     }
-    return PyLong_FromDouble(floor(x));
+    return value_from_integral_double(floor(x));
 }
 
 /*[clinic input]
@@ -1445,7 +1520,7 @@ _fsum_realloc(double **p_ptr, Py_ssize_t  n,
 */
 
 /*[clinic input]
-math.fsum
+math.fsum -> value
 
     seq: object
     /
@@ -1455,11 +1530,12 @@ Return an accurate floating-point sum of values in the iterable seq.
 Assumes IEEE-754 floating-point arithmetic.
 [clinic start generated code]*/
 
-static PyObject *
-math_fsum(PyObject *module, PyObject *seq)
-/*[clinic end generated code: output=ba5c672b87fe34fc input=4506244ded6057dc]*/
+static PyValue
+math_fsum_impl(PyObject *module, PyObject *seq)
+/*[clinic end generated code: output=315af31f5a11b316 input=8f8274de46386460]*/
 {
-    PyObject *item, *iter, *sum = NULL;
+    PyObject *iter;
+    PyValue item, sum = PyValue_NULL;
     Py_ssize_t i, j, n = 0, m = NUM_PARTIALS;
     double x, y, t, ps[NUM_PARTIALS], *p = ps;
     double xsave, special_sum = 0.0, inf_sum = 0.0;
@@ -1467,21 +1543,19 @@ math_fsum(PyObject *module, PyObject *seq)
 
     iter = PyObject_GetIter(seq);
     if (iter == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     for(;;) {           /* for x in iterable */
         assert(0 <= n && n <= m);
         assert((m == NUM_PARTIALS && p == ps) ||
                (m >  NUM_PARTIALS && p != NULL));
 
-        item = PyIter_Next(iter);
-        if (item == NULL) {
-            if (PyErr_Occurred())
-                goto _fsum_error;
+        int status = PyIter_NextValue(PyValue_FromObject(iter), &item);
+        if (status < 0)
+            goto _fsum_error;
+        if (status == 0)
             break;
-        }
-        ASSIGN_DOUBLE(x, item, error_with_item);
-        Py_DECREF(item);
+        ASSIGN_DOUBLE(x, item, _fsum_error);
 
         xsave = x;
         for (i = j = 0; j < n; j++) {       /* for y in partials */
@@ -1527,7 +1601,7 @@ math_fsum(PyObject *module, PyObject *seq)
             PyErr_SetString(PyExc_ValueError,
                             "-inf + inf in fsum");
         else
-            sum = PyFloat_FromDouble(special_sum);
+            sum = PyValue_FromDouble(special_sum);
         goto _fsum_error;
     }
 
@@ -1560,26 +1634,22 @@ math_fsum(PyObject *module, PyObject *seq)
                 hi = x;
         }
     }
-    sum = PyFloat_FromDouble(hi);
+    sum = PyValue_FromDouble(hi);
 
   _fsum_error:
     Py_DECREF(iter);
     if (p != ps)
         PyMem_Free(p);
     return sum;
-
-  error_with_item:
-    Py_DECREF(item);
-    goto _fsum_error;
 }
 
 #undef NUM_PARTIALS
 
 
 /*[clinic input]
-math.trunc
+math.trunc -> value
 
-    x: object
+    x: value
     /
 
 Truncates the Real x to the nearest Integral toward 0.
@@ -1587,24 +1657,33 @@ Truncates the Real x to the nearest Integral toward 0.
 Uses the __trunc__ magic method.
 [clinic start generated code]*/
 
-static PyObject *
-math_trunc(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=34b9697b707e1031 input=2168b34e0a09134d]*/
+static PyValue
+math_trunc_impl(PyObject *module, PyValue x)
+/*[clinic end generated code: output=253a272082c8c7de input=cd8ffe27c8f687d9]*/
 {
-    if (PyFloat_CheckExact(x)) {
-        return PyFloat_Type.tp_as_number->nb_int(x);
+    if (PyValue_IsInlineFloat(x)) {
+        // float.__trunc__()
+        return value_from_integral_double(trunc(PyValue_Double(x)));
+    }
+    if (PyValue_IsInlineInt(x)) {
+        // int.__trunc__() returns the int itself.
+        return x;
+    }
+    PyObject *obj = PyValue_ObjectBorrow(x);
+    if (PyFloat_CheckExact(obj)) {
+        return PyValue_FromResult(PyFloat_Type.tp_as_number->nb_int(obj));
     }
 
-    PyObject *result = _PyObject_MaybeCallSpecialNoArgs(x, &_Py_ID(__trunc__));
+    PyObject *result = _PyObject_MaybeCallSpecialNoArgs(obj, &_Py_ID(__trunc__));
     if (result != NULL) {
-        return result;
+        return PyValue_FromObject(result);
     }
     else if (!PyErr_Occurred()) {
         PyErr_Format(PyExc_TypeError,
             "type %.100s doesn't define __trunc__ method",
-            Py_TYPE(x)->tp_name);
+            Py_TYPE(obj)->tp_name);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -1634,15 +1713,15 @@ math_frexp_impl(PyObject *module, double x)
     else {
         x = frexp(x, &i);
     }
-    return Py_BuildValue("(di)", x, i);
+    return value_pair(PyValue_FromDouble(x), PyValue_FromInt32(i));
 }
 
 
 /*[clinic input]
-math.ldexp
+math.ldexp -> value
 
     x: double
-    i: object
+    i: value
     /
 
 Return x * (2**i).
@@ -1650,27 +1729,27 @@ Return x * (2**i).
 This is essentially the inverse of frexp().
 [clinic start generated code]*/
 
-static PyObject *
-math_ldexp_impl(PyObject *module, double x, PyObject *i)
-/*[clinic end generated code: output=b6892f3c2df9cc6a input=17d5970c1a40a8c1]*/
+static PyValue
+math_ldexp_impl(PyObject *module, double x, PyValue i)
+/*[clinic end generated code: output=5f24ea3a15b6c51c input=db6aace4b99baddf]*/
 {
     double r;
     long exp;
     int overflow;
 
-    if (PyLong_Check(i)) {
+    if (PyType_FastSubclass(PyValue_Type(i), Py_TPFLAGS_LONG_SUBCLASS)) {
         /* on overflow, replace exponent with either LONG_MAX
            or LONG_MIN, depending on the sign. */
-        exp = PyLong_AsLongAndOverflow(i, &overflow);
+        exp = value_as_long_and_overflow(i, &overflow);
         if (exp == -1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
         if (overflow)
             exp = overflow < 0 ? LONG_MIN : LONG_MAX;
     }
     else {
         PyErr_SetString(PyExc_TypeError,
                         "Expected an int as second argument to ldexp.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (x == 0. || !isfinite(x)) {
@@ -1714,8 +1793,8 @@ math_ldexp_impl(PyObject *module, double x, PyObject *i)
     }
 
     if (errno && is_error(r, 1))
-        return NULL;
-    return PyFloat_FromDouble(r);
+        return PyValue_NULL;
+    return PyValue_FromDouble(r);
 }
 
 
@@ -1738,13 +1817,14 @@ math_modf_impl(PyObject *module, double x)
     /* some platforms don't do the right thing for NaNs and
        infinities, so we take care of special cases directly. */
     if (isinf(x))
-        return Py_BuildValue("(dd)", copysign(0., x), x);
+        return value_pair(PyValue_FromDouble(copysign(0., x)),
+                          PyValue_FromDouble(x));
     else if (isnan(x))
-        return Py_BuildValue("(dd)", x, x);
+        return value_pair(PyValue_FromDouble(x), PyValue_FromDouble(x));
 
     errno = 0;
     x = modf(x, &y);
-    return Py_BuildValue("(dd)", x, y);
+    return value_pair(PyValue_FromDouble(x), PyValue_FromDouble(y));
 }
 
 
@@ -1757,7 +1837,7 @@ math_modf_impl(PyObject *module, double x)
    However, intermediate overflow is possible for an int if the number of bits
    in that int is larger than PY_SSIZE_T_MAX. */
 
-static PyObject*
+static PyValue
 loghelper_int(PyObject* arg, double (*func)(double))
 {
     /* If it is int, do it ourselves. */
@@ -1768,13 +1848,13 @@ loghelper_int(PyObject* arg, double (*func)(double))
     if (!_PyLong_IsPositive((PyLongObject *)arg)) {
         PyErr_SetString(PyExc_ValueError,
                         "expected a positive input");
-        return NULL;
+        return PyValue_NULL;
     }
 
     x = PyLong_AsDouble(arg);
     if (x == -1.0 && PyErr_Occurred()) {
         if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return NULL;
+            return PyValue_NULL;
         /* Here the conversion to double overflowed, but it's possible
            to compute the log anyway.  Clear the exception and continue. */
         PyErr_Clear();
@@ -1786,32 +1866,37 @@ loghelper_int(PyObject* arg, double (*func)(double))
     else
         /* Successfully converted x to a double. */
         result = func(x);
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 }
 
-static PyObject*
-loghelper(PyObject* arg, double (*func)(double))
+static PyValue
+loghelper(PyValue arg, double (*func)(double))
 {
     /* If it is int, do it ourselves. */
-    if (PyLong_Check(arg)) {
-        return loghelper_int(arg, func);
+    if (PyType_FastSubclass(PyValue_Type(arg), Py_TPFLAGS_LONG_SUBCLASS)) {
+        PyObject *obj = PyValue_Object(arg);
+        if (obj == NULL) {
+            return PyValue_NULL;
+        }
+        return loghelper_int(obj, func);
     }
     /* Else let libm handle it by itself. */
-    PyObject *res = math_1(arg, func, 0, "expected a positive input, got %s");
-    if (res == NULL &&
+    PyValue res = math_1(arg, func, 0, "expected a positive input, got %s");
+    if (PyValue_IsNull(res) &&
         PyErr_ExceptionMatches(PyExc_OverflowError) &&
-        PyIndex_Check(arg))
+        !PyValue_IsInline(arg) &&
+        PyIndex_Check(PyValue_ObjectBorrow(arg)))
     {
         /* Here the conversion to double overflowed, but it's possible
            to compute the log anyway.  Clear the exception, convert to
            integer and continue. */
         PyErr_Clear();
-        arg = _PyNumber_Index(arg);
-        if (arg == NULL) {
-            return NULL;
+        PyObject *index = _PyNumber_Index(PyValue_ObjectBorrow(arg));
+        if (index == NULL) {
+            return PyValue_NULL;
         }
-        res = loghelper_int(arg, func);
-        Py_DECREF(arg);
+        res = loghelper_int(index, func);
+        Py_DECREF(index);
     }
     return res;
 }
@@ -1819,29 +1904,24 @@ loghelper(PyObject* arg, double (*func)(double))
 
 /* AC: cannot convert yet, see gh-102839 and gh-89381, waiting
    for support of multiple signatures */
-static PyObject *
-math_log(PyObject *module, PyObject * const *args, Py_ssize_t nargs)
+static PyValue
+math_log(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *num, *den;
-    PyObject *ans;
+    PyValue num, den;
 
     if (!_PyArg_CheckPositional("log", nargs, 1, 2))
-        return NULL;
+        return PyValue_NULL;
 
     num = loghelper(args[0], m_log);
-    if (num == NULL || nargs == 1)
+    if (PyValue_IsNull(num) || nargs == 1)
         return num;
 
     den = loghelper(args[1], m_log);
-    if (den == NULL) {
-        Py_DECREF(num);
-        return NULL;
+    if (PyValue_IsNull(den)) {
+        return PyValue_NULL;
     }
 
-    ans = PyNumber_TrueDivide(num, den);
-    Py_DECREF(num);
-    Py_DECREF(den);
-    return ans;
+    return PyNumber_TrueDivideValue(num, den);
 }
 
 PyDoc_STRVAR(math_log_doc,
@@ -1850,41 +1930,41 @@ Return the logarithm of x to the given base.\n\n\
 If the base is not specified, returns the natural logarithm (base e) of x.");
 
 /*[clinic input]
-math.log2
+math.log2 -> value
 
-    x: object
+    x: value
     /
 
 Return the base 2 logarithm of x.
 [clinic start generated code]*/
 
-static PyObject *
-math_log2(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=5425899a4d5d6acb input=08321262bae4f39b]*/
+static PyValue
+math_log2_impl(PyObject *module, PyValue x)
+/*[clinic end generated code: output=e0c698ba670e2679 input=e35c8e541561ffa7]*/
 {
     return loghelper(x, m_log2);
 }
 
 
 /*[clinic input]
-math.log10
+math.log10 -> value
 
-    x: object
+    x: value
     /
 
 Return the base 10 logarithm of x.
 [clinic start generated code]*/
 
-static PyObject *
-math_log10(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=be72a64617df9c6f input=b2469d02c6469e53]*/
+static PyValue
+math_log10_impl(PyObject *module, PyValue x)
+/*[clinic end generated code: output=2adf907d2d91724f input=04cb6ed0eec5f97d]*/
 {
     return loghelper(x, m_log10);
 }
 
 
 /*[clinic input]
-math.fma
+math.fma -> value
 
     x: double
     y: double
@@ -1896,15 +1976,15 @@ Fused multiply-add operation.
 Compute (x * y) + z with a single round.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_fma_impl(PyObject *module, double x, double y, double z)
-/*[clinic end generated code: output=4fc8626dbc278d17 input=e3ad1f4a4c89626e]*/
+/*[clinic end generated code: output=ccdb12a8aba0744f input=6bf29669a89329d2]*/
 {
     double r = fma(x, y, z);
 
     /* Fast path: if we got a finite result, we're done. */
     if (isfinite(r)) {
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
     }
 
     /* Non-finite result. Raise an exception if appropriate, else return r. */
@@ -1912,21 +1992,21 @@ math_fma_impl(PyObject *module, double x, double y, double z)
         if (!isnan(x) && !isnan(y) && !isnan(z)) {
             /* NaN result from non-NaN inputs. */
             PyErr_SetString(PyExc_ValueError, "invalid operation in fma");
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (isfinite(x) && isfinite(y) && isfinite(z)) {
         /* Infinite result from finite inputs. */
         PyErr_SetString(PyExc_OverflowError, "overflow in fma");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 }
 
 
 /*[clinic input]
-math.fmod
+math.fmod -> value
 
     x: double
     y: double
@@ -1937,14 +2017,14 @@ Return fmod(x, y), according to platform C.
 x % y may differ.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_fmod_impl(PyObject *module, double x, double y)
-/*[clinic end generated code: output=7559d794343a27b5 input=4f84caa8cfc26a03]*/
+/*[clinic end generated code: output=1f70a4ea344b6c19 input=ddb5e93a3b3d75fa]*/
 {
     double r;
     /* fmod(x, +/-Inf) returns x for finite x. */
     if (isinf(y) && isfinite(x))
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     errno = 0;
     r = fmod(x, y);
 #ifdef _MSC_VER
@@ -1963,9 +2043,9 @@ math_fmod_impl(PyObject *module, double x, double y)
             errno = 0;
     }
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
 /*
@@ -2125,7 +2205,7 @@ vector_norm(Py_ssize_t n, double *vec, double max, int found_nan)
 #define NUM_STACK_ELEMS 16
 
 /*[clinic input]
-math.dist
+math.dist -> value
 
     p: object
     q: object
@@ -2140,11 +2220,11 @@ Roughly equivalent to:
     sqrt(sum((px - qx) ** 2.0 for px, qx in zip(p, q)))
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
-/*[clinic end generated code: output=56bd9538d06bbcfe input=74e85e1b6092e68e]*/
+/*[clinic end generated code: output=89259fa9f711ed31 input=452cf5319c1b844c]*/
 {
-    PyObject *item;
+    PyValue item;
     double max = 0.0;
     double x, px, qx, result;
     Py_ssize_t i, m, n;
@@ -2155,7 +2235,7 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
     if (!PyTuple_Check(p)) {
         p = PySequence_Tuple(p);
         if (p == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         p_allocated = 1;
     }
@@ -2165,7 +2245,7 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
             if (p_allocated) {
                 Py_DECREF(p);
             }
-            return NULL;
+            return PyValue_NULL;
         }
         q_allocated = 1;
     }
@@ -2185,9 +2265,9 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
         }
     }
     for (i=0 ; i<n ; i++) {
-        item = PyTuple_GET_ITEM(p, i);
+        item = PyTuple_GET_VALUE(p, i);
         ASSIGN_DOUBLE(px, item, error_exit);
-        item = PyTuple_GET_ITEM(q, i);
+        item = PyTuple_GET_VALUE(q, i);
         ASSIGN_DOUBLE(qx, item, error_exit);
         x = fabs(px - qx);
         diffs[i] = x;
@@ -2206,7 +2286,7 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
     if (q_allocated) {
         Py_DECREF(q);
     }
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 
   error_exit:
     if (diffs != diffs_on_stack) {
@@ -2218,11 +2298,11 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
     if (q_allocated) {
         Py_DECREF(q);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
-math.hypot
+math.hypot -> value
 
     *coordinates as args: array
 
@@ -2240,13 +2320,12 @@ For example, the hypotenuse of a 3/4/5 right triangle is:
     5.0
 [clinic start generated code]*/
 
-static PyObject *
-math_hypot_impl(PyObject *module, PyObject * const *args,
+static PyValue
+math_hypot_impl(PyObject *module, const PyValue *args,
                 Py_ssize_t args_length)
-/*[clinic end generated code: output=c9de404e24370068 input=1bceaf7d4fdcd9c2]*/
+/*[clinic end generated code: output=e0658e327b454530 input=1b63620c5540cfb5]*/
 {
     Py_ssize_t i;
-    PyObject *item;
     double max = 0.0;
     double x, result;
     int found_nan = 0;
@@ -2256,12 +2335,15 @@ math_hypot_impl(PyObject *module, PyObject * const *args,
     if (args_length > NUM_STACK_ELEMS) {
         coordinates = (double *) PyMem_Malloc(args_length * sizeof(double));
         if (coordinates == NULL) {
-            return PyErr_NoMemory();
+            PyErr_NoMemory();
+            return PyValue_NULL;
         }
     }
     for (i = 0; i < args_length; i++) {
-        item = args[i];
-        ASSIGN_DOUBLE(x, item, error_exit);
+        x = PyFloat_AsDoubleValue(args[i]);
+        if (x == -1.0 && PyErr_Occurred()) {
+            goto error_exit;
+        }
         x = fabs(x);
         coordinates[i] = x;
         found_nan |= isnan(x);
@@ -2273,13 +2355,13 @@ math_hypot_impl(PyObject *module, PyObject * const *args,
     if (coordinates != coord_on_stack) {
         PyMem_Free(coordinates);
     }
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 
   error_exit:
     if (coordinates != coord_on_stack) {
         PyMem_Free(coordinates);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 #undef NUM_STACK_ELEMS
@@ -2296,7 +2378,7 @@ long_add_would_overflow(long a, long b)
 }
 
 /*[clinic input]
-math.sumprod
+math.sumprod -> value
 
     p: object
     q: object
@@ -2312,13 +2394,12 @@ For float and mixed int/float inputs, the intermediate products
 and sums are computed with extended precision.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
-/*[clinic end generated code: output=6722dbfe60664554 input=a2880317828c61d2]*/
+/*[clinic end generated code: output=1cf9cea30a4094ed input=441e378f79b3717d]*/
 {
-    PyObject *p_i = NULL, *q_i = NULL, *term_i = NULL, *new_total = NULL;
-    PyObject *p_it, *q_it, *total;
-    iternextfunc p_next, q_next;
+    PyValue p_i, q_i, term_i, total;
+    PyObject *p_it, *q_it;
     bool p_stopped = false, q_stopped = false;
     bool int_path_enabled = true, int_total_in_use = false;
     bool flt_path_enabled = true, flt_total_in_use = false;
@@ -2327,52 +2408,34 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
 
     p_it = PyObject_GetIter(p);
     if (p_it == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     q_it = PyObject_GetIter(q);
     if (q_it == NULL) {
         Py_DECREF(p_it);
-        return NULL;
+        return PyValue_NULL;
     }
-    total = PyLong_FromLong(0);
-    if (total == NULL) {
-        Py_DECREF(p_it);
-        Py_DECREF(q_it);
-        return NULL;
-    }
-    p_next = *Py_TYPE(p_it)->tp_iternext;
-    q_next = *Py_TYPE(q_it)->tp_iternext;
+    total = PyValue_FromInt32(0);
     while (1) {
         bool finished;
 
-        assert (p_i == NULL);
-        assert (q_i == NULL);
-        assert (term_i == NULL);
-        assert (new_total == NULL);
-
         assert (p_it != NULL);
         assert (q_it != NULL);
-        assert (total != NULL);
+        assert (!PyValue_IsNull(total));
 
-        p_i = p_next(p_it);
-        if (p_i == NULL) {
-            if (PyErr_Occurred()) {
-                if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-                    goto err_exit;
-                }
-                PyErr_Clear();
+        if (!p_stopped) {
+            int status = PyIter_NextValue(PyValue_FromObject(p_it), &p_i);
+            if (status < 0) {
+                goto err_exit;
             }
-            p_stopped = true;
+            p_stopped = (status == 0);
         }
-        q_i = q_next(q_it);
-        if (q_i == NULL) {
-            if (PyErr_Occurred()) {
-                if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-                    goto err_exit;
-                }
-                PyErr_Clear();
+        if (!q_stopped) {
+            int status = PyIter_NextValue(PyValue_FromObject(q_it), &q_i);
+            if (status < 0) {
+                goto err_exit;
             }
-            q_stopped = true;
+            q_stopped = (status == 0);
         }
         if (p_stopped != q_stopped) {
             PyErr_Format(PyExc_ValueError, "Inputs are not the same length");
@@ -2382,15 +2445,16 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
 
         if (int_path_enabled) {
 
-            if (!finished && PyLong_CheckExact(p_i) & PyLong_CheckExact(q_i)) {
+            if (!finished && (PyValue_Type(p_i) == &PyLong_Type)
+                             & (PyValue_Type(q_i) == &PyLong_Type)) {
                 int overflow;
                 long int_p, int_q, int_prod;
 
-                int_p = PyLong_AsLongAndOverflow(p_i, &overflow);
+                int_p = value_as_long_and_overflow(p_i, &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
-                int_q = PyLong_AsLongAndOverflow(q_i, &overflow);
+                int_q = value_as_long_and_overflow(q_i, &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
@@ -2403,8 +2467,6 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
                 }
                 int_total += int_prod;
                 int_total_in_use = true;
-                Py_CLEAR(p_i);
-                Py_CLEAR(q_i);
                 continue;
             }
 
@@ -2412,17 +2474,14 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
             // We're finished, overflowed, or have a non-int
             int_path_enabled = false;
             if (int_total_in_use) {
-                term_i = PyLong_FromLong(int_total);
-                if (term_i == NULL) {
+                term_i = PyValue_FromLongLong(int_total);
+                if (PyValue_IsNull(term_i)) {
                     goto err_exit;
                 }
-                new_total = PyNumber_Add(total, term_i);
-                if (new_total == NULL) {
+                total = PyNumber_AddValue(total, term_i);
+                if (PyValue_IsNull(total)) {
                     goto err_exit;
                 }
-                Py_SETREF(total, new_total);
-                new_total = NULL;
-                Py_CLEAR(term_i);
                 int_total = 0;   // An ounce of prevention, ...
                 int_total_in_use = false;
             }
@@ -2432,25 +2491,27 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
 
             if (!finished) {
                 double flt_p, flt_q;
-                bool p_type_float = PyFloat_CheckExact(p_i);
-                bool q_type_float = PyFloat_CheckExact(q_i);
+                bool p_type_float = _PyValue_FloatCheckExact(p_i);
+                bool q_type_float = _PyValue_FloatCheckExact(q_i);
+                PyTypeObject *p_type = PyValue_Type(p_i);
+                PyTypeObject *q_type = PyValue_Type(q_i);
                 if (p_type_float && q_type_float) {
-                    flt_p = PyFloat_AS_DOUBLE(p_i);
-                    flt_q = PyFloat_AS_DOUBLE(q_i);
-                } else if (p_type_float && (PyLong_CheckExact(q_i) || PyBool_Check(q_i))) {
+                    flt_p = value_float_as_double(p_i);
+                    flt_q = value_float_as_double(q_i);
+                } else if (p_type_float && (q_type == &PyLong_Type || q_type == &PyBool_Type)) {
                     /* We care about float/int pairs and int/float pairs because
                        they arise naturally in several use cases such as price
                        times quantity, measurements with integer weights, or
                        data selected by a vector of bools. */
-                    flt_p = PyFloat_AS_DOUBLE(p_i);
-                    flt_q = PyLong_AsDouble(q_i);
+                    flt_p = value_float_as_double(p_i);
+                    flt_q = value_long_as_double(q_i);
                     if (flt_q == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
                     }
-                } else if (q_type_float && (PyLong_CheckExact(p_i) || PyBool_Check(p_i))) {
-                    flt_q = PyFloat_AS_DOUBLE(q_i);
-                    flt_p = PyLong_AsDouble(p_i);
+                } else if (q_type_float && (p_type == &PyLong_Type || p_type == &PyBool_Type)) {
+                    flt_q = value_float_as_double(q_i);
+                    flt_p = value_long_as_double(p_i);
                     if (flt_p == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
@@ -2462,8 +2523,6 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
                 if (isfinite(new_flt_total.hi)) {
                     flt_total = new_flt_total;
                     flt_total_in_use = true;
-                    Py_CLEAR(p_i);
-                    Py_CLEAR(q_i);
                     continue;
                 }
             }
@@ -2472,17 +2531,14 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
             // We're finished, overflowed, have a non-float, or got a non-finite value
             flt_path_enabled = false;
             if (flt_total_in_use) {
-                term_i = PyFloat_FromDouble(tl_to_d(flt_total));
-                if (term_i == NULL) {
+                term_i = PyValue_FromDouble(tl_to_d(flt_total));
+                if (PyValue_IsNull(term_i)) {
                     goto err_exit;
                 }
-                new_total = PyNumber_Add(total, term_i);
-                if (new_total == NULL) {
+                total = PyNumber_AddValue(total, term_i);
+                if (PyValue_IsNull(total)) {
                     goto err_exit;
                 }
-                Py_SETREF(total, new_total);
-                new_total = NULL;
-                Py_CLEAR(term_i);
                 flt_total = tl_zero;
                 flt_total_in_use = false;
             }
@@ -2493,19 +2549,14 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
         if (finished) {
             goto normal_exit;
         }
-        term_i = PyNumber_Multiply(p_i, q_i);
-        if (term_i == NULL) {
+        term_i = PyNumber_MultiplyValue(p_i, q_i);
+        if (PyValue_IsNull(term_i)) {
             goto err_exit;
         }
-        new_total = PyNumber_Add(total, term_i);
-        if (new_total == NULL) {
+        total = PyNumber_AddValue(total, term_i);
+        if (PyValue_IsNull(total)) {
             goto err_exit;
         }
-        Py_SETREF(total, new_total);
-        new_total = NULL;
-        Py_CLEAR(p_i);
-        Py_CLEAR(q_i);
-        Py_CLEAR(term_i);
     }
 
  normal_exit:
@@ -2516,12 +2567,7 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
  err_exit:
     Py_DECREF(p_it);
     Py_DECREF(q_it);
-    Py_DECREF(total);
-    Py_XDECREF(p_i);
-    Py_XDECREF(q_i);
-    Py_XDECREF(term_i);
-    Py_XDECREF(new_total);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -2532,7 +2578,7 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
 */
 
 /*[clinic input]
-math.pow
+math.pow -> value
 
     x: double
     y: double
@@ -2541,9 +2587,9 @@ math.pow
 Return x**y (x to the power of y).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_pow_impl(PyObject *module, double x, double y)
-/*[clinic end generated code: output=fff93e65abccd6b0 input=c26f1f6075088bfd]*/
+/*[clinic end generated code: output=fd76877cd2c58019 input=3de7a83780ac7a85]*/
 {
     double r;
     int odd_y;
@@ -2604,9 +2650,9 @@ math_pow_impl(PyObject *module, double x, double y)
     }
 
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
 
@@ -2614,7 +2660,7 @@ static const double degToRad = Py_MATH_PI / 180.0;
 static const double radToDeg = 180.0 / Py_MATH_PI;
 
 /*[clinic input]
-math.degrees
+math.degrees -> value
 
     x: double
     /
@@ -2622,16 +2668,16 @@ math.degrees
 Convert angle x from radians to degrees.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_degrees_impl(PyObject *module, double x)
-/*[clinic end generated code: output=7fea78b294acd12f input=81e016555d6e3660]*/
+/*[clinic end generated code: output=1f1a63be08773dc0 input=11f2f0a860679949]*/
 {
-    return PyFloat_FromDouble(x * radToDeg);
+    return PyValue_FromDouble(x * radToDeg);
 }
 
 
 /*[clinic input]
-math.radians
+math.radians -> value
 
     x: double
     /
@@ -2639,11 +2685,11 @@ math.radians
 Convert angle x from degrees to radians.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_radians_impl(PyObject *module, double x)
-/*[clinic end generated code: output=34daa47caf9b1590 input=91626fc489fe3d63]*/
+/*[clinic end generated code: output=b94a1308334655d3 input=10309ac296a1759f]*/
 {
-    return PyFloat_FromDouble(x * degToRad);
+    return PyValue_FromDouble(x * degToRad);
 }
 
 
@@ -2856,12 +2902,12 @@ _check_long_mult_overflow(long a, long b) {
 }
 
 /*[clinic input]
-math.prod
+math.prod -> value
 
     iterable: object
     /
     *
-    start: object(c_default="NULL") = 1
+    start: value(c_default="PyValue_NULL") = 1
 
 Calculate the product of all the elements in the input iterable.
 
@@ -2872,69 +2918,66 @@ intended specifically for use with numeric values and may reject
 non-numeric types.
 [clinic start generated code]*/
 
-static PyObject *
-math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
-/*[clinic end generated code: output=36153bedac74a198 input=4c5ab0682782ed54]*/
+static PyValue
+math_prod_impl(PyObject *module, PyObject *iterable, PyValue start)
+/*[clinic end generated code: output=e5cd0efa59e7afdb input=a1bd58caf46c484a]*/
 {
-    PyObject *result = start;
-    PyObject *temp, *item, *iter;
+    PyValue result = start;
+    PyValue item;
+    PyObject *iter;
+    int status;
 
     iter = PyObject_GetIter(iterable);
     if (iter == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
+    PyValue it = PyValue_FromObject(iter);
 
-    if (result == NULL) {
-        result = _PyLong_GetOne();
+    if (PyValue_IsNull(result)) {
+        result = PyValue_FromInt32(1);
     }
-    Py_INCREF(result);
 #ifndef SLOW_PROD
     /* Fast paths for integers keeping temporary products in C.
      * Assumes all inputs are the same type.
      * If the assumption fails, default to use PyObjects instead.
     */
-    if (PyLong_CheckExact(result)) {
+    if (PyValue_Type(result) == &PyLong_Type) {
         int overflow;
-        long i_result = PyLong_AsLongAndOverflow(result, &overflow);
+        long i_result = value_as_long_and_overflow(result, &overflow);
         /* If this already overflowed, don't even enter the loop. */
         if (overflow == 0) {
-            Py_SETREF(result, NULL);
+            result = PyValue_NULL;
         }
         /* Loop over all the items in the iterable until we finish, we overflow
          * or we found a non integer element */
-        while (result == NULL) {
-            item = PyIter_Next(iter);
-            if (item == NULL) {
+        while (PyValue_IsNull(result)) {
+            status = PyIter_NextValue(it, &item);
+            if (status <= 0) {
                 Py_DECREF(iter);
-                if (PyErr_Occurred()) {
-                    return NULL;
+                if (status < 0) {
+                    return PyValue_NULL;
                 }
-                return PyLong_FromLong(i_result);
+                return PyValue_FromLongLong(i_result);
             }
-            if (PyLong_CheckExact(item)) {
-                long b = PyLong_AsLongAndOverflow(item, &overflow);
+            if (PyValue_Type(item) == &PyLong_Type) {
+                long b = value_as_long_and_overflow(item, &overflow);
                 if (overflow == 0 && !_check_long_mult_overflow(i_result, b)) {
                     long x = i_result * b;
                     i_result = x;
-                    Py_DECREF(item);
                     continue;
                 }
             }
             /* Either overflowed or is not an int.
              * Restore real objects and process normally */
-            result = PyLong_FromLong(i_result);
-            if (result == NULL) {
-                Py_DECREF(item);
+            result = PyValue_FromLongLong(i_result);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
-            temp = PyNumber_Multiply(result, item);
-            Py_DECREF(result);
-            Py_DECREF(item);
-            result = temp;
-            if (result == NULL) {
+            result = PyNumber_MultiplyValue(result, item);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -2943,46 +2986,40 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
      * Assumes all inputs are the same type.
      * If the assumption fails, default to use PyObjects instead.
     */
-    if (PyFloat_CheckExact(result)) {
-        double f_result = PyFloat_AS_DOUBLE(result);
-        Py_SETREF(result, NULL);
-        while(result == NULL) {
-            item = PyIter_Next(iter);
-            if (item == NULL) {
+    if (_PyValue_FloatCheckExact(result)) {
+        double f_result = value_float_as_double(result);
+        result = PyValue_NULL;
+        while (PyValue_IsNull(result)) {
+            status = PyIter_NextValue(it, &item);
+            if (status <= 0) {
                 Py_DECREF(iter);
-                if (PyErr_Occurred()) {
-                    return NULL;
+                if (status < 0) {
+                    return PyValue_NULL;
                 }
-                return PyFloat_FromDouble(f_result);
+                return PyValue_FromDouble(f_result);
             }
-            if (PyFloat_CheckExact(item)) {
-                f_result *= PyFloat_AS_DOUBLE(item);
-                Py_DECREF(item);
+            if (_PyValue_FloatCheckExact(item)) {
+                f_result *= value_float_as_double(item);
                 continue;
             }
-            if (PyLong_CheckExact(item)) {
+            if (PyValue_Type(item) == &PyLong_Type) {
                 long value;
                 int overflow;
-                value = PyLong_AsLongAndOverflow(item, &overflow);
+                value = value_as_long_and_overflow(item, &overflow);
                 if (!overflow) {
                     f_result *= (double)value;
-                    Py_DECREF(item);
                     continue;
                 }
             }
-            result = PyFloat_FromDouble(f_result);
-            if (result == NULL) {
-                Py_DECREF(item);
+            result = PyValue_FromDouble(f_result);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
-            temp = PyNumber_Multiply(result, item);
-            Py_DECREF(result);
-            Py_DECREF(item);
-            result = temp;
-            if (result == NULL) {
+            result = PyNumber_MultiplyValue(result, item);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -2990,19 +3027,16 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
     /* Consume rest of the iterable (if any) that could not be handled
      * by specialized functions above.*/
     for(;;) {
-        item = PyIter_Next(iter);
-        if (item == NULL) {
+        status = PyIter_NextValue(it, &item);
+        if (status <= 0) {
             /* error, or end-of-sequence */
-            if (PyErr_Occurred()) {
-                Py_SETREF(result, NULL);
+            if (status < 0) {
+                result = PyValue_NULL;
             }
             break;
         }
-        temp = PyNumber_Multiply(result, item);
-        Py_DECREF(result);
-        Py_DECREF(item);
-        result = temp;
-        if (result == NULL)
+        result = PyNumber_MultiplyValue(result, item);
+        if (PyValue_IsNull(result))
             break;
     }
     Py_DECREF(iter);
@@ -3012,7 +3046,7 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
 
 /*[clinic input]
 @permit_long_summary
-math.nextafter
+math.nextafter -> value
 
     x: double
     y: double
@@ -3028,37 +3062,37 @@ Raises a TypeError, if x or y is not a double, or if steps is not
 an integer.  Raises ValueError if steps is negative.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
-/*[clinic end generated code: output=cc6511f02afc099e input=3a9151e6b1e9f346]*/
+/*[clinic end generated code: output=9de576078043fff5 input=f0b527aeb5d10c2d]*/
 {
 #if defined(_AIX)
     if (x == y) {
         /* On AIX 7.1, libm nextafter(-0.0, +0.0) returns -0.0.
            Bug fixed in bos.adt.libm 7.2.2.0 by APAR IV95512. */
-        return PyFloat_FromDouble(y);
+        return PyValue_FromDouble(y);
     }
     if (isnan(x)) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
     if (isnan(y)) {
-        return PyFloat_FromDouble(y);
+        return PyValue_FromDouble(y);
     }
 #endif
     if (steps == Py_None) {
         // fast path: we default to one step.
-        return PyFloat_FromDouble(nextafter(x, y));
+        return PyValue_FromDouble(nextafter(x, y));
     }
     steps = PyNumber_Index(steps);
     if (steps == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(PyLong_CheckExact(steps));
     if (_PyLong_IsNegative((PyLongObject *)steps)) {
         PyErr_SetString(PyExc_ValueError,
                         "steps must be a non-negative integer");
         Py_DECREF(steps);
-        return NULL;
+        return PyValue_NULL;
     }
 
     unsigned long long usteps_ull = PyLong_AsUnsignedLongLong(steps);
@@ -3076,7 +3110,7 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
                 PyErr_Clear();
             }
             else {
-                return NULL;
+                return PyValue_NULL;
             }
         }
         usteps_ull = UINT64_MAX;
@@ -3085,13 +3119,13 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
     uint64_t usteps = (uint64_t)usteps_ull;
 
     if (usteps == 0) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
     if (isnan(x)) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
     if (isnan(y)) {
-        return PyFloat_FromDouble(y);
+        return PyValue_FromDouble(y);
     }
 
     // We assume that double and uint64_t have the same endianness.
@@ -3101,7 +3135,7 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
     union pun {double f; uint64_t i;};
     union pun ux = {x}, uy = {y};
     if (ux.i == uy.i) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
 
     const uint64_t sign_bit = 1ULL<<63;
@@ -3114,30 +3148,30 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
         // NOTE: ax + ay can never overflow, because their most significant bit
         // ain't set.
         if (ax + ay <= usteps) {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         // This comparison has to use <, because <= would get +0.0 vs -0.0
         // wrong.
         } else if (ax < usteps) {
             union pun result = {.i = (uy.i & sign_bit) | (usteps - ax)};
-            return PyFloat_FromDouble(result.f);
+            return PyValue_FromDouble(result.f);
         } else {
             ux.i -= usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         }
     // same sign
     } else if (ax > ay) {
         if (ax - ay >= usteps) {
             ux.i -= usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         } else {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         }
     } else {
         if (ay - ax >= usteps) {
             ux.i += usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         } else {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         }
     }
 }
@@ -3223,31 +3257,31 @@ math_exec(PyObject *module)
 }
 
 static PyMethodDef math_methods[] = {
-    {"acos",            math_acos,      METH_O,         math_acos_doc},
-    {"acosh",           math_acosh,     METH_O,         math_acosh_doc},
-    {"acospi",          math_acospi,    METH_O,         math_acospi_doc},
-    {"asin",            math_asin,      METH_O,         math_asin_doc},
-    {"asinh",           math_asinh,     METH_O,         math_asinh_doc},
-    {"asinpi",          math_asinpi,    METH_O,         math_asinpi_doc},
-    {"atan",            math_atan,      METH_O,         math_atan_doc},
+    {"acos",            _PyCFunction_CAST(math_acos),      METH_O,         math_acos_doc},
+    {"acosh",           _PyCFunction_CAST(math_acosh),     METH_O,         math_acosh_doc},
+    {"acospi",          _PyCFunction_CAST(math_acospi),    METH_O,         math_acospi_doc},
+    {"asin",            _PyCFunction_CAST(math_asin),      METH_O,         math_asin_doc},
+    {"asinh",           _PyCFunction_CAST(math_asinh),     METH_O,         math_asinh_doc},
+    {"asinpi",          _PyCFunction_CAST(math_asinpi),    METH_O,         math_asinpi_doc},
+    {"atan",            _PyCFunction_CAST(math_atan),      METH_O,         math_atan_doc},
     {"atan2",           _PyCFunction_CAST(math_atan2),     METH_FASTCALL,  math_atan2_doc},
-    {"atanh",           math_atanh,     METH_O,         math_atanh_doc},
+    {"atanh",           _PyCFunction_CAST(math_atanh),     METH_O,         math_atanh_doc},
     {"atan2pi",         _PyCFunction_CAST(math_atan2pi),   METH_FASTCALL,  math_atan2pi_doc},
-    {"atanpi",          math_atanpi,    METH_O,       math_atanpi_doc},
-    {"cbrt",            math_cbrt,      METH_O,         math_cbrt_doc},
+    {"atanpi",          _PyCFunction_CAST(math_atanpi),    METH_O,       math_atanpi_doc},
+    {"cbrt",            _PyCFunction_CAST(math_cbrt),      METH_O,         math_cbrt_doc},
     MATH_CEIL_METHODDEF
     {"copysign",        _PyCFunction_CAST(math_copysign),  METH_FASTCALL,  math_copysign_doc},
-    {"cos",             math_cos,       METH_O,         math_cos_doc},
-    {"cosh",            math_cosh,      METH_O,         math_cosh_doc},
-    {"cospi",           math_cospi,     METH_O,         math_cospi_doc},
+    {"cos",             _PyCFunction_CAST(math_cos),       METH_O,         math_cos_doc},
+    {"cosh",            _PyCFunction_CAST(math_cosh),      METH_O,         math_cosh_doc},
+    {"cospi",           _PyCFunction_CAST(math_cospi),     METH_O,         math_cospi_doc},
     MATH_DEGREES_METHODDEF
     MATH_DIST_METHODDEF
-    {"erf",             math_erf,       METH_O,         math_erf_doc},
-    {"erfc",            math_erfc,      METH_O,         math_erfc_doc},
-    {"exp",             math_exp,       METH_O,         math_exp_doc},
-    {"exp2",            math_exp2,      METH_O,         math_exp2_doc},
-    {"expm1",           math_expm1,     METH_O,         math_expm1_doc},
-    {"fabs",            math_fabs,      METH_O,         math_fabs_doc},
+    {"erf",             _PyCFunction_CAST(math_erf),       METH_O,         math_erf_doc},
+    {"erfc",            _PyCFunction_CAST(math_erfc),      METH_O,         math_erfc_doc},
+    {"exp",             _PyCFunction_CAST(math_exp),       METH_O,         math_exp_doc},
+    {"exp2",            _PyCFunction_CAST(math_exp2),      METH_O,         math_exp2_doc},
+    {"expm1",           _PyCFunction_CAST(math_expm1),     METH_O,         math_expm1_doc},
+    {"fabs",            _PyCFunction_CAST(math_fabs),      METH_O,         math_fabs_doc},
     MATH_FLOOR_METHODDEF
     MATH_FMA_METHODDEF
     MATH_FMAX_METHODDEF
@@ -3255,7 +3289,7 @@ static PyMethodDef math_methods[] = {
     MATH_FMIN_METHODDEF
     MATH_FREXP_METHODDEF
     MATH_FSUM_METHODDEF
-    {"gamma",           math_gamma,     METH_O,         math_gamma_doc},
+    {"gamma",           _PyCFunction_CAST(math_gamma),     METH_O,         math_gamma_doc},
     MATH_HYPOT_METHODDEF
     MATH_ISCLOSE_METHODDEF
     MATH_ISFINITE_METHODDEF
@@ -3264,9 +3298,9 @@ static PyMethodDef math_methods[] = {
     MATH_ISINF_METHODDEF
     MATH_ISNAN_METHODDEF
     MATH_LDEXP_METHODDEF
-    {"lgamma",          math_lgamma,    METH_O,         math_lgamma_doc},
+    {"lgamma",          _PyCFunction_CAST(math_lgamma),    METH_O,         math_lgamma_doc},
     {"log",             _PyCFunction_CAST(math_log),       METH_FASTCALL,  math_log_doc},
-    {"log1p",           math_log1p,     METH_O,         math_log1p_doc},
+    {"log1p",           _PyCFunction_CAST(math_log1p),     METH_O,         math_log1p_doc},
     MATH_LOG10_METHODDEF
     MATH_LOG2_METHODDEF
     MATH_MODF_METHODDEF
@@ -3274,13 +3308,13 @@ static PyMethodDef math_methods[] = {
     MATH_RADIANS_METHODDEF
     {"remainder",       _PyCFunction_CAST(math_remainder), METH_FASTCALL,  math_remainder_doc},
     MATH_SIGNBIT_METHODDEF
-    {"sin",             math_sin,       METH_O,         math_sin_doc},
-    {"sinh",            math_sinh,      METH_O,         math_sinh_doc},
-    {"sinpi",           math_sinpi,     METH_O,         math_sinpi_doc},
-    {"sqrt",            math_sqrt,      METH_O,         math_sqrt_doc},
-    {"tan",             math_tan,       METH_O,         math_tan_doc},
-    {"tanh",            math_tanh,      METH_O,         math_tanh_doc},
-    {"tanpi",           math_tanpi,     METH_O,         math_tanpi_doc},
+    {"sin",             _PyCFunction_CAST(math_sin),       METH_O,         math_sin_doc},
+    {"sinh",            _PyCFunction_CAST(math_sinh),      METH_O,         math_sinh_doc},
+    {"sinpi",           _PyCFunction_CAST(math_sinpi),     METH_O,         math_sinpi_doc},
+    {"sqrt",            _PyCFunction_CAST(math_sqrt),      METH_O,         math_sqrt_doc},
+    {"tan",             _PyCFunction_CAST(math_tan),       METH_O,         math_tan_doc},
+    {"tanh",            _PyCFunction_CAST(math_tanh),      METH_O,         math_tanh_doc},
+    {"tanpi",           _PyCFunction_CAST(math_tanpi),     METH_O,         math_tanpi_doc},
     MATH_SUMPROD_METHODDEF
     MATH_TRUNC_METHODDEF
     MATH_PROD_METHODDEF

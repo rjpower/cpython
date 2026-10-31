@@ -113,7 +113,8 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
         drop_gil = 0;   /* Benefits are likely outweighed by the overheads */
     }
     if (drop_gil) {
-        save = PyEval_SaveThread();
+        // Pinned: this frame reattaches below
+        save = _PyEval_SaveThreadPinned();
     }
     if (!seplen) {
         /* fast path */

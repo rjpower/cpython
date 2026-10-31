@@ -243,7 +243,8 @@ _pack_legacy_size(CFieldObject *field)
     return field->byte_size;
 }
 
-static int
+/* The caller anchors the field, the instance and the value. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static int
 PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
 {
     CDataObject *dst;
@@ -262,33 +263,61 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
                         "can't delete attribute");
         return -1;
     }
+    // The stack-passed arguments as integer locals, which the C mode
+    // does not take for objects.
+    Py_ssize_t size = _pack_legacy_size(self);
+    Py_ssize_t byte_size = self->byte_size;
     return PyCData_set(st, inst, self->proto, self->setfunc, value,
-                       self->index, _pack_legacy_size(self), ptr);
+                       self->index, size, byte_size, ptr);
 }
 
-static int
-PyCField_set(PyObject *op, PyObject *inst, PyObject *value)
+/* The converters (setfunc, getfunc) are object forms and not getsets;
+   converting them is a ctypes change for the ports phase.  So the field
+   setter boxes an inline value at its top, as a setter that passes on an
+   object does; a failed box returns at once.  The span holds the field,
+   the instance and the object set while the converter runs. */
+Py_GC_PRECISE static int
+PyCField_set(PyObject *op, PyObject *inst, PyValue value)
 {
-    int res;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue held[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, held);
+    _PyValueSpan_AppendObject(&span, op);
+    _PyValueSpan_AppendObject(&span, inst);
+    int res = -1;
+    PyObject *obj;
+    if (!PyValue_IsInline(value)) {
+        obj = PyValue_IsNull(value) ? NULL : PyValue_ObjectBorrow(value);
+    }
+    else {
+        obj = _PyValue_BoxInline(value);
+        if (obj == NULL) {
+            goto done;
+        }
+    }
+    _PyValueSpan_AppendObject(&span, obj);
     Py_BEGIN_CRITICAL_SECTION(inst);
-    res = PyCField_set_lock_held(op, inst, value);
+    res = PyCField_set_lock_held(op, inst, obj);
     Py_END_CRITICAL_SECTION();
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-static PyObject *
+static PyValue
 PyCField_get(PyObject *op, PyObject *inst, PyObject *type)
 {
     CDataObject *src;
     CFieldObject *self = _CFieldObject_CAST(op);
     if (inst == NULL) {
-        return Py_NewRef(self);
+        return PyValue_FromObject((PyObject *)self);
     }
     ctypes_state *st = get_module_state_by_class(Py_TYPE(self));
     if (!CDataObject_Check(st, inst)) {
         PyErr_SetString(PyExc_TypeError,
                         "not a ctype instance");
-        return NULL;
+        return PyValue_NULL;
     }
     src = _CDataObject_CAST(inst);
     PyObject *res;
@@ -297,25 +326,25 @@ PyCField_get(PyObject *op, PyObject *inst, PyObject *type)
                        self->index, _pack_legacy_size(self),
                        src->b_ptr + self->byte_offset);
     Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_FromResult(res);
 }
 
-static PyObject *
+static PyValue
 PyCField_get_legacy_size(PyObject *self, void *Py_UNUSED(closure))
 {
     CFieldObject *field = _CFieldObject_CAST(self);
-    return PyLong_FromSsize_t(_pack_legacy_size(field));
+    return PyValue_FromLongLong(_pack_legacy_size(field));
 }
 
-static PyObject *
+static PyValue
 PyCField_get_bit_size(PyObject *self, void *Py_UNUSED(closure))
 {
     CFieldObject *field = _CFieldObject_CAST(self);
     if (field->bitfield_size) {
-        return PyLong_FromSsize_t(field->bitfield_size);
+        return PyValue_FromLongLong(field->bitfield_size);
     }
     if (field->byte_size < PY_SSIZE_T_MAX / 8) {
-        return PyLong_FromSsize_t(field->byte_size * 8);
+        return PyValue_FromLongLong(field->byte_size * 8);
     }
 
     // If the bit size overflows Py_ssize_t, we don't try fitting it in
@@ -336,19 +365,19 @@ PyCField_get_bit_size(PyObject *self, void *Py_UNUSED(closure))
 finally:
     Py_XDECREF(byte_size_obj);
     Py_XDECREF(eight);
-    return result;
+    return PyValue_FromResult(result);
 }
 
-static PyObject *
+static PyValue
 PyCField_is_bitfield(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyBool_FromLong(_CFieldObject_CAST(self)->bitfield_size);
+    return PyValue_FromObject((_CFieldObject_CAST(self)->bitfield_size) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 PyCField_is_anonymous(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyBool_FromLong(_CFieldObject_CAST(self)->anonymous);
+    return PyValue_FromObject((_CFieldObject_CAST(self)->anonymous) ? Py_True : Py_False);
 }
 
 static PyGetSetDef PyCField_getset[] = {
@@ -408,6 +437,7 @@ PyCField_traverse(PyObject *op, visitproc visit, void *arg)
     CFieldObject *self = _CFieldObject_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->proto);
+    Py_VISIT(self->name);
     return 0;
 }
 

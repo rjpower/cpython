@@ -85,7 +85,7 @@ mbuf_alloc(void)
     return mbuf;
 }
 
-static PyObject *
+PyObject *
 _PyManagedBuffer_FromObject(PyObject *base, int flags)
 {
     _PyManagedBufferObject *mbuf;
@@ -103,9 +103,20 @@ _PyManagedBuffer_FromObject(PyObject *base, int flags)
     return (PyObject *)mbuf;
 }
 
-static void
-mbuf_release(_PyManagedBufferObject *self)
+const Py_buffer *
+_PyManagedBuffer_GetBuffer(_PyManagedBufferObject *self)
 {
+    assert(Py_IS_TYPE(self, &_PyManagedBuffer_Type));
+    if (self->flags & _Py_MANAGED_BUFFER_RELEASED) {
+        return NULL;
+    }
+    return &self->master;
+}
+
+void
+_PyManagedBuffer_Release(_PyManagedBufferObject *self)
+{
+    assert(Py_IS_TYPE(self, &_PyManagedBuffer_Type));
     if (self->flags&_Py_MANAGED_BUFFER_RELEASED)
         return;
 
@@ -120,8 +131,7 @@ static void
 mbuf_dealloc(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
-    assert(self->exports == 0);
-    mbuf_release(self);
+    _PyManagedBuffer_Release(self);
     if (self->flags&_Py_MANAGED_BUFFER_FREE_FORMAT)
         PyMem_Free(self->master.format);
     PyObject_GC_Del(self);
@@ -140,7 +150,7 @@ mbuf_clear(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
     assert(self->exports >= 0);
-    mbuf_release(self);
+    _PyManagedBuffer_Release(self);
     return 0;
 }
 
@@ -164,7 +174,9 @@ PyTypeObject _PyManagedBuffer_Type = {
     PyObject_GenericGetAttr,                 /* tp_getattro */
     0,                                       /* tp_setattro */
     0,                                       /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
+    /* Releasing the buffer updates the exporter's export state. */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
+        | Py_TPFLAGS_DEALLOC_READS_REFERENTS,  /* tp_flags */
     0,                                       /* tp_doc */
     mbuf_traverse,                           /* tp_traverse */
     mbuf_clear                               /* tp_clear */
@@ -175,7 +187,7 @@ PyTypeObject _PyManagedBuffer_Type = {
 /*                             MemoryView Object                            */
 /****************************************************************************/
 
-/* In the process of breaking reference cycles mbuf_release() can be
+/* In the process of breaking reference cycles _PyManagedBuffer_Release() can be
    called before memory_release(). */
 #define BASE_INACCESSIBLE(mv) \
     (((PyMemoryViewObject *)mv)->flags&_Py_MEMORYVIEW_RELEASED || \
@@ -186,6 +198,13 @@ PyTypeObject _PyManagedBuffer_Type = {
         PyErr_SetString(PyExc_ValueError,                         \
             "operation forbidden on released memoryview object"); \
         return NULL;                                              \
+    }
+
+#define CHECK_RELEASED_VALUE(mv) \
+    if (BASE_INACCESSIBLE(mv)) {                                  \
+        PyErr_SetString(PyExc_ValueError,                         \
+            "operation forbidden on released memoryview object"); \
+        return PyValue_NULL;                                      \
     }
 
 #define CHECK_RELEASED_INT(mv) \
@@ -213,6 +232,7 @@ PyTypeObject _PyManagedBuffer_Type = {
    again due to possible read after frees. */
 #define CHECK_RELEASED_AGAIN(mv) CHECK_RELEASED(mv)
 #define CHECK_RELEASED_INT_AGAIN(mv) CHECK_RELEASED_INT(mv)
+#define CHECK_RELEASED_VALUE_AGAIN(mv) CHECK_RELEASED_VALUE(mv)
 
 #define CHECK_LIST_OR_TUPLE(v) \
     if (!PyList_Check(v) && !PyTuple_Check(v)) { \
@@ -658,7 +678,6 @@ memory_alloc(int ndim)
     mv->view.shape = mv->ob_array;
     mv->view.strides = mv->ob_array + ndim;
     mv->view.suboffsets = mv->ob_array + 2 * ndim;
-    mv->weakreflist = NULL;
 
     _PyObject_GC_TRACK(mv);
     return mv;
@@ -882,7 +901,7 @@ mbuf_copy_format(_PyManagedBufferObject *mbuf, const char *fmt)
         of src->shape, src->strides and src->suboffsets.
      2) src->format is copied to the master buffer and released
         in mbuf_dealloc(). The releasebufferproc of the bytes
-        object is NULL, so it does not matter that mbuf_release()
+        object is NULL, so it does not matter that _PyManagedBuffer_Release()
         passes the altered format pointer to PyBuffer_Release().
 */
 static PyObject *
@@ -1089,11 +1108,7 @@ PyBuffer_ToContiguous(void *buf, const Py_buffer *src, Py_ssize_t len, char orde
 static inline Py_ssize_t
 get_exports(PyMemoryViewObject *buf)
 {
-#ifdef Py_GIL_DISABLED
-    return _Py_atomic_load_ssize_relaxed(&buf->exports);
-#else
     return buf->exports;
-#endif
 }
 
 
@@ -1115,8 +1130,54 @@ _memory_release(PyMemoryViewObject *self)
     self->flags |= _Py_MEMORYVIEW_RELEASED;
     assert(self->mbuf->exports > 0);
     if (--self->mbuf->exports == 0) {
-        mbuf_release(self->mbuf);
+        _PyManagedBuffer_Release(self->mbuf);
     }
+}
+
+int
+_PyMemoryView_HasAcquisition(PyObject *op)
+{
+    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        return !(self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            && self->master.obj != NULL;
+    }
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    return !(self->flags & _Py_MEMORYVIEW_RELEASED) && self->mbuf != NULL;
+}
+
+int
+_PyMemoryView_ReleaseReady(PyObject *op)
+{
+    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
+        _PyManagedBufferObject *self = (_PyManagedBufferObject *)op;
+        assert(self->exports >= 0);
+        return (self->flags & _Py_MANAGED_BUFFER_RELEASED)
+            || self->exports == 0;
+    }
+    assert(PyMemoryView_Check(op));
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    assert(get_exports(self) >= 0);
+    return (self->flags & _Py_MEMORYVIEW_RELEASED)
+        || get_exports(self) == 0;
+}
+
+int
+_PyMemoryView_ReleaseForDealloc(PyObject *op)
+{
+    if (!_PyMemoryView_HasAcquisition(op)
+        || !_PyMemoryView_ReleaseReady(op))
+    {
+        return 0;
+    }
+    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
+        _PyManagedBuffer_Release((_PyManagedBufferObject *)op);
+        return 1;
+    }
+    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
+    _memory_release(self);
+    return 1;
 }
 
 /*[clinic input]
@@ -1155,8 +1216,7 @@ memory_dealloc(PyObject *_self)
     _PyObject_GC_UNTRACK(self);
     _memory_release(self);
     Py_CLEAR(self->mbuf);
-    if (self->weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject *) self);
+    PyObject_ClearWeakRefs((PyObject *) self);
     PyObject_GC_Del(self);
 }
 
@@ -1195,10 +1255,9 @@ Release the underlying buffer exposed by the memoryview object.
 [clinic start generated code]*/
 
 static PyObject *
-memoryview___exit___impl(PyMemoryViewObject *self,
-                         PyObject * const *exc_info,
+memoryview___exit___impl(PyMemoryViewObject *self, const PyValue *exc_info,
                          Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=c055c4c69baf495d input=881969146ff4d413]*/
+/*[clinic end generated code: output=4ed187b9f576181a input=881969146ff4d413]*/
 {
     return memoryview_release_impl(self);
 }
@@ -1829,8 +1888,8 @@ pylong_as_zu(PyObject *item)
 /* Unpack a single item. 'fmt' can be any native format in struct
    module syntax. This function is very sensitive to small changes. With this
    layout gcc automatically generates a fast jump table. */
-static inline PyObject *
-unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
+static inline PyValue
+unpack_single_value(PyMemoryViewObject *self, const char *ptr, const char *fmt)
 {
     unsigned long long llu;
     unsigned long lu;
@@ -1842,7 +1901,7 @@ unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
     unsigned char uc;
     void *p;
 
-    CHECK_RELEASED_AGAIN(self);
+    CHECK_RELEASED_VALUE_AGAIN(self);
 
 #if PY_LITTLE_ENDIAN
     int endian = 1;
@@ -1910,33 +1969,41 @@ unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
 
 convert_uc:
     /* PyLong_FromUnsignedLong() is slower */
-    return PyLong_FromLong(uc);
+    return PyValue_FromInt32(uc);
 convert_ld:
-    return PyLong_FromLong(ld);
+    return PyValue_FromLongLong(ld);
 convert_lu:
-    return PyLong_FromUnsignedLong(lu);
+    return PyValue_FromUnsignedLongLong(lu);
 convert_lld:
-    return PyLong_FromLongLong(lld);
+    return PyValue_FromLongLong(lld);
 convert_llu:
-    return PyLong_FromUnsignedLongLong(llu);
+    return PyValue_FromUnsignedLongLong(llu);
 convert_zd:
-    return PyLong_FromSsize_t(zd);
+    return PyValue_FromLongLong(zd);
 convert_zu:
-    return PyLong_FromSize_t(zu);
+    return PyValue_FromUnsignedLongLong(zu);
 convert_double:
-    return PyFloat_FromDouble(d[0]);
+    return PyValue_FromDouble(d[0]);
 convert_double_complex:
-    return PyComplex_FromDoubles(d[0], d[1]);
+    return PyValue_FromResult(PyComplex_FromDoubles(d[0], d[1]));
 convert_bool:
-    return PyBool_FromLong(ld);
+    return PyValue_FromObject(PyBool_FromLong(ld));
 convert_bytes:
-    return PyBytes_FromStringAndSize(ptr, 1);
+    return PyValue_FromResult(PyBytes_FromStringAndSize(ptr, 1));
 convert_pointer:
-    return PyLong_FromVoidPtr(p);
+    return PyValue_FromResult(PyLong_FromVoidPtr(p));
 err_format:
     PyErr_Format(PyExc_NotImplementedError,
         "memoryview: format %s not supported", fmt);
-    return NULL;
+    return PyValue_NULL;
+}
+
+/* unpack_single_value() for a caller that takes an object: an inline int or
+   float is boxed. */
+static PyObject *
+unpack_single(PyMemoryViewObject *self, const char *ptr, const char *fmt)
+{
+    return PyValue_Object(unpack_single_value(self, ptr, fmt));
 }
 
 #define PACK_SINGLE(ptr, src, type) \
@@ -2283,7 +2350,7 @@ tolist_base(PyMemoryViewObject *self, const char *ptr, const Py_ssize_t *shape,
             const Py_ssize_t *strides, const Py_ssize_t *suboffsets,
             const char *fmt)
 {
-    PyObject *lst, *item;
+    PyObject *lst;
     Py_ssize_t i;
 
     lst = PyList_New(shape[0]);
@@ -2292,12 +2359,12 @@ tolist_base(PyMemoryViewObject *self, const char *ptr, const Py_ssize_t *shape,
 
     for (i = 0; i < shape[0]; ptr+=strides[0], i++) {
         const char *xptr = ADJUST_PTR(ptr, suboffsets, 0);
-        item = unpack_single(self, xptr, fmt);
-        if (item == NULL) {
+        PyValue item = unpack_single_value(self, xptr, fmt);
+        if (PyValue_IsNull(item)) {
             Py_DECREF(lst);
             return NULL;
         }
-        PyList_SET_ITEM(lst, i, item);
+        PyList_SET_VALUE(lst, i, item);
     }
 
     return lst;
@@ -2563,33 +2630,39 @@ ptr_from_tuple(const Py_buffer *view, PyObject *tup)
 /* Return the item at index. In a one-dimensional view, this is an object
    with the type specified by view->format. Otherwise, the item is a sub-view.
    The function is used in memory_subscript() and memory_as_sequence. */
-static PyObject *
-memory_item(PyObject *_self, Py_ssize_t index)
+static PyValue
+memory_item_value(PyMemoryViewObject *self, Py_ssize_t index)
 {
-    PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view = &(self->view);
     const char *fmt;
 
-    CHECK_RELEASED(self);
+    CHECK_RELEASED_VALUE(self);
 
     fmt = adjust_fmt(view);
     if (fmt == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (view->ndim == 0) {
         PyErr_SetString(PyExc_TypeError, "invalid indexing of 0-dim memory");
-        return NULL;
+        return PyValue_NULL;
     }
     if (view->ndim == 1) {
         char *ptr = ptr_from_index(view, index);
         if (ptr == NULL)
-            return NULL;
-        return unpack_single(self, ptr, fmt);
+            return PyValue_NULL;
+        return unpack_single_value(self, ptr, fmt);
     }
 
     PyErr_SetString(PyExc_NotImplementedError,
         "multi-dimensional sub-views are not implemented");
-    return NULL;
+    return PyValue_NULL;
+}
+
+static PyObject *
+memory_item(PyObject *_self, Py_ssize_t index)
+{
+    return PyValue_Object(
+        memory_item_value((PyMemoryViewObject *)_self, index));
 }
 
 /* Return the item at position *key* (a tuple of indices). */
@@ -2981,7 +3054,7 @@ memoryview_index_impl(PyMemoryViewObject *self, PyObject *value,
         assert(0 <= start);
         assert(start <= stop);
 
-        PyObject *obj = _PyObject_CAST(self);
+        PyValue v = PyValue_FromObject(value);
         for (Py_ssize_t index = start; index < stop; index++) {
             // Note: while memoryviews can be mutated during iterations
             // when calling the == operator, their shape cannot. As such,
@@ -2989,16 +3062,14 @@ memoryview_index_impl(PyMemoryViewObject *self, PyObject *value,
             // entire loop.
             assert(index < n);
 
-            PyObject *item = memory_item(obj, index);
-            if (item == NULL) {
+            PyValue item = memory_item_value(self, index);
+            if (PyValue_IsNull(item)) {
                 return NULL;
             }
-            if (item == value) {
-                Py_DECREF(item);
+            if (PyValue_Is(item, v)) {
                 return PyLong_FromSsize_t(index);
             }
-            int contained = PyObject_RichCompareBool(item, value, Py_EQ);
-            Py_DECREF(item);
+            int contained = PyObject_RichCompareBoolValue(item, v, Py_EQ);
             if (contained > 0) {  // more likely than 'contained < 0'
                 return PyLong_FromSsize_t(index);
             }
@@ -3448,105 +3519,105 @@ _IntTupleFromSsizet(int len, Py_ssize_t *vals)
     return intTuple;
 }
 
-static PyObject *
+static PyValue
 memory_obj_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
     Py_buffer *view = &self->view;
 
-    CHECK_RELEASED(self);
+    CHECK_RELEASED_VALUE(self);
     if (view->obj == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
-    return Py_NewRef(view->obj);
+    return PyValue_FromObject(view->obj);
 }
 
-static PyObject *
+static PyValue
 memory_nbytes_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromSsize_t(self->view.len);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.len);
 }
 
-static PyObject *
+static PyValue
 memory_format_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyUnicode_FromString(self->view.format);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(PyUnicode_FromString(self->view.format));
 }
 
-static PyObject *
+static PyValue
 memory_itemsize_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromSsize_t(self->view.itemsize);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.itemsize);
 }
 
-static PyObject *
+static PyValue
 memory_shape_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.shape);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.shape));
 }
 
-static PyObject *
+static PyValue
 memory_strides_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.strides);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.strides));
 }
 
-static PyObject *
+static PyValue
 memory_suboffsets_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return _IntTupleFromSsizet(self->view.ndim, self->view.suboffsets);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromResult(_IntTupleFromSsizet(self->view.ndim, self->view.suboffsets));
 }
 
-static PyObject *
+static PyValue
 memory_readonly_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(self->view.readonly);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((self->view.readonly) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_ndim_get(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyLong_FromLong(self->view.ndim);
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromLongLong(self->view.ndim);
 }
 
-static PyObject *
+static PyValue
 memory_c_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_C_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_C_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_f_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_F_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_F_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
-static PyObject *
+static PyValue
 memory_contiguous(PyObject *_self, void *Py_UNUSED(ignored))
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-    CHECK_RELEASED(self);
-    return PyBool_FromLong(MV_ANY_CONTIGUOUS(self->flags));
+    CHECK_RELEASED_VALUE(self);
+    return PyValue_FromObject((MV_ANY_CONTIGUOUS(self->flags)) ? Py_True : Py_False);
 }
 
 PyDoc_STRVAR(memory_obj_doc,
@@ -3607,7 +3678,7 @@ static PyMethodDef memory_methods[] = {
     MEMORYVIEW_INDEX_METHODDEF
     {"__enter__",   memory_enter, METH_NOARGS, NULL},
     MEMORYVIEW___EXIT___METHODDEF
-    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
+    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
      PyDoc_STR("memoryviews are generic over the type of their underlying data")},
     {NULL,          NULL}
 };
@@ -3643,32 +3714,32 @@ memoryiter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 memoryiter_next(PyObject *self)
 {
     memoryiterobject *it = (memoryiterobject *)self;
     PyMemoryViewObject *seq;
     seq = it->it_seq;
     if (seq == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (it->it_index < it->it_length) {
-        CHECK_RELEASED(seq);
+        CHECK_RELEASED_VALUE(seq);
         Py_buffer *view = &(seq->view);
         char *ptr = (char *)seq->view.buf;
 
         ptr += view->strides[0] * it->it_index++;
         ptr = ADJUST_PTR(ptr, view->suboffsets, 0);
         if (ptr == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
-        return unpack_single(seq, ptr, it->it_fmt);
+        return unpack_single_value(seq, ptr, it->it_fmt);
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -3743,12 +3814,12 @@ PyTypeObject PyMemoryView_Type = {
     0,                                        /* tp_setattro */
     &memory_as_buffer,                        /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-       Py_TPFLAGS_SEQUENCE,                   /* tp_flags */
+       Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     memoryview__doc__,                        /* tp_doc */
     memory_traverse,                          /* tp_traverse */
     memory_clear,                             /* tp_clear */
     memory_richcompare,                       /* tp_richcompare */
-    offsetof(PyMemoryViewObject, weakreflist),/* tp_weaklistoffset */
+    0,                                        /* tp_weaklistoffset */
     memory_iter,                              /* tp_iter */
     0,                                        /* tp_iternext */
     memory_methods,                           /* tp_methods */

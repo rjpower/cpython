@@ -5172,6 +5172,10 @@ written in Python, such as a mail server's external command delivery program.
    Fork a child process.  Return ``0`` in the child and the child's process id in the
    parent.  If an error occurs :exc:`OSError` is raised.
 
+   If a queued GC callback is running after the before-fork hooks,
+   :exc:`RuntimeError` is raised without forking.  Hook effects are not
+   rolled back.
+
    Note that some platforms including FreeBSD <= 6.3 and Cygwin have
    known issues when using ``fork()`` from a thread.
 
@@ -5223,6 +5227,9 @@ written in Python, such as a mail server's external command delivery program.
    new child's process id in the parent, and *fd* is the file descriptor of the
    master end of the pseudo-terminal.  For a more portable approach, use the
    :mod:`pty` module.  If an error occurs :exc:`OSError` is raised.
+
+   As with :func:`fork`, a running queued GC callback prevents forking and
+   raises :exc:`RuntimeError`.
 
    The returned file descriptor *fd* is :ref:`non-inheritable <fd_inheritance>`.
 

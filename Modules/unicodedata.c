@@ -2063,7 +2063,7 @@ GBI_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 GBI_iternext(PyObject *self)
 {
     GraphemeBreakIterator *it = (GraphemeBreakIterator *)self;
@@ -2071,20 +2071,20 @@ GBI_iternext(PyObject *self)
     Py_ssize_t pos = _Py_NextGraphemeBreak(&it->iter);
 
     if (pos < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *module = PyType_GetModule(Py_TYPE(it));
     PyObject *SegmentType = get_unicodedata_state(module)->SegmentType;
     SegmentObject *s = PyObject_GC_New(SegmentObject,
                                        (PyTypeObject *)SegmentType);
     if (!s) {
-        return NULL;
+        return PyValue_NULL;
     }
     s->string = Py_NewRef(it->iter.str);
     s->start = start;
     s->end = pos;
     PyObject_GC_Track(s);
-    return (PyObject *)s;
+    return PyValue_FromObject(s);
 }
 
 

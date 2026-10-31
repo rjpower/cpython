@@ -796,6 +796,18 @@ class CompressObjectTestCase(BaseCompressTestCase, unittest.TestCase):
         self.assertEqual(dco.flush(), b'')
         self.assertEqual(dco.flush(), b'')
 
+    def test_decompressobj_visits_its_data(self):
+        # A tracing collector frees what tp_traverse does not visit.
+        import gc
+        dco = zlib.decompressobj()
+        dco.decompress(zlib.compress(HAMLET_SCENE) + b'tail', 10)
+        referents = gc.get_referents(dco)
+        self.assertTrue(any(r is dco.unconsumed_tail for r in referents))
+        dco.decompress(dco.unconsumed_tail)
+        self.assertEqual(dco.unused_data, b'tail')
+        self.assertTrue(any(r is dco.unused_data
+                            for r in gc.get_referents(dco)))
+
     def test_decompress_unused_data(self):
         # Repeated calls to decompress() after EOF should accumulate data in
         # dco.unused_data, instead of just storing the arg to the last call.
@@ -1295,15 +1307,6 @@ class ZlibDecompressorTest(unittest.TestCase):
         self.assertRaises(Exception, zlibd.decompress, self.BAD_DATA * 30)
         # Previously, a second call could crash due to internal inconsistency
         self.assertRaises(Exception, zlibd.decompress, self.BAD_DATA * 30)
-
-    @support.refcount_test
-    def test_refleaks_in___init__(self):
-        gettotalrefcount = support.get_attribute(sys, 'gettotalrefcount')
-        zlibd = zlib._ZlibDecompressor()
-        refs_before = gettotalrefcount()
-        for i in range(100):
-            zlibd.__init__()
-        self.assertAlmostEqual(gettotalrefcount() - refs_before, 0, delta=10)
 
 
 class CustomInt:

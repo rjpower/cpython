@@ -10,7 +10,7 @@ extern "C" {
 PyAPI_DATA(PyTypeObject) PyModule_Type;
 
 #define PyModule_Check(op) PyObject_TypeCheck((op), &PyModule_Type)
-#define PyModule_CheckExact(op) Py_IS_TYPE((op), &PyModule_Type)
+#define PyModule_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyModule_Type)
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000
 PyAPI_FUNC(PyObject *) PyModule_NewObject(
@@ -89,9 +89,6 @@ struct PyModuleDef_Slot {
 #endif
 
 #if !defined(Py_LIMITED_API)
-#  if defined(Py_GIL_DISABLED)
-PyAPI_FUNC(int) PyUnstable_Module_SetGIL(PyObject *module, void *gil);
-#  endif
 #endif
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= _Py_PACK_VERSION(3, 15)

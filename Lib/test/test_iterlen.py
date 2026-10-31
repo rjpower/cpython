@@ -223,6 +223,37 @@ class TestLengthHintExceptions(unittest.TestCase):
         # Make sure an invalid result doesn't muck-up the works
         self.assertEqual(list(NoneLengthHint()), list(range(10)))
 
+    def test_hint_results(self):
+        # PyObject_LengthHint() reads the hint's result as a value (6d rung
+        # 3): an inline int is used as it is, and each other result keeps
+        # its meaning.
+        import operator
+        class Hint:
+            def __init__(self, result):
+                self.result = result
+            def __length_hint__(self):
+                if isinstance(self.result, BaseException):
+                    raise self.result
+                return self.result
+        class IntSub(int):
+            pass
+        one = int("1")
+        for result, expected in [(5 * one, 5), (0, 0), (True, 1),
+                                 (IntSub(7), 7), (2**31 * one, 2**31),
+                                 (NotImplemented, 99), (TypeError("x"), 99)]:
+            with self.subTest(result=result):
+                self.assertEqual(operator.length_hint(Hint(result), 99),
+                                 expected)
+        for result, error in [(2.5, TypeError), (-0.0, TypeError),
+                              ("3", TypeError), (-1, ValueError),
+                              (2**70, OverflowError),
+                              (RuntimeError("x"), RuntimeError)]:
+            with self.subTest(result=result):
+                with self.assertRaises(error):
+                    operator.length_hint(Hint(result), 99)
+        with self.assertRaisesRegex(TypeError, "must return an int, not float"):
+            operator.length_hint(Hint(2.5))
+
 
 if __name__ == "__main__":
     unittest.main()

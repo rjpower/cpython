@@ -22,6 +22,10 @@ PyAPI_FUNC(PyObject *) _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
 
 PyAPI_FUNC(int) _PyObject_HasLen(PyObject *o);
 
+/* The binary operation op, NB_ADD to NB_INPLACE_XOR, on values: the
+   BINARY_OP handlers' entry to the value number protocol. */
+PyAPI_FUNC(PyValue) _PyNumber_BinaryOpValue(PyValue v, PyValue w, int op);
+
 /* === Sequence protocol ================================================ */
 
 #define PY_ITERSEARCH_COUNT    1

@@ -5,12 +5,6 @@
  * See the xxlimited module for an extension module template.
  */
 
-// Test the limited C API version 3.5
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x03050000
-#endif
-
 #include "Python.h"
 
 /* Xxo objects */
@@ -83,17 +77,16 @@ static PyMethodDef Xxo_methods[] = {
     {NULL, NULL}  /* sentinel */
 };
 
-static PyObject *
+static PyValue
 Xxo_getattro(PyObject *op, PyObject *name)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
-            return NULL;
+        // An inline item is returned as it is, with no box.
+        PyValue v;
+        if (PyDict_GetItemRefValue(self->x_attr, name, &v) != 0) {
+            // found, or an error and PyValue_NULL
+            return v;
         }
     }
     return PyObject_GenericGetAttr(op, name);
@@ -304,10 +297,6 @@ xx_modexec(PyObject *m)
 
 static PyModuleDef_Slot xx_slots[] = {
     {Py_mod_exec, xx_modexec},
-#ifdef Py_GIL_DISABLED
-    // In a free-threaded build, we don't use Limited API.
-    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
-#endif
     {0, NULL}
 };
 

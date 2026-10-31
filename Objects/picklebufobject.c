@@ -8,8 +8,21 @@ typedef struct {
     PyObject_HEAD
     /* The view exported by the original object */
     Py_buffer view;
-    PyObject *weakreflist;
+    int releasing;
 } PyPickleBufferObject;
+
+static void
+picklebuf_release_view(PyPickleBufferObject *self)
+{
+    if (self->releasing) {
+        return;
+    }
+    /* Keep the original acquisition intact for its callback, while every
+       public reader observes a released buffer and recursive release is inert. */
+    self->releasing = 1;
+    PyBuffer_Release(&self->view);
+    self->releasing = 0;
+}
 
 /* C API */
 
@@ -24,7 +37,7 @@ PyPickleBuffer_FromObject(PyObject *base)
         return NULL;
     }
     self->view.obj = NULL;
-    self->weakreflist = NULL;
+    self->releasing = 0;
     if (PyObject_GetBuffer(base, &self->view, PyBUF_FULL_RO) < 0) {
         Py_DECREF(self);
         return NULL;
@@ -43,7 +56,7 @@ PyPickleBuffer_GetBuffer(PyObject *obj)
                      Py_TYPE(obj)->tp_name);
         return NULL;
     }
-    if (self->view.obj == NULL) {
+    if (self->releasing || self->view.obj == NULL) {
         PyErr_SetString(PyExc_ValueError,
                         "operation forbidden on released PickleBuffer object");
         return NULL;
@@ -62,7 +75,7 @@ PyPickleBuffer_Release(PyObject *obj)
                      Py_TYPE(obj)->tp_name);
         return -1;
     }
-    PyBuffer_Release(&self->view);
+    picklebuf_release_view(self);
     return 0;
 }
 
@@ -83,7 +96,7 @@ picklebuf_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
     self->view.obj = NULL;
-    self->weakreflist = NULL;
+    self->releasing = 0;
     if (PyObject_GetBuffer(base, &self->view, PyBUF_FULL_RO) < 0) {
         Py_DECREF(self);
         return NULL;
@@ -103,8 +116,14 @@ static int
 picklebuf_clear(PyObject *op)
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
-    PyBuffer_Release(&self->view);
+    picklebuf_release_view(self);
     return 0;
+}
+
+static void
+picklebuf_finalize(PyObject *op)
+{
+    picklebuf_release_view((PyPickleBufferObject *)op);
 }
 
 static void
@@ -112,8 +131,8 @@ picklebuf_dealloc(PyObject *op)
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(op, self->weakreflist);
-    PyBuffer_Release(&self->view);
+    FT_CLEAR_WEAKREFS(op);
+    picklebuf_release_view(self);
     Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
@@ -123,7 +142,7 @@ static int
 picklebuf_getbuf(PyObject *op, Py_buffer *view, int flags)
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
-    if (self->view.obj == NULL) {
+    if (self->releasing || self->view.obj == NULL) {
         PyErr_SetString(PyExc_ValueError,
                         "operation forbidden on released PickleBuffer object");
         return -1;
@@ -152,7 +171,7 @@ static PyObject *
 picklebuf_raw(PyObject *op, PyObject *Py_UNUSED(ignored))
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
-    if (self->view.obj == NULL) {
+    if (self->releasing || self->view.obj == NULL) {
         PyErr_SetString(PyExc_ValueError,
                         "operation forbidden on released PickleBuffer object");
         return NULL;
@@ -193,7 +212,7 @@ static PyObject *
 picklebuf_release(PyObject *op, PyObject *Py_UNUSED(ignored))
 {
     PyPickleBufferObject *self = (PyPickleBufferObject*)op;
-    PyBuffer_Release(&self->view);
+    picklebuf_release_view(self);
     Py_RETURN_NONE;
 }
 
@@ -213,12 +232,13 @@ PyTypeObject PyPickleBuffer_Type = {
     .tp_name = "pickle.PickleBuffer",
     .tp_doc = PyDoc_STR("Wrapper for potentially out-of-band buffers"),
     .tp_basicsize = sizeof(PyPickleBufferObject),
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_new = picklebuf_new,
     .tp_dealloc = picklebuf_dealloc,
+    .tp_finalize = picklebuf_finalize,
     .tp_traverse = picklebuf_traverse,
     .tp_clear = picklebuf_clear,
-    .tp_weaklistoffset = offsetof(PyPickleBufferObject, weakreflist),
     .tp_as_buffer = &picklebuf_as_buffer,
     .tp_methods = picklebuf_methods,
 };

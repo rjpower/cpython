@@ -5,6 +5,15 @@
 Multiple interpreters in a Python process
 =========================================
 
+.. warning::
+
+   This experimental runtime supports one main interpreter per process,
+   including ordinary Python and native threads.  Subinterpreter creation
+   is unsupported.  The creation APIs below report failure without creating
+   interpreter state; their upstream behavior is described for reference.
+   Process workers are an explicit alternative, not an implementation of
+   interpreter handles or thread states.
+
 While in most uses, you will only embed a single Python interpreter, there
 are cases where you need to create several independent interpreters in the
 same process and perhaps even in the same thread. Sub-interpreters allow
@@ -41,7 +50,12 @@ function. You can create and destroy them using the following functions:
       :c:member:`~PyInterpreterConfig.check_multi_interp_extensions`
       must be ``1`` (non-zero).
       If this is ``1`` then :c:member:`~PyInterpreterConfig.gil`
-      must not be :c:macro:`PyInterpreterConfig_OWN_GIL`.
+      must not be :c:macro:`PyInterpreterConfig_OWN_GIL`;
+      :c:func:`Py_NewInterpreterFromConfig` fails for that combination.
+      The interpreters that share the main interpreter's allocator are
+      collected together, and their garbage collector callbacks and
+      finalizers run on the interpreter that owns each object, which
+      requires one GIL among them.
 
    .. c:member:: int allow_fork
 
@@ -111,6 +125,11 @@ function. You can create and destroy them using the following functions:
 
 
 .. c:function:: PyStatus Py_NewInterpreterFromConfig(PyThreadState **tstate_p, const PyInterpreterConfig *config)
+
+   In this runtime, return an error :c:type:`PyStatus` with the message
+   ``subinterpreters are not supported`` and set ``*tstate_p`` to ``NULL``.
+   The caller's attached thread state is unchanged.  No Python exception
+   is set for this unsupported operation.
 
    .. index::
       pair: module; builtins
@@ -211,6 +230,10 @@ function. You can create and destroy them using the following functions:
 
 
 .. c:function:: PyThreadState* Py_NewInterpreter(void)
+
+   In this runtime, return ``NULL`` for unsupported subinterpreter creation,
+   without terminating the process or changing the attached thread state.
+   No Python exception is set for this unsupported operation.
 
    .. index::
       pair: module; builtins
@@ -432,6 +455,12 @@ All of the following functions must be called after :c:func:`Py_Initialize`.
 
 
 .. c:function:: PyInterpreterState* PyInterpreterState_New()
+
+   In this runtime, return ``NULL`` for unsupported subinterpreter creation,
+   without terminating the process or allocating an interpreter state.
+   An attached thread state is not required; callers must not assume that
+   a Python exception is set.  Main-interpreter initialization uses an
+   internal entry point and remains supported.
 
    Create a new interpreter state object.  An :term:`attached thread state` is not needed,
    but may optionally exist if it is necessary to serialize calls to this

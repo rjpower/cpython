@@ -18,6 +18,7 @@ from generators_common import (
     write_header,
     cflags,
 )
+from ir_generator import HandlerDomain, HandlerKind, build_handler_domain
 from cwriter import CWriter
 from typing import TextIO
 from stack import get_stack_effect
@@ -31,7 +32,7 @@ OPARG_KINDS = {
     "OPARG_CACHE_4": 4,
     "OPARG_TOP": 5,
     "OPARG_BOTTOM": 6,
-    "OPARG_SAVE_RETURN_OFFSET": 7,
+    "OPARG_SAVE_RETURN_SLOT": 7,
     # Skip 8 as the other powers of 2 are sizes
     "OPARG_REPLACED": 9,
     "OPERAND1_1": 10,
@@ -55,10 +56,6 @@ FLAGS = [
     "SYNC_SP",
     "ERROR_NO_POP",
     "NO_SAVE_IP",
-    "PERIODIC",
-    "UNPREDICTABLE_JUMP",
-    "NEEDS_GUARD_IP",
-    "RECORDS_VALUE",
 ]
 
 
@@ -149,25 +146,16 @@ def generate_instruction_formats(analysis: Analysis, out: CWriter) -> None:
     out.emit("};\n\n")
 
 
-def generate_deopt_table(analysis: Analysis, out: CWriter) -> None:
-    out.emit("PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];\n")
+def generate_deopt_table(analysis: Analysis, domain: HandlerDomain,
+                         out: CWriter) -> None:
+    out.emit("PyAPI_DATA(const uint16_t) _PyOpcode_Deopt[IR_NUM_HANDLERS];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit("const uint8_t _PyOpcode_Deopt[256] = {\n")
-    deopts: list[tuple[str, str]] = []
-    for inst in analysis.instructions.values():
-        deopt = inst.name
-        if inst.family is not None:
-            deopt = inst.family.name
-        deopts.append((inst.name, deopt))
-    defined = set(analysis.opmap.values())
-    for i in range(256):
-        if i not in defined:
-            deopts.append((f'{i}', f'{i}'))
-
-    assert len(deopts) == 256
-    assert len(set(x[0] for x in deopts)) == 256
-    for name, deopt in sorted(deopts):
-        out.emit(f"[{name}] = {deopt},\n")
+    out.emit("const uint16_t _PyOpcode_Deopt[IR_NUM_HANDLERS] = {\n")
+    ids = {**domain.opmap, **domain.handlers}
+    entries = {i: (ids[domain.bases[name]], name) for name, i in ids.items()}
+    for i in range(domain.count):
+        base, name = entries.get(i, (i, "unused"))
+        out.emit(f"[{i}] = {base}, /* {name} */\n")
     out.emit("};\n\n")
     out.emit("#endif // NEED_OPCODE_METADATA\n\n")
 
@@ -187,14 +175,66 @@ def generate_cache_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("#endif\n\n")
 
 
-def generate_name_table(analysis: Analysis, out: CWriter) -> None:
-    table_size = 256 + len(analysis.pseudos)
-    out.emit(f"PyAPI_DATA(const char) *_PyOpcode_OpName[{table_size}];\n")
+def feedback_fields(inst: Instruction) -> list[tuple[int, int, str]]:
+    """(unit, size, name) of each named cache effect of a specialised
+    instruction.  Fields of size 0 had no inline cache units to go back to."""
+    fields: dict[int, tuple[int, int, str]] = {}
+    offset = 1
+    for part in inst.parts:
+        if isinstance(part, Uop):
+            for cache in part.caches:
+                if cache.name != "unused" and cache.size:
+                    fields.setdefault(offset, (offset, cache.size, cache.name))
+                offset += cache.size
+        else:
+            offset += part.size
+    return sorted(fields.values())
+
+
+def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
+    """The feedback entry fields that each specialised instruction reads, and
+    where its inline cache held them before typed feedback, which is where
+    code_getcodeadaptive() puts them for dis."""
+    tables = {}
+    for inst in analysis.instructions.values():
+        if inst.family is None or inst.family.name == inst.name:
+            continue
+        if fields := feedback_fields(inst):
+            tables[inst.name] = (inst.family.name, fields)
+    max_fields = max((len(fields) for _, fields in tables.values()), default=1)
+    out.emit(f"#define FB_MAX_FIELDS {max_fields}\n")
+    out.emit("struct _PyFbField {\n")
+    out.emit("uint8_t unit;  // in code units from the instruction\n")
+    out.emit("uint8_t size;  // in code units\n")
+    out.emit("uint8_t offset;  // in the feedback entry\n")
+    out.emit("};\n")
+    out.emit("struct _PyFbFields {\n")
+    out.emit("uint8_t n;\n")
+    out.emit("struct _PyFbField fields[FB_MAX_FIELDS];\n")
+    out.emit("};\n")
+    out.emit("extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit(f"const char *_PyOpcode_OpName[{table_size}] = {{\n")
-    names = list(analysis.instructions) + list(analysis.pseudos)
-    for name in sorted(names):
-        out.emit(f'[{name}] = "{name}",\n')
+    out.emit('#include "pycore_feedback.h"\n')
+    out.emit("const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {\n")
+    for name, (family, fields) in sorted(tables.items()):
+        entries = ", ".join(
+            f"{{ {unit}, {size}, offsetof(_PyFb_{family}, {field}) }}"
+            for unit, size, field in fields
+        )
+        out.emit(f"[{name}] = {{ {len(fields)}, {{ {entries} }} }},\n")
+    out.emit("};\n")
+    out.emit("#endif\n\n")
+
+
+def generate_name_table(analysis: Analysis, domain: HandlerDomain,
+                        out: CWriter) -> None:
+    out.emit("PyAPI_DATA(const char) *_PyOpcode_OpName[IR_NUM_HANDLERS];\n")
+    out.emit("#ifdef NEED_OPCODE_METADATA\n")
+    out.emit("const char *_PyOpcode_OpName[IR_NUM_HANDLERS] = {\n")
+    ids = {**domain.opmap, **domain.handlers}
+    for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+        if domain.kinds[name] & HandlerKind.METADATA:
+            out.emit(f'[{handler}] = "{name}",\n')
     out.emit("};\n")
     out.emit("#endif\n\n")
 
@@ -259,8 +299,8 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
                         continue
                     # Add the primary expansion.
                     fmt = "OPARG_SIMPLE"
-                    if part.name == "_SAVE_RETURN_OFFSET":
-                        fmt = "OPARG_SAVE_RETURN_OFFSET"
+                    if part.name == "_SAVE_RETURN_SLOT":
+                        fmt = "OPARG_SAVE_RETURN_SLOT"
                     elif part.caches:
                         fmt = str(part.caches[0].size)
                     if "replaced" in part.annotations:
@@ -300,7 +340,7 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
 
 
 def is_viable_expansion(inst: Instruction) -> bool:
-    "An instruction can be expanded if all its parts are viable for tier 2"
+    "An instruction can be expanded if all its parts are viable uops"
     for part in inst.parts:
         if isinstance(part, Uop):
             # Skip specializing and replaced uops
@@ -313,9 +353,10 @@ def is_viable_expansion(inst: Instruction) -> bool:
     return True
 
 
-def generate_extra_cases(analysis: Analysis, out: CWriter) -> None:
+def generate_extra_cases(analysis: Analysis, domain: HandlerDomain,
+                         out: CWriter) -> None:
     out.emit("#define EXTRA_CASES \\\n")
-    valid_opcodes = set(analysis.opmap.values())
+    valid_opcodes = set(domain.opmap.values())
     for op in range(256):
         if op not in valid_opcodes:
             out.emit(f"    case {op}: \\\n")
@@ -361,8 +402,10 @@ def generate_pseudo_targets(analysis: Analysis, out: CWriter) -> None:
 
 
 def generate_opcode_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, domain: HandlerDomain,
+    outfile: TextIO
 ) -> None:
+    domain.require_analysis(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     with out.header_guard("Py_CORE_OPCODE_METADATA_H"):
@@ -383,10 +426,11 @@ def generate_opcode_metadata(
         generate_oparg_macros(out)
         generate_metadata_table(analysis, out)
         generate_expansion_table(analysis, out)
-        generate_name_table(analysis, out)
+        generate_name_table(analysis, domain, out)
         generate_cache_table(analysis, out)
-        generate_deopt_table(analysis, out)
-        generate_extra_cases(analysis, out)
+        generate_feedback_fields_table(analysis, out)
+        generate_deopt_table(analysis, domain, out)
+        generate_extra_cases(analysis, domain, out)
         generate_pseudo_targets(analysis, out)
 
 
@@ -412,5 +456,6 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_opcode_metadata(args.input, data, outfile)
+        generate_opcode_metadata(args.input, data, domain, outfile)

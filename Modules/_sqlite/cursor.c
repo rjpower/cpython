@@ -199,7 +199,7 @@ cursor_dealloc(PyObject *op)
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
-    FT_CLEAR_WEAKREFS(op, self->in_weakreflist);
+    FT_CLEAR_WEAKREFS(op);
     (void)tp->tp_clear(op);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1134,8 +1134,11 @@ error:
     return NULL;
 }
 
+/* The next row, or NULL: with an exception set on error, without one at the
+   end of the result set.  fetchone(), fetchmany() and fetchall() keep the
+   row as an object; tp_iternext converts it to a value. */
 static PyObject *
-pysqlite_cursor_iternext(PyObject *op)
+cursor_next_row(PyObject *op)
 {
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     if (!check_cursor(self)) {
@@ -1190,6 +1193,12 @@ reset_failure:
     return NULL;
 }
 
+static PyValue
+pysqlite_cursor_iternext(PyObject *op)
+{
+    return PyValue_FromResult(cursor_next_row(op));
+}
+
 /*[clinic input]
 _sqlite3.Cursor.fetchone as pysqlite_cursor_fetchone
 
@@ -1202,7 +1211,7 @@ pysqlite_cursor_fetchone_impl(pysqlite_Cursor *self)
 {
     PyObject* row;
 
-    row = pysqlite_cursor_iternext((PyObject *)self);
+    row = cursor_next_row((PyObject *)self);
     if (!row && !PyErr_Occurred()) {
         Py_RETURN_NONE;
     }
@@ -1231,7 +1240,7 @@ pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows)
         return NULL;
     }
 
-    while (maxrows > 0 && (row = pysqlite_cursor_iternext((PyObject *)self))) {
+    while (maxrows > 0 && (row = cursor_next_row((PyObject *)self))) {
         int rc = PyList_Append(list, row);
         Py_DECREF(row);
         if (rc < 0) {
@@ -1266,7 +1275,7 @@ pysqlite_cursor_fetchall_impl(pysqlite_Cursor *self)
         return NULL;
     }
 
-    while ((row = pysqlite_cursor_iternext((PyObject *)self))) {
+    while ((row = cursor_next_row((PyObject *)self))) {
         if (PyList_Append(list, row) < 0) {
             Py_DECREF(row);
             break;
@@ -1403,20 +1412,23 @@ static struct PyMemberDef cursor_members[] =
     {"description", _Py_T_OBJECT, offsetof(pysqlite_Cursor, description), Py_READONLY},
     {"lastrowid", _Py_T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), Py_READONLY},
     {"rowcount", Py_T_LONG, offsetof(pysqlite_Cursor, rowcount), Py_READONLY},
-    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(pysqlite_Cursor, in_weakreflist), Py_READONLY},
     {NULL}
 };
 
-static PyObject *
+static PyValue
 cursor_get_row_factory(PyObject *op, void *Py_UNUSED(closure))
 {
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
-    return Py_NewRef(self->row_factory);
+    return PyValue_FromObject(self->row_factory);
 }
 
 static int
-cursor_set_row_factory(PyObject *op, PyObject *value, void *Py_UNUSED(closure))
+cursor_set_row_factory(PyObject *op, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     pysqlite_Cursor *self = _pysqlite_Cursor_CAST(op);
     if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError,
@@ -1454,7 +1466,8 @@ static PyType_Spec cursor_spec = {
     .name = MODULE_NAME ".Cursor",
     .basicsize = sizeof(pysqlite_Cursor),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_MANAGED_WEAKREF),
     .slots = cursor_slots,
 };
 

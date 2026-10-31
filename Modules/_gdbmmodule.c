@@ -685,9 +685,9 @@ Close the database.
 [clinic start generated code]*/
 
 static PyObject *
-_gdbm_gdbm___exit___impl(gdbmobject *self, PyObject * const *exc_info,
+_gdbm_gdbm___exit___impl(gdbmobject *self, const PyValue *exc_info,
                          Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=4bb425e091228932 input=b22b90a00b22cf18]*/
+/*[clinic end generated code: output=1f042728a60a6374 input=b22b90a00b22cf18]*/
 {
     return _gdbm_gdbm_close_impl(self);
 }

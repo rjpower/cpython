@@ -101,21 +101,25 @@ static PyTypeObject testBufType = {
 /* Get the pointer from a buffer-supporting object as a PyLong.
  *
  * Used to test alignment properties. */
-static PyObject *
-buffer_pointer_as_int(PyObject *Py_UNUSED(module), PyObject *obj)
+static PyValue
+buffer_pointer_as_int(PyObject *Py_UNUSED(module), PyValue obj_value)
 {
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *out;
     Py_buffer view;
     if (PyObject_GetBuffer(obj, &view, PyBUF_SIMPLE) != 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     out = PyLong_FromVoidPtr(view.buf);
     PyBuffer_Release(&view);
-    return out;
+    return PyValue_FromResult(out);
 }
 
 static PyMethodDef test_methods[] = {
-    {"buffer_pointer_as_int", buffer_pointer_as_int, METH_O},
+    {"buffer_pointer_as_int", _PyCFunction_CAST(buffer_pointer_as_int), METH_O},
     {NULL},
 };
 

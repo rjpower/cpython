@@ -72,14 +72,6 @@
           pass
    */
 
-// Target both flavors of the Stable ABI.
-// Both are set to version 3.15, which adds PyModExport
-// (When using a build tool, check if it has an option to set these
-//  so they do not need to be defined in the source.)
-#define Py_LIMITED_API 0x030f0000   // abi3 (GIL-enabled builds)
-#define Py_TARGET_ABI3T 0x030f0000  // abi3t (free-threaded builds)
-
-
 #include "Python.h"
 #include <string.h>
 
@@ -290,12 +282,12 @@ Xxo_dealloc(PyObject *self)
 /* Xxo attribute handling */
 
 // Get an attribute.
-static PyObject *
+static PyValue
 Xxo_getattro(PyObject *self, PyObject *name)
 {
     XxoObject_Data *data = Xxo_get_data(self);
     if (data == NULL) {
-        return 0;
+        return PyValue_NULL;
     }
 
     PyObject *x_attr;
@@ -304,12 +296,11 @@ Xxo_getattro(PyObject *self, PyObject *name)
     Py_END_CRITICAL_SECTION();
 
     if (x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
-            return NULL;
+        // An inline item is returned as it is, with no box.
+        PyValue v;
+        if (PyDict_GetItemRefValue(x_attr, name, &v) != 0) {
+            // found, or an error and PyValue_NULL
+            return v;
         }
     }
     // Fall back to generic implementation (this handles special attributes,
@@ -319,7 +310,7 @@ Xxo_getattro(PyObject *self, PyObject *name)
 
 // Set or delete an attribute.
 static int
-Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
+Xxo_setattro(PyObject *self, PyObject *name, PyValue v)
 {
     // filter a specific attribute name
     if (PyUnicode_Check(name) && PyUnicode_EqualToUTF8(name, "reserved")) {
@@ -347,9 +338,10 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
         return -1;
     }
 
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         // delete an attribute
-        int rv = PyDict_DelItem(x_attr, name);
+        int rv = PyObject_DelItemValue(PyValue_FromObject(x_attr),
+                                       PyValue_FromObject(name));
         if (rv < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_SetString(PyExc_AttributeError,
                 "delete non-existing Xxo attribute");
@@ -359,7 +351,8 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
     }
     else {
         // set an attribute
-        return PyDict_SetItem(x_attr, name, v);
+        return PyObject_SetItemValue(PyValue_FromObject(x_attr),
+                                     PyValue_FromObject(name), v);
     }
 }
 
@@ -367,32 +360,35 @@ Xxo_setattro(PyObject *self, PyObject *name, PyObject *v)
  * specifies metadata.
  */
 
-static PyObject *
+static PyValue
 Xxo_demo(PyObject *self, PyTypeObject *defining_class,
-         PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+         const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (kwnames != NULL && PyObject_Length(kwnames)) {
         PyErr_SetString(PyExc_TypeError, "demo() takes no keyword arguments");
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs != 1) {
         PyErr_SetString(PyExc_TypeError, "demo() takes exactly 1 argument");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *o = args[0];
+    PyObject *o = PyValue_Object(args[0]);
+    if (o == NULL) {
+        return PyValue_NULL;
+    }
 
     /* Test if the argument is "str" */
     if (PyUnicode_Check(o)) {
-        return Py_NewRef(o);
+        return PyValue_FromObject(o);
     }
 
     /* test if the argument is of the Xxo class */
     if (PyObject_TypeCheck(o, defining_class)) {
-        return Py_NewRef(o);
+        return PyValue_FromObject(o);
     }
 
-    return Py_NewRef(Py_None);
+    return PyValue_FromObject(Py_None);
 }
 
 static PyMethodDef Xxo_methods[] = {
@@ -436,12 +432,12 @@ Xxo_releasebuffer(PyObject *self, Py_buffer *Py_UNUSED(view))
     Py_END_CRITICAL_SECTION();
 }
 
-static PyObject *
+static PyValue
 Xxo_get_x_exports(PyObject *self, void *Py_UNUSED(closure))
 {
     XxoObject_Data *data = Xxo_get_data(self);
     if (data == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_ssize_t result;
 
@@ -449,7 +445,7 @@ Xxo_get_x_exports(PyObject *self, void *Py_UNUSED(closure))
     result = data->x_exports;
     Py_END_CRITICAL_SECTION();
 
-    return PyLong_FromSsize_t(result);
+    return PyValue_FromLongLong(result);
 }
 
 /* Xxo type definition */

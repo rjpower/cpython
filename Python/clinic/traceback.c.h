@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(tb_new__doc__,
 "traceback(tb_next, tb_frame, tb_lasti, tb_lineno)\n"
@@ -27,7 +27,6 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -50,30 +49,39 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *tb_next;
     PyFrameObject *tb_frame;
     int tb_lasti;
     int tb_lineno;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 4, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    tb_next = fastargs[0];
-    if (!PyObject_TypeCheck(fastargs[1], &PyFrame_Type)) {
-        _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, fastargs[1]);
+    tb_next = PyValue_Object(fastargs[0]);
+    if (tb_next == NULL) {
         goto exit;
     }
-    tb_frame = (PyFrameObject *)fastargs[1];
-    tb_lasti = PyLong_AsInt(fastargs[2]);
+    {
+        PyObject *_arg = PyValue_Object(fastargs[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyFrame_Type)) {
+            _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, _arg);
+            goto exit;
+        }
+        tb_frame = (PyFrameObject *)_arg;
+    }
+    tb_lasti = PyLong_AsIntValue(fastargs[2]);
     if (tb_lasti == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    tb_lineno = PyLong_AsInt(fastargs[3]);
+    tb_lineno = PyLong_AsIntValue(fastargs[3]);
     if (tb_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -86,14 +94,16 @@ exit:
 static PyObject *
 traceback_tb_next_get_impl(PyTracebackObject *self);
 
-static PyObject *
+static PyValue
 traceback_tb_next_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *_return_value;
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
+    _return_value = traceback_tb_next_get_impl((PyTracebackObject *)self);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -102,24 +112,28 @@ static int
 traceback_tb_next_set_impl(PyTracebackObject *self, PyObject *value);
 
 static int
-traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
+traceback_tb_next_set(PyObject *self, PyValue arg, void *Py_UNUSED(context))
 {
     int return_value = -1;
     PyObject *value;
 
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'tb_next' of '%.100s' objects cannot be deleted",
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = arg;
+    value = PyValue_Object(arg);
+    if (value == NULL) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = traceback_tb_next_set_impl((PyTracebackObject *)self, value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
-#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
+#define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", traceback_tb_next_get, traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=0f7bb7a58d9f8d65 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e721d8278550267d input=a9049054013a1b77]*/

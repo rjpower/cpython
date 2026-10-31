@@ -13,13 +13,12 @@ typedef struct {
     PyObject_HEAD
     PyObject *im_func;   /* The callable object implementing the method */
     PyObject *im_self;   /* The instance it is bound to */
-    PyObject *im_weakreflist; /* List of weak references */
     vectorcallfunc vectorcall;
 } PyMethodObject;
 
 PyAPI_DATA(PyTypeObject) PyMethod_Type;
 
-#define PyMethod_Check(op) Py_IS_TYPE((op), &PyMethod_Type)
+#define PyMethod_Check(op) _Py_IS_ROOT_SHAPE((op), &PyMethod_Type)
 
 PyAPI_FUNC(PyObject *) PyMethod_New(PyObject *, PyObject *);
 
@@ -48,7 +47,7 @@ typedef struct {
 
 PyAPI_DATA(PyTypeObject) PyInstanceMethod_Type;
 
-#define PyInstanceMethod_Check(op) Py_IS_TYPE((op), &PyInstanceMethod_Type)
+#define PyInstanceMethod_Check(op) _Py_IS_ROOT_SHAPE((op), &PyInstanceMethod_Type)
 
 PyAPI_FUNC(PyObject *) PyInstanceMethod_New(PyObject *);
 PyAPI_FUNC(PyObject *) PyInstanceMethod_Function(PyObject *);

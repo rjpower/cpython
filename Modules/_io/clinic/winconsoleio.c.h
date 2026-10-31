@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 #if defined(HAVE_WINDOWS_CONSOLE_IO)
@@ -27,14 +27,14 @@ PyDoc_STRVAR(_io__WindowsConsoleIO_close__doc__,
 static PyObject *
 _io__WindowsConsoleIO_close_impl(winconsoleio *self, PyTypeObject *cls);
 
-static PyObject *
-_io__WindowsConsoleIO_close(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__WindowsConsoleIO_close(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "close() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _io__WindowsConsoleIO_close_impl((winconsoleio *)self, cls);
+    return PyValue_FromResult(_io__WindowsConsoleIO_close_impl((winconsoleio *)self, cls));
 }
 
 #endif /* defined(HAVE_WINDOWS_CONSOLE_IO) */
@@ -64,7 +64,6 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -87,8 +86,8 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *nameobj;
@@ -96,30 +95,39 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     int closefd = 1;
     PyObject *opener = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    nameobj = fastargs[0];
+    nameobj = PyValue_Object(fastargs[0]);
+    if (nameobj == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[1]) {
-        if (!PyUnicode_Check(fastargs[1])) {
-            _PyArg_BadArgument("_WindowsConsoleIO", "argument 'mode'", "str", fastargs[1]);
-            goto exit;
-        }
-        mode = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
-        if (mode == NULL) {
-            goto exit;
+    if (!PyValue_IsNull(fastargs[1])) {
+        {
+            PyObject *_arg = PyValue_Object(fastargs[1]);
+            if (_arg == NULL) {
+                goto exit;
+            }
+            if (!PyUnicode_Check(_arg)) {
+                _PyArg_BadArgument("_WindowsConsoleIO", "argument 'mode'", "str", _arg);
+                goto exit;
+            }
+            mode = _PyUnicode_AsUTF8NoNUL(_arg);
+            if (mode == NULL) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[2]) {
-        closefd = PyObject_IsTrue(fastargs[2]);
+    if (!PyValue_IsNull(fastargs[2])) {
+        closefd = PyObject_IsTrueValue(fastargs[2]);
         if (closefd < 0) {
             goto exit;
         }
@@ -127,7 +135,10 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    opener = fastargs[3];
+    opener = PyValue_Object(fastargs[3]);
+    if (opener == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = _io__WindowsConsoleIO___init___impl((winconsoleio *)self, nameobj, mode, closefd, opener);
 
@@ -218,11 +229,12 @@ static PyObject *
 _io__WindowsConsoleIO_readinto_impl(winconsoleio *self, PyTypeObject *cls,
                                     Py_buffer *buffer);
 
-static PyObject *
-_io__WindowsConsoleIO_readinto(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__WindowsConsoleIO_readinto(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("readinto", kwnames)) {
         goto exit;
@@ -230,11 +242,18 @@ _io__WindowsConsoleIO_readinto(PyObject *self, PyTypeObject *cls, PyObject *cons
     if (!_PyArg_CheckPositional("readinto", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("readinto", "argument 1", "read-write bytes-like object", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &buffer, PyBUF_WRITABLE) < 0) {
+            _PyArg_BadArgument("readinto", "argument 1", "read-write bytes-like object", _arg);
+            goto exit;
+        }
     }
-    return_value = _io__WindowsConsoleIO_readinto_impl((winconsoleio *)self, cls, &buffer);
+    _return_value = _io__WindowsConsoleIO_readinto_impl((winconsoleio *)self, cls, &buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for buffer */
@@ -290,11 +309,12 @@ static PyObject *
 _io__WindowsConsoleIO_read_impl(winconsoleio *self, PyTypeObject *cls,
                                 Py_ssize_t size);
 
-static PyObject *
-_io__WindowsConsoleIO_read(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__WindowsConsoleIO_read(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("read", kwnames)) {
         goto exit;
@@ -305,11 +325,18 @@ _io__WindowsConsoleIO_read(PyObject *self, PyTypeObject *cls, PyObject *const *a
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &size)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_Py_convert_optional_to_ssize_t(_arg, &size)) {
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = _io__WindowsConsoleIO_read_impl((winconsoleio *)self, cls, size);
+    _return_value = _io__WindowsConsoleIO_read_impl((winconsoleio *)self, cls, size);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -335,11 +362,12 @@ static PyObject *
 _io__WindowsConsoleIO_write_impl(winconsoleio *self, PyTypeObject *cls,
                                  Py_buffer *b);
 
-static PyObject *
-_io__WindowsConsoleIO_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__WindowsConsoleIO_write(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer b = {NULL, NULL};
+    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("write", kwnames)) {
         goto exit;
@@ -347,10 +375,17 @@ _io__WindowsConsoleIO_write(PyObject *self, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("write", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &b, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &b, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _io__WindowsConsoleIO_write_impl((winconsoleio *)self, cls, &b);
+    _return_value = _io__WindowsConsoleIO_write_impl((winconsoleio *)self, cls, &b);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for b */
@@ -399,17 +434,17 @@ PyDoc_STRVAR(_io__WindowsConsoleIO_closed__doc__,
 static int
 _io__WindowsConsoleIO_closed_get_impl(winconsoleio *self);
 
-static PyObject *
+static PyValue
 _io__WindowsConsoleIO_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = _io__WindowsConsoleIO_closed_get_impl((winconsoleio *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -431,17 +466,17 @@ PyDoc_STRVAR(_io__WindowsConsoleIO_closefd__doc__,
 static int
 _io__WindowsConsoleIO_closefd_get_impl(winconsoleio *self);
 
-static PyObject *
+static PyValue
 _io__WindowsConsoleIO_closefd_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
     _return_value = _io__WindowsConsoleIO_closefd_get_impl((winconsoleio *)self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -463,10 +498,10 @@ PyDoc_STRVAR(_io__WindowsConsoleIO_mode__doc__,
 static PyObject *
 _io__WindowsConsoleIO_mode_get_impl(winconsoleio *self);
 
-static PyObject *
+static PyValue
 _io__WindowsConsoleIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _io__WindowsConsoleIO_mode_get_impl((winconsoleio *)self);
+    return PyValue_FromResult(_io__WindowsConsoleIO_mode_get_impl((winconsoleio *)self));
 }
 
 #endif /* defined(HAVE_WINDOWS_CONSOLE_IO) */
@@ -516,7 +551,7 @@ _io__WindowsConsoleIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 #  if !defined(_IO__WINDOWSCONSOLEIO_CLOSED_DOCSTR)
 #    define _IO__WINDOWSCONSOLEIO_CLOSED_DOCSTR NULL
 #  endif
-#  define _IO__WINDOWSCONSOLEIO_CLOSED_GETSETDEF {"closed", (getter)_IO__WINDOWSCONSOLEIO_CLOSED_GETTER, (setter)_IO__WINDOWSCONSOLEIO_CLOSED_SETTER, _IO__WINDOWSCONSOLEIO_CLOSED_DOCSTR},
+#  define _IO__WINDOWSCONSOLEIO_CLOSED_GETSETDEF {"closed", _IO__WINDOWSCONSOLEIO_CLOSED_GETTER, _IO__WINDOWSCONSOLEIO_CLOSED_SETTER, _IO__WINDOWSCONSOLEIO_CLOSED_DOCSTR},
 #else
 #  define _IO__WINDOWSCONSOLEIO_CLOSED_GETSETDEF
 #endif
@@ -531,7 +566,7 @@ _io__WindowsConsoleIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 #  if !defined(_IO__WINDOWSCONSOLEIO_CLOSEFD_DOCSTR)
 #    define _IO__WINDOWSCONSOLEIO_CLOSEFD_DOCSTR NULL
 #  endif
-#  define _IO__WINDOWSCONSOLEIO_CLOSEFD_GETSETDEF {"closefd", (getter)_IO__WINDOWSCONSOLEIO_CLOSEFD_GETTER, (setter)_IO__WINDOWSCONSOLEIO_CLOSEFD_SETTER, _IO__WINDOWSCONSOLEIO_CLOSEFD_DOCSTR},
+#  define _IO__WINDOWSCONSOLEIO_CLOSEFD_GETSETDEF {"closefd", _IO__WINDOWSCONSOLEIO_CLOSEFD_GETTER, _IO__WINDOWSCONSOLEIO_CLOSEFD_SETTER, _IO__WINDOWSCONSOLEIO_CLOSEFD_DOCSTR},
 #else
 #  define _IO__WINDOWSCONSOLEIO_CLOSEFD_GETSETDEF
 #endif
@@ -546,9 +581,9 @@ _io__WindowsConsoleIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 #  if !defined(_IO__WINDOWSCONSOLEIO_MODE_DOCSTR)
 #    define _IO__WINDOWSCONSOLEIO_MODE_DOCSTR NULL
 #  endif
-#  define _IO__WINDOWSCONSOLEIO_MODE_GETSETDEF {"mode", (getter)_IO__WINDOWSCONSOLEIO_MODE_GETTER, (setter)_IO__WINDOWSCONSOLEIO_MODE_SETTER, _IO__WINDOWSCONSOLEIO_MODE_DOCSTR},
+#  define _IO__WINDOWSCONSOLEIO_MODE_GETSETDEF {"mode", _IO__WINDOWSCONSOLEIO_MODE_GETTER, _IO__WINDOWSCONSOLEIO_MODE_SETTER, _IO__WINDOWSCONSOLEIO_MODE_DOCSTR},
 #else
 #  define _IO__WINDOWSCONSOLEIO_MODE_GETSETDEF
 #endif
 
-/*[clinic end generated code: output=7c7499116eefd498 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=75eed44f90058770 input=a9049054013a1b77]*/

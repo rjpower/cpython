@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(mappingproxy_new__doc__,
 "mappingproxy(mapping)\n"
@@ -25,7 +25,6 @@ mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -48,17 +47,20 @@ mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
+    PyValue argsbuf[1];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *mapping;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    mapping = fastargs[0];
+    mapping = PyValue_Object(fastargs[0]);
+    if (mapping == NULL) {
+        goto exit;
+    }
     return_value = mappingproxy_new_impl(type, mapping);
 
 exit:
@@ -78,19 +80,27 @@ static PyObject *
 property___set_name___impl(propertyobject *self, PyObject *owner,
                            PyObject *name);
 
-static PyObject *
-property___set_name__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+property___set_name__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *owner;
     PyObject *name;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("__set_name__", nargs, 2, 2)) {
         goto exit;
     }
-    owner = args[0];
-    name = args[1];
-    return_value = property___set_name___impl((propertyobject *)self, owner, name);
+    owner = PyValue_Object(args[0]);
+    if (owner == NULL) {
+        goto exit;
+    }
+    name = PyValue_Object(args[1]);
+    if (name == NULL) {
+        goto exit;
+    }
+    _return_value = property___set_name___impl((propertyobject *)self, owner, name);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -145,7 +155,6 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -168,8 +177,8 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
+    PyValue argsbuf[4];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *fget = NULL;
@@ -177,7 +186,7 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *fdel = NULL;
     PyObject *doc = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -185,29 +194,41 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (fastargs[0]) {
-        fget = fastargs[0];
+    if (!PyValue_IsNull(fastargs[0])) {
+        fget = PyValue_Object(fastargs[0]);
+        if (fget == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[1]) {
-        fset = fastargs[1];
+    if (!PyValue_IsNull(fastargs[1])) {
+        fset = PyValue_Object(fastargs[1]);
+        if (fset == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (fastargs[2]) {
-        fdel = fastargs[2];
+    if (!PyValue_IsNull(fastargs[2])) {
+        fdel = PyValue_Object(fastargs[2]);
+        if (fdel == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    doc = fastargs[3];
+    doc = PyValue_Object(fastargs[3]);
+    if (doc == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = property_init_impl((propertyobject *)self, fget, fset, fdel, doc);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=fb62ee8be13af793 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9e0a6d5eb792085c input=a9049054013a1b77]*/

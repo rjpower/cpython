@@ -168,6 +168,13 @@ Dictionary objects
    See also the :c:func:`PyObject_GetItem` function.
 
 
+.. c:function:: int PyDict_GetItemRefValue(PyObject *p, PyObject *key, PyValue *result)
+
+   :c:func:`PyDict_GetItemRef` with the item as a value, so that an inline
+   int or float item is not boxed.  Return ``1`` and set *\*result* to the
+   item if *key* is present, ``0`` and set it to ``PyValue_NULL`` if it is
+   missing, or ``-1`` and set it to ``PyValue_NULL`` with an exception set.
+
 .. c:function:: PyObject* PyDict_GetItem(PyObject *p, PyObject *key)
 
    Return a :term:`borrowed reference` to the object from dictionary *p* which

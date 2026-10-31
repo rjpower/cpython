@@ -32,10 +32,6 @@ import unittest
 import warnings
 
 
-def requires_subinterpreters(meth):
-    """Decorator to skip a test if subinterpreters are not supported."""
-    return unittest.skipIf(interpreters is None,
-                           'subinterpreters required')(meth)
 
 
 DICT_KEY_STRUCT_FORMAT = 'n2BI2n'
@@ -456,28 +452,6 @@ class SysModuleTest(unittest.TestCase):
         self.assertEqual(sys.getdlopenflags(), oldflags+1)
         sys.setdlopenflags(oldflags)
 
-    @test.support.refcount_test
-    def test_refcount(self):
-        # n here originally had to be a global in order for this test to pass
-        # while tracing with a python function. Tracing used to call
-        # PyFrame_FastToLocals, which would add a copy of any locals to the
-        # frame object, causing the ref count to increase by 2 instead of 1.
-        # While that no longer happens (due to PEP 667), this test case retains
-        # its original global-based implementation
-        # PEP 683's immortal objects also made this point moot, since the
-        # refcount for None doesn't change anyway. Maybe this test should be
-        # using a different constant value? (e.g. an integer)
-        global n
-        self.assertRaises(TypeError, sys.getrefcount)
-        c = sys.getrefcount(None)
-        n = None
-        # Singleton refcnts don't change
-        self.assertEqual(sys.getrefcount(None), c)
-        del n
-        self.assertEqual(sys.getrefcount(None), c)
-        if hasattr(sys, "gettotalrefcount"):
-            self.assertIsInstance(sys.gettotalrefcount(), int)
-
     def test_getframe(self):
         self.assertRaises(TypeError, sys._getframe, 42, 42)
         self.assertRaises(ValueError, sys._getframe, 2000000000)
@@ -574,8 +548,9 @@ class SysModuleTest(unittest.TestCase):
             leave_g.set()
             t.join()
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     def test_current_frames_other_interpreters(self):
         # gh-158364: sys._current_frames() would access frames of another
@@ -672,8 +647,9 @@ class SysModuleTest(unittest.TestCase):
             leave_g.set()
             t.join()
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     def test_current_exceptions_other_interpreters(self):
         # gh-158364: sys._current_exceptions() would hand out exceptions of
@@ -882,8 +858,9 @@ class SysModuleTest(unittest.TestCase):
         if has_is_interned:
             self.assertIs(sys._is_interned(S("abc")), False)
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_dynamically_allocated(self):
         # Implementation detail: Dynamically allocated strings
         # are distinct between interpreters
@@ -892,6 +869,7 @@ class SysModuleTest(unittest.TestCase):
         self.assertIs(t, s)
 
         interp = interpreters.create()
+        self.addCleanup(interp.close)
         interp.exec(textwrap.dedent(f'''
             import sys
 
@@ -904,8 +882,9 @@ class SysModuleTest(unittest.TestCase):
             assert id(t) != {id(t)}, (id(t), {id(t)})
             '''))
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_statically_allocated(self):
         # Implementation detail: Statically allocated strings are shared
         # between interpreters.
@@ -918,6 +897,7 @@ class SysModuleTest(unittest.TestCase):
                 t = sys.intern(s)
 
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -928,14 +908,16 @@ class SysModuleTest(unittest.TestCase):
                     assert id(t) == {id(t)}, (id(t), {id(t)})
                     '''))
 
+    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @support.cpython_only
-    @requires_subinterpreters
+    @support.requires_subinterpreters
     def test_subinterp_intern_singleton(self):
         # Implementation detail: singletons are used for 0- and 1-character
         # latin1 strings.
         for s in '', '\n', '_', 'x', '\0', '\N{CEDILLA}', '\xff':
             with self.subTest(s=s):
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -1199,10 +1181,7 @@ class SysModuleTest(unittest.TestCase):
         sii = sys.implementation.supports_isolated_interpreters
         self.assertIsInstance(sii, bool)
         if test.support.check_impl_detail(cpython=True):
-            if test.support.is_emscripten or test.support.is_wasi:
-                self.assertFalse(sii)
-            else:
-                self.assertTrue(sii)
+            self.assertFalse(sii)
 
     @test.support.cpython_only
     def test_debugmallocstats(self):
@@ -1216,7 +1195,6 @@ class SysModuleTest(unittest.TestCase):
         if sys.platform != "win32":
             with_pymalloc = sysconfig.get_config_var("WITH_PYMALLOC")
             with_sanitizer = support.check_sanitizer(address=True, memory=True)
-            self.assertIn(b"free PyDictObjects", err)
             # ASan and MSan builds default to malloc, even with pymalloc.
             if with_pymalloc and not with_sanitizer:
                 self.assertIn(b'Small block threshold', err)
@@ -1556,6 +1534,7 @@ class UnraisableHookTest(unittest.TestCase):
                                             sys.__unraisablehook__):
                     # Trigger obj.__del__()
                     del obj
+                    test.support.gc_collect()  # For other GCs.
 
                 report = stderr.getvalue()
                 self.assertIn("Exception ignored", report)
@@ -1659,20 +1638,14 @@ class SizeofTest(unittest.TestCase):
     def setUp(self):
         self.P = struct.calcsize('P')
         self.longdigit = sys.int_info.sizeof_digit
-        _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        self.gc_headsize = _testinternalcapi.SIZEOF_PYGC_HEAD
-        self.managed_pre_header_size = _testinternalcapi.SIZEOF_MANAGED_PRE_HEADER
 
     check_sizeof = test.support.check_sizeof
 
     def test_gc_head_size(self):
-        # Check that the gc header size is added to objects tracked by the gc.
+        # Objects the collector tracks have no header before the object
         vsize = test.support.calcvobjsize
-        gc_header_size = self.gc_headsize
-        # bool objects are not gc tracked
         self.assertEqual(sys.getsizeof(True), vsize('') + self.longdigit)
-        # but lists are
-        self.assertEqual(sys.getsizeof([]), vsize('Pn') + gc_header_size)
+        self.assertEqual(sys.getsizeof([]), vsize('Pn'))
 
     def test_errors(self):
         class BadSizeof:
@@ -1697,7 +1670,7 @@ class SizeofTest(unittest.TestCase):
             def __sizeof__(self):
                 return int(self)
         self.assertEqual(sys.getsizeof(OverflowSizeof(sys.maxsize)),
-                         sys.maxsize + self.gc_headsize + self.managed_pre_header_size)
+                         sys.maxsize)
         with self.assertRaises(OverflowError):
             sys.getsizeof(OverflowSizeof(sys.maxsize + 1))
         with self.assertRaises(ValueError):
@@ -1722,7 +1695,7 @@ class SizeofTest(unittest.TestCase):
         # buffer
         # XXX
         # builtin_function_or_method
-        check(len, size('5P'))
+        check(len, size('4P'))
         # bytearray
         samples = [b'', b'u'*100000]
         for sample in samples:
@@ -1767,15 +1740,15 @@ class SizeofTest(unittest.TestCase):
         # method-wrapper (descriptor object)
         check({}.__iter__, size('2P'))
         # empty dict
-        check({}, size('nQ2P'))
+        check({}, size('nQP'))
         # dict (string key)
-        check({"a": 1}, size('nQ2P') + calcsize(DICT_KEY_STRUCT_FORMAT) + 8 + (8*2//3)*calcsize('2P'))
+        check({"a": 1}, size('nQP') + calcsize(DICT_KEY_STRUCT_FORMAT) + 8 + (8*2//3)*calcsize('2P'))
         longdict = {str(i): i for i in range(8)}
-        check(longdict, size('nQ2P') + calcsize(DICT_KEY_STRUCT_FORMAT) + 16 + (16*2//3)*calcsize('2P'))
+        check(longdict, size('nQP') + calcsize(DICT_KEY_STRUCT_FORMAT) + 16 + (16*2//3)*calcsize('2P'))
         # dict (non-string key)
-        check({1: 1}, size('nQ2P') + calcsize(DICT_KEY_STRUCT_FORMAT) + 8 + (8*2//3)*calcsize('n2P'))
+        check({1: 1}, size('nQP') + calcsize(DICT_KEY_STRUCT_FORMAT) + 8 + (8*2//3)*calcsize('n2P'))
         longdict = {1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8}
-        check(longdict, size('nQ2P') + calcsize(DICT_KEY_STRUCT_FORMAT) + 16 + (16*2//3)*calcsize('n2P'))
+        check(longdict, size('nQP') + calcsize(DICT_KEY_STRUCT_FORMAT) + 16 + (16*2//3)*calcsize('n2P'))
         # dictionary-keyview
         check({}.keys(), size('P'))
         # dictionary-valueview
@@ -1783,13 +1756,13 @@ class SizeofTest(unittest.TestCase):
         # dictionary-itemview
         check({}.items(), size('P'))
         # dictionary iterator
-        check(iter({}), size('P2nPn'))
+        check(iter({}), size('P2nn'))
         # dictionary-keyiterator
-        check(iter({}.keys()), size('P2nPn'))
+        check(iter({}.keys()), size('P2nn'))
         # dictionary-valueiterator
-        check(iter({}.values()), size('P2nPn'))
+        check(iter({}.values()), size('P2nn'))
         # dictionary-itemiterator
-        check(iter({}.items()), size('P2nPn'))
+        check(iter({}.items()), size('P2nn'))
         # dictproxy
         class C(object): pass
         check(C.__dict__, size('P'))
@@ -1808,7 +1781,7 @@ class SizeofTest(unittest.TestCase):
         x = codecs.charmap_build(encodings.iso8859_3.decoding_table)
         check(x, size('32B2iB'))
         # enumerate
-        check(enumerate([]), size('n4P'))
+        check(enumerate([]), size('n3P'))
         # reverse
         check(reversed(''), size('nP'))
         # float
@@ -1820,13 +1793,13 @@ class SizeofTest(unittest.TestCase):
             return sys._getframe()
         x = func()
         if support.Py_GIL_DISABLED:
-            INTERPRETER_FRAME = '9PihcP'
+            INTERPRETER_FRAME = '12PihccP'
         else:
-            INTERPRETER_FRAME = '9PhcP'
-        check(x, size('3PiccPPPP' + INTERPRETER_FRAME + 'P'))
+            INTERPRETER_FRAME = '12PhccP'
+        check(x, size('3PiccPPP' + INTERPRETER_FRAME + 'P'))
         # function
         def func(): pass
-        check(func, size('16Pi'))
+        check(func, size('15Pi'))
         class c():
             @staticmethod
             def foo():
@@ -1840,7 +1813,7 @@ class SizeofTest(unittest.TestCase):
             check(bar, size('PP'))
         # generator
         def get_gen(): yield 1
-        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'P'))
+        check(get_gen(), size('5P4c' + INTERPRETER_FRAME + 'P'))
         # iterator
         check(iter('abc'), size('lP'))
         # callable-iterator
@@ -1872,7 +1845,7 @@ class SizeofTest(unittest.TestCase):
             md_gil = '?'
         else:
             md_gil = ''
-        check(unittest, size('PPPP?' + md_gil + 'NPPPPP'))
+        check(unittest, size('PPP?' + md_gil + 'NPPPPP'))
         # None
         check(None, size(''))
         # NotImplementedType
@@ -1905,7 +1878,7 @@ class SizeofTest(unittest.TestCase):
         # frozenset
         PySet_MINSIZE = 8
         samples = [[], range(10), range(50)]
-        s = size('3nP' + PySet_MINSIZE*'nP' + '2nP')
+        s = size('3nP' + PySet_MINSIZE*'nP' + '2n')
         for sample in samples:
             minused = len(sample)
             if minused == 0: tmp = 1
@@ -1931,8 +1904,9 @@ class SizeofTest(unittest.TestCase):
         check((), vsize('') + self.P)
         check((1,2,3), vsize('') + self.P + 3*self.P)
         # type
-        # static type: PyTypeObject
-        fmt = 'P2nPI13Pl4Pn9Pn12PI2PcP'
+        # static type: PyTypeObject, its root shape last
+        shape = 'PlIIHBB5P'
+        fmt = 'P2nPI13Pl4Pn9Pn12PI2PcP' + shape
         s = vsize(fmt)
         check(int, s)
         typeid = 'n' if support.Py_GIL_DISABLED else ''
@@ -1948,17 +1922,21 @@ class SizeofTest(unittest.TestCase):
                   + typeid              # heap type id (free-threaded only)
                   )
         class newstyleclass(object): pass
-        # Separate block for PyDictKeysObject with 8 keys and 5 entries
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64 + 42*calcsize("2P"))
-        # dict with shared keys
-        [newstyleclass() for _ in range(100)]
-        check(newstyleclass().__dict__, size('nQ2P') + self.P)
+        # A separate block for the table of shapes, which has the capacity,
+        # the dictionary-mode shape and room for 64
+        shapes = calcsize('BB' + shape + '64P')
+        check(newstyleclass, s + shapes)
+        # An instance has its type's capacity of slots: without static
+        # attributes, the 7 that fill the 64-byte size class
+        check(newstyleclass(), size('7P'))
+        # The dict of a fresh instance is an ordinary empty dict
+        check(newstyleclass().__dict__, sys.getsizeof({}))
         o = newstyleclass()
         o.a = o.b = o.c = o.d = o.e = o.f = o.g = o.h = 1
-        # Separate block for PyDictKeysObject with 16 keys and 10 entries
-        check(newstyleclass, s + calcsize(DICT_KEY_STRUCT_FORMAT) + 64 + 42*calcsize("2P"))
-        # dict with shared keys
-        check(newstyleclass().__dict__, size('nQ2P') + self.P)
+        # Seven more shapes, with 1 to 7 slots of (name, kind); the eighth
+        # attribute sends o to dictionary mode
+        shapes += 7*calcsize(shape) + 28*calcsize('PB0P')
+        check(newstyleclass, s + shapes)
         # unicode
         # each tuple contains a string and its expected character size
         # don't put any static strings here, as they may contain
@@ -2004,8 +1982,6 @@ class SizeofTest(unittest.TestCase):
 
     def check_slots(self, obj, base, extra):
         expected = sys.getsizeof(base) + struct.calcsize(extra)
-        if gc.is_tracked(obj) and not gc.is_tracked(base):
-            expected += self.gc_headsize
         self.assertEqual(sys.getsizeof(obj), expected)
 
     def test_slots(self):
@@ -2042,7 +2018,8 @@ class SizeofTest(unittest.TestCase):
         check = self.check_sizeof
         # _ast.AST
         import _ast
-        check(_ast.Module(), size('3P'))
+        # The dict; a managed weak reference takes no space
+        check(_ast.Module(), size('P'))
         try:
             raise TypeError
         except TypeError as e:
@@ -2468,63 +2445,12 @@ this is invalid python code
 
 class TestSysJIT(unittest.TestCase):
 
-    def test_jit_is_available(self):
-        available = sys._jit.is_available()
-        script = f"import sys; assert sys._jit.is_available() is {available}"
-        assert_python_ok("-c", script, PYTHON_JIT="0")
-        assert_python_ok("-c", script, PYTHON_JIT="1")
-
-    def test_jit_is_enabled(self):
-        available = sys._jit.is_available()
-        script = "import sys; assert sys._jit.is_enabled() is {enabled}"
-        assert_python_ok("-c", script.format(enabled=False), PYTHON_JIT="0")
-        assert_python_ok("-c", script.format(enabled=available), PYTHON_JIT="1")
-
-    def test_jit_is_active(self):
-        available = sys._jit.is_available()
-        script = textwrap.dedent(
-            """
-            import _testcapi
-            import _testinternalcapi
-            import sys
-
-            def frame_0_interpreter() -> None:
-                assert sys._jit.is_active() is False
-
-            def frame_1_interpreter() -> None:
-                assert sys._jit.is_active() is False
-                frame_0_interpreter()
-                assert sys._jit.is_active() is False
-
-            def frame_2_jit(expected: bool) -> None:
-                # Inlined into the last loop of frame_3_jit:
-                assert sys._jit.is_active() is expected
-                # Insert C frame:
-                _testcapi.pyobject_vectorcall(frame_1_interpreter, None, None)
-                assert sys._jit.is_active() is expected
-
-            def frame_3_jit() -> None:
-                # JITs just before the last loop:
-                # 1 extra iteration for tracing.
-                for i in range(_testinternalcapi.TIER2_THRESHOLD + 2):
-                    # Careful, doing this in the reverse order breaks tracing:
-                    expected = {enabled} and i >= _testinternalcapi.TIER2_THRESHOLD
-                    assert sys._jit.is_active() is expected
-                    frame_2_jit(expected)
-                    assert sys._jit.is_active() is expected
-
-            def frame_4_interpreter() -> None:
-                assert sys._jit.is_active() is False
-                frame_3_jit()
-                assert sys._jit.is_active() is False
-
-            assert sys._jit.is_active() is False
-            frame_4_interpreter()
-            assert sys._jit.is_active() is False
-            """
-        )
-        assert_python_ok("-c", script.format(enabled=False), PYTHON_JIT="0")
-        assert_python_ok("-c", script.format(enabled=available), PYTHON_JIT="1")
+    def test_jit_stub(self):
+        # This interpreter has no JIT; sys._jit still exists so that tools
+        # which probe it keep working.
+        self.assertIs(sys._jit.is_available(), False)
+        self.assertIs(sys._jit.is_enabled(), False)
+        self.assertIs(sys._jit.is_active(), False)
 
 
 if __name__ == "__main__":

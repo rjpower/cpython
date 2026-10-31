@@ -3,11 +3,14 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
 
 PyDoc_STRVAR(gc_enable__doc__,
 "enable($module, /)\n"
@@ -91,15 +94,14 @@ PyDoc_STRVAR(gc_collect__doc__,
 static Py_ssize_t
 gc_collect_impl(PyObject *module, int generation);
 
-static PyObject *
-gc_collect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+Py_GC_PRECISE static PyValue
+gc_collect(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -122,10 +124,14 @@ gc_collect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    PyValue _gc_slots[1];
+    _PyValueRoot _gc_span;
     int generation = NUM_GENERATIONS - 1;
     Py_ssize_t _return_value;
+    _PyThreadState_PushValueSpan(_PyThreadState_GET(), &_gc_span, _gc_slots);
+    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -135,7 +141,7 @@ gc_collect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    generation = PyLong_AsInt(args[0]);
+    generation = PyLong_AsIntValue(args[0]);
     if (generation == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -144,9 +150,11 @@ skip_optional_pos:
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromLongLong((long long)_return_value);
 
 exit:
+    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);
+
     return return_value;
 }
 
@@ -168,22 +176,24 @@ PyDoc_STRVAR(gc_set_debug__doc__,
 "Debugging information is written to sys.stderr.");
 
 #define GC_SET_DEBUG_METHODDEF    \
-    {"set_debug", (PyCFunction)gc_set_debug, METH_O, gc_set_debug__doc__},
+    {"set_debug", _PyCFunction_CAST(gc_set_debug), METH_O, gc_set_debug__doc__},
 
 static PyObject *
 gc_set_debug_impl(PyObject *module, int flags);
 
-static PyObject *
-gc_set_debug(PyObject *module, PyObject *arg)
+static PyValue
+gc_set_debug(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flags;
+    PyObject *_return_value;
 
-    flags = PyLong_AsInt(arg);
+    flags = PyLong_AsIntValue(arg);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = gc_set_debug_impl(module, flags);
+    _return_value = gc_set_debug_impl(module, flags);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -230,39 +240,41 @@ static PyObject *
 gc_set_threshold_impl(PyObject *module, int threshold0, int group_right_1,
                       int threshold1, int group_right_2, int threshold2);
 
-static PyObject *
-gc_set_threshold(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+gc_set_threshold(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int threshold0;
     int group_right_1 = 0;
     int threshold1 = 0;
     int group_right_2 = 0;
     int threshold2 = 0;
+    PyObject *_return_value;
 
     if (nargs < 1 || nargs > 3) {
         PyErr_SetString(PyExc_TypeError, "gc.set_threshold requires 1 to 3 arguments");
         goto exit;
     }
-    threshold0 = PyLong_AsInt(args[0]);
+    threshold0 = PyLong_AsIntValue(args[0]);
     if (threshold0 == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs >= 2) {
-        threshold1 = PyLong_AsInt(args[1]);
+        threshold1 = PyLong_AsIntValue(args[1]);
         if (threshold1 == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_right_1 = 1;
     }
     if (nargs >= 3) {
-        threshold2 = PyLong_AsInt(args[2]);
+        threshold2 = PyLong_AsIntValue(args[2]);
         if (threshold2 == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_right_2 = 1;
     }
-    return_value = gc_set_threshold_impl(module, threshold0, group_right_1, threshold1, group_right_2, threshold2);
+    _return_value = gc_set_threshold_impl(module, threshold0, group_right_1, threshold1, group_right_2, threshold2);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -316,21 +328,28 @@ PyDoc_STRVAR(gc_get_referrers__doc__,
 static PyObject *
 gc_get_referrers_impl(PyObject *module, PyObject *objs);
 
-static PyObject *
-gc_get_referrers(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+Py_GC_PRECISE static PyValue
+gc_get_referrers(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValue _gc_slots[1];
+    _PyValueRoot _gc_span;
     PyObject *objs = NULL;
+    PyObject *_return_value;
+    _PyThreadState_PushValueSpan(_PyThreadState_GET(), &_gc_span, _gc_slots);
+    _PyValueSpan_AppendObject(&_gc_span, (PyObject *)module);
 
-    objs = PyTuple_FromArray(args, nargs);
+    objs = _PyTuple_FromValues(args, nargs);
     if (objs == NULL) {
         goto exit;
     }
-    return_value = gc_get_referrers_impl(module, objs);
+    _return_value = gc_get_referrers_impl(module, objs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for objs */
     Py_XDECREF(objs);
+    _PyThreadState_PopValueRoot(_PyThreadState_GET(), &_gc_span);
 
     return return_value;
 }
@@ -347,17 +366,19 @@ PyDoc_STRVAR(gc_get_referents__doc__,
 static PyObject *
 gc_get_referents_impl(PyObject *module, PyObject *objs);
 
-static PyObject *
-gc_get_referents(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+gc_get_referents(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *objs = NULL;
+    PyObject *_return_value;
 
-    objs = PyTuple_FromArray(args, nargs);
+    objs = _PyTuple_FromValues(args, nargs);
     if (objs == NULL) {
         goto exit;
     }
-    return_value = gc_get_referents_impl(module, objs);
+    _return_value = gc_get_referents_impl(module, objs);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for objs */
@@ -384,15 +405,14 @@ PyDoc_STRVAR(gc_get_objects__doc__,
 static PyObject *
 gc_get_objects_impl(PyObject *module, Py_ssize_t generation);
 
-static PyObject *
-gc_get_objects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+gc_get_objects(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -415,9 +435,10 @@ gc_get_objects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     Py_ssize_t generation = -1;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -427,11 +448,18 @@ gc_get_objects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &generation)) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!_Py_convert_optional_to_ssize_t(_arg, &generation)) {
+            goto exit;
+        }
     }
 skip_optional_pos:
-    return_value = gc_get_objects_impl(module, generation);
+    _return_value = gc_get_objects_impl(module, generation);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -464,22 +492,27 @@ PyDoc_STRVAR(gc_is_tracked__doc__,
 "Simple atomic objects will return false.");
 
 #define GC_IS_TRACKED_METHODDEF    \
-    {"is_tracked", (PyCFunction)gc_is_tracked, METH_O, gc_is_tracked__doc__},
+    {"is_tracked", _PyCFunction_CAST(gc_is_tracked), METH_O, gc_is_tracked__doc__},
 
 static int
 gc_is_tracked_impl(PyObject *module, PyObject *obj);
 
-static PyObject *
-gc_is_tracked(PyObject *module, PyObject *obj)
+static PyValue
+gc_is_tracked(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
     int _return_value;
 
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
     _return_value = gc_is_tracked_impl(module, obj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -492,22 +525,27 @@ PyDoc_STRVAR(gc_is_finalized__doc__,
 "Returns true if the object has been already finalized by the GC.");
 
 #define GC_IS_FINALIZED_METHODDEF    \
-    {"is_finalized", (PyCFunction)gc_is_finalized, METH_O, gc_is_finalized__doc__},
+    {"is_finalized", _PyCFunction_CAST(gc_is_finalized), METH_O, gc_is_finalized__doc__},
 
 static int
 gc_is_finalized_impl(PyObject *module, PyObject *obj);
 
-static PyObject *
-gc_is_finalized(PyObject *module, PyObject *obj)
+static PyValue
+gc_is_finalized(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *obj;
     int _return_value;
 
+    obj = PyValue_Object(arg);
+    if (obj == NULL) {
+        goto exit;
+    }
     _return_value = gc_is_finalized_impl(module, obj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
 
 exit:
     return return_value;
@@ -583,4 +621,4 @@ gc_get_freeze_count(PyObject *module, PyObject *Py_UNUSED(ignored))
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d0cb000f41ffe433 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d40044bf7269a5c input=a9049054013a1b77]*/

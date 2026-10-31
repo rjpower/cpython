@@ -9,7 +9,7 @@ extern "C" {
 
 // PyBool_Type is declared by object.h
 
-#define PyBool_Check(x) Py_IS_TYPE((x), &PyBool_Type)
+#define PyBool_Check(x) _Py_IS_ROOT_SHAPE((x), &PyBool_Type)
 
 /* Py_False and Py_True are the only two bools in existence. */
 

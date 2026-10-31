@@ -2407,7 +2407,6 @@ hamt_alloc(void)
     }
     o->h_count = 0;
     o->h_root = NULL;
-    o->h_weakreflist = NULL;
     PyObject_GC_Track(o);
     return o;
 }
@@ -2481,7 +2480,7 @@ hamt_baseiter_tp_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
+static PyValue
 hamt_baseiter_tp_iternext(PyObject *op)
 {
     PyHamtIterator *it = (PyHamtIterator*)op;
@@ -2492,10 +2491,10 @@ hamt_baseiter_tp_iternext(PyObject *op)
     switch (res) {
         case I_END:
             PyErr_SetNone(PyExc_StopIteration);
-            return NULL;
+            return PyValue_NULL;
 
         case I_ITEM: {
-            return (*(it->hi_yield))(key, val);
+            return PyValue_FromResult((*(it->hi_yield))(key, val));
         }
 
         default: {
@@ -2666,9 +2665,7 @@ hamt_tp_dealloc(PyObject *self)
     }
 
     PyObject_GC_UnTrack(self);
-    if (obj->h_weakreflist != NULL) {
-        PyObject_ClearWeakRefs(self);
-    }
+    PyObject_ClearWeakRefs(self);
     (void)hamt_tp_clear(self);
     Py_TYPE(self)->tp_free(self);
 }
@@ -2784,11 +2781,15 @@ hamt_get_impl(PyHamtObject *self, PyObject *key, PyObject *def)
     }
 }
 
-static PyObject *
-hamt_py_delete(PyObject *op, PyObject *key)
+static PyValue
+hamt_py_delete(PyObject *op, PyValue key_value)
 {
+    PyObject *key = PyValue_Object(key_value);
+    if (key == NULL) {
+        return PyValue_NULL;
+    }
     PyHamtObject *self = _PyHamtObject_CAST(op);
-    return (PyObject *)_PyHamt_Without(self, key);
+    return PyValue_FromResult((PyObject *)_PyHamt_Without(self, key));
 }
 
 static PyObject *
@@ -2825,7 +2826,7 @@ hamt_py_dump(PyObject *op, PyObject *Py_UNUSED(args))
 static PyMethodDef PyHamt_methods[] = {
     HAMT_SET_METHODDEF
     HAMT_GET_METHODDEF
-    {"delete", hamt_py_delete, METH_O, NULL},
+    {"delete", _PyCFunction_CAST(hamt_py_delete), METH_O, NULL},
     {"items", hamt_py_items, METH_NOARGS, NULL},
     {"keys", hamt_py_keys, METH_NOARGS, NULL},
     {"values", hamt_py_values, METH_NOARGS, NULL},
@@ -2854,12 +2855,12 @@ PyTypeObject _PyHamt_Type = {
     .tp_iter = hamt_tp_iter,
     .tp_dealloc = hamt_tp_dealloc,
     .tp_getattro = PyObject_GenericGetAttr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+                Py_TPFLAGS_MANAGED_WEAKREF,
     .tp_richcompare = hamt_tp_richcompare,
     .tp_traverse = hamt_tp_traverse,
     .tp_clear = hamt_tp_clear,
     .tp_new = hamt_tp_new,
-    .tp_weaklistoffset = offsetof(PyHamtObject, h_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
 };
 

@@ -1034,7 +1034,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
 
     Py_ssize_t i, numfields = 0;
     int res = -1;
-    PyObject *key, *value, *fields, *attributes = NULL, *remaining_fields = NULL;
+    PyObject *key, *fields, *attributes = NULL, *remaining_fields = NULL;
 
     fields = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_fields);
     if (fields == NULL) {
@@ -1065,7 +1065,8 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             res = -1;
             goto cleanup;
         }
-        res = PyObject_SetAttr(self, name, PyTuple_GET_ITEM(args, i));
+        res = PyObject_SetAttrValue(PyValue_FromObject(self), name,
+                                    PyTuple_GET_VALUE(args, i));
         if (PySet_Discard(remaining_fields, name) < 0) {
             res = -1;
             Py_DECREF(name);
@@ -1077,8 +1078,15 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         }
     }
     if (kw) {
-        i = 0;  /* needed by PyDict_Next */
-        while (PyDict_Next(kw, &i, &key, &value)) {
+        PyValue key_value, value;
+        i = 0;  /* needed by _PyDict_NextValue */
+        while (_PyDict_NextValue(kw, &i, &key_value, &value, NULL)) {
+            // A keyword is a str, so this normally makes no box.
+            key = PyValue_Object(key_value);
+            if (key == NULL) {
+                res = -1;
+                goto cleanup;
+            }
             int contains = PySequence_Contains(fields, key);
             if (contains == -1) {
                 res = -1;
@@ -1120,7 +1128,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     goto cleanup;
                 }
             }
-            res = PyObject_SetAttr(self, key, value);
+            res = PyObject_SetAttrValue(PyValue_FromObject(self), key, value);
             if (res < 0) {
                 goto cleanup;
             }
@@ -1335,21 +1343,23 @@ ast_type_replace_update_payload(PyObject *payload,
         if (key == NULL) {
             return -1;
         }
-        PyObject *value;
-        if (PyDict_GetItemRef(dict, key, &value) < 0) {
+        // The value is copied as it is: an inline position is not boxed.
+        PyValue value;
+        int found = _PyDict_GetItemValue(dict, PyValue_FromObject(key), &value);
+        if (found < 0) {
             Py_DECREF(key);
             return -1;
         }
-        if (value == NULL) {
+        if (!found) {
             Py_DECREF(key);
             // If a field or attribute is not present at runtime, it should
             // be explicitly given in 'kwargs'. If not, the constructor will
             // issue a warning (which becomes an error in 3.15).
             continue;
         }
-        int rc = PyDict_SetItem(payload, key, value);
+        int rc = _PyDict_SetItemValue((PyDictObject *)payload,
+                                      PyValue_FromObject(key), value);
         Py_DECREF(key);
-        Py_DECREF(value);
         if (rc < 0) {
             return -1;
         }
@@ -1766,9 +1776,12 @@ static PyObject* ast2obj_object(struct ast_state *Py_UNUSED(state), void *o)
 #define ast2obj_identifier ast2obj_object
 #define ast2obj_string ast2obj_object
 
-static PyObject* ast2obj_int(struct ast_state *Py_UNUSED(state), long b)
+/* Set node's int field name to value.  An int is inline, so this makes no
+   box. */
+static int ast2obj_set_int(PyObject *node, PyObject *name, int value)
 {
-    return PyLong_FromLong(b);
+    return PyObject_SetAttrValue(PyValue_FromObject(node), name,
+                                 PyValue_FromLongLong(value));
 }
 
 /* Conversion Python -> AST */
@@ -1949,24 +1962,25 @@ class ASTModuleVisitor(PickleVisitor):
     def visitModule(self, mod):
         self.emit("""
 /* Helper for checking if a node class is abstract in the tests. */
-static PyObject *
-ast_is_abstract(PyObject *Py_UNUSED(module), PyObject *cls) {
+static PyValue
+ast_is_abstract(PyObject *Py_UNUSED(module), PyValue cls_value) {
+    PyObject *cls = PyValue_Object(cls_value);
+    if (cls == NULL) {
+        return PyValue_NULL;
+    }
     struct ast_state *state = get_ast_state();
     if (state == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     int contains = PySet_Contains(state->abstract_types, cls);
     if (contains == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
-    else if (contains == 1) {
-        Py_RETURN_TRUE;
-    }
-    Py_RETURN_FALSE;
+    return PyValue_FromObject(contains ? Py_True : Py_False);
 }
 
 static struct PyMethodDef astmodule_methods[] = {
-    {"_is_abstract", ast_is_abstract, METH_O, NULL},
+    {"_is_abstract", _PyCFunction_CAST(ast_is_abstract), METH_O, NULL},
     {NULL}  /* Sentinel */
 };
 """.strip(), 0, reflow=False)
@@ -2087,12 +2101,20 @@ class ObjVisitor(PickleVisitor):
             self.visitConstructor(t, i + 1, name)
         self.emit("}", 1)
         for a in sum.attributes:
-            self.emit("value = ast2obj_%s(state, o->%s);" % (a.type, a.name), 1)
-            self.emit("if (!value) goto failed;", 1)
-            self.emit('if (PyObject_SetAttr(result, state->%s, value) < 0)' % a.name, 1)
-            self.emit('goto failed;', 2)
-            self.emit('Py_DECREF(value);', 1)
+            self.set_attribute(a, 1)
         self.func_end()
+
+    def set_attribute(self, a, depth):
+        if a.type == "int" and not a.seq:
+            self.emit("if (ast2obj_set_int(result, state->%s, o->%s) < 0)"
+                      % (a.name, a.name), depth)
+            self.emit("goto failed;", depth + 1)
+            return
+        self.emit("value = ast2obj_%s(state, o->%s);" % (a.type, a.name), depth)
+        self.emit("if (!value) goto failed;", depth)
+        self.emit("if (PyObject_SetAttr(result, state->%s, value) < 0)" % a.name, depth)
+        self.emit('goto failed;', depth + 1)
+        self.emit('Py_DECREF(value);', depth)
 
     def simpleSum(self, sum, name):
         self.emit("PyObject* ast2obj_%s(struct ast_state *state, %s_ty o)" % (name, name), 0)
@@ -2113,11 +2135,7 @@ class ObjVisitor(PickleVisitor):
         for field in prod.fields:
             self.visitField(field, name, 1, True)
         for a in prod.attributes:
-            self.emit("value = ast2obj_%s(state, o->%s);" % (a.type, a.name), 1)
-            self.emit("if (!value) goto failed;", 1)
-            self.emit("if (PyObject_SetAttr(result, state->%s, value) < 0)" % a.name, 1)
-            self.emit('goto failed;', 2)
-            self.emit('Py_DECREF(value);', 1)
+            self.set_attribute(a, 1)
         self.func_end()
 
     def visitConstructor(self, cons, enum, name):
@@ -2136,6 +2154,11 @@ class ObjVisitor(PickleVisitor):
             value = "o->%s" % field.name
         else:
             value = "o->v.%s.%s" % (name, field.name)
+        if field.type == "int" and not field.seq:
+            self.emit("if (ast2obj_set_int(result, state->%s, %s) < 0)"
+                      % (field.name, value), depth, reflow=False)
+            emit("goto failed;", 1)
+            return
         self.set(field, value, depth)
         emit("if (!value) goto failed;", 0)
         emit("if (PyObject_SetAttr(result, state->%s, value) == -1)" % field.name, 0)
@@ -2323,11 +2346,12 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "pycore_ast.h"
         #include "pycore_ast_state.h"     // struct ast_state
         #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
+        #include "pycore_dict.h"          // _PyDict_NextValue()
         #include "pycore_lock.h"          // _PyOnceFlag
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()
         #include "pycore_pystate.h"       // _PyInterpreterState_GET()
         #include "pycore_runtime.h"       // _Py_ID()
-        #include "pycore_setobject.h"     // _PySet_NextEntry()
+        #include "pycore_setobject.h"     // _PySet_NextValue()
         #include "pycore_unionobject.h"   // _Py_union_type_or
 
         #include <stddef.h>               // offsetof()

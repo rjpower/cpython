@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 PyAPI_DATA(PyTypeObject) PyLazyImport_Type;
-#define PyLazyImport_CheckExact(op) Py_IS_TYPE((op), &PyLazyImport_Type)
+#define PyLazyImport_CheckExact(op) _Py_IS_ROOT_SHAPE((op), &PyLazyImport_Type)
 
 PyAPI_FUNC(PyObject *) _PyLazyImport_New(
     struct _PyInterpreterFrame *frame, PyObject *builtins,

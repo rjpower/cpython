@@ -565,6 +565,9 @@ class TestPEP380Operation(unittest.TestCase):
 
         with support.catch_unraisable_exception() as cm:
             gi = g()
+            # The previous gi, left suspended by throw(), is closed as it
+            # dies, which reports its Broken's error.
+            support.gc_collect()  # For other GCs.
             self.assertEqual(next(gi), 1)
             gi.close()
 

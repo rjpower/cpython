@@ -237,7 +237,7 @@ class TestRaces(TestBase):
 
         do_race(read, mutate)
 
-    def make_shared_key_dict(self):
+    def make_instance_dict(self):
         class C:
             pass
 
@@ -259,14 +259,13 @@ class TestRaces(TestBase):
         def mutate():
             nonlocal c
             c.x = 1
-            self.assertTrue(_testinternalcapi.has_inline_values(c))
-            for i in range(30):
+            self.assertIsNotNone(_testinternalcapi.get_object_shape(c))
+            for i in range(_testinternalcapi.SHAPE_MAX_SLOTS):
                 setattr(c, f"_{i}", None)
-            self.assertFalse(_testinternalcapi.has_inline_values(c.__dict__))
-            c.__dict__ = self.make_shared_key_dict()
-            self.assertTrue(_testinternalcapi.has_split_table(c.__dict__))
+            self.assertIsNone(_testinternalcapi.get_object_shape(c))
+            # Another instance's dict, then one with a non-str key
+            c.__dict__ = self.make_instance_dict()
             c.__dict__[1] = None
-            self.assertFalse(_testinternalcapi.has_split_table(c.__dict__))
             c = C()
 
         do_race(set_value, mutate)

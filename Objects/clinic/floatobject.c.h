@@ -88,14 +88,15 @@ PyDoc_STRVAR(float___round____doc__,
 #define FLOAT___ROUND___METHODDEF    \
     {"__round__", _PyCFunction_CAST(float___round__), METH_FASTCALL, float___round____doc__},
 
-static PyObject *
-float___round___impl(PyObject *self, PyObject *o_ndigits);
+static PyValue
+float___round___impl(PyObject *self, PyValue o_ndigits);
 
-static PyObject *
-float___round__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+float___round__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
-    PyObject *o_ndigits = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValue o_ndigits = PyValue_FromObject(Py_None);
+    PyValue _return_value;
 
     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
         goto exit;
@@ -105,7 +106,8 @@ float___round__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     o_ndigits = args[0];
 skip_optional:
-    return_value = float___round___impl(self, o_ndigits);
+    _return_value = float___round___impl(self, o_ndigits);
+    return_value = _return_value;
 
 exit:
     return return_value;
@@ -164,18 +166,26 @@ PyDoc_STRVAR(float_fromhex__doc__,
 "-5e-324");
 
 #define FLOAT_FROMHEX_METHODDEF    \
-    {"fromhex", (PyCFunction)float_fromhex, METH_O|METH_CLASS, float_fromhex__doc__},
+    {"fromhex", _PyCFunction_CAST(float_fromhex), METH_O|METH_CLASS, float_fromhex__doc__},
 
 static PyObject *
 float_fromhex_impl(PyTypeObject *type, PyObject *string);
 
-static PyObject *
-float_fromhex(PyObject *type, PyObject *string)
+static PyValue
+float_fromhex(PyObject *type, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *string;
+    PyObject *_return_value;
 
-    return_value = float_fromhex_impl((PyTypeObject *)type, string);
+    string = PyValue_Object(arg);
+    if (string == NULL) {
+        goto exit;
+    }
+    _return_value = float_fromhex_impl((PyTypeObject *)type, string);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -213,15 +223,16 @@ PyDoc_STRVAR(float_new__doc__,
 "\n"
 "Convert a string or number to a floating-point number, if possible.");
 
-static PyObject *
-float_new_impl(PyTypeObject *type, PyObject *x);
+static PyValue
+float_new_impl(PyTypeObject *type, PyValue x);
 
 static PyObject *
 float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = &PyFloat_Type;
-    PyObject *x = NULL;
+    PyValue x = PyValue_NULL;
+    PyValue _return_value;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("float", kwargs)) {
@@ -233,21 +244,24 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    x = PyTuple_GET_ITEM(args, 0);
+    x = PyTuple_GET_VALUE(args, 0);
 skip_optional:
-    return_value = float_new_impl(type, x);
+    _return_value = float_new_impl(type, x);
+    return_value = PyValue_Object(_return_value);
 
 exit:
     return return_value;
 }
 
-static PyObject *
-float_vectorcall(PyObject *type, PyObject *const *args,
+static PyValue
+float_vectorcall(PyValue type_value, const PyValue *args,
     size_t nargsf, PyObject *kwnames)
 {
+    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyObject *x = NULL;
+    PyValue x = PyValue_NULL;
+    PyValue _return_value;
 
     assert(_PyType_CAST(type)->tp_new == float_new);
     /* Make sure the type object is immutable: the generated
@@ -264,10 +278,11 @@ float_vectorcall(PyObject *type, PyObject *const *args,
     }
     x = args[0];
 skip_optional:
-    return_value = float_new_impl(_PyType_CAST(type), x);
+    _return_value = float_new_impl(_PyType_CAST(type), x);
+    return_value = PyValue_Object(_return_value);
 
 exit:
-    return return_value;
+    return PyValue_FromResult(return_value);
 }
 
 PyDoc_STRVAR(float_from_number__doc__,
@@ -277,18 +292,26 @@ PyDoc_STRVAR(float_from_number__doc__,
 "Convert real number to a floating-point number.");
 
 #define FLOAT_FROM_NUMBER_METHODDEF    \
-    {"from_number", (PyCFunction)float_from_number, METH_O|METH_CLASS, float_from_number__doc__},
+    {"from_number", _PyCFunction_CAST(float_from_number), METH_O|METH_CLASS, float_from_number__doc__},
 
 static PyObject *
 float_from_number_impl(PyTypeObject *type, PyObject *number);
 
-static PyObject *
-float_from_number(PyObject *type, PyObject *number)
+static PyValue
+float_from_number(PyObject *type, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyObject *number;
+    PyObject *_return_value;
 
-    return_value = float_from_number_impl((PyTypeObject *)type, number);
+    number = PyValue_Object(arg);
+    if (number == NULL) {
+        goto exit;
+    }
+    _return_value = float_from_number_impl((PyTypeObject *)type, number);
+    return_value = PyValue_FromResult(_return_value);
 
+exit:
     return return_value;
 }
 
@@ -325,26 +348,34 @@ PyDoc_STRVAR(float___getformat____doc__,
 "used by the C type named by typestr.");
 
 #define FLOAT___GETFORMAT___METHODDEF    \
-    {"__getformat__", (PyCFunction)float___getformat__, METH_O|METH_CLASS, float___getformat____doc__},
+    {"__getformat__", _PyCFunction_CAST(float___getformat__), METH_O|METH_CLASS, float___getformat____doc__},
 
 static PyObject *
 float___getformat___impl(PyTypeObject *type, const char *typestr);
 
-static PyObject *
-float___getformat__(PyObject *type, PyObject *arg)
+static PyValue
+float___getformat__(PyObject *type, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *typestr;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__getformat__", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("__getformat__", "argument", "str", _arg);
+            goto exit;
+        }
+        typestr = _PyUnicode_AsUTF8NoNUL(_arg);
+        if (typestr == NULL) {
+            goto exit;
+        }
     }
-    typestr = _PyUnicode_AsUTF8NoNUL(arg);
-    if (typestr == NULL) {
-        goto exit;
-    }
-    return_value = float___getformat___impl((PyTypeObject *)type, typestr);
+    _return_value = float___getformat___impl((PyTypeObject *)type, typestr);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -357,25 +388,33 @@ PyDoc_STRVAR(float___format____doc__,
 "Formats the float according to format_spec.");
 
 #define FLOAT___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)float___format__, METH_O, float___format____doc__},
+    {"__format__", _PyCFunction_CAST(float___format__), METH_O, float___format____doc__},
 
 static PyObject *
 float___format___impl(PyObject *self, PyObject *format_spec);
 
-static PyObject *
-float___format__(PyObject *self, PyObject *arg)
+static PyValue
+float___format__(PyObject *self, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
+    PyObject *_return_value;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("__format__", "argument", "str", _arg);
+            goto exit;
+        }
+        format_spec = _arg;
     }
-    format_spec = arg;
-    return_value = float___format___impl(self, format_spec);
+    _return_value = float___format___impl(self, format_spec);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d1198594a76a4638 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f4b421f992da63ff input=a9049054013a1b77]*/

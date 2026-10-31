@@ -45,8 +45,14 @@ method_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("method", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    function = PyTuple_GET_ITEM(args, 0);
-    instance = PyTuple_GET_ITEM(args, 1);
+    function = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (function == NULL) {
+        goto exit;
+    }
+    instance = PyValue_Object(PyTuple_GET_VALUE(args, 1));
+    if (instance == NULL) {
+        goto exit;
+    }
     return_value = method_new_impl(type, function, instance);
 
 exit:
@@ -76,10 +82,13 @@ instancemethod_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("instancemethod", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    function = PyTuple_GET_ITEM(args, 0);
+    function = PyValue_Object(PyTuple_GET_VALUE(args, 0));
+    if (function == NULL) {
+        goto exit;
+    }
     return_value = instancemethod_new_impl(type, function);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ab546abf90aac94e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e7829bc0b07c6663 input=a9049054013a1b77]*/

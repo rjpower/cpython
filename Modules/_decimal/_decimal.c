@@ -866,17 +866,17 @@ static PyType_Spec signaldict_spec = {
 /******************************************************************************/
 
 #define Dec_CONTEXT_GET_SSIZE(mem)                          \
-static PyObject *                                           \
+static PyValue                                              \
 context_get##mem(PyObject *self, void *Py_UNUSED(closure))  \
 {                                                           \
-    return PyLong_FromSsize_t(mpd_get##mem(CTX(self)));     \
+    return PyValue_FromLongLong(mpd_get##mem(CTX(self)));   \
 }
 
-#define Dec_CONTEXT_GET_ULONG(mem)                              \
-static PyObject *                                               \
-context_get##mem(PyObject *self, void *Py_UNUSED(closure))      \
-{                                                               \
-    return PyLong_FromUnsignedLong(mpd_get##mem(CTX(self)));    \
+#define Dec_CONTEXT_GET_ULONG(mem)                                  \
+static PyValue                                                      \
+context_get##mem(PyObject *self, void *Py_UNUSED(closure))          \
+{                                                                   \
+    return PyValue_FromUnsignedLongLong(mpd_get##mem(CTX(self)));   \
 }
 
 Dec_CONTEXT_GET_SSIZE(prec)
@@ -889,26 +889,26 @@ Dec_CONTEXT_GET_ULONG(traps)
 Dec_CONTEXT_GET_ULONG(status)
 #endif
 
-static PyObject *
+static PyValue
 context_getround(PyObject *self, void *Py_UNUSED(closure))
 {
     int i = mpd_getround(CTX(self));
     decimal_state *state = get_module_state_from_ctx(self);
 
-    return Py_NewRef(state->round_map[i]);
+    return PyValue_FromObject(state->round_map[i]);
 }
 
-static PyObject *
+static PyValue
 context_getcapitals(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(CtxCaps(self));
+    return PyValue_FromLongLong(CtxCaps(self));
 }
 
 #ifdef EXTRA_FUNCTIONALITY
-static PyObject *
+static PyValue
 context_getallcr(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyLong_FromLong(mpd_getcr(CTX(self)));
+    return PyValue_FromLongLong(mpd_getcr(CTX(self)));
 }
 #endif
 
@@ -945,12 +945,12 @@ _decimal_Context_Etop_impl(PyObject *self)
 }
 
 static int
-context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setprec(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -965,12 +965,12 @@ context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setemin(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -985,12 +985,12 @@ context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setemax(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setemax(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1076,8 +1076,12 @@ _decimal_Context__unsafe_setemax_impl(PyObject *self, Py_ssize_t x)
 #endif
 
 static int
-context_setround(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setround(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     int x;
 
@@ -1096,11 +1100,11 @@ context_setround(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static int
-context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setcapitals(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1116,8 +1120,12 @@ context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_settraps(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_settraps(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     uint32_t flags;
 
@@ -1181,8 +1189,12 @@ context_settraps_dict(PyObject *self, PyObject *value)
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_setstatus(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setstatus(PyObject *self, PyValue value_v, void *Py_UNUSED(closure))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     mpd_context_t *ctx;
     uint32_t flags;
 
@@ -1246,12 +1258,12 @@ context_setstatus_dict(PyObject *self, PyObject *value)
 }
 
 static int
-context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setclamp(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1267,12 +1279,12 @@ context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 
 #ifdef EXTRA_FUNCTIONALITY
 static int
-context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+context_setallcr(PyObject *self, PyValue value, void *Py_UNUSED(closure))
 {
     mpd_context_t *ctx;
     mpd_ssize_t x;
 
-    x = PyLong_AsSsize_t(value);
+    x = PyLong_AsSsize_tValue(value);
     if (x == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -1287,7 +1299,7 @@ context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 #endif
 
-static PyObject *
+static PyValue
 context_getattr(PyObject *self, PyObject *name)
 {
     PyObject *retval;
@@ -1295,11 +1307,11 @@ context_getattr(PyObject *self, PyObject *name)
     if (PyUnicode_Check(name)) {
         if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
             retval = ((PyDecContextObject *)self)->traps;
-            return Py_NewRef(retval);
+            return PyValue_FromObject(retval);
         }
         if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
             retval = ((PyDecContextObject *)self)->flags;
-            return Py_NewRef(retval);
+            return PyValue_FromObject(retval);
         }
     }
 
@@ -1307,20 +1319,25 @@ context_getattr(PyObject *self, PyObject *name)
 }
 
 static int
-context_setattr(PyObject *self, PyObject *name, PyObject *value)
+context_setattr(PyObject *self, PyObject *name, PyValue value)
 {
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         PyErr_SetString(PyExc_AttributeError,
             "context attributes cannot be deleted");
         return -1;
     }
 
     if (PyUnicode_Check(name)) {
-        if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
-            return context_settraps_dict(self, value);
-        }
-        if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
-            return context_setstatus_dict(self, value);
+        // These read the value as a dict, so an inline value is boxed for
+        // their error.
+        int traps = PyUnicode_CompareWithASCIIString(name, "traps") == 0;
+        if (traps || PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
+            PyObject *obj = PyValue_Object(value);
+            if (obj == NULL) {
+                return -1;
+            }
+            return traps ? context_settraps_dict(self, obj)
+                         : context_setstatus_dict(self, obj);
         }
     }
 
@@ -1338,22 +1355,34 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
                  PyObject *clamp, PyObject *status, PyObject *traps) {
 
     int ret;
-    if (prec != NULL && context_setprec(self, prec, NULL) < 0) {
+    if (prec != NULL
+        && context_setprec(self, PyValue_FromObject(prec), NULL) < 0)
+    {
         return -1;
     }
-    if (rounding != NULL && context_setround(self, rounding, NULL) < 0) {
+    if (rounding != NULL
+        && context_setround(self, PyValue_FromObject(rounding), NULL) < 0)
+    {
         return -1;
     }
-    if (emin != NULL && context_setemin(self, emin, NULL) < 0) {
+    if (emin != NULL
+        && context_setemin(self, PyValue_FromObject(emin), NULL) < 0)
+    {
         return -1;
     }
-    if (emax != NULL && context_setemax(self, emax, NULL) < 0) {
+    if (emax != NULL
+        && context_setemax(self, PyValue_FromObject(emax), NULL) < 0)
+    {
         return -1;
     }
-    if (capitals != NULL && context_setcapitals(self, capitals, NULL) < 0) {
+    if (capitals != NULL
+        && context_setcapitals(self, PyValue_FromObject(capitals), NULL) < 0)
+    {
         return -1;
     }
-    if (clamp != NULL && context_setclamp(self, clamp, NULL) < 0) {
+    if (clamp != NULL
+        && context_setclamp(self, PyValue_FromObject(clamp), NULL) < 0)
+    {
        return -1;
     }
 
@@ -1363,7 +1392,7 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
         }
 #ifdef EXTRA_FUNCTIONALITY
         else if (PyLong_Check(traps)) {
-            ret = context_settraps(self, traps, NULL);
+            ret = context_settraps(self, PyValue_FromObject(traps), NULL);
         }
 #endif
         else {
@@ -1379,7 +1408,7 @@ context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
         }
 #ifdef EXTRA_FUNCTIONALITY
         else if (PyLong_Check(status)) {
-            ret = context_setstatus(self, status, NULL);
+            ret = context_setstatus(self, PyValue_FromObject(status), NULL);
         }
 #endif
         else {
@@ -2077,8 +2106,8 @@ Set a new default context.
 [clinic start generated code]*/
 
 static PyObject *
-_decimal_setcontext(PyObject *module, PyObject *context)
-/*[clinic end generated code: output=8065f870be2852ce input=b57d7ee786b022a6]*/
+_decimal_setcontext_impl(PyObject *module, PyObject *context)
+/*[clinic end generated code: output=a153db61419f41bb input=b57d7ee786b022a6]*/
 {
     return PyDec_SetCurrentContext(module, context);
 }
@@ -2213,9 +2242,9 @@ Restore the global context.
 
 static PyObject *
 _decimal_ContextManager___exit___impl(PyDecContextManagerObject *self,
-                                      PyObject * const *exc_info,
+                                      const PyValue *exc_info,
                                       Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=744a645b0145842d input=a86ec9080e28dff3]*/
+/*[clinic end generated code: output=38740607b0178279 input=a86ec9080e28dff3]*/
 {
     PyObject *ret;
     ret = PyDec_SetCurrentContext(PyType_GetModule(Py_TYPE(self)), self->global);
@@ -5843,8 +5872,8 @@ _decimal.Decimal.__deepcopy__
 [clinic start generated code]*/
 
 static PyObject *
-_decimal_Decimal___deepcopy__(PyObject *self, PyObject *memo)
-/*[clinic end generated code: output=988fb34e0136b376 input=f95598c6f43233aa]*/
+_decimal_Decimal___deepcopy___impl(PyObject *self, PyObject *memo)
+/*[clinic end generated code: output=816138d04d950813 input=f95598c6f43233aa]*/
 {
     return Py_NewRef(self);
 }
@@ -6055,13 +6084,13 @@ _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls)
 }
 
 /* real and imag */
-static PyObject *
+static PyValue
 dec_real(PyObject *self, void *Py_UNUSED(closure))
 {
-    return Py_NewRef(self);
+    return PyValue_FromObject(self);
 }
 
-static PyObject *
+static PyValue
 dec_imag(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *result;
@@ -6069,11 +6098,11 @@ dec_imag(PyObject *self, void *Py_UNUSED(closure))
     decimal_state *state = get_module_state_by_def(Py_TYPE(self));
     result = dec_alloc(state);
     if (result == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     _dec_settriple(result, MPD_POS, 0, 0);
-    return result;
+    return PyValue_FromResult(result);
 }
 
 

@@ -2,6 +2,8 @@
 preserve
 [clinic start generated code]*/
 
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+
 PyDoc_STRVAR(termios_tcgetattr__doc__,
 "tcgetattr($module, fd, /)\n"
 "--\n"
@@ -16,22 +18,30 @@ PyDoc_STRVAR(termios_tcgetattr__doc__,
 "done using the symbolic constants defined in this module.");
 
 #define TERMIOS_TCGETATTR_METHODDEF    \
-    {"tcgetattr", (PyCFunction)termios_tcgetattr, METH_O, termios_tcgetattr__doc__},
+    {"tcgetattr", _PyCFunction_CAST(termios_tcgetattr), METH_O, termios_tcgetattr__doc__},
 
 static PyObject *
 termios_tcgetattr_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcgetattr(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcgetattr(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
+    PyObject *_return_value;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    return_value = termios_tcgetattr_impl(module, fd);
+    _return_value = termios_tcgetattr_impl(module, fd);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -51,33 +61,43 @@ PyDoc_STRVAR(termios_tcsetattr__doc__,
 "queued output and discarding all queued input.");
 
 #define TERMIOS_TCSETATTR_METHODDEF    \
-    {"tcsetattr", (PyCFunction)(void(*)(void))termios_tcsetattr, METH_FASTCALL, termios_tcsetattr__doc__},
+    {"tcsetattr", _PyCFunction_CAST(termios_tcsetattr), METH_FASTCALL, termios_tcsetattr__doc__},
 
 static PyObject *
 termios_tcsetattr_impl(PyObject *module, int fd, int when, PyObject *term);
 
-static PyObject *
-termios_tcsetattr(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsetattr(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int when;
     PyObject *term;
+    PyObject *_return_value;
 
-    if (nargs != 3) {
-        PyErr_Format(PyExc_TypeError, "tcsetattr expected 3 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsetattr", nargs, 3, 3)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    when = PyLong_AsInt(args[1]);
+    when = PyLong_AsIntValue(args[1]);
     if (when == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    term = args[2];
-    return_value = termios_tcsetattr_impl(module, fd, when, term);
+    term = PyValue_Object(args[2]);
+    if (term == NULL) {
+        goto exit;
+    }
+    _return_value = termios_tcsetattr_impl(module, fd, when, term);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -93,31 +113,38 @@ PyDoc_STRVAR(termios_tcsendbreak__doc__,
 "has a system dependent meaning.");
 
 #define TERMIOS_TCSENDBREAK_METHODDEF    \
-    {"tcsendbreak", (PyCFunction)(void(*)(void))termios_tcsendbreak, METH_FASTCALL, termios_tcsendbreak__doc__},
+    {"tcsendbreak", _PyCFunction_CAST(termios_tcsendbreak), METH_FASTCALL, termios_tcsendbreak__doc__},
 
 static PyObject *
 termios_tcsendbreak_impl(PyObject *module, int fd, int duration);
 
-static PyObject *
-termios_tcsendbreak(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsendbreak(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int duration;
+    PyObject *_return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcsendbreak expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsendbreak", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    duration = PyLong_AsInt(args[1]);
+    duration = PyLong_AsIntValue(args[1]);
     if (duration == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcsendbreak_impl(module, fd, duration);
+    _return_value = termios_tcsendbreak_impl(module, fd, duration);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -130,22 +157,30 @@ PyDoc_STRVAR(termios_tcdrain__doc__,
 "Wait until all output written to file descriptor fd has been transmitted.");
 
 #define TERMIOS_TCDRAIN_METHODDEF    \
-    {"tcdrain", (PyCFunction)termios_tcdrain, METH_O, termios_tcdrain__doc__},
+    {"tcdrain", _PyCFunction_CAST(termios_tcdrain), METH_O, termios_tcdrain__doc__},
 
 static PyObject *
 termios_tcdrain_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcdrain(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcdrain(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
+    PyObject *_return_value;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    return_value = termios_tcdrain_impl(module, fd);
+    _return_value = termios_tcdrain_impl(module, fd);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -162,31 +197,38 @@ PyDoc_STRVAR(termios_tcflush__doc__,
 "both queues.");
 
 #define TERMIOS_TCFLUSH_METHODDEF    \
-    {"tcflush", (PyCFunction)(void(*)(void))termios_tcflush, METH_FASTCALL, termios_tcflush__doc__},
+    {"tcflush", _PyCFunction_CAST(termios_tcflush), METH_FASTCALL, termios_tcflush__doc__},
 
 static PyObject *
 termios_tcflush_impl(PyObject *module, int fd, int queue);
 
-static PyObject *
-termios_tcflush(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcflush(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int queue;
+    PyObject *_return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcflush expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcflush", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    queue = PyLong_AsInt(args[1]);
+    queue = PyLong_AsIntValue(args[1]);
     if (queue == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcflush_impl(module, fd, queue);
+    _return_value = termios_tcflush_impl(module, fd, queue);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -203,31 +245,38 @@ PyDoc_STRVAR(termios_tcflow__doc__,
 "or termios.TCION to restart input.");
 
 #define TERMIOS_TCFLOW_METHODDEF    \
-    {"tcflow", (PyCFunction)(void(*)(void))termios_tcflow, METH_FASTCALL, termios_tcflow__doc__},
+    {"tcflow", _PyCFunction_CAST(termios_tcflow), METH_FASTCALL, termios_tcflow__doc__},
 
 static PyObject *
 termios_tcflow_impl(PyObject *module, int fd, int action);
 
-static PyObject *
-termios_tcflow(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcflow(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int action;
+    PyObject *_return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcflow expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcflow", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    action = PyLong_AsInt(args[1]);
+    action = PyLong_AsIntValue(args[1]);
     if (action == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcflow_impl(module, fd, action);
+    _return_value = termios_tcflow_impl(module, fd, action);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -242,22 +291,30 @@ PyDoc_STRVAR(termios_tcgetwinsize__doc__,
 "Returns a tuple (ws_row, ws_col).");
 
 #define TERMIOS_TCGETWINSIZE_METHODDEF    \
-    {"tcgetwinsize", (PyCFunction)termios_tcgetwinsize, METH_O, termios_tcgetwinsize__doc__},
+    {"tcgetwinsize", _PyCFunction_CAST(termios_tcgetwinsize), METH_O, termios_tcgetwinsize__doc__},
 
 static PyObject *
 termios_tcgetwinsize_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcgetwinsize(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcgetwinsize(PyObject *module, PyValue arg)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
+    PyObject *_return_value;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(arg);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    return_value = termios_tcgetwinsize_impl(module, fd);
+    _return_value = termios_tcgetwinsize_impl(module, fd);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -274,30 +331,40 @@ PyDoc_STRVAR(termios_tcsetwinsize__doc__,
 "tcgetwinsize().");
 
 #define TERMIOS_TCSETWINSIZE_METHODDEF    \
-    {"tcsetwinsize", (PyCFunction)(void(*)(void))termios_tcsetwinsize, METH_FASTCALL, termios_tcsetwinsize__doc__},
+    {"tcsetwinsize", _PyCFunction_CAST(termios_tcsetwinsize), METH_FASTCALL, termios_tcsetwinsize__doc__},
 
 static PyObject *
 termios_tcsetwinsize_impl(PyObject *module, int fd, PyObject *winsz);
 
-static PyObject *
-termios_tcsetwinsize(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsetwinsize(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     PyObject *winsz;
+    PyObject *_return_value;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcsetwinsize expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsetwinsize", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_arg);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    winsz = PyValue_Object(args[1]);
+    if (winsz == NULL) {
         goto exit;
     }
-    winsz = args[1];
-    return_value = termios_tcsetwinsize_impl(module, fd, winsz);
+    _return_value = termios_tcsetwinsize_impl(module, fd, winsz);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d2176c4d9043d3cc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c0f3eedeaf5ba5d1 input=a9049054013a1b77]*/

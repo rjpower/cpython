@@ -18,6 +18,7 @@
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
+#include "pycore_value.h"         // _PyValue_None
 
 #include <stdbool.h>              // bool
 
@@ -84,10 +85,10 @@ static PyMemberDef encoder_members[] = {
 
 static PyObject *
 ascii_escape_unicode(PyObject *pystr);
-static PyObject *
-py_encode_basestring_ascii(PyObject* Py_UNUSED(self), PyObject *pystr);
+static PyValue
+py_encode_basestring_ascii(PyObject *module, PyValue arg);
 
-static PyObject *
+static PyValue
 scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_t idx, Py_ssize_t *next_idx_ptr);
 static PyObject *
 _build_rval_index_tuple(PyObject *rval, Py_ssize_t idx);
@@ -107,7 +108,7 @@ encoder_clear(PyObject *self);
 static int
 encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *seq, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
-encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj, Py_ssize_t indent_level, PyObject *indent_cache);
+encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyValue value, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
 encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *dct, Py_ssize_t indent_level, PyObject *indent_cache);
 static PyObject *
@@ -119,7 +120,7 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen);
 static int
 encoder_write_string(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj);
 static PyObject *
-encoder_encode_float(PyEncoderObject *s, PyObject *obj);
+encoder_encode_float(PyEncoderObject *s, PyValue value);
 
 #define S_CHAR(c) (c >= ' ' && c <= '~' && c != '\\' && c != '"')
 #define IS_WHITESPACE(c) (((c) == ' ') || ((c) == '\t') || ((c) == '\n') || ((c) == '\r'))
@@ -803,15 +804,13 @@ _parse_object_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ss
             while (idx <= end_idx && IS_WHITESPACE(PyUnicode_READ(kind, str, idx))) idx++;
 
             /* read any JSON term */
-            PyObject *val = scan_once_unicode(s, memo, pystr, idx, &next_idx);
-            if (val == NULL)
+            PyValue val = scan_once_unicode(s, memo, pystr, idx, &next_idx);
+            if (PyValue_IsNull(val))
                 goto bail;
 
-            /* The steal below takes our references to both key and val
-               (releasing them on failure).  Only key is reset for the bail
-               path; val is never live there, so it needs no cleanup. */
             if (has_pairs_hook) {
-                PyObject *item = _PyTuple_FromPairSteal(key, val);
+                PyValue pair[2] = {PyValue_FromObject(key), val};
+                PyObject *item = _PyTuple_FromValues(pair, 2);
                 key = NULL;
                 if (item == NULL)
                     goto bail;
@@ -822,7 +821,8 @@ _parse_object_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ss
                 Py_DECREF(item);
             }
             else {
-                int err = _PyDict_SetItem_Take2((PyDictObject *)rval, key, val);
+                int err = _PyDict_SetItemValue((PyDictObject *)rval,
+                                               PyValue_FromObject(key), val);
                 key = NULL;
                 if (err < 0)
                     goto bail;
@@ -905,11 +905,11 @@ _parse_array_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssi
         while (1) {
 
             /* read any JSON term  */
-            PyObject *val = scan_once_unicode(s, memo, pystr, idx, &next_idx);
-            if (val == NULL)
+            PyValue val = scan_once_unicode(s, memo, pystr, idx, &next_idx);
+            if (PyValue_IsNull(val))
                 goto bail;
 
-            if (_PyList_AppendTakeRef((PyListObject *)rval, val) < 0)
+            if (_PyList_AppendValue((PyListObject *)rval, val) < 0)
                 goto bail;
             idx = next_idx;
 
@@ -980,15 +980,14 @@ _parse_constant(PyScannerObject *s, const char *constant, Py_ssize_t idx, Py_ssi
     return rval;
 }
 
-static PyObject *
+static PyValue
 _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_ssize_t *next_idx_ptr) {
     /* Read a JSON number from PyUnicode pystr.
     idx is the index of the first character of the number
     *next_idx_ptr is a return-by-reference index to the first character after
         the number.
 
-    Returns a new PyObject representation of that number:
-        PyLong, or PyFloat.
+    Returns the value of that number: an int or a float.
         May return other types if parse_int or parse_float are set
     */
     const void *str;
@@ -996,7 +995,7 @@ _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_
     Py_ssize_t end_idx;
     Py_ssize_t idx = start;
     int is_float = 0;
-    PyObject *rval;
+    PyValue rval;
     PyObject *numstr = NULL;
     PyObject *custom_func;
 
@@ -1009,7 +1008,7 @@ _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_
         idx++;
         if (idx > end_idx) {
             raise_stop_iteration(start);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -1025,7 +1024,7 @@ _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_
     /* no integer digits, error */
     else {
         raise_stop_iteration(start);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* if the next char is '.' followed by a digit then read all float digits */
@@ -1068,8 +1067,8 @@ _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_
                                            (char*)str + kind * start,
                                            idx - start);
         if (numstr == NULL)
-            return NULL;
-        rval = PyObject_CallOneArg(custom_func, numstr);
+            return PyValue_NULL;
+        rval = PyValue_FromResult(PyObject_CallOneArg(custom_func, numstr));
     }
     else {
         Py_ssize_t i, n;
@@ -1079,22 +1078,30 @@ _match_number_unicode(PyScannerObject *s, PyObject *pystr, Py_ssize_t start, Py_
         n = idx - start;
         numstr = PyBytes_FromStringAndSize(NULL, n);
         if (numstr == NULL)
-            return NULL;
+            return PyValue_NULL;
         buf = PyBytes_AS_STRING(numstr);
         for (i = 0; i < n; i++) {
             buf[i] = (char) PyUnicode_READ(kind, str, i + start);
         }
-        if (is_float)
-            rval = PyFloat_FromString(numstr);
-        else
-            rval = PyLong_FromString(buf, NULL, 10);
+        if (is_float) {
+            double d = PyOS_string_to_double(buf, NULL, NULL);
+            if (d == -1.0 && PyErr_Occurred()) {
+                rval = PyValue_NULL;
+            }
+            else {
+                rval = PyValue_FromDouble(d);
+            }
+        }
+        else {
+            rval = PyValue_FromResult(PyLong_FromString(buf, NULL, 10));
+        }
     }
     Py_DECREF(numstr);
     *next_idx_ptr = idx;
     return rval;
 }
 
-static PyObject *
+static PyValue
 scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_t idx, Py_ssize_t *next_idx_ptr)
 {
     /* Read one JSON term (of any kind) from PyUnicode pystr.
@@ -1102,7 +1109,7 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
     *next_idx_ptr is a return-by-reference index to the first character after
         the number.
 
-    Returns a new PyObject representation of the term.
+    Returns the value of the term.
     */
     PyObject *res;
     const void *str;
@@ -1115,45 +1122,46 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
 
     if (idx < 0) {
         PyErr_SetString(PyExc_ValueError, "idx cannot be negative");
-        return NULL;
+        return PyValue_NULL;
     }
     if (idx >= length) {
         raise_stop_iteration(idx);
-        return NULL;
+        return PyValue_NULL;
     }
 
     switch (PyUnicode_READ(kind, str, idx)) {
         case '"':
             /* string */
-            return scanstring_unicode(pystr, idx + 1, s->strict, next_idx_ptr);
+            return PyValue_FromResult(
+                scanstring_unicode(pystr, idx + 1, s->strict, next_idx_ptr));
         case '{':
             /* object */
             if (_Py_EnterRecursiveCall(" while decoding a JSON object "
                                        "from a unicode string"))
-                return NULL;
+                return PyValue_NULL;
             res = _parse_object_unicode(s, memo, pystr, idx + 1, next_idx_ptr);
             _Py_LeaveRecursiveCall();
-            return res;
+            return PyValue_FromResult(res);
         case '[':
             /* array */
             if (_Py_EnterRecursiveCall(" while decoding a JSON array "
                                        "from a unicode string"))
-                return NULL;
+                return PyValue_NULL;
             res = _parse_array_unicode(s, memo, pystr, idx + 1, next_idx_ptr);
             _Py_LeaveRecursiveCall();
-            return res;
+            return PyValue_FromResult(res);
         case 'n':
             /* null */
             if ((idx + 3 < length) && PyUnicode_READ(kind, str, idx + 1) == 'u' && PyUnicode_READ(kind, str, idx + 2) == 'l' && PyUnicode_READ(kind, str, idx + 3) == 'l') {
                 *next_idx_ptr = idx + 4;
-                Py_RETURN_NONE;
+                return _PyValue_None;
             }
             break;
         case 't':
             /* true */
             if ((idx + 3 < length) && PyUnicode_READ(kind, str, idx + 1) == 'r' && PyUnicode_READ(kind, str, idx + 2) == 'u' && PyUnicode_READ(kind, str, idx + 3) == 'e') {
                 *next_idx_ptr = idx + 4;
-                Py_RETURN_TRUE;
+                return _PyValue_True;
             }
             break;
         case 'f':
@@ -1163,14 +1171,14 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
                 PyUnicode_READ(kind, str, idx + 3) == 's' &&
                 PyUnicode_READ(kind, str, idx + 4) == 'e') {
                 *next_idx_ptr = idx + 5;
-                Py_RETURN_FALSE;
+                return _PyValue_False;
             }
             break;
         case 'N':
             /* NaN */
             if ((idx + 2 < length) && PyUnicode_READ(kind, str, idx + 1) == 'a' &&
                 PyUnicode_READ(kind, str, idx + 2) == 'N') {
-                return _parse_constant(s, "NaN", idx, next_idx_ptr);
+                return PyValue_FromResult(_parse_constant(s, "NaN", idx, next_idx_ptr));
             }
             break;
         case 'I':
@@ -1182,7 +1190,7 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
                 PyUnicode_READ(kind, str, idx + 5) == 'i' &&
                 PyUnicode_READ(kind, str, idx + 6) == 't' &&
                 PyUnicode_READ(kind, str, idx + 7) == 'y') {
-                return _parse_constant(s, "Infinity", idx, next_idx_ptr);
+                return PyValue_FromResult(_parse_constant(s, "Infinity", idx, next_idx_ptr));
             }
             break;
         case '-':
@@ -1195,7 +1203,7 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
                 PyUnicode_READ(kind, str, idx + 6) == 'i' &&
                 PyUnicode_READ(kind, str, idx + 7) == 't' &&
                 PyUnicode_READ(kind, str, idx + 8) == 'y') {
-                return _parse_constant(s, "-Infinity", idx, next_idx_ptr);
+                return PyValue_FromResult(_parse_constant(s, "-Infinity", idx, next_idx_ptr));
             }
             break;
     }
@@ -1204,11 +1212,11 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
 }
 
 static PyObject *
-scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
+scanner_call_object(PyObject *self, PyObject *args, PyObject *kwds)
 {
     /* Python callable interface to scan_once_{str,unicode} */
     PyObject *pystr;
-    PyObject *rval;
+    PyValue rval;
     Py_ssize_t idx;
     Py_ssize_t next_idx = -1;
     static char *kwlist[] = {"string", "idx", NULL};
@@ -1229,9 +1237,18 @@ scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
     rval = scan_once_unicode(PyScannerObject_CAST(self),
                              memo, pystr, idx, &next_idx);
     Py_DECREF(memo);
-    if (rval == NULL)
+    if (PyValue_IsNull(rval))
         return NULL;
-    return _build_rval_index_tuple(rval, next_idx);
+    PyValue items[2] = {rval, PyValue_FromLongLong(next_idx)};
+    if (PyValue_IsNull(items[1]))
+        return NULL;
+    return _PyTuple_FromValues(items, 2);
+}
+
+static PyValue
+scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(scanner_call_object(self, args, kwds));
 }
 
 static PyObject *
@@ -1346,10 +1363,10 @@ encoder_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     if (PyCFunction_Check(s->encoder)) {
         PyCFunction f = PyCFunction_GetFunction(s->encoder);
-        if (f == py_encode_basestring_ascii) {
+        if (f == _PyCFunction_CAST(py_encode_basestring_ascii)) {
             s->fast_encode = write_escaped_ascii;
         }
-        else if (f == py_encode_basestring) {
+        else if (f == _PyCFunction_CAST(py_encode_basestring)) {
             s->fast_encode = write_escaped_unicode;
         }
     }
@@ -1444,7 +1461,7 @@ write_newline_indent(PyUnicodeWriter *writer,
 
 
 static PyObject *
-encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+encoder_call_object(PyObject *op, PyObject *args, PyObject *kwds)
 {
     /* Python callable interface to encoder_listencode_obj */
     static char *kwlist[] = {"obj", "_current_indent_level", NULL};
@@ -1470,7 +1487,8 @@ encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
         }
     }
     indent_level = 0;
-    if (encoder_listencode_obj(self, writer, obj, indent_level, indent_cache)) {
+    if (encoder_listencode_obj(self, writer, PyValue_FromObject(obj),
+                               indent_level, indent_cache)) {
         PyUnicodeWriter_Discard(writer);
         Py_XDECREF(indent_cache);
         return NULL;
@@ -1484,6 +1502,12 @@ encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
     PyObject *result = PyTuple_Pack(1, str);
     Py_DECREF(str);
     return result;
+}
+
+static PyValue
+encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+{
+    return PyValue_FromResult(encoder_call_object(op, args, kwds));
 }
 
 static PyObject *
@@ -1506,12 +1530,19 @@ _encoded_const(PyObject *obj)
 }
 
 static PyObject *
-encoder_encode_float(PyEncoderObject *s, PyObject *obj)
+encoder_encode_float(PyEncoderObject *s, PyValue value)
 {
-    /* Return the JSON representation of a PyFloat. */
-    double i = PyFloat_AS_DOUBLE(obj);
+    /* Return the JSON representation of a float, inline or a float object. */
+    double i = PyValue_IsInlineFloat(value)
+               ? PyValue_Double(value)
+               : PyFloat_AS_DOUBLE(PyValue_ObjectBorrow(value));
     if (!isfinite(i)) {
         if (!s->allow_nan) {
+            // A box of an inline value, for the message.
+            PyObject *obj = PyValue_Object(value);
+            if (obj == NULL) {
+                return NULL;
+            }
             PyErr_Format(
                     PyExc_ValueError,
                     "Out of range float values are not JSON compliant: %R",
@@ -1529,7 +1560,10 @@ encoder_encode_float(PyEncoderObject *s, PyObject *obj)
             return PyUnicode_FromString("NaN");
         }
     }
-    return PyFloat_Type.tp_repr(obj);
+    if (PyValue_IsInlineFloat(value)) {
+        return PyValue_Object(PyObject_ReprValue(value));
+    }
+    return PyFloat_Type.tp_repr(PyValue_ObjectBorrow(value));
 }
 
 static int
@@ -1566,13 +1600,24 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
 
 static int
 encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
-                       PyObject *obj,
+                       PyValue value,
                        Py_ssize_t indent_level, PyObject *indent_cache)
 {
-    /* Encode Python object obj to a JSON term */
+    /* Encode Python value to a JSON term */
     PyObject *newobj;
     int rv;
 
+    if (PyValue_IsInlineInt(value)) {
+        // Fast-path for exact integers that fit in int32
+        return PyUnicodeWriter_Format(writer, "%d", (int)PyValue_Int32(value));
+    }
+    if (PyValue_IsInlineFloat(value)) {
+        PyObject *encoded = encoder_encode_float(s, value);
+        if (encoded == NULL)
+            return -1;
+        return _steal_accumulate(writer, encoded);
+    }
+    PyObject *obj = PyValue_ObjectBorrow(value);
     if (obj == Py_None) {
       return PyUnicodeWriter_WriteASCII(writer, "null", 4);
     }
@@ -1596,7 +1641,7 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
         return _steal_accumulate(writer, encoded);
     }
     else if (PyFloat_Check(obj)) {
-        PyObject *encoded = encoder_encode_float(s, obj);
+        PyObject *encoded = encoder_encode_float(s, value);
         if (encoded == NULL)
             return -1;
         return _steal_accumulate(writer, encoded);
@@ -1645,7 +1690,8 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
             Py_XDECREF(ident);
             return -1;
         }
-        rv = encoder_listencode_obj(s, writer, newobj, indent_level, indent_cache);
+        rv = encoder_listencode_obj(s, writer, PyValue_FromObject(newobj),
+                                    indent_level, indent_cache);
         _Py_LeaveRecursiveCall();
 
         Py_DECREF(newobj);
@@ -1667,18 +1713,27 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
 
 static int
 encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *first,
-                         PyObject *dct, PyObject *key, PyObject *value,
+                         PyObject *dct, PyValue key_value, PyValue value,
                          Py_ssize_t indent_level, PyObject *indent_cache,
                          PyObject *item_separator)
 {
     PyObject *keystr = NULL;
     int rv;
 
+    if (PyValue_IsInlineFloat(key_value)) {
+        keystr = encoder_encode_float(s, key_value);
+        goto have_keystr;
+    }
+    if (PyValue_IsInlineInt(key_value)) {
+        keystr = PyValue_Object(PyObject_ReprValue(key_value));
+        goto have_keystr;
+    }
+    PyObject *key = PyValue_ObjectBorrow(key_value);
     if (PyUnicode_Check(key)) {
         keystr = Py_NewRef(key);
     }
     else if (PyFloat_Check(key)) {
-        keystr = encoder_encode_float(s, key);
+        keystr = encoder_encode_float(s, key_value);
     }
     else if (key == Py_True || key == Py_False || key == Py_None) {
                     /* This must come before the PyLong_Check because
@@ -1698,6 +1753,7 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
         return -1;
     }
 
+have_keystr:
     if (keystr == NULL) {
         return -1;
     }
@@ -1728,7 +1784,11 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
         return -1;
     }
     if (encoder_listencode_obj(s, writer, value, indent_level, indent_cache) < 0) {
-        _PyErr_FormatNote("when serializing %T item %R", dct, key);
+        // A box of an inline key, for the note.
+        PyObject *key_o = PyValue_Object(key_value);
+        if (key_o != NULL) {
+            _PyErr_FormatNote("when serializing %T item %R", dct, key_o);
+        }
         return -1;
     }
     return 0;
@@ -1741,7 +1801,7 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
                             PyObject *separator)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(items);
-    PyObject *key, *value;
+    PyValue key, value;
     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
         PyObject *item = PyList_GET_ITEM(items, i);
         // gh-142831: encoder_encode_key_value() can invoke user code
@@ -1753,8 +1813,8 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
             return -1;
         }
 
-        key = PyTuple_GET_ITEM(item, 0);
-        value = PyTuple_GET_ITEM(item, 1);
+        key = PyTuple_GET_VALUE(item, 0);
+        value = PyTuple_GET_VALUE(item, 1);
         if (encoder_encode_key_value(s, writer, first, dct, key, value,
                                      indent_level, indent_cache,
                                      separator) < 0) {
@@ -1780,9 +1840,12 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
         // that mutates the dict, invalidating these borrowed refs.
         Py_INCREF(key);
         Py_INCREF(value);
-        if (encoder_encode_key_value(s, writer, first, dct, key, value,
-                                    indent_level, indent_cache,
-                                    separator) < 0) {
+        // PyDict_Next() boxes an inline key or value.
+        if (encoder_encode_key_value(s, writer, first, dct,
+                                     PyValue_FromObject(key),
+                                     PyValue_FromObject(value),
+                                     indent_level, indent_cache,
+                                     separator) < 0) {
             Py_DECREF(key);
             Py_DECREF(value);
             return -1;
@@ -1891,22 +1954,18 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     Py_ssize_t indent_level, PyObject *indent_cache, PyObject *separator)
 {
     for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(s_fast); i++) {
-        PyObject *obj = PySequence_Fast_GET_ITEM(s_fast, i);
         // gh-142831: encoder_listencode_obj() can invoke user code
-        // that mutates the sequence, invalidating this borrowed ref.
-        Py_INCREF(obj);
+        // that mutates the sequence; this local keeps the item alive.
+        PyValue obj = PySequence_Fast_GET_VALUE(s_fast, i);
         if (i) {
             if (PyUnicodeWriter_WriteStr(writer, separator) < 0) {
-                Py_DECREF(obj);
                 return -1;
             }
         }
         if (encoder_listencode_obj(s, writer, obj, indent_level, indent_cache)) {
             _PyErr_FormatNote("when serializing %T item %zd", seq, i);
-            Py_DECREF(obj);
             return -1;
         }
-        Py_DECREF(obj);
     }
     return 0;
 }

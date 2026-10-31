@@ -7678,6 +7678,7 @@ class CapiTest(unittest.TestCase):
 
                     self.assertEqual(dt_orig, dt_rt)
 
+    @support.requires_subinterpreters
     def test_type_check_in_subinterp(self):
         # Apple mobile platforms require the use of the custom framework loader,
         # not the ExtensionFileLoader.
@@ -7795,6 +7796,7 @@ class ExtensionModuleTests(unittest.TestCase):
             """)
         script_helper.assert_python_ok('-c', script)
 
+    @support.requires_subinterpreters
     def test_concurrent_initialization_subinterpreter(self):
         # gh-136421: Concurrent initialization of _datetime across multiple
         # interpreters wasn't thread-safe due to its static types.

@@ -12,6 +12,7 @@
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_moduleobject.h"  // _PyModule_GetDefOrNull()
 #include "pycore_object.h"        // _PyType_AllocNoTrack
+#include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_slots.h"         // _PySlotIterator_Init
@@ -81,59 +82,6 @@ _PyModule_IsExtension(PyObject *obj)
 PyObject*
 PyModuleDef_Init(PyModuleDef* def)
 {
-#ifdef Py_GIL_DISABLED
-    // Check that this def does not come from a non-free-threading ABI.
-    //
-    // This is meant as a "sanity check"; users should never rely on it.
-    // In particular, if we run out of ob_flags bits, or otherwise need to
-    // change some of the internals, this check can go away. Still, it
-    // would be nice to keep it for the free-threading transition.
-    //
-    // A PyModuleDef must be initialized with PyModuleDef_HEAD_INIT,
-    // which (via PyObject_HEAD_INIT) sets _Py_STATICALLY_ALLOCATED_FLAG
-    // and not _Py_LEGACY_ABI_CHECK_FLAG. For PyModuleDef, these flags never
-    // change.
-    // This means that the lower nibble of a valid PyModuleDef's ob_flags is
-    // always `_10_` (in binary; `_` is don't care).
-    //
-    // So, a check for these bits won't reject valid PyModuleDef.
-    // Rejecting incompatible extensions is slightly less important; here's
-    // how that works:
-    //
-    // In the pre-free-threading stable ABI, PyModuleDef_HEAD_INIT is big
-    // enough to overlap with free-threading ABI's ob_flags, is all zeros
-    // except for the refcount field.
-    // The refcount field can be:
-    // - 1 (3.11 and below)
-    // - UINT_MAX >> 2 (32-bit 3.12 & 3.13)
-    // - UINT_MAX (64-bit 3.12 & 3.13)
-    // - 7L << 28 (3.14)
-    //
-    // This means that the lower nibble of *any byte* in PyModuleDef_HEAD_INIT
-    // is not `_10_` -- it can be:
-    // - 0b0000
-    // - 0b0001
-    // - 0b0011 (from UINT_MAX >> 2)
-    // - 0b0111 (from 7L << 28)
-    // - 0b1111 (e.g. from UINT_MAX)
-    // (The values may change at runtime as the PyModuleDef is used, but
-    // PyModuleDef_Init is required before using the def as a Python object,
-    // so we check at least once with the initial values.
-    uint16_t flags = ((PyObject*)def)->ob_flags;
-    uint16_t bits = _Py_STATICALLY_ALLOCATED_FLAG | _Py_LEGACY_ABI_CHECK_FLAG;
-    if ((flags & bits) != _Py_STATICALLY_ALLOCATED_FLAG) {
-        const char *message = "invalid PyModuleDef, extension possibly "
-            "compiled for non-free-threaded Python";
-        // Write the error as unraisable: if the extension tries calling
-        // any API, it's likely to segfault and lose the exception.
-        PyErr_SetString(PyExc_SystemError, message);
-        PyErr_WriteUnraisable(NULL);
-        // But also raise the exception normally -- this is technically
-        // a recoverable state.
-        PyErr_SetString(PyExc_SystemError, message);
-        return NULL;
-    }
-#endif
     assert(PyModuleDef_Type.tp_flags & Py_TPFLAGS_READY);
     if (def->m_base.m_index == 0) {
         Py_SET_REFCNT(def, 1);
@@ -176,12 +124,8 @@ new_module_notrack(PyTypeObject *mt)
     if (m == NULL)
         return NULL;
     m->md_state = NULL;
-    m->md_weaklist = NULL;
     m->md_name = NULL;
     m->md_token_is_def = false;
-#ifdef Py_GIL_DISABLED
-    m->md_requires_gil = true;
-#endif
     m->md_state_size = 0;
     m->md_state_traverse = NULL;
     m->md_state_clear = NULL;
@@ -202,14 +146,14 @@ new_module_notrack(PyTypeObject *mt)
  */
 static int
 module_dict_watcher(PyDict_WatchEvent event, PyObject *dict,
-                    PyObject *key, PyObject *new_value)
+                    PyValue key, PyValue new_value)
 {
     assert(PyDict_Check(dict));
     // Only if a new lazy object shows up do we need to clear the dictionary. If
     // this is adding a new key then the version will be reset anyway.
     if (event == PyDict_EVENT_MODIFIED &&
-        new_value != NULL &&
-        PyLazyImport_CheckExact(new_value)) {
+        PyValue_IsObject(new_value) &&
+        PyLazyImport_CheckExact(PyValue_ObjectBorrow(new_value))) {
         _PyDict_ClearKeysVersionLockHeld(dict);
     }
     return 0;
@@ -219,8 +163,8 @@ int
 _PyModule_InitModuleDictWatcher(PyInterpreterState *interp)
 {
     // This is a reserved watcher for CPython so there's no need to check for non-NULL.
-    assert(interp->dict_state.watchers[MODULE_WATCHER_ID] == NULL);
-    interp->dict_state.watchers[MODULE_WATCHER_ID] = &module_dict_watcher;
+    assert(interp->dict_state.core_watchers[MODULE_WATCHER_ID] == NULL);
+    interp->dict_state.core_watchers[MODULE_WATCHER_ID] = &module_dict_watcher;
     return 0;
 }
 
@@ -391,9 +335,6 @@ _PyModule_CreateInitialized(PyModuleDef* module, int module_api_version)
     m->md_token = module;
     m->md_token_is_def = true;
     module_copy_members_from_deflike(m, module);
-#ifdef Py_GIL_DISABLED
-    m->md_requires_gil = true;
-#endif
     return (PyObject*)m;
 }
 
@@ -530,21 +471,6 @@ module_from_slots_and_spec(
         goto error;
     }
 
-#ifdef Py_GIL_DISABLED
-    // For modules created directly from slots (not from a def), we enable
-    // the GIL here (pairing `_PyEval_EnableGILTransient` with
-    // an immediate `_PyImport_EnableGILAndWarn`).
-    // For modules created from a def, the caller is responsible for this.
-    if (!original_def && requires_gil) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        if (_PyEval_EnableGILTransient(tstate) < 0) {
-            goto error;
-        }
-        if (_PyImport_EnableGILAndWarn(tstate, nameobj) < 0) {
-            goto error;
-        }
-    }
-#endif
 
     if (def_like->m_size < 0) {
         PyErr_Format(
@@ -609,11 +535,7 @@ module_from_slots_and_spec(
         else {
             mod->md_token = token;
         }
-#ifdef Py_GIL_DISABLED
-        mod->md_requires_gil = requires_gil;
-#else
         (void)requires_gil;
-#endif
         mod->md_exec = m_exec;
     } else {
         if (def_like->m_size > 0 || def_like->m_traverse || def_like->m_clear
@@ -687,19 +609,6 @@ PyModule_FromSlotsAndSpec(const PySlot *slots, PyObject *spec)
                                       NULL);
 }
 
-#ifdef Py_GIL_DISABLED
-int
-PyUnstable_Module_SetGIL(PyObject *module, void *gil)
-{
-    bool requires_gil = (gil != Py_MOD_GIL_NOT_USED);
-    if (!PyModule_Check(module)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    ((PyModuleObject *)module)->md_requires_gil = requires_gil;
-    return 0;
-}
-#endif
 
 static int
 run_exec_func(PyObject *module, int (*exec)(PyObject *))
@@ -1057,14 +966,22 @@ _PyModule_ClearDict(PyObject *d)
        avoid rehashing the dictionary (to some extent). */
 
     Py_ssize_t pos;
-    PyObject *key, *value;
+    PyValue key_value, value;
+    PyObject *key;
+    // The values are read as they are: shutdown may be short of memory, and
+    // a box would be wasted on a value about to be replaced.
+    PyValue none = PyValue_FromObject(Py_None);
 
     int verbose = _Py_GetConfig()->verbose;
 
     /* First, clear only names starting with a single underscore */
     pos = 0;
-    while (PyDict_Next(d, &pos, &key, &value)) {
-        if (value != Py_None && PyUnicode_Check(key)) {
+    while (_PyDict_NextValue(d, &pos, &key_value, &value, NULL)) {
+        if (PyValue_Is(value, none) || PyValue_IsInline(key_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        if (PyUnicode_Check(key)) {
             if (PyUnicode_READ_CHAR(key, 0) == '_' &&
                 PyUnicode_READ_CHAR(key, 1) != '_') {
                 if (verbose > 1) {
@@ -1084,8 +1001,12 @@ _PyModule_ClearDict(PyObject *d)
 
     /* Next, clear all names except for __builtins__ */
     pos = 0;
-    while (PyDict_Next(d, &pos, &key, &value)) {
-        if (value != Py_None && PyUnicode_Check(key)) {
+    while (_PyDict_NextValue(d, &pos, &key_value, &value, NULL)) {
+        if (PyValue_Is(value, none) || PyValue_IsInline(key_value)) {
+            continue;
+        }
+        key = PyValue_ObjectBorrow(key_value);
+        if (PyUnicode_Check(key)) {
             if (PyUnicode_READ_CHAR(key, 0) != '_' ||
                 !_PyUnicode_EqualToASCIIString(key, "__builtins__"))
             {
@@ -1143,18 +1064,9 @@ module_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(m);
 
-    int verbose = _Py_GetConfig()->verbose;
-    if (verbose && m->md_name) {
-        PySys_FormatStderr("# destroy %U\n", m->md_name);
-    }
-    FT_CLEAR_WEAKREFS(self, m->md_weaklist);
+    FT_CLEAR_WEAKREFS(self);
 
     assert_def_missing_or_redundant(m);
-    /* bpo-39824: Don't call m_free() if m_size > 0 and md_state=NULL */
-    if (m->md_state_free && (m->md_state_size <= 0 || m->md_state != NULL))
-    {
-        m->md_state_free(m);
-    }
 
     Py_XDECREF(m->md_dict);
     Py_XDECREF(m->md_name);
@@ -1162,6 +1074,20 @@ module_dealloc(PyObject *self)
         PyMem_Free(m->md_state);
     }
     Py_TYPE(m)->tp_free((PyObject *)m);
+}
+
+/* m_free is extension code, which may run Python code or allocate, so it
+   runs before the sweep, while the module's state is intact.  The collector
+   calls it once (_Py_GC_NOTIFIED_FLAG); the state's memory is freed with the
+   module. */
+void
+_PyModule_FreeState(PyObject *self)
+{
+    PyModuleObject *m = _PyModule_CAST(self);
+    /* bpo-39824: Don't call m_free() if m_size > 0 and md_state=NULL */
+    if (m->md_state_free && (m->md_state_size <= 0 || m->md_state != NULL)) {
+        m->md_state_free(m);
+    }
 }
 
 static PyObject *
@@ -1174,69 +1100,89 @@ module_repr(PyObject *self)
 
 /* Check if the "_initializing" attribute of the module spec is set to true.
  */
-int
+Py_GC_PRECISE int
 _PyModuleSpec_IsInitializing(PyObject *spec)
 {
     if (spec == NULL) {
         return 0;
     }
-    PyObject *value;
-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_initializing), &value);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[2];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, spec);
+    PyObject **valuep = _PyValueSpan_ObjectSlot(&span);
+    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_initializing), valuep);
     if (rc > 0) {
-        rc = PyObject_IsTrue(value);
-        Py_DECREF(value);
+        rc = PyObject_IsTrue(*valuep);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return rc;
 }
 
 /* Check if the submodule name is in the "_uninitialized_submodules" attribute
    of the module spec.
  */
-int
+Py_GC_PRECISE int
 _PyModuleSpec_IsUninitializedSubmodule(PyObject *spec, PyObject *name)
 {
     if (spec == NULL) {
          return 0;
     }
 
-    PyObject *value;
-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_uninitialized_submodules), &value);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, spec);
+    _PyValueSpan_AppendObject(&span, name);
+    PyObject **valuep = _PyValueSpan_ObjectSlot(&span);
+    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_uninitialized_submodules),
+                                      valuep);
     if (rc > 0) {
-        rc = PySequence_Contains(value, name);
-        Py_DECREF(value);
+        rc = PySequence_Contains(*valuep, name);
     }
+    _PyThreadState_PopValueRoot(tstate, &span);
     return rc;
 }
 
-int
+Py_GC_PRECISE int
 _PyModuleSpec_GetFileOrigin(PyObject *spec, PyObject **p_origin)
 {
-    PyObject *has_location = NULL;
-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(has_location), &has_location);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, spec);
+    PyObject **has_locationp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **originp = _PyValueSpan_ObjectSlot(&span);
+    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(has_location),
+                                      has_locationp);
     if (rc <= 0) {
-        return rc;
+        goto done;
     }
     // If origin is not a location, or doesn't exist, or is not a str, we could consider falling
     // back to module.__file__. But the cases in which module.__file__ is not __spec__.origin
     // are cases in which we probably shouldn't be guessing.
-    rc = PyObject_IsTrue(has_location);
-    Py_DECREF(has_location);
+    rc = PyObject_IsTrue(*has_locationp);
     if (rc <= 0) {
-        return rc;
+        goto done;
     }
     // has_location is true, so origin is a location
-    PyObject *origin = NULL;
-    rc = PyObject_GetOptionalAttr(spec, &_Py_ID(origin), &origin);
+    rc = PyObject_GetOptionalAttr(spec, &_Py_ID(origin), originp);
     if (rc <= 0) {
-        return rc;
+        goto done;
     }
-    assert(origin != NULL);
-    if (!PyUnicode_Check(origin)) {
-        Py_DECREF(origin);
-        return 0;
+    assert(*originp != NULL);
+    if (!PyUnicode_Check(*originp)) {
+        rc = 0;
+        goto done;
     }
-    *p_origin = origin;
-    return 1;
+    *p_origin = *originp;
+    rc = 1;
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return rc;
 }
 
 int
@@ -1313,7 +1259,9 @@ done:
     return result;
 }
 
-static int
+/* The callers anchor the dict and the name, and *result is an object slot
+   of their spans. */
+Py_GC_PRECISE Py_GC_ARGS_ANCHORED static int
 module_get_resolved_dict_item(PyObject *dict, PyObject *name, PyObject **result)
 {
     int rc = PyDict_GetItemRef(dict, name, result);
@@ -1330,32 +1278,66 @@ module_get_resolved_dict_item(PyObject *dict, PyObject *name, PyObject **result)
     return value == NULL ? -1 : 1;
 }
 
-PyObject*
+/* The module's attribute as a value: an inline value in its dict is not
+   boxed, nor what a module __getattr__ returns.  The span: the module, the
+   name and the module's dict, then the slots of what is looked up: the
+   attribute, the module's __getattr__, its __name__ and __spec__, the
+   spec's origin and sys.stdlib_module_names. */
+Py_GC_PRECISE PyValue
 _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
 {
     // When suppress=1, this function suppresses AttributeError.
-    PyObject *attr, *mod_name, *getattr;
-    attr = _PyObject_GenericGetAttrWithDict((PyObject *)m, name, NULL, suppress);
-    if (attr == NULL) {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[9];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)m);
+    _PyValueSpan_AppendObject(&span, name);
+    PyObject *dict = m->md_dict;
+    _PyValueSpan_AppendObject(&span, dict);
+    PyValue found = _PyObject_GenericGetAttrWithDict((PyObject *)m, name,
+                                                     NULL, suppress);
+    _PyValueSpan_Append(&span, found);
+    PyObject **getattrp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **mod_namep = _PyValueSpan_ObjectSlot(&span);
+    PyObject **specp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **originp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **stdlib_modulesp = _PyValueSpan_ObjectSlot(&span);
+    PyValue res = PyValue_NULL;
+    // Whether slots[3] holds a lazy import to reify.
+    int lazy = 0;
+
+    if (!PyValue_IsNull(slots[3])) {
+        // Anything but a lazy import is the attribute.
+        if (!PyValue_IsObject(slots[3])
+            || !PyLazyImport_CheckExact(PyValue_ObjectBorrow(slots[3])))
+        {
+            res = slots[3];
+            goto exit;
+        }
+        lazy = 1;
+    }
+    else {
         if (suppress == 1) {
             if (PyErr_Occurred()) {
                 // pass up non-AttributeError exception
-                return NULL;
+                goto exit;
             }
         }
         else {
             if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
                 // pass up non-AttributeError exception
-                return NULL;
+                goto exit;
             }
             PyErr_Clear();
         }
-        assert(m->md_dict != NULL);
+        assert(dict != NULL);
         int recheck_dict;
-        attr = _PyImport_TryLoadLazySubmodule((PyObject *)m, name, suppress,
-                                             &recheck_dict);
-        if (attr != NULL || PyErr_Occurred()) {
-            return attr;
+        PyObject *sub = _PyImport_TryLoadLazySubmodule((PyObject *)m, name,
+                                                       suppress, &recheck_dict);
+        if (sub != NULL || PyErr_Occurred()) {
+            res = PyValue_FromResult(sub);
+            goto exit;
         }
         // A concurrent load may have bound the child and removed its pending
         // registration after our initial dictionary lookup.
@@ -1365,94 +1347,104 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
                 if (descr != NULL) {
                     // Preserve the fallback after a descriptor raised.
                     recheck_dict = Py_TYPE(descr)->tp_descr_get == NULL;
-                    Py_DECREF(descr);
                 }
             }
-            if (recheck_dict &&
-                PyDict_GetItemRef(m->md_dict, name, &attr) < 0) {
-                return NULL;
+            if (recheck_dict) {
+                if (_PyDict_GetItemValue(dict, PyValue_FromObject(name),
+                                         &slots[3]) < 0) {
+                    goto exit;
+                }
+                if (!PyValue_IsNull(slots[3])) {
+                    if (!PyValue_IsObject(slots[3])
+                        || !PyLazyImport_CheckExact(
+                               PyValue_ObjectBorrow(slots[3])))
+                    {
+                        res = slots[3];
+                        goto exit;
+                    }
+                    lazy = 1;
+                }
             }
         }
     }
-    if (attr) {
-        if (PyLazyImport_CheckExact(attr)) {
-            PyThreadState *tstate = PyThreadState_GET();
-            if (suppress && _PyLazyImport_IsResolving(tstate, attr)) {
-                // Only direct reentry means this attribute is unavailable.
-                Py_DECREF(attr);
-                return NULL;
-            }
-            PyObject *new_value = _PyLazyImport_Reify(
-                tstate, attr, name, m->md_dict);
-            Py_DECREF(attr);
-            return new_value;
+    if (lazy) {
+        assert(PyLazyImport_CheckExact(PyValue_ObjectBorrow(slots[3])));
+        if (suppress
+            && _PyLazyImport_IsResolving(tstate, PyValue_ObjectBorrow(slots[3])))
+        {
+            // Only direct reentry means this attribute is unavailable.
+            goto exit;
         }
-        return attr;
+        res = PyValue_FromResult(_PyLazyImport_Reify(
+            tstate, PyValue_ObjectBorrow(slots[3]), name, dict));
+        goto exit;
     }
-    if (module_get_resolved_dict_item(
-            m->md_dict, &_Py_ID(__getattr__), &getattr) < 0) {
-        return NULL;
+    if (module_get_resolved_dict_item(dict, &_Py_ID(__getattr__),
+                                      getattrp) < 0) {
+        goto exit;
     }
-    if (getattr) {
-        PyObject *result = PyObject_CallOneArg(getattr, name);
-        if (result == NULL && suppress == 1 && PyErr_ExceptionMatches(PyExc_AttributeError)) {
+    if (*getattrp) {
+        // The argument array is the name's slot.
+        PyValue got = PyObject_VectorcallValue(PyValue_FromObject(*getattrp),
+                                               &slots[1], 1, NULL);
+        if (!PyValue_IsNull(got)) {
+            res = got;
+            goto exit;
+        }
+        if (suppress == 1 && PyErr_ExceptionMatches(PyExc_AttributeError)) {
             // suppress AttributeError
             PyErr_Clear();
         }
-        Py_DECREF(getattr);
-        return result;
+        goto exit;
     }
 
     // The attribute was not found.  We make a best effort attempt at a useful error message,
     // but only if we're not suppressing AttributeError.
     if (suppress == 1) {
-        return NULL;
+        goto exit;
     }
-    if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__name__), &mod_name) < 0) {
-        return NULL;
+    if (PyDict_GetItemRef(dict, &_Py_ID(__name__), mod_namep) < 0) {
+        goto exit;
     }
+    PyObject *mod_name = *mod_namep;
     if (!mod_name || !PyUnicode_Check(mod_name)) {
-        Py_XDECREF(mod_name);
         PyErr_Format(PyExc_AttributeError,
                     "module has no attribute '%U'", name);
-        return NULL;
+        goto exit;
     }
-    PyObject *spec;
-    if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__spec__), &spec) < 0) {
-        Py_DECREF(mod_name);
-        return NULL;
+    if (PyDict_GetItemRef(dict, &_Py_ID(__spec__), specp) < 0) {
+        goto exit;
     }
+    PyObject *spec = *specp;
     if (spec == NULL) {
         PyErr_Format(PyExc_AttributeError,
                      "module '%U' has no attribute '%U'",
                      mod_name, name);
-        Py_DECREF(mod_name);
-        return NULL;
+        goto exit;
     }
 
-    PyObject *origin = NULL;
-    if (_PyModuleSpec_GetFileOrigin(spec, &origin) < 0) {
-        goto done;
+    if (_PyModuleSpec_GetFileOrigin(spec, originp) < 0) {
+        goto exit;
     }
+    PyObject *origin = *originp;
 
     int is_possibly_shadowing = _PyModule_IsPossiblyShadowing(origin);
     if (is_possibly_shadowing < 0) {
-        goto done;
+        goto exit;
     }
     int is_possibly_shadowing_stdlib = 0;
     if (is_possibly_shadowing) {
-        PyObject *stdlib_modules;
-        if (PySys_GetOptionalAttrString("stdlib_module_names", &stdlib_modules) < 0) {
-            goto done;
+        if (PySys_GetOptionalAttrString("stdlib_module_names",
+                                        stdlib_modulesp) < 0) {
+            goto exit;
         }
+        PyObject *stdlib_modules = *stdlib_modulesp;
         if (stdlib_modules && PyAnySet_Check(stdlib_modules)) {
             is_possibly_shadowing_stdlib = PySet_Contains(stdlib_modules, mod_name);
             if (is_possibly_shadowing_stdlib < 0) {
-                Py_DECREF(stdlib_modules);
-                goto done;
+                goto exit;
             }
         }
-        Py_XDECREF(stdlib_modules);
     }
 
     if (is_possibly_shadowing_stdlib) {
@@ -1467,7 +1459,7 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
     else {
         int rc = _PyModuleSpec_IsInitializing(spec);
         if (rc < 0) {
-            goto done;
+            goto exit;
         }
         else if (rc > 0) {
             if (is_possibly_shadowing) {
@@ -1512,15 +1504,13 @@ _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
         }
     }
 
-done:
-    Py_XDECREF(origin);
-    Py_DECREF(spec);
-    Py_DECREF(mod_name);
-    return NULL;
+exit:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 
-PyObject*
+Py_GC_PRECISE PyValue
 _Py_module_getattro(PyObject *self, PyObject *name)
 {
     PyModuleObject *m = _PyModule_CAST(self);
@@ -1542,6 +1532,7 @@ module_traverse(PyObject *self, visitproc visit, void *arg)
     }
 
     Py_VISIT(m->md_dict);
+    _Py_VISIT_ATOMIC(m->md_name);
     return 0;
 }
 
@@ -1568,28 +1559,32 @@ module_clear(PyObject *self)
     return 0;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 module_dir(PyObject *self, PyObject *args)
 {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, self);
+    PyObject **dictp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **dirfuncp = _PyValueSpan_ObjectSlot(&span);
     PyObject *result = NULL;
-    PyObject *dict;
     if (PyModule_CheckExact(self)) {
-        dict = Py_NewRef(((PyModuleObject *)self)->md_dict);
+        *dictp = ((PyModuleObject *)self)->md_dict;
     } else {
-        dict = PyObject_GetAttr(self, &_Py_ID(__dict__));
+        *dictp = PyObject_GetAttr(self, &_Py_ID(__dict__));
     }
 
-    if (dict != NULL) {
-        if (PyDict_Check(dict)) {
-            PyObject *dirfunc;
+    if (*dictp != NULL) {
+        if (PyDict_Check(*dictp)) {
             int rc = module_get_resolved_dict_item(
-                dict, &_Py_ID(__dir__), &dirfunc);
+                *dictp, &_Py_ID(__dir__), dirfuncp);
             if (rc > 0) {
-                result = _PyObject_CallNoArgs(dirfunc);
-                Py_DECREF(dirfunc);
+                result = _PyObject_CallNoArgs(*dirfuncp);
             }
             else if (rc == 0) {
-                result = PyDict_Keys(dict);
+                result = PyDict_Keys(*dictp);
             }
         }
         else {
@@ -1597,7 +1592,7 @@ module_dir(PyObject *self, PyObject *args)
         }
     }
 
-    Py_XDECREF(dict);
+    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -1607,7 +1602,7 @@ static PyMethodDef module_methods[] = {
     {0}
 };
 
-static PyObject *
+Py_GC_PRECISE static PyObject *
 module_load_dict(PyModuleObject *m)
 {
     PyObject *dict = PyObject_GetAttr((PyObject *)m, &_Py_ID(__dict__));
@@ -1616,36 +1611,46 @@ module_load_dict(PyModuleObject *m)
     }
     if (!PyDict_Check(dict)) {
         PyErr_Format(PyExc_TypeError, "<module>.__dict__ is not a dictionary");
-        Py_DECREF(dict);
         return NULL;
     }
     return dict;
 }
 
-static PyObject *
+Py_GC_PRECISE static PyValue
 module_get_annotate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
-
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)m);
     PyObject *dict = module_load_dict(m);
+    _PyValueSpan_AppendObject(&span, dict);
+    _PyValueSpan_Append(&span, PyValue_NULL);
     if (dict == NULL) {
-        return NULL;
+        goto done;
     }
 
-    PyObject *annotate;
-    if (PyDict_GetItemRef(dict, &_Py_ID(__annotate__), &annotate) == 0) {
-        annotate = Py_None;
-        if (PyDict_SetItem(dict, &_Py_ID(__annotate__), annotate) == -1) {
-            Py_CLEAR(annotate);
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotate__), &slots[2]) == 0) {
+        slots[2] = PyValue_FromObject(Py_None);
+        if (PyDict_SetItem(dict, &_Py_ID(__annotate__), Py_None) == -1) {
+            slots[2] = PyValue_NULL;
         }
     }
-    Py_DECREF(dict);
-    return annotate;
+  done:;
+    PyValue res = slots[2];
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
 static int
-module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+module_set_annotate(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
 {
+    PyObject *value = PyValue_Object(value_v);
+    if (value == NULL && !PyValue_IsNull(value_v)) {
+        return -1;
+    }
     PyModuleObject *m = _PyModule_CAST(self);
     if (value == NULL) {
         PyErr_SetString(PyExc_TypeError, "cannot delete __annotate__ attribute");
@@ -1677,92 +1682,104 @@ module_set_annotate(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyObject *
+/* The span: the module and its dict, then the slots of the stored
+   annotations, the module's __spec__, its __annotate__ and the
+   annotations that makes. */
+Py_GC_PRECISE static PyValue
 module_get_annotations(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
-
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[6];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)m);
     PyObject *dict = module_load_dict(m);
+    _PyValueSpan_AppendObject(&span, dict);
+    _PyValueSpan_Append(&span, PyValue_NULL);
+    PyObject **specp = _PyValueSpan_ObjectSlot(&span);
+    PyObject **annotatep = _PyValueSpan_ObjectSlot(&span);
+    PyObject **annotationsp = _PyValueSpan_ObjectSlot(&span);
+    PyValue res = PyValue_NULL;
     if (dict == NULL) {
-        return NULL;
+        goto done;
     }
 
-    PyObject *annotations;
-    if (PyDict_GetItemRef(dict, &_Py_ID(__annotations__), &annotations) == 0) {
-        PyObject *spec;
-        if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__spec__), &spec) < 0) {
-            Py_DECREF(dict);
-            return NULL;
+    if (PyDict_GetItemRefValue(dict, &_Py_ID(__annotations__), &slots[2]) != 0) {
+        // The stored value, or PyValue_NULL with the lookup's error.
+        res = slots[2];
+        goto done;
+    }
+    if (PyDict_GetItemRef(m->md_dict, &_Py_ID(__spec__), specp) < 0) {
+        goto done;
+    }
+    bool is_initializing = false;
+    if (*specp != NULL) {
+        int rc = _PyModuleSpec_IsInitializing(*specp);
+        if (rc < 0) {
+            goto done;
         }
-        bool is_initializing = false;
-        if (spec != NULL) {
-            int rc = _PyModuleSpec_IsInitializing(spec);
-            if (rc < 0) {
-                Py_DECREF(spec);
-                Py_DECREF(dict);
-                return NULL;
-            }
-            Py_DECREF(spec);
-            if (rc) {
-                is_initializing = true;
-            }
-        }
-
-        PyObject *annotate;
-        int annotate_result = PyDict_GetItemRef(dict, &_Py_ID(__annotate__), &annotate);
-        if (annotate_result < 0) {
-            Py_DECREF(dict);
-            return NULL;
-        }
-        if (annotate_result == 1 && PyCallable_Check(annotate)) {
-            PyObject *one = _PyLong_GetOne();
-            annotations = _PyObject_CallOneArg(annotate, one);
-            if (annotations == NULL) {
-                Py_DECREF(annotate);
-                Py_DECREF(dict);
-                return NULL;
-            }
-            if (!PyDict_Check(annotations)) {
-                PyErr_Format(PyExc_TypeError,
-                             "__annotate__() must return a dict, not %T",
-                             annotations);
-                Py_DECREF(annotate);
-                Py_DECREF(annotations);
-                Py_DECREF(dict);
-                return NULL;
-            }
-        }
-        else {
-            annotations = PyDict_New();
-        }
-        Py_XDECREF(annotate);
-        // Do not cache annotations if the module is still initializing
-        if (annotations && !is_initializing) {
-            int result = PyDict_SetItem(
-                    dict, &_Py_ID(__annotations__), annotations);
-            if (result) {
-                Py_CLEAR(annotations);
-            }
+        if (rc) {
+            is_initializing = true;
         }
     }
-    Py_DECREF(dict);
-    return annotations;
+
+    int annotate_result = PyDict_GetItemRef(dict, &_Py_ID(__annotate__),
+                                            annotatep);
+    if (annotate_result < 0) {
+        goto done;
+    }
+    if (annotate_result == 1 && PyCallable_Check(*annotatep)) {
+        PyObject *one = _PyLong_GetOne();
+        *annotationsp = _PyObject_CallOneArg(*annotatep, one);
+        if (*annotationsp == NULL) {
+            goto done;
+        }
+        if (!PyDict_Check(*annotationsp)) {
+            PyErr_Format(PyExc_TypeError,
+                         "__annotate__() must return a dict, not %T",
+                         *annotationsp);
+            goto done;
+        }
+    }
+    else {
+        *annotationsp = PyDict_New();
+        if (*annotationsp == NULL) {
+            goto done;
+        }
+    }
+    // Do not cache annotations if the module is still initializing
+    if (!is_initializing
+        && PyDict_SetItem(dict, &_Py_ID(__annotations__), *annotationsp)) {
+        goto done;
+    }
+    res = PyValue_FromObject(*annotationsp);
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
+    return res;
 }
 
-static int
-module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
+Py_GC_PRECISE static int
+module_set_annotations(PyObject *self, PyValue value, void *Py_UNUSED(ignored))
 {
     PyModuleObject *m = _PyModule_CAST(self);
-
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[3];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, (PyObject *)m);
+    _PyValueSpan_Append(&span, value);
     PyObject *dict = module_load_dict(m);
+    _PyValueSpan_AppendObject(&span, dict);
+    int ret = -1;
     if (dict == NULL) {
-        return -1;
+        goto done;
     }
 
-    int ret = -1;
-    if (value != NULL) {
+    if (!PyValue_IsNull(value)) {
         /* set */
-        ret = PyDict_SetItem(dict, &_Py_ID(__annotations__), value);
+        ret = _PyDict_SetItemValue((PyDictObject *)dict,
+            PyValue_FromObject(&_Py_ID(__annotations__)), value);
     }
     else {
         /* delete */
@@ -1778,8 +1795,8 @@ module_set_annotations(PyObject *self, PyObject *value, void *Py_UNUSED(ignored)
     if (ret == 0 && PyDict_Pop(dict, &_Py_ID(__annotate__), NULL) < 0) {
         ret = -1;
     }
-
-    Py_DECREF(dict);
+  done:
+    _PyThreadState_PopValueRoot(tstate, &span);
     return ret;
 }
 
@@ -1810,12 +1827,12 @@ PyTypeObject PyModule_Type = {
     PyObject_GenericSetAttr,                    /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_BASETYPE,                    /* tp_flags */
+        Py_TPFLAGS_BASETYPE | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
     module___init____doc__,                     /* tp_doc */
     module_traverse,                            /* tp_traverse */
     module_clear,                               /* tp_clear */
     0,                                          /* tp_richcompare */
-    offsetof(PyModuleObject, md_weaklist),      /* tp_weaklistoffset */
+    0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     module_methods,                             /* tp_methods */

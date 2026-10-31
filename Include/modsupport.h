@@ -114,8 +114,6 @@ PyAPI_FUNC(int) PyABIInfo_Check(PyABIInfo *info, const char *module_name);
 #endif
 #if defined(Py_LIMITED_API) && defined(_Py_OPAQUE_PYOBJECT)
     #define _PyABIInfo_DEFAULT_FLAG_FT PyABIInfo_FREETHREADING_AGNOSTIC
-#elif defined(Py_GIL_DISABLED)
-    #define _PyABIInfo_DEFAULT_FLAG_FT PyABIInfo_FREETHREADED
 #else
     #define _PyABIInfo_DEFAULT_FLAG_FT PyABIInfo_GIL
 #endif

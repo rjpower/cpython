@@ -1,0 +1,20 @@
+gate 0 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug at 878647973ba
+Using random seed: 1006491531
+0:00:00 load avg: 2.64 mem:   45.0 MiB Run 9 tests in parallel using 2 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:46 load avg: 2.19 mem:   92.3 MiB running (1): test_capi (32.9 sec)
+0:01:16 load avg: 1.91 mem:  123.1 MiB running (1): test_capi (1 min 2 sec)
+0:01:46 load avg: 1.68 mem:  124.7 MiB running (1): test_capi (1 min 32 sec)
+0:02:16 load avg: 1.83 mem:    1.0 GiB running (1): test_capi (2 min 2 sec)
+0:02:47 load avg: 1.91 mem:    1.1 GiB running (1): test_capi (2 min 33 sec)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_capi/test_pyvalue.py:143: DeprecationWarning: Bitwise inversion '~' on bool is deprecated and will be removed in Python 3.16. This returns the bitwise inversion of the underlying int object and is usually not what you expect from negating a bool. Use the 'not' operator for boolean negation or ~int(x) if you really want the bitwise inversion of the underlying int.
+  expected = expected_func(*args)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_capi/test_pyvalue.py:148: DeprecationWarning: Bitwise inversion '~' on bool is deprecated and will be removed in Python 3.16. This returns the bitwise inversion of the underlying int object and is usually not what you expect from negating a bool. Use the 'not' operator for boolean negation or ~int(x) if you really want the bitwise inversion of the underlying int.
+  self.assertValue(func(*args), expected)
+
+== Tests result: SUCCESS ==
+
+Total duration: 2 min 56 sec
+Total tests: run=1,924 (filtered) skipped=20
+Total test files: run=9/9 (filtered)
+Result: SUCCESS
+gate 0 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug

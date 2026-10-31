@@ -1,0 +1,3 @@
+debug old same_event 1
+debug old other_event 1
+debug old oom 1

@@ -1948,9 +1948,6 @@ PyInit_readline(void)
 
     if (m == NULL)
         return NULL;
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
-#endif
 
     if (add_version_constants(m) < 0) {
         goto error;

@@ -10,6 +10,9 @@
 #include "pycore_pymem.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
+#include "pycore_gc_trace.h"      // _PyGC_LiveOnThreshold()
+#include "pycore_gc_walk.h"       // Py_GC_PRECISE
+#include "pycore_weakref.h"       // _PyWeakref_DropList()
 
 #include <stdlib.h>               // malloc()
 #include <stdbool.h>
@@ -27,9 +30,6 @@ static void _PyMem_mi_heap_collect_qsbr(mi_heap_t *heap);
 #  include "mimalloc/internal.h"  // for stats
 #endif
 
-#if defined(Py_GIL_DISABLED) && !defined(WITH_MIMALLOC)
-#  error "Py_GIL_DISABLED requires WITH_MIMALLOC"
-#endif
 
 #undef  uint
 #define uint pymem_uint
@@ -99,13 +99,6 @@ _PyMem_RawFree(void *Py_UNUSED(ctx), void *ptr)
 static void
 _PyMem_mi_page_clear_qsbr(mi_page_t *page)
 {
-#ifdef Py_GIL_DISABLED
-    // Clear the QSBR goal and remove the page from the QSBR linked list.
-    page->qsbr_goal = 0;
-    if (page->qsbr_node.next != NULL) {
-        llist_remove(&page->qsbr_node);
-    }
-#endif
 }
 
 // Check if an empty, newly reclaimed page is safe to free now.
@@ -113,92 +106,14 @@ static bool
 _PyMem_mi_page_is_safe_to_free(mi_page_t *page)
 {
     assert(mi_page_all_free(page));
-#ifdef Py_GIL_DISABLED
-    assert(page->qsbr_node.next == NULL);
-    if (page->use_qsbr && page->qsbr_goal != 0) {
-        _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-        if (tstate == NULL) {
-            return false;
-        }
-        return _Py_qbsr_goal_reached(tstate->qsbr, page->qsbr_goal);
-    }
-#endif
     return true;
 
 }
 
-#ifdef Py_GIL_DISABLED
-
-// If we are deferring collection of more than this amount of memory for
-// mimalloc pages, advance the write sequence.  Advancing allows these
-// pages to be re-used in a different thread or for a different size class.
-#define QSBR_PAGE_MEM_LIMIT 4096*20
-
-// Return true if the global write sequence should be advanced for a mimalloc
-// page that is deferred from collection.
-static bool
-should_advance_qsbr_for_page(struct _qsbr_thread_state *qsbr, mi_page_t *page)
-{
-    size_t bsize = mi_page_block_size(page);
-    size_t page_size = page->capacity*bsize;
-    if (page_size > QSBR_PAGE_MEM_LIMIT) {
-        qsbr->deferred_page_memory = 0;
-        return true;
-    }
-    qsbr->deferred_page_memory += page_size;
-    if (qsbr->deferred_page_memory > QSBR_PAGE_MEM_LIMIT) {
-        qsbr->deferred_page_memory = 0;
-        return true;
-    }
-    return false;
-}
-
-static _PyThreadStateImpl *
-tstate_from_heap(mi_heap_t *heap)
-{
-    return _Py_CONTAINER_OF(heap->tld, _PyThreadStateImpl, mimalloc.tld);
-}
-#endif
 
 static bool
 _PyMem_mi_page_maybe_free(mi_page_t *page, mi_page_queue_t *pq, bool force)
 {
-#ifdef Py_GIL_DISABLED
-    assert(mi_page_all_free(page));
-    if (page->use_qsbr) {
-        struct _qsbr_thread_state *qsbr = ((_PyThreadStateImpl *)PyThreadState_GET())->qsbr;
-        if (page->qsbr_goal != 0 && _Py_qbsr_goal_reached(qsbr, page->qsbr_goal)) {
-            _PyMem_mi_page_clear_qsbr(page);
-            _mi_page_free(page, pq, force);
-            return true;
-        }
-
-        // gh-145615: since we are not freeing this page yet, we want to
-        // make it available for allocations. Note that the QSBR goal and
-        // linked list node remain set even if the page is later used for
-        // an allocation. We only detect and clear the QSBR goal when the
-        // page becomes empty again (used == 0).
-        if (mi_page_is_in_full(page)) {
-            _mi_page_unfull(page);
-        }
-
-        _PyMem_mi_page_clear_qsbr(page);
-        page->retire_expire = 0;
-
-        if (should_advance_qsbr_for_page(qsbr, page)) {
-            page->qsbr_goal = _Py_qsbr_advance(qsbr->shared);
-        }
-        else {
-            page->qsbr_goal = _Py_qsbr_shared_next(qsbr->shared);
-        }
-
-        // We may be freeing a page belonging to a different thread during a
-        // stop-the-world event. Find the _PyThreadStateImpl for the page.
-        _PyThreadStateImpl *tstate = tstate_from_heap(mi_page_heap(page));
-        llist_insert_tail(&tstate->mimalloc.page_list, &page->qsbr_node);
-        return false;
-    }
-#endif
     _mi_page_free(page, pq, force);
     return true;
 }
@@ -206,181 +121,165 @@ _PyMem_mi_page_maybe_free(mi_page_t *page, mi_page_queue_t *pq, bool force)
 static void
 _PyMem_mi_page_reclaimed(mi_page_t *page)
 {
-#ifdef Py_GIL_DISABLED
-    assert(page->qsbr_node.next == NULL);
-    if (page->qsbr_goal != 0) {
-        if (mi_page_all_free(page)) {
-            assert(page->qsbr_node.next == NULL);
-            _PyThreadStateImpl *tstate = tstate_from_heap(mi_page_heap(page));
-            // gh-159462: the owning tstate may differ from the current
-            // one, but the heap is always owned by the current OS thread,
-            // so the page list is not shared with other OS threads.
-            assert(mi_page_heap(page)->thread_id == _Py_ThreadId());
-            page->retire_expire = 0;
-            llist_insert_tail(&tstate->mimalloc.page_list, &page->qsbr_node);
-        }
-        else {
-            page->qsbr_goal = 0;
-        }
-    }
-#endif
 }
 
 static void
 _PyMem_mi_heap_collect_qsbr(mi_heap_t *heap)
 {
-#ifdef Py_GIL_DISABLED
-    if (!heap->page_use_qsbr) {
-        return;
-    }
+}
 
+// Allocations that could not use a thread state's heap; see
+// _PyObject_MiHeap().
+static Py_ssize_t mi_unheaped_allocs = 0;
+
+// The mem domain uses the thread state's mem heap, as in the free-threaded
+// build, so that sys.getallocatedblocks() counts the mem and object domains
+// but not the raw one, as it does with pymalloc, and so that the verifier can
+// search PyMem_Malloc() blocks for references to objects it did not reach.
+static inline mi_heap_t *
+_PyMem_MiHeap(void)
+{
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    struct llist_node *head = &tstate->mimalloc.page_list;
-    if (llist_empty(head)) {
-        return;
-    }
-
-    struct llist_node *node;
-    llist_for_each_safe(node, head) {
-        mi_page_t *page = llist_data(node, mi_page_t, qsbr_node);
-        if (!mi_page_all_free(page)) {
-            // We allocated from this page some point after the delayed free
-            _PyMem_mi_page_clear_qsbr(page);
-            continue;
+    if (tstate != NULL && tstate->mimalloc.current_object_heap != NULL) {
+        mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
+        if (heap->thread_id == _mi_thread_id()) {
+            return heap;
         }
-
-        if (!_Py_qsbr_poll(tstate->qsbr, page->qsbr_goal)) {
-            return;
-        }
-
-        _PyMem_mi_page_clear_qsbr(page);
-        _mi_page_free(page, mi_page_queue_of(page), false);
     }
-#endif
+    return mi_prim_get_default_heap();
 }
 
 void *
 _PyMem_MiMalloc(void *ctx, size_t size)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
-    return mi_heap_malloc(heap, size);
-#else
-    return mi_malloc(size);
-#endif
+    return mi_heap_malloc(_PyMem_MiHeap(), size);
 }
 
 void *
 _PyMem_MiCalloc(void *ctx, size_t nelem, size_t elsize)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
-    return mi_heap_calloc(heap, nelem, elsize);
-#else
-    return mi_calloc(nelem, elsize);
-#endif
+    return mi_heap_calloc(_PyMem_MiHeap(), nelem, elsize);
 }
+
+#ifdef Py_DEBUG
+/* The verifier's kill mode (_PyGC_quarantine_tstate): a free of this
+   thread state's quarantines the block, and a realloc that would free it
+   copies it to a new block instead. */
+static inline int
+quarantining(void *ptr)
+{
+    return _PyGC_quarantine_tstate != NULL && ptr != NULL;
+}
+
+static void *
+quarantine_realloc(mi_heap_t *heap, void *ptr, size_t size)
+{
+    void *p = mi_heap_malloc(heap, size);
+    if (p != NULL) {
+        memcpy(p, ptr, Py_MIN(mi_usable_size(ptr), size));
+        _PyGC_Quarantine(ptr);
+    }
+    return p;
+}
+#endif
 
 void *
 _PyMem_MiRealloc(void *ctx, void *ptr, size_t size)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    mi_heap_t *heap = &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_MEM];
-    return mi_heap_realloc(heap, ptr, size);
-#else
-    return mi_realloc(ptr, size);
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        return quarantine_realloc(_PyMem_MiHeap(), ptr, size);
+    }
 #endif
+    return mi_heap_realloc(_PyMem_MiHeap(), ptr, size);
 }
 
 void
 _PyMem_MiFree(void *ctx, void *ptr)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        _PyGC_Quarantine(ptr);
+        return;
+    }
+#endif
     mi_free(ptr);
+}
+
+// The thread state's no-scan heap, which no walk of the tracing collector
+// visits.
+static inline mi_heap_t *
+_PyMem_NoScanHeap(void)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    assert(tstate != NULL && tstate->mimalloc.current_object_heap != NULL);
+    return &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_NOSCAN];
+}
+
+
+Py_ssize_t
+_PyMem_MiUnheapedAllocs(void)
+{
+    return _Py_atomic_load_ssize_relaxed(&mi_unheaped_allocs);
+}
+
+// In the default build the object domain allocates from the current thread
+// state's object heaps, as the free-threaded build does, so that the tracing
+// verifier (Python/gc_trace.c) can enumerate the objects and find where each
+// one starts in its block.  There is no such heap when no thread state is
+// attached, before the thread state is bound, or when a thread state bound
+// to one OS thread is attached in another (mimalloc heaps are thread-local);
+// those blocks go to mimalloc's default heap and are invisible to the
+// verifier, which reports how many there were.
+static inline mi_heap_t *
+_PyObject_MiHeap(void)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    if (tstate != NULL) {
+        mi_heap_t *heap = tstate->mimalloc.current_object_heap;
+        if (heap != NULL && heap->thread_id == _mi_thread_id()) {
+            return heap;
+        }
+    }
+    _Py_atomic_add_ssize(&mi_unheaped_allocs, 1);
+    return mi_prim_get_default_heap();
 }
 
 void *
 _PyObject_MiMalloc(void *ctx, size_t nbytes)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    mi_heap_t *heap = tstate->mimalloc.current_object_heap;
+    mi_heap_t *heap = _PyObject_MiHeap();
     return mi_heap_malloc(heap, nbytes);
-#else
-    return mi_malloc(nbytes);
-#endif
 }
 
 void *
 _PyObject_MiCalloc(void *ctx, size_t nelem, size_t elsize)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    mi_heap_t *heap = tstate->mimalloc.current_object_heap;
+    mi_heap_t *heap = _PyObject_MiHeap();
     return mi_heap_calloc(heap, nelem, elsize);
-#else
-    return mi_calloc(nelem, elsize);
-#endif
 }
 
 
 void *
 _PyObject_MiRealloc(void *ctx, void *ptr, size_t nbytes)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    // Implement our own realloc logic so that we can copy PyObject header
-    // in a thread-safe way.
-    size_t size = mi_usable_size(ptr);
-    if (nbytes <= size && nbytes >= (size / 2) && nbytes > 0) {
-        return ptr;
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        return quarantine_realloc(_PyObject_MiHeap(), ptr, nbytes);
     }
-
-    mi_heap_t *heap = tstate->mimalloc.current_object_heap;
-    void* newp = mi_heap_malloc(heap, nbytes);
-    if (newp == NULL) {
-        return NULL;
-    }
-
-    // Free threaded Python allows access from other threads to the PyObject reference count
-    // fields for a period of time after the object is freed (see InternalDocs/qsbr.md).
-    // These fields are typically initialized by PyObject_Init() using relaxed
-    // atomic stores. We need to copy these fields in a thread-safe way here.
-    // We use the "debug_offset" to determine how many bytes to copy -- it
-    // includes the PyObject header and plus any extra pre-headers.
-    size_t offset = heap->debug_offset;
-    assert(offset % sizeof(void*) == 0);
-
-    size_t copy_size = (size < nbytes ? size : nbytes);
-    if (copy_size >= offset) {
-        for (size_t i = 0; i != offset; i += sizeof(void*)) {
-            // Use memcpy to avoid strict-aliasing issues. However, we probably
-            // still have unavoidable strict-aliasing issues with
-            // _Py_atomic_store_ptr_relaxed here.
-            void *word;
-            memcpy(&word, (char*)ptr + i, sizeof(void*));
-            _Py_atomic_store_ptr_relaxed((void**)((char*)newp + i), word);
-        }
-        _mi_memcpy((char*)newp + offset, (char*)ptr + offset, copy_size - offset);
-    }
-    else {
-        // memcpy(dst, NULL, 0) is undefined behavior. See gh-151297.
-        if mi_likely(ptr) {
-            _mi_memcpy(newp, ptr, copy_size);
-        }
-    }
-    mi_free(ptr);
-    return newp;
-#else
-    return mi_realloc(ptr, nbytes);
 #endif
+    return mi_heap_realloc(_PyObject_MiHeap(), ptr, nbytes);
 }
 
 void
 _PyObject_MiFree(void *ctx, void *ptr)
 {
+#ifdef Py_DEBUG
+    if (quarantining(ptr)) {
+        _PyGC_Quarantine(ptr);
+        return;
+    }
+#endif
     mi_free(ptr);
 }
 
@@ -407,6 +306,17 @@ _PyMem_MiRawFree(void *ctx, void *ptr)
 {
     mi_free(ptr);
 }
+
+size_t
+_PyMem_SizeClass(size_t n)
+{
+    // mi_good_size() would add MI_PADDING_SIZE, which debug and ASan builds
+    // set, and so make the size depend on the build.
+    if (n == 0 || n > MI_MEDIUM_OBJ_SIZE_MAX) {
+        return n;
+    }
+    return _mi_bin_size(_mi_bin(n));
+}
 #endif // WITH_MIMALLOC
 
 
@@ -431,17 +341,22 @@ void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #  define PYMALLOC_ALLOC {NULL, _PyObject_Malloc, _PyObject_Calloc, _PyObject_Realloc, _PyObject_Free}
 #endif  // WITH_PYMALLOC
 
-#if defined(Py_GIL_DISABLED)
-// Py_GIL_DISABLED requires using mimalloc for "mem" and "obj" domains.
-#  define PYRAW_ALLOC MIMALLOC_RAWALLOC
-#  define PYMEM_ALLOC MIMALLOC_ALLOC
-#  define PYOBJ_ALLOC MIMALLOC_OBJALLOC
-#elif defined(_Py_ADDRESS_SANITIZER) || defined(_Py_MEMORY_SANITIZER)
+#if defined(_Py_MEMORY_SANITIZER) \
+    || (defined(_Py_ADDRESS_SANITIZER) && !defined(WITH_MIMALLOC))
 // ASan and MSan do not track pymalloc blocks, so use malloc by default.
+// ASan tracks mimalloc's (MI_TRACK_ASAN), which the collector needs.
 // pymalloc can still be selected at runtime.
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC MALLOC_ALLOC
 #  define PYOBJ_ALLOC MALLOC_ALLOC
+#elif defined(WITH_MIMALLOC)
+// The tracing collector needs every object in a mimalloc heap, where it can
+// enumerate the objects and resolve an address to its block (note 06,
+// section 3.4), so mimalloc is the default.  pymalloc can still be selected
+// at runtime.
+#  define PYRAW_ALLOC MIMALLOC_RAWALLOC
+#  define PYMEM_ALLOC MIMALLOC_ALLOC
+#  define PYOBJ_ALLOC MIMALLOC_OBJALLOC
 #elif defined(WITH_PYMALLOC)
 #  define PYRAW_ALLOC MALLOC_ALLOC
 #  define PYMEM_ALLOC PYMALLOC_ALLOC
@@ -787,7 +702,7 @@ _PyMem_GetAllocatorName(const char *name, PyMemAllocatorName *allocator)
     else if (strcmp(name, "debug") == 0) {
         *allocator = PYMEM_ALLOCATOR_DEBUG;
     }
-#if defined(WITH_PYMALLOC) && !defined(Py_GIL_DISABLED)
+#if defined(WITH_PYMALLOC)
     else if (strcmp(name, "pymalloc") == 0) {
         *allocator = PYMEM_ALLOCATOR_PYMALLOC;
     }
@@ -803,14 +718,12 @@ _PyMem_GetAllocatorName(const char *name, PyMemAllocatorName *allocator)
         *allocator = PYMEM_ALLOCATOR_MIMALLOC_DEBUG;
     }
 #endif
-#ifndef Py_GIL_DISABLED
     else if (strcmp(name, "malloc") == 0) {
         *allocator = PYMEM_ALLOCATOR_MALLOC;
     }
     else if (strcmp(name, "malloc_debug") == 0) {
         *allocator = PYMEM_ALLOCATOR_MALLOC_DEBUG;
     }
-#endif
     else {
         /* unknown allocator */
         return -1;
@@ -822,6 +735,25 @@ _PyMem_GetAllocatorName(const char *name, PyMemAllocatorName *allocator)
 static int
 set_up_allocators_unlocked(PyMemAllocatorName allocator)
 {
+    /* The collector finds objects by walking mimalloc's heaps: any other
+       allocator is mimalloc, with the debug hooks if it asked for them. */
+    switch (allocator) {
+    case PYMEM_ALLOCATOR_NOT_SET:
+    case PYMEM_ALLOCATOR_DEFAULT:
+    case PYMEM_ALLOCATOR_MIMALLOC:
+    case PYMEM_ALLOCATOR_MIMALLOC_DEBUG:
+        break;
+    case PYMEM_ALLOCATOR_DEBUG:
+    case PYMEM_ALLOCATOR_MALLOC_DEBUG:
+#ifdef WITH_PYMALLOC
+    case PYMEM_ALLOCATOR_PYMALLOC_DEBUG:
+#endif
+        allocator = PYMEM_ALLOCATOR_MIMALLOC_DEBUG;
+        break;
+    default:
+        allocator = PYMEM_ALLOCATOR_MIMALLOC;
+        break;
+    }
     switch (allocator) {
     case PYMEM_ALLOCATOR_NOT_SET:
         /* do nothing */
@@ -1024,23 +956,54 @@ _PyMem_PymallocEnabled(void)
 }
 
 #ifdef WITH_MIMALLOC
-static int
+int
 _PyMem_MimallocEnabled(void)
 {
-#ifdef Py_GIL_DISABLED
-    return 1;
-#else
     if (_PyMem_DebugEnabled()) {
         return (_PyMem_Debug.obj.alloc.malloc == _PyObject_MiMalloc);
     }
     else {
         return (_PyObject.malloc == _PyObject_MiMalloc);
     }
-#endif
 }
 #endif  // WITH_MIMALLOC
 
 #endif  // WITH_PYMALLOC
+
+#ifdef Py_DEBUG
+/* The collector traces and frees only objects in the object heaps (Include/
+   internal/pycore_mimalloc.h).  An object initialized in memory from malloc()
+   or PyMem_Malloc() is outside them: the collector never traces it, so the
+   objects only it refers to are swept while it still uses them.  Debug builds
+   stop at the initialization instead. */
+void
+_PyObject_CheckObjectHeap(PyObject *op, PyTypeObject *tp)
+{
+#ifdef WITH_MIMALLOC
+    if (!_PyMem_MimallocEnabled()) {
+        return;  // no collector: every object comes from the C library
+    }
+    mi_segment_t *seg = _mi_gc_segment_of((uintptr_t)op);
+    if (seg != NULL) {
+        mi_page_t *page = seg->kind == MI_SEGMENT_HUGE
+            ? mi_slice_to_page(&seg->slices[seg->segment_info_slices])
+            : _mi_segment_page_of(seg, op);
+        switch (page->heap_tag) {
+        case _Py_MIMALLOC_HEAP_OBJECT:
+        case _Py_MIMALLOC_HEAP_GC:
+            return;
+        }
+    }
+    _Py_FatalErrorFormat(__func__,
+        "%s object at %p is not in an object heap: allocate objects with "
+        "PyObject_Malloc(), PyObject_New() or the type's tp_alloc, not "
+        "malloc() or PyMem_Malloc()", tp->tp_name, (void *)op);
+#else
+    (void)op;
+    (void)tp;
+#endif
+}
+#endif
 
 
 static void
@@ -1253,12 +1216,99 @@ void PyMem_RawFree(void *ptr)
 /* the "mem" allocator */
 /***********************/
 
+/* The live collector's trigger (Python/gc_live.c): the object and mem
+   domains count the bytes they allocate, and an object allocation collects
+   first when the count passes the limit.  The mem domain does not collect:
+   its callers do not expect a collection, but objects own its blocks.
+   Precise: builds that do not inline it (debug, ASan) give it a frame of
+   its own between PyObject_Malloc()'s and the collector's, and a stale
+   word there kept a dead object (10a-2b.md, the ASan probe). */
+Py_GC_PRECISE static inline void
+gc_count_alloc(size_t size, int collect)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate == NULL) {
+        return;
+    }
+    struct _gc_runtime_state *gc = &tstate->interp->gc;
+    if (collect) {
+        _PyGC_CHECK_NOT_SWEEPING(tstate, "allocates an object");
+    }
+    gc->alloc_bytes += (Py_ssize_t)size;
+    if (collect && gc->alloc_bytes >= gc->alloc_limit) {
+        _PyGC_LiveOnThreshold(tstate);
+    }
+}
+
+/* The object map (Include/internal/pycore_gc_trace.h). */
+#include <sys/mman.h>             // mmap()
+
+uint64_t **_PyGC_object_map = NULL;
+
+static void *
+object_map_reserve(size_t size)
+{
+    void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (p == MAP_FAILED) {
+        Py_FatalError("cannot map the collector's object map");
+    }
+    return p;
+}
+
+/* The bits of the chunk that holds addr, mapped the first time an object is
+   made in it.  An object has been allocated, so there is nothing to fail
+   back to: a failed mapping is fatal. */
+uint64_t *
+_PyGC_ObjectMapChunk(uintptr_t addr)
+{
+    assert(addr >> 48 == 0);
+    uint64_t **map = _Py_atomic_load_ptr(&_PyGC_object_map);
+    if (map == NULL) {
+        uint64_t **fresh = object_map_reserve(
+            _PyGC_MAP_CHUNKS * sizeof(uint64_t *));
+        if (_Py_atomic_compare_exchange_ptr(&_PyGC_object_map, &map, fresh)) {
+            map = fresh;
+        }
+        else {
+            munmap(fresh, _PyGC_MAP_CHUNKS * sizeof(uint64_t *));
+        }
+    }
+    uint64_t **entry = &map[addr >> _PyGC_MAP_CHUNK_SHIFT];
+    uint64_t *chunk = _Py_atomic_load_ptr(entry);
+    if (chunk == NULL) {
+        uint64_t *fresh = object_map_reserve(
+            _PyGC_MAP_CHUNK_WORDS * sizeof(uint64_t));
+        if (_Py_atomic_compare_exchange_ptr(entry, &chunk, fresh)) {
+            chunk = fresh;
+        }
+        else {
+            munmap(fresh, _PyGC_MAP_CHUNK_WORDS * sizeof(uint64_t));
+        }
+    }
+    return chunk;
+}
+
+/* The object in the block at ptr, if it holds one. */
+static inline PyObject *
+gc_block_object(void *ptr)
+{
+    mi_page_t *page = _mi_ptr_page(ptr);
+    if (page->heap_tag != _Py_MIMALLOC_HEAP_OBJECT &&
+        page->heap_tag != _Py_MIMALLOC_HEAP_GC) {
+        return NULL;
+    }
+    PyObject *op = (PyObject *)ptr;
+    return _PyGC_IsHeapObject(op) ? op : NULL;
+}
+
 void *
 PyMem_Malloc(size_t size)
 {
     /* see PyMem_RawMalloc() */
     if (size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
+    gc_count_alloc(size, 0);
     OBJECT_STAT_INC_COND(allocations512, size < 512);
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
@@ -1272,6 +1322,7 @@ PyMem_Calloc(size_t nelem, size_t elsize)
     /* see PyMem_RawMalloc() */
     if (elsize != 0 && nelem > (size_t)PY_SSIZE_T_MAX / elsize)
         return NULL;
+    gc_count_alloc(nelem * elsize, 0);
     OBJECT_STAT_INC_COND(allocations512, elsize < 512);
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
@@ -1285,6 +1336,7 @@ PyMem_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
+    gc_count_alloc(new_size, 0);
     return _PyMem.realloc(_PyMem.ctx, ptr, new_size);
 }
 
@@ -1380,24 +1432,7 @@ free_work_item(uintptr_t ptr, delayed_dealloc_cb cb, void *state)
 {
     if (work_item_should_decref(ptr)) {
         PyObject *obj = (PyObject *)(ptr - 1);
-#ifdef Py_GIL_DISABLED
-        if (cb == NULL) {
-            assert(!_PyInterpreterState_GET()->stoptheworld.world_stopped);
-            Py_DECREF(obj);
-            return;
-        }
-        assert(_PyInterpreterState_GET()->stoptheworld.world_stopped);
-        if (_Py_IsImmortal(obj)) {
-            // The object may have become immortal after it was queued.
-            return;
-        }
-        Py_ssize_t refcount = _Py_ExplicitMergeRefcount(obj, -1);
-        if (refcount == 0) {
-            cb(obj, state);
-        }
-#else
         Py_DECREF(obj);
-#endif
     }
     else {
         PyMem_Free((void *)ptr);
@@ -1405,120 +1440,11 @@ free_work_item(uintptr_t ptr, delayed_dealloc_cb cb, void *state)
 }
 
 
-#ifdef Py_GIL_DISABLED
-
-// For deferred advance on free: the number of deferred items before advancing
-// the write sequence.  This is based on WORK_ITEMS_PER_CHUNK.  We ideally
-// want to process a chunk before it overflows.
-#define QSBR_DEFERRED_LIMIT 127
-
-// If the deferred memory exceeds 1 MiB, advance the write sequence.  This
-// helps limit memory usage due to QSBR delaying frees too long.
-#define QSBR_FREE_MEM_LIMIT 1024*1024
-
-// Return true if the global write sequence should be advanced for a deferred
-// memory free.
-static bool
-should_advance_qsbr_for_free(struct _qsbr_thread_state *qsbr, size_t size)
-{
-    if (size > QSBR_FREE_MEM_LIMIT) {
-        qsbr->deferred_count = 0;
-        qsbr->deferred_memory = 0;
-        qsbr->should_process = true;
-        return true;
-    }
-    qsbr->deferred_count++;
-    qsbr->deferred_memory += size;
-    if (qsbr->deferred_count > QSBR_DEFERRED_LIMIT ||
-            qsbr->deferred_memory > QSBR_FREE_MEM_LIMIT) {
-        qsbr->deferred_count = 0;
-        qsbr->deferred_memory = 0;
-        qsbr->should_process = true;
-        return true;
-    }
-    return false;
-}
-#endif
 
 static void
 free_delayed(uintptr_t ptr, size_t size)
 {
-#ifndef Py_GIL_DISABLED
     free_work_item(ptr, NULL, NULL);
-#else
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (_PyInterpreterState_GetFinalizing(interp) != NULL ||
-        interp->stoptheworld.world_stopped)
-    {
-        // Free immediately during interpreter shutdown or if the world is
-        // stopped.
-        assert(!interp->stoptheworld.world_stopped || !work_item_should_decref(ptr));
-        free_work_item(ptr, NULL, NULL);
-        return;
-    }
-
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    struct llist_node *head = &tstate->mem_free_queue;
-
-    struct _mem_work_chunk *buf = NULL;
-    if (!llist_empty(head)) {
-        // Try to re-use the last buffer
-        buf = llist_data(head->prev, struct _mem_work_chunk, node);
-        if (buf->wr_idx == WORK_ITEMS_PER_CHUNK) {
-            // already full
-            buf = NULL;
-        }
-    }
-
-    if (buf == NULL) {
-        buf = PyMem_Calloc(1, sizeof(*buf));
-        if (buf != NULL) {
-            llist_insert_tail(head, &buf->node);
-        }
-    }
-
-    if (buf == NULL) {
-        // failed to allocate a buffer, free immediately
-        PyObject *to_dealloc = NULL;
-        _PyEval_StopTheWorld(tstate->base.interp);
-        if (work_item_should_decref(ptr)) {
-            PyObject *obj = (PyObject *)(ptr - 1);
-            if (!_Py_IsImmortal(obj)) {
-                Py_ssize_t refcount = _Py_ExplicitMergeRefcount(obj, -1);
-                if (refcount == 0) {
-                    to_dealloc = obj;
-                }
-            }
-        }
-        else {
-            PyMem_Free((void *)ptr);
-        }
-        _PyEval_StartTheWorld(tstate->base.interp);
-        if (to_dealloc != NULL) {
-            _Py_Dealloc(to_dealloc);
-        }
-        return;
-    }
-
-    assert(buf != NULL && buf->wr_idx < WORK_ITEMS_PER_CHUNK);
-    uint64_t seq;
-    if (should_advance_qsbr_for_free(tstate->qsbr, size)) {
-        seq = _Py_qsbr_advance(tstate->qsbr->shared);
-    }
-    else {
-        seq = _Py_qsbr_shared_next(tstate->qsbr->shared);
-    }
-    buf->array[buf->wr_idx].ptr = ptr;
-    buf->array[buf->wr_idx].qsbr_goal = seq;
-    buf->wr_idx++;
-
-    if (buf->wr_idx == WORK_ITEMS_PER_CHUNK) {
-        // Normally the processing of delayed items is done from the eval
-        // breaker.  Processing here is a safety measure to ensure too much
-        // work does not accumulate.
-        _PyMem_ProcessDelayed((PyThreadState *)tstate);
-    }
-#endif
 }
 
 void
@@ -1530,29 +1456,7 @@ _PyMem_FreeDelayed(void *ptr, size_t size)
     }
 }
 
-#ifdef Py_GIL_DISABLED
-void
-_PyObject_XDecRefDelayed(PyObject *ptr)
-{
-    assert(!((uintptr_t)ptr & 0x01));
-    if (ptr != NULL && !_Py_IsImmortal(ptr)) {
-        // We use 0 as the size since we don't have an easy way to know the
-        // actual size.  If we are freeing many objects, the write sequence
-        // will be advanced due to QSBR_DEFERRED_LIMIT.
-        free_delayed(((uintptr_t)ptr)|0x01, 0);
-    }
-}
-#endif
 
-#ifdef Py_GIL_DISABLED
-void
-_PyObject_XSetRefDelayed(PyObject **ptr, PyObject *value)
-{
-    PyObject *old = *ptr;
-    FT_ATOMIC_STORE_PTR_RELEASE(*ptr, value);
-    _PyObject_XDecRefDelayed(old);
-}
-#endif
 
 static struct _mem_work_chunk *
 work_queue_first(struct llist_node *head)
@@ -1706,12 +1610,13 @@ _PyMem_FiniDelayed(PyInterpreterState *interp)
 /* the "object" allocator */
 /**************************/
 
-void *
+Py_GC_PRECISE void *
 PyObject_Malloc(size_t size)
 {
     /* see PyMem_RawMalloc() */
     if (size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
+    gc_count_alloc(size, 1);
     OBJECT_STAT_INC_COND(allocations512, size < 512);
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
@@ -1725,6 +1630,7 @@ PyObject_Calloc(size_t nelem, size_t elsize)
     /* see PyMem_RawMalloc() */
     if (elsize != 0 && nelem > (size_t)PY_SSIZE_T_MAX / elsize)
         return NULL;
+    gc_count_alloc(nelem * elsize, 1);
     OBJECT_STAT_INC_COND(allocations512, elsize < 512);
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
@@ -1738,6 +1644,29 @@ PyObject_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
+    gc_count_alloc(new_size, 1);
+    /* An object block that moves is freed without PyObject_Free(): move
+       its object map bit to the new block, so that the free block does not
+       look like an object. */
+    PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
+    if (op != NULL) {
+        size_t offset = (char *)op - (char *)ptr;
+        // The weak reference table is keyed by address, and weak
+        // references name their object's address: an object resized here
+        // loses them, as it did when they could not follow it either.
+        if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+            _PyWeakref_DropList(op);
+        }
+        char *p = _PyObject.realloc(_PyObject.ctx, ptr, new_size);
+        if (p == NULL) {
+            return NULL;
+        }
+        _PyGC_ObjectMapClear(op);
+        if (new_size >= offset + sizeof(PyObject)) {
+            _PyGC_ObjectMapSet((PyObject *)(p + offset));
+        }
+        return p;
+    }
     return _PyObject.realloc(_PyObject.ctx, ptr, new_size);
 }
 
@@ -1745,7 +1674,38 @@ void
 PyObject_Free(void *ptr)
 {
     OBJECT_STAT_INC(frees);
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (ptr != NULL && tstate != NULL
+        && ptr == tstate->interp->gc.sweep_block)
+    {
+        return;  // the sweep frees it after the deallocs
+    }
+    PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
+    if (op != NULL) {
+        if (op->ob_flags & _Py_GC_DEAD_FLAG) {
+            // The sweep frees the blocks of dead objects after their deallocs.
+            if (tstate != NULL && tstate->interp->gc.sweeping) {
+                return;
+            }
+        }
+        if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+            _PyWeakref_DropList(op);
+        }
+        _PyGC_ObjectMapClear(op);
+    }
     _PyObject.free(_PyObject.ctx, ptr);
+}
+
+
+void
+_PyGC_FreeDeadBlock(PyObject *op, void *block)
+{
+    OBJECT_STAT_INC(frees);
+    if (op->ob_flags & _Py_HAS_WEAKREFS_FLAG) {
+        _PyWeakref_DropList(op);
+    }
+    _PyGC_ObjectMapClear(op);
+    _PyObject.free(_PyObject.ctx, block);
 }
 
 
@@ -1818,7 +1778,6 @@ static Py_ssize_t
 get_mimalloc_allocated_blocks(PyInterpreterState *interp)
 {
     size_t allocated_blocks = 0;
-#ifdef Py_GIL_DISABLED
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, t) {
         _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)t;
         for (int i = 0; i < _Py_MIMALLOC_HEAP_COUNT; i++) {
@@ -1832,14 +1791,28 @@ get_mimalloc_allocated_blocks(PyInterpreterState *interp)
         mi_abandoned_visit_blocks(subproc, tag, false, &count_blocks,
                                   &allocated_blocks);
     }
-#else
-    // TODO(sgross): this only counts the current thread's blocks.
-    mi_heap_t *heap = mi_heap_get_default();
-    mi_heap_visit_blocks(heap, false, &count_blocks, &allocated_blocks);
-#endif
+
     return allocated_blocks;
 }
 #endif
+
+void *
+_PyMem_NoScanMalloc(size_t size)
+{
+    return mi_heap_malloc(_PyMem_NoScanHeap(), size);
+}
+
+void *
+_PyMem_NoScanRealloc(void *ptr, size_t size)
+{
+    return mi_heap_realloc(_PyMem_NoScanHeap(), ptr, size);
+}
+
+void
+_PyMem_NoScanFree(void *ptr)
+{
+    mi_free(ptr);
+}
 
 Py_ssize_t
 _PyInterpreterState_GetAllocatedBlocks(PyInterpreterState *interp)
@@ -3028,26 +3001,6 @@ static void
 fill_mem_debug(debug_alloc_api_t *api, void *data, int c, size_t nbytes,
                bool is_alloc)
 {
-#ifdef Py_GIL_DISABLED
-    if (api->api_id == 'o') {
-        // Don't overwrite the first few bytes of a PyObject allocation in the
-        // free-threaded build
-        _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-        size_t debug_offset;
-        if (is_alloc) {
-            debug_offset = tstate->mimalloc.current_object_heap->debug_offset;
-        }
-        else {
-            char *alloc = (char *)data - 2*SST;  // start of the allocation
-            debug_offset = _mi_ptr_page(alloc)->debug_offset;
-        }
-        debug_offset -= 2*SST;  // account for pymalloc extra bytes
-        if (debug_offset < nbytes) {
-            memset((char *)data + debug_offset, c, nbytes - debug_offset);
-        }
-        return;
-    }
-#endif
     memset(data, c, nbytes);
 }
 
@@ -3213,7 +3166,6 @@ _PyMem_DebugRawRealloc(void *ctx, void *p, size_t nbytes)
 #ifdef PYMEM_DEBUG_SERIALNO
     size_t block_serialno = read_size_t(tail + SST);
 #endif
-#ifndef Py_GIL_DISABLED
     /* Mark the header, the trailer, ERASED_SIZE bytes at the begin and
        ERASED_SIZE bytes at the end as dead and save the copy of erased bytes.
      */
@@ -3230,7 +3182,6 @@ _PyMem_DebugRawRealloc(void *ctx, void *p, size_t nbytes)
         memset(tail - ERASED_SIZE, PYMEM_DEADBYTE,
                ERASED_SIZE + PYMEM_DEBUG_EXTRA_BYTES - 2 * SST);
     }
-#endif
 
     /* Resize and add decorations. */
     r = (uint8_t *)api->alloc.realloc(api->alloc.ctx, head, total);
@@ -3258,7 +3209,6 @@ _PyMem_DebugRawRealloc(void *ctx, void *p, size_t nbytes)
     write_size_t(tail + SST, block_serialno);
 #endif
 
-#ifndef Py_GIL_DISABLED
     /* Restore saved bytes. */
     if (original_nbytes <= sizeof(save)) {
         memcpy(data, save, Py_MIN(nbytes, original_nbytes));
@@ -3271,7 +3221,6 @@ _PyMem_DebugRawRealloc(void *ctx, void *p, size_t nbytes)
                    Py_MIN(nbytes - i, (size_t)ERASED_SIZE));
         }
     }
-#endif
 
     if (r == NULL) {
         return NULL;
@@ -3291,16 +3240,9 @@ _PyMem_DebugCheckGIL(const char *func)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     if (tstate == NULL) {
-#ifndef Py_GIL_DISABLED
         _Py_FatalErrorFunc(func,
                            "Python memory allocator called "
                            "without holding the GIL");
-#else
-        _Py_FatalErrorFunc(func,
-                           "Python memory allocator called "
-                           "without an active thread state. "
-                           "Are you trying to call it inside of a Py_BEGIN_ALLOW_THREADS block?");
-#endif
     }
 }
 

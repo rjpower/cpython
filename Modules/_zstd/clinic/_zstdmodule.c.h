@@ -3,10 +3,8 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 
 PyDoc_STRVAR(_zstd_train_dict__doc__,
@@ -29,40 +27,53 @@ static PyObject *
 _zstd_train_dict_impl(PyObject *module, PyBytesObject *samples_bytes,
                       PyObject *samples_sizes, Py_ssize_t dict_size);
 
-static PyObject *
-_zstd_train_dict(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_zstd_train_dict(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyBytesObject *samples_bytes;
     PyObject *samples_sizes;
     Py_ssize_t dict_size;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("train_dict", nargs, 3, 3)) {
         goto exit;
     }
-    if (!PyBytes_Check(args[0])) {
-        _PyArg_BadArgument("train_dict", "argument 1", "bytes", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyBytes_Check(_arg)) {
+            _PyArg_BadArgument("train_dict", "argument 1", "bytes", _arg);
+            goto exit;
+        }
+        samples_bytes = (PyBytesObject *)_arg;
     }
-    samples_bytes = (PyBytesObject *)args[0];
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("train_dict", "argument 2", "tuple", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("train_dict", "argument 2", "tuple", _arg);
+            goto exit;
+        }
+        samples_sizes = _arg;
     }
-    samples_sizes = args[1];
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[2]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         dict_size = ival;
     }
-    return_value = _zstd_train_dict_impl(module, samples_bytes, samples_sizes, dict_size);
+    _return_value = _zstd_train_dict_impl(module, samples_bytes, samples_sizes, dict_size);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -95,51 +106,70 @@ _zstd_finalize_dict_impl(PyObject *module, PyBytesObject *custom_dict_bytes,
                          PyObject *samples_sizes, Py_ssize_t dict_size,
                          int compression_level);
 
-static PyObject *
-_zstd_finalize_dict(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_zstd_finalize_dict(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyBytesObject *custom_dict_bytes;
     PyBytesObject *samples_bytes;
     PyObject *samples_sizes;
     Py_ssize_t dict_size;
     int compression_level;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("finalize_dict", nargs, 5, 5)) {
         goto exit;
     }
-    if (!PyBytes_Check(args[0])) {
-        _PyArg_BadArgument("finalize_dict", "argument 1", "bytes", args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyBytes_Check(_arg)) {
+            _PyArg_BadArgument("finalize_dict", "argument 1", "bytes", _arg);
+            goto exit;
+        }
+        custom_dict_bytes = (PyBytesObject *)_arg;
     }
-    custom_dict_bytes = (PyBytesObject *)args[0];
-    if (!PyBytes_Check(args[1])) {
-        _PyArg_BadArgument("finalize_dict", "argument 2", "bytes", args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyBytes_Check(_arg)) {
+            _PyArg_BadArgument("finalize_dict", "argument 2", "bytes", _arg);
+            goto exit;
+        }
+        samples_bytes = (PyBytesObject *)_arg;
     }
-    samples_bytes = (PyBytesObject *)args[1];
-    if (!PyTuple_Check(args[2])) {
-        _PyArg_BadArgument("finalize_dict", "argument 3", "tuple", args[2]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[2]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyTuple_Check(_arg)) {
+            _PyArg_BadArgument("finalize_dict", "argument 3", "tuple", _arg);
+            goto exit;
+        }
+        samples_sizes = _arg;
     }
-    samples_sizes = args[2];
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[3]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue ivalue = PyNumber_IndexValue(args[3]);
+        if (!PyValue_IsNull(ivalue)) {
+            ival = PyLong_AsSsize_tValue(ivalue);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         dict_size = ival;
     }
-    compression_level = PyLong_AsInt(args[4]);
+    compression_level = PyLong_AsIntValue(args[4]);
     if (compression_level == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _zstd_finalize_dict_impl(module, custom_dict_bytes, samples_bytes, samples_sizes, dict_size, compression_level);
+    _return_value = _zstd_finalize_dict_impl(module, custom_dict_bytes, samples_bytes, samples_sizes, dict_size, compression_level);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -162,15 +192,14 @@ PyDoc_STRVAR(_zstd_get_param_bounds__doc__,
 static PyObject *
 _zstd_get_param_bounds_impl(PyObject *module, int parameter, int is_compress);
 
-static PyObject *
-_zstd_get_param_bounds(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_get_param_bounds(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -193,24 +222,26 @@ _zstd_get_param_bounds(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     int parameter;
     int is_compress;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    parameter = PyLong_AsInt(args[0]);
+    parameter = PyLong_AsIntValue(args[0]);
     if (parameter == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    is_compress = PyObject_IsTrue(args[1]);
+    is_compress = PyObject_IsTrueValue(args[1]);
     if (is_compress < 0) {
         goto exit;
     }
-    return_value = _zstd_get_param_bounds_impl(module, parameter, is_compress);
+    _return_value = _zstd_get_param_bounds_impl(module, parameter, is_compress);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -232,15 +263,14 @@ PyDoc_STRVAR(_zstd_get_frame_size__doc__,
 static PyObject *
 _zstd_get_frame_size_impl(PyObject *module, Py_buffer *frame_buffer);
 
-static PyObject *
-_zstd_get_frame_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_get_frame_size(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -263,18 +293,26 @@ _zstd_get_frame_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_buffer frame_buffer = {NULL, NULL};
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &frame_buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &frame_buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _zstd_get_frame_size_impl(module, &frame_buffer);
+    _return_value = _zstd_get_frame_size_impl(module, &frame_buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for frame_buffer */
@@ -300,15 +338,14 @@ PyDoc_STRVAR(_zstd_get_frame_info__doc__,
 static PyObject *
 _zstd_get_frame_info_impl(PyObject *module, Py_buffer *frame_buffer);
 
-static PyObject *
-_zstd_get_frame_info(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_get_frame_info(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -331,18 +368,26 @@ _zstd_get_frame_info(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     Py_buffer frame_buffer = {NULL, NULL};
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &frame_buffer, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &frame_buffer, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
-    return_value = _zstd_get_frame_info_impl(module, &frame_buffer);
+    _return_value = _zstd_get_frame_info_impl(module, &frame_buffer);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     /* Cleanup for frame_buffer */
@@ -371,15 +416,14 @@ static PyObject *
 _zstd_set_parameter_types_impl(PyObject *module, PyObject *c_parameter_type,
                                PyObject *d_parameter_type);
 
-static PyObject *
-_zstd_set_parameter_types(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_set_parameter_types(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -402,28 +446,42 @@ _zstd_set_parameter_types(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    PyValue argsbuf[2];
     PyObject *c_parameter_type;
     PyObject *d_parameter_type;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], &PyType_Type)) {
-        _PyArg_BadArgument("set_parameter_types", "argument 'c_parameter_type'", (&PyType_Type)->tp_name, args[0]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("set_parameter_types", "argument 'c_parameter_type'", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        c_parameter_type = _arg;
     }
-    c_parameter_type = args[0];
-    if (!PyObject_TypeCheck(args[1], &PyType_Type)) {
-        _PyArg_BadArgument("set_parameter_types", "argument 'd_parameter_type'", (&PyType_Type)->tp_name, args[1]);
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyObject_TypeCheck(_arg, &PyType_Type)) {
+            _PyArg_BadArgument("set_parameter_types", "argument 'd_parameter_type'", (&PyType_Type)->tp_name, _arg);
+            goto exit;
+        }
+        d_parameter_type = _arg;
     }
-    d_parameter_type = args[1];
-    return_value = _zstd_set_parameter_types_impl(module, c_parameter_type, d_parameter_type);
+    _return_value = _zstd_set_parameter_types_impl(module, c_parameter_type, d_parameter_type);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=437b084f149e68e5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=092f665767dd774b input=a9049054013a1b77]*/

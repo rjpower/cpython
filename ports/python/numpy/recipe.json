@@ -1,0 +1,69 @@
+{
+  "name": "numpy",
+  "version": "2.5.4",
+  "kind": "sdist",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz",
+    "sha256": "9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a"
+  },
+  "build_requires": [
+    "meson-python==0.22.1",
+    "meson==1.12.1",
+    "ninja==1.13.2",
+    "pyproject-metadata==0.12.1",
+    "packaging==26.3"
+  ],
+  "build_ports": [
+    "python/cython"
+  ],
+  "build_options": [
+    "-Csetup-args=-Dallow-noblas=true"
+  ],
+  "patches": [
+    {
+      "file": "gc-roots.patch",
+      "sha256": "d268ead402d083ce1a0f701e5d849438a2183c5e109d4e6642d80aacc8b070d8",
+      "touches": {
+        "numpy/_core/src/multiarray/alloc.c": "ce8d03653f80284f71af1fb648cd41a896825e21d95a9fcea75b7ac96055f335",
+        "numpy/_core/src/multiarray/alloc.h": "24f2687e71eadae41bc5b7de24b0d13281baee182dc10c31f838b1a04aca9789",
+        "numpy/_core/src/multiarray/array_converter.c": "2d7c32613bf8fcfff6ba3f04304093c25447c547af17d2e77d95307e7dfd6a58",
+        "numpy/_core/src/multiarray/array_method.c": "ce6be28c79ef0c1b369a805f1b395508fca392cee1aa180b0c956e86106ebeed",
+        "numpy/_core/src/multiarray/arrayfunction_override.c": "562a5c285ea6bf40041b0fa9f62749fcbd76a723acdfabc730273f994157c58e",
+        "numpy/_core/src/multiarray/arrayobject.c": "0d0462adcc387d36a78361087f863b178b435b575119c46275bc185bf099de73",
+        "numpy/_core/src/multiarray/convert_datatype.c": "4c4dba0c4313399305bedabb7b4e40c30370eab78edf543de224f93c186288a8",
+        "numpy/_core/src/multiarray/ctors.c": "dc98bee5d646083c0ba15fbab0f30afffd86b3b56b66e83db65a014a52efe45a",
+        "numpy/_core/src/multiarray/descriptor.c": "d0ad047e2d8b04c3307950614b34292cd5a4084c22f9ec0ed6129d7f84d8ae21",
+        "numpy/_core/src/multiarray/descriptor.h": "9e0852d6600993148d23810ff92998d1b2dcbd691c63e046ea2711dfdefad86c",
+        "numpy/_core/src/multiarray/dtypemeta.c": "c9ba204ba447c3dccc5d37da8edb5ac64fe77241a86edec783d2a668e3e319d3",
+        "numpy/_core/src/multiarray/flagsobject.c": "52705a87382bda2c69eb54800225977269c688174806257a173770fab34d3994",
+        "numpy/_core/src/multiarray/iterators.c": "cc1c4d472e1926cab6e9f6bd8b76bac331946848cd789ffe0d7fc1b7c6e6b031",
+        "numpy/_core/src/multiarray/mapping.c": "df3c6187a6ec401dea77b671ea08f17a605bee42297fd70b0ffc2e9dfdcc83f1",
+        "numpy/_core/src/multiarray/multiarraymodule.c": "1bfda5658c09101dd6557fcb6f235ed63b0f57cdf01b07fb9e3166a25f724c64",
+        "numpy/_core/src/multiarray/nditer_api.c": "27d41b77aa0c52a1540f6dd8fee190c3315b3befc6181136c254959d55cdadc7",
+        "numpy/_core/src/multiarray/nditer_constr.c": "5e3e7e24efbf4dd5d447e0de72de79251097b073810531740a684a752880cbf1",
+        "numpy/_core/src/multiarray/nditer_impl.h": "2591fb87dd65817c4229a73dab5f76b8c3fb919434ff8b85a27546ce0aed5869",
+        "numpy/_core/src/multiarray/nditer_pywrap.c": "363b81acab7b7afd0270a69903f991e3ee486b83503caf5e31f54410a54a93fb",
+        "numpy/_core/src/multiarray/nditer_pywrap.h": "60bd8703728ffe15074c8850a2668c3fe5dc65b3fd278a61ec62408a251f42a9",
+        "numpy/_core/src/multiarray/scalartypes.c.src": "16645b91a059f3c11388cebf86e5a909991dc805d2442816954f26cc749ce38d",
+        "numpy/_core/src/multiarray/stringdtype/dtype.c": "3bb4fcea192111a74cb70c21266c5df5bbf48787a355a0fd9089448a035210f1",
+        "numpy/_core/src/umath/ufunc_object.c": "7526a7a9dd606beec78f6e9f687b65ce048555c8400659cb7dfab55cf9faf4ef"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "script": "tests/smoke.py"
+    },
+    {
+      "script": "tests/held.py"
+    },
+    {
+      "script": "tests/collect.py"
+    }
+  ],
+  "bench": [
+    {
+      "script": "tests/bench_ufunc.py"
+    }
+  ]
+}

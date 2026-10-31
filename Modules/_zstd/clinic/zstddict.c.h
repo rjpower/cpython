@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_zstd_ZstdDict_new__doc__,
 "ZstdDict(dict_content, /, *, is_raw=False)\n"
@@ -36,7 +36,6 @@ _zstd_ZstdDict_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -59,25 +58,31 @@ _zstd_ZstdDict_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
+    PyValue argsbuf[2];
+    const PyValue *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     Py_buffer dict_content = {NULL, NULL};
     int is_raw = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyObject_GetBuffer(fastargs[0], &dict_content, PyBUF_SIMPLE) != 0) {
-        goto exit;
+    {
+        PyObject *_arg = PyValue_Object(fastargs[0]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (PyObject_GetBuffer(_arg, &dict_content, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    is_raw = PyObject_IsTrue(fastargs[1]);
+    is_raw = PyObject_IsTrueValue(fastargs[1]);
     if (is_raw < 0) {
         goto exit;
     }
@@ -99,10 +104,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_dict_content__doc__,
 static PyObject *
 _zstd_ZstdDict_dict_content_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_dict_content_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_dict_content_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_dict_content_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_digested_dict__doc__,
@@ -121,10 +126,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_digested_dict__doc__,
 static PyObject *
 _zstd_ZstdDict_as_digested_dict_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_digested_dict_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_digested_dict_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_digested_dict_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_undigested_dict__doc__,
@@ -142,10 +147,10 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_undigested_dict__doc__,
 static PyObject *
 _zstd_ZstdDict_as_undigested_dict_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_undigested_dict_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_undigested_dict_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_undigested_dict_get_impl((ZstdDict *)self));
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_as_prefix__doc__,
@@ -163,17 +168,17 @@ PyDoc_STRVAR(_zstd_ZstdDict_as_prefix__doc__,
 static PyObject *
 _zstd_ZstdDict_as_prefix_get_impl(ZstdDict *self);
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_as_prefix_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _zstd_ZstdDict_as_prefix_get_impl((ZstdDict *)self);
+    return PyValue_FromResult(_zstd_ZstdDict_as_prefix_get_impl((ZstdDict *)self));
 }
-#define _ZSTD_ZSTDDICT_DICT_CONTENT_GETSETDEF {"dict_content", (getter)_zstd_ZstdDict_dict_content_get, (setter)NULL, _zstd_ZstdDict_dict_content__doc__},
+#define _ZSTD_ZSTDDICT_DICT_CONTENT_GETSETDEF {"dict_content", _zstd_ZstdDict_dict_content_get, NULL, _zstd_ZstdDict_dict_content__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_DIGESTED_DICT_GETSETDEF {"as_digested_dict", (getter)_zstd_ZstdDict_as_digested_dict_get, (setter)NULL, _zstd_ZstdDict_as_digested_dict__doc__},
+#define _ZSTD_ZSTDDICT_AS_DIGESTED_DICT_GETSETDEF {"as_digested_dict", _zstd_ZstdDict_as_digested_dict_get, NULL, _zstd_ZstdDict_as_digested_dict__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_UNDIGESTED_DICT_GETSETDEF {"as_undigested_dict", (getter)_zstd_ZstdDict_as_undigested_dict_get, (setter)NULL, _zstd_ZstdDict_as_undigested_dict__doc__},
+#define _ZSTD_ZSTDDICT_AS_UNDIGESTED_DICT_GETSETDEF {"as_undigested_dict", _zstd_ZstdDict_as_undigested_dict_get, NULL, _zstd_ZstdDict_as_undigested_dict__doc__},
 
-#define _ZSTD_ZSTDDICT_AS_PREFIX_GETSETDEF {"as_prefix", (getter)_zstd_ZstdDict_as_prefix_get, (setter)NULL, _zstd_ZstdDict_as_prefix__doc__},
+#define _ZSTD_ZSTDDICT_AS_PREFIX_GETSETDEF {"as_prefix", _zstd_ZstdDict_as_prefix_get, NULL, _zstd_ZstdDict_as_prefix__doc__},
 
-/*[clinic end generated code: output=aa4d4b8fd985ae08 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f5c5ebaeae62fb7a input=a9049054013a1b77]*/

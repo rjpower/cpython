@@ -955,10 +955,14 @@ do_string_format(PyObject *self, PyObject *args, PyObject *kwargs)
     return build_string(&input, args, kwargs, recursion_depth, &auto_number);
 }
 
-static PyObject *
-do_string_format_map(PyObject *self, PyObject *obj)
+static PyValue
+do_string_format_map(PyObject *self, PyValue obj_value)
 {
-    return do_string_format(self, NULL, obj);
+    PyObject *obj = PyValue_Object(obj_value);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromResult(do_string_format(self, NULL, obj));
 }
 
 
@@ -993,7 +997,7 @@ formatteriter_dealloc(PyObject *op)
    format_spec is the string after the ':'.  mibht be None
    conversion is either None, or the string after the '!'
 */
-static PyObject *
+static PyValue
 formatteriter_next(PyObject *op)
 {
     formatteriterobject *it = (formatteriterobject*)op;
@@ -1012,7 +1016,7 @@ formatteriter_next(PyObject *op)
     assert(0 <= result && result <= 2);
     if (result == 0 || result == 1)
         /* if 0, error has already been set, if 1, iterator is empty */
-        return NULL;
+        return PyValue_NULL;
     else {
         PyObject *literal_str = NULL;
         PyObject *field_name_str = NULL;
@@ -1055,7 +1059,7 @@ formatteriter_next(PyObject *op)
         Py_XDECREF(field_name_str);
         Py_XDECREF(format_spec_str);
         Py_XDECREF(conversion_str);
-        return tuple;
+        return PyValue_FromResult(tuple);
     }
 }
 
@@ -1100,26 +1104,30 @@ static PyTypeObject PyFormatterIter_Type = {
    string.Formatter.vformat.  it parses a string and returns tuples
    describing the parsed elements.  It's a wrapper around
    stringlib/string_format.h's MarkupIterator */
-static PyObject *
-formatter_parser(PyObject *Py_UNUSED(module), PyObject *self)
+static PyValue
+formatter_parser(PyObject *Py_UNUSED(module), PyValue self_value)
 {
+    PyObject *self = PyValue_Object(self_value);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
     formatteriterobject *it;
 
     if (!PyUnicode_Check(self)) {
         PyErr_Format(PyExc_TypeError, "expected str, got %s", Py_TYPE(self)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     it = PyObject_New(formatteriterobject, &PyFormatterIter_Type);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* take ownership, give the object to the iterator */
     it->str = Py_NewRef(self);
 
     /* initialize the contained MarkupIterator */
     MarkupIterator_init(&it->it_markup, (PyObject*)self, 0, PyUnicode_GET_LENGTH(self));
-    return (PyObject *)it;
+    return PyValue_FromResult((PyObject *)it);
 }
 
 
@@ -1152,7 +1160,7 @@ fieldnameiter_dealloc(PyObject *op)
               false if we used index syntax (e.g., '[foo]')
    value is an integer or string
 */
-static PyObject *
+static PyValue
 fieldnameiter_next(PyObject *op)
 {
     fieldnameiterobject *it = (fieldnameiterobject*)op;
@@ -1165,7 +1173,7 @@ fieldnameiter_next(PyObject *op)
                                     &idx, &name);
     if (result == 0 || result == 1)
         /* if 0, error has already been set, if 1, iterator is empty */
-        return NULL;
+        return PyValue_NULL;
     else {
         PyObject* result = NULL;
         PyObject* is_attr_obj = NULL;
@@ -1184,12 +1192,12 @@ fieldnameiter_next(PyObject *op)
             goto error;
 
         /* return a tuple of values */
-        return _PyTuple_FromPairSteal(is_attr_obj, obj);
+        return PyValue_FromResult(_PyTuple_FromPairSteal(is_attr_obj, obj));
 
     error:
         Py_XDECREF(is_attr_obj);
         Py_XDECREF(obj);
-        return result;
+        return PyValue_FromResult(result);
     }
 }
 
@@ -1236,9 +1244,13 @@ static PyTypeObject PyFieldNameIter_Type = {
    name.  it's a wrapper around stringlib/string_format.h's
    field_name_split.  The iterator it returns is a
    FieldNameIterator */
-static PyObject *
-formatter_field_name_split(PyObject *Py_UNUSED(module), PyObject *self)
+static PyValue
+formatter_field_name_split(PyObject *Py_UNUSED(module), PyValue self_value)
 {
+    PyObject *self = PyValue_Object(self_value);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
     SubString first;
     Py_ssize_t first_idx;
     fieldnameiterobject *it;
@@ -1248,12 +1260,12 @@ formatter_field_name_split(PyObject *Py_UNUSED(module), PyObject *self)
 
     if (!PyUnicode_Check(self)) {
         PyErr_Format(PyExc_TypeError, "expected str, got %s", Py_TYPE(self)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     it = PyObject_New(fieldnameiterobject, &PyFieldNameIter_Type);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* take ownership, give the object to the iterator.  this is
        just to keep the field_name alive */
@@ -1275,10 +1287,10 @@ formatter_field_name_split(PyObject *Py_UNUSED(module), PyObject *self)
         goto error;
 
     /* return a tuple of values */
-    return _PyTuple_FromPairSteal(first_obj, (PyObject *)it);
+    return PyValue_FromResult(_PyTuple_FromPairSteal(first_obj, (PyObject *)it));
 
 error:
     Py_XDECREF(it);
     Py_XDECREF(first_obj);
-    return result;
+    return PyValue_FromResult(result);
 }

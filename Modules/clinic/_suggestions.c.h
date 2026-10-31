@@ -18,27 +18,38 @@ static PyObject *
 _suggestions__generate_suggestions_impl(PyObject *module,
                                         PyObject *candidates, PyObject *item);
 
-static PyObject *
-_suggestions__generate_suggestions(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_suggestions__generate_suggestions(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *candidates;
     PyObject *item;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_generate_suggestions", nargs, 2, 2)) {
         goto exit;
     }
-    candidates = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_generate_suggestions", "argument 2", "str", args[1]);
+    candidates = PyValue_Object(args[0]);
+    if (candidates == NULL) {
         goto exit;
     }
-    item = args[1];
+    {
+        PyObject *_arg = PyValue_Object(args[1]);
+        if (_arg == NULL) {
+            goto exit;
+        }
+        if (!PyUnicode_Check(_arg)) {
+            _PyArg_BadArgument("_generate_suggestions", "argument 2", "str", _arg);
+            goto exit;
+        }
+        item = _arg;
+    }
     Py_BEGIN_CRITICAL_SECTION(candidates);
-    return_value = _suggestions__generate_suggestions_impl(module, candidates, item);
+    _return_value = _suggestions__generate_suggestions_impl(module, candidates, item);
     Py_END_CRITICAL_SECTION();
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1690dd15a464d19c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d7b44af1d09a9a4 input=a9049054013a1b77]*/

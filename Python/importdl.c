@@ -428,7 +428,7 @@ _PyImport_RunModInitFunc(PyModInitFunction p0,
         goto error;
     }
 
-    if (Py_IS_TYPE(m, NULL)) {
+    if (_PyObject_SHAPE(m) == NULL) {
         /* This can happen when a PyModuleDef is returned without calling
          * PyModuleDef_Init on it
          */
@@ -450,6 +450,8 @@ _PyImport_RunModInitFunc(PyModInitFunction p0,
     else if (info->hook_prefixes == &nonascii_prefixes) {
         /* Non-ASCII is only supported for multi-phase init. */
         res.kind = _Py_ext_module_kind_MULTIPHASE;
+        /* The error path releases the module the init function created. */
+        res.module = m;
         /* Don't allow legacy init for non-ASCII module names. */
         _Py_ext_module_loader_result_set_error(
                 &res, _Py_ext_module_loader_result_ERR_NONASCII_NOT_MULTIPHASE);

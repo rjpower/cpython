@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -21,15 +20,14 @@ static PyObject *
 _hmac_new_impl(PyObject *module, PyObject *keyobj, PyObject *msgobj,
                PyObject *hash_info_ref);
 
-static PyObject *
-_hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hmac_new(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -52,30 +50,41 @@ _hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *k
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *keyobj;
     PyObject *msgobj = NULL;
     PyObject *hash_info_ref = NULL;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    keyobj = args[0];
+    keyobj = PyValue_Object(args[0]);
+    if (keyobj == NULL) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (args[1]) {
-        msgobj = args[1];
+    if (!PyValue_IsNull(args[1])) {
+        msgobj = PyValue_Object(args[1]);
+        if (msgobj == NULL) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    hash_info_ref = args[2];
+    hash_info_ref = PyValue_Object(args[2]);
+    if (hash_info_ref == NULL) {
+        goto exit;
+    }
 skip_optional_pos:
-    return_value = _hmac_new_impl(module, keyobj, msgobj, hash_info_ref);
+    _return_value = _hmac_new_impl(module, keyobj, msgobj, hash_info_ref);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -93,14 +102,14 @@ PyDoc_STRVAR(_hmac_HMAC_copy__doc__,
 static PyObject *
 _hmac_HMAC_copy_impl(HMACObject *self, PyTypeObject *cls);
 
-static PyObject *
-_hmac_HMAC_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hmac_HMAC_copy(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _hmac_HMAC_copy_impl((HMACObject *)self, cls);
+    return PyValue_FromResult(_hmac_HMAC_copy_impl((HMACObject *)self, cls));
 }
 
 PyDoc_STRVAR(_hmac_HMAC_update__doc__,
@@ -115,15 +124,14 @@ PyDoc_STRVAR(_hmac_HMAC_update__doc__,
 static PyObject *
 _hmac_HMAC_update_impl(HMACObject *self, PyObject *msgobj);
 
-static PyObject *
-_hmac_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hmac_HMAC_update(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -146,16 +154,21 @@ _hmac_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    PyValue argsbuf[1];
     PyObject *msgobj;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    msgobj = args[0];
-    return_value = _hmac_HMAC_update_impl((HMACObject *)self, msgobj);
+    msgobj = PyValue_Object(args[0]);
+    if (msgobj == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_HMAC_update_impl((HMACObject *)self, msgobj);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -207,28 +220,28 @@ _hmac_HMAC_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 _hmac_HMAC_name_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_name_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_name_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_name_get_impl((HMACObject *)self));
 }
 
 static PyObject *
 _hmac_HMAC_block_size_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_block_size_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_block_size_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_block_size_get_impl((HMACObject *)self));
 }
 
 static PyObject *
 _hmac_HMAC_digest_size_get_impl(HMACObject *self);
 
-static PyObject *
+static PyValue
 _hmac_HMAC_digest_size_get(PyObject *self, void *Py_UNUSED(context))
 {
-    return _hmac_HMAC_digest_size_get_impl((HMACObject *)self);
+    return PyValue_FromResult(_hmac_HMAC_digest_size_get_impl((HMACObject *)self));
 }
 
 PyDoc_STRVAR(_hmac_compute_digest__doc__,
@@ -243,15 +256,14 @@ static PyObject *
 _hmac_compute_digest_impl(PyObject *module, PyObject *key, PyObject *msg,
                           PyObject *digest);
 
-static PyObject *
-_hmac_compute_digest(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hmac_compute_digest(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
-        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -274,20 +286,31 @@ _hmac_compute_digest(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    PyValue argsbuf[3];
     PyObject *key;
     PyObject *msg;
     PyObject *digest;
+    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    digest = args[2];
-    return_value = _hmac_compute_digest_impl(module, key, msg, digest);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    digest = PyValue_Object(args[2]);
+    if (digest == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_digest_impl(module, key, msg, digest);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -304,19 +327,27 @@ PyDoc_STRVAR(_hmac_compute_md5__doc__,
 static PyObject *
 _hmac_compute_md5_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_md5(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_md5", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_md5_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_md5_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -333,19 +364,27 @@ PyDoc_STRVAR(_hmac_compute_sha1__doc__,
 static PyObject *
 _hmac_compute_sha1_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha1(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha1", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha1_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha1_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -362,19 +401,27 @@ PyDoc_STRVAR(_hmac_compute_sha2_224__doc__,
 static PyObject *
 _hmac_compute_sha2_224_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha2_224(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha2_224(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha224", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha2_224_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha2_224_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -391,19 +438,27 @@ PyDoc_STRVAR(_hmac_compute_sha2_256__doc__,
 static PyObject *
 _hmac_compute_sha2_256_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha2_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha2_256(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha256", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha2_256_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha2_256_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -420,19 +475,27 @@ PyDoc_STRVAR(_hmac_compute_sha2_384__doc__,
 static PyObject *
 _hmac_compute_sha2_384_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha2_384(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha2_384(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha384", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha2_384_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha2_384_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -449,19 +512,27 @@ PyDoc_STRVAR(_hmac_compute_sha2_512__doc__,
 static PyObject *
 _hmac_compute_sha2_512_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha2_512(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha2_512(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha512", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha2_512_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha2_512_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -478,19 +549,27 @@ PyDoc_STRVAR(_hmac_compute_sha3_224__doc__,
 static PyObject *
 _hmac_compute_sha3_224_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha3_224(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha3_224", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha3_224_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha3_224_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -507,19 +586,27 @@ PyDoc_STRVAR(_hmac_compute_sha3_256__doc__,
 static PyObject *
 _hmac_compute_sha3_256_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha3_256(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha3_256", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha3_256_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha3_256_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -536,19 +623,27 @@ PyDoc_STRVAR(_hmac_compute_sha3_384__doc__,
 static PyObject *
 _hmac_compute_sha3_384_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha3_384(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha3_384", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha3_384_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha3_384_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -565,19 +660,27 @@ PyDoc_STRVAR(_hmac_compute_sha3_512__doc__,
 static PyObject *
 _hmac_compute_sha3_512_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_sha3_512(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_sha3_512", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_sha3_512_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_sha3_512_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -594,19 +697,27 @@ PyDoc_STRVAR(_hmac_compute_blake2s_32__doc__,
 static PyObject *
 _hmac_compute_blake2s_32_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_blake2s_32(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_blake2s_32(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_blake2s_32", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_blake2s_32_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_blake2s_32_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -623,27 +734,35 @@ PyDoc_STRVAR(_hmac_compute_blake2b_32__doc__,
 static PyObject *
 _hmac_compute_blake2b_32_impl(PyObject *module, PyObject *key, PyObject *msg);
 
-static PyObject *
-_hmac_compute_blake2b_32(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hmac_compute_blake2b_32(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *key;
     PyObject *msg;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("compute_blake2b_32", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    msg = args[1];
-    return_value = _hmac_compute_blake2b_32_impl(module, key, msg);
+    key = PyValue_Object(args[0]);
+    if (key == NULL) {
+        goto exit;
+    }
+    msg = PyValue_Object(args[1]);
+    if (msg == NULL) {
+        goto exit;
+    }
+    _return_value = _hmac_compute_blake2b_32_impl(module, key, msg);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-#define _HMAC_HMAC_NAME_GETSETDEF {"name", (getter)_hmac_HMAC_name_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_NAME_GETSETDEF {"name", _hmac_HMAC_name_get, NULL, NULL},
 
-#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", (getter)_hmac_HMAC_block_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_BLOCK_SIZE_GETSETDEF {"block_size", _hmac_HMAC_block_size_get, NULL, NULL},
 
-#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", (getter)_hmac_HMAC_digest_size_get, (setter)NULL, NULL},
+#define _HMAC_HMAC_DIGEST_SIZE_GETSETDEF {"digest_size", _hmac_HMAC_digest_size_get, NULL, NULL},
 
-/*[clinic end generated code: output=f63101faf6ff6bac input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ba0e316a0517b9ba input=a9049054013a1b77]*/

@@ -15,6 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
+from ir_generator import HandlerDomain, HandlerKind, build_handler_domain
 from typing import TextIO
 
 
@@ -43,7 +44,8 @@ def generate_specializations(analysis: Analysis, out: CWriter) -> None:
     out.emit(")\n\n")
 
 
-def generate_specialized_opmap(analysis: Analysis, out: CWriter) -> None:
+def generate_specialized_opmap(analysis: Analysis, domain: HandlerDomain,
+                               out: CWriter) -> None:
     out.emit("_specialized_opmap = frozendict(\n")
     names = []
     seen = set()
@@ -56,29 +58,64 @@ def generate_specialized_opmap(analysis: Analysis, out: CWriter) -> None:
             seen.add(member.name)
             names.append(member.name)
     for name in sorted(names):
-        out.emit(f"{name}={analysis.opmap[name]},\n")
+        out.emit(f"{name}={domain.opmap[name]},\n")
     out.emit(")\n\n")
 
 
-def generate_opmap(analysis: Analysis, out: CWriter) -> None:
+def generate_opmap(analysis: Analysis, domain: HandlerDomain,
+                   out: CWriter) -> None:
     specialized = get_specialized(analysis)
     out.emit("opmap = frozendict(\n")
-    for inst, op in analysis.opmap.items():
+    for inst, op in domain.opmap.items():
         if inst not in specialized:
-            out.emit(f"{inst}={analysis.opmap[inst]},\n")
+            out.emit(f"{inst}={domain.opmap[inst]},\n")
     out.emit(")\n\n")
+
+
+def generate_ir_opmap(analysis: Analysis, domain: HandlerDomain,
+                      out: CWriter) -> None:
+    "The handlers of the register IR that are not opcodes, by name"
+    out.emit("_ir_opmap = frozendict(\n")
+    ids = domain.handlers
+    for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+        if handler >= domain.first_ir_only:
+            out.emit(f"{name}={handler},\n")
+    out.emit(")\n\n")
+
+
+def generate_handler_metadata(domain: HandlerDomain, out: CWriter) -> None:
+    ids = {**domain.opmap, **domain.handlers}
+    flags = [0] * domain.count
+    bases = list(range(domain.count))
+    operations = [None] * domain.count
+    for name, handler in ids.items():
+        flags[handler] = int(domain.kinds[name])
+        bases[handler] = ids[domain.bases[name]]
+        operations[handler] = domain.operations.get(name)
+    for kind in HandlerKind:
+        out.emit(f"_HANDLER_{kind.name} = {kind.value}\n")
+    for name, values in (("flags", flags), ("bases", bases),
+                         ("operations", operations)):
+        out.emit(f"_handler_{name} = (\n")
+        for value in values:
+            out.emit(f"    {value!r},\n")
+        out.emit(")\n\n")
 
 
 def generate_py_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, domain: HandlerDomain,
+    outfile: TextIO
 ) -> None:
+    domain.require_analysis(analysis)
     write_header(__file__, filenames, outfile, "#")
     out = CWriter(outfile, 0, False)
     generate_specializations(analysis, out)
-    generate_specialized_opmap(analysis, out)
-    generate_opmap(analysis, out)
-    out.emit(f"HAVE_ARGUMENT = {analysis.have_arg}\n")
-    out.emit(f"MIN_INSTRUMENTED_OPCODE = {analysis.min_instrumented}\n")
+    generate_specialized_opmap(analysis, domain, out)
+    generate_opmap(analysis, domain, out)
+    generate_ir_opmap(analysis, domain, out)
+    generate_handler_metadata(domain, out)
+    out.emit(f"HAVE_ARGUMENT = {domain.have_arg}\n")
+    out.emit(f"MIN_INSTRUMENTED_OPCODE = {domain.min_instrumented}\n")
 
 
 arg_parser = argparse.ArgumentParser(
@@ -99,5 +136,6 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_py_metadata(args.input, data, outfile)
+        generate_py_metadata(args.input, data, domain, outfile)

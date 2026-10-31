@@ -86,21 +86,25 @@ _PySSL_msg_callback(int write_p, int version, int content_type,
 }
 
 
-static PyObject *
+static PyValue
 _PySSLContext_get_msg_callback(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
     if (self->msg_cb != NULL) {
-        return Py_NewRef(self->msg_cb);
+        return PyValue_FromObject(self->msg_cb);
     } else {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 }
 
 static int
-_PySSLContext_set_msg_callback(PyObject *op, PyObject *arg,
+_PySSLContext_set_msg_callback(PyObject *op, PyValue arg_v,
                                void *Py_UNUSED(closure))
 {
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL && !PyValue_IsNull(arg_v)) {
+        return -1;
+    }
     PySSLContext *self = PySSLContext_CAST(op);
     if (arg == NULL) {
         PyErr_Format(PyExc_AttributeError,
@@ -175,21 +179,25 @@ done:
     PyGILState_Release(threadstate);
 }
 
-static PyObject *
+static PyValue
 _PySSLContext_get_keylog_filename(PyObject *op, void *Py_UNUSED(closure))
 {
     PySSLContext *self = PySSLContext_CAST(op);
     if (self->keylog_filename != NULL) {
-        return Py_NewRef(self->keylog_filename);
+        return PyValue_FromObject(self->keylog_filename);
     } else {
-        Py_RETURN_NONE;
+        return PyValue_FromObject(Py_None);
     }
 }
 
 static int
-_PySSLContext_set_keylog_filename(PyObject *op, PyObject *arg,
+_PySSLContext_set_keylog_filename(PyObject *op, PyValue arg_v,
                                   void *Py_UNUSED(closure))
 {
+    PyObject *arg = PyValue_Object(arg_v);
+    if (arg == NULL && !PyValue_IsNull(arg_v)) {
+        return -1;
+    }
     if (arg == NULL) {
         PyErr_Format(PyExc_AttributeError,
                      "attribute 'keylog_filename' of '%.100s' objects "

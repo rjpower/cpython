@@ -1,0 +1,2090 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "6c-pystats",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/dev-pystats/python",
+  "version": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean-dirty:367af7b7037, Oct 27 2026, 22:08:10) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/weaver/python-boil-the-ocean-dirty",
+   "367af7b7037"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-29-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726156 kB"
+ },
+ "results": {
+  "boxes": {
+   "richards": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 9.0,
+    "int_boxes": 9.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 9.0
+    },
+    "by_instruction": {},
+    "dispatches": 5746498.5,
+    "values": [
+     9.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "go": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 30809.0,
+    "int_boxes": 16844.0,
+    "float_boxes": 13965.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 200.0,
+     "return to C": 0.0,
+     "other": 30609.0
+    },
+    "by_instruction": {},
+    "dispatches": 17936413.5,
+    "values": [
+     30809.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "nbody": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 1.0,
+    "int_boxes": 1.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 1.0
+    },
+    "by_instruction": {},
+    "dispatches": 17600848.0,
+    "values": [
+     1.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "float": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 2.0,
+    "int_boxes": 2.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 2.0
+    },
+    "by_instruction": {},
+    "dispatches": 7799931.5,
+    "values": [
+     2.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "spectral_norm": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 42.0,
+    "int_boxes": 42.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 42.0
+    },
+    "by_instruction": {},
+    "dispatches": 16335441.5,
+    "values": [
+     42.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "raytrace": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 110104.0,
+    "int_boxes": 110104.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 40000.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 70104.0
+    },
+    "by_instruction": {},
+    "dispatches": 30728307.5,
+    "values": [
+     110104.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 809.0,
+    "int_boxes": 809.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 809.0
+    },
+    "by_instruction": {},
+    "dispatches": 548682.4833333334,
+    "values": [
+     809.0
+    ],
+    "loops": [
+     30,
+     90
+    ],
+    "runs": 1
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 155290.0,
+    "int_boxes": 155290.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 10000.0,
+     "return to C": 0.0,
+     "other": 145290.0
+    },
+    "by_instruction": {},
+    "dispatches": 7051897.25,
+    "values": [
+     155290.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "nqueens": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 40332.0,
+    "int_boxes": 40332.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 40332.0
+    },
+    "by_instruction": {},
+    "dispatches": 12004769.0,
+    "values": [
+     40332.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "fannkuch": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 4.0,
+    "int_boxes": 4.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 4.0
+    },
+    "by_instruction": {},
+    "dispatches": 47838301.5,
+    "values": [
+     4.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 6508572.5,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     2,
+     6
+    ],
+    "runs": 1
+   },
+   "comprehensions": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 2431.505416666667,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     6000,
+     18000
+    ],
+    "runs": 1
+   },
+   "coroutines": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 2.0,
+    "int_boxes": 2.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 2.0
+    },
+    "by_instruction": {},
+    "dispatches": 4005960.0,
+    "values": [
+     2.0
+    ],
+    "loops": [
+     4,
+     12
+    ],
+    "runs": 1
+   },
+   "unpack_sequence": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 9604.0,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     4000,
+     12000
+    ],
+    "runs": 1
+   },
+   "deepcopy": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 4.0,
+    "int_boxes": 4.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 4.0
+    },
+    "by_instruction": {},
+    "dispatches": 27986.15166666667,
+    "values": [
+     4.0
+    ],
+    "loops": [
+     300,
+     900
+    ],
+    "runs": 1
+   },
+   "deepcopy_reduce": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 265.0009,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     20000,
+     60000
+    ],
+    "runs": 1
+   },
+   "deepcopy_memo": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4661.0465,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     4000,
+     12000
+    ],
+    "runs": 1
+   },
+   "json_dumps": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 9000.0,
+    "int_boxes": 9000.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 9000.0
+    },
+    "by_instruction": {},
+    "dispatches": 316128.0,
+    "values": [
+     9000.0
+    ],
+    "loops": [
+     10,
+     30
+    ],
+    "runs": 1
+   },
+   "json_loads": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4098.0075,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1
+   },
+   "pickle": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 400.0,
+    "int_boxes": 400.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 400.0
+    },
+    "by_instruction": {},
+    "dispatches": 372.0,
+    "values": [
+     400.0
+    ],
+    "loops": [
+     400,
+     1200
+    ],
+    "runs": 1
+   },
+   "unpickle": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 312.0,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     300,
+     900
+    ],
+    "runs": 1
+   },
+   "regex_compile": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 986325.0,
+    "int_boxes": 986325.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 348916.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 637409.0
+    },
+    "by_instruction": {},
+    "dispatches": 17412526.0,
+    "values": [
+     986325.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "logging_format": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 20.0325,
+    "int_boxes": 10.0325,
+    "float_boxes": 10.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 20.0325
+    },
+    "by_instruction": {},
+    "dispatches": 5782.6494999999995,
+    "values": [
+     20.0325
+    ],
+    "loops": [
+     1000,
+     3000
+    ],
+    "runs": 1
+   },
+   "logging_silent": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 162.00000833333334,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     60000,
+     180000
+    ],
+    "runs": 1
+   },
+   "logging_simple": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 19.9655,
+    "int_boxes": 9.9655,
+    "float_boxes": 10.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 19.9655
+    },
+    "by_instruction": {},
+    "dispatches": 5552.1705,
+    "values": [
+     19.9655
+    ],
+    "loops": [
+     1000,
+     3000
+    ],
+    "runs": 1
+   },
+   "xml_etree_generate": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 101731.0,
+    "int_boxes": 101731.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 101731.0
+    },
+    "by_instruction": {},
+    "dispatches": 6927957.0,
+    "values": [
+     101731.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_iterparse": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 341.0,
+    "int_boxes": 341.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 341.0
+    },
+    "by_instruction": {},
+    "dispatches": 5115453.0,
+    "values": [
+     341.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_parse": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 343.0,
+    "int_boxes": 343.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 343.0
+    },
+    "by_instruction": {},
+    "dispatches": 1194020.0,
+    "values": [
+     343.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "xml_etree_process": {
+    "group": "kernels",
+    "unit": "boxes per loop",
+    "value": 140.0,
+    "int_boxes": 140.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 140.0
+    },
+    "by_instruction": {},
+    "dispatches": 6137521.5,
+    "values": [
+     140.0
+    ],
+    "loops": [
+     1,
+     3
+    ],
+    "runs": 1
+   },
+   "empty_loop": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 2.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "empty_loop_large_i": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.002,
+    "int_boxes": 0.002,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.002
+    },
+    "by_instruction": {},
+    "dispatches": 2.009,
+    "values": [
+     0.002
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "empty_list_loop": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 2.006,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "int_add": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "int_add_small": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "float_add": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "int_compare": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "float_compare": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "int_chain": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "float_chain": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "compare_branch": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "store_fast_two": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load_poly": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 3.006,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load_poly5": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 3.0061199999999997,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store_boxed": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store_poly": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.0,
+    "int_boxes": 0.0,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.0
+    },
+    "by_instruction": {},
+    "dispatches": 4.015524999999999,
+    "values": [
+     0.0
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load_after_dict": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store_after_dict": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_load_dataclass": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "attr_store_dataclass": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 1.001,
+    "int_boxes": 1.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 1.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.00812,
+    "values": [
+     1.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "slots_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "property_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "class_attr_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "method_call": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "new_instance": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 16.0080025,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "new_instance_empty": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 8.0080025,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "isinstance": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "global_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "builtin_load": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_len": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_abs": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 5.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_math_sin": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 7.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_1": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_3": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 8.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_py_kw": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 9.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "call_closure": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 11.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "generator_resume": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 7.018999999999999,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "list_subscript": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "tuple_subscript": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "dict_subscript": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "float_list_subscript": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 3.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "str_join": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 6.013,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "str_concat": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.0089999999999995,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "str_concat_loop": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.01,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "try_noraise": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 4.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   },
+   "try_raise": {
+    "group": "micro",
+    "unit": "boxes per iteration",
+    "value": 0.001,
+    "int_boxes": 0.001,
+    "float_boxes": 0.0,
+    "array_boxes": 0.0,
+    "by_class": {
+     "container store": 0.0,
+     "attribute store": 0.0,
+     "call into C": 0.0,
+     "return to C": 0.0,
+     "other": 0.001
+    },
+    "by_instruction": {},
+    "dispatches": 11.008,
+    "values": [
+     0.001
+    ],
+    "loops": [
+     200,
+     600
+    ],
+    "runs": 1,
+    "inner": 1000
+   }
+  }
+ },
+ "runs": {
+  "boxes": {
+   "timestamp": "2026-10-27T22:19:25-07:00",
+   "commit": {
+    "sha": "f70da2cad2a4d8d991f70ae0d35e1055e4789012",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 15.01708984375,
+    "samples": [
+     12.6142578125,
+     12.6142578125,
+     13.0458984375,
+     13.0458984375,
+     13.0458984375,
+     13.0458984375,
+     13.92333984375,
+     13.92333984375,
+     13.92333984375,
+     13.9296875,
+     13.9296875,
+     13.935546875,
+     13.935546875,
+     14.34130859375,
+     14.34130859375,
+     14.23388671875,
+     14.23388671875,
+     14.23388671875,
+     14.23388671875,
+     14.61572265625,
+     14.61572265625,
+     14.61572265625,
+     14.80712890625,
+     14.80712890625,
+     14.98291015625,
+     14.98291015625,
+     14.98291015625,
+     14.82373046875,
+     14.82373046875,
+     14.82373046875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     14.75732421875,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375,
+     15.01708984375
+    ]
+   }
+  }
+ }
+}

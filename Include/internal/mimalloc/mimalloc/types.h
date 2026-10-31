@@ -357,13 +357,8 @@ typedef struct mi_page_s {
   struct mi_page_s*     next;              // next page owned by this thread with the same `block_size`
   struct mi_page_s*     prev;              // previous page owned by this thread with the same `block_size`
 
-#ifdef Py_GIL_DISABLED
-  struct llist_node     qsbr_node;         // CPython: list of pages waiting for a QSBR goal before being freed
-  uint64_t              qsbr_goal;         // CPython: QSBR goal to reach before the page can be freed (0 if none)
-#else
   // 64-bit 11 words, 32-bit 13 words, (+2 for secure)
   void* padding[1];
-#endif
 } mi_page_t;
 
 

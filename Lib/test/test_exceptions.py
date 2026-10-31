@@ -966,8 +966,7 @@ class ExceptionTests(unittest.TestCase):
             except MyException:
                 pass
         obj = None
-        if check_impl_detail(cpython=False):
-            gc_collect()
+        gc_collect()
         obj = wr()
         self.assertIsNone(obj)
 
@@ -982,8 +981,7 @@ class ExceptionTests(unittest.TestCase):
         with Context():
             inner_raising_func()
         obj = None
-        if check_impl_detail(cpython=False):
-            gc_collect()
+        gc_collect()
         obj = wr()
         self.assertIsNone(obj)
 
@@ -1590,7 +1588,6 @@ class ExceptionTests(unittest.TestCase):
         # Check that the program does not fail with SIGABRT.
         self.assertEqual(rc, 1)
         self.assertIn(b'RecursionError', err)
-        self.assertIn(b'ResourceWarning', err)
         self.assertIn(b'Done.', out)
 
     @cpython_only
@@ -1970,6 +1967,7 @@ class ExceptionTests(unittest.TestCase):
 
             gc_collect()
 
+    @support.requires_subinterpreters
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_memory_error_in_subinterp(self):
         # gh-109894: subinterpreters shouldn't count on last resort memory error

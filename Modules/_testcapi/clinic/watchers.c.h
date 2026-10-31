@@ -15,22 +15,27 @@ PyDoc_STRVAR(_testcapi_watch_dict__doc__,
 static PyObject *
 _testcapi_watch_dict_impl(PyObject *module, int watcher_id, PyObject *dict);
 
-static PyObject *
-_testcapi_watch_dict(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_watch_dict(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int watcher_id;
     PyObject *dict;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("watch_dict", nargs, 2, 2)) {
         goto exit;
     }
-    watcher_id = PyLong_AsInt(args[0]);
+    watcher_id = PyLong_AsIntValue(args[0]);
     if (watcher_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    dict = args[1];
-    return_value = _testcapi_watch_dict_impl(module, watcher_id, dict);
+    dict = PyValue_Object(args[1]);
+    if (dict == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_watch_dict_impl(module, watcher_id, dict);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -47,22 +52,27 @@ PyDoc_STRVAR(_testcapi_unwatch_dict__doc__,
 static PyObject *
 _testcapi_unwatch_dict_impl(PyObject *module, int watcher_id, PyObject *dict);
 
-static PyObject *
-_testcapi_unwatch_dict(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_unwatch_dict(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int watcher_id;
     PyObject *dict;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unwatch_dict", nargs, 2, 2)) {
         goto exit;
     }
-    watcher_id = PyLong_AsInt(args[0]);
+    watcher_id = PyLong_AsIntValue(args[0]);
     if (watcher_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    dict = args[1];
-    return_value = _testcapi_unwatch_dict_impl(module, watcher_id, dict);
+    dict = PyValue_Object(args[1]);
+    if (dict == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_unwatch_dict_impl(module, watcher_id, dict);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -79,22 +89,27 @@ PyDoc_STRVAR(_testcapi_watch_type__doc__,
 static PyObject *
 _testcapi_watch_type_impl(PyObject *module, int watcher_id, PyObject *type);
 
-static PyObject *
-_testcapi_watch_type(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_watch_type(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int watcher_id;
     PyObject *type;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("watch_type", nargs, 2, 2)) {
         goto exit;
     }
-    watcher_id = PyLong_AsInt(args[0]);
+    watcher_id = PyLong_AsIntValue(args[0]);
     if (watcher_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    type = args[1];
-    return_value = _testcapi_watch_type_impl(module, watcher_id, type);
+    type = PyValue_Object(args[1]);
+    if (type == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_watch_type_impl(module, watcher_id, type);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -111,22 +126,27 @@ PyDoc_STRVAR(_testcapi_unwatch_type__doc__,
 static PyObject *
 _testcapi_unwatch_type_impl(PyObject *module, int watcher_id, PyObject *type);
 
-static PyObject *
-_testcapi_unwatch_type(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_unwatch_type(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int watcher_id;
     PyObject *type;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unwatch_type", nargs, 2, 2)) {
         goto exit;
     }
-    watcher_id = PyLong_AsInt(args[0]);
+    watcher_id = PyLong_AsIntValue(args[0]);
     if (watcher_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    type = args[1];
-    return_value = _testcapi_unwatch_type_impl(module, watcher_id, type);
+    type = PyValue_Object(args[1]);
+    if (type == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_unwatch_type_impl(module, watcher_id, type);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -144,19 +164,27 @@ static PyObject *
 _testcapi_set_func_defaults_via_capi_impl(PyObject *module, PyObject *func,
                                           PyObject *defaults);
 
-static PyObject *
-_testcapi_set_func_defaults_via_capi(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_set_func_defaults_via_capi(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *defaults;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_func_defaults_via_capi", nargs, 2, 2)) {
         goto exit;
     }
-    func = args[0];
-    defaults = args[1];
-    return_value = _testcapi_set_func_defaults_via_capi_impl(module, func, defaults);
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        goto exit;
+    }
+    defaults = PyValue_Object(args[1]);
+    if (defaults == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_set_func_defaults_via_capi_impl(module, func, defaults);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -174,21 +202,29 @@ static PyObject *
 _testcapi_set_func_kwdefaults_via_capi_impl(PyObject *module, PyObject *func,
                                             PyObject *defaults);
 
-static PyObject *
-_testcapi_set_func_kwdefaults_via_capi(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_testcapi_set_func_kwdefaults_via_capi(PyObject *module, const PyValue *args, Py_ssize_t nargs)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *func;
     PyObject *defaults;
+    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_func_kwdefaults_via_capi", nargs, 2, 2)) {
         goto exit;
     }
-    func = args[0];
-    defaults = args[1];
-    return_value = _testcapi_set_func_kwdefaults_via_capi_impl(module, func, defaults);
+    func = PyValue_Object(args[0]);
+    if (func == NULL) {
+        goto exit;
+    }
+    defaults = PyValue_Object(args[1]);
+    if (defaults == NULL) {
+        goto exit;
+    }
+    _return_value = _testcapi_set_func_kwdefaults_via_capi_impl(module, func, defaults);
+    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0e07ce7f295917a5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=da923b22f1a2691f input=a9049054013a1b77]*/

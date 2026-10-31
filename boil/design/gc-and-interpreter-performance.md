@@ -8,10 +8,11 @@ throughput reaches aggregate parity, while generator and coroutine gaps are
 larger. The landed cleanup improves those shared costs; it does not establish
 broad parity or a general 2× result.
 
-Two bounded candidates now await coherent qualification: an opt-in nonmoving
-nursery for cells/tuples, and one shape admission per polymorphic attribute
-operation. Their behavior checks passed; neither is a runtime landing or a new
-throughput result. Bulk frame transfer was rejected after its finite comparison.
+The opt-in nonmoving nursery for cells/tuples and one shape admission per
+polymorphic attribute operation passed coherent qualification and are integrated
+in source. [Post-merge checks](../issues/nursery-shape-landing/status.md) track
+landing closure; neither change establishes a new throughput result.
+Bulk frame transfer was rejected after its finite comparison.
 Extend nursery coverage, reclamation and old-work reduction in separate steps.
 
 ## Current runtime
@@ -33,9 +34,8 @@ sweep all remain material; sampled inventory is not an object-age histogram.
 ## Collector sequence
 
 1. [Minimum nursery](../issues/gc-nursery-minimum/status.md): bounded behavior,
-   major-path compatibility and negative controls passed independent review.
-   Qualify the small opt-in candidate with the interpreter change. Its
-   conservative old scan and cell/tuple cohort establish no speedup.
+   major-path compatibility, negative controls and combined qualification passed.
+   Its conservative old scan and cell/tuple cohort establish no speedup.
 2. [Coverage and reclamation](../issues/gc-nursery-coverage/status.md): extend to
    actual allocation-heavy traffic, including generator/coroutine bodies and
    embedded frames. Make safe dead-storage reclamation cheaper; report retained
@@ -55,8 +55,9 @@ contracts and is not a prerequisite for the first age experiment.
 [Residual attribution](../issues/interpreter-residual-costs/status.md) led to
 the [bulk frame-transfer experiment](../issues/frame-transfer-bulk/status.md),
 rejected after two matched process rounds showed no repeatable benefit.
-The next [shape-admission candidate](../issues/shape-admission-reuse/status.md)
-passed source, behavior and emitted-code review: four matcher sites become two,
+The integrated [shape admission](../issues/shape-admission-reuse/status.md)
+passed source, behavior, emitted-code review and combined qualification:
+four matcher sites become two,
 one per existing load/store family. This removes duplicate work without a new
 protocol; the sampled duplicate share is only 0.774% of Richards CPU, so it is
 not a broad performance explanation or an elapsed speed claim.

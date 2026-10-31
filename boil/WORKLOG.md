@@ -55,3 +55,8 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   and cleanup gates. The 334-artifact capsule and six validator replays passed
   within the restart batch deadline. Integration and post-merge smokes follow.
   [Acceptance](issues/nursery-shape-landing/reviews/final-qualification-20261031.md).
+- 2026-10-31: Integrated the exact qualified nursery/shape source union and
+  updated the runtime contracts. The nursery remains private and opt-in;
+  actual merge binding and the reviewed release/debug smoke pair close this
+  landing. No new performance result is claimed.
+  [Landing status](issues/nursery-shape-landing/status.md).

@@ -46,6 +46,7 @@ tuple_alloc(Py_ssize_t size)
     PyTupleObject *result = PyObject_GC_NewVar(PyTupleObject, &PyTuple_Type, size);
     if (result != NULL) {
         _PyTuple_RESET_HASH_CACHE(result);
+        _PyGC_YoungAllocated((PyObject *)result);
     }
     return result;
 }

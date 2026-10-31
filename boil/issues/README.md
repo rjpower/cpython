@@ -7,7 +7,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | coordinator | Remaining-only batch running after reviewed restart carry; stop on unexpected failure |
+| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | coordinator | Qualified source integrated; prove actual merge bridge and run the release/debug smoke pair |
 | GC / next design | [Exact coroutine coverage and reclamation](gc-nursery-coverage/status.md) | restart_audit / independent reviewer | Reviewed design accepted; implementation waits for shared landing |
 
 Source work, light analysis and reviews can overlap with separate ownership;
@@ -15,12 +15,12 @@ quiet measurements, shared full-suite/perf-map windows and integration serialize
 Qualify the selected combination once rather than repeat unchanged ladders.
 Broader nursery implementation waits for that decision.
 
-## Selected for qualification
+## Integrated; post-merge checks pending
 
 - [Minimal nonmoving nursery](gc-nursery-minimum/status.md): working opt-in
-  cell/tuple consumer, conservative old scan; bounded behavior/review passed.
+  cell/tuple consumer, conservative old scan; combined qualification passed.
 - [Shared shape admission](shape-admission-reuse/status.md): four emitted
-  matcher sites become two; bounded behavior/review passed, no speed claim.
+  matcher sites become two; combined qualification passed, no speed claim.
 
 ## Next GC experiments, in order
 

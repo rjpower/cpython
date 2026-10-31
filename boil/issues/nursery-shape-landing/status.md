@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: independent final acceptance passed; exact integration and post-merge smokes next
+- Phase: qualified source integrated; actual merge bridge and post-merge smokes next
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -54,6 +54,8 @@ attempt remains incomplete; its completed results stand through reviewed carry.
 Primary checkout recovery is complete, including all five pre-existing user
 files with exact preserved hashes. User work retains its original unstaged
 state; see the [recovery follow-up](reviews/restart-user-note-recovery.md).
-The separate frozen union is unchanged. Integration preparation is reviewed
-but held until the actual merge is bound. There is no
-runtime landing or new speed claim yet.
+The separate frozen union is unchanged. Source is integrated with runtime
+contracts updated in the same merge. Integration preparation remains held until
+the actual merge identity and exact prose-only tree bridge are bound, then one
+release/debug smoke pair and independent outcome review close the landing.
+No new speed claim is made.

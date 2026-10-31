@@ -4171,6 +4171,117 @@ def _queue_child(code, **env):
     return out.decode()
 
 
+@unittest.skipUnless(_testinternalcapi, "requires _testinternalcapi")
+@unittest.skipIf(Py_GIL_DISABLED, "experimental young collector requires GIL")
+class MinimalNurseryTests(unittest.TestCase):
+    def setUp(self):
+        if not support.with_mimalloc():
+            self.skipTest("experimental young collector requires mimalloc")
+        if (_testinternalcapi.gc_verify_mode() != (0, 0)
+                or _testinternalcapi.gc_get_stress() != 0):
+            self.skipTest("experimental minor requires verifier and stress off")
+
+    def run_code(self, code):
+        # Explicit mode assertions in _assert_debug_output apply to this child.
+        prelude = """
+import gc, types, weakref
+import _testinternalcapi as capi
+gc.disable()
+gc.collect()
+previous = capi.gc_set_young_enabled(1)
+assert previous == 0
+"""
+        _assert_debug_output(prelude + "\ntry:\n"
+                             + textwrap.indent(textwrap.dedent(code), "    ")
+                             + "\nfinally:\n"
+                             + "    capi.gc_set_young_enabled(previous)\n"
+                             + "    gc.collect()\n")
+
+    def test_data_and_survivor_promotion(self):
+        self.run_code("""
+            cell = types.CellType((12345, "payload"))
+            for generation in (-1, 0, 1, 2):
+                assert all(gc.is_tracked(item)
+                           for item in gc.get_objects(generation))
+            assert any(item is cell for item in gc.get_objects(0))
+            gc.collect(0)
+            assert cell.cell_contents == (12345, "payload")
+            assert not any(item is cell for item in gc.get_objects(0))
+            assert any(item is cell for item in gc.get_objects(2))
+            cell.cell_contents = (types.CellType(67890), "replacement")
+            gc.collect(0)
+            assert cell.cell_contents[0].cell_contents == 67890
+            assert cell.cell_contents[1] == "replacement"
+            fresh = types.CellType("major promotion while disabled")
+            capi.gc_set_young_enabled(0)
+            gc.collect()
+            capi.gc_set_young_enabled(1)
+            assert not any(item is fresh for item in gc.get_objects(0))
+        """)
+
+    def test_dead_young_cycles_are_reclaimed(self):
+        self.run_code("""
+            def discard_cycles():
+                for _ in range(2000):
+                    cell = types.CellType()
+                    cell.cell_contents = (cell,)
+            before = gc.get_stats()[0]['collected']
+            discard_cycles()
+            collected = gc.collect(0)
+            assert collected > 0, 'minor reclaimed no young garbage'
+            assert gc.get_stats()[0]['collected'] > before
+        """)
+
+    def test_old_boundary_and_eventual_major(self):
+        self.run_code("""
+            class Owner:
+                pass
+            owner = Owner()  # This layout is outside the young cohort.
+            owner.cell = types.CellType((12345, "kept by old owner"))
+            owner.cycle = owner
+            reference = weakref.ref(owner)
+            del owner
+            gc.collect(0)
+            assert reference() is not None, 'minor reclaimed an old owner'
+            assert reference().cell.cell_contents == (12345, "kept by old owner")
+            gc.collect()
+            assert reference() is None, 'major did not reclaim the old cycle'
+        """)
+
+    def test_minor_preserves_major_debt_and_statistics(self):
+        self.run_code("""
+            cells = [types.CellType(i) for i in range(2000)]
+            before = gc.get_count()[0]
+            assert before > 10000
+            fulls = gc.get_stats()[2]['collections']
+            minors = gc.get_stats()[0]['collections']
+            gc.collect(0)
+            assert gc.get_count()[0] >= before, 'minor reset major allocation debt'
+            assert gc.get_stats()[2]['collections'] == fulls
+            assert gc.get_stats()[0]['collections'] == minors + 1
+            assert cells[-1].cell_contents == 1999
+        """)
+
+    def test_callback_generation_and_reentrant_mode_change(self):
+        self.run_code("""
+            events = []
+            def callback(phase, info):
+                try:
+                    capi.gc_set_young_enabled(0)
+                except RuntimeError:
+                    rejected = True
+                else:
+                    rejected = False
+                events.append((phase, info['generation'], rejected, gc.collect(0)))
+            gc.callbacks.append(callback)
+            try:
+                gc.collect(0)
+            finally:
+                gc.callbacks.remove(callback)
+            assert events == [('start', 0, True, 0), ('stop', 0, True, 0)], events
+        """)
+
+
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 class ManagedScanningTests(unittest.TestCase):
     def test_cell_and_tuple_payloads_survive_collection(self):

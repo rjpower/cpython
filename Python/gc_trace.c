@@ -1905,6 +1905,11 @@ stack_hit(trace_t *t, PyObject *op)
                   Py_TYPE(op)->tp_name);
 }
 
+/* The all-old boundary includes objects that have not been published yet.
+   Unlike normal conservative tuple roots, these require TRACKED before any
+   item is interpreted as an initialized value. */
+#define LIVE_OLD_BOUNDARY 2
+
 static inline void
 live_mark(trace_t *t, PyObject *op, int conservative)
 {
@@ -1927,7 +1932,9 @@ live_mark(trace_t *t, PyObject *op, int conservative)
     if (t->hit_value != 0) {
         stack_hit(t, op);
     }
-    if (conservative && !live_safe_to_traverse(op)) {
+    int partial_tuple = conservative == LIVE_OLD_BOUNDARY
+        && PyTuple_Check(op) && !(flags & _Py_GC_TRACKED_FLAG);
+    if (conservative && (partial_tuple || !live_safe_to_traverse(op))) {
         op->ob_flags = flags | _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
         t->nshallow++;
         /* Its fields cannot be trusted as objects, but its words can be
@@ -2117,6 +2124,10 @@ struct live_walk {
     trace_t *t;
     size_t offset;
     int pages;            // record the mem heaps' pages, not the blocks
+    int seed_old;         // experimental minor: all old objects are roots
+    int minor;            // old-boundary retention is not resurrection
+    int promote;          // nonfailing age commit after successful tracing
+    int young_left;       // dead candidates may be retained by later preparation
     _PyGCMarkResult *res;
     size_t dead_cap;
     PyObject **objs;      // for _PyGC_TraceLiveHeapObjects()
@@ -2207,6 +2218,23 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     if (!_PyGC_IsHeapObject(op)) {
         return true;
     }
+    if (w->seed_old) {
+        if (!(op->ob_flags & _Py_GC_YOUNG_FLAG)) {
+            /* Old partial constructors use the same SHALLOW protection as
+               conservative roots; old garbage intentionally floats to major. */
+            live_mark(t, op, LIVE_OLD_BOUNDARY);
+        }
+        return !t->oom;
+    }
+    if (w->promote) {
+        if (!(op->ob_flags & _Py_GC_DEAD_FLAG)) {
+            op->ob_flags &= ~_Py_GC_YOUNG_FLAG;
+        }
+        else if (op->ob_flags & _Py_GC_YOUNG_FLAG) {
+            w->young_left = 1;
+        }
+        return true;
+    }
     if (w->objs != NULL || w->res == NULL) {
         // Listing the objects
         if (w->failed) {
@@ -2230,7 +2258,9 @@ live_walk_block(const mi_heap_t *heap, const mi_heap_area_t *area,
     uint16_t flags = op->ob_flags;
     if (flags & _Py_GC_MARKED_FLAG) {
         uint16_t clear = _Py_GC_MARKED_FLAG | _Py_GC_SHALLOW_FLAG;
-        if (flags & (_Py_GC_FINALIZED_FLAG | _Py_GC_DEL_CALLED_FLAG)) {
+        if (!w->minor
+            && (flags & (_Py_GC_FINALIZED_FLAG | _Py_GC_DEL_CALLED_FLAG)))
+        {
             /* Reachable again: tp_del runs at its next death, as it does
                at each one under reference counting, and so does the
                finalizer of a non-GC object, which PEP 442 does not cover. */
@@ -3391,7 +3421,7 @@ _PyGC_TestBorrowAcross(PyObject *container, PyObject *callback, int kind)
 }
 
 int
-_PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
+_PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res, int young)
 {
     *res = (_PyGCMarkResult){0};
     struct _gc_trace_state *ts = tstate->interp->gc.trace;
@@ -3447,13 +3477,22 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     if (ts != NULL && ts->stack_hits_on) {
         ts->stack_hits_collection++;
     }
+    if (young) {
+        struct live_walk old = {.t = &t, .seed_old = 1};
+        if (live_walk_heaps(&t, &old) < 0) {
+            t.oom = 1;
+        }
+        live_drain(&t);
+    }
     live_mark_roots(&t, tstate);
     if (t.verify) {
         verify_mark_b(&t, tstate);
     }
     /* The walk clears every mark, also after a failure, when it lists
        nothing. */
-    struct live_walk w = {.t = &t, .res = res, .failed = t.oom};
+    struct live_walk w = {
+        .t = &t, .res = res, .failed = t.oom, .minor = young,
+    };
     PyInterpreterState *interp = tstate->interp;
     // CPython's own dict watchers hear of a deallocation in the sweep.
     for (int i = FIRST_AVAILABLE_WATCHER; i < DICT_MAX_WATCHERS; i++) {
@@ -3469,6 +3508,15 @@ _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res)
     int walked = live_walk_heaps(&t, &w);
     if (walked >= 0 && !w.failed) {
         live_clear_weak_caches(&t);
+        /* No callbacks, allocation or traversal in this commit.  Failed
+           marking leaves age unchanged, as well as reclaiming nothing. */
+        if (tstate->interp->gc.young_pending) {
+            struct live_walk promote = {.t = &t, .promote = 1};
+            int promoted = live_walk_heaps(&t, &promote);
+            assert(promoted == 0);
+            (void)promoted;
+            tstate->interp->gc.young_pending = promote.young_left;
+        }
     }
     HEAD_UNLOCK(&_PyRuntime);
     res->nmarked = t.nmarked;

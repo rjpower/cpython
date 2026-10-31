@@ -74,8 +74,15 @@ Do not weaken the checker or reinterpret a failure to make a counter zero.
 
 ## Extensions
 
-Minor collection, movement, writable-slot/reload interfaces and pinning are
-additional capabilities. A read-only precise visitor is not a relocation proof.
+The private opt-in cell/tuple nursery runs generation-zero minors through the
+same mark/death engine. It retains all allocated old owners and their closure,
+so old-to-young stores need no new barrier in this bounded experiment. Successful
+tracing promotes survivors in place; failed tracing retains age and objects safely.
+Automatic/full collection remains major. Verifier/stress modes do not support
+experimental minors; see the [nursery contract](../issues/gc-nursery-minimum/design.md).
+
+Movement, writable-slot/reload interfaces and pinning remain additional
+capabilities. A read-only precise visitor is not a relocation proof.
 Age metadata and native-owner indexes must not become accidental major roots.
 New spaces must preserve lookup, publication, lifetime, OOM and observer contracts.
 

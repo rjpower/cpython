@@ -1,7 +1,8 @@
 # Shape-admission source and O3 feedback
 
-Recommendation: keep this as a small shared-family simplification for
-integration review. Reviewed commit `c46f1bef67f58dacac04215765e557f7f3b51523`
+This records component source/O3 feedback before the
+[combined qualification and integration](../nursery-shape-landing/status.md).
+Reviewed commit `c46f1bef67f58dacac04215765e557f7f3b51523`
 combines each existing polymorphic LOAD/STORE admission with its payload so
 the existing matcher runs once. One fresh O3 build, two finite behavior rows
 and static emission inspection passed. No timing or new profile was collected.

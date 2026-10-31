@@ -1,7 +1,9 @@
 # Minimal young collection: current evidence
 
-2026-10-31. First bounded debug feedback passed. No performance measurement has
-run. Nothing in this issue is landed or fully qualified.
+2026-10-31. This records component debug feedback before the
+[combined qualification and integration](../nursery-shape-landing/status.md).
+No nursery performance measurement has run. Component feedback alone does not
+establish a landing.
 
 - Base: `b3f2bcc605c0174909f2b6df8a92b51995fc070a`.
 - Branch/worktree: `boil/gc-nursery-minimum`,

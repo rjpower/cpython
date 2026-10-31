@@ -2667,18 +2667,14 @@ dummy_func(
          * shape's version.  A row's handler says what it holds: for
          * LOAD_ATTR_SHAPE, the slot's offset in index; for
          * LOAD_ATTR_METHOD_SHAPE, at a call-pair site, the method in descr,
-         * borrowed while the version matches.  The guard finds the row and
-         * the load finds it again. */
-        op(_GUARD_SHAPE_POLY, (owner -- owner)) {
-            _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
-            EXIT_IF(_PyFb_ShapeRow(poly, _PyObject_SHAPE(PyValue_ObjectBorrow(owner))) < 0);
-        }
-
-        op(_LOAD_ATTR_SHAPE_POLY, (owner -- attr, self_or_null[oparg & 1])) {
+         * borrowed while the version matches. Match once, then use the row
+         * within this noncollecting operation. */
+        inline_ok op(_LOAD_ATTR_SHAPE_POLY, (owner -- attr, self_or_null[oparg & 1])) {
+            EXIT_IF(!_PyValue_IsPointerSpace(owner));
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
             _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
             int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
-            assert(row >= 0);
+            EXIT_IF(row < 0);
             STAT_INC(LOAD_ATTR, hit);
             if (poly->handler[row] == LOAD_ATTR_SHAPE) {
                 attr = *(PyValue *)((char *)owner_o + poly->index[row]);
@@ -2702,7 +2698,6 @@ dummy_func(
 
         macro(LOAD_ATTR_SHAPE_POLY) =
             unused/1 +
-            _GUARD_SHAPE_POLY +
             unused/8 +
             _LOAD_ATTR_SHAPE_POLY;
 
@@ -2922,7 +2917,7 @@ dummy_func(
             POP_TOP;
 
         /* A store at two to four shapes, of one type or several, each a row
-         * of the site's poly table found by _GUARD_SHAPE_POLY (note 12
+         * of the site's poly table matched below (note 12
          * section 6.1).  A STORE_ATTR_SHAPE row holds the field's offset in
          * index; a STORE_ATTR_SHAPE_TRANSITION row also holds the shape
          * after the store in descr, a shape of the row's live type.  Each
@@ -2930,11 +2925,12 @@ dummy_func(
          * field's after a generalisation that renewed only an ADD row's
          * target; kinds only widen, so the row admits fewer values, all of
          * which the field takes.  Nothing here allocates. */
-        op(_STORE_ATTR_SHAPE_POLY, (value, owner -- o)) {
+        inline_ok op(_STORE_ATTR_SHAPE_POLY, (value, owner -- o)) {
+            EXIT_IF(!_PyValue_IsPointerSpace(owner));
             PyObject *owner_o = PyValue_ObjectBorrow(owner);
             _PyFbPoly *poly = _PyFrame_FbPoly(frame, FB_COUNTER());
             int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
-            assert(row >= 0);
+            EXIT_IF(row < 0);
             EXIT_IF(!_PyValue_FitsKind(value, poly->slot_kind[row]));
             PyValue *value_ptr = (PyValue *)((char *)owner_o + poly->index[row]);
             STAT_INC(STORE_ATTR, hit);
@@ -2957,7 +2953,6 @@ dummy_func(
 
         macro(STORE_ATTR_SHAPE_POLY) =
             unused/1 +
-            _GUARD_SHAPE_POLY +
             unused/3 +
             _STORE_ATTR_SHAPE_POLY +
             POP_TOP;

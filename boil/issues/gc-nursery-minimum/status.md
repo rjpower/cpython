@@ -7,8 +7,8 @@
 - Depends on: [landed GC baseline](../gc-cleanup-scanning/status.md)
 - Branch: boil/gc-nursery-minimum, candidate 3a473612157
 - Worktree: ../boil-gc-nursery-minimum
-- Phase: bounded experiment accepted for qualification; not landed
-- Decision: integrate if coherent landing qualification passes
+- Phase: combined qualification accepted; source integrated; post-merge checks pending
+- Decision: retain opt-in consumer; close after joint post-merge acceptance
 
 ## Hypothesis
 
@@ -44,9 +44,10 @@ additional KILL skips are exactly the unsupported nursery controls. A safe
 full-instead-of-minor negative failed at the intended old-owner assertion.
 Independent review replayed the results and verified cleanup.
 
-The first bounded hypothesis works. The selected candidate is in
-[shared landing qualification](../nursery-shape-landing/status.md) with the
-interpreter change. Keep the nursery opt-in;
+The first bounded hypothesis works. The exact combination passed
+[shared qualification](../nursery-shape-landing/status.md) and independent final
+review. The source is integrated; its exact merge bridge and two post-merge
+smokes remain. Keep the nursery opt-in;
 the all-old scan and tiny cohort establish no performance gain.
 
 ## References

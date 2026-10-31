@@ -7,8 +7,8 @@
 - Depends on: [residual attribution](../interpreter-residual-costs/status.md)
 - Branch: boil/shape-admission-reuse, candidate c46f1bef67f
 - Worktree: ../boil-shape-admission-reuse
-- Phase: independent review passed; selected for coherent qualification
-- Decision: integrate if coherent landing qualification passes
+- Phase: combined qualification accepted; source integrated; post-merge checks pending
+- Decision: retain shared family simplification; close after joint post-merge acceptance
 
 ## Hypothesis
 
@@ -43,7 +43,9 @@ Fresh O3 build and cleanup passed. Whole shape checks ran 156 tests with eight
 existing pystats skips; ten IR/generator controls passed. Emitted matcher sites
 fell from four to two, and evaluator code shrank by 213 bytes. Independent
 review verified source, generated outputs and all 71 evidence references.
-Next, run [shared qualification](../nursery-shape-landing/status.md) with the GC candidate.
+The exact combination passed [shared qualification](../nursery-shape-landing/status.md)
+and independent final review. Source is integrated; the exact merge bridge and
+two post-merge smokes remain.
 No elapsed speedup is claimed.
 
 ## References

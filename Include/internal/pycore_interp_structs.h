@@ -204,6 +204,9 @@ struct _gc_runtime_state {
     struct gc_stats *generation_stats;
     /* true if we are currently running the collector */
     int collecting;
+    /* Experimental exact cell/tuple age domain; disabled by default. */
+    int young_enabled;
+    int young_pending;  /* age bits may remain after disabling the experiment */
     // The frame that started the current collection. It might be NULL even when
     // collecting (if no Python frame is running):
     _PyInterpreterFrame *frame;

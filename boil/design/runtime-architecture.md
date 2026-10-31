@@ -51,8 +51,12 @@ The supported configuration is Linux, one main interpreter, ordinary threads
 and the GIL. Unsupported interpreter creation rejects explicitly. Foreign
 adoption and broader lifecycle guarantees are outside this contract.
 
-No nursery, relocation or write-barrier protocol is enabled by this description.
-See [GC roots and lifetimes](gc-roots-and-lifetimes.md) and
+The default remains full-heap collection. A private opt-in nursery admits exact
+cells and nonempty tuples, conservatively retains all old objects and promotes
+survivors in place. Automatic and full collections remain major; experimental
+minors require verifier/stress off. This adds no relocation or write barrier.
+See [the bounded nursery](../issues/gc-nursery-minimum/design.md),
+[GC roots and lifetimes](gc-roots-and-lifetimes.md) and
 [performance direction](gc-and-interpreter-performance.md).
 
 ## Subsystem ownership

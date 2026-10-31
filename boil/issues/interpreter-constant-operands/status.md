@@ -2,7 +2,7 @@
 
 - State: review
 - Owner: qualification_review_resumed; coordinator selects implementation
-- Updated: 2026-10-31, 21:48 UTC
+- Updated: 2026-10-31, 22:01 UTC
 - Budget: offline research complete; 90-minute host-only prototype
 - Source started: 2026-10-31 20:20:13 UTC; decision due 21:50:13 UTC
 - Checkpoints: 20:50:13 domain/format; 21:20:13 fallback/observer/stack proof
@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: corrected eleven, full IR and generation passed; stopped at disassembly golden; inventory held
+- Decision: corrected eleven, full IR and generation passed; six disassembly assertions await classification
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Current test-only candidate: `a475acbf46d117137f7201adcb4557ce92fb9ec5`
 - Tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
@@ -71,7 +71,10 @@ on the bridged debug image; all eleven corrected cases passed without skips,
 all 74 IR tests passed, and generation ran 83 tests with one existing expected
 failure and no unexpected result. Disassembly then stopped at the first
 constant-load/immediate golden mismatch. A bounded unchanged-source inventory
-is held for review and a free native window before any golden correction.
+ran at 21:57 UTC: 147 cases returned six assertions, then its host validator
+stopped on an absent phase name before the fixture child ran. Terminal cleanup
+passed. Raw failures remain intact; read-only replay and individual causal
+classification precede any golden correction.
 The original deadline remains
 22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
 The [held performance proposal](performance-plan.md) preselects the registered

@@ -166,3 +166,28 @@ than per-call observer telemetry. All three cohorts reported zero fallbacks.
 Both remote-statistics cases actually executed and passed without an availability
 skip. Whole-GC OFF then returned 204 tests with its 21 expected skips. Its
 terminal contract and the subsequent KILL row still need final disposition.
+
+### Terminal first-feedback decision
+
+All seven rows completed at **21:53:34.769030 UTC**, before the original
+deadline. Root polled session 90952 to terminal exit zero at 21:54:44 UTC.
+The independent [outcome review](reviews/retirement-feedback-outcome-20261031-v1.md)
+accepts this exact batch as first native feedback. Completion SHA-256 is
+`3bb58d5a6c5dff679806ede5ec1bbe0f9a6ac38f65a2a2ddc6f1dd38d7cc90c1`;
+independent receipt is
+`f1faf960ffd8fd7838d965d4f1b37bf2e1664b9e8e600524fd541cd125dc1a69`.
+All 91 bound artifacts, 6,944 source inputs, sealed products, toolchain and
+seven gate/verification/idle chains match.
+
+Whole-GC OFF and KILL each passed 204 tests with the exact 21 expected skips.
+All normal nursery children have positive main-interpreter collection evidence
+and zero fallback; expected KILL auxiliaries earn no normal-end credit.
+Every row has zero fallback. Each whole-suite worker records one unpinned
+event, consistent with its passing deliberate `test_unpinned_counter`; no
+per-collection attribution is claimed. Focused and remote-stat rows have zero
+unpinned events. The owner's extra blanket-zero audit assertion was too broad,
+was preserved and corrected in its host receipt; it was not a native failure.
+
+This accepts first feedback only. Temporary force-major and minor-debt-reset
+causal controls remain before qualification. Automatic halfway cadence and its
+cost decision remain separate; there is no landing or performance acceptance.

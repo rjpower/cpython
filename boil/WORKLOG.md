@@ -147,3 +147,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   inventory before updating expected output; no performance claim.
   [GC fresh run](issues/gc-nursery-adoption/feedback-results.md),
   [IR remaining checks](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Independent review accepted all seven fresh nursery feedback
+  rows, including full GC OFF/KILL, child roots and cleanup. Temporary causal
+  controls precede qualification. IR disassembly inventory observed six
+  assertions, then stopped on a host phase-name assumption; preserved both
+  failures and bounded read-only classification before any golden edit.
+  [GC outcome](issues/gc-nursery-adoption/reviews/retirement-feedback-outcome-20261031-v1.md),
+  [IR evidence](issues/interpreter-constant-operands/feedback-results.md).

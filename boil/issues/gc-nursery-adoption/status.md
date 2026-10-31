@@ -62,11 +62,16 @@ while preserving unrelated records; the observation's changed resize failure
 location limits its causal claim about the first run. Independent design review
 accepted per-target oracles and an isolated exact-last-entry metadata fixture.
 The source correction froze before 21:49, passed independent exact review and
-started fresh debug feedback at 21:47 UTC, session 90952. Its focused thirty
-methods/51 children and both remote-stat cases passed; whole-GC OFF returned
-204 tests with 21 expected skips. Remaining contracts/KILL and independent
-outcome review continue. Old products remain sealed; original deadline
-22:07:46 UTC is unchanged. Qualification remains pending.
+started fresh debug feedback at 21:47 UTC, session 90952. All seven rows
+completed at 21:53:34 UTC; root confirmed terminal exit zero. The focused thirty
+methods/51 children and both remote-stat cases passed; whole-GC OFF and KILL
+each returned 204 tests with 21 expected skips. The independent
+[outcome review](reviews/retirement-feedback-outcome-20261031-v1.md) accepts
+this exact first feedback, including normal-child root coverage and idle
+cleanup. Every row has zero fallback; each whole suite has one worker unpinned
+event consistent with its passing deliberate counter test. Old products remain
+sealed. Required temporary force-major and minor-debt-reset controls are next;
+qualification, cadence selection and landing remain pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

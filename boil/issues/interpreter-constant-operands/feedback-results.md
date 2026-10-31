@@ -111,3 +111,22 @@ results stop the diagnostic. The source, conditions and failed receipts remain
 unchanged. Exact helper review and root activation precede execution, after the
 GC native window. Its own ten-minute cap also retains the original
 22:20:45.868428 UTC ceiling.
+
+### Inventory execution and validator failure
+
+Root activated the reviewed inventory at **21:57:17.423705 UTC**, session
+**88372**. The unchanged full `test_dis` executed 147 cases and returned six
+assertion failures: `test_disassemble_str` and `test_loop_quicken` in each of
+the two disassembly classes, `InstructionTests.test_jumpy`, and
+`TestFinderMethods.test_findlabels`. No golden or runtime source was edited.
+The host validator then failed while expecting an absent `suite-result`
+phase, before the five-string fixture child ran. Root confirmed terminal exit
+one; cleanup at 21:57:33 UTC records no live target process. Both native
+assertions and validator failure are preserved under
+`build/constant-operands-golden-inventory-v1/`, with outer receipts under
+`build/constant-operands-feedback-remaining-v1/golden-inventory-v1.*`.
+
+This is diagnostic evidence, not a successful inventory or compatibility pass.
+Read-only host replay and individual causal classification are next; the full
+module will not be rerun merely to repair evidence parsing. The original
+22:20:45.868428 UTC feedback deadline remains unchanged.

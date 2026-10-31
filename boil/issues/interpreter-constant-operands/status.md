@@ -102,8 +102,10 @@ accepted all 426 archive entries. Root activated the three-row completion at
 22:25:24 UTC with its separate 22:45:24 UTC deadline. Fresh O3 completed in
 109.473 seconds and all eleven release cases passed without skips. Emission
 stopped before its target child because the ELF reader assumes ET_EXEC;
-both matched images are PIE. The native session is terminal and idle; reviewed
-host-only reader correction is being prepared while GC controls run.
+both matched images are PIE. The reviewed correction then collected emission
+successfully at 22:40 UTC, with terminal exit zero and cleanup before the
+unchanged completion deadline. Independent work-removal review and raw timing
+capture preparation remain; no timing has run.
 The [execution record](feedback-results.md) owns outcomes and separate clocks.
 The [original held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its

@@ -277,3 +277,23 @@ diagnostics. No new size cutoff or timing result is substituted into old
 evidence. Raw instruction-pair capture, actual work-removal review, independent
 revision review and exact activation still precede timing. GC causal controls
 currently own the sole native window.
+
+### Reviewed PIE emission collection
+
+Independent [PIE preparation review](reviews/pie-emission-preparation-20261031-v1.md)
+accepted the exact decoder/controller successor. It validates ELF64 x86-64
+relative relocations against file-backed executable ranges. All 617 dispatch
+slots across the two frozen images agree with independent `readelf` output;
+twelve malformed-image controls reject. No runtime source or product changed.
+
+Root activated the emission-only row at **22:40:31.637851 UTC**, session 50014,
+retaining the original completion deadline 22:45:24.688115 UTC. Plan SHA-256 is
+`4787f43c2851429d72c040664f76b48d5e645cdeaa16ab94a0e20a82a28791a6`;
+launch is `40028b8fb4aa9b70fc825245acf94f36e014497e41a8d1fe3fb01167e837b925`.
+Root confirmed terminal exit 0 at 22:40:58 UTC. Completion is 22:40:48.370521;
+result SHA-256 is
+`a8c87cade65453260dee6bd14babd5bd83940d163d01acea68cfc69ee4450f3f`,
+cleanup `9bfa35043c8b334a6eac3dc6a4ea9d8c364791d26dadec090974753eff0b147a`.
+Artifacts live in `build/constant-operands-emission-v2/`. Independent native/
+consumer-word work-removal review follows; collection alone is not that verdict.
+No timing, performance, qualification or landing acceptance is claimed.

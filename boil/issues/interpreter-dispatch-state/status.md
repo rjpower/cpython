@@ -8,6 +8,7 @@
 - Checkpoint: 23:51:19 UTC
 - Branch/worktree: `boil/interpreter-slot-base`; `build/worktrees/dispatch-slot-base`
 - Source base: primary `5163eadffaf`, runtime identical to accepted native `e9e10d5b503`
+- Prototype: frozen early at 23:52:24 UTC, `3ddc437679ebbb9f8629c1670655c58776075dfc`
 - Depends on: [constant-operand elapsed rejection](../interpreter-constant-operands/performance-results.md)
 - Decision: investigate concrete common-handler stack work before another opcode increment
 
@@ -24,9 +25,9 @@ Inspect the preserved matched images, generated C, compiler policy and state
 lifetimes. The coordinator reproduced all twelve bounded native captures in
 `build/constant-operands-quiet-v1/author-analysis` exactly. This establishes
 extra emitted common-path operations, not their share of elapsed cost or the
-responsible compiler pass. Return one concrete minimal design with falsifiable
-native and elapsed checks. No source implementation, compiler experiment,
-target invocation, new workload or timing belongs to this scope.
+responsible compiler pass. The research selected a minimal design with
+falsifiable native and elapsed checks. Its separate source prototype changes
+only slot-alias scope; compiler, target and timing execution remain held.
 
 ## Decision rule
 
@@ -43,6 +44,12 @@ targets accepted-baseline return/yield cache transport, with receiving-load and
 register-allocation costs still unmeasured. Independent
 [design review](reviews/design-20261031-v1.md) accepts a bounded source prototype.
 Root granted the separate 30-minute host-only increment at 23:41:19 UTC.
+It froze early at 23:52:24 UTC. Host tests passed 79 cases, including one
+existing expected failure; the precise-root checker reported zero errors.
+All original generated statements remain after removing the 292 new aliases,
+and the other six generated products are byte-identical. These are host
+structural results, not C compilation or runtime coverage. Exact source review
+is pending; the [held native plan](feedback-plan.md) defines the next question.
 Native compilation, behavior, performance and landing remain unauthorized.
 The [research results](results.md) and native/source inventory retain the
 287-handler, 19-join, five-label and 26-reload entry proof and its limits.

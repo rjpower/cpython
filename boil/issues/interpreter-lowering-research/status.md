@@ -7,7 +7,7 @@
 - Depends on: [constant operand prototype](../interpreter-constant-operands/status.md), [shared interface review](../interpreter-shared-costs/reviews/holistic.md)
 - Source inspected: documentation checkpoint `32f14069fd2a0b34b67f167621d2de4671369a49`; runtime/compiler source identical to integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Outcome: reported
-- Decision: research accepted by coordinator; continue the existing constant operand prototype first; no new runtime experiment authorized here
+- Decision: research accepted; the subsequent constant-operand prototype was rejected on elapsed performance; no new runtime experiment is authorized here
 
 ## Hypothesis
 
@@ -36,9 +36,10 @@ does not establish a speedup.
 
 The [results](results.md) identify existing local optimization and interblock
 liveness, distinguish them from full SSA optimization, and rank two concrete
-operand-form hypotheses. Small integer arithmetic is already assigned to its
-own bounded prototype. Literal integer read subscription is a conditional
-follow-up after that shared representation is reviewed. General identity-test
-and branch fusion is held because its feedback/target encoding and event
-contract are materially more expensive. Nursery source reviews take priority
-over further research in this issue.
+operand-form hypotheses. The small-integer arithmetic prototype subsequently
+regressed both elapsed rounds and was rejected; its size veto was withdrawn
+before timing. The active [common-state investigation](../interpreter-dispatch-state/status.md)
+addresses observed baseline return/yield transport. Literal integer read
+subscription remains unassigned and needs its own representation and cost
+design. General identity-test and branch fusion remains held because its
+feedback/target encoding and event contract are materially more expensive.

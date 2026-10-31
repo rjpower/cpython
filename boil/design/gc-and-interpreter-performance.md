@@ -70,9 +70,14 @@ Existing frame-window sharing, compiler folds and tagged payloads are already
 present; preserve their initialization, root and exception contracts.
 The [lowering comparison](../issues/interpreter-lowering-research/results.md)
 distinguishes these local optimizations from general SSA and LuaJIT's trace
-optimizer. Its next concrete consumer is the active
-[constant-operand prototype](../issues/interpreter-constant-operands/status.md);
-literal read subscripts are a conditional successor. Neither has a measured gain.
+optimizer. The thirteen-handler
+[constant-operand prototype](../issues/interpreter-constant-operands/status.md)
+was rejected after both matched elapsed rounds regressed. Its 18.42% evaluator
+text growth is diagnostic; the earlier 5% size veto was withdrawn before timing.
+The active [slot-base prototype](../issues/interpreter-dispatch-state/status.md)
+targets observed baseline return/yield state transport without new opcodes.
+Its source and host checks establish no elapsed gain yet. Literal read
+subscripts remain an unassigned design candidate.
 
 Generators measure 0.603× upstream and need about 1.66× more throughput for
 parity. Their separate profile spends about 22% in timed GC; removing that timed

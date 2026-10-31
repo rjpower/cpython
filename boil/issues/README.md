@@ -60,8 +60,9 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
   rewrite. Hypothesis rejected without a runtime change or new benchmark.
 - [Lowering and LuaJIT staging](interpreter-lowering-research/status.md): current
   local optimizations and interblock liveness are substantial; a general SSA
-  optimizer is absent. Continue constant operands first, then inspect literal
-  read subscripts. General compare/branch fusion needs a separate encoding proof.
+  optimizer is absent. The constant-operand experiment was rejected on elapsed
+  performance; common evaluator state is the active follow-up. Literal read
+  subscripts and compare/branch fusion remain unassigned design candidates.
 
 ## Landed
 

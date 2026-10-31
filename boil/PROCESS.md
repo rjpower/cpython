@@ -427,6 +427,17 @@ merge. A runtime, test, generated, build or tool change invalidates this
 exception and requires its own reconciliation. Primary publication waits for
 both smoke results; inherited final-GC/performance debt remains open.
 
+Coordinator landing ruling, 2026-10-30: the same project-prose-only rule applies
+to selective-death qualification source94ae1b1d4a2. Complete its finite
+qualification, closure and independent landing review first. Prove the actual
+merge changes only enumerated project Markdown paths under `boil/` relative to that source;
+runtime/test/tool/build/generated inputs must remain identical. Bind the actual
+merge separately from frozen release/debug/ASan native identities, and run one
+fresh post-merge smoke per release/O1-debug configuration using those qualified
+products and their source/stdlib roots. This avoids rebuilding and rerunning
+full suites for prose edits. Any non-prose difference requires reconciliation
+and qualification of the changed union. Publication waits for both smokes.
+
 Queue2a's original classifier-held probes stay preserved, without a native
 retry. The newly reviewed source design separates three safety changes.
 The coordinator authorizes isolated source implementation of sweep-order

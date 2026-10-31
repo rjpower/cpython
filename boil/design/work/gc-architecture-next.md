@@ -282,8 +282,19 @@ manual free/realloc and observer notifications. Exact cells and nonempty tuples
 are small proof layouts; they are not claimed to dominate current traffic.
 Completed generators require a separate frame/exception/origin cleanup proof.
 
-Then implement a page-segmented bump region behind a space-aware object
-lookup/enumeration interface, initially retaining full marking. Reserve start,
+After native cleanup and direct managed scanning, repeat the bounded profiles.
+If individual storage return remains material, first assess batching through
+the existing mimalloc owner/page boundary. It already supplies size classes,
+page occupancy and reusable blocks; use that knowledge before duplicating it.
+Batching still performs required object cleanup and wrapper notifications and
+respects remote frees, debug fills and delayed page retirement. Its benefit
+must exceed the bitmap/grouping work. The
+[storage implementation packet](gc-region-implementation.md#storage-decision-after-managed-scanning)
+defines this decision and the compact-metadata requirement for a new backend.
+
+If allocation/locality remains the larger opportunity, implement a
+page-segmented bump region behind a space-aware object lookup/enumeration
+interface, initially retaining full marking. Reserve start,
 size, initialization and pin metadata before publication. Adapt
 `_PyObject_MallocWithType`, `new_reference`, free/realloc/address reuse,
 `live_lookup` and heap enumeration together; region objects must remain visible
@@ -295,8 +306,13 @@ at their addresses and charge their slack. This first experiment still builds
 dead records: it measures allocation/recycling, not a magically eliminated
 classification pass. Verify bounded memory with a survivor per page, address
 reuse, allocation failure and cyclic graphs. Keep the region route only if its
-coverage and memory cost justify it. This backend is scaffolding for the nursery,
-not a separate generational collector to ship first.
+coverage and memory cost justify it. This backend is scaffolding for the nursery.
+Its metadata must be compact: an exact cell is16 bytes, so a24–32-byte record
+per object would outweigh its payload before page slack. Prefer page descriptors,
+stride knowledge and bitmaps where sufficient; count all metadata in the
+comparison. A second allocator must earn its complexity through measured
+allocation/reclamation benefit rather than becoming a required detour before
+nursery work.
 
 ### C. Copy common young objects; keep native exceptions stable
 

@@ -64,8 +64,13 @@ region tested.
 
 ## Storage metadata and construction publication
 
-Keep private, off-heap page descriptors and allocation records containing raw
-start, raw extent, object offset and live/retired state. Obtain payload pages
+The required information is raw start, raw extent, object offset and
+live/retired state. Private off-heap allocation records are correctness
+scaffolding, not the selected final representation: a cell is16 bytes, and
+a24–32-byte record would cost more than the object. Before backend code,
+choose compact page/stride/bitmap metadata for fixed layouts and a bounded
+encoding for variable tuples; include metadata and lookup costs in the
+experiment. Obtain payload pages
 from anonymous mappings, not an object or PyMem carrier that the current heap
 walker could scan a second time. Metadata is not a strong-root table. Store
 the owning main-interpreter identity explicitly; the allocating thread is not
@@ -204,6 +209,39 @@ lookup as a material cost and exact cells/tuples cover enough bytes to justify
 this cut. Compare total elapsed, instructions, RSS/slack and pause maxima with
 the same budget; a faster allocator with more full-heap work is not automatically
 a useful collector improvement.
+
+## Storage decision after managed scanning
+
+First finish native cleanup and direct scanning, then compare the same bounded
+rows at the unchanged32MiB budget. Separate allocation, address lookup,
+native teardown and storage return; a visible allocator frame alone does not
+show that another allocator will help.
+
+If return/retirement is material, the first source investigation is an
+allocator-owned batch over existing mimalloc pages. `heap.c` already reconstructs
+free-block bitmaps and knows block stride/occupancy. Reuse that boundary rather
+than sorting a new per-object registry. An ordinary page can contain allocated
+blocks without published object starts: those blocks still occupy storage.
+"All initialized objects are dead" is therefore insufficient to free a page.
+
+Any batch must preserve per-object teardown, allocator hooks/statistics, debug
+padding/fills, ASan poisoning, kill-mode quarantine, object-map retirement
+and borrowed dead-journal storage. Admit
+only a proved owner/wrapper combination initially; remote and abandoned pages
+retain their existing delayed/atomic free path. `_mi_page_free` requires all
+blocks already free, the correct owner queue and no `MI_DELAYED_FREEING`; the
+collector cannot jump directly to it while `page->used` is positive. Page
+release follows the last journal borrower. Bitmap construction still costs
+work proportional to capacity words and free/live blocks, and full marking
+and dead journaling remain. No batch implementation or performance claim is
+made here.
+
+Choose a new region instead when measured allocation/locality benefits justify
+the wrapper, publication, lookup and lifetime interfaces above. Before that
+implementation, settle compact metadata and report an estimated bytes/object
+and bytes/page cost for actual cell/tuple traffic. Keep one storage experiment
+active at a time; choose by elapsed time, instructions, RSS/slack and pause
+maxima after qualification, then proceed to the nursery contract.
 
 ## Review35: what to keep from the current root/traverse structures
 

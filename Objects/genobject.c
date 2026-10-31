@@ -1286,6 +1286,8 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     gen->gi_frame_state = FRAME_CLEARED;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
+    /* Coroutine origin construction can collect after this object is tracked. */
+    gen->gi_origin_or_finalizer = NULL;
     gen->gi_iframe.f_executable = _PyValue_None;
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
     assert(name != NULL);
@@ -1368,6 +1370,7 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     Py_DECREF(f);
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
+    gen->gi_origin_or_finalizer = NULL;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else

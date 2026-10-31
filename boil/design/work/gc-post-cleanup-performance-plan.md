@@ -56,6 +56,13 @@ Hardware-count intervals include the acknowledged control boundaries. Compare
 historical parent32/upstream samples as context, not a new contemporaneous
 paired CPU experiment.
 
+The root metric `unpinned` counts visits to detached-thread snapshots without
+a pinned C-frame extent (`gc_trace.c:scan_other_thread`). Their captured registers
+and stack receive conservative scanning. Counts can include repeated visits to
+one snapshot; they are report-only under the existing qualification policy.
+Here pinning describes the captured frame extent. Nursery object pinning has a
+separate movement contract.
+
 Offline attribution reuses the existing phase decoder: filter the actual PID
 and hot monotonic timestamps; report exclusive mark, preparation, native-clear,
 other teardown, storage return, residual and unknown/lost samples. New native

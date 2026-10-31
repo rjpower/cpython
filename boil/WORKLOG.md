@@ -5453,7 +5453,7 @@ passes the corrected audit unchanged; its original make failure remains recorded
 The earlier O1 decoder-effect audit failure is likewise retained.
 
 Release and debugkill focused12 and whole10 pass. Both whole runs report one
-diagnostic unpinned object, with zero fallback; focused cases report neither.
+diagnostic visit to an unpinned snapshot, with zero fallback; focused cases report neither.
 The remaining early smoke/root/backend checks run before the held broad ladder.
 The ASan smoke recipe inherited ordinary filters and admitted an already-known
 failing sanitizer-only case; operator/reviewer preserve its actual terminal
@@ -5550,3 +5550,38 @@ listing and six linked excerpts. A shared match-once/use-payload contract is
 prospective, preserving receiver admission, cache version/address reuse, store
 kind/transition, method layout, statistics and rooting. No new opcode, candidate
 edit, target execution or measured benefit. Refreshed profiles select its priority.
+
+### 2026-10-30 19:17 PDT — constructor publication abort; finite repair successor
+
+All three fulls independently pass51,255 each (kill626.077s), and release
+stress independently passes3,115/148,35,814collections/0fallback with56 report-
+only unpinned snapshot visits. Debug stress then aborts its coroutine worker
+at test_origin_tracking during ComputeOrigin→Py_BuildValue→PyTuple_New.
+Failure447af602/50refs and postguardbeb5c0d0 independently clear: native2/host1,
+ten returned modulesPASS,3,016/113 only their partial count; the coroutine worker
+has no terminal/root-complete witness. ASan16/closure are unrun. Source339 and
+all four images remain intact; the runtime window is released.
+
+Two source reads identify the same local hole: both common constructors track
+before initializing the coroutine origin/finalizer slot, while the full tracer
+visits that field. Pinned upstream deliberately omits this acyclic field from
+cycle traversal; inherited constructor order is unsuitable for our full tracer.
+One sealed debug probe enables N1 only around positive-depth coroutine creation
+after setup and reproduces the fatal in0.304s (resultba6b29b1), with both old
+source/product guards passing. No repeated probe or suppressed assertion.
+
+Roots owns exactly two pre-TRACK NULL initializations plus an external
+origin/data regression; source review and a finite successor plan are in progress.
+Keep later branches/assignments intact. Preserve the old four builds with verified
+independent copies, then refresh configured builds at their original absolute
+paths. Proposed composite retains339 fulls as339 evidence and freshly checks
+the delta, affected modules, failed debug stress, ASan16 and closure; no extra
+full rerun unless scope widens or new evidence requires it. No successor native
+build or landing is claimed yet. Held performance/integration plans require
+actual successor identities and remain blocked on qualification.
+
+Corrected current metric wording: unpinned counts visits to detached-thread
+snapshots lacking pinned C-frame extent, followed by conservative register/stack
+scanning. It is not an object count; original raw values are unchanged. The
+GC/code plan now connects this constructor failure directly to Review35's
+question about inherited cycle-GC assumptions. Next hourly checkpoint19:44PDT.

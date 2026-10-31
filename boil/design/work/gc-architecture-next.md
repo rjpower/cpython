@@ -13,11 +13,13 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 18:53 PDT: candidate `33944d24e55` contains
+Current checkpoint, 2026-10-30 19:15 PDT: candidate `33944d24e55` contains
 the four reviewed improvements below. All early ordinary, sanitizer and tail
-checks pass. Broad release and debug normal fulls each pass 51,255 tests.
-Debug-kill full is active; two stress profiles, ASan16, closure and final landing review
-remain. Post-landing comparison and integration packets are source-reviewed
+checks pass. Three broad fulls each pass 51,255 tests, and release stress passes.
+Debug stress aborts during coroutine origin construction; the traced origin
+field has not been initialized before an allocating helper runs. Source339 is
+held, with a two-constructor initialization repair in progress. ASan16, closure
+and final landing review remain. Post-landing comparison and integration packets are source-reviewed
 and held; no new whole-interpreter score is claimed.
 
 This plan supersedes the earlier requirement to ship nonmoving generations
@@ -498,6 +500,12 @@ has an explicit owner and teardown point. OOM in discovery/preparation retains
 objects; irreversible cleanup begins only after the needed storage is ready.
 These are more important shared rules than a single universal vector/hash API.
 
+Qualification's report-only `unpinned` root metric counts visits to detached
+thread snapshots without a pinned C-frame extent. The collector
+then scans saved registers and stack conservatively; the count can include
+repeated visits to one snapshot. This frame-extent contract is separate from
+the nursery's future object-pinning contract.
+
 ### Shared concepts to introduce with implementation
 
 **Reference locations and access.** Today `visitproc(PyObject *, void *)` reports
@@ -671,8 +679,9 @@ This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
 resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
 and exact decoder/libc effect repairs. Both original linked-audit failures remain
-recorded; all early ordinary/ASan/tail checks pass and broad release/debug normal
-fulls each pass 51,255. Debug-kill full is active; final qualification and landing remain.
+recorded; all early ordinary/ASan/tail checks, three fulls and release stress
+pass. Debug stress exposes the coroutine-construction publication hole;
+source339 is held pending repair and final qualification.
 Root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
@@ -688,6 +697,30 @@ This remains a source-reviewed proposal, selected only if post-landing profiles
 show material repeated-edge cost; it adds no registry or moving-GC dependency.
 
 ### Audit lifetime assumptions at their actual boundaries
+
+Debug stress found a second concrete inherited assumption: upstream's cycle
+traversal deliberately omits `cr_origin`, because its tuple/string/int contents
+cannot form a cycle. Our full tracer correctly visits that strong field, but
+the constructors still track the coroutine before origin construction initializes
+it. An allocation inside `_PyCoro_ComputeOrigin` can therefore collect and read
+uninitialized storage. One post-setup N1 probe reproduces the exact abort in
+0.304 seconds; no repeated suite or synthetic corrupt object is needed.
+
+Initialize the shared origin/finalizer slot to NULL before tracking in both
+common constructors. Keep origin computation, error behavior and existing
+branches intact. The regression checks useful origin contents and the coroutine's
+returned data while collection occurs during construction. This is the existing
+tracked-object traversal invariant applied locally, rather than a new publication
+framework. It shows why inherited edge knowledge must be reviewed alongside
+initialization and lifetime: a cycle collector can omit acyclic edges that a
+full tracer must retain.
+
+Source339's three fulls and release stress remain their actual passes; its debug
+stress failure remains a failure. The initialization-only successor can use a
+reviewed composite: preserve old images, refresh four build/audit receipts, verify
+the deterministic regression and affected coroutine/generator/GC modules, then
+complete debug stress, ASan16 and closure. Any wider runtime change reopens that
+scope decision. Old full passes must not be relabeled as successor executions.
 
 The warning failure is a concrete example of useful code carrying an unsuitable
 context assumption. Native finalization calls `get_warnings_attr`, which imports

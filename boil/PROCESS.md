@@ -88,11 +88,18 @@ were unknown. Candidate33944 adds exact noncollecting declarations and critical
 regressions; program C/headers are unchanged from4d8. All seven generated outputs
 match. O1, O3, ASan and tail builds now pass, with the original failures retained.
 Focused12 and whole10 pass release/debugkill; each whole10 run reports one
-diagnostic unpinned object and zero fallback. All early ASan/tail/root checks
+diagnostic visit to an unpinned snapshot and zero fallback. All early ASan/tail/root checks
 also pass and clear independent review. Broad release full passes51,255/3,795
 with zero fallback and one report-only unpinned record. Debug normal full also
 passes51,255/3,739 with zero fallback and two report-only unpinned records.
-Debug-kill full is active; stress2, ASan16, closure and landing remain. Earlier
+Debug-kill full also passes51,255/3,739 with zero fallback and two report-only
+unpinned snapshot visits; release stress passes3,115/148. Debug stress fails
+with a coroutine origin field observed before initialization during allocating
+origin construction. Source339 stays frozen/HOLD, with original failure and
+postguards preserved; ASan16 and closure are unrun. A focused two-constructor
+repair is in progress. A finite successor may combine these source339 passes
+with fresh qualification of the reviewed initialization-only delta; it must
+state each source/native identity explicitly. Earlier
 selective ASan16 and three fulls pass, but final debug stress fails; its closure
 is unrun. The actual union must qualify before landing.
 

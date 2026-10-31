@@ -23,9 +23,11 @@ improves1.309× in the isolated topic; whole29 remains unchanged. Keep32MiB afte
 the completed budget experiment. Native-only cleanup and direct scanning are
 now composed with the warning-context repair as4d8e690. Candidate33944 adds proven
 decoder/libc effect declarations after two retained linked-audit failures.
-O1/O3/ASan/tail builds and all early runtime checks pass. Broad release and debug
-normal fulls each pass51,255 tests; debug-kill full is active. Final qualification and landing
-remain before any refreshed performance claim.
+O1/O3/ASan/tail builds and all early runtime checks pass. All three broad fulls
+pass51,255 tests each and release stress passes. Debug stress fails in coroutine
+origin construction before the traced origin field is initialized; source339
+is held. Constructor repair and final qualification/landing remain before any
+refreshed performance claim.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
 checks actual source and ranks five clean cuts for post-qualification attribution.

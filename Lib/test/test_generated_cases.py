@@ -2483,6 +2483,31 @@ fail:
         self.assertEqual(classifier.kind("unknown"), "reentrant")
         self.assertEqual(classifier.kind("collecting"), "reentrant")
 
+    def test_doc_signature_scanner_does_not_collect(self):
+        source = ir_generator.ROOT / "Objects/typeobject.c"
+        functions, _, _ = root_check_c.find_functions(
+            root_check_c.tokens_of(source.read_text()))
+        names = {"find_signature", "skip_signature", "_PyType_DocWithoutSignature",
+                 "_PyType_GetDocFromInternalDoc"}
+        bodies = {fn.name: fn.body_toks for fn in functions if fn.name in names}
+        self.assertEqual(bodies.keys(), names)
+        classifier = root_check_c.Classifier(bodies)
+        for name in names - {"_PyType_GetDocFromInternalDoc"}:
+            with self.subTest(function=name):
+                self.assertEqual(classifier.kind(name), "none")
+        # The caller still allocates the Unicode result after scanning.
+        self.assertEqual(classifier.kind("_PyType_GetDocFromInternalDoc"), "alloc")
+        for leaf, expected in (("unknown_search", "reentrant"),
+                               ("PyUnicode_FromString", "alloc")):
+            with self.subTest(leaf=leaf):
+                changed = dict(bodies)
+                changed["find_signature"] = [
+                    replace(token, text=leaf) if token.text == "strrchr" else token
+                    for token in bodies["find_signature"]]
+                self.assertEqual(root_check_c.Classifier(changed).kind(
+                    "_PyType_DocWithoutSignature"), expected)
+
+
     def check(self, src):
         return [str(e) for e in root_check_c.check_source(
             self.PRELUDE + src,

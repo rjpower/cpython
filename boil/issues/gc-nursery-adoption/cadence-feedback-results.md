@@ -61,7 +61,38 @@ accepted plan `755aaa840793d90e56a7e47832fa38c138d1fac5460767c0eab1e34a9ae6ab99`
 and launch `5f281b264476c0ab0564b5e5de205f0169804588164183bed7d7cae4fc083618`.
 Root activated that fresh batch at 23:42:14.488441 UTC, activation
 `60e80aea3e0201eba9884e480eed69077dc115492e0916dcd4d233d9fe2e7acb`.
-Session 73424 is live. Its new master is `build/nursery-cadence-first-feedback-precise`
+Its new master is `build/nursery-cadence-first-feedback-precise`
 in the isolated worktree. The original deadline is enforced literally; source,
 child assertions and the accepted gate/observer protocol have explicit bridges.
 No fresh linked audit or case pass is credited at activation.
+
+## Corrected build and compound-trigger failure
+
+The 5cc successor built successfully and passed the linked audit and build
+verification. Candidate focus then returned native code 2 after 15.081 seconds:
+thirteen methods ran with one failure, in the every=1 child of
+`test_due_major_overrides_halfway_opportunity`. Its every=0 sibling passed.
+The strict unchanged-minor-count assertion failed; no positive focus pass or
+qualification is credited. No negative build or child ran.
+
+The actual result is isolated
+`build/nursery-cadence-precise-feedback/runs/candidate-focus.result.json`, SHA256
+`22da3da33ad76202b73af5cc447c66ee6e07d0fb4b29b11b220d3e683dd90863`.
+Its child observations are
+`b0454a9b7d3a42bc31ecaa51893aa7daeafe9159ff3780c7f907bc3db1ee9298`.
+Master failure was recorded at 23:44:28.338572 UTC. Cleanup at
+23:44:28.328104 UTC found no live target PIDs under the build lock, before the
+original deadline. Root confirmed session 73424 terminal exit 1 at 23:45:07 UTC.
+All original failed logs and the successful compiled image remain preserved.
+
+Independent [trigger design review](reviews/cadence-trigger-correction-design-20261031-v1.md)
+proved that `CellType('trigger')` allocates an argument tuple and then a cell.
+With stress=1, a due major at the first allocation can legitimately be followed
+by a minor in the new epoch at the second, before Python disables collection.
+An empty list literal follows a single accounted allocation in this fork,
+without a list freelist or item-buffer allocation. Root granted a narrow
+test-only correction at 23:50 UTC, freezing by 23:58 UTC: replace this trigger
+and its final payload assertion, retain all strict count/kind/liveness checks
+and both stress children. Native reuse requires an exact runtime-identical
+test-source bridge and independent helper review. The original
+00:14:59.201344 UTC deadline remains unchanged; corrected behavior is unverified.

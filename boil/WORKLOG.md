@@ -246,3 +246,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   [GC execution](issues/gc-nursery-adoption/cadence-feedback-results.md),
   [IR review](issues/interpreter-dispatch-state/reviews/design-20261031-v1.md),
   [Cost plan](issues/gc-nursery-adoption/cadence-cost-plan.md).
+- 2026-10-31: Corrected cadence build passed the linked audit, then focused
+  execution stopped at one stress=1 failure among thirteen methods. Independent
+  review proved the test trigger allocates twice; authorized a single-allocation
+  replacement while retaining strict kind/count/liveness assertions. Preserved
+  all failures, confirmed terminal idle cleanup, and kept the original feedback
+  deadline. The slot-base prototype passed host generation/root checks; native
+  behavior remains untested.
+  [GC failure and correction](issues/gc-nursery-adoption/cadence-feedback-results.md),
+  [Trigger review](issues/gc-nursery-adoption/reviews/cadence-trigger-correction-design-20261031-v1.md).

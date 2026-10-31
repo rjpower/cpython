@@ -53,8 +53,15 @@ Its [independent correction review](reviews/cadence-precise-correction-source-20
 accepts fresh reviewed feedback. Remaining-only helpers use fresh builds and
 source-negative arms under the original batch deadline. Their
 [helper review](reviews/cadence-precise-helper-preparation-20261031-v1.md) accepted
-the exact successor. Root activated it at 23:42:14.488441 UTC; session 73424 is
-live and fresh configuration is underway. The
+the exact successor. Root activated it at 23:42:14.488441 UTC. Its fresh
+build, linked audit and verification passed; focused execution stopped with one
+failure among thirteen methods, in the due-major stress=1 child. Root confirmed
+session 73424 terminal exit 1 at 23:45:07 UTC and idle cleanup. Independent
+[trigger review](reviews/cadence-trigger-correction-design-20261031-v1.md)
+proved that the original CellType trigger allocates an argument tuple and a
+cell, permitting a major followed by a valid minor. A test-only empty-list
+trigger correction is authorized; strict count and liveness assertions remain.
+The original feedback deadline remains fixed. The
 [cadence execution record](cadence-feedback-results.md) owns actual
 rows, identities, failures and terminal observations.
 

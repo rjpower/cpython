@@ -69,6 +69,9 @@ comparison using the existing four kernels and fixed counts: coroutines 4,
 generators 2, unpack_sequence 4000, spectral_norm 1. Use two rotating-order
 rounds and five samples per source/workload/round, exact matched images and
 origins. Freeze commands and the fresh/serial sampling policy before execution.
+The ready quiet plan must also predeclare a spread/noise-adequacy rule and
+retain every raw vector; two favorable point medians alone cannot accept a
+comparison whose spread makes the claimed benefit inconclusive.
 
 Coroutines is the primary call/return consumer: require at least 1% lower
 median elapsed time in both rounds. Generators is the yield/resume consumer;

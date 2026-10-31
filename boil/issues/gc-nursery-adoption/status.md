@@ -5,7 +5,7 @@
 - Updated: 2026-10-31
 - Base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Adopted automatic-major baseline: `ef0af95904b87d888eee4a98b6a745835ff95085`
-- Current cadence candidate: `5cc1e5310e2cb5f11feade09195b5a3695188161`
+- Current cadence candidate: `47ccf35e21a94fde9351d1c2e4571bf207257a4c`
 - Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
 - Dispatch started: 2026-10-31 20:18:11 UTC; overall deadline 2026-11-01 04:18:11 UTC
 - Current feedback deadline: 2026-11-01 00:14:59.201344 UTC, unchanged after the first build failure
@@ -61,7 +61,11 @@ session 73424 terminal exit 1 at 23:45:07 UTC and idle cleanup. Independent
 proved that the original CellType trigger allocates an argument tuple and a
 cell, permitting a major followed by a valid minor. A test-only empty-list
 trigger correction is authorized; strict count and liveness assertions remain.
-The original feedback deadline remains fixed. The
+Frozen successor `47ccf35e21a9` changes only that test trigger/comment/result
+assertion. Independent source and helper reviews accepted reuse of the 5cc
+compiled image and the untouched three negative arms. Root activated seven
+remaining rows at 23:55:53.807706 UTC; session 45104 is live. The original
+feedback deadline remains fixed. The
 [cadence execution record](cadence-feedback-results.md) owns actual
 rows, identities, failures and terminal observations.
 

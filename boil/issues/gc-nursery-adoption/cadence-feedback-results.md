@@ -96,3 +96,28 @@ and its final payload assertion, retain all strict count/kind/liveness checks
 and both stress children. Native reuse requires an exact runtime-identical
 test-source bridge and independent helper review. The original
 00:14:59.201344 UTC deadline remains unchanged; corrected behavior is unverified.
+
+## Single-allocation successor activation
+
+Frozen `47ccf35e21a94fde9351d1c2e4571bf207257a4c` changes only the nominated
+test trigger, explanatory comment and final result assertion. Independent
+[source review](reviews/cadence-trigger-correction-source-20261031-v1.md),
+SHA256 `82e1c1299fd43dbbc97063e03537ed628d3257b1546f66d3deb48eda7e0d1ded`,
+verified all strict assertions, all twenty-two assembled children and all
+588 unchanged compiled products. Only children six/seven changed; nominated
+negative children one/eighteen/eleven remain byte-identical.
+
+The [remaining-helper review](reviews/cadence-trigger-helper-preparation-20261031-v1.md),
+SHA256 `0309fa5ef8e41411ecd44e6da4b4a71c0a0490594f9027d4918374c7df31b7b9`,
+accepted seven literal rows: corrected positive focus, then three fresh negative
+build/run pairs. The existing negative sources remain direct 5cc fault-only
+children; per-scope test-file hashes and identical nominated bodies explicitly
+bridge the test correction. No candidate rebuild is needed.
+
+Root observed no live native target or compiler and activated the exact
+remaining batch at 23:55:53.807706 UTC, session 45104. The master is isolated
+`build/nursery-cadence-first-feedback-trigger`; activation SHA256 is
+`8b53631513e2cef5df9ddce98744fb35ff3e0563944657057e1df7a607a3618a`.
+Plan `bdd3a7c6c50ad2fe835439ea57faa3474ca2ba508e1f5dca08baed02a4c00dfe`
+and launch `b80c359f0ca9de0841ab803e8f648c4d0553b8501766b9afb0eaa9e7a6c44c10`
+retain the original 00:14:59.201344 UTC deadline. No pass is credited at launch.

@@ -255,3 +255,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   behavior remains untested.
   [GC failure and correction](issues/gc-nursery-adoption/cadence-feedback-results.md),
   [Trigger review](issues/gc-nursery-adoption/reviews/cadence-trigger-correction-design-20261031-v1.md).
+- 2026-10-31: Accepted the exact single-allocation test correction and activated
+  seven remaining GC feedback rows, reusing unchanged compiled runtime products
+  under the original deadline. Independently accepted the frozen handler-local
+  slot-base source after reproducing generation, preserved-body/reload proofs
+  and meaningful entry checks; native helpers remain held for review.
+  [GC execution](issues/gc-nursery-adoption/cadence-feedback-results.md),
+  [IR source review](issues/interpreter-dispatch-state/reviews/source-20261031-v1.md).

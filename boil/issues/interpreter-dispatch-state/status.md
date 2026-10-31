@@ -48,8 +48,13 @@ It froze early at 23:52:24 UTC. Host tests passed 79 cases, including one
 existing expected failure; the precise-root checker reported zero errors.
 All original generated statements remain after removing the 292 new aliases,
 and the other six generated products are byte-identical. These are host
-structural results, not C compilation or runtime coverage. Exact source review
-is pending; the [held native plan](feedback-plan.md) defines the next question.
+structural results, not C compilation or runtime coverage. Independent
+[exact source review](reviews/source-20261031-v1.md) accepted the frozen source
+for separately reviewed feedback; the [held native plan](feedback-plan.md)
+defines the next question.
+Host-only helper preparation runs 23:55–00:15 UTC, checkpoint 00:05, and may
+overlap source review without changing frozen source. Execution remains held
+and must serialize after terminal GC feedback.
 Native compilation, behavior, performance and landing remain unauthorized.
 The [research results](results.md) and native/source inventory retain the
 287-handler, 19-join, five-label and 26-reload entry proof and its limits.

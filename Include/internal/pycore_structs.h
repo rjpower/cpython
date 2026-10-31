@@ -55,6 +55,13 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
+/* Initialized strong value slots.  This is a view, not a root registration
+ * or a promise that aliases outside the range can follow moving objects. */
+typedef struct {
+    PyValue *base;
+    Py_ssize_t n;
+} _PyGCValueRange;
+
 // Values that a C frame holds, linked into the thread state so that the
 // collector visits them: the way a function whose own C frame the collector
 // does not scan (Py_GC_PRECISE) holds values across a

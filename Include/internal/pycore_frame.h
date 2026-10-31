@@ -41,6 +41,10 @@ struct _frame {
 // Exported for external JIT support
 PyAPI_FUNC(PyFrameObject *) _PyFrame_New_NoTrack(PyCodeObject *code);
 
+/* Fixed strong fields, without the register/value array. */
+extern int _PyFrame_VisitHeader(_PyInterpreterFrame *frame,
+                                visitproc visit, void *arg);
+
 
 /* other API */
 

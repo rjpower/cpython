@@ -28,3 +28,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
 - 2026-10-31: Combined GCC builds and early nursery/shape controls passed;
   sanitizer and tail builds followed. Closed call-setup attribution without
   selecting an interface rewrite. [Work index](issues/README.md).
+- 2026-10-31: Resumed after machine restart. Restored missing tracked primary
+  files and worktree metadata without replacing survivors; retained four-build,
+  backend-control and release-full evidence. Recorded the expired qualification
+  attempt and bounded only its remaining checks; independent carry review and
+  recovery of missing uncommitted notes continue.
+  [Evidence and recovery](issues/nursery-shape-landing/results.md).

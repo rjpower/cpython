@@ -7,7 +7,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | string_design | Execute the reviewed 90-minute batch; stop on unexpected failure |
+| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | coordinator | Validate restart carry, then run only remaining qualification under a new finite budget |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

@@ -36,8 +36,9 @@ The admitted route has an empty batch. `route_calls` therefore returns from
 foreign deleting interpreter in the admitted one-interpreter domain.
 `unpin_domain` uses the existing HEAD lock with `_Py_LOCK_DONT_DETACH`; its body
 only changes pin counters and notifies the pin event. No Python is called.
-This proof is for the supported GIL build, not free threading or arbitrary
-custom RAW allocator callbacks.
+An explicit `Py_GIL_DISABLED` admission rejection selects the old path on an
+unsupported free-threaded build. This proof is for the supported GIL build,
+not arbitrary custom RAW allocator callbacks.
 
 Sweep saves the current exception, sets the existing `gc.sweeping` guard, and
 clears every still-eligible generator before ordinary deallocation. The new
@@ -80,8 +81,11 @@ Five new methods exercise behavior rather than preparation counters:
 - `GeneratorDeallocTest.test_escaped_frame_preserves_mutable_payload`: escaped
   frame locals remain usable after generator death.
 
-The child controls reuse `_queue_child` and its actual-mode assertions with
-stress disabled. No raw-address fixture or new hook is introduced. Existing
+The inspection tests preserve this fork's existing referrer-first delivery
+behavior; they do not assert that Python specifies an order for cyclic
+finalizers. The child controls reuse `_queue_child` and its actual-mode
+assertions with stress disabled. No raw-address fixture or new hook is
+introduced. Existing
 `test_finalizer_order_through_closed_generator`, finalizer-work OOM recovery,
 buffer readiness, generator close/throw and monitoring `test_gen_unwind`
 remain relevant. The first feedback proposal is these five methods once in
@@ -119,3 +123,15 @@ owns the current native/runtime window. Timing and admission effectiveness are
 later questions: measure the conservative cohort and actual elapsed/shared
 cost change with the existing bounded comparison, without a speedup promise
 or widening the semantics to make a benchmark enter the cohort.
+
+## Reviewed deallocator cleanup follow-up
+
+Source checkpoint `32d4e339c2d` preserves the original five-file change. The
+separate follow-up removes only `gen_dealloc`'s redundant TRACK →
+`PyObject_CallFinalizerFromDealloc` → UNTRACK ceremony after the initial
+UNTRACK and weakref clearing. The exported function in `Objects/object.c`
+already returns zero before its unreachable reference-counted body; that body
+is deleted while the exported signature, comment and return value stay intact.
+All native/frame/origin/name/code cleanup and normal block freeing remain.
+No other callers or resource families are changed. This source simplification
+has no claimed speedup and needs no test mirroring unreachable statements.

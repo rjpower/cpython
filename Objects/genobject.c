@@ -207,12 +207,6 @@ gen_dealloc(PyObject *self)
 
     FT_CLEAR_WEAKREFS(self);
 
-    _PyObject_GC_TRACK(self);
-
-    if (PyObject_CallFinalizerFromDealloc(self))
-        return;                     /* resurrected.  :( */
-
-    _PyObject_GC_UNTRACK(self);
     if (PyAsyncGen_CheckExact(gen)) {
         /* We have to handle this case for asynchronous generators
            right here, because this code has to be between UNTRACK

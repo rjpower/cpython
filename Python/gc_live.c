@@ -1456,6 +1456,9 @@ sweep(PyThreadState *tstate, GCState *gc, _PyGCMarkResult *res,
 static int
 native_cleanup_ready(PyThreadState *tstate, _PyGCMarkResult *res)
 {
+#ifdef Py_GIL_DISABLED
+    return 0;
+#endif
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
     if (!(res->kinds & _PyGC_DEAD_FINALIZE)

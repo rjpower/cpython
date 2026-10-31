@@ -24,8 +24,9 @@ managed scanning and the restricted-builtins warning repair. Program C/headers
 derive from `4d8e690f483`, with exact decoder/libc effect metadata and two added
 constructor initializations. All seven generated outputs match the original union.
 Four successor make-only builds pass (O1 debug, O3 release, ASan and Clang tail).
-The origin/data regression, affected modules, debug stress, ASan16 and closure
-are next. Predecessor33944 passed all early checks, three broad fulls of 51,255
+The origin/data regression and affected modules pass. The formerly failing
+debug stress now returns PASS (3,116 tests/113 skips, zero fallback); independent
+terminal review is pending. ASan16 and closure remain. Predecessor33944 passed all early checks, three broad fulls of 51,255
 tests each and release stress, then failed debug stress on an uninitialized
 coroutine origin field. Its results and binaries are preserved. The successor
 initializes that field before tracking in both constructors; it is qualifying
@@ -34,7 +35,7 @@ Original
 selective stress, two linked-audit and ASan recipe failures remain recorded.
 **This runtime candidate is not landed.**
 
-Next: review and qualify the constructor repair, retaining the failed run and
+Next: finish the finite constructor qualification, retaining the failed run and
 source-specific passes; complete ASan16, closure and independent landing review;
 merge with fresh release/debug smoke checks; then execute the
 [post-landing measurement plan](design/work/gc-post-cleanup-performance-plan.md).

@@ -5617,3 +5617,27 @@ independently source-clear;120 old files remain unchanged. Actual final composit
 merge, smoke seed, fresh29 workload origins and quiet reservation remain pending.
 No benchmark launch, new score or runtime landing. Updated code/GC status names
 0b15 and keeps339's failure/pass identities explicit. Next hourly19:44PDT.
+
+### 2026-10-30 19:44 PDT — focused successor passes; original debug stress returns PASS
+
+Fresh focused completion20e132de/60refs independently clears. The byte-identical
+old negative probe now succeeds in0.205s with origin and returned-data assertions.
+The new external regression passes release off and debug kill, one test each;
+whole GC/generator/coroutine/asyncgen checks pass456/35 release and456/21 debug
+kill, with9,350/9,945 collections, zero fallback and one report-only snapshot
+visit each. Tail ownership passes1/0,60collections,0fallback/0snapshot visits.
+
+The original off/N1000 debug stress selection now returns PASS3,116/113 over
+all11 modules,38,251collections, zero fallback and43 report-only snapshot visits.
+Native and launcher return0; post-command guards pass. Independent terminal
+review is pending at this checkpoint. Remaining packet32fe1064 freezes6,946
+inputs and serializes debug stress→ASan16kill→conditional closure4; ASan protects
+the new regression. No full3/release-stress replay, extra probe or benchmark.
+
+Primary runtime remains75e8; candidate0b15 and all four native products stay
+frozen. Source-specific339 full passes and its failed debug stress remain
+preserved. Finish remaining gates, independent composite LAND review, actual
+Markdown-only merge proof and two smokes, then publish the held29/parent4/
+profile4/micro results. No final-union speedup is claimed. Root arrays/direct
+managed scans/native compatibility decisions remain as recorded in Review35.
+Next hourly documentation checkpoint20:44PDT; material results reported sooner.

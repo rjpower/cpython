@@ -13,10 +13,15 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 19:30 PDT: successor `0b15b4bbc9b` contains
+Current checkpoint, 2026-10-30 19:44 PDT: successor `0b15b4bbc9b` contains
 the four reviewed improvements and two pre-tracking constructor initializations.
-All four incremental builds and their audits pass. Fresh origin/affected checks,
-debug stress, ASan16, closure and final composite landing review remain.
+All four incremental builds and their audits pass. The identical old negative
+probe now passes once; the origin/data regression, four affected modules in
+release off/debug kill and tail ownership control independently pass. The
+formerly failing debug stress returns PASS (3,116 tests/113 skips, 38,251
+collections, zero fallback and43 report-only detached-snapshot visits), with
+independent terminal review pending. ASan16, closure and final composite landing
+review remain.
 Predecessor339's early checks, three fulls of 51,255 tests each and release stress
 are retained at that source. Its debug stress failure exposes the late origin
 initialization; one bounded probe reproduces it and the two-store repair is

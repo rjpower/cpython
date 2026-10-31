@@ -27,8 +27,10 @@ O1/O3/ASan/tail builds and all early runtime checks pass. All three broad fulls
 pass51,255 tests each and release stress passes on339. Its debug stress fails
 in coroutine origin construction before the traced origin field is initialized.
 Successor0b15 adds exactly two pre-tracking initializations and an origin/data
-regression; all four make-only builds/audits pass. Finite delta qualification
-and landing remain before any refreshed performance claim. This construction
+regression; all four make-only builds/audits and focused origin/affected/tail
+checks pass. The original debug stress selection returns PASS3,116/113 with
+zero fallback; independent terminal review, ASan16, closure and landing remain
+before any refreshed performance claim. This construction
 repair changes no IR handler or call ABI.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)

@@ -98,7 +98,10 @@ with a coroutine origin field observed before initialization during allocating
 origin construction. Failed source339 and its images/results are preserved;
 its ASan16 and closure are unrun. Reviewed repair173adf is cherry-picked as0b15:
 exactly two pre-TRACK NULL stores, a context comment and one origin/data test.
-All four fresh make-only build/audit/cleanup receipts pass. Earlier
+All four fresh make-only build/audit/cleanup receipts pass. Fresh origin proof,
+origin/data regression, affected modules and tail ownership independently pass.
+At19:44PDT, the original debug stress selection returns PASS3,116/113 with zero
+fallback; independent terminal review, ASan16 and closure remain. Earlier
 selective ASan16 and three fulls pass, but final debug stress fails; its closure
 is unrun. The actual union must qualify before landing.
 

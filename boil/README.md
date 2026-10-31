@@ -44,10 +44,14 @@ The plan now explains actual root APIs/data structures and the staged shared
 interfaces for regions and writable slots. Native-cleanup source70977878 passes
 independent review, including removal of obsolete deallocator ceremony; native
 composition/qualification waits for selective death. Selective ASan16 passes4,027; release and debug-normal fulls each pass51,241
-tests with zero fallback. Debug-kill full also passes51,241; stress/closure remain.
-Native cleanup and reviewed scanner sourceb9d829 will compose after selective
-landing and share one independently reviewed qualification ladder, avoiding
-two successive full campaigns. Storage work follows their measured result;
+tests with zero fallback. Debug-kill full also passes51,241. Final debug stress
+found a real warning-context bug: delayed coroutine cleanup under a restricted
+frame loses its warning and raises `KeyError('__import__')`. The deterministic
+probe confirms it; selective qualification remains FAIL and closure is unrun.
+The warning repair, selective processing, native cleanup and reviewed scanner
+sourceb9d829 will compose and share one independently reviewed qualification
+ladder. Earlier component passes remain evidence for those exact components.
+Storage work follows the union's measured result;
 existing mimalloc page batching is the first investigation if returns remain
 costly, while a region requires compact metadata and demonstrated benefit.
 [Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)

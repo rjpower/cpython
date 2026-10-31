@@ -57,15 +57,21 @@ slices. Current native gates remain finite and source-frozen; later branches
 merge the landed integration before final qualification. Report broad performance
 after the runtime improvements land, with hourly documentation checkpoints.
 
-Named composition ruling, 2026-10-30: after selective death lands, qualify
-native-only cleanup and direct managed scanning as one coherent candidate.
-The native-cleanup owner merges primary, then reviewed scanner source
-`b9d8294123d` in that existing worktree, preserving both histories, and applies
-the small frame-range hunk under its `gc_live.c` ownership. Review the actual
-union independently before building. Include both focused behavior sets and
+Named composition ruling, 2026-10-30, updated after stress failure: qualify
+selective death, its warning-context repair, native-only cleanup and direct
+managed scanning as one coherent candidate. Selective's final debug stress
+found a real diagnostic-context bug; its campaign remains FAIL, with closure
+unrun. A deterministic restricted-builtins collection loses the intended
+never-awaited warning and produces two `KeyError('__import__')` unraisables.
+The native-cleanup owner merges primary, frozen selective source94ae and
+reviewed scanner source`b9d8294123d` in its existing worktree, preserving all
+histories, and applies the small frame-range hunk under its `gc_live.c`
+ownership. The selective owner authors the warning repair in separate owned
+files; it joins only after independent source review. Review the actual
+union independently before building. Include all focused behavior sets and
 all applicable ordinary/debug/ASan/tail/root obligations in one source-frozen
-ladder. This replaces two successive builds/full-suite campaigns; it does not
-reuse either slice's source-only checks as native qualification. Resolve any
+ladder. This replaces successive builds/full-suite campaigns; it does not
+promote component passes or source-only checks to union qualification. Resolve any
 code conflict by semantic review. Only the coordinator authorizes this named
 composition; ordinary cross-lane merges remain prohibited. Land the union once
 and reconcile both topic records afterward.
@@ -441,9 +447,11 @@ exception and requires its own reconciliation. Primary publication waits for
 both smoke results; inherited final-GC/performance debt remains open.
 
 Coordinator landing ruling, 2026-10-30: the same project-prose-only rule applies
-to selective-death qualification source94ae1b1d4a2. Complete its finite
+to the eventual qualified GC union. The earlier proposed selective-only landing
+is superseded by the named composition above; source94ae is not qualified.
+Complete the final union's finite
 qualification, closure and independent landing review first. Prove the actual
-merge changes only enumerated project Markdown paths under `boil/` relative to that source;
+merge changes only enumerated project Markdown paths under `boil/` relative to its frozen source;
 runtime/test/tool/build/generated inputs must remain identical. Bind the actual
 merge separately from frozen release/debug/ASan native identities, and run one
 fresh post-merge smoke per release/O1-debug configuration using those qualified

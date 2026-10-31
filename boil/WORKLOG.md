@@ -5333,7 +5333,7 @@ Debug-normal selective full now terminal PASS:51,241/3,739skips,60,800collection
 follow. Source94ae and products stay frozen. gc-designrev4 and handover73
 contain review35 reflection; primary remains runtime75e8 pending landing.
 
-### 2026-10-30 17:28 PDT — one cleanup/scanner candidate; storage by measured cost
+### 2026-10-30 17:25 PDT — one cleanup/scanner candidate; storage by measured cost
 
 Selective debug-kill full passes51,241/3,739skips,60,778collections/0fallback/
 3report-onlyunpinned; result9f126439 and cleanup3b0c7dba independently replayed.
@@ -5357,3 +5357,29 @@ Regions stay conditional on measured allocation/locality and compact metadata:
 16-byte cells cannot justify24–32-byte records merely to obtain bump allocation.
 No batch/region code or new speedup is claimed. PROCESS records prose-only
 selective merge reconciliation; two fresh qualified-product smokes precede push.
+
+### 2026-10-30 17:33 PDT — real warning-context bug; qualify one final GC union
+
+Selective debugstress fails validation despite native exit0: asyncgen is
+ENV_CHANGED from two unraisable KeyError('__import__') reports for one never-
+awaited coroutine. Failure capsule287d7efd retains12 refs and independently
+replays3,105/113,10PASS+1ENV_CHANGED,37,714collections/0fallback. No closure,
+retry or selective landing follows. Source94ae and products remain intact.
+
+One deterministic ordinary-API probe confirms the mechanism without asyncio:
+under disabled automatic GC, drop an unawaited coroutine and collect from a
+lambda whose legitimate builtins dictionary is empty. Expected RuntimeWarning
+is lost; two import KeyErrors are reported. Result83123698/postcleanup PASS
+preserve actualoff/N0 and original products. Warnings retrieval imports using
+the interrupted frame's builtins, so delayed cleanup can inherit an unrelated
+restricted namespace. The two reports can come from the helper and fallback,
+not two finalizer deliveries. Namedtuple constructors provide this valid context.
+
+Roots owner will repair runtime-owned warning-module retrieval with cached
+module lookup/dynamic attrs and deliberate absent-module import semantics;
+stats independently reviews it. No test suppression or forced close hides it.
+Coordinator supersedes selective-first landing: native owner composes reviewed
+selective/native/scanner histories, then reviewed warning repair, and freezes
+the actual union for one qualification. This avoids qualifying successive
+intermediate combinations while preserving failed history and all backend,
+lifetime and external-behavior obligations. No union native run has begun.

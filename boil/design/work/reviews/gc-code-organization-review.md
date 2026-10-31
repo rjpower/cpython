@@ -1,7 +1,7 @@
 # GC code organization and root contracts
 
 Source review at primary `9c3c0d574246`, 2026-10-30. No runtime edit, build,
-native test or timing. This supplements [architecture §7](../gc-architecture-next.md#7-code-design-and-the-interfaces-we-will-improve).
+native test or timing. This supplements [the current root/code contracts](../gc-architecture-next.md#gc-code-and-data-structures).
 
 The current root mechanism is small and useful. Keep its two lifetime models,
 the common traversal wrapper, contiguous scratch arrays and rooted callback

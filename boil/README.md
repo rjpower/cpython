@@ -34,7 +34,7 @@ copying nor a nonmoving minor that retains the same corpse work is a required
 preliminary stage. Stability and age are separate choices. Keep 32 MiB major
 headroom; no young collector or copying backend is implemented yet.
 
-The [Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
+The [current design](design/work/gc-architecture-next.md#gc-code-and-data-structures)
 explains frame-array roots, sparse durable registrations and direct managed
 scanning. The [code organization review](design/work/reviews/gc-code-organization-review.md)
 and [interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)

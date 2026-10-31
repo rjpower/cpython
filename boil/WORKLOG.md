@@ -5707,3 +5707,18 @@ received a metadata-only repair. Source-only scanner retirement preserves ten
 entries/71,843 bytes in archive aa5551f5 and pushed b9d history. Serving, parent,
 upstream, selective exact-path evidence and unrelated user work are preserved.
 Next hourly documentation checkpoint: 21:44 PDT; material results sooner.
+
+### 2026-10-31 — concise current-state GC/interpreter design
+
+Rewrote gc-architecture-next around a short TLDR and a separate detailed plan.
+The current state, aggregate/per-row parity gaps, useful young allocation/bulk
+reclamation milestone and parallel interpreter attribution now lead. Removed
+old candidates, superseded proposals, qualification logs and historical tables
+from the design narrative; linked measurements and source/landing records retain
+the evidence. Roughly 15% aggregate throughput closes the measured geometric-
+mean gap, while generator/coroutine gaps need about 66%/62%; no general 2x claim.
+
+Updated section links and architecture/root/generation summaries to match.
+Independent numeric/clarity review cleared the claims, with wording fixes for
+sample categories and non-rooting lifecycle metadata. Documentation only;
+no runtime, benchmark or qualification changes. Original user edits preserved.

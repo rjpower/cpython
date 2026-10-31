@@ -1,745 +1,166 @@
-# GC performance: measured costs and implementation plan
+# GC and interpreter performance: current state and plan
 
-Coordinator decision, 2026-10-30, replacing revision 1 after review 33. The
-supported Linux/main-interpreter/GIL collector is landed in `75e8a1e0c01`.
-Selective death processing, native-only generator cleanup, direct managed
-scanning and warning/origin repairs are now qualified and integrated as one
-reviewed change. The earlier selective-only comparison improved coroutine
-throughput **30.9%**, with smaller, noisier changes on the other rows; it does
-not measure the final union. The combined change is now measured below.
-Restoring reference counting remains a valid architecture alternative, while
-current results support retaining tracing and fixing its repeated heap work.
+Updated 2026-10-31. This is the current recommendation. Measurement history,
+qualification records and implementation detail live in the linked documents.
 
-Current checkpoint, 2026-10-30 20:44 PDT: **GC improvements are landed, pushed
-and measured** at integrationaee46/source0b15. Final50054725/382refs and both
-postmerge smokes clear independent review. Performance88bf6c7f/550refs clears
-raw, finite-outcome and phase review. [Full report](gc-post-cleanup-performance.md).
+## TLDR
 
-| Current result | Measurement |
-| --- | --- |
-| All 29 versus matched upstream |0.871038× throughput;7 faster/22 slower; serial samples and wide spreads on some rows |
-| Same-fork combined gain |Coroutines1.417×; comprehensions 1.621×; generators 1.085× with overlapping ranges; Richards 0.987× |
-| Remaining sampled roots/closure |Coroutines10.75%; comprehensions5.96%; generators11.55% |
-| Remaining object inventory/dead classification |12.14% /7.28% /4.46% respectively |
-| Remaining sweep work |9.60% /5.26% /3.95%; includes dispatch/storage, not free() alone |
+- **Landed:** GC fixes, direct managed scanning, register IR and eight-byte
+  tagged values. No nursery yet.
+- **Current result:** 0.871× upstream throughput over 29 workloads. Aggregate
+  parity needs about **15% more throughput**; generators/coroutines need roughly
+  **66%/62%**. Simple int/float diagnostics already show large wins.
+- **Next GC change:** one useful young-space path covering generator/coroutine
+  objects and frames, with cheap allocation and bulk reclamation. Avoid repeating
+  per-object bookkeeping for safely disposable garbage. Copying is optional.
+- **Parallel interpreter work:** attribute the remaining cost, then simplify
+  shared frame/call/value interfaces where it matters. Small dispatch cleanups
+  cannot yet be credited with closing these gaps.
+- **Parity++:** extend existing value/arithmetic wins to calls, containers and
+  library boundaries, while reducing memory use. Roughly 2× remains guidance;
+  whole-suite 2× is not a prerequisite for JIT work.
 
-**Revised implementation decision:** one useful common-young allocation and
-reclamation path, detailed in [the next milestone](gc-young-space-next.md).
-Source review shows generator/coroutine objects include their frames in one
-allocation. Moving only cells/tuples misses those important sources; a nonmoving
-minor can retain the same O(dead) inventory and sweep. Neither is a mandatory
-preliminary collector. Cover the relevant allocations and safe bulk recycling,
-reuse the current major/lifecycle engine, and add copying where writable-alias
-contracts and measured coverage justify it. Generationality and movement are
-separate capabilities. No young collector is implemented yet.
+## Detailed plan
 
-The source ledgers and region packet remain interface/constraint inputs, rather
-than required inert foundations. Keep32 MiB major headroom. The following older
-selective-only and parent/upstream measurements retain their original identities;
-they are not the final union's score.
+### Where we are
 
-## 1. What we measured
+Runtime integration is `aee46aacae2`, qualified source `0b15b4bbc9b`. Scoped
+qualification, ASan, closure and both postmerge smokes passed independent review.
+Selective death processing, native-only generator cleanup and direct managed
+scanning are implemented. All measurements below have JITs off and use matched
+GCC/O3 build policy with upstream, not its fastest production configuration.
 
-The historical [matched 29 baseline](pre-I-post-GC-timing.md) was **0.8243× upstream
-throughput** geometrically: 21 rows slower, eight faster. Coroutines,
-comprehensions and generators are 0.449×/0.510×/0.574×; float, Richards and
-nbody are 2.039×/1.866×/1.668×. These are release interpreter results, all JITs
-off. The new four-row result does not replace that aggregate.
+| Workload | Our throughput / upstream | Gain needed from here for parity |
+| --- | ---: | ---: |
+| 29-workload geometric mean | 0.871× | 1.15× |
+| Comprehensions | 0.847× | 1.18× |
+| Coroutines | 0.618× | 1.62× |
+| Generators | 0.603× | 1.66× |
+| Richards | 1.886× | Already ahead |
 
-### Unprofiled selective-death comparison
+This is an uneven performance profile, not a universally slow interpreter.
+The same-fork comparison shows large coroutine/comprehension gains, an uncertain
+8.5% generator gain with overlapping ranges, and a 1.3% Richards regression.
+Five serial samples per arm provide descriptive ranges, not confidence intervals.
+The aggregate gap is a geometric-mean comparison, not a weighted application cost.
 
-The candidate classifies actual weakref/finalizer/buffer work once, using
-existing dead-record bits and stage guards. It preserves graph connectors,
-resurrection, OOM rollback and callback policy; it adds no registry or scheduler.
-Source `10d8773815c` includes implementation `788695e3` and corrected behavioral
-tests `69c34fb1`. The O3 candidate is compared with qualified source `4da292b1`,
-ordinary native `3c6`. Both use GCC 15/O3, frame pointers and eval `-fno-gcse`,
-without PGO/LTO/BOLT, debug, statistics, JIT or tail dispatch.
+### 1. Make common allocation and reclamation cheap
 
-| Workload | Parent median ms/run() | Candidate ms/run() | Parent/candidate throughput |
+The remaining collector cost includes these substantial components:
+
+| Exclusive sampled CPU | Coroutines | Comprehensions | Generators |
 | --- | ---: | ---: | ---: |
-| Coroutines | 219.667 | 167.858 | **1.309×** |
-| Comprehensions | 205.070 | 193.040 | 1.062× |
-| Generators | 104.795 | 97.200 | 1.078× |
-| Richards | 61.635 | 62.567 | 0.985× |
-
-Eight fresh processes, one warmup and five serial samples per process produce
-40 retained values, with arm order alternating across rows. These are correlated
-samples, not five independent process pairs. Coroutine ranges do not overlap;
-the other rows' ranges overlap. The coroutine elapsed reduction is **23.6%**;
-30.9% describes throughput, not elapsed reduction. Independent replay reproduces
-all medians from raw stdout. The [163-reference completion index](../../../../boil-gc-selective-death/build/selective-death-paired-four/paired-completion.json)
-has SHA256 `34033f1352e2979760c6587a80db293c3a74d12ae4d35439ccab1931cd40a4a7`.
-
-### Native profiles, hardware counts and memory
-
-A separate finite batch uses **13 processes**, not 100 repeated suites:
-qualified fork at32/64 MiB on four rows, upstream defaults on four rows, and
-candidate32 MiB coroutines. Each performs one warmup and 50 hot calls of the
-registered workload. `perf record` samples user CPU at 199 Hz with frame-pointer
-call chains; `perf stat` counts user cycles/instructions. FIFO acknowledgements
-enable both around the hot calls. Analysis filters the actual PID and monotonic
-hot boundaries; every sample belongs to one exclusive bucket. All13 streams
-reconcile with raw sample records, with zero lost/excluded samples. Hardware
-counts have 100% running coverage. GC remains enabled; verifier/stress/extras
-are off, and all fork runs report zero root fallback.
-
-| 32 MiB/default condition | Hot seconds | Collections | Timed GC seconds | Cycles, billions | Instructions, billions | Peak RSS, MiB |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Fork coroutines | 12.294 | 301 | 6.022 | 50.08 | 85.275 | 67.35 |
-| Selective-death coroutines | 8.729 | 301 | 3.302 | 37.21 | 79.338 | 67.50 |
-| Upstream coroutines | 4.819 | 0 | 0 | 20.38 | 58.731 | 16.17 |
-| Fork comprehensions | 12.430 | 115 | 6.214 | 53.43 | 84.954 | 84.45 |
-| Upstream comprehensions | 5.554 | 0 | 0 | 23.34 | 58.351 | 19.35 |
-| Fork generators | 5.509 | 59 | 1.574 | 23.29 | 44.351 | 74.12 |
-| Upstream generators | 3.036 | 0 | 0 | 12.78 | 35.024 | 28.24 |
-| Fork Richards | 3.211 | 0 | 0 | 13.70 | 35.388 | 37.06 |
-| Upstream Richards | 6.275 | 1 | 0.000158 | 26.89 | 53.942 | 16.31 |
-
-GC seconds cover mark, classification, retention, ordering and sweep; they
-exclude later queued Python callbacks. RSS is whole-process peak, not hot-only
-live memory. PMU boundaries include a little control work around the hot window.
-Upstream's zero collections means zero cyclic collections: ordinary reference
-counting and destruction still run. Setup, code and allocator differences remain;
-this is a matched interpreter comparison, not an isolated RC toggle.
-
-The candidate keeps 301 collections and essentially the same RSS, while timed
-GC falls **45.2%** and instructions **7.0%**. This corroborates the unprofiled
-win without attributing the entire elapsed change to an instruction count.
-The candidate still takes 8.729s versus upstream 4.819s on this profile; parity
-has not been demonstrated. Coroutine cycles/instruction fall from0.587 to0.469
-with selective death, versus upstream0.347. The deficit includes both extra
-instructions and more cycles per instruction; no cache-miss counters were
-collected, so a locality explanation remains a hypothesis.
-
-The [97-reference native index](../../../build/checkpoint-i-current-cost-attribution/native-comparison-v1/completion.json)
-(`9ef2649b698565b56f73fc2e95809a220d4c155dc3c46bccd4f04c9788698598`)
-contains raw perf data, counters, source/product witnesses and cleanup checks.
-[Disjoint analysis](../../../build/gc-lifecycle-review-analysis/analysis.json)
-(`5016ed981ec549c88b03ba226cf8a2f4bba9ee1a17371fbebea200a0a1e17019`)
-and the [independent lifecycle review](reviews/gc-lifecycle-cost-and-contract-review.md)
-retain all 13 rows, decoding rules and limits. These build artifacts are retained
-locally; the tracked reviews preserve the useful tables and interpretation.
-
-## 2. Where time goes, and where the design wastes work
-
-The current collector allocates with mimalloc, records initialized object starts,
-and charges gross requested object/PyMem bytes, including full realloc requests.
-With the GIL held, collection captures supported roots, marks the reachable
-heap, inventories unreachable objects, handles weakrefs/finalizers/hooks and
-retains their closures, orders necessary native teardown, then frees storage.
-A rooted interpreter-wide drainer delivers queued callbacks at safe points.
-Every automatic collection inspects the whole heap.
-
-The following percentages are **exclusive sampled user CPU**, not inclusive
-stacks, callback counts or exact wall times. Mark includes heap enumeration and
-classification. A nearest recognized frame assigns each sample once; an inlined
-`collect_pass` ancestry without a narrower phase remains ambiguous.
-
-| Phase | Fork coroutine 32 | Candidate coroutine 32 | Fork comprehension 32 |
-| --- | ---: | ---: | ---: |
-| Mark/enumerate/classify | 17.63% | 22.71% | 8.69% |
-| Finalizer eligibility | 4.51% | — | 2.23% |
-| Finalizer ordering | 0.21% | — | 9.05% |
-| Retain finalizer closure | — | — | 13.07% |
-| Other finalizer preparation | — | — | 0.28% |
-| Weakref stage | 5.15% | — | 2.92% |
-| Destroy-hook selection | 3.92% | — | 2.48% |
-| Sweep/storage release | 8.30% | 8.13% | 5.77% |
-| Native teardown under sweep | 3.45% | 4.94% | 1.26% |
-| Other collector | 5.32% | — | 2.44% |
-| Callback drainer subtree | — | — | 4.06% |
-| Ambiguous collect/drain ancestry | 1.62% | 1.86% | 2.27% |
-| Residual user CPU | 49.87% | 62.37% | 45.47% |
-
-A dash means no resolved samples in that bucket, not literally zero work.
-Shares change denominator when total runtime falls. Root/transitive-mark timers
-are inside GC, not an additional charge. Unresolved physical libc leaves retain
-resolved ancestry; they are not guessed to be memcpy or allocation.
-
-Three avoidable costs emerge:
-
-1. **Testing type capability instead of actual work.** Finished generators can
-   have a finalizer slot yet need no finalization; weakref-capable types often
-   have no registered weakrefs. Repeated negative checks were expensive. The
-   measured selective-death patch removes much of that work.
-2. **Treating native frame cleanup as Python-capable finalization.** The
-   comprehension workload leaves ordinary generator expressions suspended
-   through short-circuiting `any`. Their frames need cleanup. Some already
-   satisfy `gen_close`'s existing clear-only proof, yet collection retains and
-   orders them as if they must execute Python. Eligibility, ordering and closure
-   retention total **24.36%** of sampled CPU; delivery is 4.06%. That selects the
-   next distinction. It is a target cost, not a forecasted24% speedup.
-3. **Paying death processing for every temporary.** Whole-heap enumeration,
-   dead-record construction and per-object recycling remain even after empty
-   stages disappear. A nursery can make storage reclamation proportional mainly
-   to survivors, while genuine native cleanup remains explicit.
-
-We have not measured expensive user weakref callbacks here. Calling this a
-“callback performance problem” obscures the preparation and no-op costs.
-
-## 3. Required lifetime guarantees and choices we made
-
-| Required behavior | Current implementation choice and next action |
-| --- | --- |
-| A surviving callback-bearing weakref is dead before notification; callbacks on one referent run newest-first; exceptions are reported. | Keep invalidation before storage reuse, then deliver rooted notifications at safe points. |
-| Callback-free weakrefs can remain usable through finalization/resurrection in our pinned upstream. | Preserve that distinction; after resurrection, later death must clear the surviving references correctly. |
-| Finalizers see valid objects; resurrected graphs remain usable. | Keep required storage alive. The fork's global referrer-before-referent finalizer DFS is a stronger policy than Python's unspecified cyclic-finalizer order. |
-| Native cleanup can read referents, flush a stream or release a live buffer acquisition. | Preserve those actual dependencies until teardown completes; storage remains intact while a consumer can use it. |
-| Delivery remains safe under reentry and ordinary threads. | Keep the simple single rooted drainer for now. A global FIFO/single drainer is our policy, rather than a general Python API guarantee. |
-
-Python explicitly leaves cyclic finalizer ordering unspecified. That permits
-simpler ordering for Python finalizers, but does not make a raw stream safe to
-free before a buffered writer finishes using it. Our first change removes
-*unneeded participants*, preserving the existing resource guarantees; the next
-native-only cohort avoids finalizer preparation altogether when nobody can
-observe it. The [lifecycle specification](https://docs.python.org/3/c-api/lifecycle.html)
-and [pinned upstream weakref rationale](https://github.com/python/cpython/blob/321925c92c9e67864cafa1566840927f6f07e90a/Python/gc.c#L779-L787)
-are the semantic references.
-
-The dead array is a contiguous inventory. Traversals follow object edges when
-needed; there is no permanently materialized callback graph. Modern finalizer
-ordering uses a shared visited set, approximately `O(D+V+E)`; native-first
-ordering adds sorting/searching selected objects. Ordinary dead objects can
-connect two relevant objects, so filtering a cohort must retain those connectors.
-The current sparse weakref table uses expected-constant-time chained lookups.
-Its entries have stable addresses because callers can hold the list-head slot
-across allocations. These are reasonable structures. The first gains come from
-less work, rather than replacing everything with a new graph representation.
-
-### A simpler weakref path
-
-We will keep the sparse registry, select actual registered work and preserve
-separate invalidation/notification. Java similarly clears weak references when
-weak reachability is established and allows later queue notification; Python's
-callback-free/resurrection rules still determine our exact phases.
-[Java WeakReference](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/ref/WeakReference.html)
-provides that architectural comparison.
-
-If a weakref-rich residual profile shows clearing itself is material, add a
-private bulk-clear helper using the already captured registry head. Today each
-cleared weakref can repeat the lookup. The helper will preserve locking, entry
-lifetime, newest-first order and OOM preparation before irreversible clearing.
-The first nursery pins an object when it gains a weakref, avoiding a relocation
-handle table or a new resurrection-identity mechanism. This is a concrete small
-migration boundary, with weakref-heavy coverage measuring its cost.
-
-## 4. Allocation policy: retain32 MiB while reducing actual work
-
-After a collection the allowance is `max(32 MiB, last_live_object_bytes)`.
-This is gross new-allocation headroom, not total heap, nursery size or RSS.
-The32/64 MiB experiment sets the floor before setup/warmup in both arms, using
-`gc.set_threshold`; it performs no forced collection. The setter's initial
-limit and the subsequent post-collection formula are recorded separately.
-
-| Workload | Instructions saved at64 MiB | Peak RSS32 →64 MiB | Lifetime max pause32 →64ms |
-| --- | ---: | ---: | ---: |
-| Coroutines | 3.24% | 67.35 →102.43 | 33.65 →42.06 |
-| Comprehensions | 1.66% | 84.45 →145.77 | 70.26 →118.00 |
-| Generators | 6.98% | 74.12 →136.70 | 48.34 →67.42 |
-
-Collections roughly halve, but peak RSS rises52–84% for modest instruction
-reductions. Richards has no hot GC and identical instructions in both arms,
-yet 17.76% wall variation: this single sweep cannot establish stable budget
-wall-time benefits. Lifetime maxima include earlier process activity; they
-are not hot pause distributions. **Keep32 MiB as the current default.** It is
-not proven optimal; increasing it is less attractive than the demonstrated
-same-memory reduction in work.
-
-Comparable runtimes separate quantities that our current policy combines:
-
-- [PyPy](https://doc.pypy.org/gc_info.html#environment-variables) uses a nursery
-  sized around half last-level cache,4M fallback; its major threshold defaults
-  to 1.82 times previous major live memory, with threshold growth capped at 1.4.
-- [Go](https://go.dev/doc/gc-guide#GOGC) targets total heap
-  `L + (L + roots)*GOGC/100`, default 100, with a4 MiB minimum total target.
-  Its guide's simplified CPU model omits sweep cost, which is material here.
-- [BDWGC](https://www.hboehm.info/gc/gcdescr.html) compares allocation since GC
-  against heap/free-space-divisor, adjusts for root/fragmentation costs, and
-  integrates lazy sweeping with allocation.
-
-Those constants are not interchangeable with our32 MiB gross-allocation floor.
-For the actual minor prototype, start with a declared **8 MiB experimental
-nursery**: CPU0's last-level-cache group on this Ryzen 3800X is16 MiB. Record
-survival, pinned bytes, slack, pauses and RSS before choosing a production size.
-Major allocation debt and promotion/old-space pressure remain separate. A
-finite major allowance collects old garbage even during zero-promotion traffic.
-
-## 5. Landed changes and the next implementation
-
-### A. Select actual death work and distinguish native-only cleanup
-
-Selective death processing, native-only cleanup, direct managed scanning and
-the warning repair are implemented in reviewed program source `4d8e690f483`.
-Candidate33944 adds exact decoder/libc effect declarations and critical tool
-regressions; its program C/headers remain identical. Successor0b15 adds the
-two constructor initializations and origin/data regression. The explicitly
-scoped composite is qualified, landed and measured in the report above. Preserve the earlier selective campaign's stress failure:
-delayed warning retrieval inherited a restricted frame's builtins, lost its
-warning and reported import KeyErrors. The repair now resolves current modules
-and uses explicit interpreter import semantics; it does not suppress the test.
-The corrected plain-weakref/resurrection oracle and original failed expectation
-also remain in the record.
-
-The implemented [native-cleanup slice](gc-native-cleanup-next.md) shares
-`gen_close`'s existing side-effect-free eligibility check:
-exact ordinary generator, suspended frame, no escaped frame object, safe
-RESUME-depth state and no unwind monitoring. It classifies the entire dead set
-and uses the native cohort only when there are no actual Python-capable finalizers,
-registered weakrefs, hooks, buffer/read-before-free dependencies, old queued
-work or active observers. Other collections use the existing path.
-
-All fallible preparation and whole-cohort revalidation precede frame clearing.
-The commit interval performs no allocation, Python execution or
-thread detachment. It clears each frame once, then uses normal deallocation
-and accounting. This preserves OOM rollback before commit and avoids inventing
-rollback after irreversible cleanup. Behavior checks cover finally/delegation,
-resurrection, weakref, escaped-frame, monitoring and payload reclamation.
-Then reuse the bounded comprehension/generator comparison and report observed
-native-clear execution/CPU cost and the admitted scope. Sampled execution does
-not establish an exact admission rate. The distinction must earn its benefit
-without widening semantics.
-
-### B. Make common young allocation and dead-storage recycling useful
-
-Implement [the combined young-space milestone](gc-young-space-next.md), using
-one age/boundary/lifecycle protocol. The new captured stacks separate roots plus transitive
-closure from allocated-block inventory/dead classification: coroutine inventory plus sweep alone
-is21.74% of sampled CPU; comprehensions12.54%; generators8.41%. These shares
-are not allocation ages. A minor that inventories the same young corpses saves
-unknown old work and adds barriers/native-owner scanning. A region under full
-marking also leaves that journal cost intact.
-
-The first useful admission must cover exact generator/coroutine allocations
-and embedded frames, alongside safe managed layouts. Keep their addresses
-stable where that avoids an unnecessary relocation contract. Track pending
-lifecycle work compactly and earn bulk discard of strictly eligible completed
-storage; suspended generators still need the existing native-clear proof.
-Required cleanup, weakrefs, hooks, observers, map invalidation, debug/quarantine
-and accounting remain obligations. Recycle only after graph/journal users finish.
-
-Use existing allocator/page knowledge or a compact young-space backend; avoid
-an independent object registry. Public mimalloc heap deletion is not survivor
-promotion into our old heap. Close kind tags, ownership, page transfer/retirement,
-remote frees and thread-exit handling explicitly. Partial-page survivor slack is
-part of the memory result. The [region packet](gc-region-implementation.md)
-retains useful wrapper/publication constraints; its cell/tuple-only full-mark
-experiment is not a required stage.
-
-Land one complete experimental consumer after source review and finite behavior,
-barrier/oracle, memory and matched-performance checks. If it merely moves the
-same inventory work or misses the common traffic, preserve that result and
-revise admission/backend. Do not equate a proof of age or movement with a speedup.
-
-### C. Copy common young objects; keep native exceptions stable
-
-Yes: common objects can use a nursery while opaque, large or resource-bearing
-objects go directly to stable space. Objects already exposed through raw pointers
-must be pinned **in place**; moving them into a pinned pool would already break
-the pointer. Retire pages with pinned survivors into stable-space metadata and
-charge unused space. Allocate known-native/large layouts directly there.
-
-When adding copying inside the useful young space, close these contracts;
-relocation is not a prerequisite for address-stable young collection:
-
-1. **Writable roots and fields.** Add visitors for actual PyValue/object slots
-   in admitted core layouts. Register addresses of actual C locals that survive
-   safepoints, rather than protecting only duplicate values. Every surviving
-   alias must reload/recompute after a safepoint; a derived interior pointer
-   pins its owner or is recomputed. Legacy readonly or
-   ambiguous roots pin targets. The [OCaml C interface](https://ocaml.org/manual/5.4/intfc.html)
-   illustrates registered local/global slots plus barriered field stores; it
-   permits moving GC without adding an indirection to every object access.
-2. **Core stores and constructors.** Add nonallocating old-to-young owner
-   barriers at container, frame, type/shape and runtime stores, using the existing
-   ledgers. Publish only safely traversable constructor prefixes. Partly
-   initialized SHALLOW survivors remain young/protected until traversable, even
-   on retired pinned pages. Commit age and remembered edges before reentrant
-   Python execution. Native writes into core
-   arrays use barriered setters.
-3. **Stable native owners.** Permanently scan all allocated old native owners
-   at each minor, using the authoritative space index. Their outgoing edges
-   retain young objects; readonly edges pin those targets. The list is not a
-   root at a major. This trades explicit native scanning for initially porting
-   every native store; measure that tax and port hot owners later. Complete
-   traversal, constructor safety and GIL-serialized strong-field mutation are
-   admission requirements.
-4. **Relocation and pinning.** Discover all conservative/readonly/native pin
-   targets, including their required pinning closure, before evacuating any
-   object. Otherwise a later raw alias could pin the original after a writable
-   alias was already relocated. Reserve destination/forwarding/map metadata
-   before rewriting references; copy survivors, rewrite writable slots, then
-   recycle dead pages. Pin on address-based identity/hash, weakref registration
-   or buffer export before exposing the address. Test rollback before commit and a complete
-   no-failure relocation commit. The first admitted movable layouts can be cells/tuples;
-   expand to measured common containers and completed frames after their layout
-   proofs, while unknown layouts retain their stable path.
-5. **Minor oracle and major policy.** Compare minor liveness against an
-   independent full-trace oracle before enabling reclamation. Missing-barrier
-   negatives must expose a lost child. Test zero-promotion old cycles, pinned
-   page pressure and resource release. Keep finite major allocation debt and
-   explicit full collection. Region capacity stays separate from major budget.
-
-A small native fixture set accompanies this work: old native owner→young child,
-raw borrowed local across allocation, native→core container mutation, weakref
-resurrection and exported buffer lifetime. Tests check usable data, expected
-live sets, bounded memory and eventual resource release; narrowly scoped unit
-checks cover relocation/barrier invariants. These fixtures become the first
-ports-tree contract examples, then a representative Cython/cffi package exercises
-the actual extension boundary. [The nursery review](reviews/gc-nursery-policy-implementation-review.md)
-contains file-level interfaces and the stable-owner scanning proof.
-
-## 6. Reference counting and the decision after these steps
-
-RC gave prompt acyclic destruction and reuse, naturally amortized across the
-mutator. Our full collector replaces that with repeated heap/death work and
-larger bursts of temporary storage. Removing RC also removed ownership facts
-used for in-place string concatenation and prompt tuple reuse. Historical
-same-fork5b→5c instruction measurements were mixed: Richards 675→520 million,
-go 1624→1176M, nbody 1407→1427M, float 949→1022M. These predate current integration
-and bundle several changes; they establish neither present RC superiority nor
-present parity. The lifecycle review preserves their original context.
-
-In the new upstream coroutine profile, 17.75% of sampled CPU is in non-GC
-deallocator subtrees, versus our large bulk collector charge. Comprehensions
-show 11.50%, generators 4.48%. Inline reference-count updates remain in the
-residual, so these are not complete RC costs. Nursery locality and prompt region
-reuse may reduce the fork's larger temporary working set; that is an inference,
-not a measured cache-miss result.
-
-**Recommendation: keep tracing; A is landed, B is the next material milestone,
-and C adds relocation within that same space when it earns its cost.** The
-new evidence rejects both obligatory nonmoving-first and copying-first proof
-stages. Ruby's barrier-protection boundary and hybrid young/stable collectors
-provide useful comparisons; [the next plan](gc-young-space-next.md) cites their
-primary sources and states this fork's distinct contracts.
-
-RC is compatible with eight-byte tagged values: inline scalars need no counts,
-heap values could carry counts. Restoring it requires count storage plus coherent
-ownership/borrowing rules across frames, containers, calls, native APIs and cycles;
-it is a real architecture branch, not a switch. Reopen that comparison if the
-simplified collector still spends substantial time on unavoidable death work,
-or nursery pinning/native scanning dominates representative workloads. Use a
-bounded matched experiment then, rather than maintaining two ownership systems
-preemptively. After A refresh the current interpreter profile; after the next
-structural gain refresh the 29-row result and commission design reflection on
-remaining call/value/dispatch costs. Roughly 2× remains guidance for simple work,
-with clean orthogonal changes deciding what we keep.
-
-## 7. Code design and the interfaces we will improve
-
-Implementation authorization, 2026-10-30: proceed with the framed design and
-land reviewed increments. The coordinator owns integration and documentation;
-parallel agents qualify the composed GC candidate, independently review evidence,
-and examine interpreter design. The completed
-[independent code review](reviews/gc-code-organization-review.md) verifies
-this source map and the interface direction. Performance is summarized after
-the broad improvements land. Existing measurements above remain at their actual
-source identities until then.
-
-### Roots today: a small mechanism with a lifetime-only contract
-
-`_PyValueRoot`, declared in `Include/internal/pycore_structs.h`, is a linked
-record containing an inline value/object union, a `PyValue *base`, initialized
-length `n`, and `next`. A thread's `gc_trace.value_roots` points to its LIFO
-chain. `Include/internal/pycore_value.h` supplies the push, append, rebase and
-pop helpers. Registration allocates no memory. `_PyGC_TraceVisitThreadState`
-in `Python/gc_trace.c` visits the object-valued entries of every active span.
-
-The normal recipe for a temporary C borrow is:
-
-1. Identify which object/value must survive a call that can allocate or run
-   Python. Reuse a real frame slot or traced owner when its lifetime already
-   covers the call; otherwise push a local span before the call.
-2. Append each initialized value, extending `n` only after storing it. Use
-   `_PyValueSpan_AppendObject` for a raw `PyObject *`, including a numeric box:
-   canonicalizing that box to an inline number would leave its storage unrooted.
-3. Keep the span linked through the last use. Pop it in reverse push order on
-   every success/error exit. If a backing array reallocates, rebase the span
-   before the next collecting call.
-4. Mark a function `Py_GC_PRECISE` only when all surviving references are
-   anchored. The C root checker runs at build time; the stack walker then skips
-   the function's opaque local words. Exercise collection/reentry at the actual
-   lifetime boundary, including kill mode when relevant.
-
-This is reasonably clean for nonmoving code, but manual cleanup paths and copied
-anchors need care. `Py_GC_PRECISE` means “safe to omit conservative scanning,”
-not “all pointer locations are writable by GC.” `_PyValueSpan_ObjectSlot` is an
-existing narrow way for an out-parameter to write a raw object pointer directly
-into an anchored slot. Prefer that existing facility to adding another root API.
-
-For longer-lived non-object storage, `_PyGCRoot` and `_PyGC_AddRoot/RemoveRoot`
-register an array of `PyObject *` in an interpreter's doubly linked list. The
-runtime head lock protects insertion/removal and collection; the caller owns
-the record and storage lifetime. Public `PyGC_AddRoot/RemoveRoot` wrap a single
-actual pointer variable with an allocated registration node. This is distinct
-from a thread-local span and does not make arbitrary mutation thread-safe.
-
-A **heap field is an edge, not a new root**. Add it to the owner's traversal
-using `Py_VISIT` or `_Py_VISIT_VALUE`, including separately allocated backing
-storage. `_PyGC_TraceTraverse` also supplies runtime-owned attribute/type edges.
-A persistent interpreter/thread field belongs in its corresponding root visitor;
-borrowed caches need an explicit weak/invalidation contract rather than accidental
-strong rooting. Tests check usable data while reachable and reclamation after the
-last real owner disappears.
-
-### Data structures and who owns them
-
-| Structure | Definition/use today | Consequence for the next work |
-| --- | --- | --- |
-| `_PyValueRoot` chain | Thread-owned LIFO records over initialized value slots; value helpers register, root visitors read. | Reuse storage and balanced lifetime rules. Add explicit writable-slot visitation for admitted relocation paths; legacy copies/aliases still pin or reload. |
-| `_PyGCRoot` list | Interpreter list of registered object-pointer arrays, protected by the runtime head lock. | Visit actual pointer locations where their alias contract permits relocation; retain pinning for legacy consumers. |
-| Object-start map | Two-level sparse bitmap in `pycore_gc_trace.h`, set on initialized-object publication and cleared before reuse; one bit per eight address bytes, 32 MiB chunks. | Keep authoritative object identity. Region lookup/enumeration must join this contract rather than introduce a conflicting object registry. |
-| `addrset`, `rangelist` | Local open-addressed sets (linear probing, at most half full) and sorted range vectors/binary search in `gc_trace.c`. | Useful scratch/diagnostic structures. The live collector also uses object-header mark/shallow bits; it does not require a hash node per ordinary marked object. |
-| `trace_t` | Per-mark context for roots, heap domain, scratch stacks, range maps and verification diagnostics. | Separate root/heap access from verifier-only policy as real nursery consumers appear; keep one mark engine. |
-| `_PyGCMarkResult` / `_PyGCDeadObject` | Contiguous dead inventory with sizes/kind bits and aggregate facts, plus live/root statistics and domain pin information. | Preserve connectors and actual-work facts. Reuse the inventory for native cleanup instead of adding another object worklist. |
-| `objstack` and ordering scratch | Growable libc arrays in `gc_live.c`; sticky OOM stops traversal and triggers retention/rollback. | Preserve failure semantics. Share a helper only when ownership, failure injection and rollback truly match; no generic container rewrite is required. |
-| `live_call` / `call_batch` | Singly linked libc callback nodes; head/tail batches splice without allocation, with queue roots published before delivery. | Keep the simple drainer. Separate native-only cleanup before objects reach this machinery. |
-| Weakref registry | Stable separately allocated hash entries; each entry owns the head slot of a per-referent doubly linked weakref list. | Stable head addresses matter across allocation. Keep the sparse representation and improve actual-work selection/bulk clearing where measured. |
-| `_PyGCWalkCache` | Per-interpreter open-addressed frame-descriptor cache, invalidated by loader/code-range generations. | Retain opaque-frame fallback and attribution; writable roots are an additional contract, not a reason to delete compatibility scanning. |
-
-Collector scratch uses libc allocation so it neither triggers collection nor
-appears as hidden strong references in scanned managed heaps. Each structure
-has an explicit owner and teardown point. OOM in discovery/preparation retains
-objects; irreversible cleanup begins only after the needed storage is ready.
-These are more important shared rules than a single universal vector/hash API.
-
-Qualification's report-only `unpinned` root metric counts visits to detached
-thread snapshots without a pinned C-frame extent. The collector
-then scans saved registers and stack conservatively; the count can include
-repeated visits to one snapshot. This frame-extent contract is separate from
-the nursery's future object-pinning contract.
-
-### Shared concepts to introduce with implementation
-
-**Reference locations and access.** Today `visitproc(PyObject *, void *)` reports
-child values. The nursery needs visitors over actual `PyValue *` and
-`PyObject **` slots, plus a pin path for readonly/ambiguous references. Implement
-that narrow interface when converting the first root/layout consumers. Reuse
-existing span/root chains and traced owners. Updating a copied anchor does not
-update its C alias; every alias surviving a safepoint must reload/recompute or
-pin the object. Discover all pin targets before rewriting any reference.
-The existing `Tools/cases_generator/call_effects.py` remains the authority for
-allocation versus Python reentry; reuse it in checker changes. Its current
-proof does not certify relocation/reload safety.
-
-**Heap-space access.** `live_page_of`, `live_lookup`, block walking and owner
-queries currently know mimalloc's segments/tags/debug offsets. Add a small
-space-aware lookup/enumeration boundary when admitting the first region layouts.
-It must answer initialized start, extent and owning space for exact/interior
-addresses and enumerate live allocation records. Preserve the current mimalloc
-fast path; region code supplies a second concrete backend, without fabricating
-mimalloc page structures or building a registry of unused allocator plugins.
-
-**Construction publication.** A published object start, a safely traversable
-object and a movable object are different states. Today initialized-start,
-TRACKED and SHALLOW checks encode parts of this distinction. Give allocation,
-constructor completion and promotion named entry points with stated invariants
-as the region backend needs them. Current object-map extension failure is fatal;
-new returnable metadata/evacuation reservation needs an earlier fallible boundary.
-A pinned page does not make a partially built object safely old.
-Metadata/remembered edges must be committed before reentry.
-
-**Lifecycle facts and effects.** Keep actual weakref/finalizer/hook/buffer facts
-in dead records rather than recomputing type capability in every stage. Share
-native cleanup eligibility with its existing operation (`gen_close` first).
-Separate pure eligibility, fallible preparation and nonfailing cleanup. This
-makes the proof local and avoids a second registry of type-specific exceptions.
-
-**Collection transaction.** Keep discovery/retention/preparation distinct from
-irreversible frame cleanup, pointer relocation and recycling. Name the commit
-boundary in the code at each new consumer. Reuse sticky failure/retention before
-commit; require a no-allocation/no-Python/no-detach interval afterward. Callback
-publication is already partly irreversible, so its existing partial-delivery
-contract must remain explicit rather than be called a universal rollback.
-
-### Code organization and landing sequence
-
-`gc_trace.c` currently combines root enumeration, mimalloc address interpretation,
-marking, the historical verifier, live verification/quarantine and diagnostics;
-`gc_live.c` combines scheduling, lifecycle graphs, queue delivery and sweep.
-The boundaries are understandable, but the names/header introduction still
-reflect the original verifier and obscure today's live collector.
-
-We will keep native-only cleanup small in its current files. During region work,
-extract heap-space access with its second implementation; during writable-root
-work, place root declarations/visitors together and keep platform unwind code in
-`gc_walk.c`. Move verifier/debug helpers only when that separation removes real
-dependencies from the hot mark path. Update obsolete comments at those boundaries.
-This avoids interleaving a large mechanical file split with lifecycle fixes.
-
-The landed source composes selective death, warning-context repair,
-native-only cleanup with obsolete deallocator ceremony removed, and direct
-managed slot scanners. The union is qualified and measured. Build useful young allocation/reclamation
-with barriers, stable-owner scans and oracle; add copying within that protocol.
-Slot/scanner and region interfaces can be developed in parallel once their
-field/space contracts are agreed; the region experiment remains conditional
-on common-path coverage and allocator-hook costs. Independent review can examine the next slice while
-the preceding frozen source runs its gates. Runtime branches merge the landed
-integration head before final qualification. PROCESS names the current
-coordinator-approved composition; ordinary cross-lane consumption stays
-prohibited. Release measurements serialize after the broad runtime union
-lands. Its report will include the full interpreter comparison,
-allocation-heavy rows, GC CPU, RSS and pauses. Nursery coverage and pinning
-belong to the later moving prototype; no nursery is implemented in this union.
-
-## 8. Review35: choose GC structures for this runtime
-
-The resemblance to CPython mixes two different things. The live collector no
-longer uses its per-object GC generation links, reference-count copying/subtraction
-or cycle-isolation algorithm. Historical subtraction code remains in diagnostics. `_PyValueRoot`, `_PyGCRoot` and `PyGC_AddRoot` are fork
-interfaces, absent from the pinned upstream source. The inherited part is mostly
-the native object-edge protocol (`tp_traverse`/`visitproc`) and native cleanup.
-Those were useful for establishing complete coverage; they are not the intended
-universal hot path for a moving collector.
-
-### Frame registers already form the common root set
-
-Ordinary IR operations store directly into the frame's `PyValue` array. They
-do not register/unregister each result as a separate root. At collection,
-`_PyGC_TraceVisitFrames` walks pushed frames and active generator/coroutine
-frames; `_PyFrame_Traverse` and `_PyGC_VisitFrameStack` scan their physical slot
-extent and header references. The extent is `co_framesize - FRAME_SPECIALS_SIZE`.
-Slots are initialized before use; temporary slots are cleared as inputs die.
-Extra C spans protect values that are not safely held there, such as newly
-boxed receivers or temporaries across callbacks. One span can cover many values.
-
-We still scan the full slot extent, rather than a final-IR liveness map. Object
-mark bits suppress repeated object traversal, not repeated examination of slots.
-Some conservative compatibility coverage also overlaps precise frame storage.
-A usable physical-liveness map could reduce scanning/retention and clearing
-work, but needs complete final-word effects, alternate/exception entries,
-monitoring and frame-publication proofs. Archived H2 is only a partial decoder,
-not an existing usable map. Keep frame-array roots; pursue a complete map as a
-separate interpreter/root improvement when the remaining profile selects it.
-
-### Linked roots: distinguish lifetime from scan density
-
-An intrusive link is not inherently a bad GC structure. Our long-lived list
-contains **explicitly registered arrays**, not every heap object or frame slot.
-Its embedded nodes support arbitrary lifetimes, stable addresses and constant-time
-internal insertion/removal without allocation. The public wrapper allocates a
-node and removal by slot address currently searches the list, `O(R)` in registered
-records. Scanning is `O(R + S)` for records plus their slots, with pointer chasing
-between records. We have not measured its population or isolated its CPU cost.
-
-| Root family | Current fit | Better alternative when needed |
-| --- | --- | --- |
-| Interpreter registers | Contiguous existing frame arrays; no root-node update on ordinary stores. | Static safepoint liveness maps over these same arrays, rather than another root stack. |
-| Temporary C scopes | Allocation-free local span records; LIFO and initialized-length contract. | A per-thread chunked shadow stack with saved-top scope restoration, if span registration/scanning materially costs time. Reserve chunks before exposure and preserve reentry, detach, raw-box and alias rules. |
-| Durable external arrays | Intrusive interpreter list; arbitrary removal and caller-owned storage. | Stable records in blocks plus a dense active index/handle for removal and scanning if `R` becomes material. Reserve capacity before publication; a growing vector cannot silently replace an allocation-free registration contract. |
-
-The next measurement should distinguish record count, slot count, registration
-frequency and scanning CPU. A large array behind one node is already dense where
-its values live; replacing that node with a hash table would add costs without
-improving the array scan. Conversely, many one-slot persistent roots can justify
-blocks and direct handles. We will change the representation for that workload,
-not retain a linked list as a permanent architectural commitment.
-
-The local/durable lifetime distinction is also present in
-[V8's embedding handle API](https://v8.dev/docs/embed). LLVM documents a linked
-shadow stack as a portable rooting strategy and describes compiler stack maps
-as the lower-overhead alternative when the compiler can provide them.
-[LLVM GC integration](https://www.llvm.org/docs/GarbageCollection.html#the-shadow-stack-gc)
-These are useful tradeoffs, not evidence of our root-registration cost.
-
-### Retain edge knowledge; replace generic callbacks on common layouts
-
-`Py_VISIT` is a small null-check/callback helper, not CPython's cycle algorithm.
-Finding strong references remains necessary in any tracing collector. The useful
-inherited asset is knowledge of which native fields are strong, weak or owned
-elsewhere. The current protocol nevertheless has costs: dispatch through
-`tp_traverse` once per object, a callback for each reference, and precise child
-visitation that still performs allocator/object-start lookup in `live_visit`.
-It also reports values instead of writable locations. Our measurements do not
-isolate those costs from marking/classification; a speedup is not established.
-
-The selected code direction is now explicit:
-
-1. **Managed core layouts use direct slot/range scanning.** Start with the
-   admitted cell/tuple layouts, then frame/value arrays, lists and shape slots.
-   Select a layout once per object; scan contiguous tagged values with inline
-   tag checks and the mark operation visible to the compiler. Pointer-free
-   payloads need no child scan. Preserve type/header and runtime-owned attribute
-   edges alongside payload fields.
-2. **Share slot descriptions across marking and relocation.** A compact exact
-   layout walker supplies actual value/object locations, with initialization
-   bounds and separate weak edges. Instantiate the mark/update loops so that
-   introducing a slot visitor does not merely replace one per-edge indirect
-   callback with another. Use existing shape/value layout facts, adding only
-   the native-layout information they do not contain. Barrier ownership uses
-   the same field boundary; it is not inferred from a raw backing-array address.
-3. **Pinned native layouts keep the traversal adapter.** Their complete strong
-   edges seed minor liveness; readonly targets pin before evacuation. Port a
-   measured hot native family to slot/barrier contracts when useful. This makes
-   `tp_traverse` the compatibility path rather than the universal managed path.
-4. **Separate trusted slots from ambiguous words.** Validated exact managed
-   slots can eventually mark through a simpler path; raw/interior C words still
-   require safe address-to-object lookup. Make publication and slot validity
-   explicit before removing a lookup, with debug/verifier checks covering the
-   stronger contract. Weak fields never become strong merely to simplify a loop.
-
-This is an implementation refinement of the approved writable-slot/nursery
-milestone. The collection transaction, complete pin discovery and native
-resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
-and exact decoder/libc effect repairs; successor0b15 adds only the reviewed
-constructor initializations and origin/data regression. All four fresh build
-audits and finite delta qualification pass; independent LAND clears this integration. Earlier339 fulls
-remain their source-specific evidence, alongside its preserved debug stress failure.
-Root-list replacement and a universal layout-description framework are not
-prerequisites. The [region/code packet](gc-region-implementation.md) records
-where allocator integration costs may favor existing-mimalloc cleanup first.
-The [comparison plan](gc-post-cleanup-performance-plan.md) freezes which existing
-elapsed/profile/arithmetic protocols we will reuse after landing.
-
-The [precise-edge review](reviews/gc-precise-edge-validation.md) identifies a
-smaller possible next cut: trusted managed fields could skip repeated allocator
-lookup for already fully marked objects, while first discovery, SHALLOW upgrades,
-native inputs and diagnostic modes keep the full validator. MARKED also serves
-other lifecycle phases, so any shortcut must belong to the root-mark phase.
-This remains a source-reviewed proposal, selected only if post-landing profiles
-show material repeated-edge cost; it adds no registry or moving-GC dependency.
-
-### Audit lifetime assumptions at their actual boundaries
-
-Debug stress found a second concrete inherited assumption: upstream's cycle
-traversal deliberately omits `cr_origin`, because its tuple/string/int contents
-cannot form a cycle. Our full tracer correctly visits that strong field, but
-the constructors still track the coroutine before origin construction initializes
-it. An allocation inside `_PyCoro_ComputeOrigin` can therefore collect and read
-uninitialized storage. One post-setup N1 probe reproduces the exact abort in
-0.304 seconds; no repeated suite or synthetic corrupt object is needed.
-
-The repair initializes the shared origin/finalizer slot to NULL before tracking
-in both common constructors. Origin computation, error behavior and existing
-branches stay intact. The regression checks useful origin contents and the coroutine's
-returned data while collection occurs during construction. This is the existing
-tracked-object traversal invariant applied locally, rather than a new publication
-framework. It shows why inherited edge knowledge must be reviewed alongside
-initialization and lifetime: a cycle collector can omit acyclic edges that a
-full tracer must retain.
-
-Source339's three fulls and release stress remain their actual passes; its debug
-stress failure remains a failure. The initialization-only successor can use a
-reviewed composite: preserve old images, refresh four build/audit receipts, verify
-the deterministic regression and affected coroutine/generator/GC modules, then
-complete debug stress, ASan16 and closure. Any wider runtime change reopens that
-scope decision. Old full passes must not be relabeled as successor executions.
-
-The warning failure is a concrete example of useful code carrying an unsuitable
-context assumption. Native finalization calls `get_warnings_attr`, which imports
-through the current Python frame's builtins even if the warning module is
-already loaded. Delayed cleanup can interrupt a generated namedtuple lambda
-whose builtins dictionary is legitimately empty. The failed import then repeats
-on the fallback warning path, explaining two errors without proving duplicate
-finalizer delivery. Runtime-owned diagnostics should resolve current
-interpreter modules and use an explicit interpreter import path when loading
-is necessary. Dynamic warning hooks and genuine hook errors still matter.
-
-This calls for a local contract repair, not changing the documented ambient
-semantics of public `PyImport_Import`. Apply the same review question to native
-operations that collection defers: which interpreter state is authoritative,
-which context can vary before delivery, and which cleanup genuinely executes
-Python? Explicit callbacks keep their ordinary Python call semantics. Edge
-coverage, roots and raw-memory lifetime remain separate obligations; this
-failure is not evidence that an object disappeared from the live graph.
+| Roots plus transitive closure | 10.75% | 5.96% | 11.55% |
+| Allocated-block inventory/dead classification | 12.14% | 7.28% | 4.46% |
+| Sweep work, including dispatch and storage return | 9.60% | 5.26% | 3.95% |
+
+A minor collection that still inventories and dispatches cleanup for every
+young corpse preserves much of this work. A moving nursery limited to cells
+and tuples misses the generator/coroutine allocations prominent in these kernels.
+Neither is a sufficient first performance milestone.
+
+Build a complete experimental young-space path with these properties:
+
+1. **Cover the common allocations.** Admit known layouts, including generator/
+   coroutine bodies and embedded frames. Unknown native and resource-bearing
+   layouts use stable storage. Start with addresses stable where that avoids
+   relocation work; make copying an additional capability of the same collector.
+2. **Track actual exceptional work.** Maintain compact, non-rooting lifecycle metadata so
+   completed, safely disposable objects can avoid a full per-object dead journal.
+   Suspended frames, weakrefs, finalizers, buffers and observers retain their
+   required handling. Reserve membership before publication; completion, free,
+   address reuse and allocation failure must leave the index correct.
+3. **Close the age boundary.** Barrier old core stores; scan allocated old native
+   owners for young references. Active frame arrays remain roots. Do not rescan
+   all old managed objects on every minor or register a root on every bytecode.
+4. **Reclaim storage in bulk after required cleanup.** Use the existing object-
+   start map and compact space metadata. Preserve allocator hooks, accounting,
+   debug behavior, page ownership and thread-exit handling. Charge survivor slack.
+   Keep the existing full collector as major collection and the liveness oracle.
+
+The allocator boundary needs explicit engineering: public `mi_heap_delete()`
+does not promote survivors into our old object heap. The first source review
+must resolve page transfer or stable page retirement before admission expands.
+Keep the current 32 MiB major floor; young capacity and bounded major debt are
+separate policy settings, declared before the experiment.
+
+Deliver **one working consumer**, including barriers, lifecycle behavior and
+memory checks. Measure allocation coverage, native scan cost, per-death work,
+RSS and pauses. A proof of age or movement without those savings does not earn
+a default change. The [young-space implementation plan](gc-young-space-next.md)
+contains the concrete contracts and acceptance checks.
+
+### 2. Close the interpreter's remaining shared costs
+
+Run this investigation alongside the collector implementation. Prioritize the
+large generator/coroutine gaps and slower library paths such as serialization.
+Use captured stacks and instruction counts first; collect a bounded additional
+profile only where the current evidence cannot distinguish the costs.
+
+The generator profile spends about 22% of its hot interval inside the GC timer.
+Removing that timed work entirely illustrates only a 1.28× gain, versus the
+1.66× needed in its separate timing run. This is not a transferable forecast:
+queued work is partly outside the timer, and an allocation backend can improve
+mutator cost too. It does show why the investigation must extend beyond that timer.
+Residual sampled CPU is not yet attributed specifically to frame or call overhead.
+
+Select general changes from the measured budget:
+
+- **Frame/call/resume transitions:** remove duplicated work when proven, while
+  preserving initialized roots, ownership and exception state. Argument-window
+  sharing and several compiler/branch folds already exist; build on them.
+- **Native value interfaces:** remove repeated boxing/conversion through one
+  coherent receiver/result convention if it is material. Cover generic,
+  specialized and escaped-method routes together.
+- **Dispatch and feedback:** consume an established type/shape fact once within
+  an operation. Repeated matching on later polymorphic attribute rows is proven
+  in emitted code, but its frequency and cost remain unmeasured; row0 is already
+  optimized. Treat it as a small cleanup until the budget says otherwise.
+
+Keep operations orthogonal. Tagged attribute payloads already exist; merely
+adding a `LOAD_ATTR_INT32` spelling creates no new guarantee. Express useful
+representation facts consistently across producers, consumers and fallback paths.
+
+### 3. Establish parity, then extend the lead
+
+After each material change, rerun the unchanged matched workload set and report
+per-row elapsed ratios, ranges, instructions and memory. Broad parity means a
+credible aggregate near upstream **with the large remaining deficits visible**.
+A higher mean that conceals severe regressions is not a complete result.
+
+For parity++, extend the existing arithmetic/value advantages to calls,
+containers and library boundaries, while reducing GC CPU and excess RSS. Current
+profile RSS is roughly 68–87 MiB on the three allocation-heavy rows; historical
+upstream contexts are 16–28 MiB. Compare memory contemporaneously before claiming
+an improvement. No measured budget currently supports a general pre-JIT 2× promise.
+
+Begin JIT work once the value, frame, root and allocation contracts are coherent
+and the major pre-JIT costs are understood. Whole-suite 2× is not a prerequisite.
+Retain tracing for now: the landed gains support continuing it. Restoring reference
+counting would be a separate ownership redesign and matched experiment, not a switch.
+
+### GC code and data structures
+
+Frame registers already form contiguous root arrays. Temporary C spans use an
+allocation-free LIFO chain; durable registrations link caller-owned arrays.
+These lists do not track every object, and no measured bottleneck justifies
+replacing them now. Cells, tuples and frame values have shared range definitions
+and direct managed marking; native layouts retain the traversal adapter.
+
+Preserve that edge knowledge. Add writable-slot/reload/pinning contracts when
+copying needs them. Share space access and lifecycle-state rules with their actual
+consumers; avoid a large mechanical file split or another object registry first.
+
+### Evidence and implementation detail
+
+- [Measured results and all 29 rows](gc-post-cleanup-performance.md).
+- [Young-space implementation and acceptance plan](gc-young-space-next.md).
+- [Collector source feasibility](reviews/gc-young-space-feasibility.md) and
+  [allocation coverage](reviews/gc-young-space-coverage.md).
+- [Lifecycle and callback contracts](reviews/gc-lifecycle-cost-and-contract-review.md).
+- [Root/code interface map](reviews/gc-code-organization-review.md) and
+  [interpreter review](reviews/interpreter-holistic-review-post-gc.md).
+- [Landing and qualification record](reviews/gc-cleanup-final-landing.md).
+
+Historical comparisons and failed attempts remain in those records, WORKLOG,
+Git history and earlier artifact revisions. They are not part of the current plan.

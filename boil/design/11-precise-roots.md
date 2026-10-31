@@ -7,10 +7,10 @@ on a C stack, and what tier 0 and tier 1 must provide; it retires the
 hack-register rows assigned to 10 and 10a. Moving and the handle
 discipline for C code remain 10b's.
 
-Current boundary, 2026-10-30: the supported Linux/main-interpreter/GIL collector
-retains hybrid roots. The approved [GC implementation plan](work/gc-architecture-next.md#7-code-design-and-the-interfaces-we-will-improve)
-adds writable-slot and pin/reload contracts for a common nursery; precision
-alone remains a lifetime promise. The nursery may initially scan all stable
+Current boundary, 2026-10-31: the supported Linux/main-interpreter/GIL collector
+retains hybrid roots. The approved [GC implementation plan](work/gc-architecture-next.md#gc-code-and-data-structures)
+separates root lifetime from the writable-slot and pin/reload contracts needed
+for future copying; no minor collector is active. The nursery may initially scan all stable
 native owners each minor, while core owner stores use barriers. This explicitly
 revises the all-native-store migration prerequisite in the older generational
 handoff; complete native traversal and serialized strong-field mutation remain

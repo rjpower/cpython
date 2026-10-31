@@ -161,3 +161,8 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   review and remaining feedback. No timing or qualification acceptance.
   [GC oracle review](issues/gc-nursery-adoption/reviews/finite-major-oracle-20261031-v1.md),
   [IR capture](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Accepted exact IR goldens and remaining helper bridge; corrected
+  disassembly, code-object and tracing modules passed. Monitoring stopped at
+  one loop-exit offset assertion. Preserved the failure and idle cleanup;
+  exact-code diagnosis precedes correction, with release/emission still open.
+  [Remaining feedback](issues/interpreter-constant-operands/feedback-results.md).

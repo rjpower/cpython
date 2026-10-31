@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: corrected eleven, full IR and generation passed; six disassembly assertions await classification
+- Decision: corrected disassembly/code/tracing passed; stopped at monitoring offset assertion
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Current test-only candidate: `c76bc5b5a9b4c4ebe546441b5cd416c3c217343a`
 - Runtime tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
@@ -78,8 +78,14 @@ classification precede any golden correction.
 The separate reviewed fixture capture passed at 22:03 UTC. Three strings
 remove a literal load; two are identical. Live jump targets agree with labels,
 and the single removed instruction explains the expected table's offset
-changes. Authorized test-only goldens froze at 22:05 UTC; exact source review
-and remaining-only launch preparation continue, with no compatibility claim.
+changes. Authorized test-only goldens froze at 22:05 UTC and passed independent
+[exact source/output review](reviews/golden-correction-source-outcome-20261031-v1.md).
+Root reviewed the remaining helpers and activated seven rows at 22:08 UTC.
+Disassembly passed 147 cases, code objects 47 with one expected skip, and tracing
+442 with one expected skip. Monitoring stopped after 54 cases on one loop-exit
+offset assertion: actual8 versus expected9. Cleanup passed; release and emission
+did not run. A bounded exact-CodeType observation is being prepared before any
+correction. Earlier failures and unchanged original deadline remain.
 The original deadline remains
 22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
 The [held performance proposal](performance-plan.md) preselects the registered

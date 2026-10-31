@@ -8,7 +8,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / causal controls | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coordinator | First feedback accepted; design temporary force-major and debt-reset controls |
-| IR / golden inventory review | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Preserve validator failure; classify six actual assertions before changing expectations |
+| IR / monitoring offset diagnosis | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Disassembly/code/tracing passed; prove the stopped loop-exit offset before correction |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

@@ -160,3 +160,27 @@ five assignments in `Lib/test/test_dis.py`; all test bodies/readers remain.
 Exact source review and a two-test-file bridge to the original debug image
 precede a remaining-only batch. No failed receipt is rewritten and no complete
 compatibility, release, emission or performance result is credited yet.
+
+### Remaining-v2 execution and monitoring stop
+
+Independent [source/output review](reviews/golden-correction-source-outcome-20261031-v1.md)
+accepts c76 for further feedback. Root's [helper review](reviews/remaining-v2-helpers-20261031-v1.md)
+replayed 144 inputs, the exact two-file source bridge and all 588 debug products.
+Root activated the seven remaining rows at **22:08:21.858606 UTC**, session
+**85999**, retaining the original start/deadline. No old image was relabeled.
+
+Disassembly passed all 147 cases; code objects passed 47 with one expected
+skip; tracing passed 442 with one expected skip. All three terminal validators
+and idle cleanup passed. Monitoring then stopped after 54 cases with one
+failure in `TestBranchAndJumpEvents.test_while_offset_consistency`: four
+branch-left3-to5 events match, but the final branch-right3-to8 differs from the
+hardcoded3-to9 expectation. Actual target return2 and batch failure are retained.
+Root confirmed session85999 terminal exit1; cleanup at 22:09:02.709196 UTC
+records no live target process. Release build, release cases and emission did
+not run.
+
+The loop contains `n += 1`; removal of its literal producer is a concrete
+offset-shift hypothesis. A small exact-original-CodeType observation is being
+prepared without calling the method or nested function. No monitoring oracle
+or runtime change is authorized merely by this hypothesis. Deadline remains
+**22:20:45.868428 UTC**.

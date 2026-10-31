@@ -13,14 +13,15 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 19:15 PDT: candidate `33944d24e55` contains
-the four reviewed improvements below. All early ordinary, sanitizer and tail
-checks pass. Three broad fulls each pass 51,255 tests, and release stress passes.
-Debug stress aborts during coroutine origin construction; the traced origin
-field has not been initialized before an allocating helper runs. Source339 is
-held, with a two-constructor initialization repair in progress. ASan16, closure
-and final landing review remain. Post-landing comparison and integration packets are source-reviewed
-and held; no new whole-interpreter score is claimed.
+Current checkpoint, 2026-10-30 19:30 PDT: successor `0b15b4bbc9b` contains
+the four reviewed improvements and two pre-tracking constructor initializations.
+All four incremental builds and their audits pass. Fresh origin/affected checks,
+debug stress, ASan16, closure and final composite landing review remain.
+Predecessor339's early checks, three fulls of 51,255 tests each and release stress
+are retained at that source. Its debug stress failure exposes the late origin
+initialization; one bounded probe reproduces it and the two-store repair is
+independently source-reviewed. Post-landing comparison and integration packets
+are source-reviewed and held; no new whole-interpreter score is claimed.
 
 This plan supersedes the earlier requirement to ship nonmoving generations
 before movement. The existing generation/store ledgers remain source inputs.
@@ -261,8 +262,9 @@ finite major allowance collects old garbage even during zero-promotion traffic.
 Selective death processing, native-only cleanup, direct managed scanning and
 the warning repair are implemented in reviewed program source `4d8e690f483`.
 Candidate33944 adds exact decoder/libc effect declarations and critical tool
-regressions; program C/headers remain identical. Qualify this union once, then
-merge and measure it. Preserve the earlier selective campaign's stress failure:
+regressions; its program C/headers remain identical. Successor0b15 adds the
+two constructor initializations and origin/data regression. Qualify the explicitly
+scoped composite below, then merge and measure it. Preserve the earlier selective campaign's stress failure:
 delayed warning retrieval inherited a restricted frame's builtins, lost its
 warning and reported import KeyErrors. The repair now resolves current modules
 and uses explicit interpreter import semantics; it does not suppress the test.
@@ -678,10 +680,10 @@ The selected code direction is now explicit:
 This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
 resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
-and exact decoder/libc effect repairs. Both original linked-audit failures remain
-recorded; all early ordinary/ASan/tail checks, three fulls and release stress
-pass. Debug stress exposes the coroutine-construction publication hole;
-source339 is held pending repair and final qualification.
+and exact decoder/libc effect repairs; successor0b15 adds only the reviewed
+constructor initializations and origin/data regression. All four fresh build
+audits pass; finite delta qualification and landing remain. Earlier339 fulls
+remain their source-specific evidence, alongside its preserved debug stress failure.
 Root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
@@ -706,9 +708,9 @@ it. An allocation inside `_PyCoro_ComputeOrigin` can therefore collect and read
 uninitialized storage. One post-setup N1 probe reproduces the exact abort in
 0.304 seconds; no repeated suite or synthetic corrupt object is needed.
 
-Initialize the shared origin/finalizer slot to NULL before tracking in both
-common constructors. Keep origin computation, error behavior and existing
-branches intact. The regression checks useful origin contents and the coroutine's
+The repair initializes the shared origin/finalizer slot to NULL before tracking
+in both common constructors. Origin computation, error behavior and existing
+branches stay intact. The regression checks useful origin contents and the coroutine's
 returned data while collection occurs during construction. This is the existing
 tracked-object traversal invariant applied locally, rather than a new publication
 framework. It shows why inherited edge knowledge must be reviewed alongside

@@ -5585,3 +5585,35 @@ snapshots lacking pinned C-frame extent, followed by conservative register/stack
 scanning. It is not an object count; original raw values are unchanged. The
 GC/code plan now connects this constructor failure directly to Review35's
 question about inherited cycle-GC assumptions. Next hourly checkpoint19:44PDT.
+
+### 2026-10-30 19:31 PDT — initialization successor builds pass; fresh delta checks start
+
+Reviewed two-file repair173adf527d5 is cherry-picked alone onto339 as clean
+0b15b4bbc9b. Exact runtime delta is two NULL stores before tracking, with one
+context comment; the27-line origin/data regression is the only test addition.
+No branches, layout, visitor, frame/queue policy or allocator change. The source
+diff applies cleanly and clears independent review; original one-shot negative
+and all failed339 evidence remain intact.
+
+Verified archive7276117e preserves2,364 old files and four sets of67 internal
+aliases as independent copies; copies are retention evidence, not configured
+images claimed runnable elsewhere. Original configured paths are refreshed.
+All four make-only builds/audits/cleanup independently pass (index3db801b2,
+38refs): actual genobject compilation in each,116 module checks each, fresh
+ELFs, tail293 handler and ordinary native-clear body/FDE checks. Program source
+0b15 is an incremental two-store successor over preserved339/17ef products;
+other unchanged translation units were not described as freshly recompiled.
+
+PROCESS now records the independently reviewed initialization-only composite:
+retain339 full3/release-stress/earlier backend evidence at339, freshly check the
+delta and finish pending work. Q3runtimepacket9885445d/tail8bff84c8 clears
+mechanical review with6,932 inputs and explicit protected origin regression.
+The identical old probe now runs once on fresh O1, then origin1 and whole4
+in release off/debug kill, and fresh tail ownership1. Debugstress11, ASan16
+and closure follow after actual outcomes. No full or release-stress repeat.
+
+Held integration/performance-v2 static preparationf2bcf728/ordinarydad96403 is
+independently source-clear;120 old files remain unchanged. Actual final composite,
+merge, smoke seed, fresh29 workload origins and quiet reservation remain pending.
+No benchmark launch, new score or runtime landing. Updated code/GC status names
+0b15 and keeps339's failure/pass identities explicit. Next hourly19:44PDT.

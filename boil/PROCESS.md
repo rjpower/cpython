@@ -47,7 +47,7 @@ record and is updated at every landing.
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
 The user authorizes implementation/landing of the revised GC design. Parallel
-owners: string_design qualifies candidate33944 (programC4d8e690) in `boil/gc-native-cleanup`;
+owners: string_design qualifies candidate0b15 (programC4d8e690 plus two constructor initializations) in `boil/gc-native-cleanup`;
 stats_design_review independently reviews native/composition/warning source
 and evidence and prepares the comparison plan. Its scanner source is independently
 reviewed by the coordinator and string_design. Roots authored the warning repair
@@ -95,13 +95,29 @@ passes51,255/3,739 with zero fallback and two report-only unpinned records.
 Debug-kill full also passes51,255/3,739 with zero fallback and two report-only
 unpinned snapshot visits; release stress passes3,115/148. Debug stress fails
 with a coroutine origin field observed before initialization during allocating
-origin construction. Source339 stays frozen/HOLD, with original failure and
-postguards preserved; ASan16 and closure are unrun. A focused two-constructor
-repair is in progress. A finite successor may combine these source339 passes
-with fresh qualification of the reviewed initialization-only delta; it must
-state each source/native identity explicitly. Earlier
+origin construction. Failed source339 and its images/results are preserved;
+its ASan16 and closure are unrun. Reviewed repair173adf is cherry-picked as0b15:
+exactly two pre-TRACK NULL stores, a context comment and one origin/data test.
+All four fresh make-only build/audit/cleanup receipts pass. Earlier
 selective ASan16 and three fulls pass, but final debug stress fails; its closure
 is unrun. The actual union must qualify before landing.
+
+Initialization-only successor ruling, 2026-10-30: compose339's three full passes,
+release stress and earlier backend evidence with fresh0b15 delta qualification.
+Keep every source/native identity explicit; old fulls remain339 executions.
+The independently reviewed runtime delta is exactly two NULL stores before
+tracking in the shared generator constructors; later branches, visitors,
+allocators, frame/queue policy and layouts stay identical. Old binaries have
+verified independent archive copies7276117e; configured builds are refreshed at
+their original absolute paths. Require four make-only build/audit/module/CFI
+receipts, old-negative/new-positive origin proof and its unskipped external
+regression, whole GC/generator/coroutine/asyncgen checks in release off and
+debug kill, one fresh tail ownership control, the original debug stress11
+off/N1000 selection, ASan16 kill including the regression, and closure. Preserve
+the failed339 row; no automatic full3 or release-stress repetition. A wider
+runtime change or new failure reopens this finite scope. Independent final
+composite review, actual Markdown-only integration proof and two fresh merge
+smokes still precede push; measurements follow with actual successor bindings.
 
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves

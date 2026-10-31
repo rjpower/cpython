@@ -18,18 +18,19 @@ ordinary-thread/GIL GC milestone. Its qualification, closure and both post-merge
 smokes pass. The [landing review](design/work/reviews/gc-main-only-final-landing.md)
 retains exact source/native identities, failures and support limits.
 
-Current candidate: **33944d24e55**, on `boil/gc-native-cleanup`. It combines
+Current candidate: **0b15b4bbc9b**, on `boil/gc-native-cleanup`. It combines
 selective death processing, native-only suspended-generator cleanup, direct
 managed scanning and the restricted-builtins warning repair. Program C/headers
-are frozen at `4d8e690f483`; later commits add exact decoder/libc effect metadata,
-critical classifier regressions and records. All seven generated outputs match.
-Four builds pass (O1 debug, O3 release, ASan and Clang tail), as do focused and
-affected-module checks and all seven ordinary jobs. All early ASan/tail checks
-also pass. All three broad fulls each pass 51,255 tests, and release stress passes.
-**Debug stress failed** during coroutine origin tracking: a traced coroutine's
-origin field is still uninitialized when origin construction allocates.
-The candidate is held; ASan16 and closure did not run. A two-constructor
-initialization repair and focused regression are in progress. Original
+derive from `4d8e690f483`, with exact decoder/libc effect metadata and two added
+constructor initializations. All seven generated outputs match the original union.
+Four successor make-only builds pass (O1 debug, O3 release, ASan and Clang tail).
+The origin/data regression, affected modules, debug stress, ASan16 and closure
+are next. Predecessor33944 passed all early checks, three broad fulls of 51,255
+tests each and release stress, then failed debug stress on an uninitialized
+coroutine origin field. Its results and binaries are preserved. The successor
+initializes that field before tracking in both constructors; it is qualifying
+as an explicitly reviewed composite, rather than claiming old fulls as new runs.
+Original
 selective stress, two linked-audit and ASan recipe failures remain recorded.
 **This runtime candidate is not landed.**
 
@@ -176,7 +177,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
-| GC performance union | Candidate33944 has all early checks, three fulls51255 each and release stressPASS; debug stressFAIL exposes uninitialized coroutine origin during allocation | Constructor repair/regression and finite successor qualification, ASan16, closure and landing review. No refreshed union performance result |
+| GC performance union | Successor0b15 adds two constructor initializations and an origin/data regression; all four refreshed builds pass. Prior33944 full3/release stress remain at their true source | Fresh affected checks, corrected debug stress, ASan16, closure and composite landing review. No refreshed union performance result |
 | Common nursery and stable native space | Revised measured plan plus allocator, frame, container and runtime-store ledgers | Measure the qualified union; choose justified allocator/space work, then writable slots/pinning, core barriers, scanned native owners and independent minor oracle. No nursery/minors/barriers implemented |
 | JIT, broad movement and package ports | JIT and whole-heap movement deferred; nursery and small native contract fixtures are in the current performance plan | Interpreter checkpointI before JIT; extend package migration as native root/barrier/pinning contracts settle |
 

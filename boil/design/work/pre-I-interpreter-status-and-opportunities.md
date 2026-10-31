@@ -24,10 +24,12 @@ the completed budget experiment. Native-only cleanup and direct scanning are
 now composed with the warning-context repair as4d8e690. Candidate33944 adds proven
 decoder/libc effect declarations after two retained linked-audit failures.
 O1/O3/ASan/tail builds and all early runtime checks pass. All three broad fulls
-pass51,255 tests each and release stress passes. Debug stress fails in coroutine
-origin construction before the traced origin field is initialized; source339
-is held. Constructor repair and final qualification/landing remain before any
-refreshed performance claim.
+pass51,255 tests each and release stress passes on339. Its debug stress fails
+in coroutine origin construction before the traced origin field is initialized.
+Successor0b15 adds exactly two pre-tracking initializations and an origin/data
+regression; all four make-only builds/audits pass. Finite delta qualification
+and landing remain before any refreshed performance claim. This construction
+repair changes no IR handler or call ABI.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
 checks actual source and ranks five clean cuts for post-qualification attribution.

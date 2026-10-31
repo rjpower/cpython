@@ -38,7 +38,7 @@ record and is updated at every landing.
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
 | H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. H1 native62456/tool-test94ab and H2 inert decoder5df/test-only b3e remain unmerged; both checkouts retired with pushed source tags and local evidence. Reopen H1 only for an active Clang-tail target; H2 needs a scheduled usable liveness consumer. No active maps, clearing change or opcode threshold |
-| 7/10b | common nursery and stable native space | Revised GC performance plan supersedes mandatory nonmoving-generations-first. After selective death and native-only cleanup: space-aware region backend, writable roots/fields, core barriers, scanned stable native owners, pinning and independent minor oracle. No nursery/barrier/minor implemented |
+| 7/10b | common nursery and stable native space | Qualify/measure current GC union, then choose justified existing-allocator batching or compact region work; writable roots/fields, core barriers, scanned native owners, pinning and independent minor oracle follow. No nursery/barrier/minor implemented; nonmoving generations are not a prerequisite |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
 | 10b, later | broader evacuation/compaction | Nursery contracts are in7/10b above; whole-heap movement remains separate |
@@ -47,13 +47,13 @@ record and is updated at every landing.
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
 The user authorizes implementation/landing of the revised GC design. Parallel
-owners: roots_audit qualifies selective death in its existing topic;
-string_design implements native-only generator cleanup in `boil/gc-native-cleanup`
-from integration; stats_design_review completed the root/code review and now implements direct
-managed scanners in `boil/gc-managed-scanning`; independent review of the
-preceding frozen qualification remains separate from authoring this new slice. The coordinator owns
-integration/documents and sequences region/writable-slot/minor work after these
-slices. Current native gates remain finite and source-frozen; later branches
+owners: string_design qualifies composed source4d8e690 in `boil/gc-native-cleanup`;
+stats_design_review independently reviews native/composition/warning source
+and evidence and prepares the comparison plan. Its scanner source is independently
+reviewed by the coordinator and string_design. Roots authored the warning repair
+and now performs a read-only interpreter review. The coordinator owns
+integration/documents and sequences storage/writable-slot/minor work after
+measurement. Current native gates remain finite and source-frozen; later branches
 merge the landed integration before final qualification. Report broad performance
 after the runtime improvements land, with hourly documentation checkpoints.
 
@@ -81,22 +81,24 @@ C shadow-stack and durable-root representations by their distinct lifetimes;
 introduce direct managed slot/range scanners with shared mark/update field
 knowledge. Native `tp_traverse` remains an explicit pinned compatibility path.
 This replaces the universal per-edge callback direction, not the strong-edge
-coverage contract. Native-cleanup70977878 clears independent source review and
-includes redundant generator finalizer ceremony removal; final native composition
-and gates follow the selective landing. Existing ASan16/release full pass;
-selective debug-normal is now also passed; debug-kill/stress/closure and
-landing review remain active.
+coverage contract. Native709778, scannerb9d829 and warningb184 are composed with
+selective94ae as4d8e690; source/composition and host root/traversal checks clear.
+The first O1 compile/link/module check passes, but its linked audit rejects an
+outlined generator-close predicate; repair its proven call-effect contract
+before proceeding. No native target credit yet. Earlier
+selective ASan16 and three fulls pass, but final debug stress fails; its closure
+is unrun. The actual union must qualify before landing.
 
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves
 30.9%; the other three ranges overlap. O1-debug focused13 and four affected
-modules pass599 tests/46 skips. Landing qualification/review and merge remain.
+modules pass599 tests/46 skips. Final-union qualification/review and merge remain.
 The [revised architecture plan](design/work/gc-architecture-next.md) records
 all13 perf/counter/RSS conditions and exclusive phase costs. Keep32MiB: doubling
 headroom costs52–84% peak RSS on the three slow rows for only2–7% fewer
-instructions. Native-only generator cleanup is the next code slice; prepare
-its whole-pass eligibility/transaction before introducing a new allocator.
-Then develop common storage reclamation and a movable nursery with stable
+instructions. Native-only generator cleanup and direct scans are implemented
+in the current candidate. Choose common storage work from its measurements,
+then develop a movable nursery with stable
 native space, using writable root slots, core barriers, scanned native owners
 and pinning. The old nonmoving-first sequence is superseded, while its source
 ledgers remain inputs. Current runtime precision and native lifetime contracts

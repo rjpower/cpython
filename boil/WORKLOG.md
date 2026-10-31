@@ -5383,3 +5383,38 @@ selective/native/scanner histories, then reviewed warning repair, and freezes
 the actual union for one qualification. This avoids qualifying successive
 intermediate combinations while preserving failed history and all backend,
 lifetime and external-behavior obligations. No union native run has begun.
+
+### 2026-10-30 17:46 PDT — hourly checkpoint: composed GC source and first build audit
+
+Final candidate4d8e690 composes selective94ae, native709778, scannerb9d829
+and warningb184. All source histories are preserved; actual merges had no code
+conflicts. Independent composition review clears actual-kind gating, full frame
+range semantics and the final warning join. Scanner retains coordinator/string
+independent source review rather than self-clear by its author. Host root checks
+on8C units and early required traverse audit pass.
+
+O1 configure/compile/link and116 module checks pass, but the build's required
+linked audit rejects outlined gen_close_clears_frame as conservatively collecting.
+The owner stops before targets and preserves the failed build/capsule; source
+4d8 remains frozen. Agents inspect its actual NoToolsForUnwind/InstrOparg call
+graph and shared effect metadata; no forced inline or opaque waiver is granted.
+No union native target or performance result is claimed. Focused12 plus retained
+warning5, whole10, release/debug full/stress, applicableASan/tail, closure and
+independent landing review remain. Original selective stress FAIL is retained.
+
+Read-only interpreter review39c1a956 is copied into integration documentation
+without importing runtime changes. IR/compiler/value/call paths match75e8
+apart from the GC range view. Existing inline int arithmetic, value attribute
+loads, compare truth folding and overlapping call frames are present. Five
+ranked cuts cover shared polymorphic shape match, measured native NOARGS
+conversion, constant producer facts, compare/branch contracts and shared frame
+transitions. Source duplication is not assumed to survive compiler optimization;
+H1/H2 remain archived absent a consumer. No IR runtime edit or opcode quota.
+
+README/PROCESS/GC design describe the actual final union and supersede the
+selective-first sequence. gc-designrev5/handover74 publish warning/storage
+reflection; the checkpoint refreshes their source state. Last matched29 score
+remains0.8243; selective coroutine1.309× remains the isolated four-row result.
+Stats prepares reuse of quiet29/paired-four/bounded profiles after landing;
+no benchmark campaign is active. Next hourly checkpoint18:44PDT, with material
+changes reported sooner.

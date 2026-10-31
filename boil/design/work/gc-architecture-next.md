@@ -247,7 +247,7 @@ finite major allowance collects old garbage even during zero-promotion traffic.
 
 ## 5. Three changes, in implementation order
 
-### A. Land selective death processing, then distinguish native-only cleanup
+### A. Select actual death work and distinguish native-only cleanup
 
 The selective patch has an O3 build, independent source/performance review,
 focused 13 behavioral controls and four O1-debug modules passing 599 tests with
@@ -419,8 +419,9 @@ with clean orthogonal changes deciding what we keep.
 
 Implementation authorization, 2026-10-30: proceed with the framed design and
 land reviewed increments. The coordinator owns integration and documentation;
-parallel agents own selective-death qualification, native-only generator cleanup,
-and an independent code/root organization review. The [independent code review](reviews/gc-code-organization-review.md) verifies
+parallel agents qualify the composed GC candidate, independently review evidence,
+and examine interpreter design. The completed
+[independent code review](reviews/gc-code-organization-review.md) verifies
 this source map and the interface direction. Performance is summarized after
 the broad improvements land. Existing measurements above remain at their actual
 source identities until then.
@@ -663,7 +664,10 @@ The selected code direction is now explicit:
 
 This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
-resource rules stay intact. Current native-cleanup qualification continues;
+resource rules stay intact. Composed candidate4d8e690 has passed source and host
+root/traversal review. Its first O1 compile/link succeeds, then the linked audit
+rejects an outlined generator-close predicate whose call-effect contract needs
+review. Native qualification remains pending;
 root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.

@@ -20,8 +20,13 @@ remain separate. Original failed runs and measurement limits stay preserved.
 The [measured GC plan](gc-architecture-next.md) now has implementation/landing
 authorization and active parallel owners. Selective-death O3 coroutine throughput
 improves1.309× in the isolated topic; whole29 remains unchanged. Keep32MiB after
-the completed budget experiment. Native-only cleanup is the next code slice,
-then common storage/nursery interfaces. The code organization review explains
+the completed budget experiment. Native-only cleanup and direct scanning are
+now composed with the warning-context repair as4d8e690; its first O1 compile/link
+passes but the linked audit rejects an outlined predicate. Call-effect review
+precedes native targets. The
+[new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
+checks actual source and ranks five clean cuts for post-qualification attribution.
+Storage/nursery interfaces follow the union's measured result. The code organization review explains
 current roots and the new writable-slot/space/publication/commit boundaries.
 These status updates supersede pending-budget and nonmoving-first sequencing
 below; the other interpreter opportunities remain conditional on attribution.

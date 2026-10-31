@@ -234,8 +234,10 @@ _PyFrame_AssertTemporariesClear(_PyInterpreterFrame *f)
 static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
     int nslots = _PyFrame_NumSlots(src);
+    PyValue *src_base = src->base;
+    PyValue *dest_base = dest->owned_slots;
     dest->f_executable = src->f_executable;
-    dest->base = dest->owned_slots;
+    dest->base = dest_base;
     // Don't leave a dangling pointer to the old frame when creating generators
     // and coroutines:
     dest->previous = NULL;
@@ -253,11 +255,10 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #ifdef Py_DEBUG
     dest->lltrace = src->lltrace;
 #endif
-    // A move: the slots that src leaves behind may be the caller's
-    for (int i = 0; i < nslots; i++) {
-        dest->base[i] = src->base[i];
-        src->base[i] = PyValue_NULL;
-    }
+    // Callers move between distinct frame storage. Clear the source slots,
+    // which may belong to the caller's call window. PyValue_NULL is all-zero.
+    memcpy(dest_base, src_base, nslots * sizeof(PyValue));
+    memset(src_base, 0, nslots * sizeof(PyValue));
 }
 
 

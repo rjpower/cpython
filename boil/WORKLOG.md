@@ -166,3 +166,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   one loop-exit offset assertion. Preserved the failure and idle cleanup;
   exact-code diagnosis precedes correction, with release/emission still open.
   [Remaining feedback](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Exact code confirmed the monitoring offset shift; its one-value
+  correction passed all 108 monitoring cases. All planned debug scopes passed.
+  O3 then hit its fixed-window timeout; preserved unqualified partial products
+  and assigned an explicit separate twenty-minute release/emission completion
+  scope for preparation/review. No speedup or qualification claim.
+  [IR execution and decision](issues/interpreter-constant-operands/feedback-results.md).

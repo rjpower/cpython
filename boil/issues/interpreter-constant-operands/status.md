@@ -11,9 +11,9 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: corrected disassembly/code/tracing passed; stopped at monitoring offset assertion
+- Decision: all planned debug modules passed; O3 timed out with partial products unqualified
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
-- Current test-only candidate: `c76bc5b5a9b4c4ebe546441b5cd416c3c217343a`
+- Current test-only candidate: `a84965eaa90267ac1dbf1b4c97ab032aaf26cedd`
 - Runtime tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
 
 ## Hypothesis
@@ -85,9 +85,20 @@ Disassembly passed 147 cases, code objects 47 with one expected skip, and tracin
 442 with one expected skip. Monitoring stopped after 54 cases on one loop-exit
 offset assertion: actual8 versus expected9. Cleanup passed; release and emission
 did not run. A bounded exact-CodeType observation is being prepared before any
-correction. Earlier failures and unchanged original deadline remain.
-The original deadline remains
-22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
+correction. The reviewed exact-code observation confirmed branch3-to8 and
+inline ADD1. Independent review accepted the sole expected-offset9-to8 change.
+Root activated four remaining rows at 22:15 UTC under the original deadline.
+Full monitoring passed 108 cases without skips; the release build then reached
+its downward-clamped 82-second timeout. Root confirmed terminal exit1 and idle
+cleanup. Partial O3 products are unqualified; release cases/emission did not run.
+All planned debug scopes have now passed with explicit source bridges.
+
+The original first-feedback deadline remains 22:20:45 UTC. The coordinator
+explicitly assigned a separate twenty-minute completion scope for the three
+unfinished release/emission rows, with source unchanged. Host preparation will
+archive and hash all interrupted products, then propose a fresh release build
+under exact reviewed helpers. Native activation remains held. The
+[execution record](feedback-results.md) owns outcomes and separate clocks.
 The [held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
 independent [design review](reviews/performance-plan-20261031.md) accepts the

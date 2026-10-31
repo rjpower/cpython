@@ -77,9 +77,12 @@ Source review found that the old final allocation would trigger a major even
 after an incorrect minor debt reset. The [reviewed oracle correction](reviews/finite-major-oracle-20261031-v1.md)
 now interleaves bounded allocations and manual minors under automatic GC, with
 a finite actual-budget witness. Its test-only source is frozen; positive
-feedback and temporary negative-source manifests are being prepared. No native
-run of that correction is credited yet. Their proposed new 45-minute window
-will require separate activation after the IR native window.
+feedback and temporary negative-source manifests are frozen. Independent
+[preparation review](reviews/causal-controls-preparation-20261031-v1.md) accepts
+the exact six-row [causal plan](causal-plan.md), source isolation, sealed-product
+bridge and actual expected-failure witnesses. No native run of that correction
+is credited yet. The new 45-minute window remains held for separate activation
+after IR release completion.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

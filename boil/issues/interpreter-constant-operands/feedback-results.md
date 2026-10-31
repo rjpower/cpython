@@ -184,3 +184,50 @@ offset-shift hypothesis. A small exact-original-CodeType observation is being
 prepared without calling the method or nested function. No monitoring oracle
 or runtime change is authorized merely by this hypothesis. Deadline remains
 **22:20:45.868428 UTC**.
+
+### Monitoring proof, complete debug feedback, interrupted O3
+
+The independently [reviewed word observation](reviews/monitoring-words-preparation-20261031-v1.md)
+ran once at 22:13:39.887232 UTC, session34119. Root confirmed terminal exit0;
+its result SHA-256 is
+`9cc9cf8e8ea9c58bd0d40221bf21975d6d188c9e1c29a723a2854d2ac3cf2068`.
+It records 28 collections, zero fallback/unpinned and idle cleanup. The original
+nested CodeType has branch3-to8, immediate in-place ADD1 at6, backedge7-to1,
+None-load8 and return9. Neither the method nor function ran.
+
+Independent [source/output review](reviews/monitoring-correction-source-outcome-20261031-v1.md)
+accepts `a84965eaa90267ac1dbf1b4c97ab032aaf26cedd`: the complete new test file
+equals its parent with the unique expected exit tuple9-to8 change. Root's
+[remaining helper review](reviews/remaining-v3-helpers-20261031-v1.md) replayed
+174 inputs and all 588 debug products, retaining the actual three-test-file
+bridge to native7f0. The four remaining rows activated at
+**22:15:44.054196 UTC**, session96412, with the original deadline unchanged.
+
+Full monitoring passed **108 cases, zero skips**, with 75 collections and zero
+fallback/unpinned. Terminal verification and idle cleanup passed. All planned
+debug scopes have passed; earlier failed assertions remain preserved.
+
+The fresh O3 build then reached its deadline-derived **82-second** outer timeout
+after 82.184 seconds, return124. Make jobs were terminated during final module
+compilation; no compiler diagnostic was observed. Root confirmed session96412
+terminal exit1. Gate cleanup at 22:17:15.429 UTC records no live target process.
+No build-result/product-freeze receipt exists: partial products remain
+unqualified. Neither release cases nor emission launched. This is incomplete
+release work, not a semantic rejection or successful release build.
+
+### Explicit remaining-work decision
+
+The original sixty-minute clock and failed build remain immutable. The
+coordinator assigned **one new twenty-minute completion window**, separately
+activated after preparation/review, for exactly fresh O3 build, eleven release
+cases and emission. Runtime source stays frozen at a849. No debug repeats,
+timing or qualification is included. First unexpected failure stops execution.
+
+Authorized host work snapshots every task-owned interrupted product, mode,
+symlink text, configuration/source/tool identity; archives the whole partial
+directory as `build/release-interrupted-20261031-2217`; and verifies byte identity
+with an explicit old/new path bridge. A fresh `build/release` can then use the
+existing fresh-only protocol without trusting interrupted objects. No deletion
+or native execution is authorized by that preparation alone. Held helpers and
+actual preservation receipts precede root activation; no new deadline is
+substituted into an old artifact.

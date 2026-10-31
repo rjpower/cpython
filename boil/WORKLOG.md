@@ -89,3 +89,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   follow; no native pass or landing is claimed.
   [Adoption status](issues/gc-nursery-adoption/status.md),
   [feedback scope](issues/gc-nursery-adoption/feedback-plan.md).
+- 2026-10-31: Independent source review accepted nursery b34931a881b for
+  bounded native feedback. Froze IR operand candidate 7f0b1819f84 with shared
+  handlers/metadata, eleven target tests and passing host controls; its exact
+  source review continues. Both launch preparations remain held for binding
+  and review, with no native or performance result claimed.
+  [GC source review](issues/gc-nursery-adoption/reviews/source-20261031-v1.md),
+  [IR status](issues/interpreter-constant-operands/status.md).

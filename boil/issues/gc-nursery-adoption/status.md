@@ -45,8 +45,10 @@ frozen in the isolated worktree from documentation checkpoint `32f14069fd2`,
 whose runtime source is d98291018c9. The candidate adds mandatory admission,
 actual checked minors, transactional diagnostic records, storage-lifetime
 retirement and failed-collection debt/backoff. Host checks pass; twenty
-focused tests are prepared. Exact-source independent review and the
-[held feedback plan](feedback-plan.md) precede any native execution.
+focused tests are prepared. [Exact-source review](reviews/source-20261031-v1.md)
+accepts b34931a881b for bounded native feedback. Concrete helpers, launch
+bindings and the [held feedback plan](feedback-plan.md) still need coordinator
+acceptance before execution. No native build or behavior pass is claimed.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

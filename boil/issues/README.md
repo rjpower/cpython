@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / source | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Review mandatory admission and real minor checking; cadence follows separately |
-| IR / prototype | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Build a bounded shared operand-source candidate after design review |
+| GC / feedback preparation | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coordinator | Activate bounded native feedback for reviewed b34931a881b |
+| IR / source review | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Review frozen 7f0b1819f84 and prepare native feedback |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

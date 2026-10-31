@@ -2432,6 +2432,33 @@ class OriginTrackingTest(unittest.TestCase):
         finally:
             sys.set_coroutine_origin_tracking_depth(orig_depth)
 
+    def test_origin_tracking_during_collection(self):
+        _testinternalcapi = import_helper.import_module('_testinternalcapi')
+
+        async def corofn():
+            return 'origin-data'
+
+        orig_depth = sys.get_coroutine_origin_tracking_depth()
+        orig_stress = _testinternalcapi.gc_get_stress()
+        try:
+            sys.set_coroutine_origin_tracking_depth(2)
+            # Collect while the constructor is still building the origin tuple.
+            _testinternalcapi.gc_set_stress(1)
+            try:
+                coro = corofn()
+            finally:
+                _testinternalcapi.gc_set_stress(orig_stress)
+            with contextlib.closing(coro):
+                self.assertEqual(len(coro.cr_origin), 2)
+                self.assertEqual(coro.cr_origin[0][0], __file__)
+                self.assertEqual(coro.cr_origin[0][2],
+                                 'test_origin_tracking_during_collection')
+                with self.assertRaises(StopIteration) as result:
+                    coro.send(None)
+                self.assertEqual(result.exception.value, 'origin-data')
+        finally:
+            sys.set_coroutine_origin_tracking_depth(orig_depth)
+
     def test_origin_tracking_warning(self):
         async def corofn():
             pass

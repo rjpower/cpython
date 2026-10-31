@@ -192,3 +192,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   causal outcome review precedes cadence work.
   [Performance revision](issues/interpreter-constant-operands/performance-revision-20261031.md),
   [GC execution](issues/gc-nursery-adoption/feedback-results.md).
+- 2026-10-31: Accepted independent GC causal-control and IR native-work reviews.
+  The focused counter journal change passed nine mock tests and independent
+  source review. A single restarted-host readiness probe denied hardware
+  counters; preserve the failure and revise the held plan before scores, with
+  elapsed performance still decisive. GC cadence design review proceeds in
+  parallel; neither runtime candidate has performance or landing acceptance.
+  [GC review](issues/gc-nursery-adoption/reviews/causal-controls-outcome-20261031-v1.md),
+  [IR review](issues/interpreter-constant-operands/reviews/emission-work-removal-outcome-20261031-v1.md),
+  [capture review](issues/interpreter-constant-operands/reviews/raw-capture-source-20261031-v1.md).

@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / causal outcome review | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Baseline cases passed and all three nominated faults detected; review evidence before cadence work |
-| IR / emitted work and performance preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Release cases passed; fix PIE inspection and judge elapsed performance, retaining text growth as diagnostic |
+| GC / cadence design review | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Causal controls accepted; review the halfway scheduling increment before implementation |
+| IR / performance preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Native work removal and counter capture accepted; prepare elapsed comparison with restarted-host counter denial recorded |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

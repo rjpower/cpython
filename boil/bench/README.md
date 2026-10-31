@@ -41,6 +41,14 @@ and set hash seed 0. Workload counts are fixed, not calibrated. Missing metric
 tools or invalid samples fail the run. Timing requires a quiet reservation;
 `--max-load` is an additional guard, not a reservation mechanism.
 
+Instruction results retain `raw_pairs` with the original low/high counts and
+numbered invocation IDs. Use `--perf-records FILE` to retain the corresponding
+original perf output, command, return status and full stdout/stderr in JSONL.
+The journal records probes and warmups too, and survives measurement failure
+and scratch cleanup. It must be a new file distinct from the report. Successful
+run metadata binds its path, SHA-256 and invocation count. Journal writes occur
+outside the measured child; they do not alter normalization or loop counts.
+
 ## Usage
 
 Run the host driver through the shared uv environment; `--build` accepts the
@@ -50,7 +58,8 @@ diagnostic, not a qualification or matched timing campaign:
 ```sh
 uv run --no-project --python /usr/bin/python3 -- python -B boil/bench/run.py \
   --build build/release --label candidate --set micro --only int_add \
-  --metric instr -o build/int-add-instructions.json
+  --metric instr -o build/int-add-instructions.json \
+  --perf-records build/int-add-instructions.perf.jsonl
 ```
 
 `--set` accepts `kernels,micro,memory` or `all`; `--only` narrows names.

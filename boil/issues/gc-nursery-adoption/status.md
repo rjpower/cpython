@@ -86,7 +86,11 @@ was credited at preparation. Root activated the separate causal window at
 the force-major arm produced its nominated old-owner assertion failure. The
 debt-reset arm produced both nominated debt/starvation failures. All six rows
 completed at 22:35:14 UTC; root confirmed terminal exit zero and idle cleanup.
-Expected failures earn causal evidence only; independent outcome review remains.
+Expected failures earn causal evidence only. Independent
+[outcome review](reviews/causal-controls-outcome-20261031-v1.md) accepts the
+positive cases, all three nominated fault detections and terminal cleanup.
+The separate halfway scheduling design is now under independent review;
+implementation, performance, qualification and landing remain pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

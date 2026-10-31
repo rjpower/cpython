@@ -104,8 +104,12 @@ accepted all 426 archive entries. Root activated the three-row completion at
 stopped before its target child because the ELF reader assumes ET_EXEC;
 both matched images are PIE. The reviewed correction then collected emission
 successfully at 22:40 UTC, with terminal exit zero and cleanup before the
-unchanged completion deadline. Independent work-removal review and raw timing
-capture preparation remain; no timing has run.
+unchanged completion deadline. Independent
+[native review](reviews/emission-work-removal-outcome-20261031-v1.md) accepts
+the removed producer dispatch, frame write and RHS loads while identifying the
+remaining guards and fallbacks. The
+[raw counter capture change](reviews/raw-capture-source-20261031-v1.md) passed
+independent review and nine mock tests. No timing has run.
 The [execution record](feedback-results.md) owns outcomes and separate clocks.
 The [original held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
@@ -115,9 +119,17 @@ still required. The [revised decision](performance-revision-20261031.md)
 withdraws hard code-size/instruction-count proxies after user steering before
 any timing. Matched evaluator text grew 18.4248%; this remains a reported cost,
 not an automatic rejection. Actual elapsed performance and control regressions
-decide acceptance. Broader behavior, native emitted-work and performance
-acceptance remain pending.
+decide acceptance. Broader qualification and performance acceptance remain
+pending.
 Independent [footprint review](reviews/footprint-outcome-20261031-v1.md) retains
 the matched size measurement and explicitly supersedes the historical rejection.
 The [performance revision review](reviews/performance-revision-20261031-v1.md)
 accepts the held elapsed-based decision rule; it grants no timing activation.
+
+A single five-second readiness probe of `perf stat instructions:u -- true`
+returned exit 1 at 22:54 UTC: the restarted host has perf_event_paranoid=4 and
+denies counter access. Raw output is retained in
+`build/constant-operands-readiness-v1`; no workload ran and no system setting
+changed. Prepare a separately reviewed, premeasurement amendment omitting
+unavailable diagnostic counters while preserving the elapsed samples, workloads,
+order, quiet window and decision rule. Quiet activation remains pending.

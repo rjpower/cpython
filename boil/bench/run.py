@@ -23,8 +23,10 @@ instr
     is 1000 iterations of its statement, so its value is per iteration,
     less the median of its skeleton (the empty loop of the same form)
     measured in the same invocation; ``raw`` keeps the value before the
-    subtraction.  If perf cannot count, this script exits with an error and
-    writes nothing.
+    subtraction. ``raw_pairs`` retains the original low/high counts and
+    invocation IDs. If perf cannot count, this script exits with an error and
+    writes no measurement report; a requested ``--perf-records`` journal keeps
+    the failed invocation's original output.
 time
     Nanoseconds per loop: one process makes a warm-up call of ``run(loops)``
     then ``--time-runs`` (default 5) timed calls; the value is the median.
@@ -46,6 +48,11 @@ rss
     inherits the parent's high-water mark); median of ``--rss-runs``
     (default 3) processes.
 
+``--perf-records FILE`` exclusively creates an append-only JSONL journal before
+any target probe. It retains numbered start/finish records for every perf
+invocation, including warmups, raw output and failures, outside measured work.
+Use a different new journal for each invocation of this script.
+
 The JSON holds the build, the machine, ``results`` (metric, then benchmark,
 then the entry with its value, the per-run values and the loop and run
 counts) and ``runs`` (per metric: the timestamp, the bench commit and the
@@ -63,6 +70,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import platform
@@ -253,6 +261,8 @@ class Context:
     python: Path
     pycache: Path
     scratch: Path
+    perf_records: Path | None = None
+    perf_sequence: int = 0
 
     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1,
                 options: tuple[str, ...] = ()) -> list[str]:
@@ -261,25 +271,59 @@ class Context:
         return cmd + ([bench.variant] if bench.variant else [])
 
 
-def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=CHILD_ENV)
+def check_result(proc: subprocess.CompletedProcess, cmd: list[str],
+                 what: str) -> subprocess.CompletedProcess:
     if proc.returncode != 0:
         raise MeasurementError(f"{what} failed with exit status {proc.returncode}:\n"
                                f"$ {' '.join(cmd)}\n{proc.stdout[-2000:]}{proc.stderr[-4000:]}")
     return proc
 
 
+def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=CHILD_ENV)
+    return check_result(proc, cmd, what)
+
+
+def write_perf_record(ctx: Context, record: dict) -> None:
+    if ctx.perf_records is None:
+        return
+    with ctx.perf_records.open("a") as stream:
+        stream.write(json.dumps(record) + "\n")
+
+
 def perf_instructions(ctx: Context, cmd: list[str], what: str) -> int:
     """Run cmd under perf stat and return its user-mode instruction count."""
     out = ctx.scratch / "perf.txt"
-    run_checked(["perf", "stat", "-x,", "-o", str(out), "-e", "instructions:u", "--", *cmd], what)
-    for line in out.read_text().splitlines():
-        fields = line.split(",")
-        if len(fields) > 2 and fields[2].startswith("instructions"):
-            if not fields[0].isdigit():
-                raise MeasurementError(f"perf could not count instructions:u for {what}: {line}")
-            return int(fields[0])
-    raise MeasurementError(f"no instructions:u line in perf output for {what}:\n{out.read_text()}")
+    out.unlink(missing_ok=True)
+    command = ["perf", "stat", "-x,", "-o", str(out), "-e", "instructions:u", "--", *cmd]
+    ctx.perf_sequence += 1
+    record = {"invocation": ctx.perf_sequence, "purpose": what, "argv": command,
+              "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    write_perf_record(ctx, dict(record, phase="start"))
+    record.update(returncode=None, stdout=None, stderr=None, perf_text=None, instructions=None)
+    try:
+        proc = subprocess.run(command, check=False, capture_output=True, text=True, env=CHILD_ENV)
+        record.update(returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr)
+        if out.exists():
+            record["perf_text"] = out.read_text()
+        check_result(proc, command, what)
+        if record["perf_text"] is None:
+            raise MeasurementError(f"perf produced no output for {what}")
+        for line in record["perf_text"].splitlines():
+            fields = line.split(",")
+            if len(fields) > 2 and fields[2].startswith("instructions"):
+                if not fields[0].isdigit():
+                    raise MeasurementError(f"perf could not count instructions:u for {what}: {line}")
+                record["instructions"] = int(fields[0])
+                return record["instructions"]
+        raise MeasurementError(f"no instructions:u line in perf output for {what}:\n"
+                               f"{record['perf_text']}")
+    except BaseException as exc:
+        record["error"] = repr(exc)
+        raise
+    finally:
+        record["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        write_perf_record(ctx, dict(record, phase="finish"))
 
 
 def check_perf(ctx: Context) -> None:
@@ -293,14 +337,18 @@ def measure_instr(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     lo, hi = loops, HIGH * loops
     perf_instructions(ctx, ctx.command(bench, "run", lo), f"{bench.name} warm-up")
     values = []
+    raw_pairs = []
     for _ in range(runs):
         a = perf_instructions(ctx, ctx.command(bench, "run", lo), f"{bench.name} at {lo}")
+        low_invocation = ctx.perf_sequence
         b = perf_instructions(ctx, ctx.command(bench, "run", hi), f"{bench.name} at {hi}")
+        raw_pairs.append({"low": a, "high": b, "low_invocation": low_invocation,
+                          "high_invocation": ctx.perf_sequence})
         values.append((b - a) / ((hi - lo) * bench.inner))
     unit = "instructions:u per iteration" if bench.inner > 1 else "instructions:u per loop"
     entry = {"group": bench.group, "unit": unit,
              "value": statistics.median(values), "values": values,
-             "loops": [lo, hi], "runs": runs}
+             "loops": [lo, hi], "runs": runs, "raw_pairs": raw_pairs}
     if bench.inner > 1:
         entry["inner"] = bench.inner
     return entry
@@ -505,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instr-runs", type=int, default=4)
     ap.add_argument("--time-runs", type=int, default=5)
     ap.add_argument("--rss-runs", type=int, default=3)
+    ap.add_argument("--perf-records", type=Path,
+                    help="exclusive new JSONL file retaining every raw perf invocation, including failures")
     ap.add_argument("--max-load", type=float,
                     help="fail if the 1-minute load average reaches this before any measurement")
     ap.add_argument("--update", action="store_true",
@@ -517,6 +567,14 @@ def main(argv: list[str] | None = None) -> int:
     python = resolve_build(args.build)
     metrics = split(args.metric, METRICS, "metric")
     benches = select(split(args.set, GROUPS, "set"), args.only)
+    if args.perf_records is not None:
+        if "instr" not in metrics:
+            ap.error("--perf-records requires the instr metric")
+        args.perf_records = args.perf_records.resolve()
+        if args.output is not None and args.perf_records == args.output.resolve():
+            ap.error("--perf-records and --output must be different files")
+        with args.perf_records.open("x"):
+            pass
     label = args.label or python.parent.name
     started = datetime.datetime.now().astimezone()
     loads: list[float] = []
@@ -526,9 +584,9 @@ def main(argv: list[str] | None = None) -> int:
         loads.append(load)
         if args.max_load is not None and load >= args.max_load:
             raise MeasurementError(f"1-minute load average {load:.2f} reached --max-load "
-                                   f"{args.max_load}; nothing written")
+                                   f"{args.max_load}; no measurement report written")
     with tempfile.TemporaryDirectory(prefix="boil-bench-") as tmp:
-        ctx = Context(python, Path(tmp) / "pycache", Path(tmp))
+        ctx = Context(python, Path(tmp) / "pycache", Path(tmp), args.perf_records)
         results: dict[str, dict] = {}
         try:
             build = build_info(python, label)
@@ -561,6 +619,12 @@ def main(argv: list[str] | None = None) -> int:
                 "commit": {"sha": git("rev-parse", "HEAD"),
                            "dirty": bool(git("status", "--porcelain", "--", "boil/bench"))},
                 "load_1min": {"max": max(loads), "samples": loads}}
+    if args.perf_records is not None:
+        run_info["perf_records"] = {
+            "path": str(args.perf_records),
+            "sha256": hashlib.sha256(args.perf_records.read_bytes()).hexdigest(),
+            "invocations": ctx.perf_sequence,
+        }
     report = {"schema": "boil-bench/1", "build": build, "machine": machine(),
               "results": {}, "runs": {}}
     if args.update:

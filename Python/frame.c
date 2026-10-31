@@ -9,12 +9,22 @@
 
 
 int
-_PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
+_PyFrame_VisitHeader(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     Py_VISIT(frame->frame_obj);
     Py_VISIT(frame->f_locals);
     _Py_VISIT_VALUE(frame->f_funcobj);
     _Py_VISIT_VALUE(frame->f_executable);
+    return 0;
+}
+
+int
+_PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
+{
+    int err = _PyFrame_VisitHeader(frame, visit, arg);
+    if (err) {
+        return err;
+    }
     return _PyGC_VisitFrameStack(frame, visit, arg);
 }
 

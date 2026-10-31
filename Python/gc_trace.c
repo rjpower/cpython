@@ -63,6 +63,7 @@
 #if defined(WITH_MIMALLOC)
 
 #include "pycore_capsule.h"       // _PyCapsule_HasDestructor()
+#include "pycore_cell.h"          // _PyCell_GCValues()
 #include "pycore_code.h"          // _PyCode_HasExtraFree()
 #include "pycore_crossinterp.h"   // _PyXIData_regitem_t
 #include "pycore_dict.h"          // PyDictObject._ma_watcher_tag
@@ -78,6 +79,7 @@
 #include "pycore_object.h"
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
+#include "pycore_tuple.h"         // _PyTuple_GCValues()
 #include "pycore_typeobject.h"    // _PyType_TraverseStatic()
 
 #include <setjmp.h>
@@ -1382,11 +1384,13 @@ visit_frame(_PyInterpreterFrame *f, visitproc visit, void *arg)
     return _PyFrame_Traverse(f, visit, arg);
 }
 
+typedef int (*frame_visitproc)(_PyInterpreterFrame *, void *);
+
 /* The frame headers of a chunk of the data stack, from limit, the
    innermost, to the chunk's first, which ends one word before the chunk
    does (pystate.c's chunk_frames_end()). */
 static int
-visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
+visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, frame_visitproc visit,
                    void *arg)
 {
     PyObject **end = (PyObject **)((char *)chunk + chunk->size) - 1;
@@ -1399,7 +1403,7 @@ visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
             continue;
         }
         assert(f->owner == FRAME_OWNED_BY_THREAD);
-        int err = visit_frame(f, visit, arg);
+        int err = visit(f, arg);
         if (err) {
             return err;
         }
@@ -1415,18 +1419,20 @@ visit_chunk_frames(_PyStackChunk *chunk, PyObject **limit, visitproc visit,
    frame) only the return slot is visited: what a returning or yielding
    frame stores there and INTERPRETER_EXIT returns (4.3).  Its other fields
    are poisoned in debug builds. */
-int
-_PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
+static int
+trace_visit_frames(PyThreadState *p, frame_visitproc visit_frame,
+                   visitproc visit, void *arg)
 {
     _PyStackChunk *chunk = p->datastack_chunk;
     if (chunk != NULL) {
-        int err = visit_chunk_frames(chunk, p->datastack_limit, visit, arg);
+        int err = visit_chunk_frames(chunk, p->datastack_limit,
+                                     visit_frame, arg);
         if (err) {
             return err;
         }
         for (chunk = chunk->previous; chunk != NULL; chunk = chunk->previous) {
-            err = visit_chunk_frames(chunk, &chunk->data[chunk->top], visit,
-                                     arg);
+            err = visit_chunk_frames(chunk, &chunk->data[chunk->top],
+                                     visit_frame, arg);
             if (err) {
                 return err;
             }
@@ -1440,12 +1446,39 @@ _PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
             _Py_VISIT_VALUE(f->base[f->return_slot]);
             continue;
         }
-        int err = visit_frame(f, visit, arg);
+        int err = visit_frame(f, arg);
         if (err) {
             return err;
         }
     }
     return 0;
+}
+
+typedef struct {
+    visitproc visit;
+    void *arg;
+} frame_visit_context;
+
+static int
+visit_frame_adapter(_PyInterpreterFrame *f, void *arg)
+{
+    frame_visit_context *context = arg;
+    return visit_frame(f, context->visit, context->arg);
+}
+
+static int
+visit_return_adapter(PyObject *op, void *arg)
+{
+    frame_visit_context *context = arg;
+    return context->visit(op, context->arg);
+}
+
+int
+_PyGC_TraceVisitFrames(PyThreadState *p, visitproc visit, void *arg)
+{
+    frame_visit_context context = {visit, arg};
+    return trace_visit_frames(p, visit_frame_adapter, visit_return_adapter,
+                              &context);
 }
 
 #ifdef Py_DEBUG
@@ -1938,10 +1971,11 @@ live_check_dangling(trace_t *t, uintptr_t addr)
 }
 #endif
 
-static int
-live_visit(PyObject *op, void *arg)
+/* Shared by the native traversal adapter and direct managed value loops.
+ * Precise fields still need exact lookup in this collection's domain. */
+static inline void
+live_precise_child(trace_t *t, PyObject *op)
 {
-    trace_t *t = arg;
 #ifdef Py_DEBUG
     // _Py_VISIT_VALUE() drops inline values, so an inline encoding here
     // came from a PyObject * field that was given a value's bits.  It is
@@ -1964,6 +1998,38 @@ live_visit(PyObject *op, void *arg)
         live_check_dangling(t, (uintptr_t)op);
     }
 #endif
+}
+
+static int
+live_visit(PyObject *op, void *arg)
+{
+    live_precise_child(arg, op);
+    return 0;
+}
+
+static inline void
+live_mark_values(trace_t *t, _PyGCValueRange values, int reverse)
+{
+    for (Py_ssize_t offset = 0; offset < values.n; offset++) {
+        Py_ssize_t i = reverse ? values.n - 1 - offset : offset;
+        PyValue value = values.base[i];
+        if (PyValue_IsObject(value)) {
+            live_precise_child(t, PyValue_ObjectBorrow(value));
+        }
+    }
+}
+
+static int
+live_visit_frame(_PyInterpreterFrame *f, void *arg)
+{
+    trace_t *t = arg;
+    live_precise_child(t, f->f_globals);
+    live_precise_child(t, f->f_builtins);
+    int err = _PyFrame_VisitHeader(f, live_visit, t);
+    if (err) {
+        return err;
+    }
+    live_mark_values(t, _PyFrame_GCValues(f), 0);
     return 0;
 }
 
@@ -1974,7 +2040,20 @@ live_drain(trace_t *t)
         PyObject *op = t->stack[--t->sp];
         t->current = op;
         (void)live_visit((PyObject *)Py_TYPE(op), t);
-        (void)_PyGC_TraceTraverse(op, live_visit, t);
+        if (Py_IS_TYPE(op, &PyCell_Type)) {
+            assert(!(Py_TYPE(op)->tp_flags & Py_TPFLAGS_INLINE_VALUES));
+            assert(!_PyGC_HasDictWord(Py_TYPE(op)));
+            live_mark_values(t, _PyCell_GCValues((PyCellObject *)op), 0);
+        }
+        else if (PyTuple_CheckExact(op) && Py_SIZE(op) != 0) {
+            assert(!(Py_TYPE(op)->tp_flags & Py_TPFLAGS_INLINE_VALUES));
+            assert(!_PyGC_HasDictWord(Py_TYPE(op)));
+            // Match the native tuple traversal's reverse element order.
+            live_mark_values(t, _PyTuple_GCValues((PyTupleObject *)op), 1);
+        }
+        else {
+            (void)_PyGC_TraceTraverse(op, live_visit, t);
+        }
     }
     t->current = NULL;
 }
@@ -2298,7 +2377,7 @@ static void
 live_mark_thread(trace_t *t, PyThreadState *p, unsigned int roots)
 {
     if (roots & _PyGC_TRACE_ROOT_FRAMES) {
-        (void)_PyGC_TraceVisitFrames(p, live_visit, t);
+        (void)trace_visit_frames(p, live_visit_frame, live_visit, t);
         live_drain(t);
     }
     if (roots & _PyGC_TRACE_ROOT_TSTATE) {

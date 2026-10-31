@@ -4172,6 +4172,111 @@ def _queue_child(code, **env):
 
 
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+class ManagedScanningTests(unittest.TestCase):
+    def test_cell_and_tuple_payloads_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"cell and tuple")
+            def make():
+                value = (None, 42, 3.5, Payload())
+                def read():
+                    return value
+                return read.__closure__[0]
+            cell = make()
+            for _ in range(3):
+                junk = [bytearray(1000) for _ in range(200)]
+                del junk
+                gc.collect()
+                assert cell.cell_contents[3].data == b"cell and tuple"
+            refs = gc.get_referents(cell)
+            assert len(refs) == 1 and refs[0] is cell.cell_contents
+            refs = gc.get_referents(cell.cell_contents)
+            assert any(ref is cell.cell_contents[3] for ref in refs)
+            cell.cell_contents[3].data.extend(b" alive")
+            assert cell.cell_contents[3].data == b"cell and tuple alive"
+        """)
+
+    def test_tuple_subclass_attributes_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self, data):
+                    self.data = bytearray(data)
+            class Tuple(tuple):
+                pass
+            def make():
+                obj = Tuple((17, Payload(b"element")))
+                obj.extra = Payload(b"attribute")
+                return obj
+            obj = make()
+            for _ in range(3):
+                gc.collect()
+                assert obj[1].data == b"element"
+                assert obj.extra.data == b"attribute"
+            obj[1].data.extend(b" alive")
+            obj.extra.data.extend(b" alive")
+            assert obj[1].data == b"element alive"
+            assert obj.extra.data == b"attribute alive"
+        """)
+
+    def test_call_and_exception_frame_values_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"frame local")
+            def callback(raise_error):
+                junk = [bytearray(1000) for _ in range(200)]
+                del junk
+                gc.collect()
+                if raise_error:
+                    raise RuntimeError("callback")
+            def hold(raise_error):
+                value = Payload()
+                try:
+                    callback(raise_error)
+                except RuntimeError as error:
+                    assert str(error) == "callback"
+                    gc.collect()
+                value.data.extend(b" alive")
+                return bytes(value.data)
+            for raise_error in (False, True):
+                assert hold(raise_error) == b"frame local alive"
+        """)
+
+    def test_running_and_escaped_generator_values_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"generator local")
+            def generate():
+                payload = Payload()
+                yield "ready"
+                gc.collect()
+                payload.data.extend(b" alive")
+                yield bytes(payload.data)
+            for escape in (False, True):
+                gen = generate()
+                assert next(gen) == "ready"
+                if escape:
+                    frame = gen.gi_frame
+                gc.collect()
+                assert next(gen) == b"generator local alive"
+                if escape:
+                    del gen
+                    gc.collect()
+                    assert frame.f_locals['payload'].data == (
+                        b"generator local alive")
+                    del frame
+                else:
+                    gen.close()
+        """)
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 @threading_helper.requires_working_threading()
 class SingleDrainerTests(unittest.TestCase):
     def test_worker_collect_returns_without_overtaking(self):

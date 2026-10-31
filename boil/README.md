@@ -4,9 +4,10 @@ A performance fork of CPython (upstream base `321925c92c9`, main of
 2026-10-23) that replaces the execution substrate wholesale: a
 fixed-width register IR produced by the compiler, one NaN-boxed value
 type in every frame and container, shapes in the object header, and a
-tracing collector with no reference counting. Current work targets GC and
-interpreter performance, including a common moving nursery and small native
-contract fixtures; tiers 0 and 1 and broader package ports follow. The user's goal statement is the Loom artifact `goal`; the
+tracing collector with no reference counting. Current work qualifies GC cleanup
+and scanning improvements, then measures interpreter performance. A moving
+nursery and small native contract fixtures follow that measurement; tiers 0
+and 1 and broader package ports follow. The user's goal statement is the Loom artifact `goal`; the
 first analysis and plan is the artifact `plan`.
 
 This file is the hand-over point. It says what the design is, where the
@@ -46,12 +47,14 @@ is complete.
 The plan now explains actual root APIs/data structures and the staged shared
 interfaces for regions and writable slots. Reviewed source709778 cleanup,
 b9d829 scanning and b184 warning repair are composed with selective processing
-as program source4d8e690. Candidate **17efeeac9f8** adds the decoder's proven
-noncollecting declaration and critical classifier regression; all seven generated
-outputs remain identical. Independent source/composition and host root/traversal
-checks pass. The O1 incremental build/audit/cleanup now passes; original build
-failure remains recorded. Focused12 plus retainedwarning5 pass debugkill/N0
-with zero fallback/unpinned. Whole10 and a fresh O3 build are active.
+as program source `4d8e690f483`. Candidate **33944d24e55** adds exact
+noncollecting declarations for the IR decoder and libc `strrchr`, with critical
+classifier regressions. All seven generated outputs remain identical. The two
+original linked-audit failures remain recorded; O1, O3, ASan and Clang-tail builds
+now pass. Focused 12 cases pass release and debug-kill; ten affected modules
+pass 1,189 cases in each mode (66/52 skips). Each whole-module run reports one
+diagnostic unpinned object, with zero fallback; focused cases report neither. Remaining
+smoke, stale-root and backend runtime checks precede broad qualification.
 The earlier selective ASan16 passes4,027 and three fulls each pass51,241,
 with zero fallback. Final debug stress
 found a real warning-context bug: delayed coroutine cleanup under a restricted
@@ -185,7 +188,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
-| GC performance union | Candidate17efee combines reviewed programC4d8 and the exact decoder-effect repair. Focused12+retainedwarning5 pass debugkill; old selective stress FAIL remains | Whole10 and O3 build active; broad ordinary/debug/ASan/tail qualification, closure and landing remain. No refreshed union performance result |
+| GC performance union | Candidate33944 combines reviewed programC4d8 and exact decoder/libc effect repairs. Four builds, focused12 and whole10 pass; original selective stress and first linked-audit failures remain | Finish early backend/root checks, broad release/debug/stress/ASan qualification, closure and independent landing review. No refreshed union performance result |
 | Common nursery and stable native space | Revised measured plan plus allocator, frame, container and runtime-store ledgers | Measure the qualified union; choose justified allocator/space work, then writable slots/pinning, core barriers, scanned native owners and independent minor oracle. No nursery/minors/barriers implemented |
 | JIT, broad movement and package ports | JIT and whole-heap movement deferred; nursery and small native contract fixtures are in the current performance plan | Interpreter checkpointI before JIT; extend package migration as native root/barrier/pinning contracts settle |
 

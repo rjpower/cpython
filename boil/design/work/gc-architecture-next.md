@@ -664,15 +664,22 @@ The selected code direction is now explicit:
 
 This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
-resource rules stay intact. Candidate17efee contains reviewed programC4d8e690
-and the exact decoder-effect repair. The first linked-audit failure remains
-recorded; incremental O1 build/audit/cleanup and focused12 plus retainedwarning5
-debugkill pass. Broad qualification remains pending;
+resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
+and exact decoder/libc effect repairs. Both original linked-audit failures remain
+recorded; O1/O3/ASan/tail builds, focused12 and whole10 pass. Broad qualification remains pending;
 root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
 The [comparison plan](gc-post-cleanup-performance-plan.md) freezes which existing
 elapsed/profile/arithmetic protocols we will reuse after landing.
+
+The [precise-edge review](reviews/gc-precise-edge-validation.md) identifies a
+smaller possible next cut: trusted managed fields could skip repeated allocator
+lookup for already fully marked objects, while first discovery, SHALLOW upgrades,
+native inputs and diagnostic modes keep the full validator. MARKED also serves
+other lifecycle phases, so any shortcut must belong to the root-mark phase.
+This remains a source-reviewed proposal, selected only if post-landing profiles
+show material repeated-edge cost; it adds no registry or moving-GC dependency.
 
 ### Audit lifetime assumptions at their actual boundaries
 

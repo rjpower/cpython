@@ -5442,3 +5442,28 @@ paired-four and four candidate32MiB hot profiles. Include five existing micro
 instruction/elapsed diagnostics outside the kernel score. No extra32/64 sweep,
 new timer/runner/production counter or current measurement launch. All29 spreads
 use the prior100*(max/min-1) definition; serial samples remain correlated.
+
+### 2026-10-30 18:18 PDT — four builds pass; early runtime coverage advances
+
+Frozen candidate33944 retains program C/headers4d8 and adds exact effect metadata
+and classifier regressions. O1, fresh O3, ASan and Clang-tail builds pass. The
+tail audit's sole missing leaf was libc strrchr; its already-reviewed H1 tool
+prerequisite is reused without importing H1 runtime changes. The failed tail ELF
+passes the corrected audit unchanged; its original make failure remains recorded.
+The earlier O1 decoder-effect audit failure is likewise retained.
+
+Release and debugkill focused12 and whole10 pass. Both whole runs report one
+diagnostic unpinned object, with zero fallback; focused cases report neither.
+The remaining early smoke/root/backend checks run before the held broad ladder.
+The ASan smoke recipe inherited ordinary filters and admitted an already-known
+failing sanitizer-only case; operator/reviewer preserve its actual terminal
+outcome before a minimal recipe correction. PROCESS already authorizes the exact
+case exclusion; no broader exemption or new runtime diagnosis is inferred.
+
+Canonical status documents now name33944 and the current evidence. A read-only
+precise-edge review is copied from e8c082a73ff: trusted managed fields may avoid
+revalidating already fully marked targets if the new profile selects that cost.
+First marks, SHALLOW upgrades, native inputs and diagnostic modes retain full
+validation. This is a proposal, with no new runtime edit or benchmark launch.
+Independent source/document review clears these updates; the union remains
+unlanded. Next hourly checkpoint remains18:44PDT.

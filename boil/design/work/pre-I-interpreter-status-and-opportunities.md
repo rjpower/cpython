@@ -21,9 +21,9 @@ The [measured GC plan](gc-architecture-next.md) now has implementation/landing
 authorization and active parallel owners. Selective-death O3 coroutine throughput
 improves1.309× in the isolated topic; whole29 remains unchanged. Keep32MiB after
 the completed budget experiment. Native-only cleanup and direct scanning are
-now composed with the warning-context repair as4d8e690;17efee adds the proven
-decoder-effect declaration after the first linked-audit failure. O1 build/audit
-and focused12 plus retainedwarning5 debugkill pass; broad qualification remains.
+now composed with the warning-context repair as4d8e690. Candidate33944 adds proven
+decoder/libc effect declarations after two retained linked-audit failures.
+O1/O3/ASan/tail builds, focused12 and whole10 pass; broad qualification remains.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
 checks actual source and ranks five clean cuts for post-qualification attribution.

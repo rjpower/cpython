@@ -5,8 +5,11 @@ supported Linux/main-interpreter/GIL collector is landed in `75e8a1e0c01`.
 The next change, selective death processing, is implemented and measured in
 an isolated branch; **it is not landed**. Its coroutine throughput improves
 **30.9%** in the unprofiled paired comparison, with smaller, noisier changes
-on the other rows. We will qualify that change, separate native-only generator
-cleanup from Python finalization, then develop a common copying nursery with
+on the other rows. Final debug stress exposed a reproducible warning-delivery
+bug under restricted builtins; selective qualification remains FAIL and its
+closure is unrun. We will qualify one reviewed union of selective processing,
+the warning repair, native-only generator cleanup and direct managed scanning,
+then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
@@ -253,8 +256,13 @@ only the record, with all 588 O3 products/aliases unchanged from measured `10d`.
 Its initial resurrection test had the wrong plain-weakref
 expectation; the corrected test matches pinned upstream and checks eventual
 second death. Keep that original failure in the record. Complete the existing
-landing gates and independent landing review, then merge. No new repetition
-campaign is needed.
+landing gates and independent landing review on the composed candidate, then
+merge once. The three selective full suites and ASan pass, but final debug
+stress reports an unraisable import KeyError. A deterministic ordinary-API
+probe loses the intended never-awaited warning and reports two import errors:
+native warning retrieval inherits the interrupted frame's restricted builtins.
+Repair runtime-owned module retrieval rather than suppressing the test.
+Keep this failed campaign distinct from the final union's qualification.
 
 The [five-file native-cleanup handoff](gc-native-cleanup-next.md) is the next
 code slice. Share `gen_close`'s existing side-effect-free eligibility check:
@@ -542,17 +550,20 @@ work, place root declarations/visitors together and keep platform unwind code in
 dependencies from the hot mark path. Update obsolete comments at those boundaries.
 This avoids interleaving a large mechanical file split with lifecycle fixes.
 
-The active landing order is selective death → native-only cleanup with obsolete
-deallocator ceremony removed → direct managed slot scanners and measured
+The active candidate composes selective death, warning-context repair,
+native-only cleanup with obsolete deallocator ceremony removed, and direct
+managed slot scanners. Qualify and land that union once, then choose measured
 storage/space work → core barriers/stable-owner scans and oracle → copying minors.
 Slot/scanner and region interfaces can be developed in parallel once their
 field/space contracts are agreed; the region experiment remains conditional
 on common-path coverage and allocator-hook costs. Independent review can examine the next slice while
 the preceding frozen source runs its gates. Runtime branches merge the landed
-integration head before final qualification; they do not consume one another's
-unlanded patches. Release measurements serialize after the broad runtime union
-lands. The resulting report will include the full interpreter comparison,
-allocation-heavy rows, actual nursery coverage/pinning, GC CPU, RSS and pauses.
+integration head before final qualification. PROCESS names the current
+coordinator-approved composition; ordinary cross-lane consumption stays
+prohibited. Release measurements serialize after the broad runtime union
+lands. Its report will include the full interpreter comparison,
+allocation-heavy rows, GC CPU, RSS and pauses. Nursery coverage and pinning
+belong to the later moving prototype; no nursery is implemented in this union.
 
 ## 8. Review35: choose GC structures for this runtime
 
@@ -656,3 +667,23 @@ resource rules stay intact. Current native-cleanup qualification continues;
 root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
+
+### Audit lifetime assumptions at their actual boundaries
+
+The warning failure is a concrete example of useful code carrying an unsuitable
+context assumption. Native finalization calls `get_warnings_attr`, which imports
+through the current Python frame's builtins even if the warning module is
+already loaded. Delayed cleanup can interrupt a generated namedtuple lambda
+whose builtins dictionary is legitimately empty. The failed import then repeats
+on the fallback warning path, explaining two errors without proving duplicate
+finalizer delivery. Runtime-owned diagnostics should resolve current
+interpreter modules and use an explicit interpreter import path when loading
+is necessary. Dynamic warning hooks and genuine hook errors still matter.
+
+This calls for a local contract repair, not changing the documented ambient
+semantics of public `PyImport_Import`. Apply the same review question to native
+operations that collection defers: which interpreter state is authoritative,
+which context can vary before delivery, and which cleanup genuinely executes
+Python? Explicit callbacks keep their ordinary Python call semantics. Edge
+coverage, roots and raw-memory lifetime remain separate obligations; this
+failure is not evidence that an object disappeared from the live graph.

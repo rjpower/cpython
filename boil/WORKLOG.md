@@ -5310,3 +5310,25 @@ unpinned. Independent raw validator/ref replay clears frozen outcomes and
 preserves warning/skip limits. Debug normal is active; debug kill, stress and
 closure follow. No new runtime landing or full interpreter speed claim yet.
 Next hourly checkpoint17:44PDT; material changes are reported sooner.
+
+
+### 2026-10-30 17:15 PDT — direct scanner implementation assigned
+
+Read and approved managed-scanner packetb186a768. Stats owner created
+boil-gc-managed-scanning from integrationd0f467; owns shared ranges/accessors,
+cell/tuple/frame traversal and gc_trace direct mark paths with focused tests.
+The tiny gc_live generic-range hunk stays unapplied until native cleanup lands
+and releases that file; no unlanded cross-lane merge or concurrent file edit.
+First source checkpoint expected about25min, not a native/runtime promise.
+Keep exact/current-domain lookup and debug checks; no faster pointer trust,
+movement, unused updater, per-edge replacement callback or layout DSL.
+The same owner will correct obsolete object.h header/refcount comments without
+changing actual layout. No region runtime is being built yet; its per-object
+metadata cost versus compact page/bitmap/stride knowledge needs explicit review.
+
+Native author709778 prepares reused O1/O3/ASan/tail and finite affected/control
+packets, without source/product bindings or execution before selective landing.
+Debug-normal selective full now terminal PASS:51,241/3,739skips,60,800collections,
+0fallback/1report-onlyunpinned;598.68s. Debug-kill is active, stress2 and closure
+follow. Source94ae and products stay frozen. gc-designrev4 and handover73
+contain review35 reflection; primary remains runtime75e8 pending landing.

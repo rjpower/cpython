@@ -49,8 +49,9 @@ record and is updated at every landing.
 The user authorizes implementation/landing of the revised GC design. Parallel
 owners: roots_audit qualifies selective death in its existing topic;
 string_design implements native-only generator cleanup in `boil/gc-native-cleanup`
-from integration; stats_design_review examines roots/data structures/code
-organization and independently reviews the next patch. The coordinator owns
+from integration; stats_design_review completed the root/code review and now implements direct
+managed scanners in `boil/gc-managed-scanning`; independent review of the
+preceding frozen qualification remains separate from authoring this new slice. The coordinator owns
 integration/documents and sequences region/writable-slot/minor work after these
 slices. Current native gates remain finite and source-frozen; later branches
 merge the landed integration before final qualification. Report broad performance
@@ -64,7 +65,8 @@ This replaces the universal per-edge callback direction, not the strong-edge
 coverage contract. Native-cleanup70977878 clears independent source review and
 includes redundant generator finalizer ceremony removal; final native composition
 and gates follow the selective landing. Existing ASan16/release full pass;
-remaining selective debug/stress/closure and landing review are active.
+selective debug-normal is now also passed; debug-kill/stress/closure and
+landing review remain active.
 
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves

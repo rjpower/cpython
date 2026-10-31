@@ -46,10 +46,12 @@ is complete.
 The plan now explains actual root APIs/data structures and the staged shared
 interfaces for regions and writable slots. Reviewed source709778 cleanup,
 b9d829 scanning and b184 warning repair are composed with selective processing
-as **4d8e690f483**. Host root/traversal checks and independent composition review
-pass. The first O1 build compiles/links and passes116 module checks, then fails
-the linked root audit on an outlined generator-close predicate. Its call-effect
-contract is under review; no union native target has passed yet.
+as program source4d8e690. Candidate **17efeeac9f8** adds the decoder's proven
+noncollecting declaration and critical classifier regression; all seven generated
+outputs remain identical. Independent source/composition and host root/traversal
+checks pass. The O1 incremental build/audit/cleanup now passes; original build
+failure remains recorded. Focused12 plus retainedwarning5 pass debugkill/N0
+with zero fallback/unpinned. Whole10 and a fresh O3 build are active.
 The earlier selective ASan16 passes4,027 and three fulls each pass51,241,
 with zero fallback. Final debug stress
 found a real warning-context bug: delayed coroutine cleanup under a restricted
@@ -65,6 +67,9 @@ clarifies that frame registers already are roots, durable root lists are sparse
 fork registrations, and common managed layouts will gain direct slot scanners
 while pinned native types retain traversal adapters. No nursery or refreshed
 broad performance result is claimed.
+The [post-landing comparison plan](design/work/gc-post-cleanup-performance-plan.md)
+reuses matched29, parent/union paired-four, four hot profiles and a small
+arithmetic appendix; none is running during qualification.
 The [independent interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)
 confirms existing inline arithmetic/value/frame paths and ranks five prospective
 shared improvements. Emitted cost and refreshed profiles select implementation.
@@ -180,7 +185,7 @@ This lands the increment, not final GC correctness or interpreter parity.
 | H3 handler domain, monitoring storage and statistics | Included in qualified d6a23. Actual Py_STATS producer/reader checks pass on predecessor e9; fresh5a45 checks pass1,376 cases in each of three modes, followed by combined qualification | Later transport/renumbering and typed operations |
 | H1 dispatch/frame passing | Isolated native62456/tool-test94ab; audits/CFI,103 runtime cases per build and strict6×100 stale controls succeed. Later review finds informational platform-header errors in both combined logs; retain that harness limitation beside the case/root evidence. Original audit/cleanup failures and corrections remain explicit. Static code changes are mixed | Archived for current GCC milestone: source tags pushed, selected evidence retained locally, checkout retired. Affects Clang tail dispatch only. Reopen a bounded matched comparison only for that active backend; no speedup measured |
 | H2 physical liveness/root maps | Inert decoder5df336 declares27 supported/126 explicitly unsupported pristine handlers. Test-parser fixb3e6847, corrected release generator module79 cases and debug-kill eight modules748/10skips succeed; zero fallback | Archived: source tags pushed, selected evidence retained locally, checkout retired. No immediate consumer. Reuse the tested patch for a scheduled usable liveness slice; no runtime maps or clearing changes |
-| GC performance union | Reviewed4d8e690 combines selective death, native-only cleanup, direct managed scanning and deferred-warning repair. Selective10d877 measured1.309× coroutine throughput; its final stress campaign remains FAIL | First O1 compile/link passes, linked audit rejects an outlined predicate; call-effect repair precedes focused/broad qualification, closure and landing. No refreshed union performance result |
+| GC performance union | Candidate17efee combines reviewed programC4d8 and the exact decoder-effect repair. Focused12+retainedwarning5 pass debugkill; old selective stress FAIL remains | Whole10 and O3 build active; broad ordinary/debug/ASan/tail qualification, closure and landing remain. No refreshed union performance result |
 | Common nursery and stable native space | Revised measured plan plus allocator, frame, container and runtime-store ledgers | Measure the qualified union; choose justified allocator/space work, then writable slots/pinning, core barriers, scanned native owners and independent minor oracle. No nursery/minors/barriers implemented |
 | JIT, broad movement and package ports | JIT and whole-heap movement deferred; nursery and small native contract fixtures are in the current performance plan | Interpreter checkpointI before JIT; extend package migration as native root/barrier/pinning contracts settle |
 

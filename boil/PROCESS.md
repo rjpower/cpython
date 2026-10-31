@@ -47,7 +47,7 @@ record and is updated at every landing.
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
 The user authorizes implementation/landing of the revised GC design. Parallel
-owners: string_design qualifies composed source4d8e690 in `boil/gc-native-cleanup`;
+owners: string_design qualifies candidate17efee (programC4d8e690) in `boil/gc-native-cleanup`;
 stats_design_review independently reviews native/composition/warning source
 and evidence and prepares the comparison plan. Its scanner source is independently
 reviewed by the coordinator and string_design. Roots authored the warning repair
@@ -83,9 +83,11 @@ knowledge. Native `tp_traverse` remains an explicit pinned compatibility path.
 This replaces the universal per-edge callback direction, not the strong-edge
 coverage contract. Native709778, scannerb9d829 and warningb184 are composed with
 selective94ae as4d8e690; source/composition and host root/traversal checks clear.
-The first O1 compile/link/module check passes, but its linked audit rejects an
-outlined generator-close predicate; repair its proven call-effect contract
-before proceeding. No native target credit yet. Earlier
+The first linked audit rejected an outlined predicate; candidate17efee adds only
+the exact noncollecting decoder contract, its critical regression and record.
+All seven generated outputs match. O1 make/audit/cleanup and focused12 plus
+retainedwarning5 debugkill pass, zero fallback/unpinned. Whole10 and fresh O3
+build are active. Earlier
 selective ASan16 and three fulls pass, but final debug stress fails; its closure
 is unrun. The actual union must qualify before landing.
 

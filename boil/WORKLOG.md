@@ -5418,3 +5418,27 @@ remains0.8243; selective coroutine1.309× remains the isolated four-row result.
 Stats prepares reuse of quiet29/paired-four/bounded profiles after landing;
 no benchmark campaign is active. Next hourly checkpoint18:44PDT, with material
 changes reported sooner.
+
+### 2026-10-30 17:55 PDT — precise effect fix; first behavior feedback passes
+
+Three source reads and host classifier replay identify exact missing effect
+knowledge: unmarked ir.c is outside the linked audit inventory, so immutable
+_PyCode_InstrOparg is conservatively reentrant. Candidate17efee adds its exact
+shared noncollecting declaration and a critical wrapper/unknown/collecting
+regression. No predicate C/root/precision/inlining change. Six established
+generators produce all seven tracked outputs byte-identically; independent
+review clears source and the held warnings-existing/5 guard correction.
+
+Accepted make-only successor completes O1/audit/116modulechecks and cleanup;
+original make2/postguard7aa99 remains immutable. Actual closurea1e6370d binds
+compiled programC4d8 with17ef source/effect/test authority. First feedbackf7f1e03c
+passes focused12/0 and retainedwarning5/0 actualkill/N0,225/135collections,
+zero fallback/unpinned and both cleanup. Independent raw/22-ref replay clears.
+Whole10debugkill and fresh O3 configure/make run in the two normal admitted
+slots with separate locks. No performance or full-union landing claim.
+
+The tracked post-landing performance plan reuses quiet29, parent75e8/union
+paired-four and four candidate32MiB hot profiles. Include five existing micro
+instruction/elapsed diagnostics outside the kernel score. No extra32/64 sweep,
+new timer/runner/production counter or current measurement launch. All29 spreads
+use the prior100*(max/min-1) definition; serial samples remain correlated.

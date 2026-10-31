@@ -664,13 +664,15 @@ The selected code direction is now explicit:
 
 This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
-resource rules stay intact. Composed candidate4d8e690 has passed source and host
-root/traversal review. Its first O1 compile/link succeeds, then the linked audit
-rejects an outlined generator-close predicate whose call-effect contract needs
-review. Native qualification remains pending;
+resource rules stay intact. Candidate17efee contains reviewed programC4d8e690
+and the exact decoder-effect repair. The first linked-audit failure remains
+recorded; incremental O1 build/audit/cleanup and focused12 plus retainedwarning5
+debugkill pass. Broad qualification remains pending;
 root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.
+The [comparison plan](gc-post-cleanup-performance-plan.md) freezes which existing
+elapsed/profile/arithmetic protocols we will reuse after landing.
 
 ### Audit lifetime assumptions at their actual boundaries
 

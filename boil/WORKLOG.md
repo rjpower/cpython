@@ -201,3 +201,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   [GC review](issues/gc-nursery-adoption/reviews/causal-controls-outcome-20261031-v1.md),
   [IR review](issues/interpreter-constant-operands/reviews/emission-work-removal-outcome-20261031-v1.md),
   [capture review](issues/interpreter-constant-operands/reviews/raw-capture-source-20261031-v1.md).
+- 2026-10-31: Accepted the concrete halfway GC cadence design and granted a
+  separate 45-minute source increment, preserving the overall deadline and
+  mandatory nursery architecture. The policy must earn its place through
+  actual elapsed performance; instruction/text size are diagnostics. Source
+  and native review remain separate gates.
+  [Design and review](issues/gc-nursery-adoption/reviews/cadence-design-20261031-v1.md).

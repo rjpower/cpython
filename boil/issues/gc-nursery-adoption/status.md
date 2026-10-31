@@ -14,6 +14,7 @@
 - Current test/fixture correction: `856222c62458bf3648e51d0bb0d278b1fbf54bd7`, frozen 21:42:14 UTC
 - Current test-only candidate: `ef0af95904b87d888eee4a98b6a745835ff95085`, frozen 22:03:21 UTC
 - Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
+- Cadence source started: 2026-10-31 22:57:29 UTC; checkpoint 23:12:29 UTC; freeze due 23:42:29 UTC
 
 ## Hypothesis
 
@@ -89,8 +90,13 @@ completed at 22:35:14 UTC; root confirmed terminal exit zero and idle cleanup.
 Expected failures earn causal evidence only. Independent
 [outcome review](reviews/causal-controls-outcome-20261031-v1.md) accepts the
 positive cases, all three nominated fault detections and terminal cleanup.
-The separate halfway scheduling design is now under independent review;
-implementation, performance, qualification and landing remain pending.
+The separate [halfway scheduling design](cadence-design.md) passed
+[independent review](reviews/cadence-design-20261031-v1.md). Root granted a
+45-minute host-only source increment at 22:57:29 UTC, with a 15-minute status
+checkpoint and 23:42:29 UTC freeze deadline. It adds two debt/opportunity
+deadlines, commits consumption only on success, and preserves full recovery
+entries and stress/queue behavior. No new native execution is authorized yet;
+exact-source review, performance, qualification and landing remain pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

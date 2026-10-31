@@ -46,3 +46,9 @@ activation SHA256 is
 The [preparation review](reviews/quiet-preparation-20261031-v1.md) accepts the
 elapsed-only amendment and exact helpers. Earlier native/semantic passes remain
 valid for their stated scopes; they do not establish a performance win.
+
+Subsequent bounded disassembly found extra instruction-pointer/frame reloads
+and next-pointer stores in unchanged common handlers. The coordinator
+reproduced all twelve saved captures exactly. This supplies a concrete
+[successor research question](../interpreter-dispatch-state/status.md), while
+leaving the elapsed rejection and its causal limits intact.

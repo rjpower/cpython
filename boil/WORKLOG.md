@@ -215,3 +215,8 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   cadence source froze early for independent source review and feedback prep.
   [Performance decision](issues/interpreter-constant-operands/performance-results.md),
   [outcome review](issues/interpreter-constant-operands/reviews/quiet-outcome-20261031-v1.md).
+- 2026-10-31: Reproduced twelve bounded native captures showing extra common
+  evaluator-state loads/stores in the rejected build despite unchanged handler
+  C bodies. Opened a separate 30-minute host-only design investigation; this
+  neither attributes the full slowdown nor reopens the rejected increment.
+  [Research scope](issues/interpreter-dispatch-state/status.md).

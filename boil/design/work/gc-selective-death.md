@@ -1,5 +1,10 @@
 # Selective death processing
 
+Closed component/as-built record. The combined integration and measurements
+are complete; see [current GC status](../../issues/gc-cleanup-scanning/status.md).
+Pending gates and no-measurement statements in the historical timeline below
+retain their original checkpoint meaning and do not assign new work.
+
 Current combined measurements: [performance report](gc-post-cleanup-performance.md)
 records1.417× coroutine/1.621× comprehension parent throughput and0.871× upstream
 across29. These do not isolate this component. Earlier no-measurement statements

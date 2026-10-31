@@ -5722,3 +5722,19 @@ Updated section links and architecture/root/generation summaries to match.
 Independent numeric/clarity review cleared the claims, with wording fixes for
 sample categories and non-rooting lifecycle metadata. Documentation only;
 no runtime, benchmark or qualification changes. Original user edits preserved.
+
+### 2026-10-31 — separate current work tracking from designs and history
+
+Adopted issues/<stable-name>/status.md as each work item's current authority,
+with a short work index and explicit state/outcome rules in DOCUMENTATION.md.
+Seeded landed GC cleanup, queued young-space/interpreter attribution and deferred
+H1/H2/foreign lifecycle. A source audit also retained full value/native closure,
+verification orchestration, root/checker reconciliation and H3 tooling consumers
+as separate follow-ups. README is now navigation; PROCESS contains procedure
+rather than the growing status timeline. Dated snapshots preserve the old
+handover, decisions and qualification history. Existing designs/results/receipts
+stay at their original paths; touched legacy records link their current issues.
+
+Reconciled the old automatic ten-repeat/daily-full wording with the already
+adopted finite-campaign rule. No runtime or qualification changes; no new test
+or benchmark campaign. Original unrelated review edits remain untouched.

@@ -1,5 +1,9 @@
 # Landed GC improvements: performance and next steps
 
+Completed measurement report. Current execution/landing state is recorded in
+[the GC cleanup issue](../../issues/gc-cleanup-scanning/status.md). Results
+below retain their measured source identities.
+
 2026-10-30. Integrated in **aee46aacae2**, qualified source/native **0b15b4bbc9b**.
 Independent comparison, finite-outcome and phase reviews pass. The combined
 change improves coroutine throughput **1.417×** and comprehension throughput

@@ -1,5 +1,11 @@
 # Pre-JIT roadmap: GC correctness and coherent interpreter design
 
+Historical roadmap, superseded for current sequencing/status on 2026-10-31.
+Use the [current design and plan](gc-architecture-next.md) and
+[work index](../../issues/README.md). Present-tense assignments and older
+performance checkpoints below describe their recorded dates; measurement
+principles remain useful reference.
+
 Coordinator plan, revised2026-10-30. Roughly2× is a **soft design guide**,
 especially for obvious arithmetic such as `i += 1`, not a mandatory aggregate
 score or a numerical gate before JIT work. The declared GC milestone below

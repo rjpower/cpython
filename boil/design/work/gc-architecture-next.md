@@ -2,6 +2,8 @@
 
 Updated 2026-10-31. This is the current recommendation. Measurement history,
 qualification records and implementation detail live in the linked documents.
+Execution state and ownership live in the [work index](../../issues/README.md),
+not in this design's description of the next steps.
 
 ## TLDR
 

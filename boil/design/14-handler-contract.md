@@ -4,9 +4,11 @@ Status: design, revised 2026-10-29 after two review rounds (both
 returned revise). Round 1 is `reviews/14-handler-contract-review-1.md`;
 round 2 is `reviews/14-handler-contract-review.md`. Sections 7 and 8
 record the responses. This is a specification, not implemented evidence.
-For step H (PROCESS.md section 0): before checkpoint I and step 8.
-H1 starts when its checker/walk/build dependencies are qualified; H2's
-maps require 10a rung 3's precise readers and spans. The user's
+Current sequencing is recorded in the [work index](../issues/README.md), not
+this historical step-H specification. [H1](../issues/h1-tail-dispatch/status.md)
+and [H2](../issues/h2-root-maps/status.md) are deferred with explicit resume
+conditions; they are not mandatory next work before interpreter attribution.
+Usable maps still need qualified precise readers, spans and their consumer. The user's
 ruling of 2026-10-28: the interpreter need not be tuned to LuaJIT's
 level, but obvious improvements are not left on the ground; a mechanism
 stays when it is principled and orthogonal, and one-offs go. This note
@@ -311,7 +313,7 @@ monitoring and root-state contract. The inventory may bring a tier-0
 hand-off into the interpreter when it has a reusable lowering and no
 second loop protocol; rule 4's current deferral stands until that design
 is adopted. This is not approval for arbitrary fused instruction pairs.
-H's results feed the pre-JIT parity checkpoint I in PROCESS section 0.4;
+H's results feed the pre-JIT parity checkpoint I in the now-[archived PROCESS §0.4](../archive/process-2026-10-31.md);
 elapsed-time evidence is required alongside instructions. Re-estimate
 H1/H2 after the root-reader inventory and measure the new H3 scope.
 
@@ -440,4 +442,4 @@ record encodings and selected handlers; measurements include elapsed
 time and the direct predecessor; the debug slot checker is map-aware.
 Rule 1 uses elapsed time to choose the frame convention. Rule 2 bounds
 lookup and names its allocation-free path and version obligations.
-PROCESS section 0 is reconciled with these decisions.
+The now-[archived PROCESS §0](../archive/process-2026-10-31.md) records that revision's decisions.

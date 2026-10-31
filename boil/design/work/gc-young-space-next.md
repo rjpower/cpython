@@ -1,5 +1,9 @@
 # Next collector milestone: common young allocation and reclamation
 
+Implementation plan. Current assignment, phase and next action are recorded in
+[the young-space issue](../../issues/gc-common-young-space/status.md). This
+plan does not imply an implementation or running campaign.
+
 Decision 2026-10-30 after the landed cleanup/scanner measurement. Source/native
 0b15 and integrationaee46 remain the qualified default; **no young collector
 is implemented or enabled yet**. This replaces both a required cell/tuple

@@ -1,9 +1,11 @@
 # 06: Architecture v2: a fixed-width register IR from the compiler, one value type, a tracing GC
 
 Status: approved 2026-10-25 with two review amendments (sections 3.2 and 3.4, step 10).
-The plan of record and the position are in `boil/PROCESS.md` section 0,
-which revises section 6 below (7a moved before 7, 10 split into 10a and 10b,
-the ports deferred); sections 9 to 21 are the per-step decision records. Supersedes the Phase 1 notes 01 to 05
+The [work index](../issues/README.md) records current execution state; the
+[GC/interpreter plan](work/gc-architecture-next.md) gives the current direction.
+They supersede the historical sequencing in section 6 below (including 7a
+before 7, the split of 10 into 10a/10b, and ports deferral). Sections 9 to 21
+are the per-step decision records. Supersedes the Phase 1 notes 01 to 05
 (the first IR encoding, the tagged `_PyStackRef`, deferred reference
 counting, shapes behind a flag, the first tier 0), which are deleted;
 this note is the design, note 09 the object protocol, and step 8's
@@ -15,7 +17,8 @@ summarizes parity gaps and selects common young allocation and bulk reclamation,
 with parallel attribution of remaining interpreter costs. One useful young-space
 consumer is required; neither moving-first nor nonmoving-first is a mandatory
 proof stage. Root/space/publication contracts and supported-platform limits
-remain in force. PROCESS records implementation and landing status.
+remain in force. Issue records own implementation and landing status;
+[PROCESS](../PROCESS.md) defines procedure and gates.
 
 ## 0. What Phase 1 got wrong, and the correction
 
@@ -605,7 +608,7 @@ stated as generator rules so that tier 0's templates copy the lean form.
 The user's ruling: the interpreter need not be tuned to LuaJIT's level,
 but obvious improvements are not left on the ground.
 
-Plan revision, 2026-10-29 (takeover). PROCESS section 0.4 supersedes the
+Plan revision, 2026-10-29 (takeover). The now-[archived PROCESS §0.4](../archive/process-2026-10-31.md) supersedes the
 old delivery times. Resume the compiler, 7a and 10a landings, then split
 queue lifecycle and precise-root residue into gated subrungs. H keeps
 per-word diagnostic positions and uses a separate collector state; its

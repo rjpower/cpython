@@ -3,6 +3,7 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_object.h"
+#include "pycore_structs.h"       // _PyGCValueRange
 #include "pycore_value.h"
 
 #ifdef __cplusplus
@@ -12,6 +13,13 @@ extern "C" {
 #ifndef Py_BUILD_CORE
 #  error "this header requires Py_BUILD_CORE define"
 #endif
+
+static inline _PyGCValueRange
+_PyCell_GCValues(PyCellObject *cell)
+{
+    _PyGCValueRange values = {&cell->ob_ref, 1};
+    return values;
+}
 
 // Sets the cell contents to the canonical value v and returns the previous
 // contents.

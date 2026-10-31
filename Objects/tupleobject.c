@@ -698,8 +698,9 @@ static int
 tuple_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyTupleObject *o = _PyTuple_CAST(self);
-    for (Py_ssize_t i = Py_SIZE(o); --i >= 0; ) {
-        _Py_VISIT_VALUE(o->ob_item[i]);
+    _PyGCValueRange values = _PyTuple_GCValues(o);
+    for (Py_ssize_t i = values.n; --i >= 0; ) {
+        _Py_VISIT_VALUE(values.base[i]);
     }
     return 0;
 }

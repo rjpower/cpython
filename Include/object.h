@@ -8,44 +8,27 @@ extern "C" {
 /* Object and type object interface */
 
 /*
-Objects are structures allocated on the heap.  Special rules apply to
-the use of objects to ensure they are properly garbage-collected.
-Objects are never allocated statically or on the stack; they must be
-accessed through special macros and functions only.  (Type objects are
-exceptions to the first rule; the standard types are represented by
-statically initialized type objects, although work on type/class unification
-for Python 2.2 made it possible to have heap-allocated type objects too).
+Heap objects are owned by the tracing collector.  C code must keep live
+objects reachable through the root and traversal interfaces; copying or
+discarding a pointer does not change a reference count.  Some immortal
+objects, including built-in types and singletons, are allocated statically.
 
-An object has a 'reference count' that is increased or decreased when a
-pointer to the object is copied or deleted; when the reference count
-reaches zero there are no references to the object left and it can be
-removed from the heap.
+An object's type determines its behavior and layout.  The PyObject header
+is one machine word containing a shape pointer and collector flags.  The
+shape identifies the type and, where applicable, attribute storage.
+Py_TYPE() obtains the type through the shape; code must use the accessors
+rather than treating the header as a direct type pointer.
 
-An object has a 'type' that determines what it represents and what kind
-of data it contains.  An object's type is fixed when it is created.
-Types themselves are represented as objects; an object contains a
-pointer to the corresponding type object.  The type itself has a type
-pointer pointing to the object representing the type 'type', which
-contains a pointer to itself!.
+The C object interface uses PyObject pointers.  Core value slots use PyValue,
+which can also hold inline numbers.  A concrete object structure starts
+with PyObject_HEAD and adds its own fields; casting between that structure
+and PyObject preserves the common header.
 
-Objects do not float around in memory; once allocated an object keeps
-the same size and address.  Objects that must hold variable-size data
-can contain pointers to variable-size parts of the object.  Not all
-objects of the same type have the same size; but the size cannot change
-after allocation.  (These restrictions are made so a reference to an
-object can be simply a pointer -- moving an object would require
-updating all the pointers, and changing an object's size would require
-moving it if there was another object right next to it.)
-
-Objects are always accessed through pointers of the type 'PyObject *'.
-The type 'PyObject' is a structure that only contains the reference count
-and the type pointer.  The actual memory allocated for an object
-contains other data that can only be accessed after casting the pointer
-to a pointer to a longer structure type.  This longer type must start
-with the reference count and type fields; the macro PyObject_HEAD should be
-used for this (to accommodate for future changes).  The implementation
-of a particular object type can cast the object pointer to the proper
-type and back.
+The current collector does not relocate objects.  APIs that explicitly
+resize an object can return a different address under their own ownership
+conditions, so callers must follow each API's pointer and lifetime rules.
+An interior C pointer needs its underlying storage kept alive; it is not
+itself a general writable root or a relocation contract.
 
 A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.

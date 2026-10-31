@@ -207,12 +207,6 @@ gen_dealloc(PyObject *self)
 
     FT_CLEAR_WEAKREFS(self);
 
-    _PyObject_GC_TRACK(self);
-
-    if (PyObject_CallFinalizerFromDealloc(self))
-        return;                     /* resurrected.  :( */
-
-    _PyObject_GC_UNTRACK(self);
     if (PyAsyncGen_CheckExact(gen)) {
         /* We have to handle this case for asynchronous generators
            right here, because this code has to be between UNTRACK
@@ -534,6 +528,59 @@ is_resume(_PyInstr *instr)
     );
 }
 
+/* The outermost exception handler only converts StopIteration.  Closing at
+   this resume point needs no Python execution when unwind tools are absent. */
+static bool
+gen_close_clears_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (!is_resume(frame->instr_ptr)) {
+        return false;
+    }
+    bool no_unwind_tools = _PyEval_NoToolsForUnwind(tstate, frame);
+    int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame),
+                                 _PyFrame_InstrOffset(frame, frame->instr_ptr));
+    if (!(oparg & RESUME_OPARG_DEPTH1_MASK) || !no_unwind_tools) {
+        return false;
+    }
+    assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);
+    return true;
+}
+
+int
+_PyGen_CanClearUnreachable(PyThreadState *tstate, PyObject *op)
+{
+    if (!PyGen_CheckExact(op)) {
+        return 0;
+    }
+    PyGenObject *gen = _PyGen_CAST(op);
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    return gen->gi_frame_state == FRAME_SUSPENDED
+        && frame->owner == FRAME_OWNED_BY_GENERATOR
+        && frame->frame_obj == NULL
+        && gen_close_clears_frame(tstate, frame);
+}
+
+/* The collector revalidates the entire cohort before this nonfailing commit.
+   Without an escaped frame, gen_clear_frame only clears fields and roots. */
+Py_GC_PRECISE void
+_PyGen_ClearUnreachable(PyObject *op)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue slots[1];
+    _PyValueRoot span;
+    _PyThreadState_PushValueSpan(tstate, &span, slots);
+    _PyValueSpan_AppendObject(&span, op);
+    assert(tstate->interp->gc.sweeping);
+    assert(op->ob_flags & _Py_GC_DEAD_FLAG);
+    assert(!(op->ob_flags & _Py_GC_FINALIZED_FLAG));
+    assert(_PyGen_CanClearUnreachable(tstate, op));
+    PyGenObject *gen = _PyGen_CAST(op);
+    _PyGC_SET_FINALIZED(op);
+    FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
+    gen_clear_frame(gen);
+    _PyThreadState_PopValueRoot(tstate, &span);
+}
+
 /* Precise: once the generator runs, the span holds it, which the close
    reads after the delegate's close (the parameter rule), and the slot of
    the send's result, as in gen_send(). */
@@ -580,21 +627,11 @@ gen_close(PyObject *self, PyObject *args)
         Py_DECREF(yf);
     }
 
-    if (is_resume(frame->instr_ptr)) {
-        bool no_unwind_tools = _PyEval_NoToolsForUnwind(tstate, frame);
-        /* We can safely ignore the outermost try block
-         * as it is automatically generated to handle
-         * StopIteration. */
-        int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame),
-                                       _PyFrame_InstrOffset(frame, frame->instr_ptr));
-        if (oparg & RESUME_OPARG_DEPTH1_MASK && no_unwind_tools) {
-            // RESUME after YIELD_VALUE and exception depth is 1
-            assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);
-            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
-            gen_clear_frame(gen);
-            res = Py_None;
-            goto done;
-        }
+    if (gen_close_clears_frame(tstate, frame)) {
+        FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
+        gen_clear_frame(gen);
+        res = Py_None;
+        goto done;
     }
     if (err == 0) {
         PyErr_SetNone(PyExc_GeneratorExit);
@@ -1286,6 +1323,8 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
     gen->gi_frame_state = FRAME_CLEARED;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
+    /* Coroutine origin construction can collect after this object is tracked. */
+    gen->gi_origin_or_finalizer = NULL;
     gen->gi_iframe.f_executable = _PyValue_None;
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
     assert(name != NULL);
@@ -1368,6 +1407,7 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     Py_DECREF(f);
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
+    gen->gi_origin_or_finalizer = NULL;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else

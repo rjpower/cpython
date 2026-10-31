@@ -9,7 +9,14 @@ extern "C" {
 #endif
 
 #include "pycore_object.h"        // _PyObject_GC_IS_TRACKED
-#include "pycore_structs.h"       // PyValue
+#include "pycore_structs.h"       // _PyGCValueRange
+
+static inline _PyGCValueRange
+_PyTuple_GCValues(PyTupleObject *tuple)
+{
+    _PyGCValueRange values = {tuple->ob_item, Py_SIZE(tuple)};
+    return values;
+}
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
 // v in the tuple op: 1, 0, or -1 with an exception set.

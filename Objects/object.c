@@ -187,42 +187,9 @@ PyObject_CallFinalizer(PyObject *self)
 int
 PyObject_CallFinalizerFromDealloc(PyObject *self)
 {
-    /* The collector ran the finalizer, from its queue, in the collection
-       before the one that is sweeping self. */
+    /* The collector completes finalization before deallocation;
+       deallocation must not invoke it again. */
     (void)self;
-    return 0;
-    if (Py_REFCNT(self) != 0) {
-        _PyObject_ASSERT_FAILED_MSG(self,
-                                    "PyObject_CallFinalizerFromDealloc called "
-                                    "on object with a non-zero refcount");
-    }
-
-    /* Temporarily resurrect the object. */
-    _PyObject_ResurrectStart(self);
-
-    PyObject_CallFinalizer(self);
-
-    _PyObject_ASSERT_WITH_MSG(self,
-                              Py_REFCNT(self) > 0,
-                              "refcount is too small");
-
-    _PyObject_ASSERT(self,
-                    (!_PyType_IS_GC(Py_TYPE(self))
-                    || _PyObject_GC_IS_TRACKED(self)));
-
-    /* Undo the temporary resurrection; can't use DECREF here, it would
-     * cause a recursive call. */
-    if (_PyObject_ResurrectEnd(self)) {
-        /* tp_finalize resurrected it!
-           gh-130202: Note that the object may still be dead in the free
-           threaded build in some circumstances, so it's not safe to access
-           `self` after this point. For example, the last reference to the
-           resurrected `self` may be held by another thread, which can
-           concurrently deallocate it. */
-        return -1;
-    }
-
-    /* this is the normal path out, the caller continues with deallocation. */
     return 0;
 }
 

@@ -13,38 +13,23 @@ first analysis and plan is the artifact `plan`.
 This is the handover point. The coordinator updates it at landings and hourly
 checkpoints; PROCESS governs the plan and WORKLOG preserves outcomes.
 
-Latest runtime landing: **75e8a1e0c01**, the supported Linux/main-interpreter/
-ordinary-thread/GIL GC milestone. Its qualification, closure and both post-merge
-smokes pass. The [landing review](design/work/reviews/gc-main-only-final-landing.md)
-retains exact source/native identities, failures and support limits.
+Latest runtime integration: qualified source **0b15b4bbc9b**, combining selective
+death processing, native-only suspended-generator cleanup, direct managed scans,
+and warning/origin correctness repairs. The [independent landing review](design/work/reviews/gc-cleanup-final-landing.md)
+clears the explicit composite: predecessor339's three fulls and release stress
+retain their original identities; fresh successor builds, origin/data proof,
+affected modules, debug stress, ASan16 and closure pass. The failed predecessor
+stress and other original failures remain preserved. Both postmerge smokes are
+next, before pushing the runtime integration.
 
-Current candidate: **0b15b4bbc9b**, on `boil/gc-native-cleanup`. It combines
-selective death processing, native-only suspended-generator cleanup, direct
-managed scanning and the restricted-builtins warning repair. Program C/headers
-derive from `4d8e690f483`, with exact decoder/libc effect metadata and two added
-constructor initializations. All seven generated outputs match the original union.
-Four successor make-only builds pass (O1 debug, O3 release, ASan and Clang tail).
-The origin/data regression and affected modules pass. The formerly failing
-debug stress now returns PASS (3,116 tests/113 skips, zero fallback); independent
-terminal review is pending. ASan16 and closure remain. Predecessor33944 passed all early checks, three broad fulls of 51,255
-tests each and release stress, then failed debug stress on an uninitialized
-coroutine origin field. Its results and binaries are preserved. The successor
-initializes that field before tracking in both constructors; it is qualifying
-as an explicitly reviewed composite, rather than claiming old fulls as new runs.
-Original
-selective stress, two linked-audit and ASan recipe failures remain recorded.
-**This runtime candidate is not landed.**
-
-Next: finish the finite constructor qualification, retaining the failed run and
-source-specific passes; complete ASan16, closure and independent landing review;
-merge with fresh release/debug smoke checks; then execute the
+Next: run the two normal release/debug smokes, then execute the
 [post-landing measurement plan](design/work/gc-post-cleanup-performance-plan.md).
-That refreshes all 29 workloads versus upstream, four same-fork comparisons,
+It refreshes all29 workloads versus upstream, four same-fork comparisons,
 four hot `perf` profiles and existing arithmetic/attribute diagnostics. Keep
-32 MiB headroom. The [measured GC plan](design/work/gc-architecture-next.md)
-explains the existing phase, instruction and RSS evidence. Storage changes and
-a copying nursery follow measured costs and explicit writable-slot/pinning
-contracts; neither is implemented in this candidate.
+32MiB headroom. The [measured GC plan](design/work/gc-architecture-next.md)
+explains existing phase, instruction and RSS evidence. Storage changes and a
+copying nursery follow measured costs and explicit writable-slot/pinning
+contracts; neither is implemented in this integration.
 
 Last broad performance result: **0.8243× upstream throughput** in the
 [matched baseline](design/work/pre-I-post-GC-timing.md). Isolated selective death
@@ -122,7 +107,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30, integrated75e8**. PROCESS section0 records the
+Current checkpoint: **2026-10-30, integrated source0b15; postmerge smokes next**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 

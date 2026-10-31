@@ -1546,6 +1546,109 @@ class TracingCollectorTests(unittest.TestCase):
             self.assertIsNone(ref())
 
     @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_finalizer_observes_suspended_generator(self):
+        _queue_child("""
+            import inspect
+            gc.disable()
+            survivors = []
+            observed = []
+            def generate():
+                payload = bytearray(b"still usable")
+                yield "ready"
+                yield payload
+            class Owner:
+                def __init__(self):
+                    self.gen = generate()
+                    assert next(self.gen) == "ready"
+                    self.cycle = self
+                def __del__(self):
+                    observed.append(inspect.getgeneratorstate(self.gen))
+                    self.payload = next(self.gen)
+                    survivors.append(self)
+            def make():
+                Owner()
+            gc.collect()
+            make()
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], observed
+            assert len(survivors) == 1
+            owner = survivors.pop()
+            assert owner.payload == b"still usable"
+            owner.payload.extend(b" after resurrection")
+            assert owner.payload == b"still usable after resurrection"
+            assert inspect.getgeneratorstate(owner.gen) == inspect.GEN_CLOSED
+            del owner
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], observed
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_weakref_callback_observes_suspended_generator(self):
+        _queue_child("""
+            import inspect
+            gc.disable()
+            survivors = []
+            observed = []
+            def generate():
+                yield "ready"
+                yield bytearray(b"callback payload")
+            class Trigger:
+                def __init__(self):
+                    self.cycle = self
+            def callback(ref):
+                assert ref() is None
+                gen = plain()
+                observed.append(inspect.getgeneratorstate(gen))
+                survivors.append((gen, next(gen)))
+            def make():
+                gen = generate()
+                assert next(gen) == "ready"
+                trigger = Trigger()
+                return weakref.ref(gen), weakref.ref(trigger, callback)
+            gc.collect()
+            plain, trigger = make()
+            gc.collect()
+            assert observed == [inspect.GEN_SUSPENDED], (
+                'weakref callback must observe a suspended generator', observed)
+            assert len(survivors) == 1
+            gen, payload = survivors.pop()
+            assert plain() is gen
+            assert payload == b"callback payload"
+            payload.extend(b" alive")
+            assert payload == b"callback payload alive"
+            assert inspect.getgeneratorstate(gen) == inspect.GEN_CLOSED
+            del gen, payload
+            gc.collect()
+            assert plain() is None and trigger() is None
+            assert observed == [inspect.GEN_SUSPENDED], observed
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_suspended_generator_payloads_do_not_accumulate(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                __slots__ = ('data',)
+                def __init__(self):
+                    self.data = bytearray(64 * 1024)
+            def generate():
+                payload = Payload()
+                yield 1
+                yield payload
+            def make_batch():
+                for _ in range(32):
+                    gen = generate()
+                    assert next(gen) == 1
+            def payload_count():
+                return sum(type(obj) is Payload for obj in gc.get_objects())
+            gc.collect()
+            for _ in range(4):
+                make_batch()
+                gc.collect()
+                assert payload_count() == 0, 'suspended payloads retained'
+        """, PYTHON_GCSTRESS="")
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
     def test_finalizer_work_oom_recovers_next_collection(self):
         # The root stack, cleanup journal and output each grow once.  In
         # particular, failure of the journal must leave no unrecorded MARKED.
@@ -1846,6 +1949,43 @@ def make_garbage(n):
                 break
         self.assertEqual(called, [ref])
         self.assertIsNone(ref())
+
+    @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+    def test_weakrefs_after_resurrection(self):
+        _queue_child("""
+            gc.disable()
+            survivors = []
+            finalized = []
+            callbacks = []
+            class A:
+                def __init__(self):
+                    self.data = b"still usable"
+                    self.cycle = self
+                def __del__(self):
+                    finalized.append(self.data)
+                    survivors.append(self)
+            def build():
+                obj = A()
+                return weakref.ref(obj), weakref.ref(obj, callbacks.append)
+            plain, first = build()
+            gc.collect()
+            assert first() is None
+            assert callbacks == [first], callbacks
+            assert finalized == [b"still usable"], finalized
+            # Callback-free weakrefs stay usable through finalization and
+            # are cleared only if the object remains unreachable afterward.
+            assert plain() is survivors[0]
+            assert survivors[0].data == b"still usable"
+            # A new weakref on the resurrected object must be processed at
+            # its next death, even though its finalizer will not run again.
+            second = weakref.ref(survivors[0], callbacks.append)
+            survivors.clear()
+            gc.collect()
+            assert plain() is None and second() is None
+            assert callbacks == [first, second], callbacks
+            assert finalized == [b"still usable"], finalized
+            assert survivors == [], survivors
+        """, PYTHON_GCSTRESS="")
 
     @unittest.skipIf(_testcapi is None, "requires _testcapi")
     def test_dealloc_reads_referents(self):
@@ -4029,6 +4169,111 @@ def _queue_child(code, **env):
     rc, out, err = assert_python_ok("-c", prelude + textwrap.dedent(code),
                                   **env)
     return out.decode()
+
+
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+class ManagedScanningTests(unittest.TestCase):
+    def test_cell_and_tuple_payloads_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"cell and tuple")
+            def make():
+                value = (None, 42, 3.5, Payload())
+                def read():
+                    return value
+                return read.__closure__[0]
+            cell = make()
+            for _ in range(3):
+                junk = [bytearray(1000) for _ in range(200)]
+                del junk
+                gc.collect()
+                assert cell.cell_contents[3].data == b"cell and tuple"
+            refs = gc.get_referents(cell)
+            assert len(refs) == 1 and refs[0] is cell.cell_contents
+            refs = gc.get_referents(cell.cell_contents)
+            assert any(ref is cell.cell_contents[3] for ref in refs)
+            cell.cell_contents[3].data.extend(b" alive")
+            assert cell.cell_contents[3].data == b"cell and tuple alive"
+        """)
+
+    def test_tuple_subclass_attributes_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self, data):
+                    self.data = bytearray(data)
+            class Tuple(tuple):
+                pass
+            def make():
+                obj = Tuple((17, Payload(b"element")))
+                obj.extra = Payload(b"attribute")
+                return obj
+            obj = make()
+            for _ in range(3):
+                gc.collect()
+                assert obj[1].data == b"element"
+                assert obj.extra.data == b"attribute"
+            obj[1].data.extend(b" alive")
+            obj.extra.data.extend(b" alive")
+            assert obj[1].data == b"element alive"
+            assert obj.extra.data == b"attribute alive"
+        """)
+
+    def test_call_and_exception_frame_values_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"frame local")
+            def callback(raise_error):
+                junk = [bytearray(1000) for _ in range(200)]
+                del junk
+                gc.collect()
+                if raise_error:
+                    raise RuntimeError("callback")
+            def hold(raise_error):
+                value = Payload()
+                try:
+                    callback(raise_error)
+                except RuntimeError as error:
+                    assert str(error) == "callback"
+                    gc.collect()
+                value.data.extend(b" alive")
+                return bytes(value.data)
+            for raise_error in (False, True):
+                assert hold(raise_error) == b"frame local alive"
+        """)
+
+    def test_running_and_escaped_generator_values_survive_collection(self):
+        _queue_child("""
+            gc.disable()
+            class Payload:
+                def __init__(self):
+                    self.data = bytearray(b"generator local")
+            def generate():
+                payload = Payload()
+                yield "ready"
+                gc.collect()
+                payload.data.extend(b" alive")
+                yield bytes(payload.data)
+            for escape in (False, True):
+                gen = generate()
+                assert next(gen) == "ready"
+                if escape:
+                    frame = gen.gi_frame
+                gc.collect()
+                assert next(gen) == b"generator local alive"
+                if escape:
+                    del gen
+                    gc.collect()
+                    assert frame.f_locals['payload'].data == (
+                        b"generator local alive")
+                    del frame
+                else:
+                    gen.close()
+        """)
 
 
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")

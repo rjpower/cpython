@@ -37,7 +37,7 @@ record and is updated at every landing.
 | compiler-copyprop | prevent local-load folding across operations that can run Python; specializers must run no Python code | landed: ab18af7d778 cleared independent source/artifact review and merged as 99435658509. Detached default/debug smoke 1,924 each, targeted 1,783 each, debug-kill 20 tests and release/debug full suites 51,081 each passed; zero fallback in 60,014/61,865 collections. Gate3's cext 16 tests, unchanged regeneration and traversal audit passed. Prior three review findings closed; residual performance attribution belongs to checkpoint I |
 | audit-2 | `Tools/boil/traverse_audit.py` report 3 (members that neither the traverse nor a release names) triaged; report 3 part of `--check` | landed 2026-10-28 12:20 PDT (9fe9241bf77): 5 tool defects fixed, 2 real traverse omissions fixed (the SRE scanner's string, the CJK stream writer's pending), 9 allow entries by exact member path; remaining checker limits (last-component matching, duplicated header names, the depth-2 cut-off, hashtable keys and values) to an audit-3 pass by the coordinator after 7a rung 2 |
 | 6e | remaining numeric/container/comparison/hash slots, Clinic residue, inline numeric receivers, identity and pointer bounds | open; design after the 10a root/checker contract settles, as note 06 specifies |
-| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. H1 native62456/tool-test94ab and H2 inert decoder5df/test-only b3e remain unmerged; both checkouts retired with pushed source tags and local evidence. Reopen H1 only for an active Clang-tail target; H2 needs a scheduled usable liveness consumer. No active maps, clearing change or opcode threshold |
+| H | generated handler domain and orthogonal dispatch | H3 storage/names/statistics qualified in d6a23. H1 runtime native62456 and H2 inert decoder5df/test-only b3e remain unmerged; the exact strrchr tool/test prerequisite from94ab is included in0b15; both checkouts retired with pushed source tags and local evidence. Reopen H1 only for an active Clang-tail target; H2 needs a scheduled usable liveness consumer. No active maps, clearing change or opcode threshold |
 | 7/10b | common nursery and stable native space | Qualify/measure current GC union, then choose justified existing-allocator batching or compact region work; writable roots/fields, core barriers, scanned native owners, pinning and independent minor oracle follow. No nursery/barrier/minor implemented; nonmoving generations are not a prerequisite |
 | 8 | tier 0 over the IR, x86-64; uses H3's generated handler domain | open, after checkpoint I |
 | 9 | tier 1 | open |
@@ -121,6 +121,13 @@ the failed339 row; no automatic full3 or release-stress repetition. A wider
 runtime change or new failure reopens this finite scope. Independent final
 composite review, actual Markdown-only integration proof and two fresh merge
 smokes still precede push; measurements follow with actual successor bindings.
+
+Checkpoint19:58PDT: final50054725/382refs clears independent composite LAND.
+All required successor checks and closure pass; source0b15 is integrated with
+primary-only as-built records. Two normal postmerge smokes precede runtime
+push, then roots owns the finite performance batch. Serving0b15 stays frozen.
+H1's exact strrchr effect declaration/unit control from94ab is now included;
+H1 runtime frame passing and H2 decoder remain archived and unmerged.
 
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves

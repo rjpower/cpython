@@ -11,6 +11,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_value.h"         // PyValue_ObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
+#include "pycore_structs.h"       // _PyGCValueRange
 
 #ifdef __cplusplus
 extern "C" {
@@ -301,6 +302,16 @@ static inline PyValue*
 _PyFrame_GetLocalsArray(_PyInterpreterFrame *frame)
 {
     return frame->base;
+}
+
+/* Only for an initialized ordinary frame, not an interpreter-owned entry
+ * frame whose sole live value is its return slot. */
+static inline _PyGCValueRange
+_PyFrame_GCValues(_PyInterpreterFrame *frame)
+{
+    _PyGCValueRange values = {
+        _PyFrame_GetLocalsArray(frame), _PyFrame_NumSlots(frame)};
+    return values;
 }
 
 /* Determine whether a frame is incomplete.

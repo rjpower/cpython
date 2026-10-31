@@ -5641,3 +5641,21 @@ Markdown-only merge proof and two smokes, then publish the held29/parent4/
 profile4/micro results. No final-union speedup is claimed. Root arrays/direct
 managed scans/native compatibility decisions remain as recorded in Review35.
 Next hourly documentation checkpoint20:44PDT; material results reported sooner.
+
+### 2026-10-30 19:58 PDT — GC composite clears LAND and integrates
+
+Fresh ASan16 independently passes4,038/141 over16 modules,13,095collections,
+zero fallback and3 report-only snapshot visits. Closure independently passes
+cext16/exact7 skips, regeneration, traversal and19 header receipts with four
+explicit unsupported modules. Final source/config/tool/four-product postguards
+pass. Final50054725 binds382 absolute refs; independent review3627c0fb says LAND.
+No native work remains in the qualification campaign; runtime window transfers
+to roots for integration smokes and performance.
+
+Merged qualified0b15 once, retaining its histories, and reconciled native,
+scanner and selective as-built records on primary. Only project Markdown differs
+from the qualified source; actual commit/tree/path proof follows the commit.
+Three339 fulls/release stress stay339 executions, original339 debug stress stays
+FAIL, and fresh0b15 delta qualification is explicit. No repeated broad fulls or
+new benchmark score. Two normal postmerge smokes precede runtime push, then the
+finite29/parent4/profile4/micro plan. Serving0b15 and all images stay frozen.

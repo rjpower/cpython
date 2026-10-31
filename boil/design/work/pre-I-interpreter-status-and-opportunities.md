@@ -27,11 +27,12 @@ O1/O3/ASan/tail builds and all early runtime checks pass. All three broad fulls
 pass51,255 tests each and release stress passes on339. Its debug stress fails
 in coroutine origin construction before the traced origin field is initialized.
 Successor0b15 adds exactly two pre-tracking initializations and an origin/data
-regression; all four make-only builds/audits and focused origin/affected/tail
-checks pass. The original debug stress selection returns PASS3,116/113 with
-zero fallback; independent terminal review, ASan16, closure and landing remain
-before any refreshed performance claim. This construction
-repair changes no IR handler or call ABI.
+regression. All four builds, finite delta qualification and closure pass;
+independent composite LAND clears integration. Two postmerge smokes and the
+finite measurement plan follow. No refreshed performance claim is made. This
+construction repair changes no IR handler or call ABI. H1's exact strrchr
+effect/unit prerequisite is included, while its runtime frame-passing history
+and inert H2 remain archived and unmerged.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
 checks actual source and ranks five clean cuts for post-qualification attribution.
@@ -117,7 +118,8 @@ validate metadata and distinguish entries from semantic/site counts. Later
 transport/renumbering and typed operations remain. See
 [H3 source/results](H3-1-stage2b3-implementation.md).
 
-**H1 passed-frame is isolated**, native62456/tool-test94ab. Source/audits,
+**H1 passed-frame is isolated**, native62456. Its exact strrchr effect/unit
+prerequisite from94ab is included in0b15; the runtime branch remains unmerged. Source/audits,
 runtime checks and strict stale controls exist; old combined harness receipts
 have an informational platform-header limitation. Static code changes are
 mixed, and no elapsed benefit is measured. Its matched Clang experiment is

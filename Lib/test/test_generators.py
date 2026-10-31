@@ -721,6 +721,49 @@ class GeneratorCloseTest(unittest.TestCase):
 
 # See https://github.com/python/cpython/issues/125723
 class GeneratorDeallocTest(unittest.TestCase):
+    def test_collect_preserves_delegation_and_finally(self):
+        events = []
+        payload = bytearray(b"delegated payload")
+
+        def inner():
+            try:
+                yield payload
+            finally:
+                events.append(("inner", bytes(payload)))
+
+        def outer():
+            try:
+                yield from inner()
+            finally:
+                events.append(("outer", bytes(payload)))
+
+        def make():
+            gen = outer()
+            self.assertIs(next(gen), payload)
+
+        make()
+        support.gc_collect()
+        self.assertEqual(events, [("inner", b"delegated payload"),
+                                  ("outer", b"delegated payload")])
+        payload.extend(b" alive")
+        self.assertEqual(payload, b"delegated payload alive")
+        support.gc_collect()
+        self.assertEqual(len(events), 2)
+
+    def test_escaped_frame_preserves_mutable_payload(self):
+        def generate():
+            payload = bytearray(b"escaped payload")
+            yield payload
+
+        gen = generate()
+        payload = next(gen)
+        frame = gen.gi_frame
+        del gen
+        support.gc_collect()
+        self.assertIs(frame.f_locals['payload'], payload)
+        payload.extend(b" alive")
+        self.assertEqual(frame.f_locals['payload'], b"escaped payload alive")
+
     def test_frame_outlives_generator(self):
         def g1():
             a = 42

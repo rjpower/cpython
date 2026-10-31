@@ -132,6 +132,9 @@ NON_COLLECTING = frozenset({
     "_PyGen_GetGeneratorFromFrame", "gen_try_set_executing",
     "_Py_LeaveRecursiveCallPy", "_Py_LeaveRecursiveCallTstate",
     "_Py_ReachedRecursionLimit",
+    # Python/ir.c: decodes immutable code words/FBINIT through scalar field
+    # extraction and the static format table; no allocation or callback.
+    "_PyCode_InstrOparg",
     # feedback
     "_PyFb_Entry", "_PyFb_Header", "_PyFb_HasEntry", "_PyFrame_FbPoly",
     "_PyFb_ShapeRow", "advance_backoff_counter", "backoff_counter_triggers",
@@ -140,7 +143,7 @@ NON_COLLECTING = frozenset({
     "assert", "Py_UNREACHABLE", "Py_FatalError", "Py_UNUSED",
     "Py_ARRAY_LENGTH", "Py_MIN", "Py_MAX", "Py_ABS", "JUMP_TO_LABEL",
     "memcpy", "memmove", "memset", "memcmp", "strlen", "strcmp", "strncmp",
-    "strchr", "isnan", "isfinite", "pow",
+    "strchr", "strrchr", "isnan", "isfinite", "pow",
     # reads the stack pointer, with an intrinsic or an asm
     "_Py_get_machine_stack_pointer",
     "Py_BEGIN_CRITICAL_SECTION", "Py_END_CRITICAL_SECTION",

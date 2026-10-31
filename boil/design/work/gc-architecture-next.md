@@ -13,20 +13,14 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 19:44 PDT: successor `0b15b4bbc9b` contains
-the four reviewed improvements and two pre-tracking constructor initializations.
-All four incremental builds and their audits pass. The identical old negative
-probe now passes once; the origin/data regression, four affected modules in
-release off/debug kill and tail ownership control independently pass. The
-formerly failing debug stress returns PASS (3,116 tests/113 skips, 38,251
-collections, zero fallback and43 report-only detached-snapshot visits), with
-independent terminal review pending. ASan16, closure and final composite landing
-review remain.
-Predecessor339's early checks, three fulls of 51,255 tests each and release stress
-are retained at that source. Its debug stress failure exposes the late origin
-initialization; one bounded probe reproduces it and the two-store repair is
-independently source-reviewed. Post-landing comparison and integration packets
-are source-reviewed and held; no new whole-interpreter score is claimed.
+Current checkpoint, 2026-10-30 19:58 PDT: source `0b15b4bbc9b` has completed
+qualification and independent LAND review and is integrated with this record.
+Its explicit composite retains339's three fulls/release stress as339 evidence;
+fresh0b15 four-cohort builds, causal origin/data proof, affected modules, tail
+ownership, debug stress3,116/113, ASan16 4,038/141 and closure all pass. Final
+index50054725 binds382 artifacts. Original failures remain preserved. The two
+postmerge smokes and finite performance batch are next; no new speedup is
+claimed. See the [final landing review](reviews/gc-cleanup-final-landing.md).
 
 This plan supersedes the earlier requirement to ship nonmoving generations
 before movement. The existing generation/store ledgers remain source inputs.
@@ -687,7 +681,7 @@ milestone. The collection transaction, complete pin discovery and native
 resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
 and exact decoder/libc effect repairs; successor0b15 adds only the reviewed
 constructor initializations and origin/data regression. All four fresh build
-audits pass; finite delta qualification and landing remain. Earlier339 fulls
+audits and finite delta qualification pass; independent LAND clears this integration. Earlier339 fulls
 remain their source-specific evidence, alongside its preserved debug stress failure.
 Root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records

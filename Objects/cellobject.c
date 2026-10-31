@@ -122,7 +122,8 @@ static int
 cell_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyCellObject *op = _PyCell_CAST(self);
-    _Py_VISIT_VALUE(op->ob_ref);
+    _PyGCValueRange values = _PyCell_GCValues(op);
+    _Py_VISIT_VALUE(values.base[0]);
     return 0;
 }
 

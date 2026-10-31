@@ -226,29 +226,32 @@ get_warnings_attr(PyInterpreterState *interp, PyObject *attr, int try_import)
 {
     PyObject *warnings_module, *obj;
 
-    /* don't try to import after the start of the Python finallization */
-    if (try_import && !_Py_IsInterpreterFinalizing(interp)) {
-        warnings_module = PyImport_Import(&_Py_ID(warnings));
-        if (warnings_module == NULL) {
-            /* Fallback to the C implementation if we cannot get
-               the Python implementation */
-            if (PyErr_ExceptionMatches(PyExc_ImportError)) {
-                PyErr_Clear();
-            }
-            return NULL;
-        }
+    /* Finalizers can run after the modules dictionary has been cleared. */
+    if (!_PyImport_GetModules(interp)) {
+        return NULL;
     }
-    else {
-        /* if we're so late into Python finalization that the module dict is
-           gone, then we can't even use PyImport_GetModule without triggering
-           an interpreter abort.
-        */
-        if (!_PyImport_GetModules(interp)) {
-            return NULL;
+    warnings_module = PyImport_GetModule(&_Py_ID(warnings));
+    if (warnings_module == Py_None) {
+        /* An explicit sys.modules block must not trigger another import. */
+        Py_DECREF(warnings_module);
+        return NULL;
+    }
+    if (warnings_module == NULL && !PyErr_Occurred() && try_import
+        && !_Py_IsInterpreterFinalizing(interp)
+        && interp->imports.importlib != NULL)
+    {
+        /* Warning delivery can interrupt a frame with restricted builtins.
+           Use interpreter import machinery, not that frame's __import__. */
+        warnings_module = PyImport_ImportModuleLevelObject(
+            &_Py_ID(warnings), NULL, NULL, NULL, 0);
+    }
+    if (warnings_module == NULL) {
+        /* Keep the C fallback for unavailable warnings, but report genuine
+           failures in initialization or warning helpers. */
+        if (try_import && PyErr_ExceptionMatches(PyExc_ImportError)) {
+            PyErr_Clear();
         }
-        warnings_module = PyImport_GetModule(&_Py_ID(warnings));
-        if (warnings_module == NULL)
-            return NULL;
+        return NULL;
     }
 
     (void)PyObject_GetOptionalAttr(warnings_module, attr, &obj);

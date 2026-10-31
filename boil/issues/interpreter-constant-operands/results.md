@@ -90,3 +90,23 @@ it does not yet establish that the change pays for its generator/reader scope.
 The proposed 90-minute host-only follow-up has explicit reject rules and no
 automatic native or timing campaign. Broader checked arithmetic or attribute
 facts require their own demonstrated consumer and fallback/entry proof.
+
+## Source checkpoint, 2026-10-31 21:02 UTC
+
+Candidate `7f0b1819f84ee11b354d60394a4975e1fcb0a188` froze within the
+90-minute prototype budget. [Independent review](reviews/source-20261031-v1.md)
+accepts its exact 31-file source for bounded native feedback. Its independent
+host replay ran 83 tests: 82 ordinary passes and one existing expected failure.
+All seven products reproduced; three intentional defects triggered 13/6/7
+assertion failures without harness errors. Eleven changed C/header root checks
+reported zero diagnostics. The review binds the complete candidate capsule,
+patch, host artifacts and eleven prepared target tests. These are host/source
+results; actual C compilation, target behavior, emitted work and speed remain
+unproven.
+
+The [held performance proposal](performance-plan.md) names existing timed
+coroutine `n - 1`/`n - 2` sites before scores are observed. Its host-only source
+inventory also identifies two spectral-norm `+ 1` candidates and distinguishes
+untimed generator setup from the timed traversal control. Compiler eligibility
+and emitted-word evidence remain prerequisites; no target was executed for
+that inventory.

@@ -96,3 +96,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   and review, with no native or performance result claimed.
   [GC source review](issues/gc-nursery-adoption/reviews/source-20261031-v1.md),
   [IR status](issues/interpreter-constant-operands/status.md).
+- 2026-10-31: Independent exact-source review accepted IR 7f0b1819f84 for
+  bounded native feedback after host replay and generated/root consistency
+  checks. Preselected the existing recursive-coroutine workload for a held
+  performance decision; source inventory identifies its literal subtraction
+  sites without claiming compiler or native evidence. Both tracks prepare
+  reviewed launch bindings before execution.
+  [IR review](issues/interpreter-constant-operands/reviews/source-20261031-v1.md),
+  [held measurement design](issues/interpreter-constant-operands/performance-plan.md).

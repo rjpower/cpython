@@ -8,7 +8,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / feedback preparation | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coordinator | Activate bounded native feedback for reviewed b34931a881b |
-| IR / source review | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Review frozen 7f0b1819f84 and prepare native feedback |
+| IR / feedback preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Activate reviewed native feedback for source-accepted 7f0b1819f84 |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

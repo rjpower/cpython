@@ -226,3 +226,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   concrete helper review precedes activation. No native cadence result yet.
   [Source review](issues/gc-nursery-adoption/reviews/cadence-source-20261031-v1.md),
   [Held feedback](issues/gc-nursery-adoption/cadence-feedback-plan.md).
+- 2026-10-31: Accepted revised cadence helpers after independent review caught
+  verifier-mode, timeout-output and optional-artifact defects. Activated one
+  45-minute native batch with four fresh builds, positive selection and three
+  isolated fault controls. Source and earlier evidence stay frozen; no native
+  result is credited at launch.
+  [Execution](issues/gc-nursery-adoption/cadence-feedback-results.md).

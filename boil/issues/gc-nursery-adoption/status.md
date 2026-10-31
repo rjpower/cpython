@@ -107,6 +107,11 @@ accepts exact c8cc for separately reviewed native feedback. The held
 [cadence feedback plan](cadence-feedback-plan.md) covers thirteen actual
 methods/twenty-two children and three isolated source-negative children in
 one 45-minute window. Concrete helpers and activation remain pending.
+Final-v4 [helper review](reviews/cadence-helper-preparation-20261031-v1.md)
+accepted the corrected preparation. Root activated the eight-row batch at
+23:29:59.201344 UTC, with fixed deadline 00:14:59.201344 UTC and live session
+71061. Fresh candidate configuration has started; native case outcomes remain
+pending in the [cadence execution record](cadence-feedback-results.md).
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

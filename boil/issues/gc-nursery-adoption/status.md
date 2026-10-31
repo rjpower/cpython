@@ -15,6 +15,7 @@
 - Current test-only candidate: `ef0af95904b87d888eee4a98b6a745835ff95085`, frozen 22:03:21 UTC
 - Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
 - Cadence source started: 2026-10-31 22:57:29 UTC; checkpoint 23:12:29 UTC; freeze due 23:42:29 UTC
+- Cadence candidate: `c8cc7718ef3037500aa3902ba5c31acc2b8d7c60`, frozen 23:10:24 UTC
 
 ## Hypothesis
 
@@ -97,6 +98,10 @@ checkpoint and 23:42:29 UTC freeze deadline. It adds two debt/opportunity
 deadlines, commits consumption only on success, and preserves full recovery
 entries and stress/queue behavior. No new native execution is authorized yet;
 exact-source review, performance, qualification and landing remain pending.
+The seven-file source froze early at 23:10:24 UTC. All 22 assembled child
+programs compile on the host, twenty prior nursery IDs remain, and seven
+methods were added. Independent exact-source review and concrete feedback
+preparation now proceed in parallel; no new native pass is claimed.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

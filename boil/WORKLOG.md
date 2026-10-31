@@ -207,3 +207,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   actual elapsed performance; instruction/text size are diagnostics. Source
   and native review remain separate gates.
   [Design and review](issues/gc-nursery-adoption/reviews/cadence-design-20261031-v1.md).
+- 2026-10-31: Rejected the thirteen-handler constant-operand increment on actual
+  elapsed results: coroutine medians regressed 4.47% and 11.64%, with both
+  controls also slower. Independent review verified the fixed 80 samples,
+  eight origins, quiet checks, unchanged products and terminal cleanup. Text
+  growth remains diagnostic; no extra timing or qualification follows. GC
+  cadence source froze early for independent source review and feedback prep.
+  [Performance decision](issues/interpreter-constant-operands/performance-results.md),
+  [outcome review](issues/interpreter-constant-operands/reviews/quiet-outcome-20261031-v1.md).

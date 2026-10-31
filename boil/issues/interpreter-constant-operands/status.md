@@ -1,6 +1,6 @@
 # Reuse exact small constant operands
 
-- State: review
+- State: rejected
 - Owner: qualification_review_resumed; coordinator selects implementation
 - Updated: 2026-10-31
 - Budget: offline research complete; 90-minute host-only prototype
@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: debug and release cases passed; performance decision open, text growth is diagnostic
+- Decision: reject the thirteen-handler increment on measured elapsed regression; text growth remains diagnostic
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Current test-only candidate: `a84965eaa90267ac1dbf1b4c97ab032aaf26cedd`
 - Runtime tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
@@ -39,6 +39,15 @@ native work remains and one operand-source contract can cover every entry.
 No elapsed improvement is inferred from source or sampled evaluator shares.
 
 ## Now / next
+
+The [completed comparison](performance-results.md) rejects this increment.
+Coroutines was 4.47% and 11.64% slower in the two fixed rounds; both controls
+also regressed. Independent [outcome review](reviews/quiet-outcome-20261031-v1.md)
+verified all 80 raw elapsed durations, eight actual origin witnesses, unchanged
+products, accepted quiet checks and terminal cleanup. No extra samples,
+qualification or landing follow this result. Preserve the source and evidence;
+any further implementation needs a separate concrete hypothesis. The history
+below retains the earlier preparation decisions and their limits.
 
 O3 retains RHS admission at `0x4592a0`/`0x4592a3`, and the small-constant producer
 stores then dispatches at `0x45de38`/`0x45de4a`. The simple source proposal is

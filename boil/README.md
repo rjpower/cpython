@@ -31,14 +31,22 @@ memory tradeoffs. Keep32MiB; next separate native-only suspended-generator clean
 from Python finalization, then common-region reclamation and a movable nursery
 with stable native space. Nonmoving generations are not a required intermediate.
 Historical worktree retirement is complete:32 checkouts removed, eight
-registered roots retained, including three ownership/dirty-state exceptions.
+registered roots retained at that checkpoint, including three ownership/dirty-state
+exceptions. The active `boil-gc-native-cleanup` topic is an additional checkout.
 H1/H2 source tags are pushed and selected evidence is retained locally.
 Implementation of the framed plan is authorized. Active parallel lanes are
 selective-death landing qualification, native-only generator cleanup, and the
 [code/root organization review](design/work/gc-architecture-next.md#7-code-design-and-the-interfaces-we-will-improve).
 The plan now explains actual root APIs/data structures and the staged shared
-interfaces for regions and writable slots. Native cleanup is source-only until
-independent review; no nursery or new broad performance result is claimed.
+interfaces for regions and writable slots. Native-cleanup source70977878 passes
+independent review, including removal of obsolete deallocator ceremony; native
+composition/qualification waits for selective death. Selective ASan16 passes4,027
+and release full passes51,241 tests with zero fallback; debug/stress/closure remain.
+[Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
+clarifies that frame registers already are roots, durable root lists are sparse
+fork registrations, and common managed layouts will gain direct slot scanners
+while pinned native types retain traversal adapters. No nursery or refreshed
+broad performance result is claimed.
 This update separates implemented work
 from landed work; prior delivery dates are superseded by PROCESS §0.4.
 

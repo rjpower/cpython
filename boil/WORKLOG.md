@@ -5269,3 +5269,44 @@ authority and distinguishes fatal current object-map extension from returnable
 future region reservation. First fresh selective release smoke passes1,935 tests/
 80 skips with source94ae/native10d and cleanup/root/state checks. Affected whole4
 and the fresh ASan build are active; full qualification is not yet complete.
+
+
+### 2026-10-30 17:09 PDT — review35 reflection; implementation continues
+
+The user asks whether root lists/traversal inherit unsuitable CPython machinery,
+and explicitly keeps implementation moving. Roots qualification and stats review
+were still running after the root read-only poll interruption; the native-cleanup
+author was deliberately awaiting independent review. No native job was killed
+or restarted. Ordinary IR register writes are assignments into existing frame
+arrays; full physical slot extent is scanned at collection. Extra C roots cover
+boxing/reentry temporaries, not every instruction. _PyValueRoot/_PyGCRoot/public
+root registration are fork additions absent pinned upstream, not per-object
+CPython generation lists. Internal durable registration is O(1), while public
+slot-address removal searches O(R). Existing data does not isolate that cost.
+
+Architecture§8 compares chunked transient shadow stacks and dense persistent
+handles without conflating lifetimes. The selected managed path uses direct
+slot/range scanning with one field definition for mark/update; native opaque
+layouts retain tp_traverse/pinning. Trusted exact slots versus ambiguous lookup
+are distinct contracts; current-domain/initialized identity cannot disappear
+merely because a pointer is tagged. Independent source review clears§8 with
+one wording refinement: historical subtraction remains diagnostic, while live
+collection no longer uses the RC cycle-isolation algorithm.
+
+Native-cleanup V1 source32d4e339 and narrow B/no-GIL successor70977878 are
+committed/pushed after independent SOURCE_CLEAR. The latter preserves exported
+return0 API while removing unreachable RC code and redundant generator
+TRACK/stub/UNTRACK ceremony, keeping weakref/native cleanup. Host root/AST/child
+checks pass; no native qualification claimed. Author prepares reused native
+packets and will merge selective integration before final adaptation/qualification.
+Region implementation packet4a3bd1ba names actual wrapper, publication, lookup,
+free/resize/quarantine/reset and late-lifetime boundaries; existing-mimalloc
+cleanup comes first. A direct managed scanner packet is being prepared.
+
+Selective qualification source94ae/native10d (fresh ASan94ae) remains frozen.
+ASan16 terminal passes4,027/141skips,13,015collections/0fallback/3report-only
+unpinned; release full passes51,241/3,795skips,58,608collections/0fallback/1report-only
+unpinned. Independent raw validator/ref replay clears frozen outcomes and
+preserves warning/skip limits. Debug normal is active; debug kill, stress and
+closure follow. No new runtime landing or full interpreter speed claim yet.
+Next hourly checkpoint17:44PDT; material changes are reported sooner.

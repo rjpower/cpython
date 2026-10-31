@@ -526,11 +526,117 @@ work, place root declarations/visitors together and keep platform unwind code in
 dependencies from the hot mark path. Update obsolete comments at those boundaries.
 This avoids interleaving a large mechanical file split with lifecycle fixes.
 
-The active landing order is selective death → native-only cleanup → measured
-storage cleanup/region backend → writable slots/core barriers/stable-owner scans
-and oracle → copying minors. Independent review can examine the next slice while
+The active landing order is selective death → native-only cleanup with obsolete
+deallocator ceremony removed → direct managed slot scanners and measured
+storage/space work → core barriers/stable-owner scans and oracle → copying minors.
+Slot/scanner and region interfaces can be developed in parallel once their
+field/space contracts are agreed; the region experiment remains conditional
+on common-path coverage and allocator-hook costs. Independent review can examine the next slice while
 the preceding frozen source runs its gates. Runtime branches merge the landed
 integration head before final qualification; they do not consume one another's
 unlanded patches. Release measurements serialize after the broad runtime union
 lands. The resulting report will include the full interpreter comparison,
 allocation-heavy rows, actual nursery coverage/pinning, GC CPU, RSS and pauses.
+
+## 8. Review35: choose GC structures for this runtime
+
+The resemblance to CPython mixes two different things. The live collector no
+longer uses its per-object GC generation links, reference-count copying/subtraction
+or cycle-isolation algorithm. Historical subtraction code remains in diagnostics. `_PyValueRoot`, `_PyGCRoot` and `PyGC_AddRoot` are fork
+interfaces, absent from the pinned upstream source. The inherited part is mostly
+the native object-edge protocol (`tp_traverse`/`visitproc`) and native cleanup.
+Those were useful for establishing complete coverage; they are not the intended
+universal hot path for a moving collector.
+
+### Frame registers already form the common root set
+
+Ordinary IR operations store directly into the frame's `PyValue` array. They
+do not register/unregister each result as a separate root. At collection,
+`_PyGC_TraceVisitFrames` walks pushed frames and active generator/coroutine
+frames; `_PyFrame_Traverse` and `_PyGC_VisitFrameStack` scan their physical slot
+extent and header references. The extent is `co_framesize - FRAME_SPECIALS_SIZE`.
+Slots are initialized before use; temporary slots are cleared as inputs die.
+Extra C spans protect values that are not safely held there, such as newly
+boxed receivers or temporaries across callbacks. One span can cover many values.
+
+We still scan the full slot extent, rather than a final-IR liveness map. Object
+mark bits suppress repeated object traversal, not repeated examination of slots.
+Some conservative compatibility coverage also overlaps precise frame storage.
+A usable physical-liveness map could reduce scanning/retention and clearing
+work, but needs complete final-word effects, alternate/exception entries,
+monitoring and frame-publication proofs. Archived H2 is only a partial decoder,
+not an existing usable map. Keep frame-array roots; pursue a complete map as a
+separate interpreter/root improvement when the remaining profile selects it.
+
+### Linked roots: distinguish lifetime from scan density
+
+An intrusive link is not inherently a bad GC structure. Our long-lived list
+contains **explicitly registered arrays**, not every heap object or frame slot.
+Its embedded nodes support arbitrary lifetimes, stable addresses and constant-time
+internal insertion/removal without allocation. The public wrapper allocates a
+node and removal by slot address currently searches the list, `O(R)` in registered
+records. Scanning is `O(R + S)` for records plus their slots, with pointer chasing
+between records. We have not measured its population or isolated its CPU cost.
+
+| Root family | Current fit | Better alternative when needed |
+| --- | --- | --- |
+| Interpreter registers | Contiguous existing frame arrays; no root-node update on ordinary stores. | Static safepoint liveness maps over these same arrays, rather than another root stack. |
+| Temporary C scopes | Allocation-free local span records; LIFO and initialized-length contract. | A per-thread chunked shadow stack with saved-top scope restoration, if span registration/scanning materially costs time. Reserve chunks before exposure and preserve reentry, detach, raw-box and alias rules. |
+| Durable external arrays | Intrusive interpreter list; arbitrary removal and caller-owned storage. | Stable records in blocks plus a dense active index/handle for removal and scanning if `R` becomes material. Reserve capacity before publication; a growing vector cannot silently replace an allocation-free registration contract. |
+
+The next measurement should distinguish record count, slot count, registration
+frequency and scanning CPU. A large array behind one node is already dense where
+its values live; replacing that node with a hash table would add costs without
+improving the array scan. Conversely, many one-slot persistent roots can justify
+blocks and direct handles. We will change the representation for that workload,
+not retain a linked list as a permanent architectural commitment.
+
+The local/durable lifetime distinction is also present in
+[V8's embedding handle API](https://v8.dev/docs/embed). LLVM documents a linked
+shadow stack as a portable rooting strategy and describes compiler stack maps
+as the lower-overhead alternative when the compiler can provide them.
+[LLVM GC integration](https://www.llvm.org/docs/GarbageCollection.html#the-shadow-stack-gc)
+These are useful tradeoffs, not evidence of our root-registration cost.
+
+### Retain edge knowledge; replace generic callbacks on common layouts
+
+`Py_VISIT` is a small null-check/callback helper, not CPython's cycle algorithm.
+Finding strong references remains necessary in any tracing collector. The useful
+inherited asset is knowledge of which native fields are strong, weak or owned
+elsewhere. The current protocol nevertheless has costs: dispatch through
+`tp_traverse` once per object, a callback for each reference, and precise child
+visitation that still performs allocator/object-start lookup in `live_visit`.
+It also reports values instead of writable locations. Our measurements do not
+isolate those costs from marking/classification; a speedup is not established.
+
+The selected code direction is now explicit:
+
+1. **Managed core layouts use direct slot/range scanning.** Start with the
+   admitted cell/tuple layouts, then frame/value arrays, lists and shape slots.
+   Select a layout once per object; scan contiguous tagged values with inline
+   tag checks and the mark operation visible to the compiler. Pointer-free
+   payloads need no child scan. Preserve type/header and runtime-owned attribute
+   edges alongside payload fields.
+2. **Share slot descriptions across marking and relocation.** A compact exact
+   layout walker supplies actual value/object locations, with initialization
+   bounds and separate weak edges. Instantiate the mark/update loops so that
+   introducing a slot visitor does not merely replace one per-edge indirect
+   callback with another. Use existing shape/value layout facts, adding only
+   the native-layout information they do not contain. Barrier ownership uses
+   the same field boundary; it is not inferred from a raw backing-array address.
+3. **Pinned native layouts keep the traversal adapter.** Their complete strong
+   edges seed minor liveness; readonly targets pin before evacuation. Port a
+   measured hot native family to slot/barrier contracts when useful. This makes
+   `tp_traverse` the compatibility path rather than the universal managed path.
+4. **Separate trusted slots from ambiguous words.** Validated exact managed
+   slots can eventually mark through a simpler path; raw/interior C words still
+   require safe address-to-object lookup. Make publication and slot validity
+   explicit before removing a lookup, with debug/verifier checks covering the
+   stronger contract. Weak fields never become strong merely to simplify a loop.
+
+This is an implementation refinement of the approved writable-slot/nursery
+milestone. The collection transaction, complete pin discovery and native
+resource rules stay intact. Current native-cleanup qualification continues;
+root-list replacement and a universal layout-description framework are not
+prerequisites. The [region/code packet](gc-region-implementation.md) records
+where allocator integration costs may favor existing-mimalloc cleanup first.

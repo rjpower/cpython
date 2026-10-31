@@ -56,6 +56,16 @@ slices. Current native gates remain finite and source-frozen; later branches
 merge the landed integration before final qualification. Report broad performance
 after the runtime improvements land, with hourly documentation checkpoints.
 
+Review35 refines the code direction: retain frame-array roots; assess transient
+C shadow-stack and durable-root representations by their distinct lifetimes;
+introduce direct managed slot/range scanners with shared mark/update field
+knowledge. Native `tp_traverse` remains an explicit pinned compatibility path.
+This replaces the universal per-edge callback direction, not the strong-edge
+coverage contract. Native-cleanup70977878 clears independent source review and
+includes redundant generator finalizer ceremony removal; final native composition
+and gates follow the selective landing. Existing ASan16/release full pass;
+remaining selective debug/stress/closure and landing review are active.
+
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves
 30.9%; the other three ranges overlap. O1-debug focused13 and four affected

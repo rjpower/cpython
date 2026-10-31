@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / reviewed test correction | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Freeze per-target oracle and deterministic last-record fixture by 21:49 UTC |
-| IR / remaining native feedback | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coordinator | Corrected eleven passed; review broader checks within original deadline |
+| GC / fresh native feedback | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coordinator | Review corrected source856 debug outcomes by original 22:07:46 deadline |
+| IR / golden inventory preparation | [Exact constant operands](interpreter-constant-operands/status.md) | qualification_review_resumed / coroutine_design_review | Review actual golden differences before changing expectations |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

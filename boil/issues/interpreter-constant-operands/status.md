@@ -2,7 +2,7 @@
 
 - State: review
 - Owner: qualification_review_resumed; coordinator selects implementation
-- Updated: 2026-10-31, 21:41 UTC
+- Updated: 2026-10-31, 21:48 UTC
 - Budget: offline research complete; 90-minute host-only prototype
 - Source started: 2026-10-31 20:20:13 UTC; decision due 21:50:13 UTC
 - Checkpoints: 20:50:13 domain/format; 21:20:13 fallback/observer/stack proof
@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: test-only oracle corrected after exact observation; eleven cases passed; broader feedback running
+- Decision: corrected eleven, full IR and generation passed; stopped at disassembly golden; inventory held
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Current test-only candidate: `a475acbf46d117137f7201adcb4557ce92fb9ec5`
 - Tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
@@ -68,7 +68,11 @@ An exact-CodeType observation confirmed earlier block inlining, and the
 [reviewed test-only correction](reviews/test-oracle-correction-20261031-v1.md)
 preserves the raw-CFG controls. Its remaining-only batch started at 21:40 UTC
 on the bridged debug image; all eleven corrected cases passed without skips,
-and full IR follows. The original deadline remains
+all 74 IR tests passed, and generation ran 83 tests with one existing expected
+failure and no unexpected result. Disassembly then stopped at the first
+constant-load/immediate golden mismatch. A bounded unchanged-source inventory
+is held for review and a free native window before any golden correction.
+The original deadline remains
 22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
 The [held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its

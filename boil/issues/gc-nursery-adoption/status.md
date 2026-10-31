@@ -10,7 +10,8 @@
 - Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
 - Source started: 2026-10-31 20:18:11 UTC; source checkpoint due 21:48:11 UTC
 - Overall dispatch deadline: 2026-11-01 04:18:11 UTC
-- Candidate: `b34931a881b33b47a2b2f4b1b2a644c50fed963b`, frozen 20:48:24 UTC
+- Initial candidate: `b34931a881b33b47a2b2f4b1b2a644c50fed963b`, frozen 20:48:24 UTC
+- Current test/fixture correction: `856222c62458bf3648e51d0bb0d278b1fbf54bd7`, frozen 21:42:14 UTC
 - Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
 
 ## Hypothesis
@@ -60,8 +61,12 @@ Exact-body observations witnessed retirement of both original target records
 while preserving unrelated records; the observation's changed resize failure
 location limits its causal claim about the first run. Independent design review
 accepted per-target oracles and an isolated exact-last-entry metadata fixture.
-Source/host correction freezes by 21:49 UTC, then receives exact review and a
-fresh debug build within the original window. No behavior acceptance is claimed.
+The source correction froze before 21:49, passed independent exact review and
+started fresh debug feedback at 21:47 UTC, session 90952. Its focused thirty
+methods/51 children and both remote-stat cases passed; whole-GC OFF returned
+204 tests with 21 expected skips. Remaining contracts/KILL and independent
+outcome review continue. Old products remain sealed; original deadline
+22:07:46 UTC is unchanged. Qualification remains pending.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

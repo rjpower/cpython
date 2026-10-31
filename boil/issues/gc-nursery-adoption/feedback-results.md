@@ -132,4 +132,37 @@ last-entry hint/count transition and harmless empty repeat, and never installs
 state in the live collector or exercises interpreter creation. It supplies
 metadata evidence rather than a B-reachability witness. The actual free,
 resize and rooted-reuse controls remain. New C fixture code requires exact
-source review and fresh debug products; no source correction is accepted yet.
+source review and fresh debug products; no source correction was accepted at
+this observation checkpoint.
+
+## Reviewed correction on fresh products
+
+Source `856222c62458bf3648e51d0bb0d278b1fbf54bd7` froze at 21:42:14 UTC,
+before the 21:49 limit. The [independent exact-source review](reviews/retirement-correction-source-20261031-v1.md)
+accepts its five-file correction for bounded feedback. The live retirement
+hook is byte-identical; actual B/free/resize/reuse controls remain. The isolated
+scratch fixture supplies the last-entry metadata transition without installing
+state in the collector. Twenty method IDs are unchanged.
+
+Root [accepted the fresh-build helpers](reviews/retirement-feedback-helpers-20261031-v1.md)
+after host replay and preservation checks, then activated the sole invocation
+at **21:47:26.018736 UTC**, exec session **90952**. Evidence is under the isolated
+checkout's `build/nursery-adoption-feedback-retirement/`; products use the new
+`build/debug-retirement/`, preserving the prior 588-product debug image.
+The original **22:07:46.664152 UTC** deadline is unchanged. Configuration/build
+was running at 21:48 UTC; no corrected target-test result is recorded yet.
+
+- Plan SHA-256: `d5933054028035800bfbe0ad4cb87a77f8fc13d21fb454fa2d23260daa9c5568`.
+- Manifest: `bdebe4659fedb4ad977788b1ce7b826368644564f87ffca2c0f3410281d5e6cf`.
+- Independent source receipt: `1f1341be15100d4902459bb9ee7af49ae3a8630028d1c055f4cd879d0fc36684`.
+- Coordinator helper receipt: `13a0febe6e179f48ad7ced40fd7ccdcf298ff268c0f65564eaba745fe2110d84`.
+
+At 21:52 UTC, the fresh build passed, followed by the full focused selection:
+twenty OFF methods/37 children, nine KILL/both-extras methods/12 children, and
+one retain/both-extras stress method/two children. All thirty method executions
+passed without skips; the 51 actual children include one separate expected
+KILL auxiliary. Dynamic stress remains backed by the frozen assertions rather
+than per-call observer telemetry. All three cohorts reported zero fallbacks.
+Both remote-statistics cases actually executed and passed without an availability
+skip. Whole-GC OFF then returned 204 tests with its 21 expected skips. Its
+terminal contract and the subsequent KILL row still need final disposition.

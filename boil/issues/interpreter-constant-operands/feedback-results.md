@@ -88,3 +88,26 @@ At 21:40:46 UTC the corrected eleven-case selection passed with zero skips,
 including terminal verification and idle cleanup. Full `test_ir` then started.
 Broader behavior, emitted-work, qualification and performance decisions remain
 open; this checkpoint does not accept the complete representation.
+
+### Broader checks and first disassembly golden
+
+The same continuation passed all 74 `test_ir` cases. The generator suite ran
+83 tests: 82 ordinary passes and one existing expected failure, with no
+unexpected results. Their terminal verification and cleanup passed.
+
+`test_dis` then stopped at its first failure after 45 cases (44 passes):
+`DisTests.test_disassemble_str` expected a separate LOAD_SMALL_INT for `x + 1`
+and a register RHS. Actual output removes that load and displays literal 1 in
+the arithmetic word. The failure and complete diff are retained. Session 7327
+is terminal; idle cleanup passed at 21:42:25.657210 UTC. Later code/trace/
+monitoring, O3 and emission rows did not run.
+
+Root authorized preparation of a separately bounded diagnostic inventory:
+the unchanged full disassembly module without fail-fast, plus actual output
+for the five exact existing fixture strings in the failed method. Assertion
+differences are observations to classify individually, not compatibility credit
+or permission to replace expectations blindly. Unexpected native/status/error
+results stop the diagnostic. The source, conditions and failed receipts remain
+unchanged. Exact helper review and root activation precede execution, after the
+GC native window. Its own ten-minute cap also retains the original
+22:20:45.868428 UTC ceiling.

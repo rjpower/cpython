@@ -140,3 +140,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   remaining feedback runs under the original deadline.
   [GC observations](issues/gc-nursery-adoption/feedback-results.md),
   [IR continuation](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Independent review accepted GC oracle/fixture correction856;
+  fresh debug feedback started while preserving the old image and deadline.
+  IR full-module and generator checks passed, then stopped at the anticipated
+  literal-operand disassembly golden. Prepared a bounded unchanged-source
+  inventory before updating expected output; no performance claim.
+  [GC fresh run](issues/gc-nursery-adoption/feedback-results.md),
+  [IR remaining checks](issues/interpreter-constant-operands/feedback-results.md).

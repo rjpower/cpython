@@ -8,7 +8,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | GC / cadence native feedback | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Reviewed eight-row batch active; establish actual behavior and three causal fault detections |
-| IR / common state research | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | qualification_review_resumed / coordinator | Explain concrete extra stack operations and select one bounded design before another opcode increment |
+| IR / slot-base prototype | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | qualification_review_resumed / coordinator | Implement reviewed handler-local derivation, then check exact entry/root contracts before native feedback |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

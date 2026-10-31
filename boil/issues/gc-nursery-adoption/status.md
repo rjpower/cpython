@@ -1,123 +1,69 @@
 # Adopt the nursery as the runtime architecture
 
-- State: review
-- Owner: restart_audit implements; coroutine_design_review independently reviews; coordinator integrates
+- State: active
+- Owner: restart_audit implements; independent reviewers check source/helpers; coordinator integrates
 - Updated: 2026-10-31
-- Base: merged `d98291018c9665ae3db6952da0b0a40a4e04992b`
-- Budget: design accepted; eight elapsed hours with 90-minute source and first-feedback checkpoints
-- Depends on: [post-merge nursery/shape checks](../nursery-shape-landing/status.md)
-- Decision: keep the functioning nursery; remove global nursery/no-nursery optionality
+- Base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
+- Adopted automatic-major baseline: `ef0af95904b87d888eee4a98b6a745835ff95085`
+- Current cadence candidate: `5cc1e5310e2cb5f11feade09195b5a3695188161`
 - Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
-- Source started: 2026-10-31 20:18:11 UTC; source checkpoint due 21:48:11 UTC
-- Overall dispatch deadline: 2026-11-01 04:18:11 UTC
-- Initial candidate: `b34931a881b33b47a2b2f4b1b2a644c50fed963b`, frozen 20:48:24 UTC
-- Current test/fixture correction: `856222c62458bf3648e51d0bb0d278b1fbf54bd7`, frozen 21:42:14 UTC
-- Current test-only candidate: `ef0af95904b87d888eee4a98b6a745835ff95085`, frozen 22:03:21 UTC
-- Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
-- Cadence source started: 2026-10-31 22:57:29 UTC; checkpoint 23:12:29 UTC; freeze due 23:42:29 UTC
-- Cadence candidate: `c8cc7718ef3037500aa3902ba5c31acc2b8d7c60`, frozen 23:10:24 UTC
+- Dispatch started: 2026-10-31 20:18:11 UTC; overall deadline 2026-11-01 04:18:11 UTC
+- Current feedback deadline: 2026-11-01 00:14:59.201344 UTC, unchanged after the first build failure
+- Decision: keep mandatory nursery admission and real minors; automatic cadence remains an experiment
 
 ## Hypothesis
 
-Mandatory age admission for the existing exact cell/tuple cohort, real minor
-collection and age-aware checking can replace the temporary experiment switch
-without a parallel legacy collector mode. One automatic minor halfway through
-the existing major allocation budget may provide useful early reclamation;
-its additional all-old scan must earn its cost separately.
+Mandatory admission for the exact cell/nonempty-base-tuple cohort and real
+checked minors replace the global nursery switch. One automatic minor halfway
+through the existing major byte budget may reclaim useful young work sooner;
+its all-old scan must earn its cost through actual elapsed performance.
 
-## Experiment
+## Experiment and decision rule
 
-Follow the [design](design.md): remove the runtime enable field and test setter,
-migrate all live consumers/tests, support actual minor execution under retain,
-KILL and stress, and keep major debt independent of minor requests. Compare
-the automatic cadence using temporary source variants, with actual collection
-and age witnesses, fixed major budgets, matched instructions/elapsed and memory.
+The [adoption design](design.md) defines admission, age-aware verification,
+transactional diagnostic records, retirement and independent major debt. The
+[concrete cadence design](cadence-design.md) adds only major/opportunity
+deadlines and no runtime policy choice. Failed attempts cannot consume a minor
+opportunity or reset major debt; explicit full/emergency entries remain majors.
 
-## Decision rule
+Keep the nursery architecture. Integrate a correct, useful scheduling increment
+or reject that increment and retain automatic majors/manual minors as the one
+settled policy. Never restore a nursery disable option. Performance uses the
+elapsed-first [cost plan](cadence-cost-plan.md), with resource correctness and
+explicit memory tradeoffs; text/instruction counts are diagnostics.
 
-The nursery is adopted. Reject an incorrect implementation or expensive
-automatic cadence and improve it; do not restore a nursery disable option.
-The halfway cadence is a hypothesis rather than an accepted policy. Adoption
-with automatic majors and explicit minors is a coherent scheduling baseline
-for that comparison, not a second collector mode.
+## Current evidence
 
-## Now / next
+The mandatory-admission baseline passed its [first native feedback](feedback-results.md)
+and [independent outcome review](reviews/retirement-feedback-outcome-20261031-v1.md).
+Its separate [causal controls](causal-plan.md) detected the nominated manual-kind,
+debt-reset and finite-major starvation faults; [outcome review](reviews/causal-controls-outcome-20261031-v1.md)
+accepted those exact scopes. That evidence does not qualify the later cadence.
 
-The [independent design review](reviews/nursery-adoption-design-20261031.md)
-cleared design `046b8ab0…` for the first source increment. Implementation is
-frozen in the isolated worktree from documentation checkpoint `32f14069fd2`,
-whose runtime source is d98291018c9. The candidate adds mandatory admission,
-actual checked minors, transactional diagnostic records, storage-lifetime
-retirement and failed-collection debt/backoff. Host checks pass; twenty
-focused tests are prepared. [Exact-source review](reviews/source-20261031-v1.md)
-accepts b34931a881b for bounded native feedback. Concrete helpers, launch
-bindings and the [held feedback plan](feedback-plan.md) received coordinator
-acceptance. The first launch stopped before configuration on inconsistent
-assembler path spellings in the readiness/build tool records; no build or
-target test ran. [Failure evidence](feedback-results.md) is preserved. The
-[independent correction review](reviews/feedback-helper-correction-20261031-v2.md)
-accepted the new held helpers. Root activated their remaining-only execution
-at 21:16:41 UTC under the original 22:07:46.664152 UTC deadline. The debug build
-passed; the first selection ran twenty methods with two failures involving
-private-tuple diagnostic records. Execution stopped and cleanup passed.
-Exact-body observations witnessed retirement of both original target records
-while preserving unrelated records; the observation's changed resize failure
-location limits its causal claim about the first run. Independent design review
-accepted per-target oracles and an isolated exact-last-entry metadata fixture.
-The source correction froze before 21:49, passed independent exact review and
-started fresh debug feedback at 21:47 UTC, session 90952. All seven rows
-completed at 21:53:34 UTC; root confirmed terminal exit zero. The focused thirty
-methods/51 children and both remote-stat cases passed; whole-GC OFF and KILL
-each returned 204 tests with 21 expected skips. The independent
-[outcome review](reviews/retirement-feedback-outcome-20261031-v1.md) accepts
-this exact first feedback, including normal-child root coverage and idle
-cleanup. Every row has zero fallback; each whole suite has one worker unpinned
-event consistent with its passing deliberate counter test. Old products remain
-sealed. Required temporary force-major and minor-debt-reset controls are next;
-qualification, cadence selection and landing remain pending.
-Source review found that the old final allocation would trigger a major even
-after an incorrect minor debt reset. The [reviewed oracle correction](reviews/finite-major-oracle-20261031-v1.md)
-now interleaves bounded allocations and manual minors under automatic GC, with
-a finite actual-budget witness. Its test-only source is frozen; positive
-feedback and temporary negative-source manifests are frozen. Independent
-[preparation review](reviews/causal-controls-preparation-20261031-v1.md) accepts
-the exact six-row [causal plan](causal-plan.md), source isolation, sealed-product
-bridge and actual expected-failure witnesses. No native run of that correction
-was credited at preparation. Root activated the separate causal window at
-22:28:49 UTC, deadline 23:13:49 UTC, session 80557. Both baseline rows passed;
-the force-major arm produced its nominated old-owner assertion failure. The
-debt-reset arm produced both nominated debt/starvation failures. All six rows
-completed at 22:35:14 UTC; root confirmed terminal exit zero and idle cleanup.
-Expected failures earn causal evidence only. Independent
-[outcome review](reviews/causal-controls-outcome-20261031-v1.md) accepts the
-positive cases, all three nominated fault detections and terminal cleanup.
-The separate [halfway scheduling design](cadence-design.md) passed
-[independent review](reviews/cadence-design-20261031-v1.md). Root granted a
-45-minute host-only source increment at 22:57:29 UTC, with a 15-minute status
-checkpoint and 23:42:29 UTC freeze deadline. It adds two debt/opportunity
-deadlines, commits consumption only on success, and preserves full recovery
-entries and stress/queue behavior. No new native execution is authorized yet;
-exact-source review, performance, qualification and landing remain pending.
-The seven-file source froze early at 23:10:24 UTC. All 22 assembled child
-programs compile on the host, twenty prior nursery IDs remain, and seven
-methods were added. Independent exact-source review and concrete feedback
-preparation now proceed in parallel; no new native pass is claimed.
-The [independent source review](reviews/cadence-source-20261031-v1.md) now
-accepts exact c8cc for separately reviewed native feedback. The held
-[cadence feedback plan](cadence-feedback-plan.md) covers thirteen actual
-methods/twenty-two children and three isolated source-negative children in
-one 45-minute window. Concrete helpers and activation remain pending.
-Final-v4 [helper review](reviews/cadence-helper-preparation-20261031-v1.md)
-accepted the corrected preparation. Root activated the eight-row batch at
-23:29:59.201344 UTC, with fixed deadline 00:14:59.201344 UTC and live session
-71061. Fresh candidate configuration has started; native case outcomes remain
-pending in the [cadence execution record](cadence-feedback-results.md).
-The first source checkpoint covers mandatory admission, manual minor semantics
-and checker support with existing automatic-major scheduling. Only after that
-correctness checkpoint does the separately reviewed cadence increment begin.
+The cadence source froze at `c8cc7718ef3` within its 45-minute source scope.
+[Exact-source review](reviews/cadence-source-20261031-v1.md) accepted the seven-file
+change and host preparation of thirteen methods/twenty-two children. Native
+feedback stopped at its first linked-frame audit before any focused case or
+negative ran. Root confirmed session 71061 terminal exit 1 and idle cleanup.
+All failed products and the original failure remain preserved.
 
-The earlier [coroutine proposal](../gc-nursery-coverage/design.md) is retained
-as history and needs rebasing after adoption. Its global-knob and
-automatic-major-only assumptions no longer authorize implementation or a
-permanent runtime switch. Broader allocation coverage follows the adopted
-minor/major/checker contract and its measured scheduling decision.
+Successor `5cc1e5310e2` adds precise-frame annotations to the two actually
+outlined scalar helpers, changing no scheduling logic, tests or audit rules.
+Its [independent correction review](reviews/cadence-precise-correction-source-20261031-v1.md)
+accepts fresh reviewed feedback. Remaining-only helpers use fresh builds and
+source-negative arms under the original batch deadline. Their
+[helper review](reviews/cadence-precise-helper-preparation-20261031-v1.md) accepted
+the exact successor. Root activated it at 23:42:14.488441 UTC; session 73424 is
+live and fresh configuration is underway. The
+[cadence execution record](cadence-feedback-results.md) owns actual
+rows, identities, failures and terminal observations.
+
+## Next
+
+Complete reviewed [focused cadence feedback](cadence-feedback-plan.md), including
+three exact isolated fault children. Then compare the three frozen source arms
+under matched release policy and qualify the one selected coherent candidate.
+No cadence performance, broad qualification or landing is accepted yet.
+
+Rebase [broader allocation coverage](../gc-nursery-coverage/status.md) afterward;
+its historical global-knob proposal grants no new switch or implementation.

@@ -232,3 +232,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   isolated fault controls. Source and earlier evidence stay frozen; no native
   result is credited at launch.
   [Execution](issues/gc-nursery-adoption/cadence-feedback-results.md).
+- 2026-10-31: Cadence feedback stopped at the first linked-frame audit failure,
+  before focused tests. Preserved the failed build and verified idle cleanup.
+  Reviewed a two-annotation precise-frame correction supported by actual ELF
+  calls and source checks; fresh remaining-only feedback keeps the original
+  batch deadline, with no audit weakening or silent clock reset.
+  [Failure and correction](issues/gc-nursery-adoption/cadence-feedback-results.md).
+- 2026-10-31: Started fresh corrected GC feedback under the unchanged deadline.
+  Independent IR design review selected handler-local slot-base derivation
+  against real accepted-baseline return/yield transport; granted a separate
+  30-minute source prototype. The elapsed-first GC cost plan is accepted for
+  helper preparation, with explicit fresh-process and observation limits.
+  [GC execution](issues/gc-nursery-adoption/cadence-feedback-results.md),
+  [IR review](issues/interpreter-dispatch-state/reviews/design-20261031-v1.md),
+  [Cost plan](issues/gc-nursery-adoption/cadence-cost-plan.md).

@@ -3,8 +3,11 @@
 - State: active
 - Owner: qualification_review_resumed; coordinator reviews and selects a design
 - Updated: 2026-10-31
-- Budget: 30 minutes, host-only; 23:14:20–23:44:20 UTC
-- Checkpoint: 23:29:20 UTC
+- Research: frozen early at 23:36:03 UTC within the 23:14:20–23:44:20 scope
+- Source budget: 30 minutes, host-only; 23:41:19–00:11:19 UTC
+- Checkpoint: 23:51:19 UTC
+- Branch/worktree: `boil/interpreter-slot-base`; `build/worktrees/dispatch-slot-base`
+- Source base: primary `5163eadffaf`, runtime identical to accepted native `e9e10d5b503`
 - Depends on: [constant-operand elapsed rejection](../interpreter-constant-operands/performance-results.md)
 - Decision: investigate concrete common-handler stack work before another opcode increment
 
@@ -35,7 +38,11 @@ The deferred Clang-tail [H1 scope](../h1-tail-dispatch/status.md) is separate.
 
 ## Now / next
 
-The thirteen-handler increment remains rejected. Host-only research starts
-from that negative result while GC cadence source review and native-feedback
-preparation proceed in parallel. The next decision is a reviewed design or
-reported rejection; no successor implementation is authorized yet.
+The thirteen-handler increment remains rejected. The new [design](design.md)
+targets accepted-baseline return/yield cache transport, with receiving-load and
+register-allocation costs still unmeasured. Independent
+[design review](reviews/design-20261031-v1.md) accepts a bounded source prototype.
+Root granted the separate 30-minute host-only increment at 23:41:19 UTC.
+Native compilation, behavior, performance and landing remain unauthorized.
+The [research results](results.md) and native/source inventory retain the
+287-handler, 19-join, five-label and 26-reload entry proof and its limits.

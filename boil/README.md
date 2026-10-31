@@ -10,74 +10,54 @@ nursery and small native contract fixtures follow that measurement; tiers 0
 and 1 and broader package ports follow. The user's goal statement is the Loom artifact `goal`; the
 first analysis and plan is the artifact `plan`.
 
-This file is the hand-over point. It says what the design is, where the
-work stands, which document is authoritative for what, and how a change
-is made. It is kept current at every landing by the coordinator. Last
-revised 2026-10-30 after the main-only GC integration. Latest runtime merge
-is **75e8a1e0c01**, integrating qualified source4da292b1294 over safetyff6.
-Qualification, closure and both post-merge smokes pass; final12f1ea31 and
-postmergef56e0b6b retain the exact evidence and source/native bridges. Shared
-tooling e02e177903f, verification launcher 2db451b1b65, v2 identity/result
-component 9dd24bf42c4 and worker setup 093b9d2a1c3 are landed.
-Current focus is interpreter performance: the independently reviewed
-[matched baseline](design/work/pre-I-post-GC-timing.md) measures0.8243× upstream
-throughput. The selective-death candidate `10d8773815c` has an O3 build and a
-paired four-row comparison: coroutine throughput improves30.9%; smaller changes
-on comprehensions/generators and a1.5% Richards elapsed regression have overlapping
-sample ranges. Its focused13 and four O1-debug modules pass599 tests/46 skips;
-full landing qualification and merge remain. No new runtime optimization has
-landed on primary. The [revised GC performance plan](design/work/gc-architecture-next.md)
-contains13 hot-window perf profiles, cycles/instructions, phase costs and32/64MiB
-memory tradeoffs. Keep32MiB; the current candidate separates native-only cleanup
-and adds direct managed scanning. Measure that union before choosing storage
-work, then develop a movable nursery with stable native space. Nonmoving
-generations are not a required intermediate.
-Historical worktree retirement is complete:32 checkouts removed, eight
-registered roots retained at that checkpoint, including three ownership/dirty-state
-exceptions. Active `boil-gc-native-cleanup` and `boil-gc-managed-scanning` topics
-are additional checkouts.
-H1/H2 source tags are pushed and selected evidence is retained locally.
-Implementation of the framed plan is authorized. The native-cleanup owner
-qualifies the composed candidate, stats independently reviews evidence and
-prepares performance comparisons, and roots reviews interpreter design.
-[Direct managed scanning](design/work/gc-managed-scanning-implementation.md)
-is implemented in the candidate.
-The [code/root organization review](design/work/reviews/gc-code-organization-review.md)
-is complete.
-The plan now explains actual root APIs/data structures and the staged shared
-interfaces for regions and writable slots. Reviewed source709778 cleanup,
-b9d829 scanning and b184 warning repair are composed with selective processing
-as program source `4d8e690f483`. Candidate **33944d24e55** adds exact
-noncollecting declarations for the IR decoder and libc `strrchr`, with critical
-classifier regressions. All seven generated outputs remain identical. The two
-original linked-audit failures remain recorded; O1, O3, ASan and Clang-tail builds
-now pass. Focused 12 cases pass release and debug-kill; ten affected modules
-pass 1,189 cases in each mode (66/52 skips). Each whole-module run reports one
-diagnostic unpinned object, with zero fallback; focused cases report neither. Remaining
-smoke, stale-root and backend runtime checks precede broad qualification.
-The earlier selective ASan16 passes4,027 and three fulls each pass51,241,
-with zero fallback. Final debug stress
-found a real warning-context bug: delayed coroutine cleanup under a restricted
-frame loses its warning and raises `KeyError('__import__')`. The deterministic
-probe confirms it; selective qualification remains FAIL and closure is unrun.
-The final union receives one independently reviewed qualification ladder.
-Earlier component passes remain evidence for those exact components.
-Storage work follows the union's measured result;
-existing mimalloc page batching is the first investigation if returns remain
-costly, while a region requires compact metadata and demonstrated benefit.
-[Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
-clarifies that frame registers already are roots, durable root lists are sparse
-fork registrations, and common managed layouts will gain direct slot scanners
-while pinned native types retain traversal adapters. No nursery or refreshed
-broad performance result is claimed.
-The [post-landing comparison plan](design/work/gc-post-cleanup-performance-plan.md)
-reuses matched29, parent/union paired-four, four hot profiles and a small
-arithmetic appendix; none is running during qualification.
-The [independent interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)
-confirms existing inline arithmetic/value/frame paths and ranks five prospective
-shared improvements. Emitted cost and refreshed profiles select implementation.
-This update separates implemented work
-from landed work; prior delivery dates are superseded by PROCESS §0.4.
+This is the handover point. The coordinator updates it at landings and hourly
+checkpoints; PROCESS governs the plan and WORKLOG preserves outcomes.
+
+Latest runtime landing: **75e8a1e0c01**, the supported Linux/main-interpreter/
+ordinary-thread/GIL GC milestone. Its qualification, closure and both post-merge
+smokes pass. The [landing review](design/work/reviews/gc-main-only-final-landing.md)
+retains exact source/native identities, failures and support limits.
+
+Current candidate: **33944d24e55**, on `boil/gc-native-cleanup`. It combines
+selective death processing, native-only suspended-generator cleanup, direct
+managed scanning and the restricted-builtins warning repair. Program C/headers
+are frozen at `4d8e690f483`; later commits add exact decoder/libc effect metadata,
+critical classifier regressions and records. All seven generated outputs match.
+Four builds pass (O1 debug, O3 release, ASan and Clang tail), as do focused and
+affected-module checks and all seven ordinary jobs. The corrected ASan selection
+and remaining backend runtime checks run before broad qualification. Original
+selective stress, two linked-audit and ASan recipe failures remain recorded.
+**This runtime candidate is not landed.**
+
+Next: finish one broad qualification ladder, closure and independent landing
+review; merge with fresh release/debug smoke checks; then execute the
+[post-landing measurement plan](design/work/gc-post-cleanup-performance-plan.md).
+That refreshes all 29 workloads versus upstream, four same-fork comparisons,
+four hot `perf` profiles and existing arithmetic/attribute diagnostics. Keep
+32 MiB headroom. The [measured GC plan](design/work/gc-architecture-next.md)
+explains the existing phase, instruction and RSS evidence. Storage changes and
+a copying nursery follow measured costs and explicit writable-slot/pinning
+contracts; neither is implemented in this candidate.
+
+Last broad performance result: **0.8243× upstream throughput** in the
+[matched baseline](design/work/pre-I-post-GC-timing.md). Isolated selective death
+processing improves coroutine throughput 30.9%; the other three ranges overlap.
+That result does not establish the final union's performance. Roughly 2× remains
+soft interpreter guidance, especially for simple arithmetic, rather than a gate.
+
+The [Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
+explains why frames remain root arrays, sparse durable registrations use lists,
+and direct managed scanning replaces generic callbacks on common layouts.
+The [code organization review](design/work/reviews/gc-code-organization-review.md)
+and [independent interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)
+record shared contracts and prospective improvements. Profiles select the next cut.
+
+Owners: native-cleanup qualifies the union, stats independently reviews its
+source/evidence, roots prepares measurements and reviews interpreter design,
+and the coordinator owns integration and documents. Historical retirement removed
+32 checkouts; H1/H2 source tags and selected evidence remain. Current GC topic
+checkouts stay until landing and evidence retention are complete. Prior delivery
+dates are superseded by PROCESS §0.4.
 
 ## 1. The design in one page
 

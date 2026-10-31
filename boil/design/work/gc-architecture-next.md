@@ -278,8 +278,10 @@ thread detachment. Native-clear the frame once, then use normal deallocation
 and accounting. This preserves OOM rollback before commit and avoids inventing
 rollback after irreversible cleanup. Validate observable finally/delegation,
 resurrection, weakref, escaped-frame, monitoring and payload reclamation behavior.
-Then reuse the bounded comprehension/generator comparison and report admission
-coverage. The clean distinction must earn its benefit without widening semantics.
+Then reuse the bounded comprehension/generator comparison and report observed
+native-clear execution/CPU cost and the admitted scope. Sampled execution does
+not establish an exact admission rate. The distinction must earn its benefit
+without widening semantics.
 
 ### B. Make common storage reclamation collector-owned
 

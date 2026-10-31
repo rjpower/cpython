@@ -73,6 +73,12 @@ Existing micro rows can supply useful guidance: `int_add` (2000+3000),
 int32/non-NaN float and monomorphic attribute cases, not overflow, NaNs,
 polymorphism or whole-application arithmetic. The upstream cached-small-int
 distinction is intentional. Loop/dispatch and store costs remain in raw data.
+These existing arithmetic rows repeatedly assign invariant-input expressions;
+they are not increment recurrences. Source review indicates runtime arithmetic
+survives while local load/store dispatch can fold. Retain cold and warmed
+standard-library disassembly for the actual two images and the three arithmetic
+rows before interpreting instruction counts. These two untimed witnesses add no
+measurement row or score; no standalone recurrence benchmark is introduced here.
 
 Use existing `boil/bench/run.py --set micro --only
 int_add,int_add_small,float_add,attr_load,attr_store --metric instr

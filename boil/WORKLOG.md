@@ -5467,3 +5467,31 @@ First marks, SHALLOW upgrades, native inputs and diagnostic modes retain full
 validation. This is a proposal, with no new runtime edit or benchmark launch.
 Independent source/document review clears these updates; the union remains
 unlanded. Next hourly checkpoint remains18:44PDT.
+
+### 2026-10-30 18:30 PDT — ordinary coverage closed; sanitizer result recovered without replay
+
+Ordinary indexd52b04ab/71refs independently clears seven jobs: release focused12,
+whole1189/66; release/debug smokes1937/80 and1937/50; strict stale6×100 in release
+off, debug off and debug kill. All report zero fallback. Whole release retains
+one report-only unpinned record; both smokes and all stale controls report zero.
+
+ASan smoke originally fails solely on the omitted established overflow-case
+exclusion (9379186a). Its minimal corrected selection runs nativePASS1936/49,
+but the host adapter then raises KeyError('selection'). Preserve native0/host
+INVALID; no native replay. Independent offline composite061d34f7 validates
+the exact original witness/plan bindings with authoritative selection and
+unchanged validator: nine modulesPASS,823collections, zero fallback and three
+report-only unpinned records, with current source/product/cleanup guards clear.
+Both original selectionFAIL and adapterINVALID stay distinct.
+
+A host-only required-key preflight covers unfinished ASan, tail and broad
+plans. Only the first unfinished ASan focus and three unchanged tail jobs now
+run; no completed job is repeated. Broad qualification remains held until
+those terminal results and independent review. Prior ladder timings suggest
+35–45min after broad launch through closure/review, assuming no new failure.
+
+README's synopsis is shortened around current source, actual evidence and next
+steps rather than repeating gate history. Existing arithmetic diagnostics are
+explicitly invariant-input expressions, not increment recurrences; two held
+cold/warmed disassembly witnesses will check arithmetic versus folded dispatch
+after landing. No measurement row, benchmark runner or performance result added.

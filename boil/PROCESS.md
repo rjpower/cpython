@@ -18,14 +18,27 @@ branch.
 ## 0. The plan and where we are
 
 The programme turns CPython into a register-IR interpreter over NaN-boxed
-values with a tracing collector and no reference counting. Current work qualifies
-GC cleanup/scanning and measures interpreter performance; a moving nursery and
-native contract fixtures follow. Tiers 0 and 1 follow the interpreter checkpoint, with broader package migration as the
+values with a tracing collector and no reference counting. GC cleanup/scanning is landed and measured. Common young allocation/reclamation
+and native contract fixtures are next; movement is a separate capability. Tiers 0 and 1 follow the interpreter checkpoint, with broader package migration as the
 API settles. Steps are
 numbered as in note 06 section 6; the summary below is the position of
 record and is updated at every landing.
 
-| Step | What | State (2026-10-30 after integration75e8; actual source and retained outcomes) |
+Current20:44PDT checkpoint: qualified0b15 is integrated/pushed asaee46, both
+postmerge smokes pass, and finite performance88bf6c7f/550refs independently
+clears. Full29 is0.871038× upstream; same-fork coroutines/comprehensions improve
+1.417×/1.621×. [Report](design/work/gc-post-cleanup-performance.md).
+Next is [one useful young-space milestone](design/work/gc-young-space-next.md):
+cover actual gen/coro+frame allocations and bulk dead-storage work, sharing the
+current major/lifecycle engine. Age separation alone retains O(dead) inventory;
+cell/tuple copying alone misses important traffic. Neither is a required proof
+stage. No nursery is implemented yet. The historical qualification timeline
+below keeps its actual source identities; this checkpoint supersedes pending
+candidate/measurement and mandatory moving/nonmoving-first statements.
+Source-only scanner checkout is retired;
+serving, parent/upstream and selective evidence paths remain retained.
+
+| Step | What | State (2026-10-30 after integrationaee46; actual source and retained outcomes) |
 |---|---|---|
 | 1, 2a, 2b, 3a, 3b | the 64-bit word IR, the compiler passes, the handlers | landed |
 | 4, 5a, 5b, 5c | the collector: verifier mode, live mode, refcounts deleted | landed |
@@ -141,12 +154,11 @@ modules pass599 tests/46 skips. Final-union qualification/review and merge remai
 The [revised architecture plan](design/work/gc-architecture-next.md) records
 all13 perf/counter/RSS conditions and exclusive phase costs. Keep32MiB: doubling
 headroom costs52–84% peak RSS on the three slow rows for only2–7% fewer
-instructions. Native-only generator cleanup and direct scans are implemented
-in the current candidate. Choose common storage work from its measurements,
-then develop a movable nursery with stable
-native space, using writable root slots, core barriers, scanned native owners
-and pinning. The old nonmoving-first sequence is superseded, while its source
-ledgers remain inputs. Current runtime precision and native lifetime contracts
+instructions. Native-only generator cleanup and direct scans are landed and measured.
+The current young-space milestone combines useful allocation/dead-storage
+coverage with core barriers, native-owner scanning and the current major engine.
+Copying is a later capability; neither moving-first nor nonmoving-first is a
+required proof stage. Existing source ledgers remain inputs. Current runtime precision and native lifetime contracts
 remain in force. The [worktree closure record](design/work/worktree-closure-plan.md)
 records actual retirement batches, source tags, local evidence and exceptions.
 

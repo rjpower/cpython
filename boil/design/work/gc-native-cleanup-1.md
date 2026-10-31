@@ -1,5 +1,11 @@
 # Native suspended-generator cleanup: as built
 
+Current combined measurements: [performance report](gc-post-cleanup-performance.md)
+records1.417× coroutine/1.621× comprehension parent throughput and0.871× upstream
+across29. These do not isolate this component. Earlier no-measurement statements
+below describe the qualification checkpoint.
+
+
 2026-10-30. Reviewed successor `0b15b4bbc9b` combines selective death
 processing, native suspended-generator cleanup, managed scanning and the
 warning-context repair. Four fresh incremental build/audit capsules pass.

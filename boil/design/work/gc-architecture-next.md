@@ -6,30 +6,41 @@ Selective death processing, native-only generator cleanup, direct managed
 scanning and warning/origin repairs are now qualified and integrated as one
 reviewed change. The earlier selective-only comparison improved coroutine
 throughput **30.9%**, with smaller, noisier changes on the other rows; it does
-not measure this final union. Its failed campaign remains preserved. Next,
-measure the union, then select the next structural
-cut from its profile. A common copying nursery with stable native/large-object
-space remains the forward direction. Restoring reference counting is a valid
-alternative; the measured selective win favors these simpler cuts first.
+not measure the final union. The combined change is now measured below.
+Restoring reference counting remains a valid architecture alternative, while
+current results support retaining tracing and fixing its repeated heap work.
 
-Current checkpoint, 2026-10-30 20:04 PDT: source `0b15b4bbc9b` has completed
-qualification and independent LAND review and is integrated with this record.
-Its explicit composite retains339's three fulls/release stress as339 evidence;
-fresh0b15 four-cohort builds, causal origin/data proof, affected modules, tail
-ownership, debug stress3,116/113, ASan16 4,038/141 and closure all pass. Final
-index50054725 binds382 artifacts. Original failures remain preserved. Integration
-`aee46aacae2` adds only13 project Markdown paths over qualified0b15. Both postmerge
-smokes pass (release1,937/80; debug1,937/50; zero fallback), indexed by382dd354.
-The finite performance batch is next; no new speedup is claimed. See the [final landing review](reviews/gc-cleanup-final-landing.md).
+Current checkpoint, 2026-10-30 20:44 PDT: **GC improvements are landed, pushed
+and measured** at integrationaee46/source0b15. Final50054725/382refs and both
+postmerge smokes clear independent review. Performance88bf6c7f/550refs clears
+raw, finite-outcome and phase review. [Full report](gc-post-cleanup-performance.md).
 
-This plan supersedes the earlier requirement to ship nonmoving generations
-before movement. The existing generation/store ledgers remain source inputs.
-A nursery is a substantial implementation, with the finite contracts below;
-we will not build two young collectors to satisfy an old sequence.
+| Current result | Measurement |
+| --- | --- |
+| All 29 versus matched upstream |0.871038× throughput;7 faster/22 slower; serial samples and wide spreads on some rows |
+| Same-fork combined gain |Coroutines1.417×; comprehensions 1.621×; generators 1.085× with overlapping ranges; Richards 0.987× |
+| Remaining sampled roots/closure |Coroutines10.75%; comprehensions5.96%; generators11.55% |
+| Remaining object inventory/dead classification |12.14% /7.28% /4.46% respectively |
+| Remaining sweep work |9.60% /5.26% /3.95%; includes dispatch/storage, not free() alone |
+
+**Revised implementation decision:** one useful common-young allocation and
+reclamation path, detailed in [the next milestone](gc-young-space-next.md).
+Source review shows generator/coroutine objects include their frames in one
+allocation. Moving only cells/tuples misses those important sources; a nonmoving
+minor can retain the same O(dead) inventory and sweep. Neither is a mandatory
+preliminary collector. Cover the relevant allocations and safe bulk recycling,
+reuse the current major/lifecycle engine, and add copying where writable-alias
+contracts and measured coverage justify it. Generationality and movement are
+separate capabilities. No young collector is implemented yet.
+
+The source ledgers and region packet remain interface/constraint inputs, rather
+than required inert foundations. Keep32 MiB major headroom. The following older
+selective-only and parent/upstream measurements retain their original identities;
+they are not the final union's score.
 
 ## 1. What we measured
 
-The [matched 29 baseline](pre-I-post-GC-timing.md) remains **0.8243× upstream
+The historical [matched 29 baseline](pre-I-post-GC-timing.md) was **0.8243× upstream
 throughput** geometrically: 21 rows slower, eight faster. Coroutines,
 comprehensions and generators are 0.449×/0.510×/0.574×; float, Richards and
 nbody are 2.039×/1.866×/1.668×. These are release interpreter results, all JITs
@@ -254,7 +265,7 @@ survival, pinned bytes, slack, pauses and RSS before choosing a production size.
 Major allocation debt and promotion/old-space pressure remain separate. A
 finite major allowance collects old garbage even during zero-promotion traffic.
 
-## 5. Three changes, in implementation order
+## 5. Landed changes and the next implementation
 
 ### A. Select actual death work and distinguish native-only cleanup
 
@@ -262,8 +273,8 @@ Selective death processing, native-only cleanup, direct managed scanning and
 the warning repair are implemented in reviewed program source `4d8e690f483`.
 Candidate33944 adds exact decoder/libc effect declarations and critical tool
 regressions; its program C/headers remain identical. Successor0b15 adds the
-two constructor initializations and origin/data regression. Qualify the explicitly
-scoped composite below, then merge and measure it. Preserve the earlier selective campaign's stress failure:
+two constructor initializations and origin/data regression. The explicitly
+scoped composite is qualified, landed and measured in the report above. Preserve the earlier selective campaign's stress failure:
 delayed warning retrieval inherited a restricted frame's builtins, lost its
 warning and reported import KeyErrors. The repair now resolves current modules
 and uses explicit interpreter import semantics; it does not suppress the test.
@@ -289,46 +300,36 @@ native-clear execution/CPU cost and the admitted scope. Sampled execution does
 not establish an exact admission rate. The distinction must earn its benefit
 without widening semantics.
 
-### B. Make common storage reclamation collector-owned
+### B. Make common young allocation and dead-storage recycling useful
 
-First streamline the proven finished-generator/storage cleanup within existing
-mimalloc, using the current profiles to select the work. Define an exact-layout
-contract: safe publication, outgoing references, side storage, native cleanup,
-manual free/realloc and observer notifications. Exact cells and nonempty tuples
-are small proof layouts; they are not claimed to dominate current traffic.
-Completed generators require a separate frame/exception/origin cleanup proof.
+Implement [the combined young-space milestone](gc-young-space-next.md), using
+one age/boundary/lifecycle protocol. The new captured stacks separate roots plus transitive
+closure from allocated-block inventory/dead classification: coroutine inventory plus sweep alone
+is21.74% of sampled CPU; comprehensions12.54%; generators8.41%. These shares
+are not allocation ages. A minor that inventories the same young corpses saves
+unknown old work and adds barriers/native-owner scanning. A region under full
+marking also leaves that journal cost intact.
 
-After native cleanup and direct managed scanning, repeat the bounded profiles.
-If individual storage return remains material, first assess batching through
-the existing mimalloc owner/page boundary. It already supplies size classes,
-page occupancy and reusable blocks; use that knowledge before duplicating it.
-Batching still performs required object cleanup and wrapper notifications and
-respects remote frees, debug fills and delayed page retirement. Its benefit
-must exceed the bitmap/grouping work. The
-[storage implementation packet](gc-region-implementation.md#storage-decision-after-managed-scanning)
-defines this decision and the compact-metadata requirement for a new backend.
+The first useful admission must cover exact generator/coroutine allocations
+and embedded frames, alongside safe managed layouts. Keep their addresses
+stable where that avoids an unnecessary relocation contract. Track pending
+lifecycle work compactly and earn bulk discard of strictly eligible completed
+storage; suspended generators still need the existing native-clear proof.
+Required cleanup, weakrefs, hooks, observers, map invalidation, debug/quarantine
+and accounting remain obligations. Recycle only after graph/journal users finish.
 
-If allocation/locality remains the larger opportunity, implement a
-page-segmented bump region behind a space-aware object lookup/enumeration
-interface, initially retaining full marking. Reserve start,
-size, initialization and pin metadata before publication. Adapt
-`_PyObject_MallocWithType`, `new_reference`, free/realloc/address reuse,
-`live_lookup` and heap enumeration together; region objects must remain visible
-to conservative interior-pointer lookup. Full marking visits both spaces;
-no remembered set is needed for this allocator experiment.
+Use existing allocator/page knowledge or a compact young-space backend; avoid
+an independent object registry. Public mimalloc heap deletion is not survivor
+promotion into our old heap. Close kind tags, ownership, page transfer/retirement,
+remote frees and thread-exit handling explicitly. Partial-page survivor slack is
+part of the memory result. The [region packet](gc-region-implementation.md)
+retains useful wrapper/publication constraints; its cell/tuple-only full-mark
+experiment is not a required stage.
 
-Reset wholly dead pages after lifetime processing; retain partially live pages
-at their addresses and charge their slack. This first experiment still builds
-dead records: it measures allocation/recycling, not a magically eliminated
-classification pass. Verify bounded memory with a survivor per page, address
-reuse, allocation failure and cyclic graphs. Keep the region route only if its
-coverage and memory cost justify it. This backend is scaffolding for the nursery.
-Its metadata must be compact: an exact cell is16 bytes, so a24–32-byte record
-per object would outweigh its payload before page slack. Prefer page descriptors,
-stride knowledge and bitmaps where sufficient; count all metadata in the
-comparison. A second allocator must earn its complexity through measured
-allocation/reclamation benefit rather than becoming a required detour before
-nursery work.
+Land one complete experimental consumer after source review and finite behavior,
+barrier/oracle, memory and matched-performance checks. If it merely moves the
+same inventory work or misses the common traffic, preserve that result and
+revise admission/backend. Do not equate a proof of age or movement with a speedup.
 
 ### C. Copy common young objects; keep native exceptions stable
 
@@ -338,7 +339,8 @@ must be pinned **in place**; moving them into a pinned pool would already break
 the pointer. Retire pages with pinned survivors into stable-space metadata and
 charge unused space. Allocate known-native/large layouts directly there.
 
-Implement these contracts as a single bounded nursery milestone:
+When adding copying inside the useful young space, close these contracts;
+relocation is not a prerequisite for address-stable young collection:
 
 1. **Writable roots and fields.** Add visitors for actual PyValue/object slots
    in admitted core layouts. Register addresses of actual C locals that survive
@@ -369,7 +371,7 @@ Implement these contracts as a single bounded nursery milestone:
    before rewriting references; copy survivors, rewrite writable slots, then
    recycle dead pages. Pin on address-based identity/hash, weakref registration
    or buffer export before exposing the address. Test rollback before commit and a complete
-   no-failure relocation commit. The first admitted layouts are cells/tuples;
+   no-failure relocation commit. The first admitted movable layouts can be cells/tuples;
    expand to measured common containers and completed frames after their layout
    proofs, while unknown layouts retain their stable path.
 5. **Minor oracle and major policy.** Compare minor liveness against an
@@ -405,11 +407,12 @@ residual, so these are not complete RC costs. Nursery locality and prompt region
 reuse may reduce the fork's larger temporary working set; that is an inference,
 not a measured cache-miss result.
 
-**Recommendation: keep tracing and execute A, B and C in that order, with a
-performance decision after each.** A already has a substantial measured win
-and another specific preparation cost to remove. B tests the storage mechanism
-before committing to the moving backend. C implements the established nursery
-architecture, with native scanning/pinning as explicit migration costs.
+**Recommendation: keep tracing; A is landed, B is the next material milestone,
+and C adds relocation within that same space when it earns its cost.** The
+new evidence rejects both obligatory nonmoving-first and copying-first proof
+stages. Ruby's barrier-protection boundary and hybrid young/stable collectors
+provide useful comparisons; [the next plan](gc-young-space-next.md) cites their
+primary sources and states this fork's distinct contracts.
 
 RC is compatible with eight-byte tagged values: inline scalars need no counts,
 heap values could carry counts. Restoring it requires count storage plus coherent
@@ -419,7 +422,7 @@ simplified collector still spends substantial time on unavoidable death work,
 or nursery pinning/native scanning dominates representative workloads. Use a
 bounded matched experiment then, rather than maintaining two ownership systems
 preemptively. After A refresh the current interpreter profile; after the next
-structural gain refresh the29-row result and commission design reflection on
+structural gain refresh the 29-row result and commission design reflection on
 remaining call/value/dispatch costs. Roughly 2× remains guidance for simple work,
 with clean orthogonal changes deciding what we keep.
 
@@ -565,10 +568,10 @@ work, place root declarations/visitors together and keep platform unwind code in
 dependencies from the hot mark path. Update obsolete comments at those boundaries.
 This avoids interleaving a large mechanical file split with lifecycle fixes.
 
-The active candidate composes selective death, warning-context repair,
+The landed source composes selective death, warning-context repair,
 native-only cleanup with obsolete deallocator ceremony removed, and direct
-managed slot scanners. Qualify and land that union once, then choose measured
-storage/space work → core barriers/stable-owner scans and oracle → copying minors.
+managed slot scanners. The union is qualified and measured. Build useful young allocation/reclamation
+with barriers, stable-owner scans and oracle; add copying within that protocol.
 Slot/scanner and region interfaces can be developed in parallel once their
 field/space contracts are agreed; the region experiment remains conditional
 on common-path coverage and allocator-hook costs. Independent review can examine the next slice while

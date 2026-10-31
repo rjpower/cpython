@@ -1,13 +1,11 @@
 # First direct managed scanners
 
-2026-10-30. Implementation proposal; source is now committed as
-`b9d8294123d`, without native validation. After selective death lands, compose
-this reviewed source with native-only cleanup in its existing candidate and
-qualify the union once under the named PROCESS ruling. This implements the first part of
-[architecture §8](gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime).
-It is independent of region allocation: cells, tuples and frames already have
-known value layouts in mimalloc-backed storage. It changes neither collection
-selection nor lifetime/finalizer policy.
+2026-10-30. Implemented sourceb9d829 is included in qualified0b15/integrationaee46.
+[As-built record](gc-managed-scanning-1.md) and the
+[combined performance report](gc-post-cleanup-performance.md) supersede this
+proposal's pending qualification. The source-only checkout is retired with
+verified packet archival and pushed branch history preserved. The implementation
+below uses existing cell/tuple/frame layouts; it changes no collection policy.
 
 ## Concrete first cut
 

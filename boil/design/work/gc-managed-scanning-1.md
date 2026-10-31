@@ -1,5 +1,11 @@
 # Managed scanning: as built
 
+Current combined measurements: [performance report](gc-post-cleanup-performance.md)
+records1.417× coroutine/1.621× comprehension parent throughput and0.871× upstream
+across29. These do not isolate this component. Earlier no-measurement statements
+below describe the qualification checkpoint.
+
+
 2026-10-30. The reviewed direct-scanning source is part of composed successor
 `0b15b4bbc9b`. Four build/audit cohorts and focused/affected behavior pass;
 **The operator composite qualification is PASS; independent LAND clears this integration;

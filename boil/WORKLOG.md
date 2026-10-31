@@ -5670,3 +5670,40 @@ release1,937/80,784collections/0fallback/0snapshot visits; debug1,937/50,
 The qualified images are reused; no new rebuild is claimed. Independent raw
 terminal review clears both rows and all23 refs. Push runtime and begin held candidate29 origins
 using this real smoke index. No performance number is claimed yet.
+
+### 2026-10-30 20:44 PDT — performance reviewed; young-space plan revised
+
+Finite index 88bf6c7f binds 550 independently checked artifacts. All 330 elapsed
+comparison values, 20 profile/diagnostic command rows and cleanup clear review.
+The 29-row upstream/candidate throughput ratio is 0.871038: seven faster and
+22 slower. Same-fork coroutines/comprehensions improve 1.417×/1.621×; generators
+are 1.085× with overlapping ranges; Richards is 0.987× with disjoint ranges.
+Serial samples establish no independent-process confidence interval. Invariant
+int/small-int/float elapsed ratios are about 2.97×/1.51×/2.56×; these are not
+increment recurrences. The new report preserves all values and limits.
+
+Four profiles have 100% PMU coverage and zero lost samples. Inclusive GC time
+is 38.69%/26.88%/21.97% of coroutine/comprehension/generator hot windows.
+Independent phase analysis 17c0457d and subdivision 25be531b separate coroutine
+roots/closure (10.75%), inventory/dead classification (12.14%) and sweep (9.60%).
+Comprehensions are 5.96%/7.28%/5.26%; generators 11.55%/4.46%/3.95%. Twelve
+bound native-clear samples show execution, not an admission rate. Historical
+comprehension finalizer preparation was 24.36%; that cost is much smaller now.
+
+The revised milestone covers common young allocation and bulk dead-storage
+recycling in the existing collector. A nonmoving minor can retain the same
+corpse work; cell/tuple-only copying misses hot generator/coroutine allocations
+and their embedded frames. Neither is a mandatory proof stage. Public mimalloc
+heap deletion does not promote into our old-kind heap: page ownership, tags,
+thread exit, barriers, native boundaries, lifecycle work and memory must close
+in the complete experimental consumer. No young GC is implemented yet. Keep
+32 MiB; these results do not support restoring reference counting wholesale.
+
+The first timing launcher failed admission before any workload or witness:
+operator CPU2 affinity excluded CPU0. Seven failed outputs remain in archive
+153a7a21 with cleanup=false. The authorized broad-host launch ran the unchanged
+measured batch once, 03:19:38–03:24:32 UTC. A stale documentation digest also
+received a metadata-only repair. Source-only scanner retirement preserves ten
+entries/71,843 bytes in archive aa5551f5 and pushed b9d history. Serving, parent,
+upstream, selective exact-path evidence and unrelated user work are preserved.
+Next hourly documentation checkpoint: 21:44 PDT; material results sooner.

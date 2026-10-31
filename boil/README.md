@@ -1,58 +1,53 @@
 # Boil the ocean: start here
 
 A performance fork of CPython (upstream base `321925c92c9`, main of
-2026-10-23) that replaces the execution substrate wholesale: a
-fixed-width register IR produced by the compiler, one NaN-boxed value
-type in every frame and container, shapes in the object header, and a
-tracing collector with no reference counting. Current work qualifies GC cleanup
-and scanning improvements, then measures interpreter performance. A moving
-nursery and small native contract fixtures follow that measurement; tiers 0
-and 1 and broader package ports follow. The user's goal statement is the Loom artifact `goal`; the
-first analysis and plan is the artifact `plan`.
+2026-10-23): register IR, NaN-boxed values, shapes, and tracing without reference
+counts. GC cleanup and scanning improvements are landed and measured. Common
+young allocation/reclamation and native contract fixtures are next; JIT tiers
+and broader package ports follow. The Loom artifact `goal` records the goal.
 
-This is the handover point. The coordinator updates it at landings and hourly
-checkpoints; PROCESS governs the plan and WORKLOG preserves outcomes.
+The coordinator updates this handover at landings and hourly checkpoints;
+PROCESS governs the plan and WORKLOG preserves outcomes.
 
-Latest runtime integration: qualified source **0b15b4bbc9b**, combining selective
-death processing, native-only suspended-generator cleanup, direct managed scans,
-and warning/origin correctness repairs. The [independent landing review](design/work/reviews/gc-cleanup-final-landing.md)
-clears the explicit composite: predecessor339's three fulls and release stress
-retain their original identities; fresh successor builds, origin/data proof,
-affected modules, debug stress, ASan16 and closure pass. The failed predecessor
-stress and other original failures remain preserved. Both postmerge smokes pass: release1,937/80 and debug1,937/50, with zero
-GC fallback. Integration commit is **aee46aacae2**.
+Latest runtime integration: **aee46aacae2**, qualified source **0b15b4bbc9b**.
+It combines selective death processing, native-only suspended-generator cleanup,
+direct managed scanning, and warning/origin repairs. The
+[independent landing review](design/work/reviews/gc-cleanup-final-landing.md)
+clears the explicit composite: predecessor fulls retain their source identities;
+fresh successor builds, origin/data checks, affected modules, stress, ASan and
+closure pass. Original failures remain preserved. Both postmerge smokes pass:
+release 1,937/80 and debug 1,937/50, with zero GC fallback.
 
-Next: execute the
-[post-landing measurement plan](design/work/gc-post-cleanup-performance-plan.md).
-It refreshes all29 workloads versus upstream, four same-fork comparisons,
-four hot `perf` profiles and existing arithmetic/attribute diagnostics. Keep
-32MiB headroom. The [measured GC plan](design/work/gc-architecture-next.md)
-explains existing phase, instruction and RSS evidence. Storage changes and a
-copying nursery follow measured costs and explicit writable-slot/pinning
-contracts; neither is implemented in this integration.
+Current performance: **0.8710× upstream throughput** over 29 workloads,
+7 faster and 22 slower. Same-fork gains are **1.417× coroutines** and **1.621×
+comprehensions**; generators are 1.085× with overlapping ranges; Richards is
+0.987×. The [full report](design/work/gc-post-cleanup-performance.md) retains all
+rows, raw vectors, spreads, perf phases, instructions, RSS and limits. Invariant
+int/float addition diagnostics are about 2.97×/2.56× upstream elapsed; they are
+not i+=1 recurrences or a general 2× result. Roughly 2× remains soft guidance.
 
-Last broad performance result: **0.8243× upstream throughput** in the
-[matched baseline](design/work/pre-I-post-GC-timing.md). Isolated selective death
-processing improves coroutine throughput 30.9%; the other three ranges overlap.
-That result does not establish the final union's performance. Roughly 2× remains
-soft interpreter guidance, especially for simple arithmetic, rather than a gate.
+Next: the [common-young allocation/reclamation milestone](design/work/gc-young-space-next.md).
+Profiles show material per-object inventory and sweep costs as well as roots.
+Cover actual generator/coroutine allocations, including embedded frames, and
+safe bulk dead-storage recycling within one collector. Neither cell/tuple-only
+copying nor a nonmoving minor that retains the same corpse work is a required
+preliminary stage. Stability and age are separate choices. Keep 32 MiB major
+headroom; no young collector or copying backend is implemented yet.
 
 The [Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
-explains why frames remain root arrays, sparse durable registrations use lists,
-and direct managed scanning replaces generic callbacks on common layouts.
-The [code organization review](design/work/reviews/gc-code-organization-review.md)
-and [independent interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)
-record shared contracts and prospective improvements. Profiles select the next cut.
-The [linked-code follow-up](design/work/reviews/interpreter-poly-shape-emission.md)
-confirms repeated shape matching on later polymorphic rows; row0 is already
-optimized. Its runtime importance is still unmeasured.
+explains frame-array roots, sparse durable registrations and direct managed
+scanning. The [code organization review](design/work/reviews/gc-code-organization-review.md)
+and [interpreter review](design/work/reviews/interpreter-holistic-review-post-gc.md)
+record shared contracts. [Emitted-code review](design/work/reviews/interpreter-poly-shape-emission.md)
+confirms repeated matching on later polymorphic rows; row0 is already optimized
+and runtime importance is unmeasured.
 
-Owners: native-cleanup qualifies the union, stats independently reviews its
-source/evidence, roots prepares measurements and reviews interpreter design,
-and the coordinator owns integration and documents. Historical retirement removed
-32 checkouts; H1/H2 source tags and selected evidence remain. Current GC topic
-checkouts stay until landing and evidence retention are complete. Prior delivery
-dates are superseded by PROCESS §0.4.
+Owners: the coordinator integrates and maintains documents; subagents implement,
+measure and independently review significant changes. The source-only scanner
+checkout is retired with verified archival and pushed history. Serving, parent,
+upstream and selective evidence remain retained. Earlier retirement removed
+32 checkouts; H1/H2 tags and selected evidence remain. PROCESS §0.4 supersedes
+old delivery dates.
 
 ## 1. The design in one page
 
@@ -107,7 +102,7 @@ lists, the cycle collector, split dict tables, managed dict pointers.
 
 ## 2. Where the work stands
 
-Current checkpoint: **2026-10-30, integrated source0b15; postmerge smokes next**. PROCESS section0 records the
+Current checkpoint: **2026-10-30, integratedaee46/source0b15; performance measured**. PROCESS section0 records the
 plan and admission rules; WORKLOG preserves the gate history. This summary
 distinguishes source implementation, validation and primary landing.
 

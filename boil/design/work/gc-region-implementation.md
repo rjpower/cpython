@@ -7,6 +7,14 @@ until its source review and composition finish.
 This refines [architecture section B](gc-architecture-next.md) and
 the [code-organization review](reviews/gc-code-organization-review.md).
 
+Current decision after integrationaee46: cleanup/scanning is landed and the
+[post-cleanup profiles](gc-post-cleanup-performance.md) are complete. This
+cell/tuple-only full-mark region is not a required next experiment. The
+[young-space milestone](gc-young-space-next.md) uses the allocator-wrapper,
+publication, lookup and compact-metadata constraints below while covering real
+generator/coroutine traffic and dead-storage costs. Older source anchors and
+selection rationale below retain their historical meaning.
+
 **Do the existing-mimalloc cleanup first.** A region can remove repeated
 individual storage returns, but it cannot remove required object cleanup,
 full marking or the present dead-object journal. The measured parent

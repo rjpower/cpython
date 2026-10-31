@@ -1,5 +1,11 @@
 # Selective death processing
 
+Current combined measurements: [performance report](gc-post-cleanup-performance.md)
+records1.417× coroutine/1.621× comprehension parent throughput and0.871× upstream
+across29. These do not isolate this component. Earlier no-measurement statements
+below describe the qualification checkpoint.
+
+
 2026-10-30 as-built reconciliation. Current reviewed source is `0b15b4bbc9b`;
 its operator composite qualification is PASS. Independent LAND clears this integration;
 postmerge smokes pass. The selective-only measurements and failed

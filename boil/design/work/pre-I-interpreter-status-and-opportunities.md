@@ -7,6 +7,16 @@ smokes. The analysis below separates source evidence from the new elapsed
 diagnostic; neither is a performance implementation grant.
 H3 is landed; H1 frame passing and inert H2 remain isolated.
 
+Current20:44PDT update: cleanup/scanning integrationaee46 and both smokes pass.
+The [new report](gc-post-cleanup-performance.md) records0.871038× upstream over29,
+1.417×/1.621× parent gains on coroutines/comprehensions, and existing arithmetic
+micro elapsed ratios about2.97× int/2.56× float (invariant loops, not recurrences).
+The [profile-led plan](gc-young-space-next.md) targets common young allocation
+and bulk reclamation in one collector. Shape matching is a bounded cleanup with
+unmeasured frequency; H1/H2 remain archived. Substantial non-GC residual remains;
+a nursery cannot supply a general2× result. Historical pre-I diagnostics below
+keep their source identities and are not current whole-union measurements.
+
 The owned upstream eval-nogcse comparator has passed configure/make and
 independent build review (23c9/c518),18-module correctness and29 workload
 origins. Fork29 origins also pass. The [post-GC elapsed diagnostic](pre-I-post-GC-timing.md)

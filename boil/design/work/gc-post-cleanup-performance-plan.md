@@ -1,9 +1,14 @@
 # Post-landing performance reuse plan
 
-2026-10-30. Held source plan. Run only after the actual cleanup/scanner/warnings
+2026-10-30. Measurement protocol. Run only after the actual cleanup/scanner/warnings
 union is qualified, landed and the runtime/quiet window is released. Native
 correctness and build receipts take priority. No measurement or new runner is
 created here.
+
+Executed2026-10-30 on qualified0b15/integrationaee46; finite outcome and raw
+replay independently clear. [Results](gc-post-cleanup-performance.md) retain the
+actual330 timing values, diagnostics, profiles, source identities and limits.
+The protocol below is retained for the next matched structural comparison.
 
 Use the qualified ordinary O3 GCC cohort: frame pointers including leaf frames,
 zero initialization, evaluator `-fno-gcse`, no JIT/PGO/LTO/tail/Py_STATS, actual

@@ -210,3 +210,38 @@ finite-major witness. These diagnostic failures will earn causal-control
 evidence only. A proposed new 45-minute window follows the completed first
 batch and requires separate review/activation after IR execution. The overall
 04:18:11 UTC dispatch deadline remains.
+
+### Causal-control execution
+
+Independent [preparation review](reviews/causal-controls-preparation-20261031-v1.md)
+accepted the exact six-row [plan](causal-plan.md). Root confirmed IR terminal
+exit and idle cleanup, rechecked master/scope/source/product bindings, and
+activated the new batch at **22:28:49.462038 UTC**, session **80557**, deadline
+**23:13:49.462038 UTC**. The completed first-feedback clock is unchanged.
+
+Baseline OFF passed three methods/children; KILL with both extras passed the
+finite-major method/child. Both returned zero with no skips or root fallback/
+unpinned events. Every actual child has positive main-interpreter collection
+records. The finite OFF witness established a limit of 3,851,848 bytes and used
+32,768-byte chunks, reaching a major at step 103 within its bound of 244 batches.
+KILL established a limit of 4,156,816 and reached a major at step 111 within 262
+batches. These are actual major budgets, not the configured 1-MiB threshold.
+
+The fresh force-major source d0dd produced the nominated diagnostic: child
+829149 returned 1 with final `AssertionError: minor reclaimed an old owner`.
+Outer regrtest returned 2 with exactly one failure and no errors; its expected
+missing outer token is retained. The diagnostic contract passed with zero
+fallback/unpinned events. This is not ordinary pass or qualification credit.
+The debt-reset build is running; later failures and final outcome review remain
+unobserved at this checkpoint.
+
+All six rows completed at **22:35:14.403893 UTC**. Root polled session 80557
+to terminal exit 0 at 22:36:06 UTC; final cleanup records no live target process.
+Completion SHA-256 is
+`dbc77a5aae875fad5ddd4f9f2f97fc66268259f60fb5ad5e6df5395dd0138e6b`.
+The debt-reset arm produced exactly the nominated debt-preservation and
+finite-major assertion failures. Its finite witness exhausted 244 batches with
+a limit of 3,852,696 bytes and 32,768-byte chunks, rather than reaching a major.
+All four baseline cases passed before negative execution; all three nominated
+diagnostics were observed. Independent outcome review remains; no qualification
+or automatic-cadence acceptance follows from the master completion alone.

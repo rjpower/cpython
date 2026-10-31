@@ -178,3 +178,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   behind that native window. Original timeout retained, no new speed claim.
   [Completion scope](issues/interpreter-constant-operands/feedback-results.md),
   [GC controls](issues/gc-nursery-adoption/causal-plan.md).
+- 2026-10-31: Fresh O3 and eleven release cases passed; emission stopped on an
+  unsupported non-PIE assumption. Matched evaluator text grew 18.4248%. The
+  coordinator's initial size-based rejection was withdrawn after user steering
+  before any timing: actual elapsed performance will decide; size/counts remain
+  diagnostics. GC causal controls started; baseline witnesses passed.
+  [Revised performance decision](issues/interpreter-constant-operands/performance-revision-20261031.md),
+  [execution evidence](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Independent review reopened the IR performance decision under
+  the elapsed-based revision, preserving the original size observation and
+  historical rejection. GC causal feedback completed with four positive cases
+  and all three nominated fault detections; terminal cleanup passed. Independent
+  causal outcome review precedes cadence work.
+  [Performance revision](issues/interpreter-constant-operands/performance-revision-20261031.md),
+  [GC execution](issues/gc-nursery-adoption/feedback-results.md).

@@ -62,7 +62,9 @@ Its detailed design SHA-256 is
 Independent [preparation review](reviews/causal-controls-preparation-20261031-v1.md)
 accepts these exact artifacts. Its receipt SHA-256 is
 `37a09c0f9b6654e20ad8b075745714fd1a960213ede9e75084b9b2c7c7a99a3c`.
-Root activation remains held behind the IR release-completion window.
+Root activated the batch after IR terminal/idle confirmation at
+22:28:49.462038 UTC; its deadline is 23:13:49.462038 UTC, session 80557.
+Execution and outcome evidence belongs in [results](feedback-results.md).
 
 Automatic halfway cadence remains a separate source increment and measured
 accept/reject decision under the [accepted design](design.md). This small

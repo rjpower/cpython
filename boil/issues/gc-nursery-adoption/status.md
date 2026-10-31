@@ -81,8 +81,12 @@ feedback and temporary negative-source manifests are frozen. Independent
 [preparation review](reviews/causal-controls-preparation-20261031-v1.md) accepts
 the exact six-row [causal plan](causal-plan.md), source isolation, sealed-product
 bridge and actual expected-failure witnesses. No native run of that correction
-is credited yet. The new 45-minute window remains held for separate activation
-after IR release completion.
+was credited at preparation. Root activated the separate causal window at
+22:28:49 UTC, deadline 23:13:49 UTC, session 80557. Both baseline rows passed;
+the force-major arm produced its nominated old-owner assertion failure. The
+debt-reset arm produced both nominated debt/starvation failures. All six rows
+completed at 22:35:14 UTC; root confirmed terminal exit zero and idle cleanup.
+Expected failures earn causal evidence only; independent outcome review remains.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

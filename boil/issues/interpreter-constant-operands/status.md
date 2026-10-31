@@ -11,7 +11,7 @@
 - Source base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Native evidence: sealed union `e9e10d5b503`, GCC O3 image; saved profiles `0b15b4bbc9b`
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
-- Decision: all planned debug modules passed; O3 timed out with partial products unqualified
+- Decision: debug and release cases passed; performance decision open, text growth is diagnostic
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
 - Current test-only candidate: `a84965eaa90267ac1dbf1b4c97ab032aaf26cedd`
 - Runtime tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
@@ -99,11 +99,23 @@ unfinished release/emission rows, with source unchanged. Host preparation will
 archive and hash all interrupted products, then propose a fresh release build
 under exact reviewed helpers. Independent preservation/preparation review
 accepted all 426 archive entries. Root activated the three-row completion at
-22:25:24 UTC with its separate 22:45:24 UTC deadline; fresh O3 is running.
+22:25:24 UTC with its separate 22:45:24 UTC deadline. Fresh O3 completed in
+109.473 seconds and all eleven release cases passed without skips. Emission
+stopped before its target child because the ELF reader assumes ET_EXEC;
+both matched images are PIE. The native session is terminal and idle; reviewed
+host-only reader correction is being prepared while GC controls run.
 The [execution record](feedback-results.md) owns outcomes and separate clocks.
-The [held performance proposal](performance-plan.md) preselects the registered
+The [original held performance proposal](performance-plan.md) preselects the registered
 coroutine workload, with spectral-norm support and separate controls; its
 independent [design review](reviews/performance-plan-20261031.md) accepts the
 proposal for later preparation, with raw counter capture and native feedback
-still required. Broader behavior, native emitted-work and performance acceptance
-remain pending.
+still required. The [revised decision](performance-revision-20261031.md)
+withdraws hard code-size/instruction-count proxies after user steering before
+any timing. Matched evaluator text grew 18.4248%; this remains a reported cost,
+not an automatic rejection. Actual elapsed performance and control regressions
+decide acceptance. Broader behavior, native emitted-work and performance
+acceptance remain pending.
+Independent [footprint review](reviews/footprint-outcome-20261031-v1.md) retains
+the matched size measurement and explicitly supersedes the historical rejection.
+The [performance revision review](reviews/performance-revision-20261031-v1.md)
+accepts the held elapsed-based decision rule; it grants no timing activation.

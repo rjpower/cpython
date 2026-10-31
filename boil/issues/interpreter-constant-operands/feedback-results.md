@@ -246,3 +246,34 @@ deadline **22:45:24.688115 UTC**. Evidence is under
 `ab49c7d6b11b5633a269132c31b6d2a31df2e1013580a792155553910ff8c338`,
 manifest `fa1e6b8792d742c932ce12560390ddfce82d14ad239ca73a5e6592dafbd1d108`.
 Fresh O3 is running. No complete release or emitted-work result is claimed.
+
+### Release success, ELF-reader stop and revised performance decision
+
+The fresh O3 build completed in **109.473 seconds** with all 116 module checks
+and zero import failures. The eleven release cases passed without skips.
+Emission then stopped in the host reader before any consumer-word target:
+it requires ET_EXEC, while both matched images are ELF64 x86-64 PIE/ET_DYN.
+No emission result exists. Root confirmed session47819 terminal exit1; cleanup
+at 22:27:22.519586 UTC records no live target process. A reviewed host-only PIE
+reader correction is being prepared; no runtime change/rebuild is indicated.
+
+Matched static inspection found evaluator text of 142,471 bytes in the parent and
+168,721 in the candidate: 26,250 bytes, **18.4248%** growth. Configuration and
+toolchain match; duplicate symbol-table aliases are counted once under the same
+function-family policy. Root independently corroborated both ELF symbol sizes
+and the original plan hash. This is valid size evidence, not a speed result.
+
+The coordinator initially rejected the increment under the original 5% cap.
+The user challenged that proxy before any timing was collected. The coordinator
+withdrew the hard rejection and reopened the performance decision. Historical
+rejection receipts remain unchanged, including independent footprint receipt
+`3ae0d8c622311c481d59db04055143e3fa68466c0fc2ded8628ee4ad079cea1a`.
+They do not own the current decision.
+
+The [revised held plan](performance-revision-20261031.md) keeps fixed workloads,
+sample counts and quiet-window bounds, but makes measured elapsed performance
+the acceptance criterion. Text growth and instruction counts are explanatory
+diagnostics. No new size cutoff or timing result is substituted into old
+evidence. Raw instruction-pair capture, actual work-removal review, independent
+revision review and exact activation still precede timing. GC causal controls
+currently own the sole native window.

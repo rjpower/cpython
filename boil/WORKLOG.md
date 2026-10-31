@@ -34,3 +34,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   attempt and bounded only its remaining checks; independent carry review and
   recovery of missing uncommitted notes continue.
   [Evidence and recovery](issues/nursery-shape-landing/results.md).
+- 2026-10-31: Independently accepted the exact nursery/shape source union and
+  started remaining-only qualification after restart input/cleanup checks.
+  Accepted a reviewed next experiment for exact native coroutines, with
+  separate admission/cleanup attribution and explicit rejection gates;
+  implementation waits for the shared landing.
+  [Current qualification](issues/nursery-shape-landing/status.md),
+  [next design](issues/gc-nursery-coverage/status.md).

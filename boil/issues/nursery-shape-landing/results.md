@@ -65,6 +65,20 @@ borrowed headers and records an idle candidate process state on boot
 `7bbe1ecf-490c-40f3-8db6-d46a8f6b6ba3`. Timestamped cleanup/launch receipts supply
 the observation times; the original preflight has no UTC field.
 
-Post-restart qualification input verification and remaining execution use the
-[restart plan](resume-plan.md). No debug full, stress-two, ASan16 or closure pass
-is claimed here yet.
+Post-restart input verification and remaining execution use the
+[restart plan](resume-plan.md). The release cleanup observation at 19:14:30 UTC
+records no live release executable under its build lock; it does not backdate
+cleanup. The unchanged release verifier then wrote the missing receipt.
+`build/restart-recovery/release-full.cleanup-observation.json` retains the boot,
+time and exact verification command.
+
+The remaining-only batch started 19:14:30 UTC and has a 20:14:30 UTC deadline.
+`build/restart-recovery/remaining-batch-start.json` binds the reviewed launcher
+(`9eb24b16`), frozen launches, preflight, source and exact remaining selections.
+Debug full OFF/N0 returned at 19:24:28 UTC with a terminal pass: 51,261 tests,
+3,744 skips and 60,750 collections across 564 selected modules. It returned
+565 actual driver/worker processes, zero fallbacks and four report-only
+detached-snapshot visits. Module states match release: 462 PASSED, 94 SKIPPED
+and eight RESOURCE_DENIED. Current post-gate idle observation passed; the
+original success verifier is completing cleanup. Debug KILL, stress-two,
+ASan16 and closure remain pending.

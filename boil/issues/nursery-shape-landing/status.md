@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: recovering after machine restart; validating retained inputs before remaining qualification
+- Phase: debug full OFF/N0 passed; cleanup verification precedes debug KILL
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -38,9 +38,12 @@ qualification batch. No performance claim or automatic repeat-to-green.
 
 All four builds, early controls and backend controls completed before the
 restart. Release full has a terminal pass: 51,261 tests, zero unwind fallbacks
-and one report-only detached-snapshot visit. Its post-cleanup receipt is absent;
-current cleanup and frozen-input checks must precede carry. No debug full,
-stress, ASan16 or closure result exists. The expired attempt is incomplete,
+and one report-only detached-snapshot visit. Current frozen-input and idle-process
+checks passed; its missing cleanup receipt was completed with a separately
+timestamped observation at 19:14:30 UTC. Debug full OFF/N0 also passed: 51,261
+tests, 3,744 skips, 60,750 collections, zero fallbacks and four report-only
+detached-snapshot visits. Debug KILL, stress, ASan16 and closure remain.
+The expired attempt is incomplete,
 not a qualification pass or a rejection of the runtime hypothesis.
 
 The primary checkout lost its linked-worktree metadata and 4,921 tracked files.
@@ -50,6 +53,8 @@ exactly from a loose Git blob. Four untracked legacy notes remain missing after
 the bounded search; see the [recovery audit](reviews/restart-recovery-audit.md).
 The separate frozen union remains the qualification source.
 
-Independent carry review passed. Next: restart cleanup bridge, then only the
-remaining checks under the [bounded restart plan](resume-plan.md).
+Independent carry and launcher review passed. The remaining-only batch started
+19:14:30 UTC and ends 20:14:30 UTC. Debug full OFF/N0 returned at 19:24:28 UTC;
+its cleanup verification precedes debug KILL, stress-two, ASan16 and closure
+under the [restart plan](resume-plan.md).
 See [results](results.md). There is no runtime landing or new speed claim.

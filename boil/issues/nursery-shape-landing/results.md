@@ -53,10 +53,15 @@ files were preserved rather than rewritten.
 
 The independent [recovery audit](reviews/restart-recovery-audit.md) recovered the
 exact modified user source review from loose blob `bdf87cffe841f3f342f88967b9c460ca099a968b`.
-Its SHA256 matches the preserved migration manifest. Four untracked legacy notes
-remain missing after filename, loose-object, snapshot and editor-history checks;
-the audit names them and the search limits. The recovered user edit remains
-outside project commits.
+Its SHA256 matches the preserved migration manifest. The first filename,
+loose-object, snapshot and editor-history search found no copies of four
+untracked legacy notes. A later bounded, task-specific session-patch search
+reconstructed all four with exact original hashes, then restored only absent
+destinations. All five protected user files now match the preserved migration
+manifest and retain their original modified/untracked state. The
+[follow-up](reviews/restart-user-note-recovery.md) binds patch-replay receipts;
+the original audit remains unchanged. Recovered user work stays outside project
+commits.
 
 The [independent carry review](reviews/restart-qualification-20261031.md) replayed
 the release validator and checked retained source/product/tool/evidence hashes.
@@ -81,4 +86,9 @@ Debug full OFF/N0 returned at 19:24:28 UTC with a terminal pass: 51,261 tests,
 detached-snapshot visits. Module states match release: 462 PASSED, 94 SKIPPED
 and eight RESOURCE_DENIED. Current post-gate idle observation passed; the
 original success verifier completed cleanup at 19:24:50 UTC. Debug KILL full
-then launched at 19:24:50 UTC. Stress-two, ASan16 and closure remain pending.
+then launched at 19:24:50 UTC and returned at 19:36:00 UTC: 51,261 tests,
+3,749 skips, 60,708 collections, zero fallbacks and one report-only visit.
+Its five additional skips are exactly the unsupported nursery controls with
+the approved reason; the validator accepted their identities. Module states
+again match release/OFF. Post-gate idle observation passed; its cleanup
+verifier precedes stress-two. ASan16 and closure remain pending.

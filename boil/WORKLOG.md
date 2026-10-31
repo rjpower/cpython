@@ -41,3 +41,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   implementation waits for the shared landing.
   [Current qualification](issues/nursery-shape-landing/status.md),
   [next design](issues/gc-nursery-coverage/status.md).
+- 2026-10-31: Recovered every pre-existing user note lost with the primary
+  checkout. One exact Git blob and four task-specific patch replays match all
+  five preserved file hashes; their original modified/untracked state is
+  retained outside project commits.
+  [Recovery evidence](issues/nursery-shape-landing/reviews/restart-user-note-recovery.md).
+- 2026-10-31: The exact nursery/shape union passed release, debug OFF and debug
+  KILL full suites with zero unwind fallbacks. Remaining stress, sanitizer and
+  closure gates continue within the separately bounded restart batch.
+  [Qualification evidence](issues/nursery-shape-landing/results.md).

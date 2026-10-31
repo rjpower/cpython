@@ -9,7 +9,7 @@
 - Branch/worktree: boil/nursery-shape-qualification;
   ../boil-nursery-shape-qualification
 - Head: e9e10d5b503eaf219797a5db44766eeab6fad4dc
-- Phase: debug full OFF/N0 and cleanup passed; debug KILL full running
+- Phase: full-three passed; debug KILL cleanup precedes stress-two
 - Execution: original attempt started 16:06:20 UTC and expired 17:36:20 UTC on 2026-10-31
 
 ## Hypothesis
@@ -42,19 +42,24 @@ and one report-only detached-snapshot visit. Current frozen-input and idle-proce
 checks passed; its missing cleanup receipt was completed with a separately
 timestamped observation at 19:14:30 UTC. Debug full OFF/N0 also passed: 51,261
 tests, 3,744 skips, 60,750 collections, zero fallbacks and four report-only
-detached-snapshot visits. Debug KILL, stress, ASan16 and closure remain.
+detached-snapshot visits. Debug KILL full passed with 51,261 tests, 3,749 skips,
+60,708 collections, zero fallbacks and one report-only visit. Its five extra
+skips are exactly the unsupported nursery controls. Stress, ASan16 and closure remain.
 The expired attempt is incomplete,
 not a qualification pass or a rejection of the runtime hypothesis.
 
 The primary checkout lost its linked-worktree metadata and 4,921 tracked files.
 Missing-only recovery restored the branch at a01a9b953e2 while preserving all
-surviving files and build evidence. One pre-existing user edit was recovered
-exactly from a loose Git blob. Four untracked legacy notes remain missing after
-the bounded search; see the [recovery audit](reviews/restart-recovery-audit.md).
+surviving files and build evidence. All five pre-existing user files were
+recovered exactly: one modified review from a loose Git blob, then four
+untracked notes from task-specific session patches. Each matches its preserved
+SHA256 and remains outside project commits; see the
+[recovery follow-up](reviews/restart-user-note-recovery.md).
 The separate frozen union remains the qualification source.
 
 Independent carry and launcher review passed. The remaining-only batch started
 19:14:30 UTC and ends 20:14:30 UTC. Debug full OFF/N0 returned at 19:24:28 UTC;
-its cleanup verification passed at 19:24:50 UTC. Debug KILL full is running;
-stress-two, ASan16 and closure follow under the [restart plan](resume-plan.md).
+its cleanup verification passed at 19:24:50 UTC. Debug KILL returned at 19:36:00
+UTC; cleanup verification precedes stress-two, ASan16 and closure under the
+[restart plan](resume-plan.md).
 See [results](results.md). There is no runtime landing or new speed claim.

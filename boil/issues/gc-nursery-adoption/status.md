@@ -12,6 +12,7 @@
 - Overall dispatch deadline: 2026-11-01 04:18:11 UTC
 - Initial candidate: `b34931a881b33b47a2b2f4b1b2a644c50fed963b`, frozen 20:48:24 UTC
 - Current test/fixture correction: `856222c62458bf3648e51d0bb0d278b1fbf54bd7`, frozen 21:42:14 UTC
+- Current test-only candidate: `ef0af95904b87d888eee4a98b6a745835ff95085`, frozen 22:03:21 UTC
 - Further source-review/debug checkpoint: 2026-10-31 22:18:24 UTC
 
 ## Hypothesis
@@ -72,6 +73,13 @@ cleanup. Every row has zero fallback; each whole suite has one worker unpinned
 event consistent with its passing deliberate counter test. Old products remain
 sealed. Required temporary force-major and minor-debt-reset controls are next;
 qualification, cadence selection and landing remain pending.
+Source review found that the old final allocation would trigger a major even
+after an incorrect minor debt reset. The [reviewed oracle correction](reviews/finite-major-oracle-20261031-v1.md)
+now interleaves bounded allocations and manual minors under automatic GC, with
+a finite actual-budget witness. Its test-only source is frozen; positive
+feedback and temporary negative-source manifests are being prepared. No native
+run of that correction is credited yet. Their proposed new 45-minute window
+will require separate activation after the IR native window.
 The first source checkpoint covers mandatory admission, manual minor semantics
 and checker support with existing automatic-major scheduling. Only after that
 correctness checkpoint does the separately reviewed cadence increment begin.

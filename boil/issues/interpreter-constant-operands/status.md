@@ -2,7 +2,7 @@
 
 - State: review
 - Owner: qualification_review_resumed; coordinator selects implementation
-- Updated: 2026-10-31, 22:01 UTC
+- Updated: 2026-10-31
 - Budget: offline research complete; 90-minute host-only prototype
 - Source started: 2026-10-31 20:20:13 UTC; decision due 21:50:13 UTC
 - Checkpoints: 20:50:13 domain/format; 21:20:13 fallback/observer/stack proof
@@ -13,8 +13,8 @@
 - Branch/worktree: `boil/interpreter-constant-operands`; `build/worktrees/constant-operands`
 - Decision: corrected eleven, full IR and generation passed; six disassembly assertions await classification
 - Runtime candidate: `7f0b1819f84ee11b354d60394a4975e1fcb0a188`, frozen about 20:56 UTC
-- Current test-only candidate: `a475acbf46d117137f7201adcb4557ce92fb9ec5`
-- Tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
+- Current test-only candidate: `c76bc5b5a9b4c4ebe546441b5cd416c3c217343a`
+- Runtime tree: `a081163bde190c453627755eda5ed3ed4951ccb6`
 
 ## Hypothesis
 
@@ -75,6 +75,11 @@ ran at 21:57 UTC: 147 cases returned six assertions, then its host validator
 stopped on an absent phase name before the fixture child ran. Terminal cleanup
 passed. Raw failures remain intact; read-only replay and individual causal
 classification precede any golden correction.
+The separate reviewed fixture capture passed at 22:03 UTC. Three strings
+remove a literal load; two are identical. Live jump targets agree with labels,
+and the single removed instruction explains the expected table's offset
+changes. Authorized test-only goldens froze at 22:05 UTC; exact source review
+and remaining-only launch preparation continue, with no compatibility claim.
 The original deadline remains
 22:20:45 UTC; the [execution record](feedback-results.md) owns outcomes.
 The [held performance proposal](performance-plan.md) preselects the registered

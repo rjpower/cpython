@@ -130,3 +130,33 @@ This is diagnostic evidence, not a successful inventory or compatibility pass.
 Read-only host replay and individual causal classification are next; the full
 module will not be rerun merely to repair evidence parsing. The original
 22:20:45.868428 UTC feedback deadline remains unchanged.
+
+### Separate fixture capture and golden-only source
+
+Read-only host replay of the original inventory crosschecks returned stats,
+147 unique verbose case IDs and six failures; it preserves the missing outer
+result token. A failed unittest suite raises `TestFailedWithDetails` before
+the observer can emit that token. The original inventory remains failed.
+
+Independent [fixture preparation review](reviews/golden-fixtures-preparation-20261031-v1.md)
+accepted the separate compile-only probe. Root activated it at
+**22:03:24.769393 UTC**, session **76380**, and confirmed terminal exit zero.
+Completion is 22:03:41.201175 UTC; result SHA-256
+`854151f54db7001a77d8f4bc7983bc573a0c53ca8383b409d64458d18c5328bc`.
+It records 29 collections, zero fallback/unpinned events and idle cleanup.
+No fixture workload or `jumpy` function was called.
+
+Only expression, simple-assignment and compound-assignment strings changed:
+each removes LOAD_SMALL_INT1 and uses RHS literal1. Both annotation strings
+are identical. Live `jumpy` labels equal its live jump targets. Its 118 versus
+119 instructions reflect one removed load and one immediate subtraction;
+downstream offsets and eight jump arguments explain the remaining differences.
+The existing full-module raw diff separately records loop-quicken literal3
+and backedge7-to6 changes.
+
+Root authorized only those expected outputs. Test-only
+`c76bc5b5a9b4c4ebe546441b5cd416c3c217343a` froze at 22:05:26 UTC, changing
+five assignments in `Lib/test/test_dis.py`; all test bodies/readers remain.
+Exact source review and a two-test-file bridge to the original debug image
+precede a remaining-only batch. No failed receipt is rewritten and no complete
+compatibility, release, emission or performance result is credited yet.

@@ -154,3 +154,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   failures and bounded read-only classification before any golden edit.
   [GC outcome](issues/gc-nursery-adoption/reviews/retirement-feedback-outcome-20261031-v1.md),
   [IR evidence](issues/interpreter-constant-operands/feedback-results.md).
+- 2026-10-31: Reviewed a stronger finite-major test after identifying the old
+  witness's limit; froze the test-only GC correction for positive/negative
+  feedback. IR fixture capture passed and explained the three changed strings
+  and one-instruction jump-table shift; froze golden-only source for exact
+  review and remaining feedback. No timing or qualification acceptance.
+  [GC oracle review](issues/gc-nursery-adoption/reviews/finite-major-oracle-20261031-v1.md),
+  [IR capture](issues/interpreter-constant-operands/feedback-results.md).

@@ -191,3 +191,22 @@ was preserved and corrected in its host receipt; it was not a native failure.
 This accepts first feedback only. Temporary force-major and minor-debt-reset
 causal controls remain before qualification. Automatic halfway cadence and its
 cost decision remain separate; there is no landing or performance acceptance.
+
+### Strengthened finite-major oracle
+
+The coordinator's [source review](reviews/finite-major-oracle-20261031-v1.md)
+accepts test-only `ef0af95904b87d888eee4a98b6a745835ff95085`, frozen at
+22:03:21 UTC. Only the existing repeated-minors body changes; twenty IDs remain.
+The old early assertion detects debt reset, but its later large allocation
+would still trigger a major after the bug. The replacement interleaves small
+allocations and manual minors while automatic GC is enabled, within bounds
+derived from the actual established major budget. A fixed finite count must
+witness a major and old-cycle reclamation. No production source changes.
+
+Positive feedback and two exact temporary source negatives remain held:
+force guarded minor requests to major; reset only successful-minor major debt.
+The latter must fail both the existing exact debt assertion and the strengthened
+finite-major witness. These diagnostic failures will earn causal-control
+evidence only. A proposed new 45-minute window follows the completed first
+batch and requires separate review/activation after IR execution. The overall
+04:18:11 UTC dispatch deadline remains.

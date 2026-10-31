@@ -44,7 +44,12 @@ The plan now explains actual root APIs/data structures and the staged shared
 interfaces for regions and writable slots. Native-cleanup source70977878 passes
 independent review, including removal of obsolete deallocator ceremony; native
 composition/qualification waits for selective death. Selective ASan16 passes4,027; release and debug-normal fulls each pass51,241
-tests with zero fallback. Debug-kill/stress/closure remain.
+tests with zero fallback. Debug-kill full also passes51,241; stress/closure remain.
+Native cleanup and reviewed scanner sourceb9d829 will compose after selective
+landing and share one independently reviewed qualification ladder, avoiding
+two successive full campaigns. Storage work follows their measured result;
+existing mimalloc page batching is the first investigation if returns remain
+costly, while a region requires compact metadata and demonstrated benefit.
 [Review35 reflection](design/work/gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime)
 clarifies that frame registers already are roots, durable root lists are sparse
 fork registrations, and common managed layouts will gain direct slot scanners

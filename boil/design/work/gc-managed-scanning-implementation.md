@@ -1,7 +1,9 @@
 # First direct managed scanners
 
-2026-10-30. Source proposal only, after native-only cleanup; no runtime edit,
-build or target. This implements the first part of
+2026-10-30. Implementation proposal; source is now committed as
+`b9d8294123d`, without native validation. After selective death lands, compose
+this reviewed source with native-only cleanup in its existing candidate and
+qualify the union once under the named PROCESS ruling. This implements the first part of
 [architecture §8](gc-architecture-next.md#8-review35-choose-gc-structures-for-this-runtime).
 It is independent of region allocation: cells, tuples and frames already have
 known value layouts in mimalloc-backed storage. It changes neither collection

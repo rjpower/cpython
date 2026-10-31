@@ -5332,3 +5332,28 @@ Debug-normal selective full now terminal PASS:51,241/3,739skips,60,800collection
 0fallback/1report-onlyunpinned;598.68s. Debug-kill is active, stress2 and closure
 follow. Source94ae and products stay frozen. gc-designrev4 and handover73
 contain review35 reflection; primary remains runtime75e8 pending landing.
+
+### 2026-10-30 17:28 PDT — one cleanup/scanner candidate; storage by measured cost
+
+Selective debug-kill full passes51,241/3,739skips,60,778collections/0fallback/
+3report-onlyunpinned; result9f126439 and cleanup3b0c7dba independently replayed.
+Stress2 and closure remain. Native709778 and scannerb9d829 both clear independent
+source review, with no native validation claimed. Scanner's ordinary frame
+fixture creates its payload inside the callee; the running-generator fixture
+is documented as public behavior coverage rather than exclusive fast-path proof.
+
+Coordinator authorizes one named composition after selective lands: native
+owner merges primary and reviewed scanner history, applies the tiny held frame
+hunk, freezes the actual union for independent review, then runs one coherent
+qualification covering both focused sets and applicable backends. Stats stops
+duplicate launcher preparation. This reduces redundant full ladders while
+preserving source/native identity and the union's correctness obligations.
+
+Independent storage review clears existing mimalloc pages as the first batch
+investigation if storage return remains material after these changes. Raw
+unpublished allocations count as occupied; native teardown, wrappers, remote
+free ownership, debug/ASan/quarantine and last-journal-borrower boundaries remain.
+Regions stay conditional on measured allocation/locality and compact metadata:
+16-byte cells cannot justify24–32-byte records merely to obtain bump allocation.
+No batch/region code or new speedup is claimed. PROCESS records prose-only
+selective merge reconciliation; two fresh qualified-product smokes precede push.

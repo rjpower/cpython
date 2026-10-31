@@ -57,6 +57,19 @@ slices. Current native gates remain finite and source-frozen; later branches
 merge the landed integration before final qualification. Report broad performance
 after the runtime improvements land, with hourly documentation checkpoints.
 
+Named composition ruling, 2026-10-30: after selective death lands, qualify
+native-only cleanup and direct managed scanning as one coherent candidate.
+The native-cleanup owner merges primary, then reviewed scanner source
+`b9d8294123d` in that existing worktree, preserving both histories, and applies
+the small frame-range hunk under its `gc_live.c` ownership. Review the actual
+union independently before building. Include both focused behavior sets and
+all applicable ordinary/debug/ASan/tail/root obligations in one source-frozen
+ladder. This replaces two successive builds/full-suite campaigns; it does not
+reuse either slice's source-only checks as native qualification. Resolve any
+code conflict by semantic review. Only the coordinator authorizes this named
+composition; ordinary cross-lane merges remain prohibited. Land the union once
+and reconcile both topic records afterward.
+
 Review35 refines the code direction: retain frame-array roots; assess transient
 C shadow-stack and durable-root representations by their distinct lifetimes;
 introduce direct managed slot/range scanners with shared mark/update field

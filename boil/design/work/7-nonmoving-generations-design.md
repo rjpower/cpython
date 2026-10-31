@@ -1,5 +1,15 @@
 # Step 7: a nonmoving young/old collector
 
+Selected architecture, 2026-10-30: the approved
+[GC implementation plan](gc-architecture-next.md) develops a common moving
+nursery with stable native space after lifecycle/storage simplification.
+This nonmoving collector is an alternative, not a prerequisite. Its owner/store,
+constructor, young-index and major-debt requirements remain useful inputs.
+Initially scanning all stable native owners each minor replaces porting every
+native mutation site before activation; the core store ledger and complete
+native traversal still apply. Reconcile the historical proposals below with
+that explicit choice before using them as implementation instructions.
+
 Current status, 2026-10-30: generations remain a design proposal, with no
 minor collector or write barriers implemented. The supported GC milestone
 landed in `75e8a1e0c01`: main interpreter, ordinary threads and shared GIL;

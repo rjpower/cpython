@@ -46,6 +46,47 @@ record and is updated at every landing.
 | B | the internal benchmark set (note 10) | done; the record for every gate 4 |
 | I | interpreter performance checkpoint, all JITs off | Revised user guidance2026-10-30: roughly2× is soft guidance, especially for simple arithmetic, not an aggregate gate. Finish GC fixes first; then detailed interpreter status report and subagent design reflection for clean general improvements where results disappoint. Evaluate parameterized operation families alongside value flow, calls and dispatch. Report fair release elapsed time, regressions, allocations, boxes, RSS and pauses; no local score chasing |
 
+The user authorizes implementation/landing of the revised GC design. Parallel
+owners: roots_audit qualifies selective death in its existing topic;
+string_design implements native-only generator cleanup in `boil/gc-native-cleanup`
+from integration; stats_design_review completed the root/code review and now implements direct
+managed scanners in `boil/gc-managed-scanning`; independent review of the
+preceding frozen qualification remains separate from authoring this new slice. The coordinator owns
+integration/documents and sequences region/writable-slot/minor work after these
+slices. Current native gates remain finite and source-frozen; later branches
+merge the landed integration before final qualification. Report broad performance
+after the runtime improvements land, with hourly documentation checkpoints.
+
+Named composition ruling, 2026-10-30, updated after stress failure: qualify
+selective death, its warning-context repair, native-only cleanup and direct
+managed scanning as one coherent candidate. Selective's final debug stress
+found a real diagnostic-context bug; its campaign remains FAIL, with closure
+unrun. A deterministic restricted-builtins collection loses the intended
+never-awaited warning and produces two `KeyError('__import__')` unraisables.
+The native-cleanup owner merges primary, frozen selective source94ae and
+reviewed scanner source`b9d8294123d` in its existing worktree, preserving all
+histories, and applies the small frame-range hunk under its `gc_live.c`
+ownership. The selective owner authors the warning repair in separate owned
+files; it joins only after independent source review. Review the actual
+union independently before building. Include all focused behavior sets and
+all applicable ordinary/debug/ASan/tail/root obligations in one source-frozen
+ladder. This replaces successive builds/full-suite campaigns; it does not
+promote component passes or source-only checks to union qualification. Resolve any
+code conflict by semantic review. Only the coordinator authorizes this named
+composition; ordinary cross-lane merges remain prohibited. Land the union once
+and reconcile both topic records afterward.
+
+Review35 refines the code direction: retain frame-array roots; assess transient
+C shadow-stack and durable-root representations by their distinct lifetimes;
+introduce direct managed slot/range scanners with shared mark/update field
+knowledge. Native `tp_traverse` remains an explicit pinned compatibility path.
+This replaces the universal per-edge callback direction, not the strong-edge
+coverage contract. Native-cleanup70977878 clears independent source review and
+includes redundant generator finalizer ceremony removal; final native composition
+and gates follow the selective landing. Existing ASan16/release full pass;
+selective debug-normal is now also passed; debug-kill/stress/closure and
+landing review remain active.
+
 The supported GC milestone is complete. Selective-death candidate10d877 has
 an O3 build and independent paired-four replay: coroutine throughput improves
 30.9%; the other three ranges overlap. O1-debug focused13 and four affected
@@ -404,6 +445,19 @@ No further compile or full-suite repeat follows a proven project-prose-only
 merge. A runtime, test, generated, build or tool change invalidates this
 exception and requires its own reconciliation. Primary publication waits for
 both smoke results; inherited final-GC/performance debt remains open.
+
+Coordinator landing ruling, 2026-10-30: the same project-prose-only rule applies
+to the eventual qualified GC union. The earlier proposed selective-only landing
+is superseded by the named composition above; source94ae is not qualified.
+Complete the final union's finite
+qualification, closure and independent landing review first. Prove the actual
+merge changes only enumerated project Markdown paths under `boil/` relative to its frozen source;
+runtime/test/tool/build/generated inputs must remain identical. Bind the actual
+merge separately from frozen release/debug/ASan native identities, and run one
+fresh post-merge smoke per release/O1-debug configuration using those qualified
+products and their source/stdlib roots. This avoids rebuilding and rerunning
+full suites for prose edits. Any non-prose difference requires reconciliation
+and qualification of the changed union. Publication waits for both smokes.
 
 Queue2a's original classifier-held probes stay preserved, without a native
 retry. The newly reviewed source design separates three safety changes.

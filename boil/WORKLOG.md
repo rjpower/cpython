@@ -5231,3 +5231,155 @@ Independent cost/contract and nursery reviewers clear the revised plan after
 these explicit proof clauses and a24.35→24.36 rounding correction. Entrypoint,
 PROCESS and affected decision docs updated; original failures and unrelated
 working files preserved. Next hourly checkpoint16:30PDT if work remains active.
+
+
+### 2026-10-30 16:47 PDT — approved GC implementation starts
+
+The user authorizes landing the framed GC design and requests a code-level
+root/data-structure/organization review. AI policy and applicable instructions
+reread; unrelated dirty review files remain preserved. Three existing agents
+reactivated: roots_audit owns selective-death qualification in its current tree;
+string_design owns five-file native-only cleanup in new repository-managed
+boil-gc-native-cleanup from primary9c3c0d57424; stats_design_review owns the
+independent code/root review and subsequent patch review. No unlanded cross-lane
+merge; each runtime lane takes landed integration before final qualification.
+
+Selective topic merged primary as its next commit with documentation-only
+incoming changes. Existing O3/O1 images retain explicit native identities.
+Its finite required release/O1normal+kill fulls, stress, ASan and closure/control
+packet is being prepared from existing launchers; heavy work is coordinated by
+that owner. Native-cleanup implementation is source-only pending source review.
+No runtime optimization or nursery has newly landed at this checkpoint.
+
+Architecture plan now includes current root recipe and concrete structures:
+thread-local _PyValueRoot spans, interpreter _PyGCRoot lists, initialized-start
+bitmap, local address sets/range vectors, trace context, contiguous dead records,
+sticky-OOM stacks/order scratch, callback batches, stable weakref entries and
+frame descriptor cache. Writable slot versus lifetime anchor, space-aware object
+lookup, constructor publication, actual lifecycle facts and commit boundaries
+are the shared concepts introduced with their first real consumers. Large file
+splits and generic container/allocator frameworks are not prerequisites. Broad
+performance summary follows landed improvements; next hourly checkpoint17:44PDT.
+
+
+Independent code review `gc-code-organization-review.md` clears architecture§7
+against actual source9c3c: root recipes, ownership and structure descriptions
+are sound. It identifies existing call_effects as the shared allocation/reentry
+authority and distinguishes fatal current object-map extension from returnable
+future region reservation. First fresh selective release smoke passes1,935 tests/
+80 skips with source94ae/native10d and cleanup/root/state checks. Affected whole4
+and the fresh ASan build are active; full qualification is not yet complete.
+
+
+### 2026-10-30 17:09 PDT — review35 reflection; implementation continues
+
+The user asks whether root lists/traversal inherit unsuitable CPython machinery,
+and explicitly keeps implementation moving. Roots qualification and stats review
+were still running after the root read-only poll interruption; the native-cleanup
+author was deliberately awaiting independent review. No native job was killed
+or restarted. Ordinary IR register writes are assignments into existing frame
+arrays; full physical slot extent is scanned at collection. Extra C roots cover
+boxing/reentry temporaries, not every instruction. _PyValueRoot/_PyGCRoot/public
+root registration are fork additions absent pinned upstream, not per-object
+CPython generation lists. Internal durable registration is O(1), while public
+slot-address removal searches O(R). Existing data does not isolate that cost.
+
+Architecture§8 compares chunked transient shadow stacks and dense persistent
+handles without conflating lifetimes. The selected managed path uses direct
+slot/range scanning with one field definition for mark/update; native opaque
+layouts retain tp_traverse/pinning. Trusted exact slots versus ambiguous lookup
+are distinct contracts; current-domain/initialized identity cannot disappear
+merely because a pointer is tagged. Independent source review clears§8 with
+one wording refinement: historical subtraction remains diagnostic, while live
+collection no longer uses the RC cycle-isolation algorithm.
+
+Native-cleanup V1 source32d4e339 and narrow B/no-GIL successor70977878 are
+committed/pushed after independent SOURCE_CLEAR. The latter preserves exported
+return0 API while removing unreachable RC code and redundant generator
+TRACK/stub/UNTRACK ceremony, keeping weakref/native cleanup. Host root/AST/child
+checks pass; no native qualification claimed. Author prepares reused native
+packets and will merge selective integration before final adaptation/qualification.
+Region implementation packet4a3bd1ba names actual wrapper, publication, lookup,
+free/resize/quarantine/reset and late-lifetime boundaries; existing-mimalloc
+cleanup comes first. A direct managed scanner packet is being prepared.
+
+Selective qualification source94ae/native10d (fresh ASan94ae) remains frozen.
+ASan16 terminal passes4,027/141skips,13,015collections/0fallback/3report-only
+unpinned; release full passes51,241/3,795skips,58,608collections/0fallback/1report-only
+unpinned. Independent raw validator/ref replay clears frozen outcomes and
+preserves warning/skip limits. Debug normal is active; debug kill, stress and
+closure follow. No new runtime landing or full interpreter speed claim yet.
+Next hourly checkpoint17:44PDT; material changes are reported sooner.
+
+
+### 2026-10-30 17:15 PDT — direct scanner implementation assigned
+
+Read and approved managed-scanner packetb186a768. Stats owner created
+boil-gc-managed-scanning from integrationd0f467; owns shared ranges/accessors,
+cell/tuple/frame traversal and gc_trace direct mark paths with focused tests.
+The tiny gc_live generic-range hunk stays unapplied until native cleanup lands
+and releases that file; no unlanded cross-lane merge or concurrent file edit.
+First source checkpoint expected about25min, not a native/runtime promise.
+Keep exact/current-domain lookup and debug checks; no faster pointer trust,
+movement, unused updater, per-edge replacement callback or layout DSL.
+The same owner will correct obsolete object.h header/refcount comments without
+changing actual layout. No region runtime is being built yet; its per-object
+metadata cost versus compact page/bitmap/stride knowledge needs explicit review.
+
+Native author709778 prepares reused O1/O3/ASan/tail and finite affected/control
+packets, without source/product bindings or execution before selective landing.
+Debug-normal selective full now terminal PASS:51,241/3,739skips,60,800collections,
+0fallback/1report-onlyunpinned;598.68s. Debug-kill is active, stress2 and closure
+follow. Source94ae and products stay frozen. gc-designrev4 and handover73
+contain review35 reflection; primary remains runtime75e8 pending landing.
+
+### 2026-10-30 17:25 PDT — one cleanup/scanner candidate; storage by measured cost
+
+Selective debug-kill full passes51,241/3,739skips,60,778collections/0fallback/
+3report-onlyunpinned; result9f126439 and cleanup3b0c7dba independently replayed.
+Stress2 and closure remain. Native709778 and scannerb9d829 both clear independent
+source review, with no native validation claimed. Scanner's ordinary frame
+fixture creates its payload inside the callee; the running-generator fixture
+is documented as public behavior coverage rather than exclusive fast-path proof.
+
+Coordinator authorizes one named composition after selective lands: native
+owner merges primary and reviewed scanner history, applies the tiny held frame
+hunk, freezes the actual union for independent review, then runs one coherent
+qualification covering both focused sets and applicable backends. Stats stops
+duplicate launcher preparation. This reduces redundant full ladders while
+preserving source/native identity and the union's correctness obligations.
+
+Independent storage review clears existing mimalloc pages as the first batch
+investigation if storage return remains material after these changes. Raw
+unpublished allocations count as occupied; native teardown, wrappers, remote
+free ownership, debug/ASan/quarantine and last-journal-borrower boundaries remain.
+Regions stay conditional on measured allocation/locality and compact metadata:
+16-byte cells cannot justify24–32-byte records merely to obtain bump allocation.
+No batch/region code or new speedup is claimed. PROCESS records prose-only
+selective merge reconciliation; two fresh qualified-product smokes precede push.
+
+### 2026-10-30 17:33 PDT — real warning-context bug; qualify one final GC union
+
+Selective debugstress fails validation despite native exit0: asyncgen is
+ENV_CHANGED from two unraisable KeyError('__import__') reports for one never-
+awaited coroutine. Failure capsule287d7efd retains12 refs and independently
+replays3,105/113,10PASS+1ENV_CHANGED,37,714collections/0fallback. No closure,
+retry or selective landing follows. Source94ae and products remain intact.
+
+One deterministic ordinary-API probe confirms the mechanism without asyncio:
+under disabled automatic GC, drop an unawaited coroutine and collect from a
+lambda whose legitimate builtins dictionary is empty. Expected RuntimeWarning
+is lost; two import KeyErrors are reported. Result83123698/postcleanup PASS
+preserve actualoff/N0 and original products. Warnings retrieval imports using
+the interrupted frame's builtins, so delayed cleanup can inherit an unrelated
+restricted namespace. The two reports can come from the helper and fallback,
+not two finalizer deliveries. Namedtuple constructors provide this valid context.
+
+Roots owner will repair runtime-owned warning-module retrieval with cached
+module lookup/dynamic attrs and deliberate absent-module import semantics;
+stats independently reviews it. No test suppression or forced close hides it.
+Coordinator supersedes selective-first landing: native owner composes reviewed
+selective/native/scanner histories, then reviewed warning repair, and freezes
+the actual union for one qualification. This avoids qualifying successive
+intermediate combinations while preserving failed history and all backend,
+lifetime and external-behavior obligations. No union native run has begun.

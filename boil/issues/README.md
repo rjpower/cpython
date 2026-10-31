@@ -7,13 +7,20 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC | [Minimal nonmoving nursery](gc-nursery-minimum/status.md) | string_design | Bounded hypothesis passed; select for coherent landing qualification |
-| Interpreter | [Share polymorphic shape admission](shape-admission-reuse/status.md) | stats_design_review | Independent review passed; select for coherent landing qualification |
+| GC / integration | [Shared nursery and shape qualification](nursery-shape-landing/status.md) | string_design | Execute the reviewed 90-minute batch; stop on unexpected failure |
+| Interpreter | [Attribute shared call setup](interpreter-call-setup/status.md) | stats_design_review | One supported minimal proposal or rejection within 30 minutes |
 
-The nursery's first decision finished within its one-hour budget. Source work,
-reviews and builds can overlap with separate ownership; quiet measurements,
-shared full-suite/perf-map windows and integration serialize. Qualify the
-selected GC/interpreter combination once rather than repeat unchanged ladders.
+Source work, light analysis and reviews can overlap with separate ownership;
+quiet measurements, shared full-suite/perf-map windows and integration serialize.
+Qualify the selected combination once rather than repeat unchanged ladders.
+Broader nursery implementation waits for that decision.
+
+## Selected for qualification
+
+- [Minimal nonmoving nursery](gc-nursery-minimum/status.md): working opt-in
+  cell/tuple consumer, conservative old scan; bounded behavior/review passed.
+- [Shared shape admission](shape-admission-reuse/status.md): four emitted
+  matcher sites become two; bounded behavior/review passed, no speed claim.
 
 ## Next GC experiments, in order
 

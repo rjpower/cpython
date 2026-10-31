@@ -43,7 +43,7 @@ Fresh O3 build and cleanup passed. Whole shape checks ran 156 tests with eight
 existing pystats skips; ten IR/generator controls passed. Emitted matcher sites
 fell from four to two, and evaluator code shrank by 213 bytes. Independent
 review verified source, generated outputs and all 71 evidence references.
-Next, qualify the selected combination with the GC candidate once.
+Next, run [shared qualification](../nursery-shape-landing/status.md) with the GC candidate.
 No elapsed speedup is claimed.
 
 ## References

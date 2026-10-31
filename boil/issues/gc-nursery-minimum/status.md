@@ -44,8 +44,9 @@ additional KILL skips are exactly the unsupported nursery controls. A safe
 full-instead-of-minor negative failed at the intended old-owner assertion.
 Independent review replayed the results and verified cleanup.
 
-The first bounded hypothesis works. Next, select the coherent landing and
-qualify it once with the interpreter candidate. Keep the nursery opt-in;
+The first bounded hypothesis works. The selected candidate is in
+[shared landing qualification](../nursery-shape-landing/status.md) with the
+interpreter change. Keep the nursery opt-in;
 the all-old scan and tiny cohort establish no performance gain.
 
 ## References

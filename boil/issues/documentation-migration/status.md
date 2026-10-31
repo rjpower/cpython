@@ -32,6 +32,8 @@ two competing live layouts.
 
 Migration and coordinator review are complete. Current contracts and issue
 records replace the mixed live layout; workflow and entry points are concise.
-All 737 preserved original files and user-owned review bytes were independently
-checked. The migration is pushed at abd5c0926df; published views identify that
-source revision. Future work follows the bounded template.
+Original documents and user-owned review bytes were independently checked.
+The migration is pushed at abd5c0926df, with concise workflow and experiment
+records at 71ee990b802. The benchmark guide now follows the same current layout;
+its obsolete narrative/report is preserved separately. Future work follows the
+bounded template.

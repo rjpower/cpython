@@ -22,3 +22,6 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   compatibility and negative controls; selected the opt-in candidate for
   qualification. Shape admission passed behavior/emission feedback and moved
   to independent review. [Work index](issues/README.md).
+- 2026-10-31: Selected the exact nursery/shape combination for one reviewed,
+  finite qualification batch. Started parallel call-setup attribution and
+  completed benchmark documentation consolidation. [Work index](issues/README.md).

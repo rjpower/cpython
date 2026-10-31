@@ -1469,7 +1469,8 @@ native_cleanup_ready(PyThreadState *tstate, _PyGCMarkResult *res)
     PyInterpreterState *interp = tstate->interp;
     GCState *gc = &interp->gc;
     if (!(res->kinds & _PyGC_DEAD_FINALIZE)
-        || (res->kinds & (_PyGC_DEAD_DEL | _PyGC_DEAD_FIRST | _PyGC_DEAD_HOOK))
+        || (res->kinds & (_PyGC_DEAD_DEL | _PyGC_DEAD_FIRST | _PyGC_DEAD_HOOK
+                          | _PyGC_DEAD_BUFFER | _PyGC_DEAD_WEAKREFS))
         || res->ndomain != 1 || res->domain[0] != interp
         || !_Py_IsMainInterpreter(interp) || gc->queue_phase != QUEUE_OPEN
         || gc->queue_head != NULL || gc->queue_draining || gc->debug
@@ -1506,14 +1507,6 @@ native_cleanup_ready(PyThreadState *tstate, _PyGCMarkResult *res)
     for (Py_ssize_t i = 0; i < res->ndead; i++) {
         _PyGCDeadObject *d = &res->dead[i];
         PyObject *op = d->op;
-        if ((op->ob_flags & _Py_HAS_WEAKREFS_FLAG)
-            || (PyType_Check(op)
-                && (((PyTypeObject *)op)->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN))
-            || Py_IS_TYPE(op, &PyMemoryView_Type)
-            || Py_IS_TYPE(op, &_PyManagedBuffer_Type))
-        {
-            return 0;
-        }
         if ((d->kinds & _PyGC_DEAD_FINALIZE) && finalizer_eligible(op)) {
             if (!_PyGen_CanClearUnreachable(tstate, op)) {
                 return 0;
@@ -2387,10 +2380,9 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    PyValue *ref = _PyFrame_GetLocalsArray(frame);
-    PyValue *end = ref + _PyFrame_NumSlots(frame);
-    for (; ref < end; ref++) {
-        _Py_VISIT_VALUE(*ref);
+    _PyGCValueRange values = _PyFrame_GCValues(frame);
+    for (Py_ssize_t i = 0; i < values.n; i++) {
+        _Py_VISIT_VALUE(values.base[i]);
     }
     return 0;
 }

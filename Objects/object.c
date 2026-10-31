@@ -187,8 +187,8 @@ PyObject_CallFinalizer(PyObject *self)
 int
 PyObject_CallFinalizerFromDealloc(PyObject *self)
 {
-    /* The collector ran the finalizer, from its queue, in the collection
-       before the one that is sweeping self. */
+    /* The collector completes finalization before deallocation;
+       deallocation must not invoke it again. */
     (void)self;
     return 0;
 }

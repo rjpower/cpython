@@ -51,16 +51,29 @@ acquire a lock in this GIL configuration. The existing sweep guards reject
 object allocation or Python execution. Normal generator deallocation still
 clears names/code and normal sweep frees/accounting owns the blocks.
 
-### Required integration before final qualification
+### Named integration before final qualification
 
-Selective-death is deliberately **not cherry-picked while unlanded**. This
-base's WEAKREFS category denotes type capability, so rejecting that aggregate
-would disable the intended generator cohort. The current draft uses actual
-weakref/header and exact buffer checks. After selective-death lands, merge
-primary, reject its authoritative actual DEL/FIRST/HOOK/BUFFER/WEAKREFS kinds
-in aggregate, and remove those redundant per-object capability/header checks.
-Retain the FINALIZE prefilter and dynamic finalizer/readiness revalidation.
-Freeze and review that actual composition before final native qualification.
+The original9c3 checkpoint used weakref/header and exact buffer checks because
+that base's WEAKREFS kind described type capability. Under coordinator ruling
+`3e1a784aeda`, the actual source histories are now composed: latest primary,
+selective-death94ae, and independently reviewed managed-scanner b9d829. This
+explicit named exception supersedes the earlier requirement to land selective
+first. Selective's prior qualification remains FAIL because its final stress
+exposed deferred-warning import context; none of its receipts is a union pass.
+
+The union rejects authoritative actual DEL/FIRST/HOOK/BUFFER/WEAKREFS kinds
+in aggregate, removes the redundant per-object capability/header checks, and
+retains FINALIZE prefiltering plus dynamic eligibility/readiness revalidation.
+The released `_PyGC_VisitFrameStack` hunk now uses `_PyFrame_GCValues`; bounds,
+order, visitor error propagation and initialized-slot rules stay unchanged.
+The collector completes native finalization in the SAME pass before normal
+deallocation; it need not queue this cohort or defer its block free.
+
+The reviewed warning-context fix must join and the whole actual union must be
+independently source-reviewed/frozen before any build. One coherent O3/O1/
+ASan/tail ladder covers native cleanup5 plus managed scanner4; no source edits
+are allowed during gates. Scanner source relies on root/string_design
+independent review, not its author's review of native source/composition.
 
 ## Observable checks
 
@@ -88,10 +101,11 @@ assertions with stress disabled. No raw-address fixture or new hook is
 introduced. Existing
 `test_finalizer_order_through_closed_generator`, finalizer-work OOM recovery,
 buffer readiness, generator close/throw and monitoring `test_gen_unwind`
-remain relevant. The first feedback proposal is these five methods once in
-O1/Py_DEBUG actual kill/N0, followed on success by whole `test_gc` and
-`test_generators`, plus affected `test_coroutines`, `test_asyncgen` and
-`test_monitoring` under the coordinator's exact selection.
+remain relevant. The first feedback proposal is these five methods plus the four independently
+reviewed `ManagedScanningTests` methods once in O1/Py_DEBUG actual kill/N0.
+The held packet selects whole GC/generators/genexps/coroutines/asyncgen/
+monitoring/weakref/memoryview/buffer after focused success, with exact worker
+modes, no skipped protected controls and recorded observed counts/skips.
 
 No new copied runtime negative is claimed at this checkpoint. Omitting the
 weakref gate can execute callbacks inside sweep and is not a safe missing-event
@@ -117,9 +131,9 @@ ordinary GCC success alone cannot qualify the new entry on other backends.
 The coordinator may compose these gates with the next coherent candidate;
 this record does not request a redundant backend full suite.
 
-Builds and targets remain held for independent source review, exact launch
-review and machine admission. Root's existing selective-death qualification
-owns the current native/runtime window. Timing and admission effectiveness are
+Builds and targets remain held for the reviewed warning fix, independent
+actual-union source review, exact launch review and machine admission. The
+selective-death failure and preceding receipts remain immutable. Timing and admission effectiveness are
 later questions: measure the conservative cohort and actual elapsed/shared
 cost change with the existing bounded comparison, without a speedup promise
 or widening the semantics to make a benchmark enter the cohort.

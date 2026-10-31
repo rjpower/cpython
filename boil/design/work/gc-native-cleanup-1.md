@@ -1,6 +1,7 @@
 # Native suspended-generator cleanup: source checkpoint
 
-2026-10-30. **Source only; no build or native test has run.** Branch
+2026-10-30. **Not qualified: first O1 build stopped at its linked audit;
+no target test has run.** Branch
 `boil/gc-native-cleanup` starts at primary
 `9c3c0d57424668714ace4afff25fb0fe970f8254`. This is the bounded implementation of
 [the approved handoff](gc-native-cleanup-next.md), not a new cleanup protocol.
@@ -149,3 +150,24 @@ is deleted while the exported signature, comment and return value stay intact.
 All native/frame/origin/name/code cleanup and normal block freeing remain.
 No other callers or resource families are changed. This source simplification
 has no claimed speedup and needs no test mirroring unreachable statements.
+
+## First build audit and decoder effect correction
+
+The warning-joined union `4d8e690f483` configured, compiled and linked in the
+fresh O1/Py_DEBUG cohort and passed all 116 module checks. Its required linked
+inline audit then rejected the outlined `gen_close_clears_frame`: the shared
+classifier conservatively treated `_PyCode_InstrOparg` as collecting because
+unmarked `Python/ir.c` is outside the audit's marked-source body inventory.
+The make2/helper1 failure and unchanged post-terminal source/config/tools/
+587-product guards remain under `build/gc-native-cleanup-validation/debug/`.
+No target or successful cleanup qualification is inferred from that build.
+
+The complete decoder reads immutable code words, the static IR format table
+and FBINIT; its helpers perform scalar extraction/comparisons and aborting
+assertions. It allocates nothing, invokes no callback and cannot detach.
+The correction declares only `_PyCode_InstrOparg` noncollecting in the existing
+shared effects authority. A classifier control verifies wrapper propagation
+while a similarly named unknown decoder and a wrapper containing `collect()`
+remain collecting. Predicate precision, root spans, C behavior and compiler
+policy are unchanged. The changed source requires a new incremental build
+capsule and the original failed receipts remain immutable.

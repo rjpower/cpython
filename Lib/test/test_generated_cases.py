@@ -2466,6 +2466,23 @@ fail:
         self.assertEqual(root_check_c.Classifier(bodies).kind("Alias_IsCompact"),
                          "reentrant")
 
+    def test_instr_oparg_decoder_effect(self):
+        bodies = {
+            "decode": root_check_c.tokens_of(
+                "{ return _PyCode_InstrOparg(code, index); }"),
+            "unknown": root_check_c.tokens_of(
+                "{ return _PyCode_InstrOpargUnknown(code, index); }"),
+            "collecting": root_check_c.tokens_of("""{
+                int oparg = _PyCode_InstrOparg(code, index);
+                collect();
+                return oparg;
+            }"""),
+        }
+        classifier = root_check_c.Classifier(bodies)
+        self.assertEqual(classifier.kind("decode"), "none")
+        self.assertEqual(classifier.kind("unknown"), "reentrant")
+        self.assertEqual(classifier.kind("collecting"), "reentrant")
+
     def check(self, src):
         return [str(e) for e in root_check_c.check_source(
             self.PRELUDE + src,

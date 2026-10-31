@@ -132,6 +132,9 @@ NON_COLLECTING = frozenset({
     "_PyGen_GetGeneratorFromFrame", "gen_try_set_executing",
     "_Py_LeaveRecursiveCallPy", "_Py_LeaveRecursiveCallTstate",
     "_Py_ReachedRecursionLimit",
+    # Python/ir.c: decodes immutable code words/FBINIT through scalar field
+    # extraction and the static format table; no allocation or callback.
+    "_PyCode_InstrOparg",
     # feedback
     "_PyFb_Entry", "_PyFb_Header", "_PyFb_HasEntry", "_PyFrame_FbPoly",
     "_PyFb_ShapeRow", "advance_backoff_counter", "backoff_counter_triggers",

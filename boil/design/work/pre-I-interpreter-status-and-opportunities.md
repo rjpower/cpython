@@ -23,12 +23,15 @@ improves1.309× in the isolated topic; whole29 remains unchanged. Keep32MiB afte
 the completed budget experiment. Native-only cleanup and direct scanning are
 now composed with the warning-context repair as4d8e690. Candidate33944 adds proven
 decoder/libc effect declarations after two retained linked-audit failures.
-O1/O3/ASan/tail builds and all early runtime checks pass. Broad release full
-passes51,255 tests; debug normal full is active. Final qualification and landing
+O1/O3/ASan/tail builds and all early runtime checks pass. Broad release and debug
+normal fulls each pass51,255 tests; debug-kill full is active. Final qualification and landing
 remain before any refreshed performance claim.
 The
 [new independent interpreter review](reviews/interpreter-holistic-review-post-gc.md)
 checks actual source and ranks five clean cuts for post-qualification attribution.
+The [linked-code follow-up](reviews/interpreter-poly-shape-emission.md) confirms
+that later-row polymorphic LOAD/STORE hits retain repeated matching in GCC O3;
+row0 is already optimized. This verifies emitted work, not its frequency or cost.
 Storage/nursery interfaces follow the union's measured result. The code organization review explains
 current roots and the new writable-slot/space/publication/commit boundaries.
 These status updates supersede pending-budget and nonmoving-first sequencing

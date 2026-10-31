@@ -5532,3 +5532,21 @@ selective coroutine1.309× remains that exact comparison. After qualification,
 merge and two smokes, run the held29/parent4/profile4/micro plan and publish
 the actual improvement/regressions/phase CPU/instructions/RSS/pause scope.
 Next hourly documentation checkpoint19:44PDT, with material results sooner.
+
+### 2026-10-30 18:54 PDT — second full passes; emitted interpreter work verified
+
+Broad debug normal full independently passes51,255/3,739 over564 modules,
+60,820collections, zero fallback and two report-only unpinned records.
+Result8dac0bf0/cleanup22275669 and unchanged-validator replay agree;582.794s.
+Actual debug scanner-finalization and64 bytecode/trigger protections are present.
+Kill full is active from18:52:08PDT; stress2, ASan16 and closure follow. Source339
+and native products remain frozen; no new runtime landing or performance claim.
+
+Read-only interpreter follow-up5caa3d3c484 is copied from the review topic.
+Existing O3 object and linked ELF match the frozen product map. GCC removes
+duplicate matching for row0 and shares header/version loads; later polymorphic
+LOAD/STORE hits retain repeated comparisons. Evidence6647e8fc binds the object
+listing and six linked excerpts. A shared match-once/use-payload contract is
+prospective, preserving receiver admission, cache version/address reuse, store
+kind/transition, method layout, statistics and rooting. No new opcode, candidate
+edit, target execution or measured benefit. Refreshed profiles select its priority.

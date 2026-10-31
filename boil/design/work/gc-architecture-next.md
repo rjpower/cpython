@@ -13,10 +13,10 @@ then develop a common copying nursery with
 stable native/large-object space. Restoring reference counting remains a
 technically valid alternative; the measured win favors these simpler cuts first.
 
-Current checkpoint, 2026-10-30 18:44 PDT: candidate `33944d24e55` contains
+Current checkpoint, 2026-10-30 18:53 PDT: candidate `33944d24e55` contains
 the four reviewed improvements below. All early ordinary, sanitizer and tail
-checks pass. Broad release full passes 51,255 tests; debug normal full is active.
-Debug-kill full, two stress profiles, ASan16, closure and final landing review
+checks pass. Broad release and debug normal fulls each pass 51,255 tests.
+Debug-kill full is active; two stress profiles, ASan16, closure and final landing review
 remain. Post-landing comparison and integration packets are source-reviewed
 and held; no new whole-interpreter score is claimed.
 
@@ -671,8 +671,8 @@ This is an implementation refinement of the approved writable-slot/nursery
 milestone. The collection transaction, complete pin discovery and native
 resource rules stay intact. Candidate33944 contains reviewed programC4d8e690
 and exact decoder/libc effect repairs. Both original linked-audit failures remain
-recorded; all early ordinary/ASan/tail checks pass and broad release full passes
-51,255. Debug normal full is active; final qualification and landing remain.
+recorded; all early ordinary/ASan/tail checks pass and broad release/debug normal
+fulls each pass 51,255. Debug-kill full is active; final qualification and landing remain.
 Root-list replacement and a universal layout-description framework are not
 prerequisites. The [region/code packet](gc-region-implementation.md) records
 where allocator integration costs may favor existing-mimalloc cleanup first.

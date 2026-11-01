@@ -35,15 +35,24 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **07:18 UTC**, no native job is active. The final page-map pilot has
+As of **08:02 UTC**, corrected RC release-full session87194 is active,
+08:02:02–09:05:32 inclusive, after exact source/product/helper acceptance.
+The first full failed12 assertions and an origin-observer gap; a reviewed
+three-Python-file correction dce654 and narrow helper corrections address
+those concrete findings. Both native product sets remain exact, with six
+enumerated release caches. Debug-full helpers and fresh ASan/stackref builds
+are queued for separate review/activation. CPU extension/regen closure is in
+preparation. Fable's first-JIT review completed: amend; actual word capture is
+next before any source attempt. [RC execution](../rc-integration/status.md),
+[JIT disposition](../jit-first-native-tier/coordinator-disposition-20261101.md).
+
+The final page-map pilot has
 independent [elapsed rejection](../gc-nursery-old-work/reviews/maintained-object-map-elapsed-outcome-20261101-v2.md):
 coroutines +8.02%/+5.48%, four-row means +4.41%/+4.20% versus parent. RC source
-d7df is selected, with39 initial methods per image, exact canonical generation
-and another50 debug/48 release invocations independently accepted. The last
-targeted ownership/refleak tranche and its independent review are in preparation;
-the coordinator prepares broad qualification while the third agent designs the
-first native JIT candidate against the actual RC IR. No broad qualification,
-integration, RC speedup or working native tier is claimed.
+d7df is the restored core, with39 initial methods per image, exact canonical
+generation, another50 debug/48 release invocations, and the final35/35 plus
+eight-case refleak composite independently accepted. No completed broad
+qualification, integration, RC speedup or working native tier is claimed.
 
 The following snapshots retain the path to that decision. Rejected sources,
 failed attempts and raw evidence remain preserved; their old grants are closed.

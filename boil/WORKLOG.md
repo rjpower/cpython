@@ -413,6 +413,55 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   verified all global/shared/build locks and both target executables idle.
   Independent review scopes an additive host-reader correction and exact
   existing-result reuse; no full-batch passing credit yet.
+- 2026-11-01 07:28 UTC: Root independently accepts the additive reader and
+  composite focused observations after eight host controls and retained-result
+  replay. Original batch stays failed; no target rerun. Carry35/35 semantic
+  passes,72 natural refleak bodies/eight final stats,24 actual programs and
+  both584-product inventories; retain both nonzero nonfailing block vectors.
+  Final bespoke cohort closes; release-full helper preparation proceeds.
+  Frozen first-JIT design is in direct read-only Fable5.1 medium review,
+  session44860; no implementation grant.
+  [Composite acceptance](issues/fundamental-runtime-design/rc-final-targeted-output-root-review-20261101-v1.md).
+- 2026-11-01 07:41 UTC: Root activated the independently reviewed complete RC
+  release suite, session38425,07:40:46–08:44:16 inclusive. Both machine slots,
+  existing image/source/tools and actual full565-module selection were bound.
+  Native suite completed in97 seconds; no retry or source change during it.
+- 2026-11-01 07:44 UTC: First full FAILED:50,827 tests,12 failures,3,430 skips;
+  all565 module results retained and dual-executable cleanup idle. Ten actual
+  assertions are long-TMPDIR preconditions/permission effects missed before
+  activation. Two expose private magic/ABI assumptions; traceback's consumer
+  needs correction. Separate observer gap misses70 passed nested origins.
+  No full-pass credit. Preflight follow-up also discloses four GCC metadata
+  queries despite the intended suppression; no compilation or target in prep.
+  [Outcome](issues/rc-integration/release-full-outcome-review-20261101-v1.md).
+- 2026-11-01 07:53 UTC: Following independent design acceptance, root froze RC
+  dce654 with exactly three Python library/test changes: private magic/cache
+  expectations and real incompatible-extension hint discovery/fixtures. Loader,
+  C/frozen/build policy unchanged. Seven host filesystem controls plus empty
+  guards pass and old source misses three positive cases; full3.16 syntax/native
+  tests remain pending. Preserved first host grammar limitation and overstrict
+  cache-comparison failure rather than relabeling them.
+- 2026-11-01 07:57 UTC: Independent exact dce source/native-reuse acceptance:
+  7,177 bindings, original584 products per image unchanged, debug0/release6
+  explicitly hashed regular cache additions. Corrected full helpers and fresh
+  ASan/stackref build helpers bind this successor. Broad plan independently
+  accepted; CPU extension/regen runner remains held. Fable direct medium review
+  completed terminal0; coordinator amends first JIT design and requires decoded
+  words before implementation. No RC integration or optimization gain claimed.
+  [Source review](issues/rc-integration/namespace-source-review-20261101-v1.md).
+- 2026-11-01 07:59 UTC: Loom revision11 exact readback verified,10,307
+  characters/two Mermaid diagrams; retains actual failed full, correction,
+  image bridge and completed JIT peer disposition, without integration credit.
+  [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01 08:02 UTC: Corrected release-full helpers independently accepted
+  after12 controls/7,219-input preflight, no compiler queries. Root verified
+  exact source/images/argv/idle locks and activated08:02:02–09:05:32 inclusive,
+  native session87194. Coverage remains the full default suite, with short
+  scratch, complete origins and protected changed tests/traceback consumer.
+  Debug-full helpers separately accepted; fresh safety-profile build helpers
+  frozen for root review, CPU extension/regen in preparation. No retry credit
+  for old failure and no source change during this suite.
+  [Helper review](issues/rc-integration/release-full-helper-review-20261101-v2.md).
 - 2026-11-01: Corrected the execution emphasis on the user's clarification:
   interpreter architecture and integrated allocator/collector work are primary;
   regex extraction is a frozen, paused proposal. Assigned short executable maps

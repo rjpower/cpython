@@ -128,3 +128,16 @@ Revision9 snapshot SHA256
 No rendered-layout verification, broad qualification, integration, RC parity
 or working native tier is claimed. The [RC issue](../rc-integration/status.md)
 owns current execution.
+
+## Actual full-suite failure and reviewed correction, revision 11
+
+At07:59:46 UTC, guarded revision11 records the accepted final targeted
+composite, failed first complete release suite, missed temporary-path test
+preconditions and nested-origin gap, reviewed three-file dce654 correction and
+exact native-image reuse with six enumerated caches. It also records Fable's
+completed amend verdict and the coordinator's narrowed first-JIT stages.
+
+Exact readback matches10,307 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v11.md`
+SHA256 `4af95042b6c4f2a8a1648eaf591076121a927723944d46cf617ca518a336b349`.
+It makes no passing full-suite, rendered-layout, integration or speedup claim.

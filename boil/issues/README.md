@@ -15,8 +15,8 @@ integration. No full29 GC or RC parity claim. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC qualification | [Selected runtime](rc-integration/status.md) | restart_audit; coordinator | Last targeted/refleak helpers by07:40, independent review by07:43; then broad qualification |
-| First native JIT design | Source-grounded candidate, pending publication | qualification_review_resumed | Finite design by07:45; no implementation or working-tier claim |
+| RC qualification | [Selected runtime](rc-integration/status.md) | restart_audit; coordinator | Final targeted composite accepted; first full FAILED, three-file source correction reviewed; corrected full and native safety profiles queued |
+| First native JIT design | [Peer disposition](jit-first-native-tier/coordinator-disposition-20261101.md) | coordinator | Fable medium review completed: amend; actual word capture precedes implementation |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |

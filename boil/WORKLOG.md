@@ -271,3 +271,8 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   [GC outcome](issues/gc-nursery-adoption/reviews/cadence-trigger-outcome-20261101-v1.md),
   [Cost preparation](issues/gc-nursery-adoption/reviews/cadence-cost-helper-preparation-20261031-v1.md),
   [IR state](issues/interpreter-dispatch-state/status.md).
+- 2026-11-01: Activated independently reviewed slot-base native feedback for
+  seventeen serial debug/release, entry/root and emission rows, with a fixed
+  45-minute deadline. GC release-helper review proceeds independently while
+  its native builds wait. No timing or performance credit follows at launch.
+  [IR execution](issues/interpreter-dispatch-state/native-feedback-results.md).

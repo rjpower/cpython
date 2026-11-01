@@ -55,8 +55,11 @@ defines the next question.
 Host-only helper preparation froze early at 00:07:50 UTC within its
 23:55–00:15 scope. Seventeen literal rows cover debug/release builds, exact
 transition controls, affected modules, stale-root controls and bounded native
-inspection. Exact helper review is pending; no compiler or target ran during
-preparation. The previous GC feedback is terminal; new native batches serialize.
-Native compilation, behavior, performance and landing remain unauthorized.
+inspection. Independent [helper review](reviews/helper-preparation-20261101-v1.md)
+accepted the exact preparation. Root activated it at 00:12:00.978874 UTC,
+deadline 00:57:00.978874, session 60831 live. The
+[native execution record](native-feedback-results.md) owns actual row outcomes;
+no behavior, emitted-work or elapsed result is credited at launch. Native
+batches serialize; performance and landing remain held.
 The [research results](results.md) and native/source inventory retain the
 287-handler, 19-join, five-label and 26-reload entry proof and its limits.

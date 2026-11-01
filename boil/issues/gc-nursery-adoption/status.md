@@ -79,8 +79,13 @@ The [cost-helper review](reviews/cadence-cost-helper-preparation-20261031-v1.md)
 accepted host preparation of the three-arm, 120-fresh-sample/12-origin campaign.
 It remains unready: actual release bindings and quiet activation are separate.
 Historical e9 source/image/configuration/product reuse passed its host bridge;
-two fresh matched O3 builds and affected correctness are being prepared under
-a held manifest. No performance workload or counter probe has run here.
+six-row release preparation froze early under isolated
+`build/nursery-cadence-release-readiness-v1`: two fresh matched O3 builds, two
+source-defined focus rows and two registered stale-root rows. Its release
+roster explicitly allows two existing debug-only skips and expects fifty-two
+normal children; debug child counts are not reused. Independent helper review
+is underway. Native execution waits for terminal slot-base feedback; no
+performance workload or counter probe has run here.
 
 ## Next
 

@@ -59,7 +59,15 @@ at 03:40 UTC; no remaining concrete source blocker. Root rehashed the source
 capsule, all bound artifacts and the independent review/receipt against the
 clean actual commit. Native helper preparation ends **03:52 UTC**, checkpoint **03:45**. Four
 proposed rows build/test fresh GCC O1/debug and O3 products, including six
-existing root/lifecycle controls. No compiler, target or timing has run.
+existing root/lifecycle controls. The
+[helper review](span-native-helper-review-20261101-v1.md) passed, including root's
+actual launcher import smoke with process creation forbidden. Root activated
+the four-row batch at **03:45:59.926 UTC**, inclusive ceiling **04:30:59.926**,
+tool session **83685**. Actual GCC compilation is observed; tests and final
+build outcomes remain pending. Each test row selects 26 IDs; release permits
+only the four declared debug-only skips. No elapsed credit is available.
+The GC owner prepares the existing quiet pilot helpers in parallel through
+**04:06 UTC**, checkpoint **03:56**, with candidate products still pending.
 The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
 route/wrapper decline, indexed ownership, inventory/rollback and retirement
 connections have source checks, not native proof. The author targets a 03:40

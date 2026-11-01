@@ -496,3 +496,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   performance acceptance follows. RC-only fallback closure proceeds in its
   separate worktree while the GC owner prepares four focused feedback rows.
   [Review](issues/fundamental-runtime-design/span-source-review-20261101-v1.md).
+- 2026-11-01: Focused stable-span helpers passed readiness review, including
+  root's actual import smoke with process creation forbidden. Root verified
+  actual idle admission and activated fresh debug build/tests then release
+  build/tests, 03:45:59–04:30:59 UTC, live session 83685. Compilation is observed;
+  no test/build outcome or elapsed credit yet. Quiet pilot preparation proceeds
+  in parallel, pending candidate products and independent outcome review.
+  [Helper review](issues/fundamental-runtime-design/span-native-helper-review-20261101-v1.md).

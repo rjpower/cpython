@@ -69,10 +69,14 @@ jit_grow(void **array, int *capacity, int need, size_t item)
             capacity2 *= 2;
         }
     }
-    void *array2 = PyMem_Realloc(*array, (size_t)capacity2 * item);
+    size_t bytes = (size_t)capacity2 * item;
+    if (!_PyJit_ReserveBytes(bytes)) return -1;
+    void *array2 = PyMem_Realloc(*array, bytes);
     if (array2 == NULL) {
+        _PyJit_ReleaseBytes(bytes);
         return -1;
     }
+    _PyJit_ReleaseBytes((size_t)*capacity * item);
     *array = array2;
     *capacity = capacity2;
     return PyErr_Occurred() ? -1 : 0;
@@ -82,8 +86,11 @@ static inline void
 jit_free(jit_buf *b)
 {
     PyMem_Free(b->code);
+    _PyJit_ReleaseBytes((size_t)b->capacity);
     PyMem_Free(b->labels);
+    _PyJit_ReleaseBytes((size_t)b->labels_capacity * sizeof(*b->labels));
     PyMem_Free(b->fixups);
+    _PyJit_ReleaseBytes((size_t)b->fixups_capacity * sizeof(*b->fixups));
 }
 
 static inline void

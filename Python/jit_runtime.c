@@ -1,5 +1,6 @@
 #include "Python.h"
 #include "pycore_jit.h"
+#include "pycore_jit_ir.h"
 #include "pycore_pystate.h"
 #include "pycore_function.h"
 
@@ -101,8 +102,8 @@ _PyJit_TestCall(PyObject *function, PyObject *args, Py_ssize_t limit)
 #endif
 
 static _PyJitState initial_building = {.building = 1};
-/* Units remain charged through retired active pins. The byte quota also
- * covers lazy states/flows; bounded unpublished compiler scratch is separate. */
+/* Charge cold compiler allocations before callbacks and retain every charge
+ * through physical release, including unpublished and retired artifacts. */
 static Py_ssize_t process_units;
 static Py_ssize_t process_bytes;
 static int automatic_building;
@@ -123,20 +124,18 @@ reserve_bytes(size_t bytes)
     return 1;
 }
 
+int _PyJit_ReserveBytes(size_t bytes) { return reserve_bytes(bytes); }
+void _PyJit_ReleaseBytes(size_t bytes)
+{
+    _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)bytes);
+}
+
 static int
 reserve_budget(_PyJitCodeUnit *unit)
 {
-    size_t bytes = sizeof(*unit) + unit->nops * (sizeof(*unit->ops) + sizeof(*unit->offsets)) + unit->mapping_size;
-    if (bytes > 8 * 1024 * 1024) {
-        return 0;
-    }
     Py_ssize_t n = _Py_atomic_load_ssize_relaxed(&process_units);
     do { if (n >= 64) return 0; }
     while (!_Py_atomic_compare_exchange_ssize(&process_units, &n, n + 1));
-    if (!reserve_bytes(bytes)) {
-        _Py_atomic_add_ssize(&process_units, -1); return 0;
-    }
-    unit->charged_bytes = bytes;
     unit->budgeted = 1;
     return 1;
 }
@@ -172,6 +171,8 @@ jit_source_stamp(PyCodeObject *code)
     return stamp ^ (uint64_t)code->co_nlocalsplus;
 }
 
+uint64_t _PyJit_SourceStamp(PyCodeObject *code) { return jit_source_stamp(code); }
+
 void
 _PyJit_FreeUnit(_PyJitCodeUnit *unit)
 {
@@ -196,12 +197,18 @@ _PyJit_FreeUnit(_PyJitCodeUnit *unit)
     PyMem_Free(unit->ops);
     restore_jit_error(saved);
     saved = PyErr_GetRaisedException();
+    PyMem_Free(unit->op_offsets);
+    restore_jit_error(saved);
+    saved = PyErr_GetRaisedException();
+    _PyJit_FreeGraph(unit->graph);
+    restore_jit_error(saved);
+    saved = PyErr_GetRaisedException();
     PyMem_Free(unit);
     restore_jit_error(saved);
     if (budgeted) {
         _Py_atomic_add_ssize(&process_units, -1);
-        _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)charged);
     }
+    _PyJit_ReleaseBytes(charged);
 }
 
 void
@@ -253,7 +260,9 @@ _PyJit_ExecSizeOf(_PyCodeExec *exec)
     size_t size = sizeof(*state);
     _PyJitCodeUnit *unit = state->unit;
     if (unit != NULL) {
-        size += sizeof(*unit) + unit->nops * (sizeof(*unit->ops) + sizeof(*unit->offsets));
+        size += sizeof(*unit) + unit->nops * (sizeof(*unit->ops) + sizeof(*unit->op_offsets));
+        size += unit->nwords * sizeof(*unit->offsets);
+        if (unit->graph != NULL) size += sizeof(*unit->graph);
         size += unit->mapping_size;
     }
     return size;
@@ -340,9 +349,6 @@ _PyJit_CompileCode(PyCodeObject *code)
     if (exec->jit == NULL) {
         exec->jit = &initial_building;
         _PyJitState *fresh = initial_calloc(code, 0);
-        if (fresh != NULL && !PyErr_Occurred()) {
-            fresh->budgeted = reserve_bytes(sizeof(*fresh));
-        }
         if ((fresh != NULL && !fresh->budgeted) || PyErr_Occurred() || code->_co_exec != exec ||
             exec->jit != &initial_building || epoch != jit_epoch(tstate) ||
             source != jit_source_stamp(code)) {
@@ -431,6 +437,72 @@ _PyJit_CompileCode(PyCodeObject *code)
 }
 
 int
+_PyJit_ReplaceRecorded(_PyJitContext *ctx, _PyJitRecord *record)
+{
+    /* Only a completed nonterminal operation calls this cold transaction.
+     * Root code during construction, never across a language frame transfer. */
+    PyCodeObject *code = ctx->code;
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec != ctx->expected_exec || exec->jit == NULL || exec->jit->unit != ctx->unit ||
+        exec->jit->building || (record && (record->source_stamp != jit_source_stamp(code) ||
+                                         record->generation != exec->jit->generation))) return 0;
+    _PyJitState *state = exec->jit;
+    state->refs++;
+    state->building = 1;
+    state->record_attempted = 1;
+    Py_INCREF(code);
+    JitBuildRequest request = {building_request, code, ctx->tstate};
+    building_request = &request;
+    uint64_t generation = state->generation, source = jit_source_stamp(code);
+    uintptr_t epoch = jit_epoch(ctx->tstate);
+    PyTime_t compile_start = 0, compile_stop = 0;
+    (void)PyTime_PerfCounterRaw(&compile_start);
+    if (state->compile_attempts < UINT32_MAX) state->compile_attempts++;
+    _PyJitGraph *graph = record ? _PyJit_BuildGraph(record) : NULL;
+    _PyJitCodeUnit *fresh = NULL;
+    if (!PyErr_Occurred()) fresh = _PyJit_BuildOptimized(code, exec, generation, epoch, source, graph);
+    else _PyJit_FreeGraph(graph);
+    (void)PyTime_PerfCounterRaw(&compile_stop);
+    if (compile_stop >= compile_start) state->compile_ns += (uint64_t)(compile_stop - compile_start);
+    int valid = !PyErr_Occurred() && code->_co_exec == exec && exec->jit == state &&
+        state->unit == ctx->unit && state->generation == generation &&
+        source == jit_source_stamp(code) && epoch == jit_epoch(ctx->tstate) &&
+        (fresh == NULL || fresh->graph == NULL || ctx->tstate->interp->opt_config.tagged_values_enabled) &&
+        _PyJit_ObserversAllow(ctx->tstate, ctx->frame);
+    int installed = valid && fresh != NULL && reserve_budget(fresh);
+    state->last_failure = !valid ? _PyJIT_FAILURE_INVALIDATED :
+        fresh == NULL ? _PyJIT_FAILURE_BUILD : !installed ? _PyJIT_FAILURE_QUOTA : _PyJIT_FAILURE_NONE;
+    if (!installed && state->compile_failures < UINT32_MAX) state->compile_failures++;
+    if (installed) {
+        fresh->entry_word = ctx->unit->entry_word;
+        fresh->entry_handler = ctx->unit->entry_handler;
+        fresh->interpreter_id = ctx->unit->interpreter_id;
+        _PyJitCodeUnit *old = state->unit;
+        restore_entry(exec, old);
+        state->unit = fresh;
+        _PyIR_SetHandler(exec->words + fresh->entry_word, RESUME_JIT);
+        fresh = NULL;
+        old->detached = 1;
+        _PyJit_FreeUnit(old); /* active ctx still pins its return address */
+    }
+    else if (code->_co_exec == exec && exec->jit == state && state->unit == ctx->unit) {
+        _PyJit_DetachExec(exec); /* next natural compile is ordinary baseline */
+    }
+    if (code->_co_exec == exec && exec->jit == state) state->building = 0;
+    PyObject *saved = PyErr_GetRaisedException();
+    _PyJit_FreeUnit(fresh);
+    restore_jit_error(saved);
+    saved = PyErr_GetRaisedException();
+    release_jit_state(state);
+    restore_jit_error(saved);
+    saved = PyErr_GetRaisedException();
+    Py_DECREF(code);
+    restore_jit_error(saved);
+    building_request = request.previous;
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+int
 _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyIRWord *next_instr, int from_return, _PyJitContext *ctx)
 {
@@ -451,8 +523,19 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return 0;
     }
     _PyJitCodeUnit *unit = exec->jit->unit;
+    if (unit->recording_exhausted) {
+        exec->jit->record_attempted = 1;
+        _PyJit_DetachExec(exec);
+        if (PyErr_Occurred()) return -1;
+        if (code->_co_exec != exec || frame->ir_words != exec->words) {
+            PyErr_SetString(PyExc_SystemError, "JIT recorder retirement changed executing words");
+            return -1;
+        }
+        return 0;
+    }
     Py_ssize_t word = next_instr - exec->words;
-    if (unit->detached || word < 0 || word >= unit->nops ||
+    if (unit->detached || word < 0 || word >= unit->nwords ||
+        (unit->graph != NULL && !tstate->interp->opt_config.tagged_values_enabled) ||
         unit->interpreter_id != PyInterpreterState_GetID(tstate->interp) ||
         !_PyJit_ObserversAllow(tstate, frame) ||
         unit->epoch != jit_epoch(tstate) || unit->generation != exec->jit->generation) {
@@ -480,6 +563,8 @@ _PyJit_ReleaseActivation(_PyJitContext *ctx)
     ctx->pending_caller = NULL;
     ctx->pending_call = ctx->pending_return = 0;
     ctx->cold_request = NULL;
+    ctx->scratch = NULL;
+    ctx->record_event = NULL;
     PyObject *saved = PyErr_GetRaisedException();
     _PyJit_FreeUnit(unit);
     if (saved != NULL) {
@@ -604,9 +689,9 @@ _PyJit_CodeInfo(PyCodeObject *code)
         exits += unit->ops[i].kind == _PyJIT_LIR_EXIT;
     }
     PyObject *bytes = PyBytes_FromStringAndSize(unit->mapping, (Py_ssize_t)unit->code_size);
-    PyObject *offsets = bytes ? PyTuple_New(unit->nops) : NULL;
+    PyObject *offsets = bytes ? PyTuple_New(unit->nwords) : NULL;
     if (offsets != NULL) {
-        for (uint32_t i = 0; i < unit->nops; i++) {
+        for (uint32_t i = 0; i < unit->nwords; i++) {
             PyObject *value = PyLong_FromLong(unit->offsets[i]);
             if (value == NULL) {
                 Py_CLEAR(offsets);
@@ -620,7 +705,7 @@ _PyJit_CodeInfo(PyCodeObject *code)
         "c_call_seen", unit->c_call_seen ? Py_True : Py_False,
         "return_resume_seen", unit->return_resume_seen ? Py_True : Py_False,
         "code_size", (Py_ssize_t)unit->code_size,
-        "mapping_size", (Py_ssize_t)unit->mapping_size, "words", (Py_ssize_t)unit->nops,
+        "mapping_size", (Py_ssize_t)unit->mapping_size, "words", (Py_ssize_t)unit->nwords,
         "address", (unsigned long long)(uintptr_t)unit->mapping,
         "exits", (Py_ssize_t)exits, "code", bytes, "offsets", offsets,
         "compile_attempts", attempts,
@@ -628,6 +713,33 @@ _PyJit_CodeInfo(PyCodeObject *code)
         "compile_ns", (unsigned long long)elapsed,
         "last_failure", last_failure,
         "process_units", units, "process_bytes", charged, "bootstrap_remaining", bootstrap) : NULL;
+    if (result != NULL) {
+        _PyJitGraph *g = unit->graph;
+        PyObject *trace = Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:i,s:i,s:i,s:i,s:i,s:i,s:i,s:I,s:I,s:O,s:I}",
+            "optimized", g ? Py_True : Py_False,
+            "entry_seen", unit->trace_seen ? Py_True : Py_False,
+            "return_seen", unit->trace_return_seen ? Py_True : Py_False,
+            "scalar_seen", unit->trace_scalar_seen ? Py_True : Py_False,
+            "backedge_seen", unit->trace_backedge_seen ? Py_True : Py_False,
+            "events", g ? g->event_count : 0, "nodes", g ? g->nnodes : 0,
+            "values", g ? g->nvalues : 0, "spills", g ? g->nspills : 0,
+            "scratch", g ? g->nscratch : 0, "boxed_imports", g ? g->boxed_imports : 0,
+            "python_calls", g ? g->python_calls : 0,
+            "header", g ? g->header : unit->record_header,
+            "backedge", g ? g->backedge : unit->record_backedge,
+            "recording", unit->recording ? Py_True : Py_False,
+            "record_steps", unit->record_steps);
+        PyObject *words = trace ? PyTuple_New(g ? g->event_count : 0) : NULL;
+        if (words != NULL && g != NULL) for (int i = 0; i < g->event_count; i++) {
+            PyObject *word = Py_BuildValue("(II)", g->record_words[i], g->record_successors[i]);
+            if (word == NULL) { Py_CLEAR(words); break; }
+            PyTuple_SET_ITEM(words, i, word);
+        }
+        if (words == NULL || PyDict_SetItemString(trace, "path", words) < 0 ||
+            PyDict_SetItemString(result, "trace", trace) < 0) Py_CLEAR(result);
+        Py_XDECREF(words);
+        Py_XDECREF(trace);
+    }
     Py_XDECREF(offsets);
     Py_XDECREF(bytes);
     _PyJit_FreeUnit(unit);
@@ -639,8 +751,8 @@ _PyJit_CodeInfo(PyCodeObject *code)
 }
 
 
-static int
-ensure_flow(_PyJitContext *ctx)
+int
+_PyJit_EnsureFlow(_PyJitContext *ctx)
 {
     if (ctx->flow_owner == NULL || *ctx->flow_owner != NULL) {
         return 0;
@@ -650,18 +762,12 @@ ensure_flow(_PyJitContext *ctx)
     }
     _PyJitFlow *flow = initial_calloc(_PyFrame_GetCode(ctx->frame), 1);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(flow); restore_jit_error(saved); return -1;
+        _PyJit_FreeFlow(&flow);
+        return -1;
     }
     if (flow == NULL) {
         _Py_atomic_store_int(&bootstrap_cooldown, 4096);
         return 0;
-    }
-    flow->budgeted = reserve_bytes(sizeof(*flow));
-    if (!flow->budgeted) {
-        _Py_atomic_store_int(&bootstrap_cooldown, 4096);
-        PyMem_Free(flow);
-        return PyErr_Occurred() ? -1 : 0;
     }
     *ctx->flow_owner = flow;
     return 0;
@@ -677,6 +783,7 @@ _PyJit_PushPending(_PyJitContext *ctx)
     if (flow != NULL && flow->depth < Py_ARRAY_LENGTH(flow->pending)) {
         flow->pending[flow->depth++] = (_PyJitPending){ctx->pending_caller,
             ctx->pending_call, ctx->pending_return, ++flow->generation};
+        if (flow->record != NULL) _PyJit_RecordPending(flow, &flow->pending[flow->depth - 1]);
     }
     ctx->pending_caller = NULL;
 }
@@ -693,8 +800,10 @@ _PyJit_PopPending(_PyJitFlow *flow, _PyInterpreterFrame *frame, _PyIRWord *next)
     }
     flow->depth--;
     /* The linked caller owns code/words. The record owns no borrowed code. */
-    return next == frame->ir_words + record->return_word &&
-           frame->instr_ptr == frame->ir_words + record->call_word;
+    int match = next == frame->ir_words + record->return_word &&
+                frame->instr_ptr == frame->ir_words + record->call_word;
+    if (match && flow->record != NULL) _PyJit_RecordReturn(flow, frame, next, record->token);
+    return match;
 }
 
 void
@@ -703,6 +812,7 @@ _PyJit_RetirePending(_PyJitFlow *flow, _PyInterpreterFrame *frame)
     if (flow == NULL) {
         return;
     }
+    if (flow->record != NULL) _PyJit_RecordRetire(flow, frame);
     /* A linked Python call unwinds in stack order. No return-chain scan. */
     if (flow->depth && flow->pending[flow->depth - 1].caller == frame) {
         flow->depth--;
@@ -716,6 +826,9 @@ _PyJit_FreeFlow(_PyJitFlow **owner)
     *owner = NULL;
     int budgeted = flow != NULL && flow->budgeted;
     PyObject *saved = PyErr_GetRaisedException();
+    if (flow != NULL) _PyJit_FreeRecord(flow->record);
+    restore_jit_error(saved);
+    saved = PyErr_GetRaisedException();
     PyMem_Free(flow);
     restore_jit_error(saved);
     if (budgeted) {
@@ -759,9 +872,6 @@ natural_state(PyCodeObject *code)
     }
     exec->jit = &initial_building;
     _PyJitState *fresh = initial_calloc(code, 0);
-    if (fresh != NULL && !PyErr_Occurred()) {
-        fresh->budgeted = reserve_bytes(sizeof(*fresh));
-    }
     if ((fresh != NULL && !fresh->budgeted) || PyErr_Occurred() || code->_co_exec != exec || exec->jit != &initial_building) {
         if (fresh != NULL && !fresh->budgeted && !PyErr_Occurred())
             _Py_atomic_store_int(&bootstrap_cooldown, 4096);
@@ -835,7 +945,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, _PyStackRef callable)
     _PyCodeExec *caller_exec = caller_code->_co_exec;
     Py_ssize_t word = instr - ctx->frame->ir_words;
     if (ctx->unit != NULL) {
-        if (ensure_flow(ctx) < 0) {
+        if (_PyJit_EnsureFlow(ctx) < 0) {
             return -1;
         }
         if (ctx->tstate->current_frame != ctx->frame || caller_code->_co_exec != caller_exec) {
@@ -1021,7 +1131,7 @@ take_bootstrap_cooldown(void)
 }
 
 static void *
-initial_calloc(PyCodeObject *code, int site)
+initial_calloc_impl(PyCodeObject *code, int site)
 {
     JitColdRequest *request = cold_request;
     if (request == NULL || request->used) {
@@ -1053,6 +1163,18 @@ initial_calloc(PyCodeObject *code, int site)
     }
     (void)code;
     return PyMem_Calloc(1, site == 0 ? sizeof(_PyJitState) : sizeof(_PyJitFlow));
+}
+
+static void *
+initial_calloc(PyCodeObject *code, int site)
+{
+    size_t bytes = site == 0 ? sizeof(_PyJitState) : sizeof(_PyJitFlow);
+    if (!reserve_bytes(bytes)) return NULL;
+    void *result = initial_calloc_impl(code, site);
+    if (result == NULL) _PyJit_ReleaseBytes(bytes);
+    else if (site == 0) ((_PyJitState *)result)->budgeted = 1;
+    else ((_PyJitFlow *)result)->budgeted = 1;
+    return result;
 }
 
 PyObject *

@@ -9,7 +9,7 @@ fresh main builds and integration checks are accepted. No full29 GC or RC parity
 [decision](gc-parity-deadline/decision-20261101.md) and
 [active RC integration issue](rc-integration/status.md).
 
-## Running in parallel
+## Workstreams and decisions
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ fresh main builds and integration checks are accepted. No full29 GC or RC parity
 | JIT entry PC ABI | [Separate hypothesis](jit-entry-pc-abi/status.md) | coroutine_design_review; restart_audit; qualification_review_resumed; coordinator | Focused behavior and pilot passed; full29 GM +2.26%/+1.94% rejects599897. No publication, late qualification or resampling. Separate admission hypothesis below; RC stays active |
 | JIT entry admission | [Bounded source attempt](jit-entry-admission/status.md) | restart_audit; coroutine_design_review; qualification_review_resumed; coordinator | Closed: focused mechanism passed, full29 +0.52%/+0.45% rejects11aefbdd. No publication, late qualification or resampling; frame filters closed |
 | Selected IR block entry | [Component evidence](jit-quickened-block/status.md) | coordinator | Source accepted, unexecuted; superseded as a tier by user feedback36. Interrupted activation did not take effect |
-| Method and tracing JIT | [Accepted architecture](jit-e2e-system/status.md) | restart_audit; qualification_review_resumed; coordinator | M0 source active: generated helpers and existing evaluator Action consumer; 20-minute checkpoint/60-minute cap. M1/backend/native held |
+| Method and tracing JIT | [Accepted architecture and M0 source](jit-e2e-system/status.md) | restart_audit; qualification_review_resumed; coordinator | M0 source49cc4736 accepted: 62 helpers, 290 classifications, 30 host tests, eight runtime methods unexecuted. One focused debug build is being prepared; M1/backend execution held |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |
@@ -44,11 +44,11 @@ experiments, not permanent runtime choices. The collector decision is RC with
 cyclic collection; qualification precedes integration, and no permanent runtime
 collector option is added.
 
-## Prior GC sequence, held for design review
+## Prior GC sequence, closed
 
-The [integrated candidate](../design/integrated-runtime-candidate.md) reopens
-this ordering and the particular nursery/storage commitment. The sequence below
-records the prior plan; it does not authorize work while the review is active.
+The [integrated candidate](../design/integrated-runtime-candidate.md) and sequence
+below record the former tracing-GC plan. GC work is closed; RC with cyclic
+collection is selected. This sequence authorizes no further collector work.
 
 1. [Adopt real minor/checker semantics](gc-nursery-adoption/status.md), then
    select one measured automatic cadence without a runtime switch.

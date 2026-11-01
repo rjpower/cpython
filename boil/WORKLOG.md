@@ -1448,3 +1448,37 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   the existing evaluator; its counts prove helper behavior, not native JIT.
   Predecoded operands remain in the shared ABI. Cold specialization retry
   behavior is being corrected before source acceptance; no target/compiler ran.
+- 2026-11-01 16:43 UTC: M0 author checkpoint delivered before its20-minute
+  deadline:62 callable helpers,289 valid-handler classifications,30 host tests
+  passing and six existing generated ID/metadata products byte-identical.
+  Checkpoint dafd9ad6 retains exact source hashes. Review caught pristine inline
+  constants, boxed-value policy, cold adaptive-counter continuation, target-frame
+  isolation and observer guards; fixes remain under independent review.
+  No C compiler, target runtime or timing has run. Source completion and runtime
+  correctness remain pending; original17:23:54 source cap is unchanged.
+- 2026-11-01 16:43:51 UTC: Independent checkpoint a75820d7 is partial: metadata
+  accepts290 handlers, while the author table classifies289. Base BINARY_OP
+  safely falls back but lacks the promised explicit reason. Actual62 helpers
+  and CALL/RETURN/error source mappings are verified; full classification is
+  not accepted. Preserve the original claim and failed checker evidence; fix
+  the coverage hole under the unchanged cap. No unclassified critical frame
+  transfer was accepted and no runtime correctness is claimed.
+- 2026-11-01 16:44:42 UTC: Additive checkpoint correction f4f9c893 now records
+  all290 valid metadata handlers with62 callable helpers and30 passing host
+  tests. Generic BINARY_OP has an explicit before-operation fallback reason;
+  no IDs or formats changed. Original checkpoint/reviewer counterexample remain
+  intact. Prepare one fresh debug image and the final semantic-helper test
+  class to catch C/linkage/transition errors before M1; execution remains held
+  pending frozen source and final independent review.
+- 2026-11-01 16:53 UTC: M0 source froze clean at 49cc4736, ahead of the original
+  one-hour cap. Thirteen paths, 62 callable helpers, 290 explicit classifications,
+  30 passing host tests and eight unexecuted runtime methods; capsule 3afcc7af.
+  The empty-monitoring-header fix restores positive helper execution after
+  profiling is disabled. Final independent source review and one fresh debug
+  build remain next; no generated C or target runtime has executed yet.
+- 2026-11-01 16:55 UTC: Independent exact-source review dbb79209/258e3a88 accepts
+  M0 source 49cc4736 for focused debug validation. Root verified all 13 changed
+  paths against the source grant and capsule; disposition 62ea6aa8 closes the
+  source attempt early. Author and reviewer each passed 30 host generator tests.
+  The profiling-recovery assertion is present in source and remains unexecuted;
+  no runtime result or native JIT evidence is claimed. [Source decision](issues/jit-e2e-system/m0-source-disposition-20261101-v1.json).

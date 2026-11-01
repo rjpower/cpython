@@ -5,10 +5,10 @@ its hypothesis, budget, dependencies, decision and next action.
 
 - **Scope:** start with the [template](issues/_template/status.md); choose the
   smallest useful experiment and an integrate/reject deadline.
-- **Work in parallel:** give owners separate files/worktrees. The
-  [GC](issues/gc-nursery-minimum/status.md) and
-  [interpreter](issues/shape-admission-reuse/status.md) tracks can overlap;
-  shared full-suite, perf-map and quiet measurement windows serialize.
+- **Work in parallel:** give owners separate files/worktrees. Current
+  [method and tracing JIT](issues/jit-e2e-system/status.md) implementation,
+  independent review and validation preparation can overlap. Collector work
+  is closed; shared full-suite, perf-map and quiet measurement windows serialize.
 - **Review and qualify:** review significant changes independently, then apply
   the [validation contract](design/validation.md) to one coherent candidate.
   Prefer observed behavior; retain actual failures and source/build identities.

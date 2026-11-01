@@ -1,0 +1,45 @@
+{
+  "utc": "2026-11-01T16:54:50.807361+00:00",
+  "decision": "ACCEPT_M0_SOURCE_FOR_FOCUSED_DEBUG_VALIDATION",
+  "source_commit": "49cc47360ccd79c7a89acc8bfa3d546f94afc46c",
+  "source_parent": "aa0c166ef399973bfd1ccd4010e50b84007c73d9",
+  "changed_paths": [
+    "Include/internal/pycore_jit.h",
+    "Lib/test/test_generated_cases.py",
+    "Lib/test/test_jit_method.py",
+    "Makefile.pre.in",
+    "Modules/_testinternalcapi.c",
+    "Python/bytecodes.c",
+    "Python/ceval.c",
+    "Python/ceval_macros.h",
+    "Python/generated_ir_cases.c.h",
+    "Python/generated_jit_helpers.c.h",
+    "Python/jit_runtime.c",
+    "Tools/cases_generator/ir_generator.py",
+    "Tools/cases_generator/jit_helpers_generator.py"
+  ],
+  "capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-source/capsule.json",
+    "sha256": "3afcc7afa844e40474dc8f812f371695772d9a155d0e955d1715e587b65cf2ab"
+  },
+  "independent_review": {
+    "path": "m0-source-review-20261101-v1.md",
+    "sha256": "dbb79209f4c2d4f67288dbc00c4bd9e4e9c2373708df1c12bcf596ef28f51a01"
+  },
+  "independent_receipt": {
+    "path": "m0-source-review-receipt-20261101-v1.json",
+    "sha256": "258e3a887deb0550ae82934f69d81027b3a6e117acd8ce360d39c4da0d3f2d1a"
+  },
+  "host_tests_passed": 30,
+  "callable_helpers": 62,
+  "classified_handlers": 290,
+  "runtime_test_methods": 8,
+  "c_compilation_or_runtime_executed": false,
+  "native_jit_or_performance_claimed": false,
+  "source_attempt_closed_early": true,
+  "source_edits_authorized": false,
+  "m1_source_authorized": false,
+  "build_execution_authorized": false,
+  "gc_work_authorized": false,
+  "next_step": "Separately bound one fresh debug build and eight semantic-helper methods; retain failed checkpoints and corrections."
+}

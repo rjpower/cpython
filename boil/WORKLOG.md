@@ -1482,3 +1482,43 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   source attempt early. Author and reviewer each passed 30 host generator tests.
   The profiling-recovery assertion is present in source and remains unexecuted;
   no runtime result or native JIT evidence is claimed. [Source decision](issues/jit-e2e-system/m0-source-disposition-20261101-v1.json).
+- 2026-11-01 17:00 UTC: First M0 debug build failed before any runtime test.
+  Generated C joined 27 preprocessor directives to preceding statements; configure
+  succeeded, make failed. Supervisor 78057 exited 1. Independent outcome
+  583f026a/10c81c76 preserves the raw failure and 98 partial products. Terminal
+  cleanup verified native idle, all 20 locks and 30 historical files unchanged,
+  then removed the owned cache. No native JIT or performance result follows.
+  [Outcome](issues/jit-e2e-system/m0-debug-outcome-review-20261101-v1.md).
+- 2026-11-01 17:01 UTC: A focused 20-minute source grant addresses the observed
+  generator defect; no runtime retry or M1 implementation is authorized. It
+  permits a bounded syntax-only C check using the retained failed configuration,
+  with no objects or executables. [Grant](issues/jit-e2e-system/m0-directive-correction-source-grant-20261101-v1.json).
+- 2026-11-01 17:09 UTC: Correction f0a49b6d accepted by independent review
+  8ac9fdf4/9dcf471d, ahead of its cap. Three paths: one line-boundary call,
+  generated whitespace and the regression test. All 31 host tests pass; the new
+  test rejects the old header's 27 bad lines. Both syntax-only C checks pass.
+  Original 21 capsule artifacts remain exact, including a disclosed restoration
+  after the reused host harness wrote to its old result path. Runtime methods
+  remain unexecuted. [Decision](issues/jit-e2e-system/m0-directive-source-disposition-20261101-v1.json).
+- 2026-11-01 17:02 UTC: Loom revisions 34 and 35 retain the reviewed architecture
+  and two diagrams, first recording debug activation and then its compile failure
+  and correction scope. Exact readbacks: 19,825 and 20,580 characters; snapshots
+  dd5118a4 and c00a58ca. No native JIT execution or speed claim was published.
+- 2026-11-01 17:14 UTC: Corrected M0 fresh debug build and all eight selected
+  semantic methods passed with zero skips. Supervisor 80454 exited 0; terminal
+  cleanup verified 21 locks, native idle, 30 old image/configuration files and
+  all 137 failed-attempt files unchanged, then removed the owned cache.
+  Independent review 6afaed64/50e10b44 accepts focused helper/evaluator behavior;
+  no native JIT, speed or broad qualification claim. [Review](issues/jit-e2e-system/m0-debug-outcome-review-20261101-v2.md).
+- 2026-11-01 17:17 UTC: M0 behavior decision 050ea96c satisfies the shared
+  semantics prerequisite. M1 source grant c94efe3e opens whole-method CFG/LIR,
+  x86 backend, real native entry/continuation witnesses and code ownership in
+  the same isolated worktree, with parallel independent review. Checkpoint
+  17:47:09; hard cap 18:47:09. PyMem BUILDING/revalidation, instrumentation detach,
+  proper resume prologue and terminal-transfer lifetime rules are explicit.
+  Small encoder checks are allowed; candidate runtime builds and timing remain
+  held. [Grant](issues/jit-e2e-system/m1-source-grant-20261101-v1.json).
+- 2026-11-01 17:18 UTC: Loom revision 36 records accepted M0 behavior and active
+  whole-method source work. Exact readback 20,924 characters/two Mermaid diagrams;
+  snapshot SHA256 d3eeb9c3a40a17047fe4158bcfda3cf7aa2d916a96dd7e1114a1dad9cfcbe934.
+  The selected architecture and RC runtime remain unchanged.

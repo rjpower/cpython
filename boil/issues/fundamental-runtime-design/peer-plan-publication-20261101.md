@@ -312,3 +312,20 @@ and held M1/native gates. Exact readback19,148characters/twoMermaids; SHA256
 2f461ae267d508d6efdf41f29d4b002f5d840086a75d27d4a9f65e195b261e6c.
 The test-only ordinary-call request is semantic-helper evidence, not a native
 JIT execution claim. Existing reviewed system architecture is unchanged.
+
+Revision34 (17:00:02 UTC) records accepted M0 source and focused debug activation.
+Exact readback 19,825 characters/two Mermaid blocks; snapshot SHA256
+dd5118a475819fd5f0bd07ef3f42808f664836c1faad0e9ffb4f38546139b13b.
+
+Revision35 (17:02:49 UTC) records the actual compile failure, unexecuted runtime
+methods, terminal cleanup and focused generator correction. Exact readback
+20,580 characters/two Mermaid blocks; snapshot SHA256
+c00a58ca17412089b09edd4372678be7a203d28521195022a1484cff8bc97555.
+The architecture is unchanged; the failed source has no runtime acceptance.
+
+Revision36 (17:18:19 UTC) records accepted M0 semantic behavior and active
+whole-method source implementation. Exact readback 20,924 characters/two Mermaid
+diagrams; snapshot SHA256
+d3eeb9c3a40a17047fe4158bcfda3cf7aa2d916a96dd7e1114a1dad9cfcbe934.
+The eight passing debug methods prove shared helper/evaluator behavior; actual
+native entry and compiled continuation are M1's next required evidence.

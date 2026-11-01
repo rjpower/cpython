@@ -137,7 +137,10 @@ accepts focused native preparation, including its corrected real failed-prefix
 witness. Native helpers are being prepared through06:22, checkpoint06:14;
 actual mark/SHALLOW cleanup and recovery remain mandatory. Exact helpers passed
 review early; root activated native session25200 at06:13:43, deadline06:58:43
-inclusive. Four fresh build/test rows stop at first failure. No performance credit.
+inclusive. It stopped06:15:20 on the debug build's GC audit before focused tests
+or release. Two call-edge visibility/precision defects require a bounded source
+correction through06:30/checkpoint06:22, without checker exemptions. Failed v1
+products/evidence stay preserved; no test or performance credit.
 
 The isolated RC-only closured7df12b passed all39 focused methods in both images,
 zero skips, with independent actual-outcome acceptance and idle cleanup. It is
@@ -145,5 +148,5 @@ a working fallback candidate, not a selected collector or fully qualified core.
 Canonical Autoconf reproduction then matched every source byte; ownership/modes
 were restored and independently verified, as were1,268 old product/evidence files.
 That obligation is closed without a new source commit or native rerun.
-Page-map focused native session25200 is active. No candidate has earned parity
-or integration. Held elapsed and remaining RC qualification planning overlap.
+No native job is active. No candidate has earned parity or integration.
+Page-map correction and held RC compatibility helper preparation overlap.

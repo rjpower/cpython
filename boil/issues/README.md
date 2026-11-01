@@ -14,8 +14,8 @@ and switch to the prepared reference-counting successor. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC fallback preparation | [Canonical reproduction accepted](fundamental-runtime-design/rc-canonical-review-20261101.md) | restart_audit; coordinator | 39 debug +39 release PASS; plan remaining ownership/extension/embedding qualification |
-| GC / inventory | [Focused native running](gc-nursery-old-work/status.md) | coordinator; coroutine_design_review | Session25200,06:13:43–06:58:43;16 focused methods/image, stop first failure; held elapsed preparation overlaps |
+| RC fallback preparation | [Next compatibility design](fundamental-runtime-design/rc-next-qualification-design-review-20261101-root.md) | restart_audit; coordinator | Host helpers through06:40/checkpoint06:28; new C-API/embedding tranche on existing images; no native yet |
+| GC / inventory | [Debug build audit failure](gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md) | qualification_review_resumed; coroutine_design_review | Source correction through06:30/checkpoint06:22; no checker exemption, native/tests held |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |
 

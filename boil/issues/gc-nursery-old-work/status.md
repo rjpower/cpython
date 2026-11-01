@@ -1,9 +1,9 @@
 # Reduce old-object work during minor collection
 
-- State: maintained-baseline source/helper accepted; focused native batch running
+- State: first debug build failed GC audit; bounded source correction
 - Owner: qualification_review_resumed implements; coroutine_design_review reviews; coordinator selects
 - Updated: 2026-11-01
-- Budget: native batch06:13:43–06:58:43 UTC inclusive, four rows, stop first failure
+- Budget: host-only source correction through06:30 UTC, checkpoint06:22
 - Depends on: [minimal nursery](../gc-nursery-minimum/status.md) and
   [coverage/reclamation result](../gc-nursery-coverage/status.md)
 
@@ -42,10 +42,12 @@ visitation and independently verifies nonempty death prefix, actual remaining
 marks/SHALLOW, unconditional cold cleanup, outer rollback and recovery. Those
 observations must still pass natively. GCC computed is the fixed profile.
 Exact [helpers accepted](reviews/maintained-object-map-helper-review-20261101-v1.md);
-root activated and launched session25200 at06:13:43. Debug build/test precedes
-release build/test;16 methods per image, one declared debug-only release skip.
-No retries, timing or broad qualification are authorized by this native batch.
-Held elapsed preparation proceeds in parallel, without target calls.
+root activated and launched session25200 at06:13:43. It stopped06:15:20 at
+the debug build's GC audit, before focused tests/release. Missing `mi_ctz` body
+visibility and outlined unannotated `live_walk_block` must be corrected without
+weakening the checker. All587 products and idle cleanup independently verified.
+[Failure and next scope](maintained-object-map-native-failure-20261101-v1.md).
+No native job remains active. Elapsed preparation is paused; v1 is not retried.
 
 The earlier isolated prototype froze at `c43c8374dbd56ca7862be49a31820ded6ac5a9d9`.
 Independent [source review](reviews/object-map-source-20261101-v1.md) accepted

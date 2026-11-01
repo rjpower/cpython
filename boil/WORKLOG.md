@@ -663,3 +663,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   First failure stops the batch. Held elapsed preparation overlaps compilation;
   independent reviewer prepares actual-outcome review without target calls.
   [Helper review](issues/gc-nursery-old-work/reviews/maintained-object-map-helper-review-20261101-v1.md).
+- 2026-11-01 06:18 UTC: Object-map session25200 stopped06:15:20 at debug GC
+  inline audit, before tests/release. Verified587 failed-build products and
+  idle global/build locks. Preserve v1; authorize bounded truthful call-effect
+  source correction through06:30, with independent review and fresh builds.
+  RC new ownership/embedding helper preparation overlaps, without native calls.
+  [Failure](issues/gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md).

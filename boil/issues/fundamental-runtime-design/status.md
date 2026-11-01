@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: IR/spans/Clang rejected; GCC selected; page-map focused native running; hard GC cutoff set
+- State: IR/spans/Clang rejected; GCC selected; page-map build failed audit, source correction; hard GC cutoff set
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -29,7 +29,7 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **06:14 UTC**, page-map focused native session25200 is active. GC parity remains unproven;
+As of **06:18 UTC**, no native job is active. GC parity remains unproven;
 the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
 unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
 
@@ -73,9 +73,12 @@ unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
   and rejected spans. Exactdc2ec2 source now independently
   [accepted](../gc-nursery-old-work/reviews/maintained-object-map-source-review-20261101-v1.md)
   and exact helpers accepted. Root launched four-row focused native feedback
-  at06:13:43, deadline06:58:43 including cleanup. Actual nonempty failed
-  death-prefix, mark/SHALLOW cleanup and recovery remain mandatory; no native
-  or performance acceptance yet. Held elapsed preparation overlaps the build.
+  at06:13:43; it stopped06:15:20 on debug GC audit before tests/release.
+  [Failure](../gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md)
+  and587 products/idle cleanup verified. Minimal source correction runs
+  through06:30/checkpoint06:22, without checker exemptions; no native or
+  performance acceptance. Elapsed preparation paused; RC helper preparation
+  overlaps correction.
 - **RC fallback — focused behavior and canonical generation accepted:** d7df
   passed39 methods in both fresh images, zero skips.
   [Native outcome](rc-native-outcome-review-20261101-v1.md).

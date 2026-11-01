@@ -478,3 +478,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   No source restoration/build ran. Reassigned the author to independent review
   of the current span implementation, through 03:55 UTC.
   [Fallback](issues/fundamental-runtime-design/rc-fallback-decision-20261101.md).
+- 2026-11-01: Prepared the isolated RC successor from actual primary74f1705.
+  Commit1440f8c restores all887 manifest paths byte-exact to the coherent
+  historical core, with current boil/AGENTS unchanged. Source-only RC policy
+  closure is bounded by05:07 UTC after the owner's span review. This is
+  fallback preparation; no native execution or maintained-runtime switch.
+  [State](issues/gc-parity-deadline/status.md).

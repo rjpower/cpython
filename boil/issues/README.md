@@ -14,10 +14,10 @@ and switch to the prepared reference-counting successor. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Current site captured and accepted; region source prototype 03:22–04:07 UTC |
-| RC fallback preparation, plan accepted | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator | Coherent RC ancestor and restoration manifest ready; source/build work pending |
+| RC fallback preparation, isolated source | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator; restart_audit after span review | Exact historical core restored on rc-successor; close RC-only policy by 05:07 UTC; no native/promotion |
 | Independent source review | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | restart_audit | Review frozen span ownership and focused tests by 03:55 UTC; checkpoint 03:42 |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Source prototype active in gc-integrated-spans; ownership checkpoint 03:21 UTC, freeze 04:21 UTC |
+| GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Ownership checkpoint delivered; target source freeze 03:40 UTC, ceiling 04:21; independent review active |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline

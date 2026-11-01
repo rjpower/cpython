@@ -78,6 +78,17 @@ merge; preserve current boil records and user work. Remove owning-tracer
 optionality in the successor. The manifest is available locally, but source
 restoration, current-machine buildability and qualification remain unproved.
 
+Root then prepared `build/worktrees/rc-successor`, branch `boil/rc-successor`,
+from actual primary `74f1705774b`. Commit `1440f8c6fd1` restores exactly the
+manifest's 887 changed core paths to historical b554 bytes; scoped source did
+not change between the reviewed comparison HEAD and this actual base. Boil
+records and AGENTS remain unchanged; primary user work and tracing branches
+remain untouched. Two EOF whitespace warnings are inherited historical bytes.
+The bounded source grant ends **05:07 UTC** and permits RC-only closure after
+the owner's span review. No compiler, target or promotion is authorized by
+that grant. Historical restoration still contains the old collector choice;
+it is an intermediate preparation commit, not the chosen final product.
+
 The active [integrated-storage source attempt](../fundamental-runtime-design/status.md)
 keeps its 03:21 checkpoint/04:21 ceiling; the author targets an earlier 03:40
 freeze. Its initial checkpoint passed source review only, not native tests or

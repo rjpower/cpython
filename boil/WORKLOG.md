@@ -363,3 +363,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   [Candidate](design/integrated-runtime-candidate.md),
   [review](issues/fundamental-runtime-design/review-20261101-v1.md),
   [publication](issues/fundamental-runtime-design/publication-20261101.md).
+- 2026-11-01: Froze the IR-region, integrated stable-storage and inventory-prefix
+  witness designs early; no census or runtime implementation is granted.
+  At the user's request, launched Claude Fable 5.1 to critique the GC-heavy
+  ranking and propose a better IR/compiler/VM/GC work breakdown. Stopped the
+  initial plan-mode/high-effort attempt on correction, preserving terminal143
+  and raw output; replacement runs directly at medium effort with local file
+  pointers in normal print mode. Its live tool handle is 78126; response and
+  stderr remain in the recorded evidence directory. New native work stays held.
+  [Peer request](issues/fundamental-runtime-design/claude-fable-5.1-request-20261101.md).

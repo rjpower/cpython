@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: integrated candidate independently reviewed; concrete hypothesis designs active
+- State: concrete designs frozen; Claude Fable 5.1 peer review running
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR), restart_audit (VM),
   qualification_review_resumed (allocator/GC)
@@ -33,6 +33,14 @@ Any resumed task receives an explicit remaining scope and clock.
 
 ## Next decision
 
+The user identified that the ranked hypotheses remained GC-heavy despite the
+substantial IR/interpreter assessment. A direct local Claude Fable 5.1 review
+now evaluates the architecture and work breakdown at medium effort. The
+initial high-effort plan-mode invocation was stopped on the user's correction;
+the replacement uses normal print mode and local pointers, with no Python
+launcher. [Request and live handle](claude-fable-5.1-request-20261101.md).
+No new implementation or census starts before the recommendations are reconciled.
+
 The [integrated candidate](../../design/integrated-runtime-candidate.md) passed
 [independent review](review-20261101-v1.md) for bounded design selection only.
 It recommends logical values before frame placement, effect-complete bounded
@@ -47,6 +55,21 @@ resume the expired VM0/feedback preparation grants or authorize implementation.
 A third host-only task designs one integrated stable-storage cohort
 (01:44–02:04 UTC, checkpoint 01:54). It must account for real allocation/death
 eligibility before selecting coroutines/frames merely from source presence.
+
+All three designs finished early and remain held:
+
+- [IR region](ir-region-hypothesis.md), SHA256
+  `b72b5e668dd9799198071cbea61ccea179de4cac42477301052cf251feccc9a2`:
+  compare/forward-branch is provisional; registered-workload hotness still
+  requires a separately reviewed counter-only census.
+- [Stable storage](stable-storage-hypothesis.md), SHA256
+  `8c9aab866f2685b74cf36ae2b42fd28cd8e764e46749f47cd72fcfada2b29e01`:
+  exact coroutine/frame spans are nominated; source-predicted constructions
+  are not a measured death-eligibility/survival/slack histogram.
+- [Failed-prefix witness](../gc-nursery-old-work/failed-prefix-witness-design-20261101-v1.md),
+  SHA256 `bdd3068e2a1beeddd1b699faadda815d4fff6f0e38b02367ce3daa8b30c7e22d`:
+  direct real-prefix and independent pre/post cleanup evidence, still awaiting
+  independent design disposition and any source grant.
 
 Select one next executable hypothesis with its correctness boundary,
 whole-workload performance decision and migration cost. Existing rejected

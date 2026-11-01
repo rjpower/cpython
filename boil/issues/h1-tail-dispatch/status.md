@@ -1,14 +1,21 @@
 # H1 tail dispatch
 
-- State: active
+- State: held for integrated architecture review
 - Updated: 2026-11-01
 - Owner: coroutine_design_review prepares helpers; coordinator reviews and integrates
 - Dependencies: exact compiler/backend plan and independent review before native execution
-- Current grant: host-only VM0 helper preparation, 01:09–01:39 UTC; checkpoint 01:19
-- Branch/head: retained `boil/h1-frame` at `94ab98e8fd3`
-- Worktree: none active
+- Prior grant: host-only VM0 helper preparation, 01:09–01:39 UTC; suspended at strategic steering
+- Current managed helper source: `boil/vm-compiler-backend` at `417a9443a59`
+- Worktree: `build/worktrees/vm-compiler-backend`; no runtime source changes
 
 ## Now
+
+The [integrated review](../fundamental-runtime-design/status.md) supersedes the
+assumption that the current IR and collector should remain unchanged. VM0 is
+still a useful compiler/backend control, not the architectural answer. Helpers
+are unfinished and unready; no compiler or target has run. Resume only with a
+new explicit remaining scope and clock. Earlier H1 source remains retained on
+`boil/h1-frame` at `94ab98e8fd3`.
 
 The [new candidate](../../design/vm-design-candidate.md) selects a matched
 GCC-computed/Clang-computed/Clang-tail comparison on unchanged runtime source,

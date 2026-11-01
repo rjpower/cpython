@@ -1,6 +1,6 @@
 # Reduce old-object work during minor collection
 
-- State: active
+- State: source reviewed; feedback preparation held for integrated design review
 - Owner: restart_audit proposes; qualification_review_resumed reviews; coordinator selects
 - Updated: 2026-11-01
 - Budget: source prototype 01:00–01:30 UTC, checkpoint 01:10; no native grant
@@ -31,6 +31,14 @@ inventory/classification share is not all removable; the explicit allocator-leaf
 example is only 1.15% of total sampled coroutine CPU. No speedup is forecast.
 
 ## Now / next
+
+The isolated prototype froze at `c43c8374dbd56ca7862be49a31820ded6ac5a9d9`.
+Independent [source review](reviews/object-map-source-20261101-v1.md) accepted
+bounded native feedback preparation. A causal failed-inventory-prefix cleanup
+witness is still missing; its proposed source correction has not been granted
+or implemented. Host feedback drafts are suspended, no native job has started,
+and the [integrated review](../fundamental-runtime-design/status.md) treats this
+iterator as a transitional hypothesis rather than a complete collector design.
 
 Source proposal frozen at 00:47 UTC, SHA-256
 `1411d4567bc1a85f124b6631a570a15e016b0ae6a19c061ada83957551bbbfe2`.

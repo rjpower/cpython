@@ -1,6 +1,6 @@
 # Adopt the nursery as the runtime architecture
 
-- State: active
+- State: cost incomplete; corrected diagnostic held for integrated design review
 - Owner: restart_audit implements; independent reviewers check source/helpers; coordinator integrates
 - Updated: 2026-11-01
 - Base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
@@ -10,7 +10,17 @@
 - Dispatch started: 2026-10-31 20:18:11 UTC; overall deadline 2026-11-01 04:18:11 UTC
 - First-feedback deadline (closed): 2026-11-01 00:14:59.201344 UTC, unchanged through corrections
 - Release-readiness deadline (closed): 2026-11-01 01:05:46.376648 UTC
-- Decision: keep mandatory nursery admission and real minors; automatic cadence remains an experiment
+- Prior decision: mandatory nursery and real minors; reopened by integrated design review
+
+## Architecture review hold
+
+The [fundamental review](../fundamental-runtime-design/status.md) reopens the
+particular nursery/storage commitment. The target must remain one maintained
+policy, with no nursery-disable alternative. The earlier decision and evidence
+below are preserved; they do not establish performance value. Retention-oracle
+v3 helpers passed [root host review](reviews/retention-oracle-helpers-20261101-v3-root.md)
+but remain unactivated, with readiness false and no activation record. There is
+no current native job and the 04:18:11 UTC boundary is unchanged.
 
 ## Hypothesis
 
@@ -27,9 +37,9 @@ transactional diagnostic records, retirement and independent major debt. The
 deadlines and no runtime policy choice. Failed attempts cannot consume a minor
 opportunity or reset major debt; explicit full/emergency entries remain majors.
 
-Keep the nursery architecture. Integrate a correct, useful scheduling increment
-or reject that increment and retain automatic majors/manual minors as the one
-settled policy. Never restore a nursery disable option. Performance uses the
+The prior plan retained the nursery and selected either useful scheduling or
+automatic majors/manual minors as one policy. That commitment is now held for
+architectural review. Never restore a nursery disable option. Performance uses the
 elapsed-first [cost plan](cadence-cost-plan.md), with resource correctness and
 explicit memory tradeoffs; text/instruction counts are diagnostics.
 

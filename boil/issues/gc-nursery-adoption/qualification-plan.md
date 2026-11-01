@@ -18,6 +18,13 @@ A carried receipt needs an explicit unchanged
 source/test/product bridge. Earlier manual-nursery and cadence feedback are
 component evidence, not full qualification of the final composition.
 
+Host-only intake at `build/nursery-qualification-intake-20261101/intake.json`
+binds the current source rosters: adopted automatic-majors source has twenty
+nursery methods, cadence source has twenty-seven. It also identifies the two
+remaining Python broad-helper consumers of the old class name. This is not
+selection of a source, proof of all metadata/JSON consumers, native coverage or
+readiness; the frozen final plan must bind its actual roster and child scripts.
+
 The handler-local slot-base proposal is rejected on its fixed elapsed result
 and cannot join. Qualify the selected GC source alone. The separate VM0
 compiler/backend investigation does not change this source composition.

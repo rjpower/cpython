@@ -7,17 +7,26 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / cost observer correction | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | qualification_review_resumed; coordinator | First campaign incomplete on intended Richards retention; prepare reviewed graph-aware oracle without changing kernel or limits |
-| GC / structural source | [Object-map inventory](gc-nursery-old-work/status.md) | restart_audit | Thirty-minute isolated iterator prototype; native and performance held |
-| VM / compiler-backend helpers | [Tail state ABI](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Plan v2 reviewed; prepare strict per-arm build/root/stats helpers, then independent review |
+| Integrated architecture / IR | [Fundamental runtime review](fundamental-runtime-design/status.md) | coroutine_design_review; coordinator | Freeze one effect-complete region hypothesis with actual consumer evidence |
+| GC / transitional inventory proof | [Object-map inventory](gc-nursery-old-work/status.md) | restart_audit | Design the missing causal failed-prefix cleanup witness; no implementation grant |
+| Integrated architecture / allocator and GC | [Fundamental runtime review](fundamental-runtime-design/status.md) | qualification_review_resumed | Design one integrated stable-storage cohort with allocation/death and slack accounting |
+
+Native execution is held during this review. Retention-oracle helpers are
+reviewed but unactivated; VM0 helpers and structural-GC feedback preparation are
+suspended at their recorded checkpoints. Their source and evidence are retained.
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
 Qualify each coherent increment once. Temporary source comparisons remain
-experiments, not permanent runtime choices. The nursery architecture is kept;
-adoption removes its temporary global enable/disable control.
+experiments, not permanent runtime choices. The earlier recommendation to retain
+the particular nursery design is under review; keeping or rejecting it must
+still produce one maintained policy.
 
-## Next GC experiments, in order
+## Prior GC sequence, held for design review
+
+The [integrated candidate](../design/integrated-runtime-candidate.md) reopens
+this ordering and the particular nursery/storage commitment. The sequence below
+records the prior plan; it does not authorize work while the review is active.
 
 1. [Adopt real minor/checker semantics](gc-nursery-adoption/status.md), then
    select one measured automatic cadence without a runtime switch.

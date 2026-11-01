@@ -336,3 +336,30 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   helper preparation; qualification draft now excludes rejected slot-base work.
   [Diagnosis](issues/gc-nursery-adoption/retention-observer-diagnosis-20261101-v1.md),
   [Oracle review](issues/gc-nursery-adoption/reviews/retention-oracle-design-20261101-v1.md).
+- 2026-11-01: Prepared a source-only qualification intake while independent
+  implementation tracks proceed. Confirmed twenty adopted-baseline and
+  twenty-seven cadence nursery methods and identified legacy broad-helper
+  class consumers. No source is selected and no native qualification runs;
+  the final roster and input bridges remain tied to the eventual cost decision.
+  [Qualification draft](issues/gc-nursery-adoption/qualification-plan.md).
+- 2026-11-01: Reopened the IR/VM/collector architecture recommendation after
+  the user's challenge. Redirected all three agents to critical source and
+  primary-design reviews, with a 02:00 UTC report ceiling. No native job was
+  launched: accepted retention helpers remain unactivated; VM0 and structural
+  feedback preparation are suspended at saved checkpoints. Initial source
+  findings identify stack-constrained slot allocation, always-current frame
+  homes, largest-kind feedback strides and all-old minor scans as choices to
+  test rather than settled design requirements. The integration boundary is
+  unchanged. [Review scope](issues/fundamental-runtime-design/status.md).
+- 2026-11-01: Three critical research reports finished early. Independently
+  accepted an integrated design target: optimize logical values before frame
+  placement, generate bounded effect-complete regions, and co-design stable
+  core allocation with tracing/reclamation. Preserved historical decisions,
+  explicitly reopened the particular nursery/storage commitment, and published
+  Loom revision 1 with exact readback and source/review hashes. This accepts
+  design selection only, not an implementation or performance result. Assigned
+  finite IR-region, stable-storage-cohort and missing inventory-prefix witness
+  designs; native execution remains held.
+  [Candidate](design/integrated-runtime-candidate.md),
+  [review](issues/fundamental-runtime-design/review-20261101-v1.md),
+  [publication](issues/fundamental-runtime-design/publication-20261101.md).

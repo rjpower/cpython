@@ -1,5 +1,11 @@
 # GC and interpreter performance
 
+The architectural retention recommendation below has been reopened by the
+2026-11-01 [integrated reassessment](integrated-runtime-candidate.md). Historical
+measurements and accepted correctness scopes remain valid. The particular IR,
+all-old nursery and allocator/collector split are performance choices under
+review; pending correctness increments are not owed integration.
+
 ## TLDR
 
 Keep the register/value interpreter and tracing collector. Measured throughput

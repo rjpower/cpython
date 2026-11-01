@@ -1,0 +1,30 @@
+{
+  "candidate_execution_authorized_by_this_decision": false,
+  "changed_paths": 16,
+  "decision": "ACCEPT_M3_SOURCE_FOR_FOCUSED_NATIVE_VALIDATION_ONLY",
+  "final_syntax_translation_units_passed": 8,
+  "future_source_edits_authorized": false,
+  "host_generator_tests_passed": 35,
+  "independent_source_review": {
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m3-source-receipt-20261101-v1.json",
+      "sha256": "458d93f13520771a8d0a87348ef37062f1c301714f09cedc6a0eb087e89ef810"
+    },
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m3-source-review-20261101-v1.md",
+      "sha256": "a8815b39be6f0a2b8c28741394bc89273e6ca28a84f19ea193e437674b61233d"
+    }
+  },
+  "integration_or_performance_acceptance": false,
+  "limits": "Synthetic host records/helper stubs and emission only; runtime recording, Unit lifecycle, native traces and program outcomes remain pending.",
+  "native_bytes_executed": false,
+  "runtime_methods_pending": 36,
+  "source_attempt_closed_early": true,
+  "source_base": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "source_capsule": {
+    "path": "build/worktrees/jit-observed-loop/build/jit-method-m3-source/capsule.json",
+    "sha256": "996663967332df2310c87b8660647abbf5a25baa431b52a216dfe4fd8163ab48"
+  },
+  "source_head": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "utc": "2026-11-01T21:07:47.628715+00:00"
+}

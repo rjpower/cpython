@@ -1,6 +1,24 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision46 at20:54:41 UTC records source-level PHI/CSE/DCE,
+Latest publication: revision48 at21:20:10 UTC records fresh build success,
+35 passes/one old admission regression, all eight observed-loop tests passing,
+closed failed batch/cleanup and the separate reviewed terminal-settlement
+correction. Exact readback matches 32,080 characters/two Mermaid blocks;
+snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v48.md`
+has SHA256 `e9862911ef40035699e20300c5c8349cb35b8a36436289bec3e401a40a2186ef`.
+Whole M3 behavior, speed and primary integration remain unaccepted. Original
+failed evidence stays frozen. Mermaid source/readback, not rendered layout, checked.
+
+Revision47 at21:10:58 UTC records accepted frozen source
+90cdb7bb, exact source/launch reviews and the actual running native batch, with
+21:40:03 inclusive deadline and first-failure stop. Exact readback matches 30,648
+characters/two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v47.md`
+has SHA256 `d77371c2582a0aa6632238b62e79b489a6e6700c5696a355ee7be1cda018a096`.
+Source permissions closed early. Native behavior, performance and primary
+integration remain pending. Mermaid source/readback, not rendered layout, checked.
+
+Revision46 at20:54:41 UTC records source-level PHI/CSE/DCE,
 SSA/backend fixture and exact-source syntax progress, recorder lifetime and
 ambiguous-return-map fixes, corrected runtime fixtures and held controller
 preparation. Exact readback matches 28,828 characters and two Mermaid blocks;

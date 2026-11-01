@@ -1,0 +1,55 @@
+{
+  "utc": "2026-11-01T21:06:52.321703+00:00",
+  "decision": "ACCEPT_SOURCE_FOR_BOUNDED_NATIVE_FEEDBACK",
+  "source_head": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "source_base": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-source/capsule.json",
+    "sha256": "996663967332df2310c87b8660647abbf5a25baa431b52a216dfe4fd8163ab48"
+  },
+  "patch": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-source/source.patch",
+    "sha256": "2ea710dc60f75df6b3c4f18ae75e7497cad2cd9c99a4dfda7e6b57ceb1793116"
+  },
+  "source_paths": 16,
+  "artifacts_verified": 171,
+  "authority_references_verified": 7,
+  "independent_source_replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-source-review-20261101-v1/final-source-replay.json",
+    "sha256": "22725c5a3f7283fde2241988750a6adf937af787073941ea1ce7324596a62aa5"
+  },
+  "independent_host_log": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-source-review-20261101-v1/final-host-tests.log",
+    "sha256": "d960b403b0c919e83ec109639fca9c76fc543eaf33b2cd5dad4a33de16d51eb3"
+  },
+  "host_tests": 35,
+  "runtime_methods_pending": 36,
+  "syntax": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-source/syntax-freeze/result.json",
+    "sha256": "812e4cce2e4962d88243d10f2695188f029c50e4ec5a96a24a2a5e0d325c4fd9"
+  },
+  "syntax_tus": 8,
+  "syntax_aggregate_seconds": 8.20177417199011,
+  "standalone": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-source/backend-final/ssa-result.json",
+    "sha256": "8babfddae9e20b5fe1b7c37976f69b7cf43b30c9e1e9043520bd64b639155a87"
+  },
+  "standalone_aggregate_seconds": 3.750600466999458,
+  "checkpoint_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-source-review-20261101-v1/checkpoint-review.md",
+    "sha256": "8260a570603f5ac56170ce7fba14571e295c5d94943c17f828ec864beaba21b8"
+  },
+  "checkpoint_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-source-review-20261101-v1/checkpoint-receipt.json",
+    "sha256": "064bb3b569df0594e7d3431a39b7bd23d4dbf8b340df94aa56e03c6ceeefbe2c"
+  },
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-source-review-20261101-v1/review.md",
+    "sha256": "a8815b39be6f0a2b8c28741394bc89273e6ca28a84f19ea193e437674b61233d"
+  },
+  "candidate_calls": 0,
+  "compiler_calls": 0,
+  "emitted_native_bytes_executed": false,
+  "runtime_behavior_accepted": false,
+  "scope": "Exact source, closed evidence and existing host tests only; root alone authorizes native feedback."
+}

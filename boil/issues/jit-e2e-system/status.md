@@ -1,9 +1,17 @@
 # Cohesive method and tracing JIT
 
-**M2 focused natural-method debug behavior accepted: 28 passes, zero skips.**
+**M3 first native batch failed: 35 passes, one admission regression.**
+The fresh debug build passed, and all eight new observed-loop tests passed.
+An unchanged old test errors after a zero-iteration call causes recorder
+retirement to discard its installed baseline. The
+[independent outcome](m3-debug-outcome-review-20261101-v1.md) and
+[failed decision](m3-debug-decision-20261101-v1.json) preserve this result;
+whole M3 behavior is not accepted. A reviewed, isolated correction is underway.
+
+M2 focused natural-method debug behavior remains accepted: 28 passes, zero skips.
 Six registered-program diagnostics subsequently completed with no native-entry
-witness among12queried functions. The missing common-constant and raise helpers
-are being added within the active M3 source attempt; no speedup is established.
+witness among 12 queried functions. The missing common-constant and raise helpers
+are present in the reviewed M3 source; no speedup is established.
 
 User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
 an end-to-end method and tracing JIT. The JIT is the selected direction;
@@ -55,8 +63,8 @@ attribute specialization remains available through exact fallback.
 
 ## Parallel next work
 
-- restart_audit: observed-loop recorder/SSA/allocator implementation in isolation.
-- qualification_review_resumed: parallel actual-source and checkpoint review.
+- restart_audit: terminal recorder settlement correction in isolation.
+- qualification_review_resumed: parallel actual-source and outcome review.
 - coordinator: source/runtime integration, evidence, issue board, WORKLOG and Loom.
 - coroutine_design_review: prior research complete; later provider-capacity errors
   were reassigned without repeated retries or a model change.
@@ -201,9 +209,43 @@ same paths and deadline. It changes neither hotness/cache budgets nor the fixed
 workloads. Rare unsupported paths blocking whole-method admission are retained
 as a separate future policy hypothesis, not silently added scope.
 
-SSA implementation, genuine trace execution, performance qualification and main
-integration remain unfinished. Release/ASan/full-suite qualification, speedup
-and main integration are not established by M2 focused debug acceptance.
+Source froze early at 21:04 UTC in three dependency commits, ending at
+`90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5`. Capsule99666396 and independent
+a8815b39/458d93f1 review bind 16 source paths, 171 closed artifacts and seven
+authority references. The old 28 test ASTs and six old generated products are
+unchanged. The compiler-inclusive quota correction is implemented and reviewed;
+the original limit and source deadline did not change.
+
+The source decision closes source permissions early. Final bound controller
+checks pass five mocked controls and exact 36-method AST equality. Independent
+launch review7452632e/ea77aa40 accepts the two-row batch after verifying 17,713
+inputs, 10,392 preserved files, 30 parent fingerprints and 12 tools. Root activated
+at 21:10:03 UTC with a 21:40:03 inclusive deadline. Actual supervisor41481
+exited1 at 21:12 UTC after build success and a failed focused row. All 36 methods
+ran: 35 passes, one error, zero skips. The eight observed-loop methods all pass;
+their scalar witness retains 4,013 bytes, 16 source words, 14 nodes, one spill
+and seven scratch slots with actual scalar/backedge success flags. This is
+partial mechanism evidence; it does not override the failed cohort. Root cleanup
+verifies native idle, 25 available locks, 10,392 prior files and 30 parent
+fingerprints unchanged, then removes the owned cache. That batch is closed.
+
+The old native loop/call fixture explicitly compiles its method, then calls it
+with zero iterations. Terminal handling marks its recorder exhausted; the next
+entry detaches it, and later short calls cannot meet fresh hotness thresholds.
+The [correction design](m3-terminal-settlement-design-20261101-v1.md) and
+[observer clarification](m3-terminal-settlement-observer-clarification-20261101-v1.md)
+passed independent review. Reuse the existing cold replacement transaction at a
+validated live-frame entry, settle into ordinary baseline, then refetch and
+revalidate once at the saved logical PC. Synchronize changed monitoring state
+without replaying an operation or copying witness flags.
+
+The separate [source grant](m3-terminal-settlement-source-grant-20261101-v1.json)
+opens only runtime admission and the existing test module in
+`build/worktrees/jit-terminal-settlement`, based on frozen90cdb7bb. Start21:19:16,
+cutoff21:34:16 UTC, 900 seconds with no extension. All 36 IDs and old 28 test ASTs
+remain. Host checks and changed-runtime syntax precede freeze/review. No new
+candidate execution is authorized. The original source/image/logs stay frozen.
+Performance qualification and primary integration remain unfinished.
 
 ## Retained evidence
 

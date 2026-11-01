@@ -1769,3 +1769,32 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   scratch excluded from the reviewed compiler-inclusive quota; author will
   enforce that contract within the original cap. Publish/read back Loom46,
   28,828 characters/two diagrams, snapshot676fe955. No M3 source/native acceptance.
+- 2026-11-01 21:08 UTC: Accept clean frozen M3 source90cdb7bb in986f0135 after
+  independent a8815b39/458d93f1 review. Three dependency commits finish early;
+  16 source paths, 171 closed artifacts, seven refs and patch identities verify.
+  Old 28 test ASTs/six generated products are exact; 35 host tests, eight pinned
+  syntax checks and actual standalone SSA/allocator/backend checks pass. The
+  compiler-inclusive quota is enforced; no limit or deadline extension. Fixture
+  records/helper stubs and manual Unit cleanup do not prove candidate lifecycle.
+  Bind/seal held controller to the exact 36-method roster; five bound mocked
+  controls pass, ready a9564de7. Final launch review/activation and all runtime
+  behavior remain pending. [Source decision](issues/jit-e2e-system/m3-source-disposition-20261101-v1.json).
+- 2026-11-01 21:11 UTC: Independent held-controller review7452632e/ea77aa40
+  verifies 17,713 inputs, 10,392 preserved files, 30 parent fingerprints, 12
+  tools, exact36 roster and five mocked controls. Root activation4a596110 opens
+  one fresh debug build/suite at21:10:03 through21:40:03 inclusive, first failure
+  stops/no retries. Actual supervisor41481 is running; no runtime outcome yet.
+  Publish/read back Loom47, 30,648 characters/two diagrams, snapshotd77371c2.
+- 2026-11-01 21:20 UTC: First M3 native batch41481 exits1: fresh build passes,
+  all36 methods run with35passes/oneERROR/zero skips; all eight observed-loop
+  methods pass. Retained4013-byte/16-word scalar witness has actual scalar and
+  backedge success,14nodes/one spill/seven scratch slots. Old unchanged native
+  loop/call fixture loses its baseline after initial zero-iteration retirement.
+  Independent01c1bce4/c8e502b0 and failed decision7f66e351 preserve source90cdb7bb,
+  imagefb678ca2,590products/17713inputs/four origins; no completion invented.
+  Root cleanupfe0df7bf confirms native idle,25locks/10392prior/30parents intact,
+  owned cache removed. Reviewed correction24730/872b and source grant4f4cb7a4
+  authorize only runtime admission/existing fixture in fresh terminal-settlement
+  worktree,21:19:16–21:34:16UTC,900s/no extension; no candidate runs. Preserve
+  all36IDs/old28AST and original failed attempt. Publish/read back Loom48,
+  32,080characters/two diagrams, snapshote9862911. [Failed decision](issues/jit-e2e-system/m3-debug-decision-20261101-v1.json).

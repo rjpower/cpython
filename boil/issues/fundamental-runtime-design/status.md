@@ -47,6 +47,16 @@ attempt. Preserve ordinary deallocators/lifecycle records and collection policy;
 close all ownership/wrapper/debug/quarantine/rollback paths. Host audits and
 test source are allowed; compiler, target, native tests and timing are held.
 At the ceiling, freeze a review candidate or explicit partial patch.
+Source froze early at **03:38:25 UTC**, clean commit
+`7f982b3ecb6ae8e7f1a5c0433daa9acde870b7e4` on `boil/gc-integrated-spans`.
+The small source capsule sealed at 03:39:07, SHA256
+`d5f1ce8ffddc598fb5d22622f2936a0c44b1a69a5bef874e60a6a310953aac2b`.
+It binds thirteen changed files, twenty focused test methods and three child
+templates. Host root checks and 21 ordinary regression methods passed, with
+one existing expected failure. Independent frozen-source review is active;
+native helper preparation ends **03:52 UTC**, checkpoint **03:45**. Four
+proposed rows build/test fresh GCC O1/debug and O3 products, including six
+existing root/lifecycle controls. No compiler, target or timing has run.
 The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
 route/wrapper decline, indexed ownership, inventory/rollback and retirement
 connections have source checks, not native proof. The author targets a 03:40

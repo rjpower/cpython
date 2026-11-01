@@ -17,7 +17,7 @@ and switch to the prepared reference-counting successor. See the
 | RC fallback preparation, isolated source | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator; restart_audit after span review | Exact historical core restored on rc-successor; close RC-only policy by 05:07 UTC; no native/promotion |
 | Independent source review | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | restart_audit | Review frozen span ownership and focused tests by 03:55 UTC; checkpoint 03:42 |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Ownership checkpoint delivered; target source freeze 03:40 UTC, ceiling 04:21; independent review active |
+| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Source froze early7f982b3; review active; four-row native helper preparation by 03:52 UTC |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline

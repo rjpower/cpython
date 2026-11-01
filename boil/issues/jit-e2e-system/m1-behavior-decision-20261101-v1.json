@@ -1,0 +1,42 @@
+{
+  "utc": "2026-11-01T18:06:59.982159+00:00",
+  "decision": "ACCEPT_M1_FOCUSED_WHOLE_METHOD_NATIVE_BEHAVIOR",
+  "source": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "independent_outcome": {
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m1-debug-outcome-review-20261101-v1.md",
+      "sha256": "950cf396d1c406f318ec7f21cd97c09f4ef0d93d2e7d3072bfbb7cad31e267dc"
+    },
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m1-debug-outcome-receipt-20261101-v1.json",
+      "sha256": "e99e2b72fe8b1a41886c48d16aae808090aa6bd5269f75de77b4b6dc9bf29494"
+    }
+  },
+  "completion_sha256": "dbd7b5f1ca151e6c2baf7f0a26132d1f949666f06f0e3a54ff84d11a2733ccf4",
+  "terminal_cleanup_sha256": "c506f2993b6912eeb82b6791f55da21a90ff6a26ec3139459a75cd472a85ae90",
+  "methods_passed": 14,
+  "skips": 0,
+  "actual_native_tests": 6,
+  "fresh_products": 587,
+  "emitted_work_method": {
+    "bytes": 2419,
+    "ir_words": 27,
+    "mapping_size": 4096,
+    "endbr_destinations": 28,
+    "calls": 55
+  },
+  "evidence": "Actual native entry, Python return continuation, C bridge and RX non-W assertion; emitted calls bind the candidate ELF; branches/backedges and SysV R12/stack ABI independently inspected.",
+  "limitations": [
+    "Forced internal compilation, not automatic hotness or broad method coverage",
+    "No optimized SSA or tracing frontend implemented yet",
+    "No elapsed speedup, full qualification or main integration acceptance",
+    "RX map checked in bound test; raw map line not retained",
+    "Known optional-module limits persist"
+  ],
+  "next": [
+    "Detailed feedback/typed-IR design requested by user",
+    "Natural admission and integrated workload coverage",
+    "Observed-loop SSA and shared optimization layers"
+  ],
+  "gc_or_permanent_backend_options_authorized": false
+}

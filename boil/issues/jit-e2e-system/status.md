@@ -1,105 +1,82 @@
 # Cohesive method and tracing JIT
 
-**M0 semantic behavior accepted; M1 whole-method source implementation active.**
-User feedback36 on Loom revision31 replaces the narrow arithmetic-head tier
-proposal with an end-to-end method and tracing JIT, with layered optimizations.
-The JIT is the selected strategic direction. Experiments test implementation
-choices and optimization hypotheses within that direction; a small prototype
-is not required to justify the architecture's existence by winning the full suite.
+**M1 focused native behavior accepted. Detailed IR/feedback design and natural admission are next.**
 
-The accepted RC runtime remains selected. Three earlier frame-entry candidates
-remain rejected on their measured results. The unexecuted quickened-block source
-is retained as component evidence; its interrupted activation did not take effect.
-No tracing-GC work, collector selector or permanent competing backend is added.
+User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
+an end-to-end method and tracing JIT. The JIT is the selected direction;
+experiments choose mechanisms and optimization policies within that system.
+The [reviewed architecture](../../design/jit-e2e-system.md),
+[design decision](design-decision-20261101-v1.json) and
+[implementation milestones](implementation-milestones-20261101-v1.md) define one
+shared semantic ABI, optimizer/backend, state recovery and code owner.
 
-Parallel assignments:
+The accepted RC runtime stays selected. GC work is closed. Earlier frame-entry
+experiments remain rejected; unexecuted quickened-block source remains component
+evidence. These records do not authorize competing permanent backends.
 
-- restart_audit: M1 whole-method lowering, shared backend and code ownership.
-- coroutine_design_review: tracing/SSA research completed; subsequent review turn unavailable.
-- qualification_review_resumed: independent M1 source and ownership/ABI review.
-- coordinator: current-source audit, integration, peer review, issue/worklog and Loom.
+## Current implementation
 
-Use primary LuaJIT and V8 sources, with explicit adaptations for Python RC,
-destructors, exceptions, calls, monitoring, suspension and C extensions. Prefer
-one frame-state/ownership ABI, shared semantic operations and one optimizing
-backend. Distinguish executable interpreter homes from compiler SSA and native
-register allocation. Decide the roles of method compilation and tracing together.
+M1 source `15987a03c236d5257b8a7b944bf858ee20e52fc3` is frozen in
+`build/worktrees/jit-method-baseline`, with18 changed paths. The
+[independent exact-source review](m1-source-review-20261101-v1.md) and
+[source disposition](m1-source-disposition-20261101-v1.json) accept its shared
+method descriptors/LIR, x86 branches and helper calls, common Action consumer,
+exec-owned units, publication and active-byte lifetime handling.
 
-The reviewed architecture and ordered implementation plan are fixed below.
-Each milestone must exercise useful control flow and calls,
-with focused correctness and diagnostic measurements first. Full-suite acceptance
-and expensive qualification remain appropriate for coherent adoption candidates.
-The [system design](../../design/jit-e2e-system.md) is published to the existing
-Loom artifact, revision37, with code and lifecycle diagrams.
+The fresh debug build and all14 selected methods passed, with zero skips:
+eight existing semantic-helper methods and six actual native methods. The
+[independent outcome review](m1-debug-outcome-review-20261101-v1.md) and
+[behavior decision](m1-behavior-decision-20261101-v1.json) accept focused behavior.
+The native tests exercise varying loops/branches, Python and C calls, dunders,
+exceptions, observer invalidation/recovery, affected-code-only fallback,
+ephemeral constant destruction and invalidation during a live C/native return.
 
-The [integrated architecture](../../design/jit-e2e-system.md) passed
-[independent review](design-review-20261101-v1.md); the
-[decision](design-decision-20261101-v1.json) pins the exact design and both
-research proposals. [Implementation milestones](implementation-milestones-20261101-v1.md)
-separate broad baseline coverage, recorded-loop SSA and optimization layers.
-M0 source implementation, independent review and focused runtime validation are
-complete. The tracing reviewer encountered provider
-capacity on its next turn twice; review was reassigned without changing models
-or blocking the work. M1 source implementation is active under the grant below;
-candidate builds, runtime execution and timing remain separately gated.
+The captured27-word method has2419 executable bytes in a4096-byte RX mapping.
+Independent review checks28 ENDBR destinations,55 calls bound to the candidate
+ELF, direct edges/backedges, R12 preservation and stack alignment. The bound test
+checks RX without write permission; its raw maps line was not retained.
 
-The [first source cut](first-slice-design-20261101-v1.md) passed
-[independent review](first-slice-design-review-20261101-v1.md). Its
-[validation contract](first-slice-validation-20261101-v1.md) and
-[lifetime clarification](first-slice-lifetime-note-20261101-v1.md) are fixed.
-[M0 source grant](m0-source-grant-20261101-v1.json): 2026-11-01T16:23:54.586838+00:00
-to 2026-11-01T17:23:54.586838+00:00, checkpoint 2026-11-01T16:43:54.586838+00:00.
-The source attempt closed early at 16:53 UTC. It produced callable generated
-semantics and a real evaluator Action consumer; runtime correctness and
-performance remain unvalidated. The next source phase adds the
-shared LIR/backend and complete loop/call/error native path.
+Final cheap checks passed31 host generator methods, seven distinct C syntax
+checks and a standalone emission/failure fixture. There are63 shared helpers and
+290 explicit classifications. The source models NOT_TAKEN skip edges and exits
+AFTER at the exact committed PC for any unexpected helper successor.
 
-At 16:43 UTC the checkpoint was partial: 62 generated helpers and 30 passing host
-tests were present, but independent review found 289 explicit table rows against
-290 valid metadata handlers. The missing generic BINARY_OP base now has an
-explicit before-operation fallback reason; successor f4f9c893 preserves the
-original dafd9ad6 claim and independent a75820d7 counterexample. Source review
-and final fixture work completed before the original cap. The first debug
-attempt failed as recorded below; the same eight-method semantic-helper class
-remains the runtime check before M1. No 54-case or 29-workload gate is inherited.
+Supervisor94327 exited0; terminal cleanup confirmed native idle,22 available
+locks,30 historical image/configuration files and776 prior-attempt files intact,
+then removed the owned bytecode cache. Source and native grants are closed.
 
-Initial frozen source: `49cc47360ccd79c7a89acc8bfa3d546f94afc46c`, 13 paths. The
-[independent source review](m0-source-review-20261101-v1.md) and
-[source disposition](m0-source-disposition-20261101-v1.json) accept it for that
-focused debug validation. Both author and reviewer passed 30 host generator
-tests; all six existing ID/metadata products remain byte-identical. This is
-shared helper/evaluator infrastructure, with no native JIT execution claimed.
+This is forced internal compilation, not natural hotness, comprehensive opcode
+coverage, optimizing SSA, a tracing frontend, a speedup or main integration.
+STORE_ATTR currently exits before the operation in M1; the interpreter's existing
+attribute specialization remains available through exact fallback.
 
-The [first debug outcome](m0-debug-outcome-review-20261101-v1.md) is a compile
-failure: 27 preprocessor directives joined the preceding C statement. No runtime
-method ran. Supervisor 78057 exited 1; terminal cleanup verified native idle,
-all 20 locks, unchanged historical images and removal of the owned cache.
+## Parallel next work
 
-Validated M0 source: `f0a49b6d30a38db705329bcfd5e5f2d6d2413710`. The
-[focused correction](m0-directive-source-disposition-20261101-v1.json) adds one
-writer line boundary, regenerated whitespace and a regression check. Independent
-review passes 31 host tests and confirms two successful syntax-only C checks.
-All original evidence remains preserved. The subsequent fresh debug build and
-same eight runtime methods passed with zero skips. The
-[independent behavior review](m0-debug-outcome-review-20261101-v2.md) and
-[decision](m0-behavior-decision-20261101-v1.json) accept this prerequisite for M1.
-This proves generated helper/evaluator semantics, with no native JIT or speed claim.
+- restart_audit: user-requested IR/feedback design, actual attribute strategies,
+  typed SSA, opaque-call boundaries and concrete natural-admission/workload plan.
+- qualification_review_resumed: independent design review after sealing M1 outcome.
+- coordinator: source/runtime integration, evidence, issue board, WORKLOG and Loom.
+- coroutine_design_review: prior research complete; later provider-capacity errors
+  were reassigned without repeated retries or a model change.
 
-[M1 source grant](m1-source-grant-20261101-v1.json): 17:17:09–18:47:09 UTC,
-checkpoint 17:47:09. The outcome is a complete native-method CFG with branches,
-backedges, shared helpers, Python/C calls, normal/error continuations and code
-ownership. Real emitted entry and compiled-continuation witnesses are required;
-compile success alone is insufficient. Implementation and independent review
-run in parallel. Host generation and small standalone encoder checks are allowed;
-candidate execution and broad qualification follow a separately bounded freeze.
+The latest question requires a concrete attribute-lowering design, beyond the
+architecture's existing guard/effect/FrameState contracts. Distinguish current
+interpreter feedback from proposed optimizer facts and from hardware registers.
+Natural admission and a fixed call/loop/object/suspension workload slice precede
+observed-loop SSA, then layered guards, CSE/DCE, representation selection,
+register allocation and guarded inlining. Broad timing and expensive qualification
+belong at coherent integration milestones, not at each opcode.
 
-The [17:47 checkpoint](m1-checkpoint-decision-20261101-v1.json) has concrete
-deliverables, confirmed by the [independent reviewer](m1-independent-checkpoint-20261101-v1.json):
-actual method descriptors/LIR, x86 branches and helper calls, exec-owned code
-units and the common evaluator Action consumer. Seven distinct translation units
-pass the [bounded syntax checks](m1-syntax-check-grant-20261101-v1.json).
-A standalone fixture emits 501 bytes with six ENDBR destinations and checks
-allocation/overflow cleanup; it does not execute emitted machine code.
-The original syntax-v1 command-label defect and missing include remain recorded;
-syntax-v2 corrects both. Native behavioral fixtures, exact final source review
-and fresh runtime validation remain pending. The source cap stays 18:47:09 UTC.
+## Retained evidence
+
+M0 corrected source `f0a49b6d` passed all eight helper methods with zero skips;
+its [behavior decision](m0-behavior-decision-20261101-v1.json) is the prerequisite.
+The [initial generated-C failure](m0-debug-outcome-review-20261101-v1.md) and
+[focused correction](m0-directive-source-disposition-20261101-v1.json) remain
+preserved. M1's [timely source checkpoint](m1-checkpoint-decision-20261101-v1.json)
+retains the initial syntax-v1 command-label/include failures and corrected evidence.
+The source cap closed early, rather than extending its18:47 UTC deadline.
+
+The [Loom architecture artifact](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown)
+contains the system and lifecycle diagrams; immutable revisions retain earlier
+status. Canonical issue decisions above own current execution acceptance.

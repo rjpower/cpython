@@ -1539,3 +1539,27 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   selects all14 helper/native methods with a finite30-minute window; no execution
   is authorized yet. Preparation fingerprints all585 successful M0 build products
   and776 prior-attempt files, alongside earlier parent-image preservation.
+- 2026-11-01 17:58 UTC: M1 source15987a03 freezes clean,18paths, ahead of its cap.
+  Independent exact-source acceptance489eaad4/34e94629 and root decision689d36bc
+  accept focused native validation only. Final31host tests, seven syntax checks
+  and actual encoder emission/failure checks pass;63helpers cover290explicit
+  classifications. Review fixed real NOT_TAKEN skip edges and guards unexpected
+  committed successors with exact AFTER deoptimization. Eight existing semantic
+  methods remain intact; six new native methods remain unexecuted. Source edits
+  are closed; the bound14method fresh-debug controller passes five host controls
+  and awaits final independent readiness review. [Source decision](issues/jit-e2e-system/m1-source-disposition-20261101-v1.json).
+- 2026-11-01 18:03 UTC: Fresh M1 debug build and all14 selected methods pass,
+  zero skips; supervisor94327 exits0. Six tests execute actual method machine
+  code across loops, Python/C calls, exceptions, observation and lifetime edges.
+  Terminal cleanup confirms native idle,22locks,30old image/config files and
+  776prior-attempt files unchanged, then removes the owned cache. Independent
+  outcome950cf396/e99e2b72 accepts focused behavior; decision810df100 records
+  587fresh products and emitted27word/2419byte method ABI/target inspection.
+  No natural hotness, optimizing SSA, speedup or main integration is claimed.
+  [Decision](issues/jit-e2e-system/m1-behavior-decision-20261101-v1.json).
+- 2026-11-01 18:04 UTC: User requests a detailed IR/attribute-feedback design.
+  Parallel read-only work now audits actual receiver/version/layout/descriptor
+  strategies and researches primary V8/LuaJIT sources, distinguishing implemented
+  interpreter specializations from proposed method/trace SSA. The write-up must
+  specify RC store order, before/after/error recovery, dependency lifetimes and
+  opaque-call continuation; M1 currently falls back before STORE_ATTR.

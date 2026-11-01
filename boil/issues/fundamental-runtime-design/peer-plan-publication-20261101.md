@@ -34,3 +34,15 @@ Local body snapshot:
 SHA256 `355eff6110666d494f079787ce1347834fe8004325b3c4c337cce6c85ebc412b`.
 Reviewed Mermaid source/readback only; no rendered-layout inspection is claimed.
 The publication itself grants no runtime adoption or additional native exposure.
+
+## Hard GC budget, revision 3
+
+At 03:27:44 UTC, appended guarded revision 3 to the same work-breakdown artifact.
+It records the 15:14:44 UTC hard GC cutoff, fixed all-29 parity rule, early
+measurement gates, active GC/IR source attempts and RC fallback preparation.
+The accepted current comparison/branch capture replaces pending capture text.
+Both code-organization Mermaid diagrams remain. Exact readback matched all
+8,825 characters and two Mermaid blocks; no rendered-layout check is claimed.
+Local snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v3.md`
+has SHA256 `0858e74a6c10f57ee2689ff6e32486e7c028afd21de3b4c580a245325a56b9ba`.
+Publication confers no performance or runtime adoption credit.

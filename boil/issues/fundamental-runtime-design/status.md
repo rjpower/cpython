@@ -1,11 +1,19 @@
 # Fundamental runtime design review
 
-- State: baseline accepted; integrated storage source active; pre-target IR capture failure under bounded host repair
+- State: baseline/site evidence accepted; integrated-storage and interpreter-region source active; hard GC cutoff set
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
 - Source: baseline clean `417a9443a59`; storage prototype base `5ece3dc211a`; maintained runtime unchanged
 - Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
+
+**User's hard GC cutoff: 2026-11-01 15:14:44 UTC.** The
+[twelve-hour decision](../gc-parity-deadline/status.md) and
+[machine-readable budget](../gc-parity-deadline/budget.json) govern all new GC
+work: valid all-29 geometric-mean elapsed parity against matched upstream, or
+stop tracing-GC optimization and switch to the prepared RC successor. Critical
+correctness and focused tests precede timing; expensive full qualification
+follows a promising measured candidate. Existing shorter source grants remain.
 
 ## Question
 
@@ -39,6 +47,10 @@ attempt. Preserve ordinary deallocators/lifecycle records and collection policy;
 close all ownership/wrapper/debug/quarantine/rollback paths. Host audits and
 test source are allowed; compiler, target, native tests and timing are held.
 At the ceiling, freeze a review candidate or explicit partial patch.
+The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
+route/wrapper decline, indexed ownership, inventory/rollback and retirement
+connections have source checks, not native proof. The author targets a 03:40
+freeze if focused test-source closure is ready; 04:21 remains the ceiling.
 
 Interpreter site-capture preparation/review passed, then root activated v1 at
 03:08:36.674 UTC with a 03:18:36.674 ceiling. Tool session **73805** returned
@@ -51,13 +63,31 @@ lock at 03:10:40 and verified no live target PID. V1 activation/start/failure
 and root disposition remain untouched in
 `build/region-site-attribution-20261101-v1`; its unused window grants no retry.
 
-A new host-only repair runs **03:10–03:20 UTC**, checkpoint **03:15**, in
-`build/region-site-attribution-20261101-v2`. Independent review runs
-**03:10–03:25**, checkpoint **03:18**. It must prove actual frozen-supervisor
-dependency origins, including a conflicting cached-module case, with no target
-invocation. The proposed observation remains one child, one warmup run(4), one
-counted run(4), and IR snapshots outside counting. No rebuild, probe or extra
-workload is added. A new finite root activation is required after exact review.
+The repair froze early and passed
+[independent review](region-site-import-repair-review-20261101-v2.md), including
+actual launcher imports with cold and stale dependency caches and target
+creation forbidden. Root activated v2 at 03:17:38.671 UTC. Tool session
+**95945 returned zero**, completion 03:17:49.357, with all 44 artifacts and
+idle cleanup verified. Root's independent
+[outcome review](region-site-outcome-review-20261101-v2.md) accepts the current
+site: Fibonacci words4/5, integer comparison → forward boolean branch,
+temporary1, 971,140 pairs over four counted loops. Actual collections27,
+fallback0/unpinned0. V1 remains failed and untouched; no retry credit is invented.
+
+Interpreter-region SOURCE work runs **03:22–04:07 UTC**, checkpoints **03:37**
+and **03:52**, freeze earlier when ready. Worktree
+`build/worktrees/interpreter-regions`, branch `boil/interpreter-regions`, verified
+clean base `5c24163405d`. Implement the reviewed reusable RegionPlan/generator
+composition and one comparison/branch consumer; preserve original states,
+ordinary entries and all root/observer/error/breaker contracts. Host checks and
+test source are allowed; compiler/target/native/timing remain held. Current
+site evidence does not prove virtual single-use/exception liveness or a win.
+
+RC fallback preparation runs **03:16–03:46 UTC**, checkpoint **03:31**, owned by
+restart_audit. Identify a coherent reference-counted source restoration,
+retained compiler/inline-frame-value features and deferred container/native
+changes. No source restoration or new collector option is authorized by that
+history review; the hard-cutoff fallback is already authorized by the user.
 
 Retention-oracle v3 helpers passed root host review but remain held, with
 readiness flags false and no activation. VM0 build helpers and

@@ -3,13 +3,18 @@
 Each issue's `status.md` owns its state. Experiments have a hypothesis, concrete
 budget and integrate/reject decision; see the [template](_template/status.md).
 
+**Hard GC cutoff: 2026-11-01 15:14:44 UTC.** Reach geometric-mean elapsed parity
+across all 29 registered workloads against matched upstream, or stop tracing GC
+and switch to the prepared reference-counting successor. See the
+[twelve-hour decision and gate ordering](gc-parity-deadline/status.md).
+
 ## Running in parallel
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Repair capture's host import collision in a new capsule by 03:20 UTC; original attempt launched no target |
-| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review actual supervisor import origins and new capture capsule by 03:25 UTC; no native activation |
+| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Current site captured and accepted; region source prototype 03:22–04:07 UTC |
+| RC fallback preparation | [Twelve-hour decision](gc-parity-deadline/status.md) | restart_audit | Identify coherent RC restoration and retained IR/value features by 03:46 UTC |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
 | GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Source prototype active in gc-integrated-spans; ownership checkpoint 03:21 UTC, freeze 04:21 UTC |
 

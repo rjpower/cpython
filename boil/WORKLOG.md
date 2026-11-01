@@ -449,3 +449,19 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   review through 03:25, requiring real dependency-origin/cache controls before
   any fresh activation. Integrated-storage source work continues unchanged.
   [Execution state](issues/fundamental-runtime-design/status.md).
+- 2026-11-01: User imposed a hard twelve-hour tracing-GC decision, ending
+  15:14:44 UTC. Froze all 29 workloads and a geometric-mean elapsed parity rule
+  against matched upstream. Missing/invalid/inconclusive parity triggers an RC
+  successor and stops GC optimization; no silent extension. Reordered gates
+  for early focused correctness and measured rejection, deferring expensive
+  full qualification to promising candidates. Assigned RC restoration history
+  in parallel to active storage/IR work.
+  [Budget and enforcement](issues/gc-parity-deadline/status.md).
+- 2026-11-01: V2's pinned supervisor import repair passed independent host review
+  and one fresh activation. The sole child completed at 03:17:49 UTC; root
+  rehashed 44 artifacts and replayed the outcome. Current Fibonacci words4/5
+  show the intended integer comparison/forward boolean branch, 971,140 pairs
+  over four counted loops, with 27 collections and no fallback/unpinned rows.
+  Accepted site selection and granted the isolated region source prototype,
+  03:22–04:07 UTC. No speedup or compiler eligibility is claimed.
+  [Outcome](issues/fundamental-runtime-design/region-site-outcome-review-20261101-v2.md).

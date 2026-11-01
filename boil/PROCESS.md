@@ -12,6 +12,11 @@ its hypothesis, budget, dependencies, decision and next action.
 - **Review and qualify:** review significant changes independently, then apply
   the [validation contract](design/validation.md) to one coherent candidate.
   Prefer observed behavior; retain actual failures and source/build identities.
+- **Gate for throughput:** review critical ownership/root/effect boundaries,
+  implement and run focused tests, then review actual outcomes and screen on
+  elapsed/RSS. Reserve expensive full stress/ASan/stdlib/extension qualification
+  for promising candidates; it remains mandatory before integration. Do not
+  time a partial ownership implementation or use broad tests to rescue a loss.
 - **Decide:** integrate the useful increment or reject it. Follow-ups receive
   their own scope and budget; they do not extend an experiment silently.
 - **Report:** update issue status at meaningful transitions and agreed

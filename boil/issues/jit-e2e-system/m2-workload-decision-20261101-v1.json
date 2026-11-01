@@ -1,0 +1,36 @@
+{
+  "utc": "2026-11-01T20:16:20.863762+00:00",
+  "decision": "ACCEPT_VALID_NEGATIVE_WORKLOAD_COVERAGE_EVIDENCE_AND_ADVANCE_REVIEWED_HELPER_AMENDMENT",
+  "source": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "independent_outcome": {
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m2-workload-outcome-review-20261101-v1.md",
+      "sha256": "a9966f4db191eaa309ab8bbea4aea269ff97c6f2248ae1e5273a60502411666d"
+    },
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m2-workload-outcome-receipt-20261101-v1.json",
+      "sha256": "6100598e8a05e025d095ec27e9d4b55fad9f393263946f263199d1d2ed0551ea"
+    }
+  },
+  "manifest_sha256": "a209570980ba227e6d0c0488a6267a8364c322843d63b2633e88686ba302078c",
+  "completion_sha256": "2487194f2f0c6f7cfdf4d1da3b6933c31c705db8681bde8292b43a3ca3d426a5",
+  "root_cleanup_sha256": "013717e88ae98600bf5919ffacdd968ee40677e253bef1373eb14463a4e0e0b0",
+  "candidate_processes": 6,
+  "queried_targets": 12,
+  "queried_entry_witnesses": 0,
+  "blocked_handler_counts": {
+    "79": 8,
+    "102": 1
+  },
+  "scored_values": 0,
+  "reference_runs": 0,
+  "supervisor_session": 46593,
+  "terminal_exit_code": 0,
+  "next_source_amendment": {
+    "path": "boil/issues/jit-e2e-system/m3-coverage-amendment-20261101-v1.json",
+    "sha256": "73829cec1faf39cbeea9e0eddd3bc3408afcb4ee3ff1f535e69c9af881df9e2c"
+  },
+  "m3_source_deadline_extended": false,
+  "positive_coverage_or_speedup_or_integration_accepted": false,
+  "same_attempt_rerun_authorized": false
+}

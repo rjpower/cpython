@@ -1702,3 +1702,27 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   APIs; six unchanged-kernel candidate-only commands/930second budget are prepared,
   with no scores or execution yet. Seen bits remain lifetime witnesses; per-code
   compiler time is partial and shared process occupancy must not be summed.
+- 2026-11-01 20:09 UTC: Prepare candidate-only six-program diagnostic campaign
+  against accepted3174/imagef92c752a: unchanged kernels/loops, no manual compile,
+  no reference arm or scores;930seconds inclusive/120perchild/firstfailure stop.
+  Root corrects timer before launch; independent review finds omitted replay of
+  actual current products. Final held bindinga2095709 now verifies all587products,
+  frozen CAPI SHA,9695completion artifacts,2353prior files and30parents. Earlier
+  held preparations remain preserved. Host-only final replay passes; independent
+  readiness and root activation remain pending. M3 source/review agents stay active.
+- 2026-11-01 20:17 UTC: Six unchanged registered workloads complete in six fresh
+  accepted-M2debug processes; supervisor46593 exits0. Root cleanup013717e8 verifies
+  nativeidle/24locks and9695artifacts/587currentproducts/2353priorfiles/30parents.
+  Independenta9966f4d/6100598e outcome accepts negative evidence:0/12queriedentry
+  witnesses/attempt deltas,8coverage refusals atLOAD_COMMON_CONSTANT79,1at
+  RAISE_VARARGS102,3unnominated/suspension targets. No quota failure or scores.
+  Root decision26ca48be retains raw output and the reviewer's corrected reader.
+  Reviewed amendment73829cec adds2generatedhelpers plus implicit-None/raise
+  ownership/error/reentry checks within M3's unchanged source cap. Actual M3
+  recorder review separately found nested-call provenance, retry and validation
+  ordering defects; author fixes them before lower-level optimization proceeds.
+  [Diagnostic result](issues/jit-e2e-system/m2-workload-diagnostics-20261101-v1.md).
+- 2026-11-01 20:19 UTC: Publish and exactly read back Loom revision44,
+  25,812characters/two diagrams, snapshot3d900cde. It records valid negative
+  workload coverage, the unchanged-cap helper amendment and actual partial-source
+  recorder/SSA findings. No positive workload entry, performance or M3 acceptance.

@@ -1,0 +1,69 @@
+{
+  "utc": "2026-11-01T20:15:14.058983+00:00",
+  "accepted": true,
+  "decision": "ACCEPT_VALID_UNSCORED_DIAGNOSTIC_EVIDENCE_NO_QUERIED_ENTRY",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-outcome-review-20261101-v1/review.md",
+    "sha256": "a9966f4db191eaa309ab8bbea4aea269ff97c6f2248ae1e5273a60502411666d"
+  },
+  "manifest": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-diagnostics-20261101-v1/manifest.json",
+    "sha256": "a209570980ba227e6d0c0488a6267a8364c322843d63b2633e88686ba302078c"
+  },
+  "completion": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-diagnostics-20261101-v1/completion.json",
+    "sha256": "2487194f2f0c6f7cfdf4d1da3b6933c31c705db8681bde8292b43a3ca3d426a5"
+  },
+  "terminal_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-diagnostics-20261101-v1/terminal-cleanup.json",
+    "sha256": "80b296584813326753130cac9c7eed03a0abd6acfd450afb545214dbb6a8dc78"
+  },
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-diagnostics-20261101-v1/root-terminal-cleanup.json",
+    "sha256": "013717e88ae98600bf5919ffacdd968ee40677e253bef1373eb14463a4e0e0b0"
+  },
+  "inventory": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-outcome-review-20261101-v1/inventory.json",
+    "sha256": "edd29f8c6a40b4894a10c8ebc3c6331c22492179e1ffba09a53a0722f8659591"
+  },
+  "reader": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-outcome-review-20261101-v1/review_and_seal.py",
+    "sha256": "8aab24c4be6ead8f102112f16695f715e54e0cfecbd1a0b03b2c6469c873a35b"
+  },
+  "first_reader_preserved": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-workload-outcome-review-20261101-v1/first-timeout-prefix-assumption.py",
+    "sha256": "c100dc52348117141af49e64b3015194db8a2c20633832fedd33baf9acdb691d"
+  },
+  "candidate_processes": 6,
+  "origin_records": 12,
+  "queried_targets": 12,
+  "queried_entry_witnesses": 0,
+  "blocked_handler_counts": {
+    "79": 8,
+    "102": 1
+  },
+  "preserved_counts": {
+    "completion_artifacts": 9695,
+    "current_products": 587,
+    "prior_files": 2353,
+    "parent_fingerprints": 30
+  },
+  "compiler_or_candidate_calls_by_reviewer": 0,
+  "host_git_calls": [
+    [
+      "git",
+      "-C",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction",
+      "rev-parse",
+      "HEAD"
+    ],
+    [
+      "git",
+      "-C",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction",
+      "status",
+      "--porcelain"
+    ]
+  ],
+  "positive_coverage_or_elapsed_acceptance": false
+}

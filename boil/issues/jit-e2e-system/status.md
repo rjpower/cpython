@@ -1,6 +1,9 @@
 # Cohesive method and tracing JIT
 
 **M2 focused natural-method debug behavior accepted: 28 passes, zero skips.**
+Six registered-program diagnostics subsequently completed with no native-entry
+witness among12queried functions. The missing common-constant and raise helpers
+are being added within the active M3 source attempt; no speedup is established.
 
 User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
 an end-to-end method and tracing JIT. The JIT is the selected direction;
@@ -99,8 +102,8 @@ the original cap, without final source or runtime acceptance.
 The [policy clarification](m2-policy-clarification-20261101-v1.json) fixes bootstrap
 resource backoff before state exists, and records the explicit leaf-renomination
 limit after observation ends. The final natural observer, resource, pending-capacity
-and coroutine fixtures are now written and source-reviewed below; their runtime
-behavior remains unverified.
+and coroutine fixtures were subsequently validated in the corrected focused
+batch described below.
 
 M2 source is now frozen and clean at `3bcb891956a9d2796bbe5e92c4f0c9e2f2516899`,
 with 22 changed paths in `build/worktrees/jit-natural-method`. The
@@ -144,7 +147,21 @@ immutable baseline-plus-loop publication with precise recovery. Three commits
 are dependency steps; partial graphs or encoding are not M3 completion.
 Host/generator and bounded syntax/encoder fixture checks precede fresh native
 validation. No candidate build/runtime, timing or integration is authorized by
-this source grant. Unchanged-kernel workload diagnostics are prepared separately.
+this source grant. M2 workload diagnostics used their separate reviewed campaign.
+
+The [six-program diagnostic](m2-workload-diagnostics-20261101-v1.md) is now complete:
+six valid fresh processes, zero manual compile requests, no reference arm or
+scores, no queried entry witnesses. Eight targets were refused at
+LOAD_COMMON_CONSTANT79, one at RAISE_VARARGS102; three did not nominate
+compilation. [Independent review](m2-workload-outcome-review-20261101-v1.md) and
+the [decision](m2-workload-decision-20261101-v1.json) accept this negative
+inventory. Root cleanup confirms native idle,24 available locks and all current
+products/prior evidence intact. The
+[reviewed amendment](m3-coverage-amendment-20261101-v1.json) adds these two
+generated semantic helpers and their ownership/error/reentry checks within M3's
+same paths and deadline. It changes neither hotness/cache budgets nor the fixed
+workloads. Rare unsupported paths blocking whole-method admission are retained
+as a separate future policy hypothesis, not silently added scope.
 
 SSA implementation, genuine trace execution, performance qualification and main
 integration remain unfinished. Release/ASan/full-suite qualification, speedup

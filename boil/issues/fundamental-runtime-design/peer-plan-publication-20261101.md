@@ -1,6 +1,15 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision43 at20:02:36 UTC additionally records the accepted
+Latest publication: revision44 at20:18:14 UTC records six valid diagnostic runs
+with0/12queried native-entry witnesses, exact common-constant/raise coverage gaps,
+the reviewed two-helper amendment within M3's unchanged source cap, and actual
+recorder/SSA review findings. Exact readback matches25,812characters and two
+Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v44.md`
+has SHA256 `3d900cde09bd28ad4d40bd0ad3cda37e822bc98996913c6093a4d45dc335260b`.
+No positive workload coverage, speedup or M3 implementation acceptance is claimed.
+
+Revision43 at20:02:36 UTC additionally records the accepted
 M3 design and active source-only implementation: start20:01:13,
 checkpoint20:31:13 and cutoff21:31:13UTC. Exact readback matches23,757characters
 and two Mermaid blocks; snapshot

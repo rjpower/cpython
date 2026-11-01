@@ -1,0 +1,78 @@
+{
+  "GC_work_authorized": false,
+  "allowed_source_paths": [
+    "Include/internal/pycore_ir.h",
+    "Include/internal/pycore_jit_prefix.h",
+    "Python/jit_prefix_entry.c",
+    "Python/bytecodes.c",
+    "Python/generated_ir_cases.c.h",
+    "Modules/_testinternalcapi.c",
+    "Lib/test/test_ir.py"
+  ],
+  "branch": "boil/jit-entry-pc-abi",
+  "compiler_execution_authorized": false,
+  "decision": "AUTHORIZE_ONE_SEPARATE_BOUNDED_BY_VALUE_PC_ABI_SOURCE_HYPOTHESIS",
+  "elapsed_authorized": false,
+  "exact_nullable_contract": "NULL on every decline/unsupported; return validated continuation only after same commit+NoteSuccess; conditional caller PC update",
+  "expected_focused_methods_per_profile": 54,
+  "first_source_checkpoint_utc": "2026-11-01T12:56:17.846897+00:00",
+  "fixed_elapsed": {
+    "GM4_deletions_per_round": 40,
+    "controls": [
+      "coroutines",
+      "richards",
+      "unpack_sequence"
+    ],
+    "primary": "spectral_norm",
+    "primary_and_GM4_improve_each_round": true,
+    "primary_deletions_per_round": 10,
+    "resampling": false,
+    "rounds": 2,
+    "shorter_region_rescue": false,
+    "values_per_arm_workload": 5
+  },
+  "helper_preparation_owner": "restart_audit",
+  "host_generators_and_controls_authorized": true,
+  "hypothesis": "Removing interpreter-PC address escape restores register-resident ordinary-handler IP and avoids global interpreter tax; elapsed remains unproved",
+  "late_gates": "Independent source review, finite focused native behavior+ordinary-handler PC/unchanged-leaf evidence, then separately granted fixed elapsed; broad qualification only after useful elapsed",
+  "main_runtime_edits_authorized": false,
+  "native_execution_authorized": false,
+  "old_rejection_immutable": true,
+  "old_source_attempt_closed": true,
+  "old_values_not_replaced_or_averaged": true,
+  "references": [
+    {
+      "path": "boil/issues/jit-entry-pc-abi/design.md",
+      "sha256": "96c1374daa8b882d8fffcfacc8561528a477aba7a22b024080f5d5689cd00cfa"
+    },
+    {
+      "path": "boil/issues/jit-entry-pc-abi/static-finding.md",
+      "sha256": "97e8106840658e0d94c4b6f0d6a0e3bee6db9d91ab2975416140e02c6e4b23e7"
+    },
+    {
+      "path": "boil/issues/jit-entry-pc-abi/design-review.md",
+      "sha256": "e2f8c403cffd7db595463badc4f0e4adc4477272c42f3869d81bad36a893b211"
+    },
+    {
+      "path": "build/jit-prefix-entry-abi-design-review-20261101-v1/exact-design-v2-receipt.json",
+      "sha256": "abe64fae737008454dc777ec762246c80717d2cb713e8087f9b7b3c8518604e6"
+    },
+    {
+      "path": "build/jit-prefix-ip-escape-independent-20261101-v1/notes.md",
+      "sha256": "8732792ff2bce4e1ff3c6a53646258c364134d5b2fef28201d7bb725c9ca873b"
+    },
+    {
+      "path": "boil/issues/jit-first-native-tier/decision-20261101-v1.json",
+      "sha256": "bb117357dd488b865ddaccf969e9c748a2649106edd9d5871279759e28212a7c"
+    }
+  ],
+  "reviewer": "qualification_review_resumed",
+  "same_native_region_plan_allocator_owner_threshold_and_leaf": true,
+  "source_base": "67f5d22bb386e362571e9555c08073d1bf79f6ea",
+  "source_commits_by_root_only": true,
+  "source_deadline_utc": "2026-11-01T13:16:17.846897+00:00",
+  "source_minutes": 30,
+  "source_owner": "coroutine_design_review",
+  "start_utc": "2026-11-01T12:46:17.846897+00:00",
+  "worktree": "build/worktrees/jit-entry-pc-abi"
+}

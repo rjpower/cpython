@@ -1,6 +1,28 @@
 # First native tier
 
-**Native focused feedback passed; outcome review pending, 12:19 UTC.** Main RC integration is
+**Closed: reject the native prefix increment on aggregate elapsed loss.**
+The [fixed decision](decision-20261101-v1.json) and
+[independent raw review](elapsed-outcome-review-20261101-v1.md) retain all
+80 values, sixteen scored processes and eight unscored origins.
+
+| Elapsed change versus RC | Round 1 | Round 2 |
+| --- | ---: | ---: |
+| spectral_norm primary | −12.05% | −1.18% |
+| coroutines | +4.75% | +2.49% |
+| Richards | +9.55% | +8.93% |
+| unpack_sequence | +7.30% | +11.47% |
+| Four-workload geometric mean | **+2.01%** | **+5.31%** |
+
+Lower is better. Both mandatory aggregate gates fail; every declared
+geometric-mean single-value deletion remains slower. No resampling,
+shorter-region rescue, source extension or broad qualification follows.
+The prototype stays isolated at `67f5d22bb38`; the active main runtime remains RC.
+Source/disassembly diagnosis of the entry/compiler tax is separate from this
+closed attempt. The [separate PC ABI attempt](../jit-entry-pc-abi/status.md)
+has its own reviewed design and finite source grant; it does not change this
+decision or authorize another measurement of this frozen source.
+
+Main RC integration is
 [accepted](../rc-integration/main-outcome-review-20261101-v1.md). The
 [source grant](source-grant-20261101-v1.json) binds isolated worktree
 `build/worktrees/jit-prefix-stage1`, branch `boil/jit-prefix-stage1`, base
@@ -47,8 +69,10 @@ release/debug builds and 54 methods per image, 12:14:44–13:14:44 UTC,
 supervisor 61971. It exited zero, observed 12:18:39. Both profiles passed all
 54 methods across eight modules with zero skips. Cleanup at 12:18:53 confirmed
 all thirteen locks available, native executables idle, twelve parent fingerprints
-unchanged and the owned cache removed. Independent outcome review is pending;
-no speed result is claimed. Captured automatic code is 94 bytes in an RX/non-W
+unchanged and the owned cache removed. The
+[independent native outcome](native-outcome-review-20261101-v1.md) accepts
+focused behavior and emission. The later fixed elapsed decision rejects this
+increment. Captured automatic code is 94 bytes in an RX/non-W
 mapping; the pressure fixture emits six spills in 234 bytes. Offline disassembly
 confirms the bounded arithmetic exits and register/stack contract in both
 captures. A complete emitter draft

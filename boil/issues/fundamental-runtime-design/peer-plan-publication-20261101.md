@@ -215,6 +215,26 @@ Exact readback matches14,532 characters and two Mermaid blocks. Snapshot
 SHA256 `0f5de9128fe5c47cd051bff0b9ba388f25c0395d3a626506ba1f28dfbdb5aacc`.
 No rendered-layout check, machine-code execution or speed improvement is claimed.
 
+Revision19, published12:23:09 UTC, records focused native acceptance and the
+held fixed timing plan. Exact readback:16,653 characters/two Mermaid blocks;
+snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v19.md`,
+SHA256 `99d76c5277856c0c0d0f3679076aa8189bb4208be9926d48275f195ceb6755be`.
+
+Revision20, published12:38:25 UTC, records independent aggregate elapsed
+rejection, all four workload changes, preserved RC and unactivated late gates.
+Exact readback:18,291 characters/two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v20.md`,
+SHA256 `1ea7b7bc55d9e5664b1680e14d4f1722b2748320332c02eb3ee76a8ba3dc5327`.
+
+Revision21, published12:49:03 UTC, keeps the rejection and adds the independently
+reviewed, separate 30-minute by-value PC hypothesis. Its diagrams distinguish
+the rejected leaf experiment from the active interpreter-entry ABI work.
+Exact readback:20,462 characters/two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v21.md`,
+SHA256 `6f4c738c9cc243b5a05066a6abeda920f6c3a6650582cea0d3e48e035e4fb3e8`.
+No rendered-layout check, causal proof, new runtime acceptance or speed recovery
+is claimed by these publications.
+
 ## Adopted diagnostic scope and canonical Clinic correction, revision15
 
 At10:15:57 UTC, guarded revision15 records both failed upstream builds and

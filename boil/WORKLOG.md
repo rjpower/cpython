@@ -1155,3 +1155,49 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   IMUL+nonnegativeSHR and common guardeddecline before outputstore; pressure
   all16arithmetic exits, sixspills/reloads, no calls/RSP/callee-saved/XMM writes.
   Actualoutcome independentdisposition pending. No timing orspeed claim.
+- 2026-11-01 12:23 UTC: Independent native outcome accepted both 54-method profiles,
+  zero skips, exact release/debug emission and owner cleanup. Automatic code is
+  94 bytes in an RX mapping; the pressure leaf is 234 bytes with six spills.
+  All 7,283 completion artifacts and 586 products per profile replayed.
+  [Focused outcome](issues/jit-first-native-tier/native-outcome-review-20261101-v1.md).
+- 2026-11-01 12:31:41 UTC: Activated one fixed 45-minute timing campaign, 0b815df2.
+  Parent image remained built at eba351 through checkout2e9c's prose-only bridge;
+  candidate67f5 had the same effective GCC profile. Nine host controls, real uv
+  launch-prefix and exact helper review passed. Other agents held CPU/bulk work.
+  Sixteen scored processes produced 80 values; eight origins were unscored.
+  [Pre-score plan](issues/jit-first-native-tier/elapsed-plan-20261101-v1.md).
+- 2026-11-01 12:33:57 UTC: Timing supervisor97466 exited0, observed12:32:43.
+  Additive cleanup verified fourteen locks available, native idle, both source/
+  product/ELF bindings and twelve parent fingerprints unchanged. No replacement
+  samples. The original source attempt closed with complete source frozen early;
+  its 12:33:54 ceiling was not extended.
+- 2026-11-01 12:38 UTC: REJECT native67f5 on fixed aggregate elapsed loss. Primary
+  improved12.05%/1.18%, but GM4 lost2.01%/5.31%; all three controls lost>2% in
+  both rounds. Independent review644bfe52/1fe8dbda reproduced every raw value,
+  all10 primary/40 GM deletions per round, eight origins,48 quiet checks and206
+  artifacts. Every GM deletion remains slower. No resampling, shorter rescue or
+  late qualification. Main RC remains active. Decisionbb117357 preserves source,
+  images and failed scores. [Decision](issues/jit-first-native-tier/decision-20261101-v1.json).
+- 2026-11-01 12:38:25 UTC: Loomrev20 read back exactly18,291 characters/twoMermaids;
+  snapshot1ea7b7bc records the rejection and retained RC. Priorrev19 at12:23:09
+  recorded native correctness,16,653 characters/twoMermaids, snapshot99d76c52.
+  No rendered-layout verification or native landing claim.
+- 2026-11-01 12:46:17 UTC: Separate PC-ABI source grant55361fa2 starts30 minutes,
+  hard stop13:16:17.846897 UTC, new worktree jit-entry-pc-abi based on67f5.
+  Two independent static reviews confirm fourteen evaluator-IP address escapes
+  and new ordinary-handler IP stack traffic. Cause/performance recovery remains
+  unproved. Exact nullable by-value design96c1374d reviewed e2f8c403/abe64fae.
+  Same region/leaf/guards/owner; B source, A held helpers, independent qualifier.
+  Old attempt/rejection frozen; no compiler, native or timing grant yet.
+  [New hypothesis](issues/jit-entry-pc-abi/status.md).
+- 2026-11-01 12:49:03 UTC: Loomrev21 exact20,462 characters/twoMermaids read back,
+  snapshot6f4c738c. It preserves rejected67f5 and gives the separate by-value PC
+  source grant, static evidence and late gates; no causal/performance recovery
+  claim. Parent/old-candidate images and source stay unchanged.
+- 2026-11-01 12:51:20 UTC: Separate ABI source frozen early at599897b6, parent67f5,
+  exact seven paths87 insertions/30 deletions. Generator tests26/26; only the
+  fourteen generated hook substitutions changed, other six products exact.
+  Independent source ACCEPT9d11b3cb/ddf4dbb1 preserves nullable declines, commit
+  ordering, full post-cold checks and CAPI rollback. Leaf/owner untouched. First
+  source checkpoint met before12:56:17; no compiler/native or recovery claim.
+  [Source review](issues/jit-entry-pc-abi/source-review-20261101-v1.md).

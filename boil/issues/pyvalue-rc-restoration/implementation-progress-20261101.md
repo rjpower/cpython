@@ -10,9 +10,9 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Public PyValue and ownership API, actual frame/call publication, scoped scalar bridge owners and generator changes. Seven generators/eight products regenerate; 38 host generator tests pass. Six provisional syntax checks pass pyvalue/frame/genobject and expose remaining consumers in ceval/frameobject/testinternalcapi. Fixed-arity call emission, guard restart cleanup and tail-call coverage remain under review. |
-| coordinator | Tuple/member/cell storage, shared value operations and value iteration. The original 12-file component and new 19-file cell/iteration checkpoint are independently accepted as partial source. Set storage implementation has begun. |
-| coroutine_design_review | List/structseq 13-file component accepted as partial source, including sort/mutation/traversal and ownership tests. Dictionary storage/tests have a frozen seven-file partial checkpoint. Designing the explicit opaque extension API and rebuilt-source bridge requested by the user. |
+| restart_audit | Public PyValue and ownership API, actual frame/call publication, scoped scalar bridge owners and generator changes. Seven generators/eight products regenerate; 39 host generator tests and six selected provisional C checks pass. Wider providers/native/Clinic consumers remain open. Fixed-arity call emission, guard restart cleanup and tail-call coverage remain under review. |
+| coordinator | Tuple/member/cell storage, shared value operations and value iteration. The original 12-file component and new 19-file cell/iteration checkpoint are independently accepted as partial source. Set storage and its test adapter pass provisional syntax checks; seven focused tests are parsed, not executed. The six-file source component is under independent review. |
+| coroutine_design_review | List/structseq 13-file component accepted as partial source, including sort/mutation/traversal and ownership tests. Dictionary storage/tests have a frozen seven-file partial checkpoint. The opaque extension design passed independent review; now implementing the fixed native-scope engine and one actual O-call gateway with the foundation owner. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
 Component evidence is retained under `build/pyvalue-root-container-checkpoint-20261101-v1`,
@@ -101,3 +101,8 @@ and existing basic optimizations before returning to JIT performance work. The
 prepared comparison uses the same 29-workload roster against interim RC and
 upstream, reporting startup, compilation, first use, warm execution and memory
 separately. No timing has run yet.
+
+The [opaque extension design](../../design/extension-api.md) and its
+[first source slice](native-scope-source-grant-20261101-v1.md) are reviewed
+direction and authorized implementation respectively. Actual generated
+publication/reload and finalizer ordering remain source review obligations.

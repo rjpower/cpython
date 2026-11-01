@@ -449,3 +449,9 @@ candidate runtime or timing has executed.
   user requests opaque extension API and gradual rebuilt-source bridge.
   HPy reuse and V8 lifetime patterns under design/review; not implemented.
   Snapshot SHA256 `fbbb4540c907ddbdcb035681b48390eddf67fe4c24e4c40629cfee015eb14f3e`. No restored runtime or speed result.
+
+- 2026-11-01 23:17 UTC: Published/read back runtime-work-breakdown revision52,
+  39,933characters/five Mermaid blocks. Opaque extension direction reviewed;
+  native scope/one real O-call source slice started. Foundation39host/six
+  selected syntax checks pass; set component review remains open.
+  Snapshot SHA256 `15ef49f2eed1c55b0a97d252d0dc8e7264ffa07df8e9873ade9f5cffc0205581`. No restored runtime or speed result.

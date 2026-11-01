@@ -1842,3 +1842,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   dictionary API-removal action/approval question. Preserve three automatic
   refusals and unexecuted script. Publish/read back Loom51,39,132characters/
   five diagrams. [Extension direction](issues/pyvalue-rc-restoration/extension-api-direction-20261101.md).
+- 2026-11-01 23:17 UTC: Accept independently reviewed opaque extension API
+  direction: HPy-compatible context/backend, private rebuilt-source bridge and
+  gradual adoption. Start fixed native-scope/one actual O-call source slice;
+  foundation retains23:49:40 ceiling, engine conservative00:10:49 ceiling.
+  Generator publication and finalizer order remain implementation obligations.
+  Foundation selected component source accepted:39hostPASS/sixsyntaxPASS.
+  Set storage/test syntaxPASS, seven tests parsed, callback/GC review fixes
+  retained; no runtime tests or speed claims. Loom52 read back exactly,
+  39,933characters/five diagrams. [Design](design/extension-api.md).

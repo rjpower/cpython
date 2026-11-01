@@ -7,9 +7,11 @@ is not required. This supersedes the immediate dictionary API-removal action;
 its prepared script remains unexecuted. The earlier exact-action approval
 question is no longer the next step.
 
-This document records the direction, not a completed ABI specification or an
-accepted implementation. The dictionary storage checkpoint remains useful.
-Core PyValue restoration and its correctness review continue in parallel.
+Independent review has accepted the [preferred design](../../design/extension-api.md).
+The [first native-scope source slice](native-scope-source-grant-20261101-v1.md)
+is authorized. The API backend and runtime bridge remain unimplemented; this
+is not an HPy conformance claim. The dictionary storage checkpoint remains
+useful. Core restoration and its correctness review continue in parallel.
 
 ## Proposed boundary
 
@@ -71,12 +73,13 @@ and old binaries must be rejected before their initialization function executes.
 
 ## Active design work
 
-`coroutine_design_review` is checking official HPy/V8 designs and the actual
-native/Clinic consumer map. `value_api_consumer_map` independently reviews the
-proposal. The deliverable is a preferred API, precise ownership and error rules,
-an implementation file closure, and staged tests/hypotheses. The initial decision
-must compare implementing HPy's existing API with maintaining our own handle
-interface; similar names alone are not evidence of compatibility.
+`coroutine_design_review` completed the source-oriented HPy/V8 design and now
+implements a fixed native-scope/result engine. `restart_audit` owns the actual
+specialized O-call consumer and generated publication seam. The generic caller,
+variable parser families and HPy backend are subsequent consumers.
+`value_api_consumer_map` independently reviews implementation. HPy is no longer
+actively maintained, so the preferred direction requires a fork-owned backend
+and verified source pin; its CPython pointer casts cannot be reused unchanged.
 
 The register-interpreter checkpoint still follows coherent universal-value
 restoration. It uses verified JIT-off execution and existing basic optimizations;

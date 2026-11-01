@@ -327,16 +327,20 @@ class TestNativeMethods(unittest.TestCase):
         self.assertTrue(_testinternalcapi.jit_method_info(work)["return_resume_seen"])
 
     def test_unsupported_disables_only_affected_code(self):
+        calls = []
+
         def other(value):
+            calls.append(value)
             return value + 2
 
         def unsupported(callback, value):
-            items = [value]
-            return callback(items[0])
+            args = (value,)
+            return callback(*args)
 
         self.compile(other)
         self.compile(unsupported, complete=False)
         self.assertEqual(unsupported(other, 7), 9)
+        self.assertEqual(calls, [7])
         info = _testinternalcapi.jit_method_info(unsupported)
         self.assertFalse(info["active"])
         self.assertTrue(info["disabled"])

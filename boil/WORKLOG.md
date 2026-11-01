@@ -1119,3 +1119,39 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   The isolated HEAD/full-clean guard is retained. No compiler/target execution.
   Loomrev18 exact14,532chars/twoMermaids read back; snapshot0f5de912 records
   C actual acceptance/native source grant and unchanged source ceiling.
+- 2026-11-01 12:12:47 UTC: Native source frozen early at67f5d22bb38, parent30a0, exactsix
+  paths640 insertions/137 deletions, cleanisolatedworktree. Independent source
+  ACCEPT e2baaee4/d749a740 checks registeralias/32bitencoding/overflow/spill
+  outputbounds, ENDBR64, Planvalidation, privateowner and allfailcleanup paths;
+  valid mmapaddress0 is now explicitlyunmapped/rejected. Same12methods retain
+  priorclasses and add165pressurevectors, canaries/inputs, fourcoldfaults,
+  malformedplans, automaticfullbytes/RXwitness andSizeOf/unmap lifetime. No C
+  compiler/target/machinecodeexecution orspeed claim. Nativefeedback bound
+  ready4a95451c/planba11c2d6/launchc1312beb: freshrelease+debug build/focus,
+  54IDs each,7239inputs,3600s held,12parentfingerprints and13preflightlocks.
+  Sourceceiling12:33:54 unchanged; waitinghelperdeltareview beforeexecution.
+  [Native source review](issues/jit-first-native-tier/native-source-review-20261101-v1.md).
+- 2026-11-01 12:15:56 UTC: Native feedback helperdelta ACCEPT2a1d3388/544d9e4c reuses
+  controller composition; exact7239inputs/27artifacts/15modes/12tools and12
+  parentfingerprints verified. Root activation1323128b at12:14:44.913343,
+  deadline13:14:44.913343, all13locks available/nativeidle. Supervisor61971
+  RUNNING fourfresh build/focus rows,54IDs perprofile. Native source repair
+  ceiling12:33:54 unchanged; no elapsed or broadqualification authority.
+  [Native feedback grant](issues/jit-first-native-tier/native-feedback-grant-20261101-v1.json).
+- 2026-11-01 12:15:56 UTC: Parallel fixed elapsed designa446af89 independently ACCEPT885011a8/
+  b18be3c2 for held preparation:16scoredprocesses/80values plus8unscoredorigins,
+  unchangedregistryloops, strictprimary+GM bothrounds/all10primary+40GM deletion
+  checks, noresampling. Pre-scoreamendment explicitly leaves isolatedcompiletime,
+  globalcounts andentryfrequency UNMEASURED; wholeprocesselapsed/RSS charge
+  startup/warmup/coldcompile, residualcombinedonly. Actualregistered spectralnorm
+  seen/RX witness isunscored, no observerswhiletiming. Hosthelpermaterialization
+  authorized inparallel; actualimagebinding/review/nativeaccept still required.
+- 2026-11-01 12:19:00 UTC: Native focused cohort61971 TERMINAL0 rootobserved12:18:39;
+  bothfreshprofiles PASS54/eight modules/zero skips, allfour launch/verifyrows0.
+  Rootcleanup12:18:53.668562: all13locks/nativeidle/12parentfingerprints exact,
+  ownedemptyjn1removed; completionb338d785. Automatic94byteleaf hasseen1 and
+  actualr-xp4096 mapping; pressure234byteleaf has6spills,165vectors/canaries/
+  inputs/oracle checks. Independentoffline fullbyte disassembly confirms4ADD+
+  IMUL+nonnegativeSHR and common guardeddecline before outputstore; pressure
+  all16arithmetic exits, sixspills/reloads, no calls/RSP/callee-saved/XMM writes.
+  Actualoutcome independentdisposition pending. No timing orspeed claim.

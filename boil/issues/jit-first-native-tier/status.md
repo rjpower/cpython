@@ -1,6 +1,6 @@
 # First native tier
 
-**Source attempt active, 11:03:54–12:33:54 UTC.** Main RC integration is
+**Native focused feedback passed; outcome review pending, 12:19 UTC.** Main RC integration is
 [accepted](../rc-integration/main-outcome-review-20261101-v1.md). The
 [source grant](source-grant-20261101-v1.json) binds isolated worktree
 `build/worktrees/jit-prefix-stage1`, branch `boil/jit-prefix-stage1`, base
@@ -40,10 +40,20 @@ A implements the bounded six-register encoder, spills and executable owner;
 B adapts scratch20, temporary native fixtures and the existing twelve methods.
 Cold owner/mapping/protection/capacity faults and a synthetic Plan forcing real
 spills are approved through the production compiler and runner. The C arithmetic
-executor is replaced. Compiler and native execution remain held pending source
-freeze, review and a finite feedback grant. A complete emitter draft reached
-the source checkpoint at 12:03:02, before 12:03:54; it has not been compiled or
-executed. The 12:33:54 source ceiling is unchanged.
+executor is replaced. The [frozen native source](native-source-review-20261101-v1.md),
+`67f5d22bb38`, has independent acceptance. The
+[finite feedback grant](native-feedback-grant-20261101-v1.json) runs fresh
+release/debug builds and 54 methods per image, 12:14:44–13:14:44 UTC,
+supervisor 61971. It exited zero, observed 12:18:39. Both profiles passed all
+54 methods across eight modules with zero skips. Cleanup at 12:18:53 confirmed
+all thirteen locks available, native executables idle, twelve parent fingerprints
+unchanged and the owned cache removed. Independent outcome review is pending;
+no speed result is claimed. Captured automatic code is 94 bytes in an RX/non-W
+mapping; the pressure fixture emits six spills in 234 bytes. Offline disassembly
+confirms the bounded arithmetic exits and register/stack contract in both
+captures. A complete emitter draft
+reached the source checkpoint at 12:03:02, before 12:03:54.
+The 12:33:54 source repair ceiling is unchanged.
 
 The reviewed interface separates allocation-free bounded probing, full frame/
 input/observer eligibility, and 64-entry counting/promotion. Guards repeat after

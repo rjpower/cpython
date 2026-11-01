@@ -4168,23 +4168,6 @@ get_memory_error(int allow_allocation, PyObject *args, PyObject *kwds)
         return (PyObject *)self;
     }
 
-#ifdef Py_GC
-    /* The free list stays empty (MemoryError_dealloc()).  A new instance,
-       if one can be allocated, keeps the traceback of each raise to itself,
-       as one from the free list does; the last-resort instance is shared,
-       and its traceback grows with each raise and keeps the frames alive.
-       The allocation's own failure raises the last-resort one. */
-    static _Py_thread_local int allocating;
-    if (!allow_allocation && !allocating) {
-        allocating = 1;
-        PyObject *err = BaseException_new((PyTypeObject *)PyExc_MemoryError,
-                                          NULL, NULL);
-        allocating = 0;
-        if (err != NULL) {
-            return err;
-        }
-    }
-#endif
     if (!allow_allocation) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
         return Py_NewRef(
@@ -4235,9 +4218,6 @@ MemoryError_dealloc(PyObject *op)
         return;
     }
 
-#ifndef Py_GC
-    /* Under Py_GC the collector frees the object after this returns, so it
-       cannot be kept on the free list. */
     struct _Py_exc_state *state = get_exc_state();
     MEMERRORS_LOCK(state);
     if (state->memerrors_numfree < MEMERRORS_SAVE) {
@@ -4248,7 +4228,6 @@ MemoryError_dealloc(PyObject *op)
         return;
     }
     MEMERRORS_UNLOCK(state);
-#endif
 
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -4258,12 +4237,6 @@ preallocate_memerrors(void)
 {
     /* We create enough MemoryErrors and then decref them, which will fill
        up the freelist. */
-#ifdef Py_GC
-    /* Nothing is freed onto the free list (see MemoryError_dealloc), and
-       _PyErr_NoMemory() allocates a new MemoryError, or falls back to the
-       interpreter's last-resort one (get_memory_error()). */
-    return 0;
-#endif
     int i;
 
     PyObject *errors[MEMERRORS_SAVE];

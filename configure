@@ -1112,7 +1112,6 @@ enable_profiling
 enable_gil
 with_pydebug
 with_trace_refs
-with_gc
 enable_pystats
 with_assertions
 enable_optimizations
@@ -1919,8 +1918,6 @@ Optional Packages:
   --with-pydebug          build with Py_DEBUG defined (default is no)
   --with-trace-refs       enable tracing references for debugging purpose
                           (default is no)
-  --with-gc               let the tracing collector own memory instead of
-                          reference counting (experimental, default is no)
   --with-assertions       build with C assertions enabled (default is no)
   --with-lto=[full|thin|no|yes]
                           enable Link-Time-Optimization in any build (default
@@ -8813,84 +8810,7 @@ then
   as_fn_error $? "--disable-gil cannot be used with --with-trace-refs" "$LINENO" 5
 fi
 
-# Check for --with-gc
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-gc" >&5
-printf %s "checking for --with-gc... " >&6; }
-
-# Check whether --with-gc was given.
-if test ${with_gc+y}
-then :
-  withval=$with_gc;
-else case e in #(
-  e) with_gc=no
- ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_gc" >&5
-printf "%s\n" "$with_gc" >&6; }
-
-if test "$with_gc" = "yes"
-then
-  if test "$disable_gil" = "yes"; then
-    as_fn_error $? "--with-gc cannot be used with --disable-gil" "$LINENO" 5
-  fi
-  if test "$with_trace_refs" = "yes"; then
-    as_fn_error $? "--with-gc cannot be used with --with-trace-refs" "$LINENO" 5
-  fi
-  case "$CFLAGS $CPPFLAGS" in
-    *Py_STACKREF_DEBUG*)
-      as_fn_error $? "--with-gc cannot be used with Py_STACKREF_DEBUG" "$LINENO" 5 ;;
-  esac
-
-printf "%s\n" "#define Py_GC 1" >>confdefs.h
-
-  # The collector scans C stacks conservatively.  Zero-initialized locals
-  # leave fewer stale pointers in live frames, which keep garbage alive.
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -ftrivial-auto-var-init=zero" >&5
-printf %s "checking whether C compiler accepts -ftrivial-auto-var-init=zero... " >&6; }
-if test ${ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero+y}
-then :
-  printf %s "(cached) " >&6
-else case e in #(
-  e)
-  ax_check_save_flags=$CFLAGS
-  CFLAGS="$CFLAGS -Werror -ftrivial-auto-var-init=zero"
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main (void)
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"
-then :
-  ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=yes
-else case e in #(
-  e) ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero=no ;;
-esac
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
-  CFLAGS=$ax_check_save_flags ;;
-esac
-fi
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&5
-printf "%s\n" "$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" >&6; }
-if test "x$ax_cv_check_cflags__Werror__ftrivial_auto_var_init_zero" = xyes
-then :
-
-    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
-
-else case e in #(
-  e) : ;;
-esac
-fi
-
-fi
+# Reference counting and cycle collection own all object memory.
 
 # Check for --enable-pystats
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --enable-pystats" >&5
@@ -20440,9 +20360,6 @@ printf "%s\n" "#define WITH_MIMALLOC 1" >>confdefs.h
 elif test "$disable_gil" = "yes"; then
   as_fn_error $? "--disable-gil requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
 fi
-if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
-  as_fn_error $? "--with-gc requires mimalloc memory allocator (--with-mimalloc)." "$LINENO" 5
-fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $with_mimalloc" >&5
 printf "%s\n" "$with_mimalloc" >&6; }
@@ -29128,7 +29045,7 @@ printf %s "checking ABIFLAGS... " >&6; }
 printf "%s\n" "$ABIFLAGS" >&6; }
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking SOABI" >&5
 printf %s "checking SOABI... " >&6; }
-SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+SOABI='boilrc1-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $SOABI" >&5
 printf "%s\n" "$SOABI" >&6; }
 
@@ -29137,7 +29054,7 @@ printf "%s\n" "$SOABI" >&6; }
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
 
-  ALT_SOABI='cpython-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+  ALT_SOABI='boilrc1-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 
 printf "%s\n" "#define ALT_SOABI \"${ALT_SOABI}\"" >>confdefs.h
 

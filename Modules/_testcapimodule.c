@@ -2913,11 +2913,8 @@ uptime_bsd(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
 #endif
 
 
-/* A reference that only an extension's static variable holds, as many
-   extensions keep cached objects.  The tracing mark finds it by scanning
-   the extension's data segment.  Nothing reads it, and under Py_GC
-   Py_XSETREF() does not read the old value either: volatile keeps the
-   compiler from removing the variable. */
+/* An extension-owned cached reference for the diagnostic verifier's data
+   segment scan. Volatile prevents dead-store removal by the compiler. */
 static PyObject *volatile static_object = NULL;
 
 static PyObject *

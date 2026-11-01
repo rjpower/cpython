@@ -13,12 +13,8 @@ extern "C" {
 #include "pycore_object.h"           // _Py_REF_IS_MERGED()
 #include "pycore_pyatomic_ft_wrappers.h"
 
-// Called from deallocators.  Under Py_GC the reference count is constant.
-#ifdef Py_GC
-#  define _PyWeakref_ASSERT_DEAD(obj) ((void)0)
-#else
+// A deallocator clears weak references after its last owned reference is gone.
 #  define _PyWeakref_ASSERT_DEAD(obj) assert(Py_REFCNT(obj) == 0)
-#endif
 
 #ifdef Py_GIL_DISABLED
 
@@ -68,11 +64,7 @@ static inline int _is_dead(PyObject *obj)
     // has dropped to zero.  In the meantime, code accessing the weakref will
     // be able to "see" the target object even though it is supposed to be
     // unreachable.  See issue gh-60806.
-#if defined(Py_GC)
-    // The collector clears weak references to an object before it is swept.
-    (void)obj;
-    return 0;
-#elif defined(Py_GIL_DISABLED)
+#if defined(Py_GIL_DISABLED)
     Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&obj->ob_ref_shared);
     return shared == _Py_REF_SHARED(0, _Py_REF_MERGED);
 #else

@@ -110,13 +110,9 @@ extern wchar_t *_PyMem_DefaultRawWcsdup(const wchar_t *str);
 /* Is the debug allocator enabled? */
 extern int _PyMem_DebugEnabled(void);
 
-/* Memory that holds no reference the tracing collector of --with-gc must
- * follow, only pointers that are borrowed and checked before use, such as
- * the executing copy of a code object and its feedback.  Its conservative
- * scan never reads these blocks (as Boehm's GC_malloc_atomic()), so a stale
- * borrowed pointer cannot keep garbage alive.  Free with _PyMem_NoScanFree().
- * The caller holds the GIL.  Without Py_GC these are PyMem_Malloc() and
- * friends. */
+/* Storage used for executing code and feedback. These helpers use the normal
+ * PyMem allocator; cached pointers remain borrowed and must be checked before
+ * use. Allocation does not acquire an object reference. */
 extern void *_PyMem_NoScanMalloc(size_t size);
 extern void *_PyMem_NoScanRealloc(void *ptr, size_t size);
 extern void _PyMem_NoScanFree(void *ptr);

@@ -467,32 +467,12 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* How much scratch space to give stackref to PyObject* conversion. */
 #define MAX_STACKREF_SCRATCH 10
 
-#ifdef Py_GC
-/* The collector scans the C stack conservatively, which includes the eval
-   loop's frame: a C array of object pointers there keeps its last objects
-   alive until another instruction reuses the slots.  Such an array is
-   cleared after the call that needed it; the barrier keeps the stores,
-   which are dead to the compiler. */
-#define _PyGC_CLEAR_ARRAY(ARR) \
-    do { \
-        memset((ARR), 0, sizeof(ARR)); \
-        __asm__ volatile("" : : "r"(ARR) : "memory"); \
-    } while (0)
-
-/* The unused slots of the scratch array are cleared too, or the words that
-   earlier calls left in that stack memory would keep their objects alive. */
-#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
-    /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1] = {0}; \
-    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
-#else
 #define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
 #define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
     PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1]; \
     PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
-#endif
 
 #define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \

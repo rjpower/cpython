@@ -1322,18 +1322,7 @@ _PyThreadState_PushCStackRefNew(PyThreadState *tstate, _PyCStackRef *ref, PyObje
     ref->ref = PyStackRef_FromPyObjectNew(obj);
 }
 
-#ifdef Py_GC
-/* The collector scans the C stack conservatively, so a popped reference
-   left in its slot keeps the object alive until the stack memory is reused.
-   The barrier keeps the store, which is dead to the compiler. */
-#  define _PyCStackRef_CLEAR(REF) \
-    do { \
-        (REF)->ref = PyStackRef_NULL; \
-        __asm__ volatile("" : : "r"(REF) : "memory"); \
-    } while (0)
-#else
 #  define _PyCStackRef_CLEAR(REF) ((void)0)
-#endif
 
 static inline void
 _PyThreadState_PopCStackRef(PyThreadState *tstate, _PyCStackRef *ref)

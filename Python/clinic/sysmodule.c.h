@@ -1068,7 +1068,6 @@ exit:
     return return_value;
 }
 
-#if !defined(Py_GC)
 
 PyDoc_STRVAR(sys_getrefcount__doc__,
 "getrefcount($module, object, /)\n"
@@ -1102,7 +1101,6 @@ exit:
     return return_value;
 }
 
-#endif /* !defined(Py_GC) */
 
 #if defined(Py_REF_DEBUG)
 

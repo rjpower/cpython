@@ -2518,37 +2518,6 @@ free_code_extras(PyCodeObject *co)
     PyMem_Free(co_extra);
 }
 
-#ifdef Py_GC
-int
-_PyCode_HasExtraFree(PyObject *op)
-{
-    PyCodeObject *co = _PyCodeObject_CAST(op);
-    if (co->co_extra == NULL) {
-        return 0;
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    _PyCodeObjectExtra *co_extra = co->co_extra;
-    for (Py_ssize_t i = 0; i < co_extra->ce_size; i++) {
-        if (interp->co_extra_freefuncs[i] != NULL) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-void
-_PyCode_Destroy(PyObject *op)
-{
-    PyCodeObject *co = _PyCodeObject_CAST(op);
-    notify_code_watchers(PY_CODE_EVENT_DESTROY, co);
-    // A watcher that keeps co leaves it alive without its extras; the free
-    // functions are arbitrary C and may run code, so they cannot wait for
-    // the sweep.
-    if (co->co_extra != NULL) {
-        free_code_extras(co);
-    }
-}
-#endif
 
 static void
 code_dealloc(PyObject *self)
@@ -2556,13 +2525,11 @@ code_dealloc(PyObject *self)
     PyThreadState *tstate = PyThreadState_GET();
     _Py_atomic_add_uint64(&tstate->interp->_code_object_generation, 1);
     PyCodeObject *co = _PyCodeObject_CAST(self);
-#ifndef Py_GC
     _PyObject_ResurrectStart(self);
     notify_code_watchers(PY_CODE_EVENT_DESTROY, co);
     if (_PyObject_ResurrectEnd(self)) {
         return;
     }
-#endif
 
 #ifdef Py_GIL_DISABLED
     PyObject_GC_UnTrack(co);

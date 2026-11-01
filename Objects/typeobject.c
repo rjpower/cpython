@@ -2709,15 +2709,12 @@ subtype_dealloc(PyObject *self)
             if (PyObject_CallFinalizerFromDealloc(self) < 0)
                 return;
         }
-#ifndef Py_GC
-        // Under Py_GC the collector calls tp_del, from its queue.
         if (type->tp_del) {
             type->tp_del(self);
             if (Py_REFCNT(self) > 0) {
                 return;
             }
         }
-#endif
 
         /* Find the nearest base with a different tp_dealloc */
         base = type;
@@ -2788,9 +2785,6 @@ subtype_dealloc(PyObject *self)
         PyObject_ClearWeakRefs(self);
     }
 
-#ifndef Py_GC
-    // Under Py_GC the collector calls tp_del, from its queue, in the
-    // collection before the one that sweeps self.
     if (type->tp_del) {
         _PyObject_GC_TRACK(self);
         type->tp_del(self);
@@ -2800,7 +2794,6 @@ subtype_dealloc(PyObject *self)
         }
         _PyObject_GC_UNTRACK(self);
     }
-#endif
     if (has_finalizer) {
         /* New weakrefs could be created during the finalizer call.
            If this occurs, clear them out without calling their
@@ -6754,14 +6747,6 @@ done:
 static void
 type_dealloc_common(PyTypeObject *type)
 {
-#ifdef Py_GC
-    /* The sweep deallocates a dead type after the dead dicts, perhaps its
-       bases' subclass dicts, and a dealloc must not allocate the key.  The
-       collector has cleared the weak reference that a live base's entry
-       holds, and _PyType_GetSubclasses() skips such entries; a new subclass
-       at the same address replaces it. */
-    (void)type;
-#else
     PyObject *bases = lookup_tp_bases(type);
     if (bases != NULL) {
         PyObject *exc = PyErr_GetRaisedException();
@@ -6770,7 +6755,6 @@ type_dealloc_common(PyTypeObject *type)
         END_TYPE_LOCK();
         PyErr_SetRaisedException(exc);
     }
-#endif
 }
 
 
@@ -6914,13 +6898,6 @@ notify_type_destroy(PyTypeObject *type)
     }
 }
 
-#ifdef Py_GC
-void
-_PyType_NotifyDestroy(PyTypeObject *type)
-{
-    notify_type_destroy(type);
-}
-#endif
 
 static void
 type_dealloc(PyObject *self)
@@ -6930,7 +6907,6 @@ type_dealloc(PyObject *self)
     // Assert this is a heap-allocated type object
     _PyObject_ASSERT((PyObject *)type, type->tp_flags & Py_TPFLAGS_HEAPTYPE);
 
-#ifndef Py_GC
     // Notify type watchers before teardown.  The type object is still fully
     // intact at this point (dict, bases, mro, name are all valid), so
     // callbacks can safely inspect it.
@@ -6941,15 +6917,12 @@ type_dealloc(PyObject *self)
             return;     // callback resurrected the object
         }
     }
-#endif
 
     _PyObject_GC_UNTRACK(type);
     type_dealloc_common(type);
 
     // PyObject_ClearWeakRefs() raises an exception if Py_REFCNT() != 0
-#ifndef Py_GC  // reference counts are constant under Py_GC
     assert(Py_REFCNT(type) == 0);
-#endif
     PyObject_ClearWeakRefs((PyObject *)type);
 
     Py_XDECREF(type->tp_base);
@@ -9449,21 +9422,6 @@ type_ready_managed_dict(PyTypeObject *type)
     return 0;
 }
 
-#ifdef Py_GC
-/* The types for which live_has_destroy_hook() in Python/gc_trace.c may
-   return true: dict and type subclasses, modules, and five exact types. */
-static void
-type_ready_destroy_hook(PyTypeObject *type)
-{
-    if ((type->tp_flags & (Py_TPFLAGS_DICT_SUBCLASS | Py_TPFLAGS_TYPE_SUBCLASS))
-        || type == &PyFunction_Type || type == &PyCode_Type
-        || type == &PyCapsule_Type || type == &_PyManagedBuffer_Type
-        || type == &PyMemoryView_Type || PyType_IsSubtype(type, &PyModule_Type))
-    {
-        type_add_flags(type, _Py_TPFLAGS_DESTROY_HOOK);
-    }
-}
-#endif
 
 static int
 type_ready_post_checks(PyTypeObject *type)
@@ -9558,9 +9516,6 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
         if (type_ready_preheader(type) < 0) {
             goto error;
         }
-#ifdef Py_GC
-        type_ready_destroy_hook(type);
-#endif
     }
     if (type_ready_set_hash(type) < 0) {
         goto error;
@@ -11329,16 +11284,6 @@ bufferwrapper_releasebuf(PyObject *self, Py_buffer *view)
     Py_CLEAR(bw->obj);
 }
 
-#ifdef Py_GC
-int
-_PyBuffer_ReleaseRunsCode(PyObject *exporter)
-{
-    PyTypeObject *tp = Py_TYPE(exporter);
-    return tp == &_PyBufferWrapper_Type
-        || (tp->tp_as_buffer != NULL
-            && tp->tp_as_buffer->bf_releasebuffer == slot_bf_releasebuffer);
-}
-#endif
 
 static PyBufferProcs bufferwrapper_as_buffer = {
     .bf_releasebuffer = bufferwrapper_releasebuf,

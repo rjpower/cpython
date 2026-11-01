@@ -2030,11 +2030,6 @@ _PyThreadState_DeleteList(PyThreadState *list, int is_after_fork)
     // call destructors.
     assert(!_PyRuntime.stoptheworld.world_stopped);
 
-#ifdef Py_GC
-    if (!is_after_fork) {
-        _PyGC_LiveKeepThreads(list);
-    }
-#endif
     PyThreadState *p, *next;
     for (p = list; p; p = next) {
         next = p->next;
@@ -2275,11 +2270,6 @@ _PyThreadState_Attach(PyThreadState *tstate)
 #ifndef Py_GIL_DISABLED
     // The registers recorded at the last detach are stale now.
     ((_PyThreadStateImpl *)tstate)->gc_trace.valid = 0;
-#ifdef Py_GC
-    // The conservative scan of the thread state would take them for roots.
-    memset(((_PyThreadStateImpl *)tstate)->gc_trace.regs, 0,
-           sizeof(((_PyThreadStateImpl *)tstate)->gc_trace.regs));
-#endif
 #endif
 
     // Resume previous critical section. This acquires the lock(s) from the

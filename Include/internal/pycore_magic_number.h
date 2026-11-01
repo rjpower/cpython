@@ -323,7 +323,8 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3716
+/* Separate the RC register-IR successor from upstream and tracing caches. */
+#define PYC_MAGIC_NUMBER 64401
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

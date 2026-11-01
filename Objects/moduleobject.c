@@ -1143,24 +1143,18 @@ module_dealloc(PyObject *self)
 
     PyObject_GC_UnTrack(m);
 
-#ifndef Py_GC
-    /* Under Py_GC only the collector's sweep deallocates, and writing to
-       sys.stderr there would run code. */
     int verbose = _Py_GetConfig()->verbose;
     if (verbose && m->md_name) {
         PySys_FormatStderr("# destroy %U\n", m->md_name);
     }
-#endif
     FT_CLEAR_WEAKREFS(self, m->md_weaklist);
 
     assert_def_missing_or_redundant(m);
-#ifndef Py_GC
     /* bpo-39824: Don't call m_free() if m_size > 0 and md_state=NULL */
     if (m->md_state_free && (m->md_state_size <= 0 || m->md_state != NULL))
     {
         m->md_state_free(m);
     }
-#endif
 
     Py_XDECREF(m->md_dict);
     Py_XDECREF(m->md_name);
@@ -1170,21 +1164,6 @@ module_dealloc(PyObject *self)
     Py_TYPE(m)->tp_free((PyObject *)m);
 }
 
-#ifdef Py_GC
-/* m_free is extension code, which may run Python code or allocate, so it
-   runs before the sweep, while the module's state is intact.  The collector
-   calls it once (_Py_GC_NOTIFIED_FLAG); the state's memory is freed with the
-   module. */
-void
-_PyModule_FreeState(PyObject *self)
-{
-    PyModuleObject *m = _PyModule_CAST(self);
-    /* bpo-39824: Don't call m_free() if m_size > 0 and md_state=NULL */
-    if (m->md_state_free && (m->md_state_size <= 0 || m->md_state != NULL)) {
-        m->md_state_free(m);
-    }
-}
-#endif
 
 static PyObject *
 module_repr(PyObject *self)

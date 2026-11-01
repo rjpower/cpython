@@ -1986,9 +1986,6 @@ sys_getsizeof_impl(PyObject *module, PyObject *o, PyObject *dflt)
     return PyLong_FromSize_t(size);
 }
 
-#ifndef Py_GC
-/* Under Py_GC nothing is counted, so sys.getrefcount() does not exist. */
-
 /*[clinic input]
 sys.getrefcount -> Py_ssize_t
 
@@ -2008,7 +2005,6 @@ sys_getrefcount_impl(PyObject *module, PyObject *object)
 {
     return Py_REFCNT(object);
 }
-#endif /* !Py_GC */
 
 #ifdef Py_REF_DEBUG
 /*[clinic input]
@@ -3659,7 +3655,7 @@ const char *_PySys_ImplName = _PY_IMPL_NAME;
 #ifndef _PY_IMPL_CACHE_TAG
 #define MAJOR Py_STRINGIFY(PY_MAJOR_VERSION)
 #define MINOR Py_STRINGIFY(PY_MINOR_VERSION)
-#define _PY_IMPL_CACHE_TAG _PY_IMPL_NAME "-" MAJOR MINOR
+#define _PY_IMPL_CACHE_TAG _PY_IMPL_NAME "-rc1-" MAJOR MINOR
 #endif
 const char *_PySys_ImplCacheTag = _PY_IMPL_CACHE_TAG;
 #ifdef MAJOR

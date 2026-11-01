@@ -10,7 +10,6 @@
 #include "pycore_pymem.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
-#include "pycore_gc_trace.h"      // _PyGC_LiveOnThreshold()
 
 #include <stdlib.h>               // malloc()
 #include <stdbool.h>
@@ -325,17 +324,6 @@ _PyMem_MiFree(void *ctx, void *ptr)
     mi_free(ptr);
 }
 
-#ifdef Py_GC
-// The thread state's no-scan heap, which no walk of the tracing collector
-// visits.
-static inline mi_heap_t *
-_PyMem_NoScanHeap(void)
-{
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
-    assert(tstate != NULL && tstate->mimalloc.current_object_heap != NULL);
-    return &tstate->mimalloc.heaps[_Py_MIMALLOC_HEAP_NOSCAN];
-}
-#endif
 
 #ifndef Py_GIL_DISABLED
 
@@ -897,27 +885,6 @@ _PyMem_GetAllocatorName(const char *name, PyMemAllocatorName *allocator)
 static int
 set_up_allocators_unlocked(PyMemAllocatorName allocator)
 {
-#ifdef Py_GC
-    /* The collector finds objects by walking mimalloc's heaps: any other
-       allocator is mimalloc, with the debug hooks if it asked for them. */
-    switch (allocator) {
-    case PYMEM_ALLOCATOR_NOT_SET:
-    case PYMEM_ALLOCATOR_DEFAULT:
-    case PYMEM_ALLOCATOR_MIMALLOC:
-    case PYMEM_ALLOCATOR_MIMALLOC_DEBUG:
-        break;
-    case PYMEM_ALLOCATOR_DEBUG:
-    case PYMEM_ALLOCATOR_MALLOC_DEBUG:
-#ifdef WITH_PYMALLOC
-    case PYMEM_ALLOCATOR_PYMALLOC_DEBUG:
-#endif
-        allocator = PYMEM_ALLOCATOR_MIMALLOC_DEBUG;
-        break;
-    default:
-        allocator = PYMEM_ALLOCATOR_MIMALLOC;
-        break;
-    }
-#endif
     switch (allocator) {
     case PYMEM_ALLOCATOR_NOT_SET:
         /* do nothing */
@@ -1349,51 +1316,6 @@ void PyMem_RawFree(void *ptr)
 /* the "mem" allocator */
 /***********************/
 
-#ifdef Py_GC
-/* The live collector's trigger (Python/gc_live.c): the object and mem
-   domains count the bytes they allocate, and an object allocation collects
-   first when the count passes the limit.  The mem domain does not collect:
-   its callers do not expect a collection, but objects own its blocks. */
-static inline void
-gc_count_alloc(size_t size, int collect)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate == NULL) {
-        return;
-    }
-    struct _gc_runtime_state *gc = &tstate->interp->gc;
-    if (collect) {
-        _PyGC_CHECK_NOT_SWEEPING(tstate, "allocates an object");
-    }
-    gc->alloc_bytes += (Py_ssize_t)size;
-    if (collect && gc->alloc_bytes >= gc->alloc_limit) {
-        _PyGC_LiveOnThreshold(tstate);
-    }
-}
-
-/* The object in the block at ptr, if it holds one. */
-static inline PyObject *
-gc_block_object(void *ptr)
-{
-    mi_page_t *page = _mi_ptr_page(ptr);
-    size_t presize;
-    switch (page->heap_tag) {
-    case _Py_MIMALLOC_HEAP_OBJECT:
-        presize = 0;
-        break;
-    case _Py_MIMALLOC_HEAP_GC:
-        presize = sizeof(PyGC_Head);
-        break;
-    case _Py_MIMALLOC_HEAP_GC_PRE:
-        presize = sizeof(PyGC_Head) + 2 * sizeof(PyObject *);
-        break;
-    default:
-        return NULL;
-    }
-    PyObject *op = (PyObject *)((char *)ptr + presize);
-    return _PyGC_IsObjectHeader(op) ? op : NULL;
-}
-#endif
 
 void *
 PyMem_Malloc(size_t size)
@@ -1401,9 +1323,6 @@ PyMem_Malloc(size_t size)
     /* see PyMem_RawMalloc() */
     if (size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(size, 0);
-#endif
     OBJECT_STAT_INC_COND(allocations512, size < 512);
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
@@ -1417,9 +1336,6 @@ PyMem_Calloc(size_t nelem, size_t elsize)
     /* see PyMem_RawMalloc() */
     if (elsize != 0 && nelem > (size_t)PY_SSIZE_T_MAX / elsize)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(nelem * elsize, 0);
-#endif
     OBJECT_STAT_INC_COND(allocations512, elsize < 512);
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
@@ -1433,9 +1349,6 @@ PyMem_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(new_size, 0);
-#endif
     return _PyMem.realloc(_PyMem.ctx, ptr, new_size);
 }
 
@@ -1863,9 +1776,6 @@ PyObject_Malloc(size_t size)
     /* see PyMem_RawMalloc() */
     if (size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(size, 1);
-#endif
     OBJECT_STAT_INC_COND(allocations512, size < 512);
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
@@ -1879,9 +1789,6 @@ PyObject_Calloc(size_t nelem, size_t elsize)
     /* see PyMem_RawMalloc() */
     if (elsize != 0 && nelem > (size_t)PY_SSIZE_T_MAX / elsize)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(nelem * elsize, 1);
-#endif
     OBJECT_STAT_INC_COND(allocations512, elsize < 512);
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
@@ -1895,27 +1802,6 @@ PyObject_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-#ifdef Py_GC
-    gc_count_alloc(new_size, 1);
-    /* An object block that moves is freed without PyObject_Free(): clear
-       its header first, so that the free block does not look like an
-       object, and copy the header to the new block. */
-    PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
-    if (op != NULL) {
-        size_t offset = (char *)op - (char *)ptr;
-        int64_t header = op->ob_refcnt_full;
-        op->ob_refcnt_full = 0;
-        char *p = _PyObject.realloc(_PyObject.ctx, ptr, new_size);
-        if (p == NULL) {
-            op->ob_refcnt_full = header;
-            return NULL;
-        }
-        if (new_size >= offset + sizeof(int64_t)) {
-            ((PyObject *)(p + offset))->ob_refcnt_full = header;
-        }
-        return p;
-    }
-#endif
     return _PyObject.realloc(_PyObject.ctx, ptr, new_size);
 }
 
@@ -1923,37 +1809,10 @@ void
 PyObject_Free(void *ptr)
 {
     OBJECT_STAT_INC(frees);
-#ifdef Py_GC
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (ptr != NULL && tstate != NULL
-        && ptr == tstate->interp->gc.sweep_block)
-    {
-        return;  // the sweep frees it after the deallocs
-    }
-    PyObject *op = ptr != NULL ? gc_block_object(ptr) : NULL;
-    if (op != NULL) {
-        if (op->ob_flags & _Py_GC_DEAD_FLAG) {
-            // The sweep frees the blocks of dead objects after their deallocs.
-            if (tstate != NULL && tstate->interp->gc.sweeping) {
-                return;
-            }
-        }
-        op->ob_refcnt_full = 0;
-    }
-#endif
     _PyObject.free(_PyObject.ctx, ptr);
 }
 
 
-#ifdef Py_GC
-void
-_PyGC_FreeDeadBlock(PyObject *op, void *block)
-{
-    OBJECT_STAT_INC(frees);
-    op->ob_refcnt_full = 0;
-    _PyObject.free(_PyObject.ctx, block);
-}
-#endif
 
 
 /* Use __builtin_expect() where available to reduce overhead of
@@ -2046,31 +1905,19 @@ get_mimalloc_allocated_blocks(PyInterpreterState *interp)
 void *
 _PyMem_NoScanMalloc(size_t size)
 {
-#ifdef Py_GC
-    return mi_heap_malloc(_PyMem_NoScanHeap(), size);
-#else
     return PyMem_Malloc(size);
-#endif
 }
 
 void *
 _PyMem_NoScanRealloc(void *ptr, size_t size)
 {
-#ifdef Py_GC
-    return mi_heap_realloc(_PyMem_NoScanHeap(), ptr, size);
-#else
     return PyMem_Realloc(ptr, size);
-#endif
 }
 
 void
 _PyMem_NoScanFree(void *ptr)
 {
-#ifdef Py_GC
-    mi_free(ptr);
-#else
     PyMem_Free(ptr);
-#endif
 }
 
 Py_ssize_t

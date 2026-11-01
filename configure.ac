@@ -2033,34 +2033,7 @@ then
   AC_MSG_ERROR([--disable-gil cannot be used with --with-trace-refs])
 fi
 
-# Check for --with-gc
-AC_MSG_CHECKING([for --with-gc])
-AC_ARG_WITH([gc],
-  [AS_HELP_STRING([--with-gc], [let the tracing collector own memory instead of reference counting (experimental, default is no)])],
-  [], [with_gc=no]
-)
-AC_MSG_RESULT([$with_gc])
-
-if test "$with_gc" = "yes"
-then
-  if test "$disable_gil" = "yes"; then
-    AC_MSG_ERROR([--with-gc cannot be used with --disable-gil])
-  fi
-  if test "$with_trace_refs" = "yes"; then
-    AC_MSG_ERROR([--with-gc cannot be used with --with-trace-refs])
-  fi
-  case "$CFLAGS $CPPFLAGS" in
-    *Py_STACKREF_DEBUG*)
-      AC_MSG_ERROR([--with-gc cannot be used with Py_STACKREF_DEBUG]) ;;
-  esac
-  AC_DEFINE([Py_GC], [1],
-            [Define if the tracing collector owns memory and reference counting is off])
-  # The collector scans C stacks conservatively.  Zero-initialized locals
-  # leave fewer stale pointers in live frames, which keep garbage alive.
-  AX_CHECK_COMPILE_FLAG([-ftrivial-auto-var-init=zero], [
-    CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
-  ], [], [-Werror])
-fi
+# Reference counting and cycle collection own all object memory.
 
 # Check for --enable-pystats
 AC_MSG_CHECKING([for --enable-pystats])
@@ -5542,9 +5515,6 @@ if test "$with_mimalloc" != no; then
 elif test "$disable_gil" = "yes"; then
   AC_MSG_ERROR([--disable-gil requires mimalloc memory allocator (--with-mimalloc).])
 fi
-if test "$with_gc" = "yes" -a "$with_mimalloc" != yes; then
-  AC_MSG_ERROR([--with-gc requires mimalloc memory allocator (--with-mimalloc).])
-fi
 
 AC_MSG_RESULT([$with_mimalloc])
 AC_SUBST([INSTALL_MIMALLOC], [$with_mimalloc])
@@ -7049,7 +7019,7 @@ AC_SUBST([SOABI])
 AC_MSG_CHECKING([ABIFLAGS])
 AC_MSG_RESULT([$ABIFLAGS])
 AC_MSG_CHECKING([SOABI])
-SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+SOABI='boilrc1-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 AC_MSG_RESULT([$SOABI])
 
 # Release build, debug build (Py_DEBUG), and trace refs build (Py_TRACE_REFS)
@@ -7057,7 +7027,7 @@ AC_MSG_RESULT([$SOABI])
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
   AC_SUBST([ALT_SOABI])
-  ALT_SOABI='cpython-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+  ALT_SOABI='boilrc1-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
   AC_DEFINE_UNQUOTED([ALT_SOABI], ["${ALT_SOABI}"],
             [Alternative SOABI used in debug build to load C extensions built in release mode])
 fi

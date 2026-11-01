@@ -120,9 +120,7 @@ static void
 mbuf_dealloc(PyObject *_self)
 {
     _PyManagedBufferObject *self = (_PyManagedBufferObject *)_self;
-#ifndef Py_GC  // the sweep can deallocate the exporter before its views
     assert(self->exports == 0);
-#endif
     mbuf_release(self);
     if (self->flags&_Py_MANAGED_BUFFER_FREE_FORMAT)
         PyMem_Free(self->master.format);
@@ -1123,39 +1121,6 @@ _memory_release(PyMemoryViewObject *self)
     }
 }
 
-#ifdef Py_GC
-int
-_PyMemoryView_DeallocReleasesWithCode(PyObject *op)
-{
-    _PyManagedBufferObject *mbuf;
-    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf = (_PyManagedBufferObject *)op;
-    }
-    else {
-        assert(PyMemoryView_Check(op));
-        PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-        if (self->flags & _Py_MEMORYVIEW_RELEASED) {
-            return 0;
-        }
-        mbuf = self->mbuf;
-    }
-    return !(mbuf->flags & _Py_MANAGED_BUFFER_RELEASED)
-        && mbuf->master.obj != NULL
-        && _PyBuffer_ReleaseRunsCode(mbuf->master.obj);
-}
-
-void
-_PyMemoryView_ReleaseForDealloc(PyObject *op)
-{
-    if (Py_IS_TYPE(op, &_PyManagedBuffer_Type)) {
-        mbuf_release((_PyManagedBufferObject *)op);
-        return;
-    }
-    PyMemoryViewObject *self = (PyMemoryViewObject *)op;
-    self->exports = 0;  // as in memory_dealloc()
-    _memory_release(self);
-}
-#endif
 
 /*[clinic input]
 memoryview.release
@@ -1189,12 +1154,6 @@ static void
 memory_dealloc(PyObject *_self)
 {
     PyMemoryViewObject *self = (PyMemoryViewObject *)_self;
-#ifdef Py_GC
-    /* A consumer that holds an export refers to the view, so if the view
-       is dead the consumer is too.  The sweep may reach the view first;
-       the consumer's release then skips the swept view. */
-    self->exports = 0;
-#endif
     assert(get_exports(self) == 0);
     _PyObject_GC_UNTRACK(self);
     _memory_release(self);

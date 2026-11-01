@@ -1254,9 +1254,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _Py_EnsureTstateNotNULL(tstate);
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
-#ifdef Py_GC
-    _PyGC_CHECK_NOT_SWEEPING(tstate, "runs Python code");
-#endif
 
 #if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
 /* Import the static jump table */

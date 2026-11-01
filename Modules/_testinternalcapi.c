@@ -3479,62 +3479,6 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
-#ifdef Py_GC
-/* The classes of roots that keep the object at an address (an int, so that
-   the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
-static PyObject *
-gc_live_roots_of(PyObject *self, PyObject *addr)
-{
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return NULL;
-    }
-    return PyLong_FromLong(_PyGC_TraceLiveRootsOf(_PyThreadState_GET(),
-                                                  (uintptr_t)p));
-}
-
-/* The address of the object that the live mark finds at an address, or 0. */
-static PyObject *
-gc_live_lookup(PyObject *self, PyObject *args)
-{
-    PyObject *addr;
-    int interior;
-    if (!PyArg_ParseTuple(args, "Op", &addr, &interior)) {
-        return NULL;
-    }
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return NULL;
-    }
-    return PyLong_FromVoidPtr((void *)_PyGC_TraceLiveLookup(
-        _PyThreadState_GET(), (uintptr_t)p, interior));
-}
-
-/* The mimalloc segment that the collector's segment map holds for an
-   address, or 0. */
-static PyObject *
-gc_segment_of(PyObject *self, PyObject *addr)
-{
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return NULL;
-    }
-    return PyLong_FromVoidPtr((void *)_PyGC_TraceSegmentOf((uintptr_t)p));
-}
-
-/* Addresses in the object's mimalloc segment that hold no block. */
-static PyObject *
-gc_segment_probes(PyObject *self, PyObject *op)
-{
-    uintptr_t probes[4];
-    _PyGC_TraceSegmentProbes(op, probes);
-    return Py_BuildValue("(KKKK)",
-                         (unsigned long long)probes[0],
-                         (unsigned long long)probes[1],
-                         (unsigned long long)probes[2],
-                         (unsigned long long)probes[3]);
-}
-#endif
 
 /* Call factory() and keep the result only in a C local across a verified
    collection.  Return (holes, id of the object). */
@@ -3641,12 +3585,6 @@ static PyMethodDef module_functions[] = {
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
-#ifdef Py_GC
-    {"gc_live_roots_of", gc_live_roots_of, METH_O},
-    {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
-    {"gc_segment_of", gc_segment_of, METH_O},
-    {"gc_segment_probes", gc_segment_probes, METH_O},
-#endif
     {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
     {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
     {"call_with_c_local", call_with_c_local, METH_VARARGS},

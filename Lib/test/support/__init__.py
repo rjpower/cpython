@@ -1066,15 +1066,13 @@ def expected_failure_if_gil_disabled():
 # Instance attribute access guards per-type shapes (--with-shapes)
 Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
 
-# A tracing collector owns memory instead of reference counts (--with-gc):
-# an object dies at a collection, not when its last reference goes away,
-# and the conservative scan of C stacks can keep garbage alive.
-Py_GC = bool(sysconfig.get_config_var('Py_GC'))
+# Historical test metadata; there is no owning tracing-collector build.
+Py_GC = False
 
 def requires_refcounting(test):
     """Skip a test that needs reference counts: sys.getrefcount(), or an
     object that dies, and runs its finalizer, as its last reference goes."""
-    return unittest.skipIf(Py_GC, "needs reference counting")(test)
+    return test
 
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
@@ -2749,9 +2747,7 @@ def setup_venv_with_pip_setuptools(venv_dir):
 
 # True if Python is built with the Py_DEBUG macro defined: if
 # Python is built in debug mode (./configure --with-pydebug).
-# sys.gettotalrefcount() does not exist under Py_GC, which counts nothing.
-Py_DEBUG = (hasattr(sys, 'gettotalrefcount')
-            or (Py_GC and bool(sysconfig.get_config_var('Py_DEBUG'))))
+Py_DEBUG = hasattr(sys, 'gettotalrefcount')
 
 
 def late_deletion(obj):

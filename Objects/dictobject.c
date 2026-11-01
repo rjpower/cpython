@@ -311,9 +311,7 @@ can_modify_dict(PyDictObject *mp)
 
         // No locking required to modify a newly created frozendict
         // since it's only accessible from the current thread.
-#ifndef Py_GC  // reference counts are constant under Py_GC
         assert(PyUnstable_Object_IsUniquelyReferenced(_PyObject_CAST(mp)));
-#endif
     }
     else {
         // Locking is only required if the dictionary is not
@@ -3658,22 +3656,11 @@ static void
 dict_dealloc(PyObject *self)
 {
     PyDictObject *mp = (PyDictObject *)self;
-#ifndef Py_GC
     _PyObject_ResurrectStart(self);
     _PyDict_NotifyEvent(PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
     if (_PyObject_ResurrectEnd(self)) {
         return;
     }
-#else
-    /* Under Py_GC this runs in the collector's sweep, which may not run code
-       or allocate.  CPython's own watchers do neither and hear of the
-       deallocation here; the collector notified the others before the sweep
-       (Python/gc_live.c). */
-    int reserved = (int)(mp->_ma_watcher_tag & DICT_RESERVED_WATCHERS_MASK);
-    if (reserved) {
-        _PyDict_SendEvent(reserved, PyDict_EVENT_DEALLOCATED, mp, NULL, NULL);
-    }
-#endif
     PyDictValues *values = mp->ma_values;
     PyDictKeysObject *keys = mp->ma_keys;
     Py_ssize_t i, n;

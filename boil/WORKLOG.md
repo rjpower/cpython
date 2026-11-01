@@ -537,3 +537,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   unchanged. Existing host root checks pass; independent review follows.
   No native batch remains active, and no unused activation time grants retry.
   [V3 outcome](issues/fundamental-runtime-design/span-native-outcome-20261101-v3.md).
+- 2026-11-01: GC test-hook correction 7d10d5b passed independent source and
+  helper review. Activated fresh v4 debug/release feedback at 04:23:23 UTC,
+  inclusive ceiling 05:08:23, session 76892. Its elapsed/RSS template passed
+  independent held-protocol review; actual usable candidate products and
+  native outcome remain pending. RC first-feedback helpers froze early with
+  39 methods per image, awaiting review and serial native admission.
+  [V4 helpers](issues/fundamental-runtime-design/span-native-helper-review-20261101-v4.md).
+- 2026-11-01: IR v2 debug build passed; its focus wrapper failed at 04:21:47
+  before cases because preparation omitted the output directory. Root's review
+  also missed its observed absence. Preserve all receipts; repair under a new
+  activation with actual output-write preflight and reuse the exact valid debug
+  image where its immutable build-plan bridge permits. No runtime change or
+  selected case result follows from this host failure.
+  [IR outcome](issues/fundamental-runtime-design/region-native-outcome-20261101-v2.md).

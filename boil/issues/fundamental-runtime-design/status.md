@@ -29,8 +29,8 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **04:17 UTC**, no native batch is active. Stable-span v3 session
-**35054 returned 1** at 04:14:56 before selected cases. Hard GC cutoff remains 15:14:44.
+As of **04:23:23 UTC**, stable-span v4 native batch is active, session **76892**,
+inclusive ceiling **05:08:23 UTC**. Hard GC cutoff remains 15:14:44.
 No prototype has earned performance acceptance or integration.
 
 - **Integrated storage:** frozen source `34deae3b29260aea286b0c4017b963e092a2db62`
@@ -48,6 +48,9 @@ No prototype has earned performance acceptance or integration.
   `7d10d5bfd33cb7302df8008065c4dd637e453478` moves the witness body behind an
   existing-style exported core test hook. Independent source review and
   fresh v4 helper preparation follow; no selected case ran in v3.
+  The [v4 source review](span-link-review-20261101-v4.md) and
+  [helper review](span-native-helper-review-20261101-v4.md) passed; fresh v4
+  debug/release build and focused tests are active.
 - **Early elapsed/RSS:** host-only preparation through **04:40**, checkpoint
   **04:25**, pending successful v3 products and outcome acceptance. Use the
   fixed three-arm/four-workload/two-round protocol; occupancy vectors are
@@ -61,6 +64,12 @@ No prototype has earned performance acceptance or integration.
   correctly refused; no compiler, gate or target ran. Preserve that failed
   preactivation evidence. Minimal host-only v2 rebinding runs through **04:25**,
   checkpoint **04:18**; no source change or native launch is granted by it.
+  V2 then passed host review and activated at 04:20:07. Its debug build passed,
+  but the wrapper stopped at 04:21:47 before cases because its output directory
+  was missing: [outcome](region-native-outcome-20261101-v2.md). Separate v3
+  repair is bounded by **04:38**, checkpoint **04:30**; reuse the valid debug
+  image through an exact immutable receipt bridge, with actual output-write
+  preflight. Source/34-case contract are unchanged.
 - **RC successor:** coherent restoration `1440f8c6fd1`, RC-only closure
   `d7df12b1d81722927e71d9734c70eeafdccfee73`, isolated in
   `build/worktrees/rc-successor`. [Independent source review](rc-source-review-20261101-v1.md)

@@ -97,8 +97,9 @@ The [integrated-storage candidate](../fundamental-runtime-design/status.md)
 passed source review and two usable fresh debug builds. Its v1 legacy-constructor,
 v2 disabled-GC witness and v3 test-extension link failures remain failed. V3
 stopped at **04:14:56 UTC**, session **35054 returned 1**, before any selected
-case. The narrow core test-hook correction is frozen for independent review;
-no native batch is currently active. The isolated RC-only closure
+case. The narrow core test-hook correction passed independent source/helper
+review. Fresh v4 native batch is active **04:23:23–05:08:23 UTC**, session
+**76892**. The isolated RC-only closure
 `d7df12b` has now passed independent source review for native feedback; its
 helpers are being prepared without promoting it. No current candidate has
 earned parity or integration.

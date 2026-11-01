@@ -34,6 +34,7 @@ DIRECT = {
     "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "BUILD_LIST", "BUILD_TUPLE",
     "BUILD_MAP", "UNPACK_SEQUENCE", "STORE_SUBSCR",
     "CONTAINS_OP", "CALL_KW", "COPY_FREE_VARS", "MAKE_CELL", "LOAD_DEREF", "STORE_DEREF",
+    "LOAD_COMMON_CONSTANT", "RAISE_VARARGS",
 }
 
 
@@ -172,7 +173,12 @@ def generate(filenames, outfile):
     for name, reason in sorted(reasons.items(), key=lambda item: ids[item[0]]):
         helper = "NULL" if reason else f"jit_helper_{name}"
         message = f'"{reason}"' if reason else "NULL"
-        outfile.write(f'    [{ids[name]}] = {{"{name}", {helper}, {message}}},\n')
+        fmt = formats[name]
+        roles = ", ".join(fmt.roles)
+        effect = (f"{{ .roles = {{ {roles} }}, .ninputs = {fmt.n_inputs}, "
+                  f".borrow_mask = {fmt.borrow_mask}, "
+                  f".flags = {int(fmt.window) * 2 | int(fmt.store_dst) * 64} }}")
+        outfile.write(f'    [{ids[name]}] = {{"{name}", {helper}, {message}, {effect}}},\n')
     outfile.write("};\n#endif\n")
     outfile.write("""
 const _PyJitHelperInfo *

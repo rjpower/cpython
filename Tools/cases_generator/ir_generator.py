@@ -1584,6 +1584,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         phase = "_PyJIT_RETURN_COMPLETED" if name == "RETURN_VALUE" else "_PyJIT_AFTER"
         out.emit(f"const _PyJitAction jit_action = {action};\n")
         out.emit(f"const _PyJitPhase jit_phase = {phase};\n")
+        if name == "RAISE_VARARGS":
+            out.emit("(void)jit_action; (void)jit_phase;\n")
     else:
         out.emit(f"TARGET({name}) {{\n")
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")

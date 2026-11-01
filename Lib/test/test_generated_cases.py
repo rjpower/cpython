@@ -1037,7 +1037,7 @@ class TestJitHelpers(unittest.TestCase):
     def test_every_valid_handler_classified(self):
         names = set(ir_generator.compute_formats(self.analysis))
         self.assertIn("BINARY_OP", names)
-        rows = re.findall(r'\[\d+\] = \{"(\w+)", ([^,]+), ([^}]+)\}', self.output)
+        rows = re.findall(r'\[\d+\] = \{"(\w+)", ([^,]+), (NULL|"[^"]*"),', self.output)
         self.assertEqual({name for name, _, _ in rows}, names)
         for name, helper, reason in rows:
             with self.subTest(name=name):
@@ -1047,6 +1047,24 @@ class TestJitHelpers(unittest.TestCase):
         for name in ("LOAD_CONST_INLINE_INT", "LOAD_CONST_INLINE_FLOAT", "LOAD_SMALL_INT_INLINE"):
             self.assertIn(f"jit_helper_{name}(", self.output)
         self.assertNotIn("jit_helper_YIELD_VALUE(", self.output)
+
+    def test_recorded_home_effects_match_ir_layouts(self):
+        for name, fmt in ir_generator.compute_formats(self.analysis).items():
+            row = next(line for line in self.output.splitlines() if f'{{"{name}",' in line)
+            with self.subTest(name=name):
+                self.assertIn(".roles = { " + ", ".join(fmt.roles) + " }", row)
+                self.assertIn(f".ninputs = {fmt.n_inputs}", row)
+                self.assertIn(f".borrow_mask = {fmt.borrow_mask}", row)
+                self.assertIn(f".flags = {int(fmt.window) * 2 | int(fmt.store_dst) * 64}", row)
+
+    def test_common_constant_and_raise_window_order(self):
+        self.assertIn("PyStackRef_DupImmortal(tstate->interp->common_consts[oparg])", self.body("LOAD_COMMON_CONSTANT"))
+        raised = self.body("RAISE_VARARGS")
+        self.assertLess(raised.index("IR_CLEAR_SLOTS"), raised.index("do_raise("))
+        self.assertIn("exception_unwind", raised)
+        self.assertIn("JUMP_TO_LABEL(error)", raised)
+        self.assertIn("#define JIT_PHASE_exception_unwind _PyJIT_UNWIND_PENDING", self.output)
+        self.assertIn("_PyJIT_ERROR_LOG_PENDING", self.output)
 
     def test_real_call_return_and_error_order(self):
         call = self.body("CALL")

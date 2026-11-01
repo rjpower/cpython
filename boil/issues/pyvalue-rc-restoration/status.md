@@ -43,12 +43,16 @@ fallible boxing cannot be hidden behind a borrowed-pointer API without one.
 
 ## Current work
 
-- restart_audit: read-only provenance and dependency audit; concrete restoration
-  breakdown separating value representation from tracing collector assumptions.
-- qualification_review_resumed: independent scope/dependency audit and review
-  of the restoration design, including RC ownership and C interface boundaries.
-- coordinator: update the active plan, preserve existing work and turn the
-  reviewed design into implementation and qualification steps.
+The [restoration design](design.md) passed independent review. The
+[foundation implementation](foundation-implementation-20261101-v1.md) is now
+authorized on source `95be1d28` in the isolated universal-value worktree.
+
+- restart_audit implements the value/ownership foundation and actual frame/call
+  publication paths, then the dependent container and native-interface cuts.
+- value_api_consumer_map independently reviews source and maintains the exact
+  native consumer inventory (660 paths in its sealed first version).
+- The coordinator maintains the log and monitoring loop, prepares qualification
+  and the interpreter performance checkpoint, and integrates reviewed changes.
 
 The RC images remain a qualified interim base. JIT source95be1d28 is frozen and
 independently source-accepted, but its next native batch is held after user
@@ -57,6 +61,12 @@ claimed. Failed90cdb7bb source/image/results and all earlier evidence remain
 preserved. The method/tracing JIT stays in scope and must share the restored
 value/ownership contract.
 
-No new representation source changes or candidate executions have begun. Next:
-review the restoration dependency map and API/ownership contracts, implement
-coherent increments, then qualify the complete universal-value RC runtime.
+Source implementation is underway; no restored candidate runtime result is
+claimed. Next: review and exercise the foundation, finish universal container,
+attribute and native-operation coverage, then qualify the coherent runtime.
+The user's next performance checkpoint measures the register interpreter with
+unified PyValue and basic optimizations, with JIT execution disabled and checked.
+Compare matched configurations against the interim RC interpreter and upstream,
+report the suite aggregate and individual workloads, and distinguish startup,
+lowering and warm execution. Use results to choose specific implementation
+improvements. Universal values and the selected collector remain requirements.

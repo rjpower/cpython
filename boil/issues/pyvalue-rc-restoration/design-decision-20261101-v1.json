@@ -1,0 +1,54 @@
+{
+  "branch": "boil/pyvalue-rc-universal",
+  "candidate_execution_authorized": false,
+  "collector": "reference_counting_with_cyclic_collection",
+  "decision": "ADOPT_REVIEWED_UNIVERSAL_PYVALUE_RC_RESTORATION_DESIGN",
+  "dependent_steps": [
+    "Value/ownership foundation and real frame/call consumers",
+    "Containers, traversal and value iteration",
+    "Attributes, complete core operation/native ABI and bundled consumers"
+  ],
+  "design_inputs": {
+    "dependency-ledger-20261101-v1.json": {
+      "path": "boil/issues/pyvalue-rc-restoration/dependency-ledger-20261101-v1.json",
+      "sha256": "2b28124e077f46ffa4d7742178e0344e22886638e19d68ba30fa6083c714a976"
+    },
+    "design-receipt-20261101-v1.json": {
+      "path": "boil/issues/pyvalue-rc-restoration/design-receipt-20261101-v1.json",
+      "sha256": "bbe7cfe177bb3cce16082b136eb64331d2b8db81fee0836da8ebf215ba6f2350"
+    },
+    "design-review-20261101-v1.md": {
+      "path": "boil/issues/pyvalue-rc-restoration/design-review-20261101-v1.md",
+      "sha256": "2d9772ecc3419047c0a4153ac3ff65672233e4854631055ea7d9f6953465c6d8"
+    },
+    "design.md": {
+      "path": "boil/issues/pyvalue-rc-restoration/design.md",
+      "sha256": "d20b40a11f9602b0a92f7117816d9e12dc948ef673d8928075bb8da6fce38f91"
+    },
+    "provenance-20261101-v1.json": {
+      "path": "boil/issues/pyvalue-rc-restoration/provenance-20261101-v1.json",
+      "sha256": "5a983d78902105703d59f603347f83e10c24b391fd81786d8bbac1cf5e2ff711"
+    }
+  },
+  "foundation_alone_is_completion": false,
+  "full_scope_required": true,
+  "historical_acceptances_do_not_qualify_new_abi": true,
+  "next": "Review exact foundation path manifest, then authorize bounded implementation with cheap source/ownership checks.",
+  "one_payload": {
+    "bytes": 8,
+    "error_bits": 2,
+    "inline": "Exact int32 and non-NaN double; established fork scalar identity.",
+    "null_bits": 1,
+    "ownership": "Current RC owning/borrowed/immortal pointer conventions; heap mortal values must own."
+  },
+  "private_abi_target": "boilvalrc1",
+  "required_target": "Universal ownership-aware PyValue across core operations, frames, containers, cells, instance storage and core calls.",
+  "runtime_boxed_only_mode": false,
+  "scalar_box_compatibility_cache": false,
+  "selected_base": "95be1d28a12ebbd9de102f70e1b5e881d06c7384",
+  "source_changes_authorized": false,
+  "tracing_gc_reopened": false,
+  "utc": "2026-11-01T21:42:31.652359+00:00",
+  "whole_gc_tree_restore": false,
+  "worktree": "build/worktrees/pyvalue-rc-universal"
+}

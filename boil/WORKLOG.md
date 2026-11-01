@@ -1815,3 +1815,18 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   audit representation/RC ownership/API dependencies; no restoration code or
   candidate execution yet. Existing JIT and qualified interim RC evidence stay
   preserved; the original universal-value requirement is not reduced to frames.
+- 2026-11-01 21:49 UTC: Accept universal-PyValue RC restoration design after
+  independent ownership/API review. Foundation manifest46d190fe closes93 old
+  paths/three renames/two additions; independent scope review7fe2d835 accepts.
+  Start implementation on95be in the isolated universal-value worktree; A
+  implements, D reviews, C prepares interpreter measurement. Keep all dependent
+  container/attribute/native cuts required. User explicitly requests unified-value
+  register-interpreter performance with basic optimizations before JIT performance;
+  require explicit JIT-off evidence and matched suite comparisons. No new runtime
+  result yet. [Implementation scope](issues/pyvalue-rc-restoration/foundation-implementation-20261101-v1.md).
+- 2026-11-01 21:59 UTC: Begin dependent tuple/shared value-operation source port;
+  independent review identifies and corrects virtual-iterator boxing error
+  classification and ordinary iterator advancement. Add failure/lifetime/storage
+  tests; they remain unexecuted. List/structseq scope independently accepted;
+  parallel owner starts implementation. Publish/read back Loom50,36,497characters/
+  four diagrams,snapshot5164eb71. No restored runtime acceptance or timing.

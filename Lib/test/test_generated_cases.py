@@ -1045,6 +1045,12 @@ class TestJitHelpers(unittest.TestCase):
         self.assertIn("_PyJIT_BRANCH", self.body("JUMP_BACKWARD"))
         self.assertIn("check_periodics(tstate)", self.body("JUMP_BACKWARD"))
 
+    def test_directives_start_physical_lines(self):
+        for lineno, line in enumerate(self.output.splitlines(), 1):
+            if re.search(r"#(?:if|elif|else|endif|define|undef|pragma)\b", line):
+                with self.subTest(lineno=lineno):
+                    self.assertRegex(line, r"^\s*#")
+
     def test_descriptor_and_no_evaluator_dispatch(self):
         self.assertIn("const _PyJitDecodedOp *op", self.body("CALL"))
         for field in range(4):

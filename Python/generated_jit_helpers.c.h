@@ -95,7 +95,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -199,7 +200,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -303,7 +305,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -407,7 +410,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -511,7 +515,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -615,7 +620,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -719,7 +725,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -823,7 +830,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -927,7 +935,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1031,7 +1040,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1135,7 +1145,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1239,7 +1250,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1343,7 +1355,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1447,7 +1460,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1551,7 +1565,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1655,7 +1670,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1759,7 +1775,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1863,7 +1880,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -1967,7 +1985,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2071,7 +2090,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2175,7 +2195,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2279,7 +2300,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2383,7 +2405,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2487,7 +2510,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2591,7 +2615,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2695,7 +2720,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }
@@ -2799,7 +2825,8 @@
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);#if ENABLE_SPECIALIZATION
+                assert(oparg <= NB_OPARG_LAST);
+                #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_BINARY_OP:;
                 #endif
             }

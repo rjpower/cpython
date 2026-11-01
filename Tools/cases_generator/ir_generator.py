@@ -1510,6 +1510,7 @@ def write_uop(
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if (emitter.helper and uop.name.startswith("_SPECIALIZE_") and
             any(t.text == "DISPATCH_SAME_OPARG" for t in uop.body.tokens())):
+        emitter.out.start_line()
         emitter.emit("#if ENABLE_SPECIALIZATION\n")
         emitter.emit(f"jit_after{uop.name}:;\n")
         emitter.emit("#endif\n")

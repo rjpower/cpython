@@ -62,3 +62,27 @@ Local snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focu
 has SHA256 `f4778e1275a7c481c75eaba56269d54c34cf8fed07cf747fc8c94f837a029001`.
 Only source/readback was checked; no rendered-layout verification is claimed.
 Earlier revisions and the unedited peer review remain preserved.
+
+## Measured storage rejection, revision 5
+
+At05:35:53 UTC, guarded revision5 records the valid span rejection, focused
+backend feedback then in progress, canonical RC preparation and next inventory
+hypothesis. Both diagrams now distinguish maintained paths from rejected
+prototypes. Exact readback/local snapshot match12,032 characters and two Mermaid
+blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v5.md`
+SHA256 `67dbe14849903e1f3411b28899035aaf99c53555de8e976a509282551d5292ba`.
+
+## Matched-profile decision and actual feedback, revision 6
+
+At05:51:48 UTC, guarded revision6 adds the independently reviewed pre-score
+compiler/profile selector, fresh same-backend upstream requirement, unchanged
+deadline/all29 rule, accepted14-row native outcome, canonical RC reproduction
+and bounded maintained-source inventory attempt. No elapsed backend selection
+or full29 parity result exists. Rejected IR/spans remain rejected.
+
+Exact readback and local snapshot match13,159 characters and two Mermaid blocks.
+Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v6.md`
+SHA256 `8589543c82f600f7d2c554110cb23757b1ea34d50a42cf714a5045ddb4dd7aba`.
+Source/readback checked; no rendered-layout verification is claimed.

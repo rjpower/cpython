@@ -602,3 +602,46 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   feedback activated05:12:09–05:57:09 UTC, session83297; 27 selected methods,
   four unchanged release skips, no timing or parity credit yet.
   [Helper review](issues/fundamental-runtime-design/span-native-helper-review-20261101-v5.md).
+- 2026-11-01 05:19 UTC: Fresh span feedback completed05:16:16, session83297
+  exit0. Independent review accepts debug27 passes and release23 passes plus
+  four exact skips, including both strict forwarding witnesses, actual roots,
+  unchanged products and idle cleanup. Ready for elapsed, not qualification.
+  [Outcome](issues/fundamental-runtime-design/span-native-outcome-review-20261101-v5.md).
+- 2026-11-01 05:24 UTC: Storage v5 pilot session48525 stopped before targets:
+  root activation created a missing empty upstream lock after its inventory
+  was sealed. All images stayed unchanged; no scores exist. Preserved complete
+  failure and verified native/slot/build-lock quiescence. Authorized additive
+  v6 host binding to05:35 with the exact bookkeeping delta. VM0 fourteen-row
+  helpers independently accepted; native waits for storage quiet measurement.
+  [Failure](issues/fundamental-runtime-design/span-elapsed-launch-outcome-20261101-v5.md).
+- 2026-11-01 05:34 UTC: Independent review rejects integrated spans5a on the
+  valid fixed pilot: coroutines+50.74%/+51.07%, GM4+14.79%/+10.26%. All120
+  values/twelve origins and idle cleanup verified. No extra samples, broad
+  qualification or integration; original failures remain preserved.
+  [Decision](issues/fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md).
+- 2026-11-01 05:44 UTC: Before any VM0 elapsed score, adopted independently
+  reviewed compiler-profile addendum. Select one backend by fixed gates; any
+  Clang parity claim requires fresh same-compiler/backend upstream, all29 rows
+  and unchanged numerical/consistency/correctness rules. Original budget bytes,
+  cutoff and fallback remain fixed; no profile shopping or mixed-compiler credit.
+  [Authority](issues/gc-parity-deadline/compiler-profile-addendum-20261101.json).
+- 2026-11-01 05:45 UTC: Reviewed selective page-map port design and granted
+  isolated maintained417 source attempt through06:16/checkpoint06:00. Preserve
+  classifier/cadence; exclude47 ledger/nursery and rejected spans. Real nonempty
+  failed death-prefix, independent rollback flags and recovery are required.
+  [Design review](issues/gc-nursery-old-work/reviews/maintained-object-map-port-design-20261101-root.md).
+- 2026-11-01 05:46 UTC: VM0 fourteen native rows completed05:40:26, session66715
+  exit0. Independent review accepts102 passes/3 declared skips across105 selected
+  invocations and five stale children/3,000 iterations. All images idle; no
+  backend speed/selection credit. Fixed G/C/T elapsed helpers proceed to06:04.
+  [Outcome](issues/h1-tail-dispatch/reviews/native-outcome-20261101-v3.md).
+- 2026-11-01 05:48 UTC: Canonical offline Autoconf reproduced RC d7df exactly.
+  Restored three files' original metadata; independently verified7,059 source
+  paths and1,268 old product/evidence files unchanged. No new source commit or
+  native rerun needed; broader qualification remains.
+  [Review](issues/fundamental-runtime-design/rc-canonical-review-20261101.md).
+- 2026-11-01 05:52 UTC: Published guarded Loom revisions5/6 with both measured
+  rejections, actual backend/RC outcomes, pre-score selector and two updated
+  organization diagrams. Latest exact readback/local snapshot match13,159
+  characters. Parity unproven; no collector/backend adoption.
+  [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).

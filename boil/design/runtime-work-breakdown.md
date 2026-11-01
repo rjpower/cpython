@@ -12,8 +12,13 @@ target under investigation, not a performance result.
 Current execution is owned by the [issue state](../issues/fundamental-runtime-design/status.md).
 The original plan below is retained as the reviewed starting point. The later
 comparison-region implementation was [rejected on measured elapsed](../issues/fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md),
-despite verified local work removal. Integrated storage remains correctness-
-blocked; the RC fallback has passed focused debug/release testing. The hard
+despite verified local work removal. Integrated storage was also
+[rejected on elapsed](../issues/fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md)
+after focused correctness passed. The compiler/backend control passed native
+feedback and is preparing its fixed elapsed pilot. A separate maintained-source
+page-map inventory port is active; RC has passed focused debug/release and
+canonical generation checks. The pre-score compiler-profile amendment requires
+fresh matched upstream if Clang is selected. The hard
 15:14:44 UTC GC cutoff governs the remaining work. No rejected prototype is
 adopted merely because it implements this plan.
 

@@ -4,7 +4,7 @@
 - Owner: coordinator
 - Start: **2026-11-01 03:14:44 UTC**
 - Cutoff: **2026-11-01 15:14:44 UTC**; no silent extension
-- Machine-readable authority: [budget.json](budget.json), 43,200 seconds
+- Machine-readable authority: [budget.json](budget.json), 43,200 seconds, plus the narrow [pre-score compiler-profile addendum](compiler-profile-addendum-20261101.json)
 
 The user requires tracing GC to reach upstream parity averaged across the test
 suite within twelve hours. Otherwise stop tracing-GC optimization and restore
@@ -29,6 +29,18 @@ with each image's bound standard library/extensions. Freeze rotating order,
 fresh-process rounds and the variability rule before scores. Borderline,
 inconsistent, invalid or missing evidence does not establish parity. A known
 critical correctness failure cannot qualify a candidate.
+
+At05:44:57 UTC, before any VM0 elapsed score, the coordinator adopted the
+independently [reviewed compiler-profile amendment](compiler-profile-addendum-review-20261101-v1.md).
+Original budget/protocol bytes remain unchanged. Select T only if T/C and T/G
+pass every already-declared gate; else C if C/G passes; else G. One selected
+profile remains fixed for the timebox. A selected Clang profile earns parity
+only against fresh unchanged upstream built with the same compiler/backend and
+matched effective policy, with actual ordinary correctness/import evidence.
+No mixed-compiler credit, arithmetic composition, profile shopping or clock
+extension is allowed. All29 rows, three rounds/five values and aggregate/each-
+round GM<=1 remain. New parity bindings must bind both original budget and
+addendum; this declaration grants no native execution or backend adoption.
 
 The [fixed measurement protocol](measurement-protocol.md) declares the early
 three-arm storage pilot and the full-29 three-round consistency decision before
@@ -60,7 +72,8 @@ packet when existing reviewed machinery suffices.
 
 ## Enforcement and fallback
 
-Every coordinator turn and new GC execution grant checks budget.json. Clamp
+Every coordinator turn and new GC execution grant checks budget.json and its
+pre-score compiler-profile addendum. Clamp
 each GC activation to the earlier of its own ceiling and the hard cutoff,
 including termination/cleanup reserve. Unused windows grant no retry. At the
 cutoff, if valid full-suite parity is absent, stop GC work, record the failed
@@ -94,21 +107,37 @@ isolated. Independent source review has accepted first native feedback;
 actual native validation remains.
 
 The [integrated-storage candidate](../fundamental-runtime-design/status.md)
-remains correctness-blocked: v4 passed 26 debug cases, then failed release's
+retains its earlier failures: v4 passed 26 debug cases, then failed release's
 allocator-wrapper lifetime assertion after four passes. Diagnostic changed-call-
 graph nonreproduction is inconclusive about the original cause. The reviewed
 cold fixture correction froze at5a457c73 and passed exact source/helper review.
-Fresh v5 debug/release feedback activated05:12:09–05:57:09 UTC, session83297;
-native outcome remains pending before any storage timing.
+Fresh v5 feedback completed05:16:16 UTC, session83297 exit0. Debug27 passed;
+release23 passed plus four declared skips. Independent focused-outcome acceptance
+allows elapsed readiness. The v5 pilot then stopped before targets because root
+created a missing empty upstream lock after inventory seal. Source/images stayed
+unchanged. The separate v6 pilot completed all120 values and twelve origins,
+then independent review **rejected** the candidate: coroutines+50.74%/+51.07%,
+four-row geometric means+14.79%/+10.26%. No more samples/full qualification.
+All source, native failures and the first pre-target launch remain preserved.
 
 The separate IR region increment passed semantics and actual work-removal
 checks, then was **rejected**: coroutine elapsed +10.86%/+14.11%, four-row
 geometric means +16.21%/+13.74%. That supplies the first measured decision before
 05:14; it supplies no GC parity credit and will not be composed into a candidate.
-The existing unchanged-runtime compiler/backend control is being revised without
-native authority or any cross-compiler parity claim.
+The unchanged-runtime compiler/backend control completed all14 native rows,
+independently accepted:105 selected invocations,102 passes/3 declared skips,
+and five stale children/3,000 iterations. Its fixed G/C/T elapsed helpers are
+being prepared through06:04. No elapsed backend selection is established.
+
+One new page/start-map inventory source attempt is authorized through06:16,
+checkpoint06:00, from maintained417 in its own worktree. The selective port
+excludes rejected spans and47 nursery/cadence/ledger changes and must close an
+actual nonempty failed-prefix rollback witness. It has no native acceptance.
 
 The isolated RC-only closured7df12b passed all39 focused methods in both images,
 zero skips, with independent actual-outcome acceptance and idle cleanup. It is
 a working fallback candidate, not a selected collector or fully qualified core.
-Only the v5 GC feedback job is active. No candidate has earned parity or integration.
+Canonical Autoconf reproduction then matched every source byte; ownership/modes
+were restored and independently verified, as were1,268 old product/evidence files.
+That obligation is closed without a new source commit or native rerun.
+No native job is active. No candidate has earned parity or integration.

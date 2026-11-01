@@ -17,6 +17,8 @@ its hypothesis, budget, dependencies, decision and next action.
   elapsed/RSS. Reserve expensive full stress/ASan/stdlib/extension qualification
   for promising candidates; it remains mandatory before integration. Do not
   time a partial ownership implementation or use broad tests to rescue a loss.
+  Create required output/cache and lock paths before sealing product inventories;
+  activation must not add a file after its inventory check.
 - **Decide:** integrate the useful increment or reject it. Follow-ups receive
   their own scope and budget; they do not extend an experiment silently.
 - **Report:** update issue status at meaningful transitions and agreed

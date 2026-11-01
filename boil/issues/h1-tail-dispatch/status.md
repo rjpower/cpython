@@ -1,56 +1,55 @@
 # H1 tail dispatch
 
-- State: unchanged-runtime compiler/backend control; host helpers in preparation
+- State: focused native feedback accepted; fixed elapsed helpers in preparation
 - Updated: 2026-11-01
 - Owner: restart_audit prepares helpers; coordinator reviews and integrates
 - Dependencies: exact compiler/backend plan and independent review before native execution
-- Current grant: host-only revision 3 helper preparation, 05:03–05:35 UTC; checkpoint 05:18
+- Current grant: host-only elapsed helper preparation through06:04 UTC; checkpoint05:55
 - Current managed helper source: `boil/vm-compiler-backend` at `417a9443a59`
 - Worktree: `build/worktrees/vm-compiler-backend`; no runtime source changes
 
 ## Now
 
-The [integrated review](../fundamental-runtime-design/status.md) supersedes the
-assumption that the current IR and collector should remain unchanged. VM0 is
-the next compiler/backend control after the measured IR-region rejection.
-The [revision 3 plan](compiler-backend-plan-20261101-v3.md) compares GCC computed,
-Clang computed and Clang tail dispatch on unchanged runtime source. Helpers
-are unfinished and unready; no compiler or target has run. Host metadata-only
-compiler/tool identity queries are authorized; feature compilation is not.
-The [process-count clarification](compiler-backend-v3-count-clarification-20261101.md)
-and its [review](reviews/compiler-backend-v3-count-clarification-20261101-root.md)
-correct physical stale-child counts without changing exposure. Revision 2 and
-the frozen revision 3 retain their original bytes. This compiler comparison
-does not establish parity under the unchanged GCC GC budget.
-Earlier H1 source remains retained on
-`boil/h1-frame` at `94ab98e8fd3`.
+The unchanged-runtime GCC-computed/Clang-computed/Clang-tail comparison has
+passed independently reviewed focused correctness. All14 native rows completed
+05:40:26 UTC; root session66715 returned zero. There are105 selected invocations:
+102 passes and three declared computed-arm tail-only skips. Both tail builds
+execute the tail-specific case; five stale children passed30 control executions/
+3,000 internal iterations. [Actual outcome](reviews/native-outcome-20261101-v3.md).
 
-The [new candidate](../../design/vm-design-candidate.md) selects a matched
-GCC-computed/Clang-computed/Clang-tail comparison on unchanged runtime source,
-then one frame-argument ABI experiment. Three parallel source reviews agree
-that this tests a concrete difference in existing machinery. The initial
-planning grant authorized no compiler, target, timing, runtime edit or worktree.
-The earlier slot-base-only increment is rejected on its actual elapsed result.
-The [revision 2 plan](compiler-backend-plan.md) preserves revision 1 and corrects
-PIE policy and actual stats-file capture. Independent coordinator
-[source/plan review](reviews/compiler-backend-plan-20261101-v2-root.md)
-accepted held host-helper preparation. One managed worktree from exact 417 is
-authorized for helper storage; runtime source changes and all native execution
-remain held. Actual compiler-selected tools are captured only in a later
-reviewed build row, not guessed from GCC's tool manifest.
+Actual source remains417, runtime-equivalent to qualifiede9. Four Clang images
+are fresh; GCC release is reused unchanged. No runtime/frame ABI source change,
+performance gain, backend selection or full qualification is established.
 
-The passed-frame tail-dispatch runtime source `62456cc59bd` is unmerged and has
-no measured current benefit. It does not change maintained GCC dispatch.
-The exact `strrchr` effect declaration and control from `94ab98e8fd3` are
-included in qualified `0b15b4bbc9b`; that does not land the runtime convention.
+The fixed [revision3 plan](compiler-backend-plan-20261101-v3.md) governs the
+four-workload G/C/T pilot:24 scored processes/120 values, twelve origin warmups,
+two fixed rounds, all three contrasts and a30-minute inclusive quiet window.
+Host helpers are being prepared through06:04, checkpoint05:55. Root must review
+exact bindings before activation. No timing has run.
+
+The independently reviewed [pre-score profile rule](../gc-parity-deadline/compiler-profile-addendum-20261101.json)
+selects T only if T/C and T/G clear every gate; otherwise C if C/G does; otherwise
+G. The selected profile stays fixed for the GC timebox and requires fresh
+same-compiler/backend upstream before any all29 parity credit. Original budget
+bytes, deadline and numerical target remain unchanged.
+
+## Prior work
+
+Revision2, revision3 and their original reviews remain frozen. The separate
+[process-count clarification](compiler-backend-v3-count-clarification-20261101.md)
+corrects physical children without changing exposure. Earlier source94ab98e8fd3
+and the unmerged passed-frame convention62456cc59bd remain retained, with no
+current measured benefit. The slot-base-only increment and compare/branch
+region are rejected on elapsed. The exact strrchr effect declaration is already
+in qualified0b15b4bbc9b; that does not land a new dispatch convention.
 
 ## Next
 
-Freeze exact helpers and finite literal native rows using existing build/root/
-quiet protocols, strict per-arm policy and actual retained stats witnesses.
-Review the helper capsule independently before execution. Then reconcile the retained five-state convention with
-current frame/root/observer contracts. Do not combine that ABI change with
-slot-base derivation, IR-word removal, helper-effect changes or GC changes.
+Freeze and independently review actual three-arm elapsed bindings, run one
+finite quiet campaign, then apply the predeclared selector. Inspect actual
+emitted carrier reload/spill paths to explain a surviving result; do not assume
+tail superiority. Only a measured survivor advances to broad qualification or
+a separately scoped frame-argument ABI experiment.
 
 ## Completion
 

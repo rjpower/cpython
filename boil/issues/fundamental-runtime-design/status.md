@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: IR region rejected; GC v5 native feedback active; compiler/backend host preparation; hard GC cutoff set
+- State: IR/spans rejected; backend focused feedback accepted, elapsed preparation; page-map source active; hard GC cutoff set
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -29,64 +29,61 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **05:12 UTC**, GC v5 native feedback is active, session83297. The first measured increment
-was rejected before the 05:14 checkpoint. **GC parity remains unproven**;
+As of **05:49 UTC**, no native job is active. GC parity remains unproven;
 the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
-unchanged. Rejected branches and every failure remain preserved.
+unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
 
-- **IR compare/branch regions — REJECT:** source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
-  passed 34 methods in each image, actual registered-site admission and complete
-  linked-path review. The fixed pilot nevertheless regressed coroutines
-  **10.86% / 14.11%** and the four-row geometric mean **16.21% / 13.74%**.
-  Generators and Richards regressed in both rounds; RSS changes were small and
-  mixed. [Independent elapsed decision](region-elapsed-outcome-review-20261101-v1.md).
-  Session42219 returned zero, all 80 values/eight origin witnesses valid, both
-  images idle. No new samples, full-29 campaign or expensive qualification for
-  this increment. Verified home/second-dispatch removal and nine added guards/
-  reloads explain the next question, not a proven slowdown decomposition.
-- **Compiler/backend control:** host-only revision of the existing unchanged-
-  runtime GCC-computed/Clang-computed/Clang-tail experiment, through **05:35**,
-  checkpoint **05:18**. Compiler and dispatch contrasts stay separate, tail is
-  not presumed superior, and no native/source invocation is granted. Current
-  GCC parity protocol is not satisfied by a cross-compiler timing comparison.
-- **Integrated storage — correctness blocked:** original source and all four
-  failed batches remain intact. V4 `7d10d5b` passed debug26, then release stopped
-  after four passes on the allocator-wrapper lifetime assertion. [Actual review](span-native-outcome-review-20261101-v4.md).
-  Two later observations completed with no reproduction under changed call
-  graphs. Their result is **inconclusive about the original cause**, with no
-  original release-case credit: `build/span-wrapper-outcome-v1/outcome.md`.
-- **Cold fixture correction:** source froze early at **04:55:30**, clean
-  `5a457c738310f9dd762c88743af9042258841c74`, six files. The independently
-  [reviewed design](span-wrapper-public-free-design-review-20261101-v1.md)
-  separates public raw-free forwarding from actual published sweep while the
-  wrapper remains installed. Producer-thread exit removes its native roots;
-  main retains only weakref/encoded key. Production allocator/collector policy
-  is unchanged. Host22 (one expected failure), six source audits and 21 native
-  test methods/three child templates check successfully; native tests are
-  unexecuted at source freeze. The 05:08 helper partial is preserved. An idle
-  reviewer handoff was corrected; independent [exact source acceptance](span-wrapper-public-free-source-review-20261101-v5.md)
-  and [helper acceptance](span-native-helper-review-20261101-v5.md) followed.
-  Fresh debug-v5/release-v5 feedback activated **05:12:09–05:57:09 UTC**,
-  four rows, 27 selected methods and four unchanged release skips. Actual
-  supervisor session83297 is running. No timing before fresh native success.
-- **RC successor — focused behavior accepted:** clean
-  `d7df12b1d81722927e71d9734c70eeafdccfee73` passed **39 exact methods in each
-  fresh image, zero skips**. Four rows completed at04:35:44, session75555
-  returned zero; root independently replayed actual methods/origins/config/
-  product and idle checks. [Outcome](rc-native-outcome-review-20261101-v1.md).
-  This is a working fallback candidate, not collector selection, performance,
-  canonical configure regeneration, full qualification or integration.
+- **IR regions — REJECT:** source40498 passed34 selected methods per image and
+  demonstrated local home/dispatch removal, then slowed coroutines10.86%/14.11%
+  and four-row means16.21%/13.74%.
+  [Elapsed decision](region-elapsed-outcome-review-20261101-v1.md).
+  No extra samples, broad qualification or composition into another candidate.
+- **Integrated spans — REJECT:** corrected source5a passed debug27 and release23
+  plus four declared skips, including strict public-free and published-sweep
+  witnesses. [Focused outcome](span-native-outcome-review-20261101-v5.md).
+  The fixed three-arm pilot then slowed coroutines50.74%/51.07% versus parent;
+  four-row means regressed14.79%/10.26%.
+  [Independent elapsed/RSS decision](span-elapsed-outcome-review-20261101-v6.md)
+  verified120 values, twelve origin warmups, all243 artifacts and idle cleanup.
+  No extra samples or full qualification. Earlier v1–v4 failures stay failed;
+  original v4 cause remains unresolved. The first elapsed launch's root-created
+  empty-lock failure stays [preserved](span-elapsed-launch-outcome-20261101-v5.md).
+- **Compiler/backend — focused feedback accepted:** unchanged runtime417/e9,
+  fourteen rows completed05:40:26, supervisor66715 exit0 confirmed05:42:05.
+  [Independent outcome](../h1-tail-dispatch/reviews/native-outcome-20261101-v3.md)
+  accepts105 selected invocations:102 passes and three computed-tail-only skips;
+  both tail builds execute the precise-handler case. Five actual stale children
+  completed3,000 iterations, zero fallback/unpinned; all products/locks idle.
+  Fixed G/C/T elapsed helpers are being prepared through06:04, checkpoint05:55.
+  No compiler/backend speedup or selection is established.
+- **Pre-score profile rule:** the independently reviewed
+  [addendum](../gc-parity-deadline/compiler-profile-addendum-20261101.json)
+  preserves the original budget bytes, deadline and all29 decision. Select T
+  only if T/C and T/G pass every declared gate; else C if C/G passes; else G.
+  One profile stays fixed for the timebox. Clang earns parity only against fresh
+  unchanged upstream with the same compiler/backend and actual correctness.
+  No mixed-compiler credit, arithmetic composition or profile shopping.
+- **Page-map inventory — source attempt:** the
+  [selective-port design](../gc-nursery-old-work/maintained-object-map-port-design-20261101.md)
+  and [conditional root review](../gc-nursery-old-work/reviews/maintained-object-map-port-design-20261101-root.md)
+  authorize one new managed worktree from417, through06:16/checkpoint06:00.
+  Preserve the classifier and collector policy; exclude47 nursery/cadence/ledger
+  and rejected spans. Require a real nonempty failed death-prefix, independent
+  mark/SHALLOW cleanup and fault-free recovery. No source/native acceptance yet.
+- **RC fallback — focused behavior and canonical generation accepted:** d7df
+  passed39 methods in both fresh images, zero skips.
+  [Native outcome](rc-native-outcome-review-20261101-v1.md).
+  Exact cached canonical Autoconf reproduced every source byte; metadata restored
+  and all7,059 source paths/1,268 old product files independently verified.
+  [Canonical review](rc-canonical-review-20261101.md).
+  No source commit/rebuild was needed. Broader qualification and integration
+  remain owed; the collector is not yet selected.
 
-The fixed [storage pilot](../gc-parity-deadline/measurement-protocol.md) and
-reviewed held helpers await a usable corrected image. The rejected IR increment
-will not be composed into a GC parity candidate. Loom
-[runtime-work-breakdown revision4](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown)
-retains both code-organization diagrams and these measured dispositions.
-
-Old retention-oracle, VM0 revisions 1/2, structural-GC and nursery-adoption helpers remain
-held/deferred; their expired grants authorize no invocation. Regex implementation
-is paused. Native work and quiet measurements serialize; source/review may
-proceed in parallel. One adopted collector policy remains required.
+Loom [runtime-work-breakdown](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown)
+retains both code-organization diagrams and measured dispositions.
+Old retention, nursery-adoption and c43 helper grants remain expired; regex is
+paused. Native/quiet work serializes, source/reviews overlap, and adoption must
+produce one collector/backend policy.
 
 ## Next decision
 

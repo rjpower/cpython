@@ -13,17 +13,18 @@ and switch to the prepared reference-counting successor. See the
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | restart_audit | Revise existing unchanged-runtime compiler/backend control by05:15; no new local IR source attempt |
-| RC fallback preparation | [Accepted focused outcome](fundamental-runtime-design/rc-native-outcome-review-20261101-v1.md) | coordinator | 39 debug +39 release PASS; canonical configure/broader qualification remain |
-| GC / allocator | [Execution state](fundamental-runtime-design/status.md) | qualification_review_resumed; coroutine_design_review | Cold fixture source5a457c73 frozen; exact source/helper review by05:08; fresh native feedback next |
-| Early elapsed / RSS | [Fixed protocols](gc-parity-deadline/measurement-protocol.md) | coordinator | IR rejected on valid two-round scores; storage held on correctness |
-| Interpreter / backend | [Existing controls](h1-tail-dispatch/status.md) | restart_audit; coordinator | Proposed nonstats controls; compiler and dispatch effects separate, no cross-compiler GC-parity claim |
+| Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
+| RC fallback preparation | [Canonical reproduction accepted](fundamental-runtime-design/rc-canonical-review-20261101.md) | coordinator | 39 debug +39 release PASS; canonical source matches exactly; broader qualification remains |
+| GC / inventory | [Selective port design](gc-nursery-old-work/maintained-object-map-port-design-20261101.md) | qualification_review_resumed; coordinator | Source attempt through06:16, checkpoint06:00; real failed-prefix rollback required |
+| Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
+| Interpreter / backend | [Focused feedback accepted](h1-tail-dispatch/reviews/native-outcome-20261101-v3.md) | restart_audit; coordinator | Fixed G/C/T elapsed helpers through06:04; pre-score selector fixed, matched upstream required |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline
 completed and passed independent outcome review. Old cadence, VM0 and
 structural-GC helper drafts are preserved and unactivated. Their expired grants
 are not resumed by the new assignments.
+The maintained-baseline page-map port is a separate scoped source attempt.
 
 The user clarified that holistic interpreter and GC improvements take priority.
 Regex extraction is a frozen, paused native-interface proposal, not the next

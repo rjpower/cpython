@@ -272,3 +272,8 @@ Revision25 (13:57:49 UTC) closes the independent raw audit and links the committ
 full-suite rejection. Exact readback10,351 characters/two Mermaid blocks; snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v25.md`,
 SHA256 `2feba4222bd7719f133a005a1c516add2457e9bf96488a38243b011631a12191`.
+
+Revision26 (14:11:04 UTC) records the separate bounded admission source grant,
+parallel roles and direct-to-all29 ordering. Exact readback11,786 characters/two
+Mermaids; snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v26.md`,
+SHA256 `f3b54b090171bdf6e111c74975b54bd663ff40e2433c38cb6f6eddd0d1ebc4aa`. Compiler/native/timing gates remain held.

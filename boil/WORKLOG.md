@@ -1292,3 +1292,45 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   A implements, B reviews, qualifier prepares held feedback. No compiler/native
   authority. After focus/emission, go directly fixedall29; omit redundant4pilot.
   Prior rejections and Main RC stay unchanged. [Grant](issues/jit-entry-admission/source-grant-20261101-v1.json).
+- 2026-11-01 14:11:04 UTC: Loom revision26 records the separately bounded entry
+  admission source attempt and direct-to-all29 gate ordering. Exact readback
+  11,786 characters/two Mermaids; snapshot SHA256 f3b54b090171bdf6e111c74975b54bd663ff40e2433c38cb6f6eddd0d1ebc4aa.
+- 2026-11-01 14:13:22 UTC: Admission source checkpoint met: seven allowed paths,
+  two canonical/fourteen generated hooks; six generators/seven products pass,
+  only IR cases changed. Initial host26 import fails on fork lazy-import syntax;
+  failure preserved, prior accepted host-support harness reused. No compiler
+  or native execution. Final tests/source freeze remain pending.
+- 2026-11-01 14:16:03 UTC: Prefreeze review corrections stay within
+  seven paths/original14:35:30 deadline. Direct code->_co_exec avoids a stronger
+  debug precondition than full entry; one cold core fixture avoids hidden static
+  data relocation from the CAPI module; empty-code observation avoids words+1.
+  No hidden data export or hot fixture use. Original grant remains immutable.
+  [Scope disposition](issues/jit-entry-admission/source-disposition-20261101-v1.json).
+- 2026-11-01 14:21 UTC: Admission source frozen clean11aefbdd, parent599897,
+  seven paths309insertions/80deletions. Capsule69ec0977;6gens7products and26host
+  generator tests PASS. Independent exactsource ACCEPT59d17637/117b6363 verifies
+  whole-file2/14hook projections, fullentry/decoder/leaf/owner/layout exact,
+  core-only cold fixture and empty-PC correction. No compiler/native claim.
+- 2026-11-01 14:27:37 UTC: Admission activation3cd2ae6c admits one3600second
+  release/debug build+54focus cohort, actual session67238. Roothelper review
+  22e19e60/d37d68c9 verifies7241inputs/12tools/24historicalfingerprints and5host
+  controls; actualcoldimports invoke4Gitcommands/0other subprocesses. Independent
+  activator reviewe9c622e8 verifies17locks/ownedemptyjea1/absolute reviewrefs.
+  No source edits or elapsed sampling. Directall29 heldprep6177f554 reuses all5
+  correctedv2 helpers byte-for-byte;14hostcontrols/realfinalUV PASS, actualimages/
+  nativeoutcome/mainfreeze deliberately unbound. [Native grant](issues/jit-entry-admission/native-feedback-grant-20261101-v1.json).
+- 2026-11-01 14:32:27 UTC: Admission native67238 terminal0 observed14:32:13;
+  bothprofiles54PASS/eightmodules/zero skips. Completion3f6c792f retained. Root
+  cleanup verifies17locks/nativeidle/24historicalfingerprints unchanged and
+  ownedemptyjea1removed. Independent actualoutcome/emission review pending;
+  no elapsed or landing claim, no active native grant.
+- 2026-11-01 14:36:29 UTC: Admission30minute source ceiling14:35:30 expired
+  complete with source frozen early/clean11aefbdd; no extension/source authority.
+  Heldall29 actualbinding waits independent native/emission and newmainfreeze.
+- 2026-11-01 14:40 UTC: Independent admission actualnative ACCEPT0483f8a3/fee19ba5
+  verifies7285completionartifacts/586products each and both54profiles/zero skips.
+  Emission77b56b95/768116c2 provesall14negativebranches bypassfullcall, inspected
+  ordinaryPC r15/rbx retained andexact94/234byte leaves/sixspills. No wholeCFG,
+  causal/elapsed/publication claim. Source/oldimages remainfrozen. Directall29
+  actualbinding noweligible afternewliteralprimaryfreeze; same116/580+58/174,
+  no4pilot, no source/compiler/nativegrant. [Outcome](issues/jit-entry-admission/native-outcome-review-20261101-v1.md).

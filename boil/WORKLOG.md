@@ -1201,3 +1201,25 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   ordering, full post-cold checks and CAPI rollback. Leaf/owner untouched. First
   source checkpoint met before12:56:17; no compiler/native or recovery claim.
   [Source review](issues/jit-entry-pc-abi/source-review-20261101-v1.md).
+- 2026-11-01 13:01:38 UTC: ABI feedback activation1217ca24 admits one3600s cohort,
+  supervisor78640. Exactsource599897/helper213f3c56+a1e2d388; correctedactualroot
+  preflight1d541594 verifies15locks/18fingerprints/7240inputs/12tools. Two stale
+  rootwrapper metadata assumptions and missingemptycache were caught before
+  anyactivation/target, fixedoutsidefrozenhelpers with acceptedauthorities179a0c38.
+  Unbound-template None-toolpins preparation failure was preserved and corrected
+  beforefinalbinding. Fivehostcontrols PASS; no source/oldscore changes.
+  [Feedback grant](issues/jit-entry-pc-abi/native-feedback-grant-20261101-v1.json).
+- 2026-11-01 13:06:07 UTC: ABI native78640 terminal0 observed13:05:55; bothprofiles
+  PASS54/eightmodules/zero skips. Cleanup13:06:07.941030 verifiesall15locks,
+  nativeidle,18parentfingerprints exact andownedemptyjpa1removed. Completion79b78aac.
+  IndependentactualACCEPT1bfc9fc6/cdf43c03 checks7284bindings/586products each.
+  Actual94/234byte leaves equaloldsource, pressure6spills unchanged. Inspected
+  load/store/range/tuple/list paths nowkeepIP r15/rbx;14byvalueentrycalls remain.
+  Fullranges retained; no whole-CFG/causal/speed claim. Reader302slot correction
+  preserves originalfailure and reconcilesallpriorhandleraddresses unchanged.
+  [Native outcome](issues/jit-entry-pc-abi/native-outcome-review-20261101-v1.md).
+- 2026-11-01 13:09:19 UTC: Held ABI timing preparation reuses five byte-identical
+  executable helpers and the accepted fixed80value/24target protocol. Ninehost
+  controls and realUV prefix pass. Parentimage remains builtatEba; rootwillfreeze
+  a prose-onlycheckout successor forliteralbinding. No old67f5samples copied;
+  no target/compiler/timing grant. [Pre-score plan](issues/jit-entry-pc-abi/elapsed-plan-20261101-v1.md).

@@ -1,6 +1,6 @@
 # JIT entry PC by value
 
-**Source frozen and reviewed; native feedback held, 2026-11-01.**
+**Focused native checks accepted; separate fixed timing held, 2026-11-01.**
 The [30-minute grant](source-grant-20261101-v1.json), 12:46:17–13:16:17 UTC, authorizes a separate
 ABI hypothesis in `build/worktrees/jit-entry-pc-abi`, based on `67f5d22bb38`.
 The [previous increment remains rejected](../jit-first-native-tier/decision-20261101-v1.json).
@@ -21,8 +21,19 @@ Source froze at `599897b6b5d`, parent `67f5d22`, at 12:51:20. The
 paths and rollback semantics. All 26 generator tests pass; only fourteen hook
 expansions change, and the other six generated products are exact. The native
 leaf and owner remain unchanged. Restart prepares the held feedback controller;
-qualification reviews its final binding independently. Compiler, native and
-timing execution require later finite grants. Register recovery is unproved.
+qualification accepted its final binding independently. The
+[finite feedback grant](native-feedback-grant-20261101-v1.json) runs four fresh
+build/focus rows, 54 methods per profile, 13:01:38–14:01:38 UTC; supervisor 78640.
+It exited zero, observed 13:05:55. Both profiles passed all 54 methods with zero
+skips. Cleanup at 13:06:07 verified fifteen locks available, native executables
+idle, eighteen reference fingerprints unchanged and the owned cache removed.
+The [independent outcome](native-outcome-review-20261101-v1.md) accepts focused
+behavior. The [offline comparison](emission-review-20261101-v1.md) confirms
+register-based PC handling on inspected load/store/range/tuple/list paths and
+all fourteen value-passing entry calls. Both native leaf captures remain exact.
+This does not establish whole-CFG behavior, causation or useful elapsed.
+The [fixed timing plan](elapsed-plan-20261101-v1.md) remains held for exact
+image/source binding, independent helper review and a separate root grant.
 
 Gates: source review; the existing 54 focused methods in fresh release/debug
 images; actual ordinary-handler PC and unchanged native-leaf evidence; then a

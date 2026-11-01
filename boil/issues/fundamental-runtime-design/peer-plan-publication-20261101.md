@@ -277,3 +277,9 @@ Revision26 (14:11:04 UTC) records the separate bounded admission source grant,
 parallel roles and direct-to-all29 ordering. Exact readback11,786 characters/two
 Mermaids; snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v26.md`,
 SHA256 `f3b54b090171bdf6e111c74975b54bd663ff40e2433c38cb6f6eddd0d1ebc4aa`. Compiler/native/timing gates remain held.
+
+Revision27 (15:02:59 UTC) records all three native-entry rejections, actual
+full29 admission loss/cleanup, closed frame filters and read-only selected IR
+entry design. Exact readback9,522 characters/two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v27.md`,
+SHA256 `5fb560565f6b4be114821db970e1706b0dbe268fb6837d8b3cfd26d2388f9f36`. No rendered-layout check or production acceptance.

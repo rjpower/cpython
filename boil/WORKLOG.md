@@ -1334,3 +1334,33 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   causal/elapsed/publication claim. Source/oldimages remainfrozen. Directall29
   actualbinding noweligible afternewliteralprimaryfreeze; same116/580+58/174,
   no4pilot, no source/compiler/nativegrant. [Outcome](issues/jit-entry-admission/native-outcome-review-20261101-v1.md).
+- 2026-11-01 14:48:41 UTC: Admission fixedall29 activationdbc2f70b admits one45minute
+  quiet campaign, actualsession89400. Helperreviewbaad75d6/f99046ee validates44
+  artifacts/50inputs, byte-identical5helpers, source/images/config/ELF/protected5
+  andrealUVprefix. First review-seal assertion compared changed design-reference
+  bytes; failure preserved and corrected to compare unchanged numerical rules
+  plus actualnewdesign reference, before review output/target. No source/helper
+  mutation. All agents held CPU/bulk work; primarye7d4/source11aef frozen.
+- 2026-11-01 14:52:49 UTC: Admission timing89400 terminal0 observed14:52:36.
+  Complete116scored/580values/58variantorigins/348quietchecks, result5959f86e.
+  Root cleanup verifies18locks/nativeidle/bothsource-product-ELF/24historical
+  fingerprints unchanged. No replacement values or extra target runs.
+- 2026-11-01 15:03 UTC: REJECT11aefbdd under unchanged GM29 rule: loss0.52%/0.45%
+  despite spectralgain5.98%/4.45%. Every290aggregate deletion remains>1 in both
+  rounds;10materiallossunion/5repeated. Independent464a1b2d/b96b290e verifiesall
+  raw/origins/1165artifacts/currentbindings/cleanup; material7e848126/37318691
+  agrees. Wholeprocess/RSS/GM28 remain diagnostic; no newveto/no causal claim.
+  Cancel publication/fullLib/landing/resampling. Main RC stays accepted. Source
+  budget closed, all frame-entry filter experiments closed. [Decision](issues/jit-entry-admission/broad-decision-20261101-v1.json).
+  A/B now read-only15minute design/review: selected same-family IR block entry
+  through actual cold specialization, explicit PC/live-in/owner/observer contract;
+  no source/compiler/target grant. [Next design](issues/jit-quickened-block/status.md).
+- 2026-11-01 15:02:59 UTC: Loomrev27 records all three measured rejections, retained
+  RC, closed source cap and read-only IR-entry design; twoMermaids, priorhistory
+  immutable. Exact readback9,522characters; snapshot SHA256 5fb560565f6b4be114821db970e1706b0dbe268fb6837d8b3cfd26d2388f9f36.
+- 2026-11-01 15:09 UTC: Read-only quickenedblock proposal283386f7 peer accepted
+  c744041e/605dbb8d within15minute window. One deterministic arithmetic head/code,
+  full known body, original-head publication/fallbackonce, intoutput0/scratch18,
+  relative16word bound and owner/observer/metadata closure explicit. Native loops
+  deferred; no source/compiler/target grant. Exact sourcefile/cache/handler-ID cut
+  requested before a separate finite attempt. [Design](issues/jit-quickened-block/design.md).

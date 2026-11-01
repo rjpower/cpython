@@ -1,44 +1,60 @@
 # Cheap JIT entry admission
 
-**Focused native behavior and emitted admission accepted; direct all29 timing
-held, 2026-11-01.** Main remains the accepted RC runtime. Both earlier native
-candidates stay rejected; no earlier value or decision is replaced.
+**Rejected by the fixed all-29 gate, 2026-11-01.** Main remains the accepted RC
+runtime. Source `11aefbdd` and its images stay isolated and frozen. All earlier
+native candidates remain rejected.
 
-The [reviewed design](design.md) adds one necessary-only inline state/PC check
-and cold immutable entry exclusions. Full TryEntry validation, dynamic guards,
-direct CAPI behavior, native leaf, decoder, threshold, owner and transactional
-commit stay authoritative. No new field, runtime selector or release counter.
-Generator flags are entry exclusions, distinct from decoder exclusions.
+## Decision
 
-Source froze clean at `11aefbdd6405953a0bf3605b3a9f703c01285bf6`, parent599897,
-within the original30minute ceiling. Exactly seven paths changed. Six generators,
-seven products and26 host generator tests pass; all other generated products and
-the executing-code layout remain exact. The initial host lazy-import harness
-failure is retained. [Independent source review](source-review-20261101-v1.md)
-and [prefreeze corrections](source-disposition-20261101-v1.json). The source
-grant expired14:35:30 UTC complete, with no extension or further edit authority.
+[Reject progression](broad-decision-20261101-v1.json). The 29-workload geometric
+mean regresses **0.52% and 0.45%**. Every aggregate single-value deletion remains
+slower in both rounds. Spectral norm improves 5.98% and 4.45%, including its
+sensitivity checks. Ten workloads lose over 2% in at least one round; five repeat
+the loss. The [independent raw review](broad-outcome-review-20261101-v1.md),
+[complete row evidence](broad-material-losses-20261101-v1.md) and
+[material disposition](broad-disposition-review-20261101-v1.md) retain each loss.
+No cause or noise exception is asserted. GM28 and resource figures are diagnostic.
 
-The [native helper review](native-helper-review-20261101-v1.md) verifies7,241
-inputs, twelve tools, twenty-four historical fingerprints and five host controls.
-The [finite native batch](native-feedback-grant-20261101-v1.json), supervisor
-67238, exited zero, observed14:32:13. Both fresh profiles passed54 methods across
-eight modules with zero skips. Root cleanup14:32:27 verified seventeen locks,
-native idleness, historical files unchanged and the owned cache removed.
+The [fixed timing grant](broad-feedback-grant-20261101-v1.json) completed 116
+scored processes, 580 values, 58 origins and 348 quiet checks. Session 89400 exited
+zero, observed 14:52:36 UTC. Cleanup at 14:52:49 verified 18 locks, native idleness,
+exact source/product/ELF bindings and 24 historical fingerprints. Independent
+review verified all 1,165 artifacts. No value was replaced.
 
-The [independent actual outcome](native-outcome-review-20261101-v1.md) verifies
-7,285 completion artifacts and586 products per profile. The [emission review](emission-review-20261101-v1.md)
-confirms all14 inline negative branches bypass the full call; inspected ordinary
-PC paths retain r15/rbx, with exact94/234-byte leaves and six pressure spills.
-This establishes focused behavior and inspected mechanism, not useful elapsed,
-whole-CFG behavior, causation, publication support or production acceptance.
+No publication, broad functional qualification, landing or replacement samples
+follow. The frame-entry filter experiments are closed. GC work stays closed.
 
-Next is [one fixed direct all29 comparison](broad-elapsed-design-20261101-v1.md):
-116 scored processes/580 values plus58 origins. Keep GM29 and all290 value
-deletions below1 in both rounds, plus the spectral primary/ten deletions. GM28
-workload deletions remain diagnostic; every material row loss needs disposition.
-Five executable/control/preflight helpers stay byte-identical to corrected v2.
-No repeated four-row pilot. Literal main/source/image binding and final helper
-review precede a separate finite root timing grant. No target execution is active.
+## What passed
 
-Publication and broad functional gates follow only useful full-suite elapsed.
-GC stays closed. Main RC and all old source/images/scores remain unchanged.
+The [reviewed design](design.md) added one necessary-only inline state/PC check
+and cold immutable entry exclusions. Full entry validation, dynamic guards,
+decoder, leaf, threshold, owner and transactional commit stayed authoritative.
+No field, runtime selector or release counter was added. Generator flags were
+entry exclusions, distinct from decoder exclusions.
+
+Source froze clean at `11aefbdd6405953a0bf3605b3a9f703c01285bf6`, parent `599897`,
+within its original 30-minute cap. Seven paths changed. Six generators, seven
+products and 26 host generator tests passed. Other generated products and the
+executing-code layout stayed exact. The initial host harness failure and
+[prefreeze corrections](source-disposition-20261101-v1.json) remain recorded.
+[Independent source review](source-review-20261101-v1.md).
+
+The [native batch](native-feedback-grant-20261101-v1.json) passed 54 methods in
+each fresh release/debug profile, across eight modules with zero skips. It exited
+zero, observed 14:32:13; root cleanup at 14:32:27 verified 17 locks, native
+idleness, historical images unchanged and the owned cache removed.
+[Independent outcome review](native-outcome-review-20261101-v1.md).
+
+The [emission review](emission-review-20261101-v1.md) verifies all 14 negative
+branches bypass the full call, inspected ordinary PC paths retain r15/rbx, and
+the native leaves remain 94/234 bytes with six pressure spills. Focused behavior
+and mechanism passed; useful full-suite elapsed did not. No whole-CFG, causal,
+publication or production claim follows.
+
+## Next work
+
+The [selected IR block design](../jit-quickened-block/status.md) uses existing
+cold specialization and explicit fallback, ownership, monitoring and safepoint
+contracts. Its exact source and cache boundaries remain under review. No source,
+compiler, probe or target execution is granted. The accepted RC runtime and all
+measured source/images/results remain unchanged.

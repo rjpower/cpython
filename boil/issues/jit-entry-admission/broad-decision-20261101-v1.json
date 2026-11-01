@@ -1,0 +1,55 @@
+{
+  "GC_optimization_authorized": false,
+  "activation_sha256": "dbc2f70b705af16eaec9593e1182b9472f8fb203cc7859db8a3380d7b3eb7878",
+  "aggregate_deletions_per_round": 290,
+  "all_aggregate_single_value_deletions_slower": true,
+  "campaign_result_sha256": "5959f86ecd9d88fd316f1e7ce65a7c1f0fa55afe4e8de7859551c489d0a24540",
+  "cleanup_locks": 18,
+  "decision": "REJECT_INLINE_ADMISSION_ON_FIXED_FULL29_AGGREGATE_ELAPSED_LOSS",
+  "frame_entry_filter_experiments_closed": true,
+  "geomean29_ratios": [
+    1.0052088894271387,
+    1.004548453285988
+  ],
+  "improved_workloads_per_round": [
+    14,
+    16
+  ],
+  "independent_receipt_sha256": "b96b290e96605541ae7865c0579b6cad70c5b99d661401251bec1b7b3ed531a0",
+  "independent_review_sha256": "464a1b2d8f878751f0f4544114a3310e4fa9c7831c955f77152009507c95978c",
+  "main_runtime_changed": false,
+  "material_disposition_receipt_sha256": "37318691ea67b9ba3d4a6e59ce9d280b5f97517e98f2de369562f8b8cad84f15",
+  "material_disposition_review_sha256": "7e848126e2351d7294297059f4ba95bab7406caf72b23edbb01b07f0f050c867",
+  "material_losses_both_rounds": 5,
+  "material_losses_either_round": 10,
+  "next_authority": "Read-only quickened IR block-entry design and peer review; no implementation or execution grant",
+  "parent_checkout": "e7d4cd79b02a515ac116d3ac277c381fc2b5b075",
+  "parent_image_source": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "plan_sha256": "e4055293b4d68eef76f5020ca383000a6d2f2ceefe17117a3eadf21d8b61045e",
+  "preserved_historical_fingerprints": 24,
+  "primary_ratios": [
+    0.9401568963658163,
+    0.9555421288445686
+  ],
+  "production_or_landing_accepted": false,
+  "publication_or_broad_qualification_authorized": false,
+  "quiet_checks": 348,
+  "raw_values": 580,
+  "regressed_workloads_per_round": [
+    15,
+    13
+  ],
+  "resampling_authorized": false,
+  "root_cleanup_utc": "2026-11-01T14:52:49.277582+00:00",
+  "root_disposition": "Reject progression under the original mean rule; keep every loss and do not infer a cause",
+  "scored_processes": 116,
+  "session_id": 89400,
+  "source_extension_authorized": false,
+  "source_grant_closed_complete": true,
+  "source_head": "11aefbdd6405953a0bf3605b3a9f703c01285bf6",
+  "terminal_exit": 0,
+  "terminal_observed_utc": "2026-11-01T14:52:36+00:00",
+  "unscored_origins": 58,
+  "verified_campaign_artifacts": 1165,
+  "workload_deletion_is_diagnostic_only": true
+}

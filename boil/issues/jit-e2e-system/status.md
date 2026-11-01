@@ -149,6 +149,18 @@ Host/generator and bounded syntax/encoder fixture checks precede fresh native
 validation. No candidate build/runtime, timing or integration is authorized by
 this source grant. M2 workload diagnostics used their separate reviewed campaign.
 
+The [partial checkpoint](m3-checkpoint-decision-20261101-v1.json) passed on time:
+author20:27:28, independent review20:31:07, before20:31:13. Review verifies12
+archived source copies,34host checks and a fixture executing the actual shared
+SSA/verifier/allocator against synthetic events. Seven actual-source syntax
+commands passed, but their receipt does not establish exact compiled byte
+identity; that limitation remains explicit. This permits continued source work
+under the same21:31:13 cutoff, with no final source or native acceptance.
+Register PHI moves and scalar folding/CSE are now being completed/reviewed;
+genuine rooted DCE, recovery/lifetime, complete emission/failure evidence and
+runtime fixtures remain. Inherited validation producers preserve10,392closed
+files; the planned36-method roster and fresh debug build remain unbound/held.
+
 The [six-program diagnostic](m2-workload-diagnostics-20261101-v1.md) is now complete:
 six valid fresh processes, zero manual compile requests, no reference arm or
 scores, no queried entry witnesses. Eight targets were refused at

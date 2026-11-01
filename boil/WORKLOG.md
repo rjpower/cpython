@@ -1726,3 +1726,25 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   25,812characters/two diagrams, snapshot3d900cde. It records valid negative
   workload coverage, the unchanged-cap helper amendment and actual partial-source
   recorder/SSA findings. No positive workload entry, performance or M3 acceptance.
+- 2026-11-01 20:31 UTC: Prepare inherited M3 validation producers only, preserving
+  10,392closed files and planning old28+eight newmethods; source/roster binding
+  and activation remain held. Root source review finds tagged-index object
+  dereference and all-PHI stack shuffling; independent reviewer confirms index
+  bug, author fixes guard and retains register-PHI/pass/emission/runtime work.
+  Author checkpoint161483b1 seals20:27:28, ahead of20:31:13: twelve source copies,
+  34host passes and actual SSA/RA fixture with synthetic events. Seven syntax
+  commands pass but lack exact source/stream pins; final producer must close
+  that evidence gap. Independent checkpoint disposition is pending; no M3 runtime.
+- 2026-11-01 20:34 UTC: Accept timely M3 partial checkpoint in09408cc7 after
+  independent8260a570/064bb3b5 review sealed20:31:07 before20:31:13. Exact12source
+  copies/9refs and actualSSA/RA compile/run pins verify; synthetic event inputs
+  and syntax byte-identity limitation stay explicit. Continue source under
+  original21:31:13 cutoff; no extension or completion/native credit. Subsequent
+  register PHI/copy/fold/CSE changes are in review; root flags value-ID compaction
+  as insufficient alone for genuineDCE. Eight runtime fixtures and full emission,
+  recovery/lifetime/final checks remain. [Checkpoint](issues/jit-e2e-system/m3-checkpoint-decision-20261101-v1.json).
+- 2026-11-01 20:36 UTC: Publish and exactly read back Loom revision45,
+  27,370characters/two diagrams, snapshot363faa00. It records the accepted timely
+  partial checkpoint, actual source-review findings and explicit evidence limits,
+  unfinished optimizer/runtime work and held36-method validation preparation.
+  No source-cap extension, M3 completion/native execution or speed claim.

@@ -1,6 +1,15 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision44 at20:18:14 UTC records six valid diagnostic runs
+Latest publication: revision45 at20:34:54 UTC records the timely independently
+accepted M3 partial checkpoint, explicit synthetic-input/syntax-identity limits,
+unfinished optimizer/runtime work and held36-method validation preparation.
+Exact readback matches27,370characters and two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v45.md`
+has SHA256 `363faa00fd01e9986a18a843305e7855a2181323eb88414b4592249a784815f1`.
+The original21:31:13UTC source cutoff stays fixed. No M3 implementation completion
+or native execution is claimed; Mermaid source/readback, not rendered layout, checked.
+
+Revision44 at20:18:14 UTC records six valid diagnostic runs
 with0/12queried native-entry witnesses, exact common-constant/raise coverage gaps,
 the reviewed two-helper amendment within M3's unchanged source cap, and actual
 recorder/SSA review findings. Exact readback matches25,812characters and two

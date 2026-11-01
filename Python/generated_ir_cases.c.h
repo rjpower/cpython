@@ -11761,6 +11761,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
                 if (generator_return) {
@@ -16330,6 +16331,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
+                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
                 if (generator_return) {
@@ -16342,6 +16344,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             IR_STORE_RETURN(res);
+            JIT_MAYBE_RESUME();
             DISPATCH();
         }
 
@@ -18972,6 +18975,7 @@ JUMP_TO_LABEL(error);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 _PyInterpreterFrame *dying = frame;
                 frame = tstate->current_frame = dying->previous;
+                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                     tstate->current_frame = frame->previous;
@@ -19007,6 +19011,7 @@ JUMP_TO_LABEL(error);
                 #if _Py_TAIL_CALL_INTERP
                 int opcode;
                 #endif
+                JIT_MAYBE_RESUME();
                 DISPATCH();
             }}
 

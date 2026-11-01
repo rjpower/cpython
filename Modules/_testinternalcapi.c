@@ -29,6 +29,7 @@
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
+#include "pycore_jit.h"
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
 #include "pycore_opcode_metadata.h" // _PyOpcode_OpName
@@ -3580,7 +3581,19 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
     return res;
 }
 
+static PyObject *
+jit_method_step_call(PyObject *module, PyObject *args)
+{
+    PyObject *function, *arguments;
+    Py_ssize_t limit = 10000;
+    if (!PyArg_ParseTuple(args, "OO|n:jit_method_step_call", &function, &arguments, &limit)) {
+        return NULL;
+    }
+    return _PyJit_TestCall(function, arguments, limit);
+}
+
 static PyMethodDef module_functions[] = {
+    {"jit_method_step_call", jit_method_step_call, METH_VARARGS, NULL},
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},

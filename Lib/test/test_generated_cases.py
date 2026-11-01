@@ -1,6 +1,8 @@
 import contextlib
 import io
 import os
+from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -34,6 +36,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_generator
+    import jit_helpers_generator
     import ir_metadata_generator
     import parser
     from stack import Local, Stack
@@ -983,6 +986,74 @@ class TestIRCases(unittest.TestCase):
                       + "BINARY_OP_ADD", lines)
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
+
+class TestJitHelpers(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
+        output = io.StringIO()
+        jit_helpers_generator.generate([str(source)], output)
+        cls.output = output.getvalue()
+        cls.analysis = analyzer.analyze_files([str(source)])
+
+    def body(self, name):
+        start = self.output.index(f"static _PyJitAction jit_helper_{name}(")
+        end = self.output.find("static _PyJitAction", start + 1)
+        if end < 0:
+            end = self.output.index("#undef JIT_FINISH", start)
+        return self.output[start:end]
+
+    def test_every_valid_handler_classified(self):
+        names = set(ir_generator.compute_formats(self.analysis))
+        self.assertIn("BINARY_OP", names)
+        rows = re.findall(r'\[\d+\] = \{"(\w+)", ([^,]+), ([^}]+)\}', self.output)
+        self.assertEqual({name for name, _, _ in rows}, names)
+        for name, helper, reason in rows:
+            with self.subTest(name=name):
+                self.assertNotEqual(helper == "NULL", reason == "NULL")
+                if helper != "NULL":
+                    self.assertIn(f"static _PyJitAction {helper}(", self.output)
+        for name in ("LOAD_CONST_INLINE_INT", "LOAD_CONST_INLINE_FLOAT", "LOAD_SMALL_INT_INLINE"):
+            self.assertIn(f"jit_helper_{name}(", self.output)
+        self.assertNotIn("jit_helper_YIELD_VALUE(", self.output)
+
+    def test_real_call_return_and_error_order(self):
+        call = self.body("CALL")
+        self.assertIn("_PyEvalFramePushAndInit(", call)
+        self.assertIn("frame->return_slot =", call)
+        self.assertIn("DISPATCH_INLINED(new_frame)", call)
+        self.assertIn("_Py_VectorCallInstrumentation_StackRefSteal", call)
+        returned = self.body("RETURN_VALUE")
+        self.assertLess(returned.index("tstate->current_frame = dying->previous"),
+                        returned.index("_PyEval_FrameClearAndPop"))
+        self.assertLess(returned.index("IR_STORE_RETURN(res)"), returned.index("DISPATCH();"))
+        self.assertIn("_PyJIT_RETURN_COMPLETED", returned)
+        binary = self.body("BINARY_OP_ADD")
+        self.assertIn("_PyEval_BinaryOps[oparg](lhs_o, rhs_o)", binary)
+        self.assertIn("IR_DROP_BORROW(lhs", binary)
+        self.assertIn("JUMP_TO_LABEL(error)", binary)
+
+    def test_cold_specialization_continues_generic_once(self):
+        for name in ("CALL", "BINARY_OP_ADD", "LOAD_GLOBAL", "COMPARE_OP"):
+            with self.subTest(name=name):
+                body = self.body(name)
+                self.assertNotIn("DISPATCH_SAME_OPARG()", body)
+                jump = body.index("goto jit_after_SPECIALIZE_")
+                label = body.index(":;", jump)
+                self.assertLess(body.index("ADVANCE_ADAPTIVE_COUNTER", jump), label)
+                self.assertIn("next_instr = this_instr + 1", body)
+        self.assertIn("_PyJIT_BRANCH", self.body("JUMP_BACKWARD"))
+        self.assertIn("check_periodics(tstate)", self.body("JUMP_BACKWARD"))
+
+    def test_descriptor_and_no_evaluator_dispatch(self):
+        self.assertIn("const _PyJitDecodedOp *op", self.body("CALL"))
+        for field in range(4):
+            self.assertIn(f"(op->fields[{field}])", self.output)
+        self.assertIn("(op->wide)", self.output)
+        self.assertNotIn("JUMP_TO_PREDICTED", self.output)
+        self.assertNotIn("goto *", self.output)
+        self.assertNotRegex(self.output, r"\bTARGET\(")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_jit.h"
 #include "pycore_long.h"
 
 #ifdef HAVE_PTHREAD_NP_H
@@ -1248,6 +1249,52 @@ dtrace_function_return(_PyInterpreterFrame *frame)
 }
 #endif
 
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+static int
+jit_helpers_have_monitoring(PyCodeObject *code)
+{
+    _PyCoMonitoringData *data = code->_co_monitoring;
+    if (data == NULL) {
+        return 0;
+    }
+    /* A wholly empty header may only record synchronization with a global
+     * epoch. Retained observer payload still requires interpreter execution. */
+    if (data->tools || data->lines || data->line_tools ||
+        data->per_instruction_opcodes || data->per_instruction_tools) {
+        return 1;
+    }
+    for (int i = 0; i < _PY_MONITORING_UNGROUPED_EVENTS; i++) {
+        if (data->local_monitors.tools[i] || data->active_monitors.tools[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+jit_helpers_allow_observers(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (IS_PEP523_HOOKED(tstate) || tstate->tracing || tstate->c_tracefunc ||
+        tstate->c_profilefunc || jit_helpers_have_monitoring(_PyFrame_GetCode(frame))) {
+        return 0;
+    }
+    for (int i = 0; i < _PY_MONITORING_UNGROUPED_EVENTS; i++) {
+        if (tstate->interp->monitors.tools[i]) {
+            return 0;
+        }
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace) {
+        return 0;
+    }
+#endif
+    return !(PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED() ||
+             PyDTrace_LINE_ENABLED());
+}
+#endif
+
+#include "generated_jit_helpers.c.h"
+
 PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
@@ -1268,6 +1315,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _PyIRWord ir_word = 0;  /* Its word, from which the handler takes its fields */
 #endif
     _PyEntryFrame entry;
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+    _PyJitTestRequest *jit_request = NULL;
+    _PyJitContext jit_context;
+    _PyJitAction jit_result;
+#endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1308,6 +1360,11 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry.frame.previous = tstate->current_frame;
     frame->previous = &entry.frame;
     tstate->current_frame = frame;
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+    if (!throwflag) {
+        jit_request = _PyJit_TestClaim(tstate, frame);
+    }
+#endif
 
     /* support for generator.throw() */
     if (throwflag) {
@@ -1338,6 +1395,94 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #   endif
 #else
     goto start_frame;
+#if !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+    jit_step:
+    {
+        /* M0 executes real generated helpers, not native machine code. An
+         * unavailable adapter ends stepping for this entire activation. */
+        if (jit_request == NULL || frame != jit_request->claimed_frame) {
+            DISPATCH();
+        }
+        if (jit_request->remaining-- <= 0 || !jit_helpers_allow_observers(tstate, frame)) {
+            jit_request->claimed_frame = NULL;
+            jit_request = NULL;
+            DISPATCH();
+        }
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        Py_ssize_t offset = next_instr - frame->ir_words;
+        assert(offset >= 0 && offset < Py_SIZE(code));
+        _PyIRWord pristine = _PyCode_WORDS(code)[offset];
+        /* Applies the existing per-interpreter boxed-constant policy without
+         * importing executing-only quickening into the semantic descriptor. */
+        int handler = _PyCode_GenericHandler(code, (int)offset);
+        if (handler >= Py_ARRAY_LENGTH(jit_helpers) || jit_helpers[handler].helper == NULL) {
+            jit_request->actions[_PyJIT_DEOPT]++;
+            jit_request->phases[_PyJIT_DEOPT_BEFORE]++;
+            jit_request->claimed_frame = NULL;
+            jit_request = NULL;
+            DISPATCH();
+        }
+        _PyJitDecodedOp op = {
+            .instruction = next_instr,
+            .fields = {IR_A(pristine), IR_B(pristine), IR_C(pristine), IR_D(pristine)},
+            .wide = IR_CD(pristine), .handler = (uint16_t)handler,
+        };
+        _PyJitContext ctx = {.tstate = tstate, .frame = frame, .next_instr = next_instr};
+        /* Retire the diagnostic frame identity before RETURN can clear it
+         * and invoke finalizers which might allocate another frame there. */
+        if (handler == RETURN_VALUE && frame == jit_request->claimed_frame) {
+            jit_request->claimed_frame = NULL;
+        }
+        _PyJitAction action = jit_helpers[handler].helper(&ctx, &op);
+        jit_request->actions[action]++;
+        jit_request->phases[ctx.phase]++;
+        jit_context = ctx;
+        jit_result = action;
+        goto jit_consume_action;
+    }
+
+    jit_consume_action:
+    {
+        _PyJitContext ctx = jit_context;
+        frame = ctx.frame;
+        next_instr = ctx.next_instr;
+        slots = _PyFrame_Slots(frame);
+        switch (jit_result) {
+            case _PyJIT_CONTINUE:
+            case _PyJIT_BRANCH:
+            case _PyJIT_RETURN:
+                goto jit_step;
+            case _PyJIT_ENTER_FRAME:
+                if (ctx.phase == _PyJIT_ENTER_PREPARED) {
+                    tstate->current_frame = frame;
+                    CALL_STAT_INC(inlined_py_calls);
+                    goto start_frame;
+                }
+                assert(ctx.phase == _PyJIT_ENTER_STARTED);
+                goto jit_step;
+            case _PyJIT_RAISE:
+                if (jit_request != NULL) {
+                    jit_request->claimed_frame = NULL;
+                    jit_request = NULL;
+                }
+                next_instr = ctx.raising_instr + 1;
+                if (ctx.phase == _PyJIT_UNWIND_PENDING) {
+                    goto exception_unwind;
+                }
+                assert(ctx.phase == _PyJIT_ERROR_LOG_PENDING);
+                goto error;
+            case _PyJIT_DEOPT:
+                assert(ctx.phase == _PyJIT_DEOPT_BEFORE || ctx.phase == _PyJIT_DEOPT_AFTER);
+                if (jit_request != NULL) {
+                    jit_request->claimed_frame = NULL;
+                    jit_request = NULL;
+                }
+                DISPATCH();
+            default:
+                Py_UNREACHABLE();
+        }
+    }
+#endif
 #       include "generated_ir_cases.c.h"
 #endif
 

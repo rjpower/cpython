@@ -1479,6 +1479,7 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
+            JIT_LEAVE_FRAME(dying);
             _PyEval_FrameClearAndPop(tstate, dying);
             RELOAD_STACK();
             // A frame resumes at the word after the one that made the call,
@@ -5909,6 +5910,7 @@ dummy_func(
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
             frame = tstate->current_frame = dying->previous;
+            JIT_LEAVE_FRAME(dying);
             _PyEval_FrameClearAndPop(tstate, dying);
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
@@ -5950,6 +5952,7 @@ dummy_func(
 #if _Py_TAIL_CALL_INTERP
             int opcode;
 #endif
+            JIT_MAYBE_RESUME();
             DISPATCH();
         }
 

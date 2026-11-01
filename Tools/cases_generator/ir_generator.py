@@ -1144,6 +1144,7 @@ class IREmitter(Emitter):
     "Emits handler bodies for the register IR"
 
     instruction_macros = IR_INSTRUCTION_MACROS
+    helper = False
 
     def __init__(self, out: CWriter, analysis: Analysis,
                  formats: dict[str, IRFormat]):
@@ -1507,6 +1508,11 @@ def write_uop(
                 emitter.emit(f"(void){cache.name};\n")
     emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
+    if (emitter.helper and uop.name.startswith("_SPECIALIZE_") and
+            any(t.text == "DISPATCH_SAME_OPARG" for t in uop.body.tokens())):
+        emitter.emit("#if ENABLE_SPECIALIZATION\n")
+        emitter.emit(f"jit_after{uop.name}:;\n")
+        emitter.emit("#endif\n")
     if braces:
         emitter.out.start_line()
         emitter.emit("}\n")
@@ -1548,9 +1554,25 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     nofb = name == inst.name + NOFB_SUFFIX
     if name != inst.name and not nofb:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
-    is_target = inst.is_target and name == inst.name
+    helper = emitter.helper
+    is_target = inst.is_target and name == inst.name and not helper
     out.emit("\n")
-    out.emit(f"TARGET({name}) {{\n")
+    if helper:
+        out.emit(f"static _PyJitAction jit_helper_{name}(_PyJitContext *ctx, const _PyJitDecodedOp *op) {{\n")
+        out.emit("PyThreadState *tstate = ctx->tstate;\n")
+        out.emit("_PyInterpreterFrame *frame = ctx->frame;\n")
+        out.emit("_PyIRWord *next_instr = ctx->next_instr;\n")
+        out.emit("_PyStackRef *slots = _PyFrame_Slots(frame);\n")
+        out.emit("(void)tstate; (void)slots;\n")
+        out.emit(f"int opcode = {name}; (void)opcode;\n")
+        out.emit("assert(next_instr == op->instruction);\n")
+        action = ("_PyJIT_RETURN" if name == "RETURN_VALUE" else
+                  "_PyJIT_BRANCH" if fmt.jumps or fmt.forward else "_PyJIT_CONTINUE")
+        phase = "_PyJIT_RETURN_COMPLETED" if name == "RETURN_VALUE" else "_PyJIT_AFTER"
+        out.emit(f"const _PyJitAction jit_action = {action};\n")
+        out.emit(f"const _PyJitPhase jit_phase = {phase};\n")
+    else:
+        out.emit(f"TARGET({name}) {{\n")
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
@@ -1624,6 +1646,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             # The result is in its slot of the window; a local takes it
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
+        if name == "RETURN_VALUE" and not helper:
+            out.emit("JIT_MAYBE_RESUME();\n")
         out.emit("DISPATCH();\n")
     out.start_line()
     out.emit("}")

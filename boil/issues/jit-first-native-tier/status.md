@@ -7,12 +7,52 @@
 `eba351fee7d`. Restart owns the scalar decoder/C leaf/exec lifetime/shared
 header/build entries; coroutine owns entry/observers/tests/generated products.
 Qualification reviewer checks critical boundaries independently. Root alone
-grants native feedback after source freeze and review; none is granted yet.
+grants native feedback after source freeze and review.
+
+The C-stage source is frozen at `f206d66979f` and
+[independently accepted](source-review-20261101-v1.md). It met the admission/
+lifetime checkpoint before 11:33:54. Host regeneration and 26 generator tests
+passed; generated cases add fourteen hooks, while six opcode metadata entries
+conservatively gain `HAS_ESCAPES_FLAG`. No analyzer exemption was added.
+
+The [54-method feedback helpers](helper-review-20261101-v1.md) are accepted.
+The first four-row cohort failed: supervisor 67674 returned 1, observed
+11:40:05. Release built successfully; its test row ran 32 methods with two new
+fixture errors before their intended assertions. Six modules and debug did not
+run. Cleanup verified all eleven locks available, native executables idle,
+parent-image fingerprints intact and the empty owned cache removed.
+
+The [test-only successor](source-fixture-review-20261101-v2.md), `30a0f5ab1bd`,
+corrects private-handler encoding and live-traceback inspection in exactly two
+methods. Runtime source and the release image remain unchanged through an
+independently accepted reuse bridge. The fixed three-row follow-up completed:
+release54, fresh debug build, debug54; all rows and verifications returned zero.
+Both profiles passed 54 methods across eight modules, with zero skips.
+Supervisor 19557 exited zero, observed 11:57:43; cleanup at 11:58:14 verified
+all eleven locks available, native executables idle, six parent fingerprints
+unchanged and the owned empty cache removed. Independent outcome review
+accepted all 7,274 completion artifacts and 586 products per profile. The first
+failure remains failed. No native encoder or elapsed credit is claimed.
+
+The [native replacement source grant](native-replacement-source-grant-20261101-v1.json)
+is active after independent C-stage acceptance and critical design clearance.
+A implements the bounded six-register encoder, spills and executable owner;
+B adapts scratch20, temporary native fixtures and the existing twelve methods.
+Cold owner/mapping/protection/capacity faults and a synthetic Plan forcing real
+spills are approved through the production compiler and runner. The C arithmetic
+executor is replaced. Compiler and native execution remain held pending source
+freeze, review and a finite feedback grant. A complete emitter draft reached
+the source checkpoint at 12:03:02, before 12:03:54; it has not been compiled or
+executed. The 12:33:54 source ceiling is unchanged.
 
 The reviewed interface separates allocation-free bounded probing, full frame/
 input/observer eligibility, and 64-entry counting/promotion. Guards repeat after
 cold work; construction is non-reentrant. First establish the C scalar contract,
 then replace its runner with native encoding. Keep no permanent C/native option.
+The [empty-monitor-record amendment](empty-monitor-record-amendment-20261101-v1.md)
+allows only a provably empty epoch header; actual or retained observer state
+still invalidates the descriptor. This avoids excluding every fresh function
+after an earlier global monitoring change.
 The original fixed two-round/five-value/four-workload decision is unchanged.
 Thirty/sixty-minute checkpoints require admission/lifetime and emitter closure;
 an incomplete patch stops at the source ceiling. No shorter-region rescue or

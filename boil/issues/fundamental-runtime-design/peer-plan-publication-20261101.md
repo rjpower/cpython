@@ -205,6 +205,16 @@ Exact readback matches12,793 characters and two Mermaid blocks. Snapshot
 SHA256 `1bbe69c0b4e753b17f89f77af0f4a78484874298477bb003bbd2a737f04debbf`.
 No rendered-layout check, JIT execution or performance improvement is claimed.
 
+Revision18, published12:03:29 UTC, records independent C-stage behavior
+acceptance, both54-method profiles, the preserved first fixture failure, exact
+release-image reuse and the active native replacement source grant. Its two
+Mermaid diagrams identify the entry/runner files and put focused native behavior
+before the fixed elapsed decision. The original source ceiling remains fixed.
+Exact readback matches14,532 characters and two Mermaid blocks. Snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v18.md`
+SHA256 `0f5de9128fe5c47cd051bff0b9ba388f25c0395d3a626506ba1f28dfbdb5aacc`.
+No rendered-layout check, machine-code execution or speed improvement is claimed.
+
 ## Adopted diagnostic scope and canonical Clinic correction, revision15
 
 At10:15:57 UTC, guarded revision15 records both failed upstream builds and

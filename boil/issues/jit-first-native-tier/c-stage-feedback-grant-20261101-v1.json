@@ -1,0 +1,15 @@
+{
+  "activation_path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1/build/jit-prefix-c-stage-feedback-v1/activation.json",
+  "activation_sha256": "7cfa55e14eec1d2194e8cf197af01f06a07f38a095f8c9517ce2a0eb70af23f8",
+  "deadline_utc": "2026-11-01T12:38:08.397294+00:00",
+  "decision": "AUTHORIZE_ONLY_FIXED_C_STAGE_BEHAVIOR_FEEDBACK",
+  "methods_per_image": 54,
+  "native_encoder_authorized": false,
+  "rows": 4,
+  "source_deadline_unchanged": "2026-11-01T12:33:54.295926+00:00",
+  "source_head": "f206d66979f1051d3664d3341150be421daa90b8",
+  "start_utc": "2026-11-01T11:38:08.397294+00:00",
+  "supervisor_session": 67674,
+  "timing_authorized": false,
+  "utc": "2026-11-01T11:40:05.072211+00:00"
+}

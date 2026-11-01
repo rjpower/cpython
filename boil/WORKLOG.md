@@ -1060,3 +1060,62 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   unchanged; noextrasamples/shorterregionrescue. Loomrev17 exact12,793chars/
   twoMermaids snapshot1bbe69c0 recordsadoption/limits/newsourceattempt.
   [Source grant](issues/jit-first-native-tier/source-grant-20261101-v1.json).
+- 2026-11-01 11:40:05 UTC: JIT C-stage source frozen clean at f206d66979f, twelve changed paths,
+  before the 11:33 admission/lifetime checkpoint. Independent source ACCEPT
+  f8855d85/55827752: scalar decoder/CSE/transaction, ownership and teardown,
+  sentinel-first declines, one-shot release witness and debug counts. Empty
+  monitoring headers are distinguished from actual/retained observers through
+  the reviewed amendment; no test isolation or observer shortcut. Host generator
+  tests passed26/26; fourteen generated hook lines and six conservative escape
+  metadata entries. No C syntax, native encoder or speed claim at this gate.
+  [Source review](issues/jit-first-native-tier/source-review-20261101-v1.md).
+- 2026-11-01 11:40:05 UTC: Reused four-row C-stage feedback independently ACCEPT54b3c5a2/7a109d3a:
+  exact54 methods/eight modules,7,239 inputs,27 artifacts,15 helper modes and
+  parent-image fingerprints. Preparation-only missing build parent/existing
+  unbound archive errors were corrected before sealing; original evidence kept.
+  Root activation7cfa55e1 at11:38:08–12:38:08; supervisor67674 running. Fresh
+  release/debug builds and54 methods each only; source ceiling12:33 unchanged.
+  Standard tagged0 child and possible environment probe are explicit, with no
+  inferred total process count. No native encoder/elapsed authorization.
+  [Feedback grant](issues/jit-first-native-tier/c-stage-feedback-grant-20261101-v1.json).
+- 2026-11-01 11:51:39 UTC: First C-stage feedback FAILED, native67674 terminal1 observed11:40:05.
+  Release built;32 tests ran with two new fixture ERRORs before their intended
+  assertions (private handler encoder lookup, unittest-cleared traceback).
+  Six modules/debug/boxed-only child did not run. Independent FAILED3a2c0fa4/
+  b6e6a944; rootcleanup11:41:56 all11locks/nativeidle/parentimages intact/cachegone.
+  No completed C-stage pass or native/elapsed credit.
+- 2026-11-01 11:51:39 UTC: Independently accepted test-only successor30a0f5ab1bd changes exactly
+  two methods, preserving constructor and exact IP12 assertions. Source review
+  83abc29d/a68a3f9e. Release reuse f1b6e46e independently ACCEPTc53a9bef/834cdfc5:
+  all586 products/config/tools exact, no additions, runtime/generated source
+  unchanged. Corrected3row/2190-second helper under final review; no redundant
+  release rebuild or separate two-case cohort. Actual reused loader and five
+  host composition controls pass without compiler/target calls. Source ceiling
+  12:33 unchanged; native encoding remains held pending C behavior acceptance.
+  [Correction](issues/jit-first-native-tier/source-fixture-review-20261101-v2.md).
+- 2026-11-01 11:59:32 UTC: Corrected C-stage cohort activation5f419792 ran three fixed rows,
+  11:51:58-12:28:28 UTC inclusive2190s, source30a0/test-only bridge. Actual
+  completion11:54:07; root observed supervisor19557 terminal0 at11:57:43.
+  Release54 and fresh-debug54 each PASS54/eight modules/zero skips; all three
+  launch/verify receipts0. Root cleanup11:58:14: nativeidle/all11locks available,
+  six parent fingerprints exact, owned emptyjc2 removed. Independent actual
+  disposition pending; native encoding still held. Prior failed cohort unchanged.
+  Source ceiling12:33:54 and emitter checkpoint12:03:54 remain unchanged.
+  [Corrected grant](issues/jit-first-native-tier/c-stage-feedback-grant-20261101-v2.json).
+- 2026-11-01 12:04:15 UTC: Independent corrected C behavior ACCEPT49d26a98/96f02a6a;
+  both54/zero skips, all7,274 completion artifacts and586 products each checked.
+  Native plan critical clearance02bfb5c3/268bfb24. Source replacement granted
+  A/B at12:01, recorded12:01:47, original ceiling12:33:54 unchanged. Approved
+  six caller-saved registers, bounded spills/scratch20, ENDBR64/Plan validation,
+  matched RW-to-RX owner lifetime and cold owner/map/protect/capacity fault tests.
+  Same production compiler/runner serves synthetic pressure fixture; no C
+  executor/selector. A first complete emitter draft12:03:02 met12:03:54 source
+  checkpoint, not compiled/executed. Independent early source review active.
+  [Native source grant](issues/jit-first-native-tier/native-replacement-source-grant-20261101-v1.json).
+- 2026-11-01 12:04:15 UTC: Native feedback helpers staged unbound for four fresh build/focus
+  rows,54IDs/eight modules per profile. Five applicable host controls PASS.
+  The initially invoked sixth main-worktree protected-file guard errored on
+  missing main_source_guard; it does not apply to this clean isolated worktree.
+  The isolated HEAD/full-clean guard is retained. No compiler/target execution.
+  Loomrev18 exact14,532chars/twoMermaids read back; snapshot0f5de912 records
+  C actual acceptance/native source grant and unchanged source ceiling.

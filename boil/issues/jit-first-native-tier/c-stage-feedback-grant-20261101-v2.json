@@ -1,0 +1,19 @@
+{
+  "decision": "AUTHORIZE_ONE_CORRECTED_C_STAGE_FEEDBACK_COHORT",
+  "source_head": "30a0f5ab1bd02128495c5a0fe03128a417375460",
+  "historical_release_image_source": "f206d66979f1051d3664d3341150be421daa90b8",
+  "start_utc": "2026-11-01T11:51:58.009079+00:00",
+  "deadline_utc": "2026-11-01T12:28:28.009079+00:00",
+  "native_window_seconds": 2190,
+  "activation_sha256": "5f4197929c6fa7280ce750e510eb1b9c964b1142ddaef9b2bc6e4a36a26e6580",
+  "source_review_sha256": "83abc29dda6d822b2bd910265e754e90b42c4f807aec7935d8ade5dd1516f98a",
+  "helper_review_sha256": "7add713a5f8906abd25f5c1d1057d6645f7f412e85d7567e34e8c37bbb8027de",
+  "release_reuse_bridge_sha256": "f1b6e46e8cbc5b0779b10c14de4e839ba66ccaa30d0031d3b0ee7599215f9132",
+  "session_id": 19557,
+  "rows": ["release54", "fresh_debug_build", "debug54"],
+  "evidence_directory": "build/worktrees/jit-prefix-stage1/build/jit-prefix-c-stage-feedback-v2",
+  "source_deadline_unchanged": "2026-11-01T12:33:54.295926+00:00",
+  "native_encoder_authorized": false,
+  "elapsed_authorized": false,
+  "qualification": false
+}

@@ -435,3 +435,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   [Storage review](issues/fundamental-runtime-design/stable-storage-mechanism-review-20261101.md),
   [IR review](issues/fundamental-runtime-design/interpreter-region-review-20261101-v1.md),
   [publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01: Reconciled the implemented-runtime overview with the current
+  architecture decision. The old nursery-adoption dispatch is deferred; its
+  private control remains explicit retirement debt, to be removed when one
+  collector policy is adopted. The description no longer treats that isolated
+  nursery candidate as the required next design. No runtime source changed.
+- 2026-11-01: The minimal current-IR capture's first activation failed in the
+  host launcher before a gate or target ran. A transitive supervisor import
+  selected the baseline's same-named build helper; the prior readiness review
+  missed the composed import path. Preserved terminal1, original activation/
+  failure and actual idle-image verification; zero workload calls earn no
+  observation credit. Assigned a new 03:10–03:20 host repair and independent
+  review through 03:25, requiring real dependency-origin/cache controls before
+  any fresh activation. Integrated-storage source work continues unchanged.
+  [Execution state](issues/fundamental-runtime-design/status.md).

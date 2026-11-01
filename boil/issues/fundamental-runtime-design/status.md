@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: baseline accepted; integrated allocator/collector source active; interpreter site-capture preparation active
+- State: baseline accepted; integrated storage source active; pre-target IR capture failure under bounded host repair
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -40,12 +40,24 @@ close all ownership/wrapper/debug/quarantine/rollback paths. Host audits and
 test source are allowed; compiler, target, native tests and timing are held.
 At the ceiling, freeze a review candidate or explicit partial patch.
 
-Interpreter site-capture helper preparation runs **02:51–03:06 UTC**, checkpoint
-**02:59**. Its one-child proposal uses the accepted current image and unchanged
-coroutine driver/kernel, one registered warmup and one counted run(4), with IR
-snapshots outside counting. Exact helper review runs **02:52–03:16**, checkpoint
-**03:04**. Helpers live in `build/region-site-attribution-20261101-v1` and remain
-unactivated; a later ten-minute inclusive native scope requires root activation.
+Interpreter site-capture preparation/review passed, then root activated v1 at
+03:08:36.674 UTC with a 03:18:36.674 ceiling. Tool session **73805** returned
+**1 before any gate or target launch**: the frozen supervisor's transitive
+`feedback_inputs` import selected a same-named baseline `build_once` from the
+composed host path. Its variant assertion rejected `launch`. The readiness
+review missed that actual import-resolution path. No target or workload call
+occurred, and no observation credit follows. Root acquired the actual image
+lock at 03:10:40 and verified no live target PID. V1 activation/start/failure
+and root disposition remain untouched in
+`build/region-site-attribution-20261101-v1`; its unused window grants no retry.
+
+A new host-only repair runs **03:10–03:20 UTC**, checkpoint **03:15**, in
+`build/region-site-attribution-20261101-v2`. Independent review runs
+**03:10–03:25**, checkpoint **03:18**. It must prove actual frozen-supervisor
+dependency origins, including a conflicting cached-module case, with no target
+invocation. The proposed observation remains one child, one warmup run(4), one
+counted run(4), and IR snapshots outside counting. No rebuild, probe or extra
+workload is added. A new finite root activation is required after exact review.
 
 Retention-oracle v3 helpers passed root host review but remain held, with
 readiness flags false and no activation. VM0 build helpers and
@@ -97,6 +109,11 @@ consumer. The integrated-storage design/review passed for its source attempt;
 the unnecessary separate completed-state census is removed because every
 ordinary deallocator and lifecycle record remains. Storage sizing and occupancy
 are measured inside the prototype's debug witnesses.
+
+The first capture's [helper review](region-site-helper-review-20261101-v1.md)
+is preserved as a historical readiness disposition. The successor must close
+the missed import path with an actual host-import fixture; another AST-only
+check or the failed attempt cannot supply that evidence.
 
 The completed census has six registered workloads/eighteen warmup-low-high
 processes; it supplies entry/pair/box evidence, not per-state death eligibility

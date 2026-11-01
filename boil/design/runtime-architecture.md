@@ -54,10 +54,13 @@ adoption and broader lifecycle guarantees are outside this contract.
 The default remains full-heap collection. A private opt-in nursery admits exact
 cells and nonempty tuples, conservatively retains all old objects and promotes
 survivors in place. Automatic and full collections remain major; experimental
-minors require verifier/stress off. The next
-[adoption increment](../issues/gc-nursery-adoption/status.md) removes that
-temporary control and closes checker support; it is not a retained runtime
-configuration choice. This adds no relocation or write barrier.
+minors require verifier/stress off. The
+[adoption increment](../issues/gc-nursery-adoption/status.md) is deferred for
+the [architecture reassessment](../issues/fundamental-runtime-design/status.md).
+The private control is retirement debt: the next collector adoption must
+select one maintained policy and remove it. The isolated checker/adoption
+prototype does not make this nursery the chosen future design. The current
+implementation adds no relocation or write barrier.
 See [the bounded nursery](../issues/gc-nursery-minimum/design.md),
 [GC roots and lifetimes](gc-roots-and-lifetimes.md) and
 [performance direction](gc-and-interpreter-performance.md).

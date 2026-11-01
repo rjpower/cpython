@@ -8,8 +8,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Prepare one current-site IR/counter capture on the accepted image; native held for helper review |
-| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review exact site-capture helpers when sealed; region design accepted for a bounded prototype |
+| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Repair capture's host import collision in a new capsule by 03:20 UTC; original attempt launched no target |
+| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review actual supervisor import origins and new capture capsule by 03:25 UTC; no native activation |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
 | GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Source prototype active in gc-integrated-spans; ownership checkpoint 03:21 UTC, freeze 04:21 UTC |
 

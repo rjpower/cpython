@@ -865,3 +865,47 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   shared upstream paths motivate a finite causal control before any gate
   amendment. No source fix/exclusion/qualification pass or native retry granted.
   [Blocking state](issues/rc-integration/status.md).
+- 2026-11-01 09:31 UTC: Corrected JIT metadata capture97754 terminal0,
+  independent outcome ACCEPT: actual14 words,64 varying calls and fixed
+  checksum; no timing or native entry. One region words1-11 selects seven
+  integer sites, local value numbering and a transactional two-store commit.
+  Second direct Fable medium review23867 terminal0 observed09:16:18; source
+  audit rejects reduced monitoring and blanket temporary-NULL guards. Adopt
+  sentinel-first structural eligibility with lifetime/ownership limits; retain
+  explicit observers, NULL checks, nonnegative division and finite elapsed gate.
+  [Disposition](issues/jit-first-native-tier/coordinator-disposition-20261101-v2.md).
+- 2026-11-01 09:31 UTC: Packaging prototype and exact public five-file layout
+  independently accepted;33 host checks pass and12 additional empty/false
+  override checks remain. First mixed preparation was rejected by automatic
+  approval review for reported active-native/authorization concerns; it made
+  no source change. Fresh idle/lock proof, build-only public staging and
+  independent review enabled the safer ordinary-workspace five-file copy at
+  09:14:42. Source dce now has exactly five packaging paths dirty. Formatting
+  stage preserves normalized ASTs/all271strings/wheels and33 passing checks;
+  independent style review and final four-image source bridge remain.
+  [Public review](issues/rc-integration/private-abi-packaging-public-layout-review-20261101-v1.md).
+- 2026-11-01 09:31 UTC: Upstream causal-control activation09:17:28-09:47:28,
+  actual launch09:21:48, supervisor78795 terminal1 observed09:23:48. Pristine
+  upstream321925 _bootstrap_python aborts freezing abc/codecs/io/collections
+  with Invalid StackRef at ceval.c2076; no comparison test row ran. Cleanup
+  reports idle09:22:59. Source diagnosis precedes any new attempt or amendment;
+  our failed stackref full run remains a landing blocker, not a qualified pass.
+  [Control review](issues/rc-integration/stackref-upstream-helper-root-review-20261101-v1.md).
+- 2026-11-01 09:31 UTC: Loom revision13 readback verified12,472 characters and
+  two Mermaid blocks at09:02:09; publication record now binds the exact snapshot.
+  Packaging focused-feedback draft is host-only/frozen with unknown final
+  source bindings: regeneration, both affected ensurepip/venv suites, two
+  actual pip foreign-wheel rejections, then unchanged CPU/refleak coverage.
+  GC optimization remains closed; RC integration and native JIT remain pending.
+- 2026-11-01 09:34 UTC: Formatting stage independently ACCEPT; root applied
+  its two files09:31:26 under all seven native/build locks and actual idle scan.
+  Exact five-path source committed8e132becdad, parentdce654, treeaa48315289b5;
+  selected RC checkout clean. No C/header/generated/config or native product
+  changed. Four-image bridge first host draft misclassified an unchanged
+  gitlink as a file; preserve that host failure and correct entry kinds before
+  replay. No source or native failure inferred from the draft's error.
+  [Style review](issues/rc-integration/private-abi-packaging-style-review-20261101-v1.md).
+- 2026-11-01 09:34 UTC: Loom revision14 exact readback13,744characters/two
+  Mermaid blocks at09:32:44, source freeze plus upstream bootstrap failure and
+  source-audited second peer disposition. Snapshot hash23faf95fce98 recorded;
+  no rendered-layout, integration, parity or working native-tier claim.

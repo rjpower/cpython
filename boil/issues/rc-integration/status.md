@@ -2,7 +2,7 @@
 
 - State: selected; qualification pending; not integrated
 - Owner: coordinator
-- Source: `dce654018d5ae16ffe5e772976d9ccc2c9d1e01a`, `boil/rc-successor`
+- Source: `8e132becdad485f9d281d63c5ec1c9c60ef3e56f`, `boil/rc-successor`; packaging-only successor of dce654
 - Worktree: `build/worktrees/rc-successor`
 - Decision: [early GC rejection and RC selection](../gc-parity-deadline/decision-20261101.md)
 - Profile: Linux/GIL, GCC computed interpreter, boxed-slot shapes
@@ -36,11 +36,16 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | --- | --- | --- |
 | Last targeted ownership/refleak tranche | coordinator | Closed through reviewed additive result reuse; no further bespoke cohort |
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
-| Safety profiles | coordinator; qualification_review_resumed | ASan composite independently accepted. Stackref stopped after confirmed failures; source audit and a minimal causal upstream control proposal precede any gate amendment |
-| Extension and generation closure | coordinator; restart_audit | CPU extension batch FAILED15 runnable cases after compile/link at private-ABI wheel-tag admission; one expected platform skip. Regeneration not run. Narrow packaging correction design underway; no retry granted |
-| First native JIT design | coordinator; restart_audit | Fable completed: amend. First capture6928 FAILED on normal absent feedback metadata before64 calls. Narrow serialization correction pending review; no implementation grant |
+| Safety profiles | coordinator; coroutine_design_review | ASan composite accepted. Stackref partial run failed. Unmodified upstream comparison build also failed during bootstrap; causal disposition under review, no test comparison or gate amendment yet |
+| Extension and generation closure | coordinator; restart_audit; qualification_review_resumed | Five-path packaging commit8e132 frozen after implementation/layout/style reviews. Four-image source bridge precedes focused feedback; generation still pending |
+| First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
 
-At08:49 UTC, all native jobs are terminal and cleanup is verified. Corrected release
+At09:30 UTC, all native jobs are terminal. Upstream build78795 returned1;
+its cleanup receipt reports idle at09:22:59. It aborted in unmodified upstream
+`_bootstrap_python` while freezing four standard modules: Invalid StackRef at
+ceval.c2076. The three comparison tests did not run. Source diagnosis and a
+bounded alternative are pending; this supplies no causal clearance for our
+failed full checker run. Corrected release
 session87194 returned0 with3,430 skips; debug60637 returned0 with3,377 skips.
 Both selected and returned565 module results:463 passed,94 skipped and eight
 resource-denied. The standard file-run summary is557/565. Keep skips visible. Successful
@@ -61,11 +66,18 @@ the compatibility assertion. No source or retry grant follows from this failure.
 The [packaging v2 design](private-abi-packaging-design-20261101-v2.md) is
 [independently accepted](private-abi-packaging-design-review-20261101-v2.md).
 It covers the three vendored tag functions and pip's separate installer path;
-the first proposal missed that path and remains incomplete. Root authorizes
-bounded host implementation and repacked scratch wheels only. Selected source
-and its wheels stay unchanged while the stackref suite runs. Public loader,
-runtime identity and test_cext bodies stay unchanged; cross-target pip overrides
-are explicitly outside this first integration. No native retry is granted yet.
+the first proposal missed that path and remains incomplete. The
+[source implementation](private-abi-packaging-source-review-20261101-v1.md)
+and [public layout](private-abi-packaging-public-layout-review-20261101-v1.md)
+passed independent review and33 host checks. Root applied exactly five paths
+at09:14:42 after idle/lock checks. The independently accepted formatting-only
+stage preserves ASTs, all271 policy/test strings and wheel bytes. Root applied
+its two text files at09:31:26 and froze exactly five paths in8e132; source is
+clean. The four-profile compiled-input bridge remains pending.
+Public loader, runtime identity and test_cext bodies stay unchanged;
+cross-target pip overrides are unsupported in this initial integration.
+A held focused feedback draft puts regeneration and affected ensurepip/venv
+checks before the expensive CPU extension gate. No native retry is granted yet.
 
 ASan31887 returned1 in the host result reader although the standard target
 harness returned SUCCESS:3,827 tests, zero failures and77 skips. Standard

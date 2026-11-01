@@ -155,3 +155,34 @@ Exact readback matches11,369 characters and two Mermaid blocks. Local snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v12.md`
 SHA256 `1a11d4e3aea73137056ebe04ce6af9aa72e6766973f65b8478f7e1cf3a973dc6`.
 No rendered-layout check, completed RC qualification or integration is claimed.
+
+## Accepted ordinary and ASan evidence; remaining blockers, revision13
+
+At09:02:09 UTC, guarded revision13 records independent ordinary full-suite
+and scoped ASan acceptance, the failed CPU extension and partial stackref
+outcomes, the proposed three-case upstream control and reviewed packaging
+prototype. It also records the actual fourteen-word observation and single
+seven-site first-tier candidate. All565 ordinary module results returned;
+557/565 is the standard file-run summary, not the returned-result count.
+
+Exact readback matches12,472 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v13.md`
+SHA256 `ca98f5f04f05e694e30e6575bae754e6d4799b055bef75bd98b408049476a379`.
+This snapshot precedes public source application, the upstream build failure
+and the second Fable audit. It claims no rendered-layout check, integration,
+RC speedup or native JIT execution.
+
+## Packaging source freeze and reviewed JIT advice, revision14
+
+At09:32:44 UTC, guarded revision14 records the clean five-path packaging
+successor8e132becdad, pending four-image bridge and focused feedback. Pristine
+upstream's checker build failed in bootstrap before its comparison tests; a
+one-assignment source hypothesis is under review. The second direct Fable review
+has a source-audited disposition: retain observer and temporary NULL guards,
+use sentinel-first structural eligibility within explicit lifetime rules.
+
+Exact readback matches13,744 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v14.md`
+SHA256 `23faf95fce987663a85ed2a2953e1556a5f92dad26f9d78c3486e590749a965c`.
+No rendered-layout check, passing checker comparison, completed integration,
+RC parity or native JIT execution is claimed.

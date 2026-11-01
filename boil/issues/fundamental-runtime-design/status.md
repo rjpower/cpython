@@ -35,17 +35,20 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **08:45 UTC**, corrected RC release-full session87194 and O1/debug
+As of **09:30 UTC**, corrected RC release-full session87194 and O1/debug
 session60637 are independently accepted:50,827 tests each, zero failures.
 Fresh ASan/stackref builds and19 borrowed-header syntax checks are accepted
-within their scopes. ASan's target harness succeeded3,827/0/77, while its
-host validator failed to account for standard multiprocessing package expansion;
-an additive reader is in independent review. The active full stackref15564
-has actual multiprocessing and embedding shutdown failures, blocking landing.
-CPU extension29576 failed private-ABI wheel admission after compilation/linking;
-its reviewed packaging correction is entering host implementation. Regeneration
-did not run. First JIT word capture6928 failed on normally absent feedback
-metadata before warmup; a narrow capture correction precedes any source attempt.
+within their scopes. ASan's3,827/0/77 composite is independently accepted;
+the original host-reader failure is preserved. Full stackref15564 failed
+partially and blocks landing. Unmodified upstream comparison build78795 also
+failed in bootstrap before its three methods; diagnosis precedes any amendment.
+CPU extension29576 failed private-ABI wheel admission after compilation/linking.
+Its reviewed five-path packaging correction is applied, awaiting final source
+freeze/bridge and focused feedback. Regeneration did not run. Corrected JIT
+metadata capture97754 succeeded after the preserved serializer failure. Actual
+words selected one seven-site design; the second direct Fable review is
+[amended after source audit](../jit-first-native-tier/coordinator-disposition-20261101-v2.md).
+Observer and temporary-slot guards remain. No JIT implementation is granted.
 All earlier failures remain preserved. Main remains
 the tracing runtime until RC qualification and integration finish.
 [RC execution](../rc-integration/status.md),

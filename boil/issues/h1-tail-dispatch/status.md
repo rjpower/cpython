@@ -1,10 +1,10 @@
 # H1 tail dispatch
 
-- State: held for integrated architecture review
+- State: unchanged-runtime compiler/backend control; host helpers in preparation
 - Updated: 2026-11-01
-- Owner: coroutine_design_review prepares helpers; coordinator reviews and integrates
+- Owner: restart_audit prepares helpers; coordinator reviews and integrates
 - Dependencies: exact compiler/backend plan and independent review before native execution
-- Prior grant: host-only VM0 helper preparation, 01:09–01:39 UTC; suspended at strategic steering
+- Current grant: host-only revision 3 helper preparation, 05:03–05:35 UTC; checkpoint 05:18
 - Current managed helper source: `boil/vm-compiler-backend` at `417a9443a59`
 - Worktree: `build/worktrees/vm-compiler-backend`; no runtime source changes
 
@@ -12,9 +12,17 @@
 
 The [integrated review](../fundamental-runtime-design/status.md) supersedes the
 assumption that the current IR and collector should remain unchanged. VM0 is
-still a useful compiler/backend control, not the architectural answer. Helpers
-are unfinished and unready; no compiler or target has run. Resume only with a
-new explicit remaining scope and clock. Earlier H1 source remains retained on
+the next compiler/backend control after the measured IR-region rejection.
+The [revision 3 plan](compiler-backend-plan-20261101-v3.md) compares GCC computed,
+Clang computed and Clang tail dispatch on unchanged runtime source. Helpers
+are unfinished and unready; no compiler or target has run. Host metadata-only
+compiler/tool identity queries are authorized; feature compilation is not.
+The [process-count clarification](compiler-backend-v3-count-clarification-20261101.md)
+and its [review](reviews/compiler-backend-v3-count-clarification-20261101-root.md)
+correct physical stale-child counts without changing exposure. Revision 2 and
+the frozen revision 3 retain their original bytes. This compiler comparison
+does not establish parity under the unchanged GCC GC budget.
+Earlier H1 source remains retained on
 `boil/h1-frame` at `94ab98e8fd3`.
 
 The [new candidate](../../design/vm-design-candidate.md) selects a matched

@@ -97,8 +97,9 @@ The [integrated-storage candidate](../fundamental-runtime-design/status.md)
 remains correctness-blocked: v4 passed 26 debug cases, then failed release's
 allocator-wrapper lifetime assertion after four passes. Diagnostic changed-call-
 graph nonreproduction is inconclusive about the original cause. The reviewed
-cold fixture correction froze at5a457c73; exact source/helper review and fresh
-native feedback come before any storage timing.
+cold fixture correction froze at5a457c73 and passed exact source/helper review.
+Fresh v5 debug/release feedback activated05:12:09–05:57:09 UTC, session83297;
+native outcome remains pending before any storage timing.
 
 The separate IR region increment passed semantics and actual work-removal
 checks, then was **rejected**: coroutine elapsed +10.86%/+14.11%, four-row
@@ -110,4 +111,4 @@ native authority or any cross-compiler parity claim.
 The isolated RC-only closured7df12b passed all39 focused methods in both images,
 zero skips, with independent actual-outcome acceptance and idle cleanup. It is
 a working fallback candidate, not a selected collector or fully qualified core.
-No native job is currently active. No candidate has earned parity or integration.
+Only the v5 GC feedback job is active. No candidate has earned parity or integration.

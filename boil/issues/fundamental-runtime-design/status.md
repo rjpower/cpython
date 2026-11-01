@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: baseline/site evidence accepted; integrated-storage and interpreter-region source active; hard GC cutoff set
+- State: IR region rejected; GC v5 native feedback active; compiler/backend host preparation; hard GC cutoff set
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -29,7 +29,7 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **04:58 UTC**, no native job is active. The first measured increment
+As of **05:12 UTC**, GC v5 native feedback is active, session83297. The first measured increment
 was rejected before the 05:14 checkpoint. **GC parity remains unproven**;
 the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
 unchanged. Rejected branches and every failure remain preserved.
@@ -45,8 +45,8 @@ unchanged. Rejected branches and every failure remain preserved.
   this increment. Verified home/second-dispatch removal and nine added guards/
   reloads explain the next question, not a proven slowdown decomposition.
 - **Compiler/backend control:** host-only revision of the existing unchanged-
-  runtime GCC-computed/Clang-computed/Clang-tail experiment, through **05:15**,
-  checkpoint **05:07**. Compiler and dispatch contrasts stay separate, tail is
+  runtime GCC-computed/Clang-computed/Clang-tail experiment, through **05:35**,
+  checkpoint **05:18**. Compiler and dispatch contrasts stay separate, tail is
   not presumed superior, and no native/source invocation is granted. Current
   GCC parity protocol is not satisfied by a cross-compiler timing comparison.
 - **Integrated storage — correctness blocked:** original source and all four
@@ -63,9 +63,12 @@ unchanged. Rejected branches and every failure remain preserved.
   main retains only weakref/encoded key. Production allocator/collector policy
   is unchanged. Host22 (one expected failure), six source audits and 21 native
   test methods/three child templates check successfully; native tests are
-  unexecuted. Exact source review and fresh v5 helper preparation end **05:08**,
-  checkpoints **05:02 / 05:01**; 27 selected methods, four unchanged release
-  skips, actual directory/import checks. No timing before fresh native success.
+  unexecuted at source freeze. The 05:08 helper partial is preserved. An idle
+  reviewer handoff was corrected; independent [exact source acceptance](span-wrapper-public-free-source-review-20261101-v5.md)
+  and [helper acceptance](span-native-helper-review-20261101-v5.md) followed.
+  Fresh debug-v5/release-v5 feedback activated **05:12:09–05:57:09 UTC**,
+  four rows, 27 selected methods and four unchanged release skips. Actual
+  supervisor session83297 is running. No timing before fresh native success.
 - **RC successor — focused behavior accepted:** clean
   `d7df12b1d81722927e71d9734c70eeafdccfee73` passed **39 exact methods in each
   fresh image, zero skips**. Four rows completed at04:35:44, session75555
@@ -80,7 +83,7 @@ will not be composed into a GC parity candidate. Loom
 [runtime-work-breakdown revision4](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown)
 retains both code-organization diagrams and these measured dispositions.
 
-Old retention-oracle, VM0, structural-GC and nursery-adoption helpers remain
+Old retention-oracle, VM0 revisions 1/2, structural-GC and nursery-adoption helpers remain
 held/deferred; their expired grants authorize no invocation. Regex implementation
 is paused. Native work and quiet measurements serialize; source/review may
 proceed in parallel. One adopted collector policy remains required.

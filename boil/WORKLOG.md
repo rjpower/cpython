@@ -589,3 +589,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   diagrams. Exact readback and local snapshot match10,517characters. The fixed
   15:14:44 UTC cutoff is unchanged; parity remains unproven.
   [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01 05:09 UTC: Corrected an idle-reviewer handoff: messages had not
+  resumed the completed design reviewer for exact GC source review. Preserved
+  the 05:08 held helper partial; explicit follow-up grants source review to
+  05:17 and helper completion to 05:22, with no native authority. VM0 revision 3
+  host preparation runs to 05:35; accepted the separate five-child/thirty-case
+  count clarification. Fixed GC cutoff unchanged; no parity claim.
+  [Current state](issues/fundamental-runtime-design/status.md).
+- 2026-11-01 05:12 UTC: GC cold fixture source5a457c73 and four-row v5 helpers
+  passed independent review. Root rehashed4,707 inputs/33 artifacts, actual
+  imports, absent-activation rejection and output writes. Fresh debug/release
+  feedback activated05:12:09–05:57:09 UTC, session83297; 27 selected methods,
+  four unchanged release skips, no timing or parity credit yet.
+  [Helper review](issues/fundamental-runtime-design/span-native-helper-review-20261101-v5.md).

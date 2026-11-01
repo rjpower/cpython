@@ -2,7 +2,7 @@
 
 - State: active
 - Owner: qualification_review_resumed; coordinator reviews and selects a design
-- Updated: 2026-10-31
+- Updated: 2026-11-01
 - Research: frozen early at 23:36:03 UTC within the 23:14:20–23:44:20 scope
 - Source budget: 30 minutes, host-only; 23:41:19–00:11:19 UTC
 - Checkpoint: 23:51:19 UTC
@@ -52,9 +52,11 @@ structural results, not C compilation or runtime coverage. Independent
 [exact source review](reviews/source-20261031-v1.md) accepted the frozen source
 for separately reviewed feedback; the [held native plan](feedback-plan.md)
 defines the next question.
-Host-only helper preparation runs 23:55–00:15 UTC, checkpoint 00:05, and may
-overlap source review without changing frozen source. Execution remains held
-and must serialize after terminal GC feedback.
+Host-only helper preparation froze early at 00:07:50 UTC within its
+23:55–00:15 scope. Seventeen literal rows cover debug/release builds, exact
+transition controls, affected modules, stale-root controls and bounded native
+inspection. Exact helper review is pending; no compiler or target ran during
+preparation. The previous GC feedback is terminal; new native batches serialize.
 Native compilation, behavior, performance and landing remain unauthorized.
 The [research results](results.md) and native/source inventory retain the
 287-handler, 19-join, five-label and 26-reload entry proof and its limits.

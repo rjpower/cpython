@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / cadence native feedback | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / coroutine_design_review | Reviewed single-allocation successor active; establish strict behavior and three causal fault detections under the original deadline |
-| IR / slot-base prototype | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | qualification_review_resumed / coroutine_design_review | Frozen source awaits exact review; host helpers prepare bounded native entry/root and emitted-work feedback |
+| GC / release cost preparation | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / qualification_review_resumed | Focused outcome accepted; review two fresh matched release builds and affected correctness before elapsed comparison |
+| IR / slot-base prototype | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | qualification_review_resumed / coroutine_design_review | Exact source accepted; review frozen seventeen-row native entry/root and emitted-work preparation |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

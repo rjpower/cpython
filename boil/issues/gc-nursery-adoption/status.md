@@ -2,7 +2,7 @@
 
 - State: active
 - Owner: restart_audit implements; independent reviewers check source/helpers; coordinator integrates
-- Updated: 2026-10-31
+- Updated: 2026-11-01
 - Base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
 - Adopted automatic-major baseline: `ef0af95904b87d888eee4a98b6a745835ff95085`
 - Current cadence candidate: `47ccf35e21a94fde9351d1c2e4571bf207257a4c`
@@ -64,16 +64,30 @@ trigger correction is authorized; strict count and liveness assertions remain.
 Frozen successor `47ccf35e21a9` changes only that test trigger/comment/result
 assertion. Independent source and helper reviews accepted reuse of the 5cc
 compiled image and the untouched three negative arms. Root activated seven
-remaining rows at 23:55:53.807706 UTC; session 45104 is live. The original
-feedback deadline remains fixed. The
+remaining rows at 23:55:53.807706 UTC. All seven rows completed at
+00:03:02.533149 UTC; root confirmed session 45104 terminal exit 0 at 00:03:17.
+All row cleanup records found no live targets before the original deadline.
+Independent [outcome review](reviews/cadence-trigger-outcome-20261101-v1.md)
+accepted thirteen methods/twenty-two normal children and three exact causal
+diagnostics. Empty due-major callback lists earn no callback-generation credit;
+strict collection counts and liveness assertions passed. The original feedback
+deadline remains fixed. The
 [cadence execution record](cadence-feedback-results.md) owns actual
 rows, identities, failures and terminal observations.
 
+The [cost-helper review](reviews/cadence-cost-helper-preparation-20261031-v1.md)
+accepted host preparation of the three-arm, 120-fresh-sample/12-origin campaign.
+It remains unready: actual release bindings and quiet activation are separate.
+Historical e9 source/image/configuration/product reuse passed its host bridge;
+two fresh matched O3 builds and affected correctness are being prepared under
+a held manifest. No performance workload or counter probe has run here.
+
 ## Next
 
-Complete reviewed [focused cadence feedback](cadence-feedback-plan.md), including
-three exact isolated fault children. Then compare the three frozen source arms
-under matched release policy and qualify the one selected coherent candidate.
+Establish the two new release arms' actual build/correctness identities under
+separately reviewed, bounded execution.
+Compare the three frozen source arms under matched release policy and qualify
+the one selected coherent candidate.
 No cadence performance, broad qualification or landing is accepted yet.
 
 Rebase [broader allocation coverage](../gc-nursery-coverage/status.md) afterward;

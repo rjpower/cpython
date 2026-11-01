@@ -121,3 +121,27 @@ remaining batch at 23:55:53.807706 UTC, session 45104. The master is isolated
 Plan `bdd3a7c6c50ad2fe835439ea57faa3474ca2ba508e1f5dca08baed02a4c00dfe`
 and launch `b80c359f0ca9de0841ab803e8f648c4d0553b8501766b9afb0eaa9e7a6c44c10`
 retain the original 00:14:59.201344 UTC deadline. No pass is credited at launch.
+
+All seven rows completed at 2026-11-01 00:03:02.533149 UTC. Root confirmed
+session 45104 terminal exit 0 at 00:03:17 UTC. The positive focus returned
+native 0, running thirteen methods/twenty-two children without skips. All
+three fresh negative builds passed and each nominated diagnostic returned
+the exact expected assertion through its reviewed validator. These direct
+negative children earn no ordinary parent-method pass credit. Every row's
+post-gate cleanup found no live target PID before the original deadline;
+the last negative cleanup was at 00:02:53.545029 UTC. Independent outcome
+review remains pending; no performance or broad qualification follows from
+this first-feedback completion alone.
+
+Independent [outcome review](reviews/cadence-trigger-outcome-20261101-v1.md)
+accepted that exact scope, SHA256
+`4b4753f2731288064bf13d2418aa5957065b93251a6f2ff4a446be1d7f446b19`.
+Its host audit rehashed all 76 completion artifacts and checked current idle
+state under all four build locks. Positive root evidence covers all twenty-two
+normal child PIDs, with 541 collections and zero fallback/unpinned visits.
+Three deliberate faults yielded the nominated assertions, earning zero ordinary
+parent-method credit. The due-major callback lists are empty: priority credit
+comes from the strict gen2 increase/gen0 equality and reclamation/payload checks,
+not the vacuous callback-generation predicate. Both earlier failed sessions
+remain failed; all historical protected products remain unchanged. Release cost,
+qualification and landing remain open.

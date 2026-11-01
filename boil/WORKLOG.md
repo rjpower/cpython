@@ -262,3 +262,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   and meaningful entry checks; native helpers remain held for review.
   [GC execution](issues/gc-nursery-adoption/cadence-feedback-results.md),
   [IR source review](issues/interpreter-dispatch-state/reviews/source-20261031-v1.md).
+- 2026-11-01: Accepted independent cadence first-feedback outcome: thirteen
+  methods, twenty-two normal children and three detected scheduling faults,
+  with terminal idle cleanup before the unchanged deadline. Preserved both
+  earlier failures and the empty-callback observation limit. Cost helpers
+  passed host review; release bindings remain held. The slot-base seventeen-row
+  native preparation froze early for review; neither track has new timing.
+  [GC outcome](issues/gc-nursery-adoption/reviews/cadence-trigger-outcome-20261101-v1.md),
+  [Cost preparation](issues/gc-nursery-adoption/reviews/cadence-cost-helper-preparation-20261031-v1.md),
+  [IR state](issues/interpreter-dispatch-state/status.md).

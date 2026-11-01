@@ -909,3 +909,61 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Mermaid blocks at09:32:44, source freeze plus upstream bootstrap failure and
   source-audited second peer disposition. Snapshot hash23faf95fce98 recorded;
   no rendered-layout, integration, parity or working native-tier claim.
+- 2026-11-01 09:36 UTC: Correct prior host-bridge draft diagnosis: Misc/mypy/_pyrepl
+  is an unchanged dangling symlink mode120000, not a gitlink. A second draft
+  that handled only gitlinks failed again; both retained. Exhaustive tree-mode
+  inspection now proves7,060 regular files/four symlinks/no gitlinks. Author
+  reports all584 original products exact per four images; final bridge seal
+  and independent replay remain pending. No native run or source drift.
+- 2026-11-01 09:36 UTC: Root accepts the one-assignment upstream-control design after
+  source/token-path review. Author may create one isolated source successor
+  and held two-row helpers, no compiler/target until independent source/helper
+  review and fresh fixed30-minute activation. Add bootstrap/freezer cleanup;
+  preserve pristine failure and stop if the corrected control still fails.
+  Packaging helper materialization separately authorized host-only, using
+  final8e132 and the finite cheap-first five-row draft. Both remain unactivated.
+  [Control design review](issues/rc-integration/stackref-compatibility-control-root-design-review-20261101-v1.md).
+- 2026-11-01 09:43 UTC: Four-image packaging bridge independently ACCEPT at09:39:52,
+  exactsource8e132/fivepaths,7,060regularfiles/fourtrackedsymlinks, all4x584
+  originalproducts/config/tools unchanged, literalcacheadditions6/6/0/6. This
+  permits explicit historical-image reuse, no new nativequalification. Held
+  five-row packaging design ACCEPT; keep literal four public -I -m foreign
+  commands, source-backed flag semantics and scoped file/launch/pip-v proof
+  rather than adding a runpy observer or claiming a complete import map.
+  [Bridge](issues/rc-integration/private-abi-packaging-bridge-review-20261101-v3.md).
+- 2026-11-01 09:43 UTC: Root independently ACCEPT corrected-upstream source d2ca412,
+  parent321925: exactlyone1+/1- assignment,5,806trackedentries, three fulltest
+  files/methodbodies/embedC unchanged. First hostreplay usedwholeFunctionDef
+  hash ratherthan body-only convention; preserved, corrected replay PASS.
+  Helperv2 ACCEPT5,833inputs/36artifacts/12hostcontrols/twohostgitcalls/zero
+  compilerqueries. Canonical lock now held directly by runner; four-executable
+  cleanup includes bootstrap/freezer. No second outerflock on same lock.
+  [Helper review](issues/rc-integration/stackref-corrected-upstream-helper-root-review-20261101-v2.md).
+- 2026-11-01 09:43 UTC: Corrected upstream comparison64610 launched once with activation
+  09:42:16.500026-10:12:16.500026, hash3dd014101f7d. Fresh configure/build active;
+  no comparison-test result yet. Stop on mechanical failure, no furtherfixchase.
+  Main remains tracing, GC work closed, RC packaging/checker qualification and
+  integration pending. Parallel agents prepare concrete packaging helpers and
+  held landing plan; no native overlap or JIT implementation grant.
+- 2026-11-01 09:55 UTC: Corrected upstream64610 terminal1 observed09:43:39; configure0,
+  make2/four freezer134, gate1 after68.044seconds, zero comparisonmethods.
+  New actual fatal is close-with-oneborrow in Unicode in-place ownership
+  transfer, not the prior invalidtoken. Cleanup09:43:28 checks all4exe idle;
+  later scoped native/compiler/core audit idle. Stop upstreamfixpath: no third
+  correction, freezer bypass, comparison-equivalence claim or new nativecohort.
+  [Final assessment](issues/rc-integration/stackref-control-final-assessment-20261101-v1.md).
+- 2026-11-01 09:55 UTC: Final source audit retains all12 RC failed modules/43assertions,
+  including manager/pyrepl/mixedfamilies with causes unresolved. Root proposes
+  withdrawing ENTIRE addedglobalStackRefprofile support from ordinarylanding,
+  not12exclusions/pass/checkersuppression. Independent formalreview pending;
+  ordinaryfull/ASAN/refleak, CPU3+3, packaging/gen andfreshintegration remain
+  mandatory. No claim supported-build defects are impossible.
+  [Proposal](issues/rc-integration/stackref-gate-amendment-proposal-20261101-v1.md).
+- 2026-11-01 09:55 UTC: Concrete packaging5-row helpers frozen09:51:29, capsule40e96fdf71b8;
+  11hostcontrols and actual7,144-input preflight passed without native/queries.
+  Independent concretehelper review pending; no activation or native retryyet.
+  Held landingplan selects8e132,42distinct39+3 consumers/image andnew main
+  release/debug builds, preserves5userfiles andoldtracingproducts. Root accepts
+  conditionaldesign; independent landingplan review/unboundhelper preparation
+  overlap. No merge, freshmainbuild, integration or JIT implementation yet.
+  [Landing plan](issues/rc-integration/landing-plan-20261101-v1.md).

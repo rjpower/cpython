@@ -15,8 +15,8 @@ integration. No full29 GC or RC parity claim. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC qualification | [Selected runtime](rc-integration/status.md) | restart_audit; coordinator | Final targeted composite accepted; first full FAILED, three-file source correction reviewed; corrected full and native safety profiles queued |
-| First native JIT design | [Peer disposition](jit-first-native-tier/coordinator-disposition-20261101.md) | coordinator | Fable medium review completed: amend; actual word capture precedes implementation |
+| RC qualification | [Selected runtime](rc-integration/status.md) | coordinator; restart_audit; qualification_review_resumed | Ordinary full and scoped ASan evidence accepted. Packaging8e132/source-image bridge accepted; focused feedback in preparation. Failed checker run awaits active corrected-upstream comparison and disposition |
+| First native JIT design | [Source-audited peer disposition](jit-first-native-tier/coordinator-disposition-20261101-v2.md) | coordinator | Actual14 words/64 calls accepted; one seven-site transactional candidate selected. Second Fable review amended after source audit; no implementation yet |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |

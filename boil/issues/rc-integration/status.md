@@ -36,11 +36,23 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | --- | --- | --- |
 | Last targeted ownership/refleak tranche | coordinator | Closed through reviewed additive result reuse; no further bespoke cohort |
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
-| Safety profiles | coordinator; coroutine_design_review | ASan composite accepted. Stackref partial run failed. Unmodified upstream comparison build also failed during bootstrap; causal disposition under review, no test comparison or gate amendment yet |
-| Extension and generation closure | coordinator; restart_audit; qualification_review_resumed | Five-path packaging commit8e132 frozen after implementation/layout/style reviews. Four-image source bridge precedes focused feedback; generation still pending |
+| Safety profiles | coordinator; qualification_review_resumed | ASan composite accepted. Stackref partial run failed. Both upstream builds failed before comparison methods; no further repairs. Entire diagnostic-profile scope amendment proposed, independent review pending |
+| Extension and generation closure | restart_audit; qualification_review_resumed | Five-path packaging8e132 and four-image reuse bridge independently accepted. Concrete cheap-first five-row helpers in host preparation/review; generation still pending |
 | First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
 
-At09:30 UTC, all native jobs are terminal. Upstream build78795 returned1;
+At09:47 UTC, all native jobs are terminal. Corrected upstream control64610
+returned1, observed09:43:39, within its fixed09:42:16-10:12:16 window. Its exact
+[source](stackref-corrected-upstream-source-root-review-20261101-v1.md) and
+[helpers](stackref-corrected-upstream-helper-root-review-20261101-v2.md)
+are independently accepted. Only the take_ownership assignment's left-hand side
+differs from upstream321925. This is a labelled compatibility control, not
+unmodified upstream. Bootstrap again aborted while freezing four modules,
+now on a closed-with-one-borrowed-reference check. No comparison method ran;
+cleanup09:43:28 confirms all four native executable paths idle. Stop this
+upstream repair path. A [whole-profile scope amendment](stackref-gate-amendment-proposal-20261101-v1.md)
+is proposed for independent review; no comparison equivalence, exclusions,
+passing checker result or approved amendment is claimed.
+The original upstream build78795 returned1;
 its cleanup receipt reports idle at09:22:59. It aborted in unmodified upstream
 `_bootstrap_python` while freezing four standard modules: Invalid StackRef at
 ceval.c2076. The three comparison tests did not run. Source diagnosis and a
@@ -73,11 +85,17 @@ passed independent review and33 host checks. Root applied exactly five paths
 at09:14:42 after idle/lock checks. The independently accepted formatting-only
 stage preserves ASTs, all271 policy/test strings and wheel bytes. Root applied
 its two text files at09:31:26 and froze exactly five paths in8e132; source is
-clean. The four-profile compiled-input bridge remains pending.
+clean. The [four-profile compiled-input bridge](private-abi-packaging-bridge-review-20261101-v3.md)
+is independently accepted: all584 original products per image, configurations
+and tool pins remain exact; only six/six/zero/six enumerated regular caches
+were added. Source entry kinds and symlink targets are exact. This is explicit
+reuse of historical builds, not four fresh successor builds or new test credit.
 Public loader, runtime identity and test_cext bodies stay unchanged;
 cross-target pip overrides are unsupported in this initial integration.
-A held focused feedback draft puts regeneration and affected ensurepip/venv
-checks before the expensive CPU extension gate. No native retry is granted yet.
+A held [focused feedback design](packaging-feedback-design-review-20261101-v1.md)
+puts regeneration and affected ensurepip/venv checks before the expensive CPU
+extension gate. Concrete helpers remain in host preparation; no native retry
+is granted yet.
 
 ASan31887 returned1 in the host result reader although the standard target
 harness returned SUCCESS:3,827 tests, zero failures and77 skips. Standard

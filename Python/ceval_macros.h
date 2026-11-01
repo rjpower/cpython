@@ -767,7 +767,11 @@ _PyStackRef_Truth(_PyStackRef ref)
  * request. Ordinary dispatch has no test request lookup or branch. */
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
 #  define JIT_MAYBE_RESUME(FROM_RETURN) do { \
-    jit_from_return = (FROM_RETURN); goto jit_resume; \
+    if (jit_context.unit != NULL || jit_request != NULL || \
+        ((FROM_RETURN) && jit_flow != NULL && jit_flow->depth && \
+         jit_flow->pending[jit_flow->depth - 1].caller == frame)) { \
+        jit_from_return = (FROM_RETURN); goto jit_resume; \
+    } \
 } while (0)
 #else
 #  define JIT_MAYBE_RESUME(FROM_RETURN) ((void)0)
@@ -775,6 +779,8 @@ _PyStackRef_Truth(_PyStackRef ref)
 
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
 #  define JIT_LEAVE_FRAME(FRAME) do { \
+    JIT_RETIRE_COLD(FRAME); \
+    if (jit_flow != NULL && jit_flow->depth && jit_flow->pending[jit_flow->depth - 1].caller == (FRAME)) _PyJit_RetirePending(jit_flow, (FRAME)); \
     if (jit_context.unit != NULL) { _PyJit_ReleaseActivation(&jit_context); } \
     if (jit_request != NULL && jit_request->claimed_frame == (FRAME)) { \
         jit_request->claimed_frame = NULL; jit_request = NULL; \
@@ -782,4 +788,33 @@ _PyStackRef_Truth(_PyStackRef ref)
 } while (0)
 #else
 #  define JIT_LEAVE_FRAME(FRAME) ((void)0)
+#endif
+
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+# define JIT_RETIRE_COLD(F) do { if (jit_cold_request != NULL) _PyJit_RetireCold(jit_cold_request, (F)); } while (0)
+# define JIT_CALL_RETRY() DISPATCH()
+# define JIT_CALL_NEEDS_PREPARE(I) (IR_HANDLER(*(I)) == CALL_JIT_WARM)
+# define JIT_PREPARE_CALL(I, F) _PyJit_PrepareCall(&(_PyJitContext){ \
+    .tstate=tstate, .frame=frame, .flow_owner=&jit_flow}, (I), (F))
+# define JIT_RETIRE_PENDING(F) do { if (jit_flow != NULL && jit_flow->depth && jit_flow->pending[jit_flow->depth - 1].caller == (F)) _PyJit_RetirePending(jit_flow, (F)); } while (0)
+# define JIT_FREE_FLOW() do { if (jit_flow != NULL && _PyJit_FreeFlow(&jit_flow) < 0) return NULL; } while (0)
+# define JIT_FREE_FLOW_RESULT(R) do { if (jit_flow != NULL && _PyJit_FreeFlow(&jit_flow) < 0) { PyObject *err = PyErr_GetRaisedException(); Py_DECREF(R); PyErr_SetRaisedException(err); return NULL; } } while (0)
+# define JIT_SITE_ENTRY(I) do { \
+    if (jit_request != NULL && jit_request->claimed_frame == frame) goto jit_step; \
+    if (IR_HANDLER(*(I)) == JUMP_BACKWARD_JIT_WARM) { \
+        int heat = _PyJit_WarmBackedge(tstate, frame); \
+        if (heat < 0) goto error; \
+        if (!heat) DISPATCH(); \
+    } \
+    jit_from_return = 0; goto jit_enter; \
+} while (0)
+#else
+# define JIT_CALL_RETRY() DISPATCH()
+# define JIT_RETIRE_COLD(F) ((void)0)
+# define JIT_CALL_NEEDS_PREPARE(I) 0
+# define JIT_PREPARE_CALL(I, F) 0
+# define JIT_RETIRE_PENDING(F) ((void)0)
+# define JIT_FREE_FLOW() ((void)0)
+# define JIT_FREE_FLOW_RESULT(R) ((void)0)
+# define JIT_SITE_ENTRY(I) ((void)0)
 #endif

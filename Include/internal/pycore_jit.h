@@ -25,6 +25,17 @@ typedef enum {
 typedef struct _PyJitCodeUnit _PyJitCodeUnit;
 typedef struct _PyJitState _PyJitState;
 typedef struct {
+    _PyInterpreterFrame *caller;
+    uint32_t call_word, return_word;
+    uint64_t token;
+} _PyJitPending;
+typedef struct {
+    unsigned int depth;
+    unsigned char budgeted;
+    uint64_t generation;
+    _PyJitPending pending[64];
+} _PyJitFlow;
+typedef struct {
     PyThreadState *tstate;
     _PyInterpreterFrame *frame;
     /* Always a word in frame; PREPARED points at the unstarted callee.
@@ -41,6 +52,10 @@ typedef struct {
     _PyCodeExec *expected_exec;
     void *entry_target;
     int from_return;
+    _PyJitFlow **flow_owner;
+    _PyInterpreterFrame *pending_caller;
+    uint32_t pending_call, pending_return;
+    void *cold_request;  /* stack-scoped test token, never an owning root */
 } _PyJitContext;
 /* Owned by the method descriptor or by the semantic-step caller. No object
  * references are embedded; the active frame roots code and feedback. */
@@ -85,15 +100,32 @@ struct _PyJitCodeUnit {
     size_t mapping_size;
     size_t code_size;
     _PyJitEntry entry;
+    size_t charged_bytes;
+    uint32_t entry_word;
+    uint16_t entry_handler;
+    unsigned char budgeted;
     unsigned char entry_seen;
     unsigned char c_call_seen;
     unsigned char return_resume_seen;
 };
+typedef enum {
+    _PyJIT_FAILURE_NONE, _PyJIT_FAILURE_BUILD, _PyJIT_FAILURE_INVALIDATED,
+    _PyJIT_FAILURE_QUOTA, _PyJIT_FAILURE_ENTRY, _PyJIT_FAILURE_COVERAGE
+} _PyJitFailure;
 struct _PyJitState {
     size_t refs;
     uint64_t generation;
     int building;
     int disabled;
+    int coverage;  /* 0 unknown, 1 complete, -1 immutable unsupported */
+    int unsupported_word;
+    int unsupported_handler;
+    _PyJitFailure last_failure;
+    uint32_t compile_attempts, compile_failures;
+    uint64_t compile_ns;
+    unsigned char budgeted;
+    uint16_t loop_heat;
+    uint16_t cooldown;
     _PyJitCodeUnit *unit;
 };
 
@@ -104,6 +136,14 @@ struct _PyJitState {
 #  define _PyJIT_BASELINE_SUPPORTED 0
 #endif
 
+extern void _PyJit_SeedBackedges(PyCodeObject *, _PyCodeExec *);
+extern int _PyJit_AutoEligible(PyObject *);
+extern int _PyJit_PrepareCall(_PyJitContext *, _PyIRWord *, _PyStackRef);
+extern int _PyJit_WarmBackedge(PyThreadState *, _PyInterpreterFrame *);
+extern void _PyJit_PushPending(_PyJitContext *);
+extern int _PyJit_PopPending(_PyJitFlow *, _PyInterpreterFrame *, _PyIRWord *);
+extern void _PyJit_RetirePending(_PyJitFlow *, _PyInterpreterFrame *);
+extern int _PyJit_FreeFlow(_PyJitFlow **);
 extern int _PyJit_ObserversAllow(PyThreadState *, _PyInterpreterFrame *);
 extern _PyJitCodeUnit *_PyJit_BuildBaseline(PyCodeObject *, _PyCodeExec *, uint64_t, uintptr_t, uint64_t);
 extern int _PyJit_EmitBaseline(_PyJitCodeUnit *);
@@ -131,7 +171,9 @@ typedef struct _PyJitTestRequest {
 } _PyJitTestRequest;
 
 extern const _PyJitHelperInfo *_PyJit_GetHelper(unsigned int);
-extern _PyJitTestRequest *_PyJit_TestClaim(PyThreadState *, _PyInterpreterFrame *);
+extern _PyJitTestRequest *_PyJit_TestClaim(PyThreadState *, _PyInterpreterFrame *, void **);
+extern void _PyJit_RetireCold(void *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyObject *) _PyJit_TestColdCall(PyObject *, PyObject *, PyObject *, int, int);
 PyAPI_FUNC(PyObject *) _PyJit_TestCall(PyObject *, PyObject *, Py_ssize_t);
 
 #ifdef __cplusplus

@@ -50,7 +50,10 @@ extern "C" {
 #define LOAD_GLOBAL_NOFB                               299
 #define LOAD_SUPER_ATTR_NOFB                           300
 #define STORE_ATTR_NOFB                                301
-#define IR_NUM_HANDLERS                                302
+#define CALL_JIT_WARM                                  302
+#define JUMP_BACKWARD_JIT_WARM                         303
+#define RESUME_JIT                                     304
+#define IR_NUM_HANDLERS                                305
 
 /* The handler of BINARY_OP operation OP is _PyIR_BINARY_OP_FIRST + OP */
 #define _PyIR_BINARY_OP_FIRST                          BINARY_OP_ADD
@@ -82,9 +85,9 @@ static_assert(BINARY_OP_INPLACE_TRUE_DIVIDE == _PyIR_BINARY_OP_FIRST + NB_INPLAC
 static_assert(BINARY_OP_INPLACE_XOR == _PyIR_BINARY_OP_FIRST + NB_INPLACE_XOR, "BINARY_OP_INPLACE_XOR");
 static_assert(BINARY_OP_SUBSCR == _PyIR_BINARY_OP_FIRST + NB_SUBSCR, "BINARY_OP_SUBSCR");
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[302];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[305];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[302] = {
+const _PyIRFormat _PyIR_Formats[305] = {
     [CACHE] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = CACHE, .nofb = 0 },
     [BINARY_SLICE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 3, .dst = -3, .borrow_mask = 0x7, .shadow = BINARY_SLICE, .nofb = 0 },
     [BUILD_TEMPLATE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .shadow = BUILD_TEMPLATE, .nofb = 0 },
@@ -375,12 +378,15 @@ const _PyIRFormat _PyIR_Formats[302] = {
     [LOAD_GLOBAL_NOFB] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_GLOBAL, .nofb = 0 },
     [LOAD_SUPER_ATTR_NOFB] = { .flags = _PyIR_VALID | _PyIR_WINDOW | _PyIR_NO_FOLD | _PyIR_STORE_DST, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = LOAD_SUPER_ATTR, .nofb = 0 },
     [STORE_ATTR_NOFB] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .shadow = STORE_ATTR, .nofb = 0 },
+    [CALL_JIT_WARM] = { .flags = _PyIR_VALID | _PyIR_WINDOW | _PyIR_STORE_DST, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .ninputs = 0, .dst = 0, .borrow_mask = 0x0, .shadow = CALL, .nofb = 0 },
+    [JUMP_BACKWARD_JIT_WARM] = { .flags = _PyIR_VALID | _PyIR_JUMPS, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = JUMP_BACKWARD, .nofb = 0 },
+    [RESUME_JIT] = { .flags = _PyIR_VALID, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .shadow = RESUME, .nofb = 0 },
 };
 #endif
 
-PyAPI_DATA(const char *const) _PyIR_OnlyNames[35];
+PyAPI_DATA(const char *const) _PyIR_OnlyNames[38];
 #ifdef NEED_IR_METADATA
-const char *const _PyIR_OnlyNames[35] = {
+const char *const _PyIR_OnlyNames[38] = {
     [IR_JUMP - IR_FIRST_ONLY_HANDLER] = "IR_JUMP",
     [BINARY_OP_ADD - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_ADD",
     [BINARY_OP_AND - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_AND",
@@ -416,6 +422,9 @@ const char *const _PyIR_OnlyNames[35] = {
     [LOAD_GLOBAL_NOFB - IR_FIRST_ONLY_HANDLER] = "LOAD_GLOBAL_NOFB",
     [LOAD_SUPER_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "LOAD_SUPER_ATTR_NOFB",
     [STORE_ATTR_NOFB - IR_FIRST_ONLY_HANDLER] = "STORE_ATTR_NOFB",
+    [CALL_JIT_WARM - IR_FIRST_ONLY_HANDLER] = "CALL_JIT_WARM",
+    [JUMP_BACKWARD_JIT_WARM - IR_FIRST_ONLY_HANDLER] = "JUMP_BACKWARD_JIT_WARM",
+    [RESUME_JIT - IR_FIRST_ONLY_HANDLER] = "RESUME_JIT",
 };
 #endif
 

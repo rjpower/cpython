@@ -56,6 +56,10 @@ _PyJit_BuildBaseline(PyCodeObject *code, _PyCodeExec *exec,
                 _PyJit_FreeUnit(unit);
                 return NULL;
             }
+            if (handler == FOR_ITER) {
+                target++;  /* exhaustion skips the END_FOR marker */
+                if ((uint32_t)target >= unit->nops) { _PyJit_FreeUnit(unit); return NULL; }
+            }
             op->target = (uint32_t)target;
             if (op->helper != NULL) {
                 op->kind = _PyJIT_LIR_BRANCH;

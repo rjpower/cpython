@@ -25,9 +25,18 @@
 #pragma push_macro("DISPATCH_SAME_OPARG")
 #pragma push_macro("JUMP_TO_LABEL")
 #pragma push_macro("DISPATCH_INLINED")
+#pragma push_macro("JIT_CALL_RETRY")
+#undef JIT_CALL_RETRY
+#define JIT_CALL_RETRY() JIT_FINISH(_PyJIT_DEOPT, _PyJIT_DEOPT_BEFORE)
+#pragma push_macro("JIT_CALL_NEEDS_PREPARE")
+#pragma push_macro("JIT_PREPARE_CALL")
+#undef JIT_CALL_NEEDS_PREPARE
+#undef JIT_PREPARE_CALL
+#define JIT_CALL_NEEDS_PREPARE(I) (ctx->unit != NULL)
+#define JIT_PREPARE_CALL(I,F) _PyJit_PrepareCall(ctx, (I), (F))
 #pragma push_macro("JIT_LEAVE_FRAME")
 #undef JIT_LEAVE_FRAME
-#define JIT_LEAVE_FRAME(FRAME) ((void)0)
+#define JIT_LEAVE_FRAME(FRAME) do { if (ctx->cold_request != NULL) _PyJit_RetireCold(ctx->cold_request, (FRAME)); } while (0)
 #undef DISPATCH
 #undef DISPATCH_SAME_OPARG
 #undef JUMP_TO_LABEL
@@ -2886,6 +2895,121 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_BUILD_LIST(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = BUILD_LIST; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BUILD_LIST;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_LIST);
+            int oparg = (int)IR_FIELD_C(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            _PyStackRef *values;
+            _PyStackRef list;
+            values = &window[0];
+            PyObject *list_o = _PyList_FromStackRefStealOnSuccess(values, oparg);
+            if (list_o == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            list = PyStackRef_FromPyObjectStealMortal(list_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
+            window[0] = list;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_BUILD_MAP(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = BUILD_MAP; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BUILD_MAP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_MAP);
+            int oparg = (int)IR_FIELD_C(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            _PyStackRef *values;
+            _PyStackRef map;
+            values = &window[0];
+            PyObject *map_o = _Py_BuildMap_StackRefSteal(values, oparg);
+            if (map_o == NULL) {
+                IR_CLEAR_SLOTS(&window[0], oparg*2);
+                JUMP_TO_LABEL(error);
+            }
+            map = PyStackRef_FromPyObjectStealMortal(map_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
+            window[0] = map;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_BUILD_TUPLE(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = BUILD_TUPLE; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = BUILD_TUPLE;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(BUILD_TUPLE);
+            int oparg = (int)IR_FIELD_C(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            _PyStackRef *values;
+            _PyStackRef tup;
+            values = &window[0];
+            PyObject *tup_o = _PyTuple_FromStackRefStealOnSuccess(values, oparg);
+            if (tup_o == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            tup = PyStackRef_FromPyObjectStealMortal(tup_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
+            window[0] = tup;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_CALL(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -2911,6 +3035,14 @@
             (void)oparg;
             _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
+            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
+                for (int jit_i = 0; jit_i < oparg + 2; jit_i++) {
+                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
+}
+                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
+                if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
+                if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
+            }
             opcode = CALL;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -2921,14 +3053,16 @@
                 self_or_null = window[1];
                 callable = window[0];
                 #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CALL; } while (0);
+                if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
+                    _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                        next_instr = this_instr;
+                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
+                        do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CALL; } while (0);
+                    }
+                    OPCODE_DEFERRED_INC(CALL);
+                    ADVANCE_ADAPTIVE_COUNTER(feedback);
                 }
-                OPCODE_DEFERRED_INC(CALL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 #if ENABLE_SPECIALIZATION
                 jit_after_SPECIALIZE_CALL:;
@@ -3011,6 +3145,152 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_CALL_KW(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = CALL_KW; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = CALL_KW;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL_KW);
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = (int)IR_FIELD_C(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
+                for (int jit_i = 0; jit_i < oparg + 3; jit_i++) {
+                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
+}
+                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
+                if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
+                if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
+            }
+            opcode = CALL_KW;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef res;
+            // _SPECIALIZE_CALL_KW
+            {
+                self_or_null = window[1];
+                callable = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CALL_KW; } while (0);
+                }
+                OPCODE_DEFERRED_INC(CALL_KW);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_CALL_KW:;
+                #endif
+            }
+            // _MAYBE_EXPAND_METHOD_KW
+            {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_KW);
+                    window[0] = callable;
+                }
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                    PyObject *self = ((PyMethodObject *)callable_o)->im_self;
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
+                    PyObject *method = ((PyMethodObject *)callable_o)->im_func;
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
+                }
+            }
+            // _DO_CALL_KW
+            {
+                kwnames = window[2 + oparg];
+                args = &window[2];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyStackRef_Box(kwnames);
+                    if (PyStackRef_IsInline(kwnames)) {
+                        window[0] = callable;
+                        window[1] = self_or_null;
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_KW);
+                    window[2 + oparg] = kwnames;
+                }
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
+                int total_args = oparg;
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
+                    arguments--;
+                    total_args++;
+                }
+                int positional_args = total_args - (int)PyTuple_GET_SIZE(kwnames_o);
+                if (Py_TYPE(callable_o) == &PyFunction_Type &&
+                    !IS_PEP523_HOOKED(tstate) &&
+                    ((PyFunctionObject *)callable_o)->vectorcall == _PyFunction_Vectorcall)
+                {
+                    int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
+                    PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
+                        tstate, callable, locals,
+                        arguments, positional_args, kwnames_o, frame
+                    );
+                    IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                    _PyStackRef_CLOSE_POINTER(kwnames);
+                    if (new_frame == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    assert( 1u == 1u);
+                    frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
+                    DISPATCH_INLINED(new_frame);
+                }
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
+                    callable,
+                    arguments,
+                    total_args,
+                    kwnames,
+                    opcode == INSTRUMENTED_CALL_KW,
+                    frame,
+                    this_instr,
+                    tstate);
+                if (res_o == NULL) {
+                    IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                    JUMP_TO_LABEL(error);
+                }
+                res = PyStackRef_FromPyObjectSteal(res_o);
+            }
+            IR_CLEAR_SLOTS(&window[1], 2 + oparg);
+            window[0] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -3111,6 +3391,108 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_CONTAINS_OP(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = CONTAINS_OP; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = CONTAINS_OP;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CONTAINS_OP);
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
+            (void)oparg;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
+            // _SPECIALIZE_CONTAINS_OP
+            {
+                right = IR_SLOT(IR_FIELD_C(this_instr));
+                left = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_ContainsOp(left, right, next_instr);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CONTAINS_OP; } while (0);
+                }
+                OPCODE_DEFERRED_INC(CONTAINS_OP);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_CONTAINS_OP:;
+                #endif
+            }
+            // _CONTAINS_OP
+            {
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                int res = PySequence_Contains(right_o, left_o);
+                if (res < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
+                    JUMP_TO_LABEL(error);
+                }
+                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
+                l = left;
+                r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            }
+            // _POP_TOP
+            {
+                value = r;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
+            }
+            // _POP_TOP
+            {
+                value = l;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), b);
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_COPY(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -3140,6 +3522,190 @@
             bottom = window[0];
             top = PyStackRef_DUP(bottom);
             window[1 + (oparg-1)] = top;
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_COPY_FREE_VARS(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = COPY_FREE_VARS; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = COPY_FREE_VARS;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(COPY_FREE_VARS);
+            int oparg = (int)IR_FIELD_A(this_instr);
+            (void)oparg;
+            PyCodeObject *co = _PyFrame_GetCode(frame);
+            assert(PyStackRef_FunctionCheck(frame->f_funcobj));
+            PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
+            PyObject *closure = func->func_closure;
+            assert(oparg == co->co_nfreevars);
+            int offset = co->co_nlocalsplus - oparg;
+            for (int i = 0; i < oparg; ++i) {
+                PyObject *o = PyTuple_GET_ITEM(closure, i);
+                frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
+            }
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_END_FOR(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = END_FOR; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = END_FOR;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(END_FOR);
+            _PyStackRef value;
+            value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            PyStackRef_CLOSE(value);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_FOR_ITER(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = FOR_ITER; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_BRANCH;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = FOR_ITER;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(FOR_ITER);
+            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef next;
+            // _SPECIALIZE_FOR_ITER
+            {
+                null_or_index = window[1];
+                iter = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_FOR_ITER; } while (0);
+                }
+                OPCODE_DEFERRED_INC(FOR_ITER);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_FOR_ITER:;
+                #endif
+            }
+            // _FOR_ITER
+            {
+                _PyStackRef item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
+                if (!PyStackRef_IsValid(item)) {
+                    if (PyStackRef_IsError(item)) {
+                        window[1] = null_or_index;
+                        JUMP_TO_LABEL(error);
+                    }
+                    JUMPBY(oparg + 1);
+                    window[1] = null_or_index;
+                    DISPATCH();
+                }
+                next = item;
+            }
+            window[1] = null_or_index;
+            window[2] = next;
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_GET_ITER(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = GET_ITER; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = GET_ITER;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_ITER);
+            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_D(this_instr);
+            (void)oparg;
+            _PyStackRef iterable;
+            _PyStackRef iter;
+            _PyStackRef index_or_null;
+            // _SPECIALIZE_GET_ITER
+            {
+                iterable = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_GetIter(iterable, next_instr);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_GET_ITER; } while (0);
+                }
+                OPCODE_DEFERRED_INC(GET_ITER);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_GET_ITER:;
+                #endif
+            }
+            // _GET_ITER
+            {
+                _PyStackRef result = _PyEval_GetIter(iterable, &index_or_null, oparg);
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
+                if (PyStackRef_IsError(result)) {
+                    JUMP_TO_LABEL(error);
+                }
+                iter = result;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), iter);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), index_or_null);
             DISPATCH();
         }
 
@@ -3258,6 +3824,170 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_LOAD_ATTR(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = LOAD_ATTR; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
+            (void)oparg;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *self_or_null;
+            // _SPECIALIZE_LOAD_ATTR
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+                    next_instr = this_instr;
+                    _Py_Specialize_LoadAttr(owner, next_instr, name);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
+                }
+                OPCODE_DEFERRED_INC(LOAD_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_LOAD_ATTR:;
+                #endif
+            }
+            // _LOAD_ATTR
+            {
+                self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LOAD_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                }
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+                if (oparg & 1) {
+                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    if (PyStackRef_IsNull(attr)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                else {
+                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                    _PyStackRef_CLOSE_POINTER(owner);
+                    if (PyStackRef_IsNull(attr)) {
+                        IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                        JUMP_TO_LABEL(error);
+                    }
+                    IR_CLEAR_SLOTS(&IR_SLOT(IR_FIELD_A(this_instr) + 1), (oparg&1));
+                }
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_LOAD_ATTR_NOFB(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = LOAD_ATTR_NOFB; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_NOFB;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *self_or_null;
+            // _SPECIALIZE_LOAD_ATTR
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
+                    next_instr = this_instr;
+                    _Py_Specialize_LoadAttr(owner, next_instr, name);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
+                }
+                OPCODE_DEFERRED_INC(LOAD_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_LOAD_ATTR:;
+                #endif
+            }
+            // _LOAD_ATTR
+            {
+                self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LOAD_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                }
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+                if (oparg & 1) {
+                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    if (PyStackRef_IsNull(attr)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+                else {
+                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                    _PyStackRef_CLOSE_POINTER(owner);
+                    if (PyStackRef_IsNull(attr)) {
+                        IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                        JUMP_TO_LABEL(error);
+                    }
+                    IR_CLEAR_SLOTS(&IR_SLOT(IR_FIELD_A(this_instr) + 1), (oparg&1));
+                }
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_LOAD_CONST(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -3344,6 +4074,41 @@
             assert(_PyLong_CheckExactAndCompact(obj));
             value = PyStackRef_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
             if (PyStackRef_IsNull(value)) {
+                JUMP_TO_LABEL(error);
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), value);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_LOAD_DEREF(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = LOAD_DEREF; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_DEREF;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_DEREF);
+            int oparg = (int)IR_FIELD_B(this_instr);
+            (void)oparg;
+            _PyStackRef value;
+            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            value = _PyCell_GetStackRef(cell);
+            if (PyStackRef_IsNull(value)) {
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
+                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
                 JUMP_TO_LABEL(error);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
@@ -3696,6 +4461,42 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_MAKE_CELL(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = MAKE_CELL; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = MAKE_CELL;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(MAKE_CELL);
+            int oparg = (int)IR_FIELD_A(this_instr);
+            (void)oparg;
+            if (_PyStackRef_BoxArray(&GETLOCAL(oparg), 1) < 0) {
+                JUMP_TO_LABEL(error);
+            }
+            PyObject *initial = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyObject *cell = PyCell_New(initial);
+            if (cell == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            _PyStackRef tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyStackRef_FromPyObjectSteal(cell);
+            PyStackRef_XCLOSE(tmp);
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_NOP(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -3739,6 +4540,37 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOT_TAKEN);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_POP_ITER(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = POP_ITER; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = POP_ITER;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_ITER);
+            _PyStackRef iter;
+            _PyStackRef index_or_null;
+            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            (void)index_or_null;
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            PyStackRef_CLOSE(iter);
             DISPATCH();
         }
 
@@ -4172,6 +5004,217 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_STORE_ATTR(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = STORE_ATTR; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_ATTR;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_ATTR);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
+            (void)oparg;
+            _PyStackRef v;
+            _PyStackRef owner;
+            // _SPECIALIZE_STORE_ATTR
+            {
+                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                v = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    if (!PyStackRef_IsNull(v)) {
+                        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                        next_instr = this_instr;
+                        _Py_Specialize_StoreAttr(owner, next_instr, name);
+                        do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
+                    }
+                }
+                OPCODE_DEFERRED_INC(STORE_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_STORE_ATTR:;
+                #endif
+            }
+            // _STORE_ATTR
+            {
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(v, IR_FIELD_B(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_A(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                }
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
+                                       name, PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_XCLOSE_POINTER(v);
+                if (err) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_STORE_ATTR_NOFB(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = STORE_ATTR_NOFB; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_ATTR_NOFB;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_ATTR);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            _PyStackRef v;
+            _PyStackRef owner;
+            // _SPECIALIZE_STORE_ATTR
+            {
+                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                v = IR_SLOT(IR_FIELD_B(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    if (!PyStackRef_IsNull(v)) {
+                        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                        next_instr = this_instr;
+                        _Py_Specialize_StoreAttr(owner, next_instr, name);
+                        do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
+                    }
+                }
+                OPCODE_DEFERRED_INC(STORE_ATTR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_STORE_ATTR:;
+                #endif
+            }
+            // _STORE_ATTR
+            {
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(v, IR_FIELD_B(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_A(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                }
+                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
+                                       name, PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_XCLOSE_POINTER(v);
+                if (err) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_STORE_DEREF(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = STORE_DEREF; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_DEREF;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_DEREF);
+            int oparg = (int)IR_FIELD_B(this_instr);
+            (void)oparg;
+            _PyStackRef v;
+            v = IR_SLOT(IR_FIELD_A(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                v = PyStackRef_Box(v);
+                if (PyStackRef_IsInline(v)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(STORE_DEREF);
+                IR_KEEP_BOX(v, IR_FIELD_A(this_instr));
+            }
+            else {
+                v = IR_BORROW_KNOWN(v, IR_FIELD_A(this_instr));
+            }
+            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyCell_SetTakeRef(cell, _PyStackRef_AsPyObjectStealPointer(v));
+            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_STORE_FAST(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -4285,6 +5328,101 @@
             GETLOCAL(oparg2) = value2;
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             PyStackRef_XCLOSE(tmp);
+            DISPATCH();
+        }
+
+        static _PyJitAction jit_helper_STORE_SUBSCR(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = STORE_SUBSCR; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_SUBSCR;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_SUBSCR);
+            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
+            _PyStackRef container;
+            _PyStackRef sub;
+            _PyStackRef v;
+            // _SPECIALIZE_STORE_SUBSCR
+            {
+                sub = IR_SLOT(IR_FIELD_B(this_instr));
+                container = IR_SLOT(IR_FIELD_A(this_instr));
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_StoreSubscr(container, sub, next_instr);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_SUBSCR; } while (0);
+                }
+                OPCODE_DEFERRED_INC(STORE_SUBSCR);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_STORE_SUBSCR:;
+                #endif
+            }
+            // _STORE_SUBSCR
+            {
+                v = IR_SLOT(IR_FIELD_C(this_instr));
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(v, IR_FIELD_C(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_C(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+                    container = PyStackRef_Box(container);
+                    if (PyStackRef_IsInline(container)) {
+                        IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(container, IR_FIELD_A(this_instr));
+                }
+                else {
+                    container = IR_BORROW_KNOWN(container, IR_FIELD_A(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
+                    sub = PyStackRef_Box(sub);
+                    if (PyStackRef_IsInline(sub)) {
+                        IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
+                        IR_DROP_BORROW(container, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(sub, IR_FIELD_B(this_instr));
+                }
+                else {
+                    sub = IR_BORROW_KNOWN(sub, IR_FIELD_B(this_instr));
+                }
+                int err = PyObject_SetItem(PyStackRef_AsPyObjectBorrow(container), PyStackRef_AsPyObjectBorrow(sub), PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(sub);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(container);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyStackRef_CLOSE_POINTER(v);
+                if (err) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
             DISPATCH();
         }
 
@@ -4485,10 +5623,80 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_UNPACK_SEQUENCE(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = UNPACK_SEQUENCE; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = UNPACK_SEQUENCE;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(UNPACK_SEQUENCE);
+            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)IR_FIELD_B(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            (void)window;
+            _PyStackRef seq;
+            _PyStackRef *top;
+            // _SPECIALIZE_UNPACK_SEQUENCE
+            {
+                seq = window[0];
+                #if ENABLE_SPECIALIZATION
+                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    next_instr = this_instr;
+                    _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
+                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_UNPACK_SEQUENCE; } while (0);
+                }
+                OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                #endif  /* ENABLE_SPECIALIZATION */
+                (void)seq;
+                #if ENABLE_SPECIALIZATION
+                jit_after_SPECIALIZE_UNPACK_SEQUENCE:;
+                #endif
+            }
+            // _UNPACK_SEQUENCE
+            {
+                top = &window[oparg];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    seq = PyStackRef_Box(seq);
+                    if (PyStackRef_IsInline(seq)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(UNPACK_SEQUENCE);
+                    window[0] = seq;
+                }
+                PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
+                window[0] = PyStackRef_NULL;
+                int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg, -1, top);
+                Py_DECREF(seq_o);
+                if (res == 0) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            DISPATCH();
+        }
+
 #undef JIT_FINISH
 #undef JIT_PHASE_error
 #undef JIT_PHASE_exception_unwind
 #pragma pop_macro("JIT_LEAVE_FRAME")
+#pragma pop_macro("JIT_PREPARE_CALL")
+#pragma pop_macro("JIT_CALL_NEEDS_PREPARE")
+#pragma pop_macro("JIT_CALL_RETRY")
 #pragma pop_macro("DISPATCH_INLINED")
 #pragma pop_macro("JUMP_TO_LABEL")
 #pragma pop_macro("DISPATCH_SAME_OPARG")
@@ -4498,7 +5706,7 @@
 #pragma pop_macro("IR_FIELD_C")
 #pragma pop_macro("IR_FIELD_B")
 #pragma pop_macro("IR_FIELD_A")
-static const _PyJitHelperInfo jit_helpers[302] = {
+static const _PyJitHelperInfo jit_helpers[305] = {
     [0] = {"CACHE", NULL, "Action adapter not yet implemented"},
     [1] = {"BINARY_SLICE", NULL, "Action adapter not yet implemented"},
     [2] = {"BUILD_TEMPLATE", NULL, "Action adapter not yet implemented"},
@@ -4508,7 +5716,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [6] = {"CHECK_EXC_MATCH", NULL, "Action adapter not yet implemented"},
     [7] = {"CLEANUP_THROW", NULL, "Action adapter not yet implemented"},
     [8] = {"DELETE_SUBSCR", NULL, "Action adapter not yet implemented"},
-    [9] = {"END_FOR", NULL, "Action adapter not yet implemented"},
+    [9] = {"END_FOR", jit_helper_END_FOR, NULL},
     [10] = {"END_SEND", NULL, "Action adapter not yet implemented"},
     [11] = {"EXIT_INIT_CHECK", NULL, "Action adapter not yet implemented"},
     [12] = {"FORMAT_SIMPLE", NULL, "Action adapter not yet implemented"},
@@ -4527,7 +5735,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [25] = {"NOP", jit_helper_NOP, NULL},
     [26] = {"NOT_TAKEN", jit_helper_NOT_TAKEN, NULL},
     [27] = {"POP_EXCEPT", NULL, "Action adapter not yet implemented"},
-    [28] = {"POP_ITER", NULL, "Action adapter not yet implemented"},
+    [28] = {"POP_ITER", jit_helper_POP_ITER, NULL},
     [29] = {"POP_TOP", jit_helper_POP_TOP, NULL},
     [30] = {"PUSH_EXC_INFO", NULL, "Action adapter not yet implemented"},
     [31] = {"PUSH_NULL", jit_helper_PUSH_NULL, NULL},
@@ -4535,7 +5743,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [33] = {"RETURN_VALUE", jit_helper_RETURN_VALUE, NULL},
     [34] = {"SETUP_ANNOTATIONS", NULL, "Action adapter not yet implemented"},
     [35] = {"STORE_SLICE", NULL, "Action adapter not yet implemented"},
-    [36] = {"STORE_SUBSCR", NULL, "Action adapter not yet implemented"},
+    [36] = {"STORE_SUBSCR", jit_helper_STORE_SUBSCR, NULL},
     [37] = {"TO_BOOL", jit_helper_TO_BOOL, NULL},
     [38] = {"UNARY_INVERT", NULL, "Action adapter not yet implemented"},
     [39] = {"UNARY_NEGATIVE", jit_helper_UNARY_NEGATIVE, NULL},
@@ -4543,30 +5751,30 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [41] = {"WITH_EXCEPT_START", NULL, "Action adapter not yet implemented"},
     [42] = {"BINARY_OP", NULL, "semantic metadata base without an executable IR dispatch target"},
     [43] = {"BUILD_INTERPOLATION", NULL, "Action adapter not yet implemented"},
-    [44] = {"BUILD_LIST", NULL, "Action adapter not yet implemented"},
-    [45] = {"BUILD_MAP", NULL, "Action adapter not yet implemented"},
+    [44] = {"BUILD_LIST", jit_helper_BUILD_LIST, NULL},
+    [45] = {"BUILD_MAP", jit_helper_BUILD_MAP, NULL},
     [46] = {"BUILD_SET", NULL, "Action adapter not yet implemented"},
     [47] = {"BUILD_SLICE", NULL, "Action adapter not yet implemented"},
     [48] = {"BUILD_STRING", NULL, "Action adapter not yet implemented"},
-    [49] = {"BUILD_TUPLE", NULL, "Action adapter not yet implemented"},
+    [49] = {"BUILD_TUPLE", jit_helper_BUILD_TUPLE, NULL},
     [50] = {"CALL", jit_helper_CALL, NULL},
     [51] = {"CALL_INTRINSIC_1", NULL, "Action adapter not yet implemented"},
     [52] = {"CALL_INTRINSIC_2", NULL, "Action adapter not yet implemented"},
-    [53] = {"CALL_KW", NULL, "Action adapter not yet implemented"},
+    [53] = {"CALL_KW", jit_helper_CALL_KW, NULL},
     [54] = {"COMPARE_OP", jit_helper_COMPARE_OP, NULL},
-    [55] = {"CONTAINS_OP", NULL, "Action adapter not yet implemented"},
+    [55] = {"CONTAINS_OP", jit_helper_CONTAINS_OP, NULL},
     [56] = {"CONVERT_VALUE", NULL, "Action adapter not yet implemented"},
     [57] = {"COPY", jit_helper_COPY, NULL},
-    [58] = {"COPY_FREE_VARS", NULL, "Action adapter not yet implemented"},
+    [58] = {"COPY_FREE_VARS", jit_helper_COPY_FREE_VARS, NULL},
     [59] = {"DELETE_DEREF", NULL, "Action adapter not yet implemented"},
     [60] = {"DELETE_FAST", NULL, "Action adapter not yet implemented"},
     [61] = {"DICT_MERGE", NULL, "Action adapter not yet implemented"},
     [62] = {"DICT_UPDATE", NULL, "Action adapter not yet implemented"},
     [63] = {"END_ASYNC_FOR", NULL, "Action adapter not yet implemented"},
     [64] = {"EXTENDED_ARG", NULL, "Action adapter not yet implemented"},
-    [65] = {"FOR_ITER", NULL, "Action adapter not yet implemented"},
+    [65] = {"FOR_ITER", jit_helper_FOR_ITER, NULL},
     [66] = {"GET_AWAITABLE", NULL, "Action adapter not yet implemented"},
-    [67] = {"GET_ITER", NULL, "Action adapter not yet implemented"},
+    [67] = {"GET_ITER", jit_helper_GET_ITER, NULL},
     [68] = {"IMPORT_FROM", NULL, "Action adapter not yet implemented"},
     [69] = {"IMPORT_NAME", NULL, "Action adapter not yet implemented"},
     [70] = {"IS_OP", NULL, "Action adapter not yet implemented"},
@@ -4577,10 +5785,10 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [75] = {"JUMP_IF_TRUE_OR_POP", NULL, "Action adapter not yet implemented"},
     [76] = {"LIST_APPEND", NULL, "Action adapter not yet implemented"},
     [77] = {"LIST_EXTEND", NULL, "Action adapter not yet implemented"},
-    [78] = {"LOAD_ATTR", NULL, "Action adapter not yet implemented"},
+    [78] = {"LOAD_ATTR", jit_helper_LOAD_ATTR, NULL},
     [79] = {"LOAD_COMMON_CONSTANT", NULL, "Action adapter not yet implemented"},
     [80] = {"LOAD_CONST", jit_helper_LOAD_CONST, NULL},
-    [81] = {"LOAD_DEREF", NULL, "Action adapter not yet implemented"},
+    [81] = {"LOAD_DEREF", jit_helper_LOAD_DEREF, NULL},
     [82] = {"LOAD_FAST", jit_helper_LOAD_FAST, NULL},
     [83] = {"LOAD_FAST_AND_CLEAR", NULL, "Action adapter not yet implemented"},
     [84] = {"LOAD_FAST_BORROW", jit_helper_LOAD_FAST_BORROW, NULL},
@@ -4594,7 +5802,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [92] = {"LOAD_SMALL_INT", jit_helper_LOAD_SMALL_INT, NULL},
     [93] = {"LOAD_SPECIAL", NULL, "Action adapter not yet implemented"},
     [94] = {"LOAD_SUPER_ATTR", NULL, "Action adapter not yet implemented"},
-    [95] = {"MAKE_CELL", NULL, "Action adapter not yet implemented"},
+    [95] = {"MAKE_CELL", jit_helper_MAKE_CELL, NULL},
     [96] = {"MAP_ADD", NULL, "Action adapter not yet implemented"},
     [97] = {"MATCH_CLASS", NULL, "Action adapter not yet implemented"},
     [98] = {"POP_JUMP_IF_FALSE", jit_helper_POP_JUMP_IF_FALSE, NULL},
@@ -4607,8 +5815,8 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [105] = {"SET_ADD", NULL, "Action adapter not yet implemented"},
     [106] = {"SET_FUNCTION_ATTRIBUTE", NULL, "Action adapter not yet implemented"},
     [107] = {"SET_UPDATE", NULL, "Action adapter not yet implemented"},
-    [108] = {"STORE_ATTR", NULL, "Action adapter not yet implemented"},
-    [109] = {"STORE_DEREF", NULL, "Action adapter not yet implemented"},
+    [108] = {"STORE_ATTR", jit_helper_STORE_ATTR, NULL},
+    [109] = {"STORE_DEREF", jit_helper_STORE_DEREF, NULL},
     [110] = {"STORE_FAST", jit_helper_STORE_FAST, NULL},
     [111] = {"STORE_FAST_LOAD_FAST", jit_helper_STORE_FAST_LOAD_FAST, NULL},
     [112] = {"STORE_FAST_STORE_FAST", jit_helper_STORE_FAST_STORE_FAST, NULL},
@@ -4616,7 +5824,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [114] = {"STORE_NAME", NULL, "Action adapter not yet implemented"},
     [115] = {"SWAP", jit_helper_SWAP, NULL},
     [116] = {"UNPACK_EX", NULL, "Action adapter not yet implemented"},
-    [117] = {"UNPACK_SEQUENCE", NULL, "Action adapter not yet implemented"},
+    [117] = {"UNPACK_SEQUENCE", jit_helper_UNPACK_SEQUENCE, NULL},
     [118] = {"YIELD_VALUE", NULL, "Action adapter not yet implemented"},
     [119] = {"TO_BOOL_BOOL", NULL, "executing specialization: tier down before effect"},
     [120] = {"TO_BOOL_INT", NULL, "executing specialization: tier down before effect"},
@@ -4785,10 +5993,13 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [295] = {"COMPARE_OP_NOFB", NULL, "Action adapter not yet implemented"},
     [296] = {"CONTAINS_OP_NOFB", NULL, "Action adapter not yet implemented"},
     [297] = {"INSTRUMENTED_LOAD_SUPER_ATTR_NOFB", NULL, "Action adapter not yet implemented"},
-    [298] = {"LOAD_ATTR_NOFB", NULL, "Action adapter not yet implemented"},
+    [298] = {"LOAD_ATTR_NOFB", jit_helper_LOAD_ATTR_NOFB, NULL},
     [299] = {"LOAD_GLOBAL_NOFB", jit_helper_LOAD_GLOBAL_NOFB, NULL},
     [300] = {"LOAD_SUPER_ATTR_NOFB", NULL, "Action adapter not yet implemented"},
-    [301] = {"STORE_ATTR_NOFB", NULL, "Action adapter not yet implemented"},
+    [301] = {"STORE_ATTR_NOFB", jit_helper_STORE_ATTR_NOFB, NULL},
+    [302] = {"CALL_JIT_WARM", NULL, "execution-only natural admission head"},
+    [303] = {"JUMP_BACKWARD_JIT_WARM", NULL, "execution-only natural admission head"},
+    [304] = {"RESUME_JIT", NULL, "execution-only natural admission head"},
 };
 #endif
 

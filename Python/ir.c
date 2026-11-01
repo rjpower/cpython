@@ -301,6 +301,7 @@ make_exec(PyCodeObject *co)
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
+    _PyJit_SeedBackedges(co, exec);
     if (inline_values_off()) {
         for (Py_ssize_t i = 0; i < nwords; i++) {
             int handler = boxing_handler(IR_HANDLER(words[i]));

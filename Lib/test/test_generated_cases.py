@@ -1003,6 +1003,37 @@ class TestJitHelpers(unittest.TestCase):
             end = self.output.index("#undef JIT_FINISH", start)
         return self.output[start:end]
 
+    def test_natural_handlers_append_and_preserve_formats(self):
+        root = Path(__file__).resolve().parents[2]
+        analysis = analyzer.analyze_files([str(root / "Python/bytecodes.c")])
+        ids = ir_generator.handler_ids(analysis)
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual({name: ids[name] for name in ir_generator.EXEC_ONLY},
+                         {"CALL_JIT_WARM": 302, "JUMP_BACKWARD_JIT_WARM": 303, "RESUME_JIT": 304})
+        for name, base in ir_generator.EXEC_ONLY.items():
+            self.assertEqual(formats[name], formats[base])
+            self.assertEqual(ir_metadata_generator.shadow_of(name, analysis), base)
+        generated = (root / "Python/generated_ir_cases.c.h").read_text()
+        warm = generated.split("TARGET(CALL_JIT_WARM)", 1)[1].split("TARGET(", 1)[0]
+        self.assertNotIn("_SPECIALIZE_CALL", warm)
+        self.assertIn("JIT_PREPARE_CALL", warm)
+        resume = generated.split("TARGET(RESUME_JIT)", 1)[1].split("TARGET(", 1)[0]
+        self.assertLess(resume.index("check_periodics"), resume.index("JIT_SITE_ENTRY"))
+
+    def test_object_iteration_and_keyword_adapters(self):
+        root = Path(__file__).resolve().parents[2]
+        generated = (root / "Python/generated_jit_helpers.c.h").read_text()
+        required = {"LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
+                    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "BUILD_LIST",
+                    "BUILD_TUPLE", "BUILD_MAP", "UNPACK_SEQUENCE",
+                    "STORE_SUBSCR", "CONTAINS_OP", "CALL_KW", "COPY_FREE_VARS",
+                    "MAKE_CELL", "LOAD_DEREF", "STORE_DEREF"}
+        for name in required:
+            self.assertIn("jit_helper_" + name + "(", generated)
+        keyword = generated.split("jit_helper_CALL_KW(", 1)[1].split("static _PyJitAction", 1)[0]
+        self.assertLess(keyword.index("JIT_PREPARE_CALL"), keyword.index("_DO_CALL_KW"))
+        self.assertIn("PyStackRef_MakeHeapSafe", keyword)
+
     def test_every_valid_handler_classified(self):
         names = set(ir_generator.compute_formats(self.analysis))
         self.assertIn("BINARY_OP", names)

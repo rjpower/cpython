@@ -21,7 +21,7 @@ from analyzer import Analysis, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
-    BINARY_OP_FAMILY,
+    BINARY_OP_FAMILY, EXEC_ONLY,
     first_ir_only_handler,
     NOFB_SUFFIX,
     IRFormat,
@@ -40,6 +40,8 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP, and for a NOFB form its base."""
+    if name in EXEC_ONLY:
+        return EXEC_ONLY[name]
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
     return name.removesuffix(NOFB_SUFFIX)

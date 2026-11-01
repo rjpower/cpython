@@ -423,6 +423,12 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
     return {**analysis.instructions, **analysis.ir_only}
 
 
+EXEC_ONLY = {"CALL_JIT_WARM": "CALL", "JUMP_BACKWARD_JIT_WARM": "JUMP_BACKWARD", "RESUME_JIT": "RESUME"}
+
+def exec_only(analysis: Analysis) -> dict[str, str]:
+    # Small generator fixtures need not define the production entry families.
+    return EXEC_ONLY if all(base in analysis.instructions for base in EXEC_ONLY.values()) else {}
+
 NOFB_SUFFIX = "_NOFB"
 
 
@@ -449,6 +455,8 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
              + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
     for i, name in enumerate(names):
         ids[name] = first_ir_only_handler(analysis) + i
+    for name in exec_only(analysis):
+        ids[name] = max(ids.values()) + 1
     return ids
 
 
@@ -461,6 +469,8 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
         result[name] = insts[BINARY_OP_FAMILY]
     for name in nofb_bases(analysis):
         result[name + NOFB_SUFFIX] = insts[name]
+    for name, base in exec_only(analysis).items():
+        result[name] = insts[base]
     return result
 
 
@@ -775,6 +785,8 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
     formats = base_formats(analysis)
     for name in nofb_bases(analysis):
         formats[name + NOFB_SUFFIX] = nofb_format(formats[name])
+    for name, base in exec_only(analysis).items():
+        formats[name] = replace(formats[base])
     return formats
 
 
@@ -1553,7 +1565,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     BINARY_OP operation, BINARY_OP with that operation."""
     operation = None
     nofb = name == inst.name + NOFB_SUFFIX
-    if name != inst.name and not nofb:
+    if name != inst.name and not nofb and name not in EXEC_ONLY:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     helper = emitter.helper
     is_target = inst.is_target and name == inst.name and not helper
@@ -1594,7 +1606,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)this_instr;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
-    if use_fb:
+    if use_fb and name != "CALL_JIT_WARM":
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
     elif nofb and uses_feedback(inst):
@@ -1614,6 +1626,15 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         out.emit(f"_PyStackRef *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
+    if name in ("CALL", "CALL_JIT_WARM", "CALL_KW"):
+        out.emit("if (JIT_CALL_NEEDS_PREPARE(this_instr)) {\n")
+        count = "oparg + 3" if name == "CALL_KW" else "oparg + 2"
+        out.emit(f"for (int jit_i = 0; jit_i < {count}; jit_i++) {{\n")
+        out.emit("window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);\n}\n")
+        out.emit("int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);\n")
+        out.emit("if (jit_prepare < 0) { JUMP_TO_LABEL(error); }\n")
+        out.emit("if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }\n")
+        out.emit("}\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -1633,6 +1654,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
+        if name == "CALL_JIT_WARM" and isinstance(part, Uop) and part.name == "_SPECIALIZE_CALL":
+            continue
         try:
             reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
         except SyntaxError as ex:
@@ -1647,8 +1670,10 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             # The result is in its slot of the window; a local takes it
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
-        if name == "RETURN_VALUE" and not helper:
+        if name in ("RETURN_VALUE", "RETURN_GENERATOR") and not helper:
             out.emit("JIT_MAYBE_RESUME(1);\n")
+        if name in ("RESUME_JIT", "JUMP_BACKWARD_JIT_WARM") and not helper:
+            out.emit("JIT_SITE_ENTRY(this_instr);\n")
         out.emit("DISPATCH();\n")
     out.start_line()
     out.emit("}")
@@ -1728,7 +1753,7 @@ def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
 
 def num_handlers(analysis: Analysis) -> int:
     return (first_ir_only_handler(analysis) + len(analysis.ir_only)
-            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
+            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)) + len(exec_only(analysis)))
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,

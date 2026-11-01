@@ -4823,6 +4823,14 @@
             (void)oparg;
             _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
+            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
+                for (int jit_i = 0; jit_i < oparg + 2; jit_i++) {
+                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
+}
+                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
+                if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
+                if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
+            }
             opcode = CALL;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -4833,14 +4841,16 @@
                 self_or_null = window[1];
                 callable = window[0];
                 #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
-                    DISPATCH_SAME_OPARG();
+                if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
+                    _PyFbHeader *feedback = ((_PyFbHeader *)fb);
+                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                        next_instr = this_instr;
+                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
+                        DISPATCH_SAME_OPARG();
+                    }
+                    OPCODE_DEFERRED_INC(CALL);
+                    ADVANCE_ADAPTIVE_COUNTER(feedback);
                 }
-                OPCODE_DEFERRED_INC(CALL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _MAYBE_EXPAND_METHOD
@@ -6333,6 +6343,117 @@
             DISPATCH();
         }
 
+        TARGET(CALL_JIT_WARM) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = CALL_JIT_WARM;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(CALL);
+            int oparg = (int)IR_FIELD_C(this_instr);
+            (void)oparg;
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            (void)window;
+            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
+                for (int jit_i = 0; jit_i < oparg + 2; jit_i++) {
+                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
+}
+                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
+                if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
+                if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
+            }
+            opcode = CALL_JIT_WARM;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
+            // _MAYBE_EXPAND_METHOD
+            {
+                self_or_null = window[1];
+                callable = window[0];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL);
+                    window[0] = callable;
+                }
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                    PyObject *self = ((PyMethodObject *)callable_o)->im_self;
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
+                    PyObject *method = ((PyMethodObject *)callable_o)->im_func;
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
+                }
+            }
+            // _DO_CALL
+            {
+                args = &window[2];
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                int total_args = oparg;
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
+                    arguments--;
+                    total_args++;
+                }
+                if (Py_TYPE(callable_o) == &PyFunction_Type &&
+                    !IS_PEP523_HOOKED(tstate) &&
+                    ((PyFunctionObject *)callable_o)->vectorcall == _PyFunction_Vectorcall)
+                {
+                    int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
+                    PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
+                        tstate, callable, locals,
+                        arguments, total_args, NULL, frame
+                    );
+                    IR_CLEAR_SLOTS(&window[0], 2 + oparg);
+                    if (new_frame == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
+                    DISPATCH_INLINED(new_frame);
+                }
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
+                    callable,
+                    arguments,
+                    total_args,
+                    PyStackRef_NULL,
+                    opcode == INSTRUMENTED_CALL,
+                    frame,
+                    this_instr,
+                    tstate);
+                if (res_o == NULL) {
+                    IR_CLEAR_SLOTS(&window[0], 2 + oparg);
+                    JUMP_TO_LABEL(error);
+                }
+                res = PyStackRef_FromPyObjectSteal(res_o);
+            }
+            // _CHECK_PERIODIC_AT_END
+            {
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                window[0] = res;
+                int err = check_periodics_at_end(tstate, frame);
+                if (err != 0) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            DISPATCH();
+        }
+
         TARGET(CALL_KW) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW;
@@ -6350,6 +6471,14 @@
             (void)oparg;
             _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
+            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
+                for (int jit_i = 0; jit_i < oparg + 3; jit_i++) {
+                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
+}
+                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
+                if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
+                if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
+            }
             opcode = CALL_KW;
             _PyStackRef callable;
             _PyStackRef self_or_null;
@@ -11900,6 +12029,7 @@
             assert(frame == &entry.frame);
             #endif
             LLTRACE_RESUME_FRAME();
+            JIT_FREE_FLOW_RESULT(result);
             return result;
         }
 
@@ -11990,6 +12120,35 @@
                 assert(JUMP_TARGET(oparg) < next_instr);
                 JUMPTO(oparg);
             }
+            DISPATCH();
+        }
+
+        TARGET(JUMP_BACKWARD_JIT_WARM) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = JUMP_BACKWARD_JIT_WARM;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(JUMP_BACKWARD);
+            int oparg = (int)IR_FIELD_CD(this_instr);
+            (void)oparg;
+            // _CHECK_PERIODIC
+            {
+                int err = check_periodics(tstate);
+                if (err != 0) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            // _JUMP_BACKWARD_NO_INTERRUPT
+            {
+                assert(JUMP_TARGET(oparg) < next_instr);
+                JUMPTO(oparg);
+            }
+            JIT_SITE_ENTRY(this_instr);
             DISPATCH();
         }
 
@@ -16260,6 +16419,53 @@
             DISPATCH();
         }
 
+        TARGET(RESUME_JIT) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = RESUME_JIT;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME);
+            int oparg = (int)IR_FIELD_A(this_instr);
+            (void)oparg;
+            // _MAYBE_INSTRUMENT
+            {
+                #ifdef Py_GIL_DISABLED
+
+                int check_instrumentation = 1;
+                #else
+                int check_instrumentation = (tstate->tracing == 0);
+                #endif
+                if (check_instrumentation) {
+                    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
+                    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
+                    if (code_version != global_version) {
+                        int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
+                        if (err) {
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = this_instr;
+                        DISPATCH();
+                    }
+                }
+            }
+            // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
+            {
+                if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                    int err = check_periodics(tstate);
+                    if (err != 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                }
+            }
+            JIT_SITE_ENTRY(this_instr);
+            DISPATCH();
+        }
+
         TARGET(RETURN_GENERATOR) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = RETURN_GENERATOR;
@@ -16290,6 +16496,7 @@
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
+            JIT_LEAVE_FRAME(frame);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
@@ -16297,6 +16504,7 @@
             res = PyStackRef_FromPyObjectStealMortal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
             IR_STORE_RETURN(res);
+            JIT_MAYBE_RESUME(1);
             DISPATCH();
         }
 
@@ -18921,6 +19129,7 @@ JUMP_TO_LABEL(error);
         {
             TAIL_CALL_LOAD_FRAME();
             {
+                JIT_RETIRE_PENDING(frame);
                 int offset = _PyFrame_InstrOffset(frame, next_instr - 1);
                 int exc_slot, handler, lasti;
                 int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
@@ -18982,6 +19191,7 @@ JUMP_TO_LABEL(error);
                     #if !_Py_TAIL_CALL_INTERP
                     assert(frame == &entry.frame);
                     #endif
+                    JIT_FREE_FLOW();
                     return NULL;
                 }
                 next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);

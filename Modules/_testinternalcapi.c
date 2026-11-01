@@ -3616,7 +3616,18 @@ jit_method_info(PyObject *module, PyObject *function)
     return _PyJit_CodeInfo((PyCodeObject *)PyFunction_GET_CODE(function));
 }
 
+static PyObject *
+jit_method_cold_call(PyObject *module, PyObject *args)
+{
+    PyObject *function, *arguments, *callback;
+    int site, fail;
+    if (!PyArg_ParseTuple(args, "OOOii:jit_method_cold_call", &function, &arguments, &callback, &site, &fail))
+        return NULL;
+    return _PyJit_TestColdCall(function, arguments, callback, site, fail);
+}
+
 static PyMethodDef module_functions[] = {
+    {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},
     {"jit_method_info", jit_method_info, METH_O, NULL},
     {"jit_method_step_call", jit_method_step_call, METH_VARARGS, NULL},

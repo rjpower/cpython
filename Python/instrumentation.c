@@ -1983,6 +1983,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
 
 done:
+    _PyJit_SeedBackedges(code, code->_co_exec);
     FT_ATOMIC_STORE_UINTPTR_RELEASE(code->_co_instrumentation_version,
                                     global_version(interp));
 

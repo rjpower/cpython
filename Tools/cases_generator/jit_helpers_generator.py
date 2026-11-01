@@ -12,7 +12,7 @@ from analyzer import analyze_files
 from cwriter import CWriter
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from ir_generator import (
-    IREmitter, compute_formats, generate_handler, handler_ids,
+    EXEC_ONLY, IREmitter, compute_formats, generate_handler, handler_ids,
     handler_instructions, is_specialization, num_handlers, uop_tokens,
 )
 
@@ -30,10 +30,16 @@ DIRECT = {
     "JUMP_FORWARD", "JUMP_BACKWARD", "JUMP_BACKWARD_NO_INTERRUPT", "IR_JUMP",
     "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE", "POP_JUMP_IF_NONE",
     "POP_JUMP_IF_NOT_NONE", "CALL", "RETURN_VALUE",
+    "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
+    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "BUILD_LIST", "BUILD_TUPLE",
+    "BUILD_MAP", "UNPACK_SEQUENCE", "STORE_SUBSCR",
+    "CONTAINS_OP", "CALL_KW", "COPY_FREE_VARS", "MAKE_CELL", "LOAD_DEREF", "STORE_DEREF",
 }
 
 
 def classify(name, inst):
+    if name in EXEC_ONLY:
+        return "execution-only natural admission head"
     if name == "BINARY_OP":
         return "semantic metadata base without an executable IR dispatch target"
     tokens = uop_tokens(inst)
@@ -98,9 +104,18 @@ def generate(filenames, outfile):
 #pragma push_macro("DISPATCH_SAME_OPARG")
 #pragma push_macro("JUMP_TO_LABEL")
 #pragma push_macro("DISPATCH_INLINED")
+#pragma push_macro("JIT_CALL_RETRY")
+#undef JIT_CALL_RETRY
+#define JIT_CALL_RETRY() JIT_FINISH(_PyJIT_DEOPT, _PyJIT_DEOPT_BEFORE)
+#pragma push_macro("JIT_CALL_NEEDS_PREPARE")
+#pragma push_macro("JIT_PREPARE_CALL")
+#undef JIT_CALL_NEEDS_PREPARE
+#undef JIT_PREPARE_CALL
+#define JIT_CALL_NEEDS_PREPARE(I) (ctx->unit != NULL)
+#define JIT_PREPARE_CALL(I,F) _PyJit_PrepareCall(ctx, (I), (F))
 #pragma push_macro("JIT_LEAVE_FRAME")
 #undef JIT_LEAVE_FRAME
-#define JIT_LEAVE_FRAME(FRAME) ((void)0)
+#define JIT_LEAVE_FRAME(FRAME) do { if (ctx->cold_request != NULL) _PyJit_RetireCold(ctx->cold_request, (FRAME)); } while (0)
 #undef DISPATCH
 #undef DISPATCH_SAME_OPARG
 #undef JUMP_TO_LABEL
@@ -140,6 +155,9 @@ def generate(filenames, outfile):
 #undef JIT_PHASE_error
 #undef JIT_PHASE_exception_unwind
 #pragma pop_macro("JIT_LEAVE_FRAME")
+#pragma pop_macro("JIT_PREPARE_CALL")
+#pragma pop_macro("JIT_CALL_NEEDS_PREPARE")
+#pragma pop_macro("JIT_CALL_RETRY")
 #pragma pop_macro("DISPATCH_INLINED")
 #pragma pop_macro("JUMP_TO_LABEL")
 #pragma pop_macro("DISPATCH_SAME_OPARG")

@@ -392,5 +392,420 @@ class TestNativeMethods(unittest.TestCase):
         self.assertTrue(_testinternalcapi.jit_method_info(work)["entry_seen"])
 
 
+
+
+@unittest.skipUnless(
+    sys.platform == "linux" and platform.machine() == "x86_64" and
+    not sysconfig.get_config_var("Py_GIL_DISABLED") and
+    not sysconfig.get_config_var("Py_STATS") and
+    not sysconfig.get_config_var("_Py_TAIL_CALL_INTERP"),
+    "natural baseline requires Linux x86-64 GIL/default evaluator",
+)
+class TestNaturalMethods(unittest.TestCase):
+    def info(self, function):
+        return _testinternalcapi.jit_method_info(function)
+
+    def test_call_heat_and_attribute_semantics(self):
+        ledger = []
+
+        class Value:
+            def __init__(self):
+                self._x = 0
+
+            @property
+            def x(self):
+                return self._x
+
+            @x.setter
+            def x(self, value):
+                ledger.append(value)
+                self._x = value
+
+        def update(obj, value):
+            obj.x = value
+            return obj.x + 1
+
+        obj = Value()
+        self.assertEqual(update(obj, 0), 1)
+        self.assertFalse(self.info(update)["active"])
+        for value in range(100):
+            self.assertEqual(update(obj, value), value + 1)
+        self.assertEqual(ledger, [0] + list(range(100)))
+        info = self.info(update)
+        self.assertTrue(info["active"])
+        self.assertTrue(info["entry_seen"])
+        self.assertEqual(info["exits"], 0)
+
+    def test_periodic_loop_iteration_and_containers(self):
+        def work(n):
+            values = []
+            mapping = {}
+            for i in range(n):
+                values.append(i + 1)
+                mapping[i] = i + 2
+            return len(values) + len(mapping)
+
+        self.assertEqual(work(700), 1400)
+        info = self.info(work)
+        self.assertTrue(info["active"])
+        self.assertTrue(info["entry_seen"])
+        self.assertEqual(info["exits"], 0)
+        self.assertEqual(work(0), 0)
+        self.assertEqual(work(3), 6)
+
+    def test_keyword_call_and_closure_continuation(self):
+        def outer(bias):
+            def callee(value, *, extra):
+                return value + extra
+
+            def work(n):
+                total = bias
+                i = 0
+                while i < n:
+                    total = total + callee(i, extra=1)
+                    i = i + 1
+                return total
+            return work
+
+        work = outer(7)
+        self.assertEqual(work(700), 7 + 700 * 701 // 2)
+        self.assertEqual(work(3), 13)
+        info = self.info(work)
+        self.assertTrue(info["active"])
+        self.assertTrue(info["entry_seen"])
+        self.assertTrue(info["return_resume_seen"])
+        self.assertEqual(info["exits"], 0)
+
+    def test_unsupported_cache_and_unrelated_method(self):
+        def unsupported(value):
+            try:
+                return 1 // value
+            except ZeroDivisionError:
+                return -1
+
+        def supported(value):
+            return value + 2
+
+        for i in range(100):
+            self.assertEqual(unsupported(0), -1)
+            self.assertEqual(supported(i), i + 2)
+        self.assertEqual(self.info(unsupported)["coverage"], -1)
+        self.assertFalse(self.info(unsupported)["active"])
+        self.assertTrue(self.info(supported)["entry_seen"])
+
+    def test_generator_creation_return_and_suspension(self):
+        def values(n):
+            yield n
+            yield n + 1
+
+        def drive(n):
+            total = 0
+            i = 0
+            while i < n:
+                iterator = values(i)
+                total = total + next(iterator)
+                total = total + next(iterator)
+                i = i + 1
+            return total
+
+        self.assertEqual(drive(700), 700 * 700)
+        info = self.info(drive)
+        self.assertTrue(info["entry_seen"])
+        self.assertTrue(info["return_resume_seen"])
+        self.assertFalse(self.info(values)["active"])
+        self.assertEqual(drive(2), 4)
+
+    def test_target_replacement_and_exception_frame_reuse(self):
+        def add(value):
+            return value + 1
+
+        def subtract(value):
+            return value - 1
+
+        def invoke(function, value):
+            return function(value)
+
+        for i in range(160):
+            self.assertEqual(invoke(add, i), i + 1)
+        for i in range(160):
+            self.assertEqual(invoke(subtract, i), i - 1)
+        self.assertTrue(self.info(add)["entry_seen"])
+        self.assertTrue(self.info(subtract)["entry_seen"])
+
+        def fail(value):
+            return 1 // value
+
+        def caller(value):
+            return fail(value) + 3
+
+        for i in range(160):
+            self.assertEqual(caller(1), 4)
+        for i in range(8):
+            with self.assertRaises(ZeroDivisionError):
+                caller(0)
+            self.assertEqual(caller(1), 4)
+        self.assertTrue(self.info(caller)["return_resume_seen"])
+
+    def test_exec_only_words_rejected_by_constructor_and_marshal(self):
+        import marshal
+        import struct
+
+        def sample(value):
+            return value + 1
+
+        original = sample.__code__.co_code
+        for handler in (302, 303, 304):
+            replacement = struct.pack("<H", handler) + original[2:]
+            with self.assertRaisesRegex(ValueError, "execution-only"):
+                sample.__code__.replace(co_code=replacement)
+            blob = marshal.dumps(sample.__code__)
+            self.assertEqual(blob.count(original), 1)
+            offset = blob.index(original)
+            corrupted = blob[:offset] + replacement + blob[offset + len(original):]
+            with self.assertRaisesRegex(ValueError, "execution-only"):
+                marshal.loads(corrupted)
+
+    def test_observer_off_fresh_call_and_same_loop_rearm(self):
+        def leaf(value):
+            return value + 1
+
+        for i in range(100):
+            self.assertEqual(leaf(i), i + 1)
+        self.assertTrue(self.info(leaf)["entry_seen"])
+        sys.setprofile(lambda *args: None)
+        try:
+            for i in range(8):
+                self.assertEqual(leaf(i), i + 1)
+        finally:
+            sys.setprofile(None)
+
+        def fresh_caller(n):
+            total = 0
+            i = 0
+            while i < n:
+                total = total + leaf(i)
+                i = i + 1
+            return total
+
+        self.assertEqual(fresh_caller(700), 700 * 701 // 2)
+        self.assertTrue(self.info(leaf)["entry_seen"])
+
+        def toggle(i):
+            if i == 400:
+                sys.setprofile(lambda *args: None)
+            if i == 450:
+                sys.setprofile(None)
+            return 1
+
+        def loop(n, callback):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + callback(i)
+                i = i + 1
+            return total
+
+        try:
+            self.assertEqual(loop(1200, toggle), 1200)
+        finally:
+            sys.setprofile(None)
+        self.assertTrue(self.info(loop)["active"])
+        self.assertTrue(self.info(loop)["entry_seen"])
+        self.assertGreaterEqual(self.info(loop)["compile_attempts"], 2)
+
+    def test_pending_capacity_preserves_older_callers(self):
+        def recurse(n):
+            if n:
+                return recurse(n - 1) + 1
+            return 0
+
+        # The second call is wholly hot and exceeds the64 pending-record bound.
+        self.assertEqual(recurse(180), 180)
+        self.assertEqual(recurse(180), 180)
+        self.assertEqual(recurse(2), 2)
+        self.assertTrue(self.info(recurse)["entry_seen"])
+        self.assertTrue(self.info(recurse)["return_resume_seen"])
+
+    def test_actual_coroutine_creation_and_interpreted_suspension(self):
+        import runpy
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[2] / "boil/bench/internal/kernels/coroutines.py"
+        fibonacci = runpy.run_path(str(path))["fibonacci"]
+
+        def create(n):
+            return fibonacci(n)
+
+        def drain(coroutine):
+            try:
+                coroutine.send(None)
+            except StopIteration as exc:
+                return exc.value
+            self.fail("fibonacci unexpectedly suspended externally")
+
+        for i in range(100):
+            create(2).close()
+        self.assertEqual(drain(create(5)), 5)
+        self.assertTrue(self.info(create)["entry_seen"])
+        # create's only CALL is generator/coroutine creation: this is the
+        # RETURN_GENERATOR continuation, not an ordinary callee RETURN_VALUE.
+        self.assertTrue(self.info(create)["return_resume_seen"])
+        self.assertFalse(self.info(fibonacci)["active"])
+
+        def work(n):
+            return drain(fibonacci(n)) + 1
+
+        for i in range(100):
+            self.assertEqual(work(5), 6)
+        self.assertTrue(self.info(work)["entry_seen"])
+        self.assertTrue(self.info(work)["return_resume_seen"])
+
+    def test_visible_store_precedes_displaced_owner_finalizer(self):
+        ledger = []
+
+        class Object:
+            pass
+
+        class Owned:
+            def __del__(self):
+                ledger.append(obj.x)
+
+        def update(value, number):
+            value.x = number + 1
+            return value.x
+
+        obj = Object()
+        obj.x = 0
+        for i in range(100):
+            self.assertEqual(update(obj, i), i + 1)
+        obj.x = Owned()
+        self.assertEqual(update(obj, 700), 701)
+        self.assertEqual(ledger, [701])
+        self.assertTrue(self.info(update)["entry_seen"])
+
+    def test_bootstrap_resource_failure_obeys_eligible_cooldown(self):
+        def driver(n):
+            def leaf(value):
+                return value + 1
+            i = 0
+            total = 0
+            while i < n:
+                total = total + leaf(i)
+                i = i + 1
+            return leaf, total
+
+        result, used, remaining, blocked = _testinternalcapi.jit_method_cold_call(
+            driver, (7000,), None, 0, 1)
+        leaf, total = result
+        self.assertTrue(used)
+        self.assertEqual(total, 7000 * 7001 // 2)
+        self.assertEqual(blocked, 4096)
+        self.assertEqual(remaining, 0)
+        self.assertTrue(self.info(leaf)["entry_seen"])
+        self.assertEqual(self.info(leaf)["compile_attempts"], 1)
+
+    def test_cold_call_owns_original_operand_and_retries_observers(self):
+        events = []
+
+        def replacement():
+            events.append("new")
+            return 2
+
+        def driver(n):
+            # No wrapper argument or other external owner retains this
+            # function when the allocation callback replaces its local.
+            def old():
+                events.append("old")
+                return 1
+            function = old
+            del old
+            i = 0
+            total = 0
+            while i < n:
+                total = total + function()
+                i = i + 1
+            return total
+
+        def callback():
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, driver.__code__)
+            events.append("hook")
+            frame.f_locals["function"] = replacement
+            sys.setprofile(lambda *args: None)
+
+        try:
+            result, used, remaining, blocked = _testinternalcapi.jit_method_cold_call(
+                driver, (100,), callback, 0, 0)
+        finally:
+            sys.setprofile(None)
+        self.assertTrue(used)
+        hook = events.index("hook")
+        self.assertEqual(events[hook + 1], "old")
+        self.assertTrue(all(event == "new" for event in events[hook + 2:]))
+        self.assertEqual(result, events.count("old") + 2 * events.count("new"))
+
+    def test_flow_failure_and_callback_error_restore_request(self):
+        def leaf(value):
+            return value + 1
+
+        def driver(n, callback):
+            total = 0
+            i = 0
+            while i < n:
+                total = total + callback(i)
+                i = i + 1
+            return total
+
+        result, used, remaining, blocked = _testinternalcapi.jit_method_cold_call(
+            driver, (7000, leaf), None, 1, 1)
+        self.assertTrue(used)
+        self.assertEqual(result, 7000 * 7001 // 2)
+        self.assertEqual(blocked, 4096)
+        self.assertEqual(remaining, 0)
+        self.assertTrue(self.info(driver)["return_resume_seen"])
+
+        def fresh(n):
+            def target(value):
+                return value + 1
+            total = 0
+            for i in range(n):
+                total = total + target(i)
+            return total
+
+        def fail():
+            raise RuntimeError("cold callback")
+
+        with self.assertRaisesRegex(RuntimeError, "cold callback"):
+            _testinternalcapi.jit_method_cold_call(fresh, (100,), fail, 0, 0)
+        self.assertEqual(fresh(100), 5050)
+
+        observations = []
+
+        def reenter():
+            def other(value):
+                return value + 1
+            for i in range(160):
+                other(i)
+            observations.append("finalized")
+
+        class Finalizer:
+            def __del__(self):
+                unconsumed(True)
+
+        def unconsumed(reentrant=False):
+            if reentrant:
+                reenter()
+            else:
+                marker = Finalizer()
+            return 7
+
+        result, used, remaining, blocked = _testinternalcapi.jit_method_cold_call(
+            unconsumed, (), lambda: self.fail("unrelated frame consumed request"), 0, 0)
+        self.assertEqual(result, 7)
+        self.assertFalse(used)
+        self.assertEqual(observations, ["finalized"])
+        # This checks noninheritance/retirement. It does not assert that a
+        # particular frame address was reused during finalizer execution.
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,35 @@
 #include "Python.h"
 #include "pycore_jit.h"
 #include "pycore_pystate.h"
+#include "pycore_function.h"
 
 /* Stack-owned and thread-local. An already claimed request cannot be inherited
  * by recursive evaluator entries or a callback, even for the same code. */
 static _Py_thread_local _PyJitTestRequest *test_request;
+/* Test-only request: claimed once by the ordinary evaluator activation. The
+ * callback cannot inherit it, and is disarmed before any Python invocation. */
+typedef struct JitColdRequest {
+    struct JitColdRequest *previous;
+    PyThreadState *tstate;
+    PyCodeObject *code;
+    _PyInterpreterFrame *frame;
+    PyObject *callback;
+    int site, fail, claimed, used;
+    unsigned int blocked;
+} JitColdRequest;
+static _Py_thread_local JitColdRequest *cold_request;
+static void *initial_calloc(PyCodeObject *, int);
+static int take_bootstrap_cooldown(void);
 
 _PyJitTestRequest *
-_PyJit_TestClaim(PyThreadState *tstate, _PyInterpreterFrame *frame)
+_PyJit_TestClaim(PyThreadState *tstate, _PyInterpreterFrame *frame, void **cold_token)
 {
+    if (cold_request != NULL && !cold_request->claimed && cold_request->tstate == tstate &&
+        cold_request->code == _PyFrame_GetCode(frame)) {
+        cold_request->claimed = 1;
+        cold_request->frame = frame;
+        *cold_token = cold_request;
+    }
     _PyJitTestRequest *request = test_request;
     if (request == NULL || request->claimed || request->tstate != tstate ||
         request->code != _PyFrame_GetCode(frame)) {
@@ -74,12 +95,62 @@ _PyJit_TestCall(PyObject *function, PyObject *args, Py_ssize_t limit)
 #include "pycore_ceval.h"
 #include "pycore_instruments.h"
 #include "pycore_pyerrors.h"
+#include "pycore_opcode_utils.h"
 #if _PyJIT_BASELINE_SUPPORTED
 #  include <sys/mman.h>
 #endif
 
 static _PyJitState initial_building = {.building = 1};
+/* Units remain charged through retired active pins. The byte quota also
+ * covers lazy states/flows; bounded unpublished compiler scratch is separate. */
+static Py_ssize_t process_units;
+static Py_ssize_t process_bytes;
+static int automatic_building;
+static int bootstrap_cooldown;
+
+static int
+reserve_bytes(size_t bytes)
+{
+    if (bytes > 8 * 1024 * 1024) {
+        return 0;
+    }
+    Py_ssize_t total = _Py_atomic_load_ssize_relaxed(&process_bytes);
+    do {
+        if (total > 8 * 1024 * 1024 - (Py_ssize_t)bytes) {
+            return 0;
+        }
+    } while (!_Py_atomic_compare_exchange_ssize(&process_bytes, &total, total + (Py_ssize_t)bytes));
+    return 1;
+}
+
+static int
+reserve_budget(_PyJitCodeUnit *unit)
+{
+    size_t bytes = sizeof(*unit) + unit->nops * (sizeof(*unit->ops) + sizeof(*unit->offsets)) + unit->mapping_size;
+    if (bytes > 8 * 1024 * 1024) {
+        return 0;
+    }
+    Py_ssize_t n = _Py_atomic_load_ssize_relaxed(&process_units);
+    do { if (n >= 64) return 0; }
+    while (!_Py_atomic_compare_exchange_ssize(&process_units, &n, n + 1));
+    if (!reserve_bytes(bytes)) {
+        _Py_atomic_add_ssize(&process_units, -1); return 0;
+    }
+    unit->charged_bytes = bytes;
+    unit->budgeted = 1;
+    return 1;
+}
+
+static void
+restore_entry(_PyCodeExec *exec, _PyJitCodeUnit *unit)
+{
+    if (unit != NULL && unit->entry_word < exec->nwords &&
+        IR_HANDLER(exec->words[unit->entry_word]) == RESUME_JIT) {
+        _PyIR_SetHandler(exec->words + unit->entry_word, unit->entry_handler);
+    }
+}
 static void release_jit_state(_PyJitState *);
+static void free_state_storage(_PyJitState *);
 static void restore_jit_error(PyObject *);
 
 static uintptr_t
@@ -111,6 +182,8 @@ _PyJit_FreeUnit(_PyJitCodeUnit *unit)
     if (--unit->refs) {
         return;
     }
+    size_t charged = unit->charged_bytes;
+    int budgeted = unit->budgeted;
     PyObject *saved = PyErr_GetRaisedException();
 #if _PyJIT_BASELINE_SUPPORTED
     if (unit->mapping != NULL) {
@@ -125,6 +198,10 @@ _PyJit_FreeUnit(_PyJitCodeUnit *unit)
     saved = PyErr_GetRaisedException();
     PyMem_Free(unit);
     restore_jit_error(saved);
+    if (budgeted) {
+        _Py_atomic_add_ssize(&process_units, -1);
+        _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)charged);
+    }
 }
 
 void
@@ -141,6 +218,7 @@ _PyJit_DetachExec(_PyCodeExec *exec)
     state->generation++;
     _PyJitCodeUnit *unit = state->unit;
     state->unit = NULL;
+    restore_entry(exec, unit);
     if (unit != NULL) {
         unit->detached = 1;
         _PyJit_FreeUnit(unit);
@@ -157,6 +235,7 @@ _PyJit_ClearExec(_PyCodeExec *exec)
     }
     _PyJitCodeUnit *unit = state->unit;
     state->unit = NULL;
+    restore_entry(exec, unit);
     if (unit != NULL) {
         unit->detached = 1;
         _PyJit_FreeUnit(unit);
@@ -201,12 +280,22 @@ restore_jit_error(PyObject *saved)
 }
 
 static void
+free_state_storage(_PyJitState *state)
+{
+    int budgeted = state != NULL && state->budgeted;
+    PyMem_Free(state);
+    if (budgeted) {
+        _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)sizeof(*state));
+    }
+}
+
+static void
 release_jit_state(_PyJitState *state)
 {
     assert(state->refs > 0);
     if (--state->refs == 0) {
         PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(state);
+        free_state_storage(state);
         restore_jit_error(saved);
     }
 }
@@ -236,6 +325,7 @@ _PyJit_CompileCode(PyCodeObject *code)
     _PyJitState *state = NULL;
     _PyJitCodeUnit *unit = NULL;
     int installed = 0;
+    int attempted = 0;
     exec = _PyCode_GetExec(code);
     if (exec == NULL || PyErr_Occurred() || _Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred()) {
         goto done;
@@ -249,15 +339,18 @@ _PyJit_CompileCode(PyCodeObject *code)
     uint64_t source = jit_source_stamp(code);
     if (exec->jit == NULL) {
         exec->jit = &initial_building;
-        _PyJitState *fresh = PyMem_Calloc(1, sizeof(*fresh));
-        if (PyErr_Occurred() || code->_co_exec != exec ||
+        _PyJitState *fresh = initial_calloc(code, 0);
+        if (fresh != NULL && !PyErr_Occurred()) {
+            fresh->budgeted = reserve_bytes(sizeof(*fresh));
+        }
+        if ((fresh != NULL && !fresh->budgeted) || PyErr_Occurred() || code->_co_exec != exec ||
             exec->jit != &initial_building || epoch != jit_epoch(tstate) ||
             source != jit_source_stamp(code)) {
             if (code->_co_exec == exec && exec->jit == &initial_building) {
                 exec->jit = NULL;
             }
             PyObject *saved = PyErr_GetRaisedException();
-            PyMem_Free(fresh);
+            free_state_storage(fresh);
             restore_jit_error(saved);
             goto done;
         }
@@ -274,22 +367,56 @@ _PyJit_CompileCode(PyCodeObject *code)
         goto done;
     }
     state->building = 1;
+    state->last_failure = _PyJIT_FAILURE_NONE;
+    attempted = 1;
+    PyTime_t compile_start = 0, compile_stop = 0;
+    /* Descriptor/frontend plus backend time, excluding earlier nomination,
+     * initial state allocation and instrumentation. Whole-process diagnostics
+     * account for those costs separately. */
+    (void)PyTime_PerfCounterRaw(&compile_start);
+    if (state->compile_attempts < UINT32_MAX) {
+        state->compile_attempts++;
+    }
     uint64_t generation = state->generation;
     unit = _PyJit_BuildBaseline(code, exec, generation, epoch, source);
+    (void)PyTime_PerfCounterRaw(&compile_stop);
+    if (compile_stop >= compile_start) {
+        state->compile_ns += (uint64_t)(compile_stop - compile_start);
+    }
     int valid = !PyErr_Occurred() && code->_co_exec == exec && exec->jit == state &&
                 state->generation == generation && !state->disabled && epoch == jit_epoch(tstate) &&
                 source == jit_source_stamp(code);
+    state->last_failure = !valid ? _PyJIT_FAILURE_INVALIDATED :
+        unit == NULL ? _PyJIT_FAILURE_BUILD : _PyJIT_FAILURE_NONE;
     if (code->_co_exec == exec && exec->jit == state) {
         state->building = 0;
-        if (valid && unit != NULL) {
+        int reserved = valid && unit != NULL && reserve_budget(unit);
+        if (valid && unit != NULL && !reserved) {
+            state->last_failure = _PyJIT_FAILURE_QUOTA;
+        }
+        if (reserved) {
+            int entry = code->_co_firsttraceable;
+            if (entry < 0 || (uint32_t)entry >= exec->nwords ||
+                _PyCode_InstrHandler(code, entry) != RESUME ||
+                (_PyCode_InstrOparg(code, entry) & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START ||
+                IR_HANDLER(exec->words[entry]) != RESUME) {
+                state->last_failure = _PyJIT_FAILURE_ENTRY;
+                goto done;
+            }
+            unit->entry_word = (uint32_t)entry;
+            unit->entry_handler = (uint16_t)_PyCode_GenericHandler(code, entry);
             unit->interpreter_id = PyInterpreterState_GetID(tstate->interp);
             state->unit = unit;
+            _PyIR_SetHandler(exec->words + unit->entry_word, RESUME_JIT);
             unit = NULL;
             installed = 1;
         }
     }
     done:
     {
+        if (attempted && !installed && state->compile_failures < UINT32_MAX) {
+            state->compile_failures++;
+        }
         PyObject *saved = PyErr_GetRaisedException();
         _PyJit_FreeUnit(unit);
         if (state != NULL) {
@@ -350,6 +477,9 @@ _PyJit_ReleaseActivation(_PyJitContext *ctx)
     ctx->code = NULL;
     ctx->expected_exec = NULL;
     ctx->entry_target = NULL;
+    ctx->pending_caller = NULL;
+    ctx->pending_call = ctx->pending_return = 0;
+    ctx->cold_request = NULL;
     PyObject *saved = PyErr_GetRaisedException();
     _PyJit_FreeUnit(unit);
     if (saved != NULL) {
@@ -445,13 +575,30 @@ _PyJit_CodeInfo(PyCodeObject *code)
     _PyCodeExec *exec = code->_co_exec;
     _PyJitState *state = exec ? exec->jit : NULL;
     _PyJitCodeUnit *unit = state && state != &initial_building ? state->unit : NULL;
+    Py_ssize_t units = _Py_atomic_load_ssize_relaxed(&process_units);
+    Py_ssize_t charged = _Py_atomic_load_ssize_relaxed(&process_bytes);
+    int bootstrap = _Py_atomic_load_int_relaxed(&bootstrap_cooldown);
     if (unit == NULL) {
-        return Py_BuildValue("{s:O,s:O}", "active", Py_False,
-            "disabled", state && state != &initial_building && state->disabled ? Py_True : Py_False);
+        int ordinary = state != NULL && state != &initial_building;
+        return Py_BuildValue("{s:O,s:O,s:i,s:i,s:i,s:i,s:i,s:I,s:I,s:K,s:i,s:n,s:n,s:i}", "active", Py_False,
+            "disabled", ordinary && state->disabled ? Py_True : Py_False,
+            "coverage", ordinary ? state->coverage : 0,
+            "loop_heat", ordinary ? state->loop_heat : 0,
+            "cooldown", ordinary ? state->cooldown : 0,
+            "unsupported_word", ordinary ? state->unsupported_word : -1,
+            "unsupported_handler", ordinary ? state->unsupported_handler : -1,
+            "compile_attempts", ordinary ? state->compile_attempts : 0,
+            "compile_failures", ordinary ? state->compile_failures : 0,
+            "compile_ns", (unsigned long long)(ordinary ? state->compile_ns : 0),
+            "last_failure", ordinary ? state->last_failure : 0,
+            "process_units", units, "process_bytes", charged, "bootstrap_remaining", bootstrap);
     }
     /* Boxing can invoke an allocator hook which invalidates this unit. The
      * snapshot owns only its scalar artifact, not code or its constants. */
     unit->refs++;
+    uint32_t attempts = state->compile_attempts, failures = state->compile_failures;
+    uint64_t elapsed = state->compile_ns;
+    int last_failure = state->last_failure;
     size_t exits = 0;
     for (uint32_t i = 0; i < unit->nops; i++) {
         exits += unit->ops[i].kind == _PyJIT_LIR_EXIT;
@@ -468,14 +615,19 @@ _PyJit_CodeInfo(PyCodeObject *code)
             PyTuple_SET_ITEM(offsets, i, value);
         }
     }
-    PyObject *result = offsets ? Py_BuildValue("{s:O,s:O,s:O,s:O,s:n,s:n,s:n,s:K,s:n,s:O,s:O}",
+    PyObject *result = offsets ? Py_BuildValue("{s:O,s:O,s:O,s:O,s:n,s:n,s:n,s:K,s:n,s:O,s:O,s:I,s:I,s:K,s:i,s:n,s:n,s:i}",
         "active", Py_True, "entry_seen", unit->entry_seen ? Py_True : Py_False,
         "c_call_seen", unit->c_call_seen ? Py_True : Py_False,
         "return_resume_seen", unit->return_resume_seen ? Py_True : Py_False,
         "code_size", (Py_ssize_t)unit->code_size,
         "mapping_size", (Py_ssize_t)unit->mapping_size, "words", (Py_ssize_t)unit->nops,
         "address", (unsigned long long)(uintptr_t)unit->mapping,
-        "exits", (Py_ssize_t)exits, "code", bytes, "offsets", offsets) : NULL;
+        "exits", (Py_ssize_t)exits, "code", bytes, "offsets", offsets,
+        "compile_attempts", attempts,
+        "compile_failures", failures,
+        "compile_ns", (unsigned long long)elapsed,
+        "last_failure", last_failure,
+        "process_units", units, "process_bytes", charged, "bootstrap_remaining", bootstrap) : NULL;
     Py_XDECREF(offsets);
     Py_XDECREF(bytes);
     _PyJit_FreeUnit(unit);
@@ -484,4 +636,454 @@ _PyJit_CodeInfo(PyCodeObject *code)
         return NULL;
     }
     return result;
+}
+
+
+static int
+ensure_flow(_PyJitContext *ctx)
+{
+    if (ctx->flow_owner == NULL || *ctx->flow_owner != NULL) {
+        return 0;
+    }
+    if (take_bootstrap_cooldown()) {
+        return 0;
+    }
+    _PyJitFlow *flow = initial_calloc(_PyFrame_GetCode(ctx->frame), 1);
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(flow); restore_jit_error(saved); return -1;
+    }
+    if (flow == NULL) {
+        _Py_atomic_store_int(&bootstrap_cooldown, 4096);
+        return 0;
+    }
+    flow->budgeted = reserve_bytes(sizeof(*flow));
+    if (!flow->budgeted) {
+        _Py_atomic_store_int(&bootstrap_cooldown, 4096);
+        PyMem_Free(flow);
+        return PyErr_Occurred() ? -1 : 0;
+    }
+    *ctx->flow_owner = flow;
+    return 0;
+}
+
+void
+_PyJit_PushPending(_PyJitContext *ctx)
+{
+    if (ctx->pending_caller == NULL || ctx->flow_owner == NULL) {
+        return;
+    }
+    _PyJitFlow *flow = *ctx->flow_owner;
+    if (flow != NULL && flow->depth < Py_ARRAY_LENGTH(flow->pending)) {
+        flow->pending[flow->depth++] = (_PyJitPending){ctx->pending_caller,
+            ctx->pending_call, ctx->pending_return, ++flow->generation};
+    }
+    ctx->pending_caller = NULL;
+}
+
+int
+_PyJit_PopPending(_PyJitFlow *flow, _PyInterpreterFrame *frame, _PyIRWord *next)
+{
+    if (flow == NULL || flow->depth == 0) {
+        return 0;
+    }
+    _PyJitPending *record = &flow->pending[flow->depth - 1];
+    if (record->caller != frame) {
+        return 0;
+    }
+    flow->depth--;
+    /* The linked caller owns code/words. The record owns no borrowed code. */
+    return next == frame->ir_words + record->return_word &&
+           frame->instr_ptr == frame->ir_words + record->call_word;
+}
+
+void
+_PyJit_RetirePending(_PyJitFlow *flow, _PyInterpreterFrame *frame)
+{
+    if (flow == NULL) {
+        return;
+    }
+    /* A linked Python call unwinds in stack order. No return-chain scan. */
+    if (flow->depth && flow->pending[flow->depth - 1].caller == frame) {
+        flow->depth--;
+    }
+}
+
+int
+_PyJit_FreeFlow(_PyJitFlow **owner)
+{
+    _PyJitFlow *flow = *owner;
+    *owner = NULL;
+    int budgeted = flow != NULL && flow->budgeted;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyMem_Free(flow);
+    restore_jit_error(saved);
+    if (budgeted) {
+        _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)sizeof(*flow));
+    }
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+static int
+complete_coverage(PyCodeObject *code, _PyJitState *state)
+{
+    int entry = code->_co_firsttraceable;
+    state->unsupported_word = state->unsupported_handler = -1;
+    if (Py_SIZE(code) < 1 || Py_SIZE(code) > 4096 || entry < 0 || entry >= Py_SIZE(code) ||
+        _PyCode_InstrHandler(code, entry) != RESUME ||
+        (_PyCode_InstrOparg(code, entry) & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START ||
+        code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) return 0;
+    for (int i = 0; i < Py_SIZE(code); i++) {
+        const _PyJitHelperInfo *info = _PyJit_GetHelper(_PyCode_GenericHandler(code, i));
+        if (info == NULL || info->helper == NULL) {
+            state->unsupported_word = i;
+            state->unsupported_handler = _PyCode_GenericHandler(code, i);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static _PyJitState *
+natural_state(PyCodeObject *code)
+{
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || exec->jit == &initial_building) {
+        return NULL;
+    }
+    if (exec->jit != NULL) {
+        return exec->jit;
+    }
+    if (take_bootstrap_cooldown()) {
+        return NULL;
+    }
+    exec->jit = &initial_building;
+    _PyJitState *fresh = initial_calloc(code, 0);
+    if (fresh != NULL && !PyErr_Occurred()) {
+        fresh->budgeted = reserve_bytes(sizeof(*fresh));
+    }
+    if ((fresh != NULL && !fresh->budgeted) || PyErr_Occurred() || code->_co_exec != exec || exec->jit != &initial_building) {
+        if (fresh != NULL && !fresh->budgeted && !PyErr_Occurred())
+            _Py_atomic_store_int(&bootstrap_cooldown, 4096);
+        if (code->_co_exec == exec && exec->jit == &initial_building) {
+            exec->jit = NULL;
+        }
+        PyObject *saved = PyErr_GetRaisedException();
+        free_state_storage(fresh); restore_jit_error(saved); return NULL;
+    }
+    exec->jit = fresh;
+    if (fresh != NULL) {
+        fresh->refs = 1;
+    }
+    else _Py_atomic_store_int(&bootstrap_cooldown, 4096);
+    return fresh;
+}
+
+static int
+automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObject *code)
+{
+#if !_PyJIT_BASELINE_SUPPORTED
+    return 0;
+#else
+    Py_INCREF(code);  /* cold transaction only, never across a Python callee */
+    _PyJitState *state = natural_state(code);
+    int result = 0;
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (state->coverage == 0) {
+        state->coverage = complete_coverage(code, state) ? 1 : -1;
+    }
+    if (state->coverage < 0 || state->disabled) { state->last_failure = _PyJIT_FAILURE_COVERAGE; result = 2; goto done; }
+    if (state->building) {
+        goto done;
+    }
+    if (state->unit != NULL) {
+        _PyCodeExec *exec = code->_co_exec;
+        if (state->unit->epoch == jit_epoch(tstate) &&
+            state->unit->generation == state->generation &&
+            state->unit->interpreter_id == PyInterpreterState_GetID(tstate->interp)) {
+            result = 1; goto done;
+        }
+        _PyJit_DetachExec(exec);
+        if (PyErr_Occurred() || code->_co_exec != exec || exec->jit != state) {
+            goto done;
+        }
+    }
+    if (state->cooldown) { state->cooldown--; goto done; }
+    if (!_PyJit_ObserversAllow(tstate, frame)) {
+        goto done;
+    }
+    int expected = 0;
+    if (!_Py_atomic_compare_exchange_int(&automatic_building, &expected, 1)) {
+        goto done;
+    }
+    result = _PyJit_CompileCode(code);
+    _Py_atomic_store_int(&automatic_building, 0);
+    if (result == 0 && code->_co_exec != NULL && code->_co_exec->jit != NULL &&
+        code->_co_exec->jit != &initial_building) code->_co_exec->jit->cooldown = 4096;
+    done:
+    { PyObject *saved = PyErr_GetRaisedException(); Py_DECREF(code); restore_jit_error(saved); }
+    return PyErr_Occurred() ? -1 : result;
+#endif
+}
+
+int
+_PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, _PyStackRef callable)
+{
+    PyCodeObject *caller_code = _PyFrame_GetCode(ctx->frame);
+    _PyCodeExec *caller_exec = caller_code->_co_exec;
+    Py_ssize_t word = instr - ctx->frame->ir_words;
+    if (ctx->unit != NULL) {
+        if (ensure_flow(ctx) < 0) {
+            return -1;
+        }
+        if (ctx->tstate->current_frame != ctx->frame || caller_code->_co_exec != caller_exec) {
+            return 1;
+        }
+        ctx->pending_caller = ctx->frame;
+        ctx->pending_call = (uint32_t)word;
+        ctx->pending_return = (uint32_t)word + 1;
+    }
+    if (ctx->tstate->current_frame != ctx->frame) {
+        return 1;
+    }
+    if (!_PyJit_ObserversAllow(ctx->tstate, ctx->frame)) {
+        if (caller_code->_co_exec == caller_exec && caller_exec != NULL &&
+            caller_exec->words == ctx->frame->ir_words && IR_HANDLER(*instr) == CALL_JIT_WARM)
+            _PyIR_SetHandler(instr, _PyCode_GenericHandler(caller_code, (int)word));
+        if (caller_code->_co_exec != NULL) {
+            _PyJit_DetachExec(caller_code->_co_exec);
+        }
+        if (PyErr_Occurred() || _Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
+            return -1;
+        }
+        return 1;
+    }
+    if (caller_code->_co_exec != caller_exec || caller_exec == NULL ||
+        caller_exec->words != ctx->frame->ir_words || IR_HANDLER(*instr) != CALL_JIT_WARM ||
+        PyStackRef_IsInline(callable)) return 0;
+    int index = _PyCode_InstrFbIndex(caller_code, (int)word);
+    if (index <= 0 || index >= caller_code->co_nfeedback) {
+        return 0;
+    }
+    _PyFbCall *fb = (_PyFbCall *)_PyIR_FbEntry(caller_exec->entries, index);
+    if (fb->h.kind != FB_CALL) {
+        return 0;
+    }
+    PyObject *function = PyStackRef_AsPyObjectBorrow(callable);
+    if (PyMethod_Check(function)) {
+        function = ((PyMethodObject *)function)->im_func;
+    }
+    if (!PyFunction_Check(function)) {
+        return 0;
+    }
+    uint32_t version = ((PyFunctionObject *)function)->func_version;
+    if (!_PyFunction_IsVersionValid(version)) {
+        fb->h.hits = 0;
+        _PyIR_SetHandler(instr, _PyCode_GenericHandler(caller_code, (int)word));
+        return 0;
+    }
+    if (version != fb->func_version) { fb->func_version = version; fb->h.hits = 0; }
+    if (fb->h.hits < 64) {
+        fb->h.hits++;
+    }
+    if (fb->h.hits < 64) {
+        return 0;
+    }
+    PyCodeObject *target_code = (PyCodeObject *)PyFunction_GET_CODE(function);
+    int result = automatic_compile(ctx->tstate, ctx->frame, target_code);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (ctx->tstate->current_frame != ctx->frame || caller_code->_co_exec != caller_exec) {
+        return 1;
+    }
+    if (!_PyJit_ObserversAllow(ctx->tstate, ctx->frame)) {
+        if (IR_HANDLER(*instr) == CALL_JIT_WARM)
+            _PyIR_SetHandler(instr, _PyCode_GenericHandler(caller_code, (int)word));
+        _PyJit_DetachExec(caller_exec);
+        if (PyErr_Occurred() || _Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
+            return -1;
+        }
+        return 1;
+    }
+    if (version != ((PyFunctionObject *)function)->func_version ||
+        target_code != (PyCodeObject *)PyFunction_GET_CODE(function)) {
+        _PyFbCall *current = (_PyFbCall *)_PyIR_FbEntry(caller_exec->entries, index);
+        current->h.hits = 0;
+        return 0;
+    }
+    if (caller_code->_co_exec == caller_exec && ctx->frame->ir_words == caller_exec->words &&
+        IR_HANDLER(caller_exec->words[word]) == CALL_JIT_WARM && result != 0) {
+        _PyIR_SetHandler(caller_exec->words + word, _PyCode_GenericHandler(caller_code, (int)word));
+    }
+    return 0;
+}
+
+int
+_PyJit_WarmBackedge(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+#if !_PyJIT_BASELINE_SUPPORTED
+    return 0;
+#else
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    _PyJitState *state = natural_state(code);
+    if (state == NULL) {
+        return PyErr_Occurred() ? -1 : 0;
+    }
+    if (state->coverage < 0 || state->disabled) {
+        _PyCodeExec *exec = code->_co_exec;
+        for (uint32_t i = 0; i < exec->nwords; i++) {
+            if (IR_HANDLER(exec->words[i]) == JUMP_BACKWARD_JIT_WARM)
+                _PyIR_SetHandler(exec->words + i, JUMP_BACKWARD);
+        }
+        return 0;
+    }
+    if (state->loop_heat < 256) {
+        state->loop_heat++;
+    }
+    if (state->loop_heat < 256) {
+        return 0;
+    }
+    /* A long-running frame may not execute RESUME again after an observer is
+     * removed. Sync the header before testing retained active monitor bits. */
+    if (code->_co_instrumentation_version != jit_epoch(tstate)) {
+        if (_Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred()) {
+            return -1;
+        }
+    }
+    int result = automatic_compile(tstate, frame, code);
+    return result == 2 ? 0 : result;
+#endif
+}
+
+int
+_PyJit_AutoEligible(PyObject *function)
+{
+#if !_PyJIT_BASELINE_SUPPORTED
+    return 0;
+#else
+    if (PyMethod_Check(function)) {
+        function = ((PyMethodObject *)function)->im_func;
+    }
+    if (!PyFunction_Check(function)) {
+        return 0;
+    }
+    PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(function);
+    if (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+        return 0;
+    }
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || exec->jit == NULL) {
+        return 1;
+    }
+    _PyJitState *state = exec->jit;
+    return state != &initial_building && state->coverage >= 0 && !state->disabled && state->unit == NULL;
+#endif
+}
+
+
+void
+_PyJit_SeedBackedges(PyCodeObject *code, _PyCodeExec *exec)
+{
+#if _PyJIT_BASELINE_SUPPORTED
+    if (exec == NULL || code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+        return;
+    }
+    if (exec->jit != NULL && exec->jit != &initial_building &&
+        (exec->jit->coverage < 0 || exec->jit->disabled)) return;
+    /* This cold pass changes only uninstrumented, real periodic backedges.
+     * It also re-arms them after ordinary monitoring removal. */
+    for (uint32_t i = 0; i < exec->nwords; i++) {
+        if (IR_HANDLER(exec->words[i]) == JUMP_BACKWARD &&
+            _PyCode_InstrHandler(code, (int)i) == JUMP_BACKWARD &&
+            _PyCode_InstrTarget(code, (int)i) >= 0 && _PyCode_InstrTarget(code, (int)i) < (int)i)
+            _PyIR_SetHandler(exec->words + i, JUMP_BACKWARD_JIT_WARM);
+    }
+#endif
+}
+
+
+static int
+take_bootstrap_cooldown(void)
+{
+    int remaining = _Py_atomic_load_int_relaxed(&bootstrap_cooldown);
+    while (remaining > 0) {
+        if (_Py_atomic_compare_exchange_int(&bootstrap_cooldown, &remaining, remaining - 1)) {
+            if (cold_request != NULL && cold_request->used &&
+                cold_request->tstate == _PyThreadState_GET())
+                cold_request->blocked++;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void *
+initial_calloc(PyCodeObject *code, int site)
+{
+    JitColdRequest *request = cold_request;
+    if (request == NULL || request->used) {
+        return PyMem_Calloc(1, site == 0 ? sizeof(_PyJitState) : sizeof(_PyJitFlow));
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyInterpreterFrame *frame = tstate->current_frame;
+    /* State injection is specifically the evaluated CALL boundary, not an
+     * earlier loop-state allocation in the same requested driver. */
+    int at_call = site == 1 || (frame != NULL && frame->owner != FRAME_OWNED_BY_INTERPRETER &&
+        _PyIR_BaseOpcode(IR_HANDLER(*frame->instr_ptr)) == CALL);
+    if (request != NULL && request->claimed && !request->used && request->site == site &&
+        request->tstate == tstate && request->frame == frame && at_call &&
+        request->code == _PyFrame_GetCode(frame)) {
+        request->used = 1;
+        if (request->callback != Py_None) {
+            PyObject *result = PyObject_CallNoArgs(request->callback);
+            if (result == NULL) {
+                return NULL;
+            }
+            Py_DECREF(result);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+        }
+        if (request->fail) {
+            return NULL;
+        }
+    }
+    (void)code;
+    return PyMem_Calloc(1, site == 0 ? sizeof(_PyJitState) : sizeof(_PyJitFlow));
+}
+
+PyObject *
+_PyJit_TestColdCall(PyObject *function, PyObject *args, PyObject *callback, int site, int fail)
+{
+    if (!PyFunction_Check(function) || !PyTuple_Check(args) ||
+        (callback != Py_None && !PyCallable_Check(callback)) || site < 0 || site > 1) {
+        PyErr_SetString(PyExc_ValueError, "expected function, tuple, callback, State/Flow site");
+        return NULL;
+    }
+    JitColdRequest request = {.previous=cold_request, .tstate=_PyThreadState_GET(),
+        .code=(PyCodeObject *)PyFunction_GET_CODE(function), .callback=callback, .site=site, .fail=fail};
+    cold_request = &request;
+    PyObject *result = PyObject_Call(function, args, NULL);
+    /* Restore before boxing or releasing anything that could reenter. The
+     * ordinary call's function/args remain owned by the extension's arguments. */
+    cold_request = request.previous;
+    request.frame = NULL;
+    if (result == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("NiiI", result, request.used,
+        _Py_atomic_load_int_relaxed(&bootstrap_cooldown), request.blocked);
+}
+
+
+void
+_PyJit_RetireCold(void *token, _PyInterpreterFrame *frame)
+{
+    JitColdRequest *request = token;
+    if (request->frame == frame) {
+        request->frame = NULL;
+    }
 }

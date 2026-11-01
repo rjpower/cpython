@@ -1325,6 +1325,8 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _PyJitContext jit_context = {0};
     _PyJitAction jit_result;
     int jit_from_return = 0;
+    _PyJitFlow *jit_flow = NULL;
+    void *jit_cold_request = NULL;
 #endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
@@ -1368,7 +1370,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     tstate->current_frame = frame;
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
     if (!throwflag) {
-        jit_request = _PyJit_TestClaim(tstate, frame);
+        jit_request = _PyJit_TestClaim(tstate, frame, &jit_cold_request);
     }
 #endif
 
@@ -1412,12 +1414,20 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (jit_request != NULL) {
             goto jit_step;
         }
+        if (!jit_from_return || !_PyJit_PopPending(jit_flow, frame, next_instr)) {
+            DISPATCH();
+        }
+    }
+    jit_enter:
+    {
         int entered = _PyJit_PrepareActivation(tstate, frame, next_instr,
                                                jit_from_return, &jit_context);
         if (entered < 0) {
             goto error;
         }
         if (entered) {
+            jit_context.flow_owner = &jit_flow;
+            jit_context.cold_request = jit_cold_request;
             jit_result = jit_context.unit->entry(&jit_context);
             goto jit_consume_action;
         }
@@ -1455,7 +1465,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
             .fields = {IR_A(pristine), IR_B(pristine), IR_C(pristine), IR_D(pristine)},
             .wide = IR_CD(pristine), .handler = (uint16_t)handler,
         };
-        _PyJitContext ctx = {.tstate = tstate, .frame = frame, .next_instr = next_instr};
+        _PyJitContext ctx = {.tstate = tstate, .frame = frame, .next_instr = next_instr, .cold_request = jit_cold_request};
         /* Retire the diagnostic frame identity before RETURN can clear it
          * and invoke finalizers which might allocate another frame there. */
         if (handler == RETURN_VALUE && frame == jit_request->claimed_frame) {
@@ -1486,6 +1496,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
                 jit_from_return = 1;
                 goto jit_resume;  /* release terminal pin, then fresh caller lookup */
             case _PyJIT_ENTER_FRAME:
+                _PyJit_PushPending(&jit_context);
                 if (jit_context.phase == _PyJIT_ENTER_PREPARED) {
                     tstate->current_frame = frame;
                     CALL_STAT_INC(inlined_py_calls);
@@ -1537,10 +1548,14 @@ early_exit:
     // GH-99729: We need to unlink the frame *before* clearing it:
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame = dying->previous;
+    JIT_RETIRE_COLD(dying);
     _PyEval_FrameClearAndPop(tstate, dying);
     assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+    if (jit_flow != NULL) _PyJit_FreeFlow(&jit_flow);
+#endif
     return NULL;
 }
 

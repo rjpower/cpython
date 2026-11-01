@@ -1,0 +1,61 @@
+{
+  "GC_optimization_authorized": false,
+  "allowed_source_paths": [
+    "Include/internal/pycore_ir.h",
+    "Python/ir.c",
+    "Python/jit_prefix.c",
+    "Python/bytecodes.c",
+    "Python/generated_ir_cases.c.h",
+    "Modules/_testinternalcapi.c",
+    "Lib/test/test_ir.py"
+  ],
+  "base_source_head": "599897b6b5d0bb973b1eea12f8eb41957004b464",
+  "branch": "boil/jit-entry-admission",
+  "candidate_integration_authorized": false,
+  "checkpoint_requirement": "Concrete changed canonical/generated admission source plus host syntax/generator evidence; freeze early if complete",
+  "checkpoint_utc": "2026-11-01T14:13:30.915648+00:00",
+  "compiler_or_native_execution_authorized": false,
+  "deadline_utc": "2026-11-01T14:35:30.915648+00:00",
+  "decision": "AUTHORIZE_ONE_SEPARATE_BOUNDED_SOURCE_HYPOTHESIS",
+  "design": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-design-20261101-v1/proposal.md",
+    "sha256": "b6780baf85ae655e98be6bbf039f20e64021e5b3c95e8ea19a92b96de0c38b0a"
+  },
+  "extension_authorized": false,
+  "host_generator_tests_authorized": true,
+  "hypothesis": "Cheap inline cached admission avoids out-of-line native entry attempts on permanently ineligible or already rejected frames",
+  "independent_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-peer-review-20261101-v1/receipt.json",
+    "sha256": "1d166a72c4d27316e58b7718aa2f098a9255a8124a2c928454e5f27cbb9fed81"
+  },
+  "independent_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-peer-review-20261101-v1/review.md",
+    "sha256": "89d14f2b737e778eb2d7844bcb28bc94fae04b709a541631f92d2c04dca3929a"
+  },
+  "new_fields_or_selectors_authorized": false,
+  "next_gates": [
+    "Independent source review",
+    "Separately granted fresh release/debug existing54 plus focused predicate/seed fixtures",
+    "Actual skipped-call branch, register-PC and unchanged native leaf review",
+    "One separate fixed all29 comparison directly; no repeated four-workload pilot",
+    "Publication and broad qualification only after useful full29 result"
+  ],
+  "prior_rejections_unchanged": true,
+  "rejected_parent_decision": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-entry-pc-abi/broad-decision-20261101-v2.json",
+    "sha256": "20f301c948ce959e69eadf6ea99922d8714ef1f91953755a1890e24a4c98b855"
+  },
+  "runtime_probe_authorized": false,
+  "source_ceiling_seconds": 1800,
+  "source_scope": "Shared state constants/mask and inline necessary admission; immutable rejection seeds; two canonical hooks and generated expansion; focused existing fixture extensions only",
+  "start_utc": "2026-11-01T14:05:30.915648+00:00",
+  "unchanged_contracts": [
+    "full TryEntry and direct CAPI guards/rollback",
+    "decoder behavior",
+    "native compiler, allocator, owner, leaf and emission",
+    "eligible64 promotion threshold",
+    "PC passed by value",
+    "frame/exception/observer ownership"
+  ],
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-entry-admission"
+}

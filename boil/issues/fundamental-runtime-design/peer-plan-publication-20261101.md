@@ -267,3 +267,8 @@ Exact readback 10106 characters/two Mermaid blocks. Snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v24.md`,
 SHA256 `6cdc2bae014f081a56a8fc9893dec00d631fa0f349dbe39756be81fa338df090`. Prior revisions remain immutable. No rendered-layout check
 or production acceptance is claimed.
+
+Revision25 (13:57:49 UTC) closes the independent raw audit and links the committed
+full-suite rejection. Exact readback10,351 characters/two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v25.md`,
+SHA256 `2feba4222bd7719f133a005a1c516add2457e9bf96488a38243b011631a12191`.

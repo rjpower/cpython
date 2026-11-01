@@ -1280,3 +1280,15 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
 - 2026-11-01 13:54:00 UTC: Loom revision24 records both candidate rejections,
   failed origin-wrapper attempt, complete broader outcome and deferred late gates.
   Exact readback 10106 characters/two Mermaids; SHA256 6cdc2bae014f081a56a8fc9893dec00d631fa0f349dbe39756be81fa338df090.
+- 2026-11-01 13:57:49 UTC: Loom revision25 closes the actual raw audit, links the
+  canonical full29 decision20f301c9 and committed rejection4140fc1b. Exact readback
+  10,351 characters/two Mermaids; prior revisions immutable.
+- 2026-11-01 14:05:30 UTC: Separate entry-admission design b6780baf peer accepted
+  89d14f2b/1d166a72. Source grant starts30minutes, checkpoint14:13:30,
+  hard stop14:35:30; new worktree/branch jit-entry-admission based599897.
+  Allow inline cached-state/entry-PC admission and cold immutable entry exclusions;
+  no new fields/selectors/release counters. Full guards/direct CAPI/native leaf,
+  promotion and commit unchanged. Generator flags are entry, not decoder exclusions.
+  A implements, B reviews, qualifier prepares held feedback. No compiler/native
+  authority. After focus/emission, go directly fixedall29; omit redundant4pilot.
+  Prior rejections and Main RC stay unchanged. [Grant](issues/jit-entry-admission/source-grant-20261101-v1.json).

@@ -416,3 +416,22 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   review alongside integrated-storage design review. Regex remains paused.
   [Baseline source review](issues/fundamental-runtime-design/shared-baseline-source-review-20261101.md),
   [helper review](issues/fundamental-runtime-design/shared-stats-helper-review-20261101-v1.md).
+- 2026-11-01: Shared baseline completed once at 02:44:35 UTC, terminal zero,
+  all ten rows verified with idle cleanup. Independent outcome review accepted
+  twenty focus methods, six stats methods, six-by-100 stale controls and six
+  journals containing eighteen raw dumps. Current coroutine comparison/branch
+  activity supports the region family; saturated boxing tables and unconnected
+  standard GC counters limit other attribution. No elapsed gain is claimed.
+  [Outcome](issues/fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md),
+  [findings](issues/fundamental-runtime-design/shared-baseline-counter-outcome-20261101.md).
+- 2026-11-01: Independent designs accepted for reusable interpreter regions
+  and integrated coroutine/frame spans. Started the isolated storage source
+  attempt, 02:51–04:21 UTC, with mandatory 03:21 ownership checkpoint; it retains
+  ordinary deallocators and lifecycle records, measuring storage facts inside
+  the prototype rather than requiring a separate cheap-death census. Prepared
+  a separately scoped minimal current-IR capture before region installation.
+  Published the corrected execution focus and two code-organization Mermaid
+  diagrams as Loom work-breakdown revision 2, with exact readback.
+  [Storage review](issues/fundamental-runtime-design/stable-storage-mechanism-review-20261101.md),
+  [IR review](issues/fundamental-runtime-design/interpreter-region-review-20261101-v1.md),
+  [publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).

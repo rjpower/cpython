@@ -18,3 +18,19 @@ identify accepted, narrowed and rejected recommendations. The work plan has
 independent design acceptance, and reporting tooling is integrated. No native
 baseline, runtime mechanism or performance adoption follows from publication.
 Earlier architecture artifacts remain preserved as historical snapshots.
+
+## Execution focus, revision 2
+
+At 02:52:40 UTC, appended guarded revision 2 to
+[runtime-work-breakdown](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown).
+It records the user's interpreter/GC priority correction, accepted baseline,
+active integrated-storage source attempt and held interpreter site capture.
+Two Mermaid diagrams show compiler/generator and allocator/collector organization.
+Revision 1 and the unedited peer review remain preserved.
+
+Exact revision-2 readback matched all 7,020 characters and both Mermaid blocks.
+Local body snapshot:
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v2.md`,
+SHA256 `355eff6110666d494f079787ce1347834fe8004325b3c4c337cce6c85ebc412b`.
+Reviewed Mermaid source/readback only; no rendered-layout inspection is claimed.
+The publication itself grants no runtime adoption or additional native exposure.

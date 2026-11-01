@@ -7,15 +7,15 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| Shared attribution baseline | [Execution state](fundamental-runtime-design/status.md) | coordinator | Running one unchanged-runtime computed debug/stats build and reviewed focused/counter rows; deadline 03:26:08 UTC |
-| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Map a reusable value/effect-aware region lowering increment; operand-locality proposal remains held |
-| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review the reusable compiler/generator boundary and all ordinary exits |
+| Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
+| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Prepare one current-site IR/counter capture on the accepted image; native held for helper review |
+| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review exact site-capture helpers when sealed; region design accepted for a bounded prototype |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Map one stable-span cohort across publication, lookup, inventory and reclamation; identify the minimum eligibility census |
+| GC / allocator | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | qualification_review_resumed | Source prototype active in gc-integrated-spans; ownership checkpoint 03:21 UTC, freeze 04:21 UTC |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
-the GC-heavy ranking. Counter-retention tooling is integrated; native baseline
-source/helper review passed and the one finite batch is active. Old cadence, VM0 and
+the GC-heavy ranking. Counter-retention tooling is integrated; the baseline
+completed and passed independent outcome review. Old cadence, VM0 and
 structural-GC helper drafts are preserved and unactivated. Their expired grants
 are not resumed by the new assignments.
 

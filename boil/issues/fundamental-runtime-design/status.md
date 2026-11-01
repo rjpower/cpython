@@ -1,10 +1,10 @@
 # Fundamental runtime design review
 
-- State: shared baseline build running; interpreter and integrated allocator/collector designs under review
+- State: baseline accepted; integrated allocator/collector source active; interpreter site-capture preparation active
 - Updated: 2026-11-01
-- Owner: coordinator; coroutine_design_review (IR/VM, GC review), restart_audit (IR review),
-  qualification_review_resumed (shared baseline and GC)
-- Source: maintained head `5ef8c34d9bf`; isolated candidates retain their own identities
+- Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
+  qualification_review_resumed (integrated storage)
+- Source: baseline clean `417a9443a59`; storage prototype base `5ece3dc211a`; maintained runtime unchanged
 - Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
 
 ## Question
@@ -21,14 +21,31 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-One native batch is running: reviewed shared GCC computed/debug/stats baseline,
-activated 02:41:08.977 UTC with inclusive deadline 03:26:08.977 UTC. Actual tool
-session **20126** and host supervisor PID **1348070** were live at 02:41:45;
-the configure step had reached compilation. Monitor that same handle; an
-observation timeout does not grant a restart. Exact activation, per-row
-launch/result/cleanup and terminal evidence live under
+No native job is running. Shared baseline tool session **20126** returned zero;
+all ten rows completed and verified at 02:44:35.528 UTC, before the activated
+03:26:08.977 ceiling. Final cleanup verified no live target PIDs. Independent
+[outcome review](shared-baseline-outcome-review-20261101-v1.md) accepts the
+capture, not runtime qualification or performance. Exact activation, per-row
+launch/result/cleanup and terminal evidence remain under
 `build/worktrees/vm-compiler-backend/build/shared-attribution-gcc-stats-v1`.
-The first unexpected failure stops the batch; no automatic retry or extension.
+The unused window is not authority for another invocation or retry.
+
+Integrated-storage source work runs **02:51–04:21 UTC**, mandatory ownership/
+route/lookup checkpoint **03:21**, further progress **03:51**. Worktree:
+`build/worktrees/gc-integrated-spans`, branch `boil/gc-integrated-spans`, actual
+base `5ece3dc211a`. The exact [plan](stable-storage-mechanism-plan.md) and
+[independent review](stable-storage-mechanism-review-20261101.md) govern the
+attempt. Preserve ordinary deallocators/lifecycle records and collection policy;
+close all ownership/wrapper/debug/quarantine/rollback paths. Host audits and
+test source are allowed; compiler, target, native tests and timing are held.
+At the ceiling, freeze a review candidate or explicit partial patch.
+
+Interpreter site-capture helper preparation runs **02:51–03:06 UTC**, checkpoint
+**02:59**. Its one-child proposal uses the accepted current image and unchanged
+coroutine driver/kernel, one registered warmup and one counted run(4), with IR
+snapshots outside counting. Exact helper review runs **02:52–03:16**, checkpoint
+**03:04**. Helpers live in `build/region-site-attribution-20261101-v1` and remain
+unactivated; a later ten-minute inclusive native scope requires root activation.
 
 Retention-oracle v3 helpers passed root host review but remain held, with
 readiness flags false and no activation. VM0 build helpers and
@@ -53,7 +70,7 @@ Counter-retention reporting is integrated at `129131574a8`, with sixteen related
 host tests passing. Its independent [review](counter-retention-review-20261101.md)
 records exact bytes, meaningful controls and limits.
 
-The shared stats preparation froze early at 02:31:45, with no native launch.
+The shared stats preparation froze early at 02:31:45.
 Independent [helper review](shared-stats-helper-review-20261101-v1.md) accepted
 the exact frozen capsule before activation. Root's
 [source/scope review](shared-baseline-source-review-20261101.md) and actual
@@ -62,23 +79,28 @@ A preview origin
 finding was withdrawn after replaying the actual pinned-helper admission;
 an additional host regression accepts that observer and rejects an unbound path.
 
+The [current counter findings](shared-baseline-counter-outcome-20261101.md)
+record 242,785 integer-compare/false-bool-branch pairs per coroutine loop. This
+supports the nominated family, not a PC, successful region count or speedup.
+Six journals retain eighteen original dump records. All native boxing tables
+saturate and the last label also aggregates overflow. Standard Py_STATS GC
+fields are zero despite actual collections; they do not rank tracing GC cost.
+
 The user clarified that holistic interpreter and GC improvements take priority.
 The [operand-locality design](operand-locality-design-20261101.md) and
 [regex extraction design](../value-native-interfaces/regex-code-extraction-design-20261101.md)
 are frozen proposals, not implementation grants. Regex implementation is paused.
-New source-only assignments map a reusable value/effect-aware interpreter region
-(02:34–02:49, checkpoint 02:41) and one integrated stable-span allocator/collector
-increment (02:33–02:48, checkpoint 02:40). They reuse the existing research and
-must specify executable steps rather than another survey. No runtime patch,
-compiler, target or extra census is authorized by these assignments.
 The [interpreter execution proposal](interpreter-region-execution-20261101.md)
-froze early and is under independent review, 02:42–02:57 (checkpoint 02:49).
-The integrated-storage design's independent review runs 02:40–02:55
-(checkpoint 02:47). Both reviews remain source/light only during the build.
+passed [design review](interpreter-region-review-20261101-v1.md) for a bounded
+prototype, with actual site attribution still required before installing the
+consumer. The integrated-storage design/review passed for its source attempt;
+the unnecessary separate completed-state census is removed because every
+ordinary deallocator and lifecycle record remains. Storage sizing and occupancy
+are measured inside the prototype's debug witnesses.
 
-The first census has six registered workloads/eighteen warmup-low-high processes;
-it supplies existing entry/pair/box counters, not per-state death eligibility or
-release timings. This is shared evidence, not a commitment to optimize regex.
+The completed census has six registered workloads/eighteen warmup-low-high
+processes; it supplies entry/pair/box evidence, not per-state death eligibility
+or release timings. This is shared evidence, not a commitment to optimize regex.
 The old architecture scope and frozen proposals below remain
 historical evidence, not an implementation queue that must be completed.
 

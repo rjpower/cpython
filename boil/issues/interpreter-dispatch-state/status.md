@@ -1,71 +1,35 @@
 # Preserve common evaluator state
 
-- State: active
-- Owner: qualification_review_resumed; coordinator reviews and selects a design
+- State: closed
+- Outcome: abandoned
+- Owner: qualification_review_resumed; independent review by coroutine_design_review
 - Updated: 2026-11-01
-- Research: frozen early at 23:36:03 UTC within the 23:14:20–23:44:20 scope
-- Source budget: 30 minutes, host-only; 23:41:19–00:11:19 UTC
-- Checkpoint: 23:51:19 UTC
 - Branch/worktree: `boil/interpreter-slot-base`; `build/worktrees/dispatch-slot-base`
-- Source base: primary `5163eadffaf`, runtime identical to accepted native `e9e10d5b503`
-- Prototype: frozen early at 23:52:24 UTC, `3ddc437679ebbb9f8629c1670655c58776075dfc`
-- Depends on: [constant-operand elapsed rejection](../interpreter-constant-operands/performance-results.md)
-- Decision: investigate concrete common-handler stack work before another opcode increment
+- Candidate: `3ddc437679ebbb9f8629c1670655c58776075dfc`
+- Decision: reject on the predeclared elapsed primary; do not integrate
 
-## Hypothesis
+## Hypothesis and outcome
 
-The rejected constant-operand build adds instruction-pointer and frame reloads
-and next-pointer stores in otherwise unchanged common handlers. A focused
-generator or evaluator-state change may preserve useful register state without
-duplicating the runtime or changing its root/observer contract.
+Handler-local slot-base derivation removed the targeted baseline return/yield
+cache transport. Source and native correctness feedback passed their bounded
+scopes. Native inspection also found added common frame/IP stack traffic.
+The subsequent fixed elapsed comparison regressed coroutines 11.98% and 11.00%,
+generators 26.13% and 26.71%, with both other controls slower in both rounds.
+No text-size veto or causal cache attribution decides this result.
 
-## Experiment
+The [performance result](performance-results.md) and
+[independent outcome review](reviews/quiet-outcome-20261101-v1.md) retain the
+actual source/image identities, raw-vector replay and quiet/cleanup evidence.
+Root confirmed session 30844 terminal exit 0. No extra samples or qualification
+are authorized under this closed attempt.
 
-Inspect the preserved matched images, generated C, compiler policy and state
-lifetimes. The coordinator reproduced all twelve bounded native captures in
-`build/constant-operands-quiet-v1/author-analysis` exactly. This establishes
-extra emitted common-path operations, not their share of elapsed cost or the
-responsible compiler pass. The research selected a minimal design with
-falsifiable native and elapsed checks. Its separate source prototype changes
-only slot-alias scope; compiler, target and timing execution remain held.
+## Next
 
-## Decision rule
+The [candidate architecture](../../design/vm-design-candidate.md) proposes
+matched compiler/backend controls followed by one explicit frame-argument
+increment in the existing generated tail backend. It has separate review and
+execution boundaries. This source candidate and its evidence remain preserved.
 
-Select a prototype only if it addresses actual remaining work and preserves
-precise roots, debugging, monitoring and every dispatch entry. Do not infer a
-speedup from register assignments or smaller text. Reject an unsupported
-register-pinning claim or a broad redesign without a bounded matched question.
-The deferred Clang-tail [H1 scope](../h1-tail-dispatch/status.md) is separate.
-
-## Now / next
-
-The thirteen-handler increment remains rejected. The new [design](design.md)
-targets accepted-baseline return/yield cache transport, with receiving-load and
-register-allocation costs still unmeasured. Independent
-[design review](reviews/design-20261031-v1.md) accepts a bounded source prototype.
-Root granted the separate 30-minute host-only increment at 23:41:19 UTC.
-It froze early at 23:52:24 UTC. Host tests passed 79 cases, including one
-existing expected failure; the precise-root checker reported zero errors.
-All original generated statements remain after removing the 292 new aliases,
-and the other six generated products are byte-identical. These are host
-structural results, not C compilation or runtime coverage. Independent
-[exact source review](reviews/source-20261031-v1.md) accepted the frozen source
-for separately reviewed feedback; the [held native plan](feedback-plan.md)
-defines the next question.
-Host-only helper preparation froze early at 00:07:50 UTC within its
-23:55–00:15 scope. Seventeen literal rows cover debug/release builds, exact
-transition controls, affected modules, stale-root controls and bounded native
-inspection. Independent [helper review](reviews/helper-preparation-20261101-v1.md)
-accepted the exact preparation. Root activated it at 00:12:00.978874 UTC,
-deadline 00:57:00.978874. All seventeen rows completed at 00:19:10.994248;
-root confirmed session 60831 terminal exit 0 at 00:19:12 with idle cleanup.
-Independent [behavior review](reviews/native-behavior-outcome-20261101-v1.md)
-accepted the exact native scope; [emission review](reviews/native-emission-outcome-20261101-v1.md)
-confirmed targeted exit stores removed but frame/IP stack traffic worsened.
-Neither establishes an elapsed benefit. The
-[native execution record](native-feedback-results.md) owns actual row outcomes;
-the [elapsed plan](performance-plan.md) is independently accepted for host-only
-quiet-helper preparation, 00:20–00:40 UTC. Scoring and landing remain held,
-including during the user's holistic architecture/collector reassessment.
-The [research results](results.md) and native/source inventory retain the
-287-handler, 19-join, five-label and 26-reload entry proof and its limits.
+Earlier [research](results.md), [source design](design.md),
+[native feedback](native-feedback-results.md), [native analysis](native-analysis.md)
+and [predeclared elapsed plan](performance-plan.md) retain their original scopes.

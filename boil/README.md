@@ -9,6 +9,7 @@ roughly 2× on simple arithmetic is guidance, not a numerical gate.
 | --- | --- |
 | Current work, owners and next actions | [Issue board](issues/README.md) |
 | Runtime structure and contracts | [Runtime architecture](design/runtime-architecture.md) |
+| Proposed VM direction and experiments | [Explicit state transport candidate](design/vm-design-candidate.md) |
 | Performance findings and recommendation | [GC and interpreter performance](design/gc-and-interpreter-performance.md) |
 | Measured results | [Performance report](issues/gc-cleanup-scanning/performance.md) |
 | Development workflow | [Process](PROCESS.md) |

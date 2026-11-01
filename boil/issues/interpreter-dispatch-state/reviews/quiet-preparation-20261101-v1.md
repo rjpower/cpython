@@ -1,0 +1,27 @@
+# Slot-base quiet preparation review
+
+Decision: **ACCEPT the exact held preparation for one root-activated elapsed campaign**. No target, timing, counter probe or compiler ran during this review. Actual activation remains absent; this review does not activate the campaign or award performance acceptance.
+
+Reviewed final v2 in `build/interpreter-slot-base-quiet-v1`:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `plan.json` | `7682690de1669e4f2ce99afeb729eb844304d2ef80fdeba0c901bff9b7c3799e` |
+| `launch-held.json` | `059b704a12747414ae485f48c3c6ba0730515e78fd2438a61eaa4334a3fff5df` |
+| `ready.json` | `e7c783139a6d7749942326d824e20856a92a5edbeea484845973e66bed2ac562` |
+| `phase_runner.py` | `3f235226531705ddfc7325f6b8b4dcc01924a232f31acf88eb90bf11ce777f86` |
+| `paired.py` | `84e935705acfa0819f79c6d1fb2f8dbb50de19adc87fafdd381517edcd019b00` |
+
+The adaptation preserves the accepted constant-operand quiet protocol's admission, two machine slots, dual build locks, CPU 0 affinity, sibling 8 reservation, load limit 1.5, before/after quiet journal, raw streams and terminal cleanup. Narrow changes bind this source and its actual correctness/emission reviews, use the required uv host command, enforce the issue's overall deadline, and implement the predeclared descriptive decision. The final witness timeout uses its single checked positive remaining value, including fractional seconds; it does not re-read the clock or round a subsecond remainder upward.
+
+The literal rows contain two rotating rounds, four original registered workloads and two images: sixteen scored fresh processes with five serial timed calls each, eighty raw durations. Eight separate zero-sample origin processes each perform one **one-loop** warmup. The sixteen scoring-process warmups use registered loop counts. These two warmup exposures are distinct. Origins run before scoring inside the same window; their own Python/json/extension/library identities must pass the retained parser. OFF/N0 preserves the driver's GC/setup behavior without threshold changes or forced majors. The four registered bodies and timed boundaries remain unchanged.
+
+The coroutine median must improve at least 1% in both rounds. The implemented MAD check compares absolute median benefit with the sum of the two within-cell MADs; ten leave-one-out ratios remove one observation from one source at a time while retaining all five from the other, each strictly below one. These are descriptive checks on correlated serial samples, not confidence bounds. A failed primary benefit rejects the increment; inadequate noise checks are inconclusive; repeated greater-than-2% regressions on generators or either control hold acceptance. All vectors remain in evidence and no automatic extra samples are allowed. Static text and frame/IP observations neither veto nor establish speed.
+
+Independent host replay passed all ten frozen controls in a reviewer-owned copy with target calls mocked. It covered the exact order/counts, normalization, load rejection, separate MAD and leave-one-out effects, raw timeout streams and fractional witness timeout. Actual source/product/tool verification was enabled without an activation. Parent e9 has 6,916 source entries and 594 products; candidate `3ddc437679ebbb9f8629c1670655c58776075dfc` has 7,004 entries and 588 products. Exact clean source, product inventory and native-library checks passed. I independently reconstructed equal pyconfig bytes and Makefiles after only exact source/build path substitutions, matching the frozen bridge. Candidate native outcomes and independent behavior/emission reviews are bound. The primary benchmark subtree is checked against ancestor `deaf74e212cdc543fabd2194cf695de611c85d2c`, permitting unrelated documentation commits.
+
+The host timeout utility has changed bytes since the old protocol: its current SHA-256 is `f84e76ea4da1e0c4e92254bd0d7dccdabe2c8b3098e734f27997dae3ee5d8e02`, at the same resolved `/usr/lib/cargo/bin/coreutils/timeout` path. The mismatch and version evidence explicitly record this fresh wrapper identity; the helper rejects the old digest. Compiler and image bindings remain unchanged. No new counter probe is made; the earlier denial receipt remains the declared instruction-counter limitation.
+
+Activation must bind the exact plan, launch and two review files, explicitly hold other native and bulk-hash work, confirm quiescence and CPU reservation, and grant no more than 45 minutes ending by 04:18:11 UTC. Independent fixture replay rejected a 46-minute window, changed plan, missing quiescence and excess overall deadline; the separate fixture is now disabled. The accepted supervisor retains a single attempt, a 210-second reserve, gate return and raw logs before cleanup, idle checks under both build locks, and deadline rechecks after identity verification, terminal inventory and final artifact hashing. Failed or late cleanup cannot produce successful performance credit.
+
+Evidence: `build/interpreter-dispatch-state-review/quiet-preparation-20261101-v1.py`, final log, and `quiet-preparation-20261101-v1-final/receipt.json`, SHA-256 `1570709dedfa43cabab4e3dc88ca8ae5be1131fed9fb746032fe3de09e5ad315`. An initial reviewer-only hash assertion used different normalization placeholder strings; the original script/log/fixture are preserved. Matching the frozen bridge's literal `$BUILD`/`$SOURCE` tokens corrected that assertion without changing any frozen helper, source, product or workload. The actual Makefiles compared equal in both attempts.

@@ -292,3 +292,25 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   interpreter registers and value/native boxing remain explicit opportunities.
   New benchmarks stay held during this design assessment; host preparation
   continues and no runtime alternative is being added.
+- 2026-11-01: Independently accepted the six-row GC release outcome and froze
+  actual three-arm cost bindings, still held for exact review and quiet
+  activation. Completed the fixed slot-base comparison: coroutines regressed
+  11.98% and 11.00%, and all controls regressed. Accepted the independent audit
+  and rejected the increment without extra samples or a code-size veto.
+  [IR result](issues/interpreter-dispatch-state/performance-results.md),
+  [GC state](issues/gc-nursery-adoption/status.md).
+- 2026-11-01: At the user's request, resumed three parallel read-only design
+  tracks covering existing VMs, Boil state/root constraints and structural GC
+  work. Drafted an explicit generated-tail state ABI, code-organization and
+  boundary diagrams, and ordered compiler/backend, frame-transport, metadata
+  inventory and conditional IR hypotheses. Independent review precedes
+  implementation; a Loom artifact will mirror the reviewed repository design.
+  [Candidate](design/vm-design-candidate.md).
+- 2026-11-01: Accepted the exact independent VM candidate review after clarifying
+  raw-memory inventory coverage and deadline feasibility. Published and read
+  back Loom revision 1 with both Mermaid diagrams and source/review identities.
+  Granted finite host-only compiler/backend plan preparation; independent GC
+  structural and actual cost-binding reviews continue in parallel. No new
+  runtime implementation, native activation or backend adoption is claimed.
+  [Publication](issues/h1-tail-dispatch/publication-20261101.md),
+  [Design review](issues/h1-tail-dispatch/reviews/candidate-design-20261101-v1.md).

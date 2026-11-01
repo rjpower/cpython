@@ -89,18 +89,26 @@ normal children; debug child counts are not reused. Independent
 accepted the exact preparation. After terminal IR cleanup, root activated it
 at 00:20:46.376648 UTC, deadline 01:05:46.376648. All six rows completed
 at 00:26:15.145783 UTC; root confirmed session 61492 terminal exit 0 and all
-six idle cleanup records. Independent release outcome review is pending.
+six idle cleanup records. Independent
+[release outcome review](reviews/cadence-release-outcome-20261101-v1.md)
+accepted the exact scope: fifty-two normal children and twelve separate
+stale-root cases, with real collection/root evidence and terminal idle cleanup.
 The [release execution record](release-feedback-results.md) owns actual rows.
 No performance workload or counter probe has run here.
 
+Actual three-arm cost bindings froze at 00:43:48 UTC in the isolated worktree's
+`build/nursery-cadence-cost-native-v1`. Immutable capsule-v2 SHA-256 is
+`c8ac2a2b116bb42ca56fc198e248a82da0dd13b433f0e198e49e11a200eebe4f`.
+Bindings include all three actual source/product/image/configuration sets;
+independent exact binding review and quiet activation remain pending.
 New benchmark activation is held during the user's holistic design review.
 The all-old scan and individual death processing remain structural costs;
 schedule correctness alone establishes no useful generational performance.
 
 ## Next
 
-Establish the two new release arms' actual build/correctness identities under
-separately reviewed, bounded execution.
+Review the exact actual-release cost bindings and the
+[new VM/GC design](../../design/vm-design-candidate.md).
 Compare the three frozen source arms under matched release policy and qualify
 the one selected coherent candidate.
 No cadence performance, broad qualification or landing is accepted yet.

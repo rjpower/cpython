@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / release outcome and architecture review | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | coroutine_design_review / qualification_review_resumed | Six native rows terminal; audit outcome and bind actual cost inputs while new benchmarks remain held for design reassessment |
-| IR / elapsed preparation | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | restart_audit / coordinator | Behavior/emission reviews accepted; finish held quiet preparation alongside holistic VM/compiler review |
+| GC / cost bindings and structural design | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / qualification_review_resumed | Release outcome accepted; review actual cost bindings and metadata inventory design before new native work |
+| VM / compiler-backend planning | [Tail state ABI](h1-tail-dispatch/status.md) | restart_audit; coordinator | Candidate design reviewed and published; prepare matched compiler/backend controls, then one frame-argument increment |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
@@ -37,7 +37,6 @@ These are intake scopes. Split a bounded hypothesis before dispatching work.
 
 ## Deferred
 
-- [Tail-dispatch frame passing](h1-tail-dispatch/status.md).
 - [Physical liveness/root maps](h2-root-maps/status.md).
 - [Foreign interpreter lifecycle](gc-foreign-lifecycle/status.md).
 - [Handler tooling consumers](handler-tooling-consumers/status.md).
@@ -47,6 +46,7 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 
 ## Rejected
 
+- [Handler-local slot bases](interpreter-dispatch-state/status.md): coroutine medians regressed 11.98% and 11.00%; all controls also regressed. Native store removal did not earn an elapsed improvement.
 - [Thirteen constant-operand handlers](interpreter-constant-operands/status.md): coroutine medians regressed 4.47% and 11.64% in the fixed elapsed comparison; controls also regressed. Code size was diagnostic, not the rejection rule.
 - [Bulk frame transfer](frame-transfer-bulk/status.md): no repeatable gain in two matched process rounds; no further qualification.
 

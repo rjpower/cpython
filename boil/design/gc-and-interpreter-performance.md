@@ -74,9 +74,11 @@ optimizer. The thirteen-handler
 [constant-operand prototype](../issues/interpreter-constant-operands/status.md)
 was rejected after both matched elapsed rounds regressed. Its 18.42% evaluator
 text growth is diagnostic; the earlier 5% size veto was withdrawn before timing.
-The active [slot-base prototype](../issues/interpreter-dispatch-state/status.md)
-targets observed baseline return/yield state transport without new opcodes.
-Its source and host checks establish no elapsed gain yet. Literal read
+The [slot-base prototype](../issues/interpreter-dispatch-state/status.md)
+removed its intended baseline return/yield transport, but its fixed elapsed
+comparison regressed all four selected workloads in both rounds and was rejected.
+The [next candidate design](vm-design-candidate.md) compares existing compiler
+and backend choices before one explicit frame-argument change. Literal read
 subscripts remain an unassigned design candidate.
 
 Generators measure 0.603× upstream and need about 1.66× more throughput for

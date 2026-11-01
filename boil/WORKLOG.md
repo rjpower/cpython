@@ -314,3 +314,25 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   runtime implementation, native activation or backend adoption is claimed.
   [Publication](issues/h1-tail-dispatch/publication-20261101.md),
   [Design review](issues/h1-tail-dispatch/reviews/candidate-design-20261101-v1.md).
+- 2026-11-01: Activated the independently bound three-arm GC cost campaign
+  under an actual quiet reservation. It stopped at the first historical
+  Richards retention guard after twelve origins and forty-five normalized
+  samples; the failed target returned zero. Preserved the incomplete run,
+  confirmed terminal idle cleanup, and assigned separate failure audit and
+  source diagnosis without widening bounds or appending timing samples.
+  [Cost result](issues/gc-nursery-adoption/cadence-cost-results.md).
+- 2026-11-01: Accepted independent structural-GC design review and granted a
+  thirty-minute host-only page-scoped object-map prototype. VM0 plan correction
+  preserved its first revision and specified actual PIE policy plus retention
+  of the existing stats child's raw witness; native execution remains held.
+  [GC design review](issues/gc-nursery-old-work/reviews/object-map-inventory-design-20261101-v1.md),
+  [VM0 plan](issues/h1-tail-dispatch/compiler-backend-plan.md).
+- 2026-11-01: Independent audit confirmed 58 actual cost processes and 46 raw
+  timings before the historical-control retention failure. Source explains its
+  intended 56-object growth per batch; historical heap inspection also collects
+  outside the clock. Accepted a typed-graph oracle design retaining unchanged
+  kernels and unexplained-growth limits; granted twenty-minute held helper
+  preparation. VM0 plan v2 passed separate source review and entered held
+  helper preparation; qualification draft now excludes rejected slot-base work.
+  [Diagnosis](issues/gc-nursery-adoption/retention-observer-diagnosis-20261101-v1.md),
+  [Oracle review](issues/gc-nursery-adoption/reviews/retention-oracle-design-20261101-v1.md).

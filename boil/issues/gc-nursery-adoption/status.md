@@ -99,18 +99,32 @@ No performance workload or counter probe has run here.
 Actual three-arm cost bindings froze at 00:43:48 UTC in the isolated worktree's
 `build/nursery-cadence-cost-native-v1`. Immutable capsule-v2 SHA-256 is
 `c8ac2a2b116bb42ca56fc198e248a82da0dd13b433f0e198e49e11a200eebe4f`.
-Bindings include all three actual source/product/image/configuration sets;
-independent exact binding review and quiet activation remain pending.
-New benchmark activation is held during the user's holistic design review.
+Bindings include all three actual source/product/image/configuration sets.
+Independent [binding review](reviews/cadence-cost-native-binding-20261101-v1.md)
+accepted the exact preparation. Root activated the fixed campaign at
+00:55:00.325366 UTC, then observed session 29523 terminal exit 1 at 00:57:23.
+The first historical Richards sample failed its post-major object-retention
+guard after twelve origin rows and forty-five normalized scored rows; the
+target itself returned zero. All workers stopped and idle cleanup passed.
+The [campaign result](cadence-cost-results.md) preserves the actual failure.
+Independent [outcome review](reviews/cadence-cost-outcome-20261101-v1.md)
+accepted the incomplete result. The source-derived
+[diagnosis](retention-observer-diagnosis-20261101-v1.md) identifies intended
+global task-graph growth and historical inspection-induced collections.
+Independent [oracle design review](reviews/retention-oracle-design-20261101-v1.md)
+accepted a verified graph-aware correction for held helper preparation,
+01:09–01:29 UTC. It retains kernel bytes, 16 KiB total byte bound and 32
+unexplained-object bound. No old score, new native exposure or retry is accepted.
 The all-old scan and individual death processing remain structural costs;
 schedule correctness alone establishes no useful generational performance.
 
 ## Next
 
-Review the exact actual-release cost bindings and the
-[new VM/GC design](../../design/vm-design-candidate.md).
-Compare the three frozen source arms under matched release policy and qualify
-the one selected coherent candidate.
+Resolve the failed retention oracle from source and raw evidence before any
+new cost activation. Review any concrete correction as a separate finite
+experiment, preserving the unchanged kernel and failed first campaign.
+The [new VM/GC design](../../design/vm-design-candidate.md) and structural GC
+source prototype proceed separately. Qualify one selected coherent candidate.
 No cadence performance, broad qualification or landing is accepted yet.
 
 Rebase [broader allocation coverage](../gc-nursery-coverage/status.md) afterward;

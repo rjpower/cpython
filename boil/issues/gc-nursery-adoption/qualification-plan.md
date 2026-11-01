@@ -1,6 +1,6 @@
 # Qualification of the selected nursery runtime
 
-Draft, 2026-10-31; **not execution-ready**. Follow the
+Draft updated 2026-11-01; **not execution-ready**. Follow the
 [validation contract](../../design/validation.md). Qualify one coherent source
 after the [cost decision](cadence-cost-plan.md), not both scheduling alternatives.
 Mandatory cell/nonempty-base-tuple admission, checked explicit minors and the
@@ -11,15 +11,17 @@ only if its correctness and elapsed/resource evidence earns acceptance.
 
 The coordinator records the selected commit/tree, exact diff from maintained
 primary, independent source reviews, carried feedback/negative capsules and
-cost disposition before preparation becomes ready. The current cadence build
-failure and subsequent focused failures remain failures; this plan anticipates
-neither a correction nor success. A carried receipt needs an explicit unchanged
+cost disposition before preparation becomes ready. Current cadence source
+`47ccf35e21a94fde9351d1c2e4571bf207257a4c` has bounded debug/release feedback;
+its earlier failures remain preserved. Broad qualification has not run.
+A carried receipt needs an explicit unchanged
 source/test/product bridge. Earlier manual-nursery and cadence feedback are
 component evidence, not full qualification of the final composition.
 
-The separate handler-local slot-base proposal may join only if its source and
-required feedback/performance decision are accepted **before** this freeze.
-Otherwise qualify GC alone. No mid-cohort runtime, test or generator merge; a
+The handler-local slot-base proposal is rejected on its fixed elapsed result
+and cannot join. Qualify the selected GC source alone. The separate VM0
+compiler/backend investigation does not change this source composition.
+No mid-cohort runtime, test or generator merge; a
 changed input requires a newly reviewed affected scope and preserved history.
 The rejected constant-operand increment is excluded.
 
@@ -47,7 +49,7 @@ linked precise-root, effect, inline, tail-membership/CFI and ownership audits.
 | Scope | Required selection |
 | --- | --- |
 | Early debug | Every selected-source `test.test_gc.NurseryTests` method, with exact child roster/mode/extras/stress and useful assertions, plus affected precise-root and lifecycle protections. Current cadence source has 27 methods; derive the final count and IDs from the frozen source. Preserve specific positive and source-negative provenance; direct expected-failure children earn no parent pass credit. |
-| Backend/root | Registered six stale-root controls ×100 iterations on O3 OFF, O1 OFF and O1 KILL. On ASan and tail, run the complete selected-source nursery class OFF/N0 with actual supported children, plus the existing 24 critical shape cases. Tail also runs `test.test_gc.StackWalkTests.test_tail_call_handlers_precise` KILL/N0 unskipped. If slot-base joins, add its exact reviewed backend/entry/root controls. |
+| Backend/root | Registered six stale-root controls ×100 iterations on O3 OFF, O1 OFF and O1 KILL. On ASan and tail, run the complete selected-source nursery class OFF/N0 with actual supported children, plus the existing 24 critical shape cases. Tail also runs `test.test_gc.StackWalkTests.test_tail_call_handlers_precise` KILL/N0 unskipped. |
 | Full ordinary | One release full OFF/N0, one O1 full OFF/N0 and one O1 full KILL/N0 through the accepted full cohort observer/validator. Discover and freeze the actual full module roster; retain compiled-root, bytecode-writing/trigger, queue/lifecycle and source-specific nursery protections. Derive tests/skips/module states from returned results, not historical counts plus new tests. |
 | Stress | Existing eleven-module release and debug OFF/N1000 selections, once each, with exact inherited exclusions and reasons below. Actual stress1/both-kind and inherited KILL/extras controls remain separately identified component or refreshed focused evidence; they are not an eleven-module cross-product. |
 | ASan | Existing sixteen-module KILL/N0 selection once, with two exact exclusions and sanitizer limits below. No new blanket nursery exclusion. |

@@ -1,9 +1,9 @@
 # Reduce old-object work during minor collection
 
-- State: review
+- State: active
 - Owner: restart_audit proposes; qualification_review_resumed reviews; coordinator selects
 - Updated: 2026-11-01
-- Budget: source design scope 00:37–01:02 UTC, frozen early at 00:47; no implementation grant
+- Budget: source prototype 01:00–01:30 UTC, checkpoint 01:10; no native grant
 - Depends on: [minimal nursery](../gc-nursery-minimum/status.md) and
   [coverage/reclamation result](../gc-nursery-coverage/status.md)
 
@@ -34,5 +34,9 @@ example is only 1.15% of total sampled coroutine CPU. No speedup is forecast.
 
 Source proposal frozen at 00:47 UTC, SHA-256
 `1411d4567bc1a85f124b6631a570a15e016b0ae6a19c061ada83957551bbbfe2`.
-Independent review is active. Nursery adoption/cadence costs remain a separate
-decision. No iterator implementation, barrier or measurement is running here.
+Independent [design review](reviews/object-map-inventory-design-20261101-v1.md)
+accepted the proposal and its explicit route-selection/stale-fixture obligations.
+Root granted a separate thirty-minute host-only prototype in one managed
+worktree from exact `47ccf35e21a94fde9351d1c2e4571bf207257a4c`.
+Native execution and performance remain held. Nursery adoption/cadence costs
+are a separate decision; no barrier or collector-policy alternative is added.

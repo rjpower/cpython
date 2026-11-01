@@ -7,8 +7,9 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / cost bindings and structural design | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / qualification_review_resumed | Release outcome accepted; review actual cost bindings and metadata inventory design before new native work |
-| VM / compiler-backend planning | [Tail state ABI](h1-tail-dispatch/status.md) | restart_audit; coordinator | Candidate design reviewed and published; prepare matched compiler/backend controls, then one frame-argument increment |
+| GC / cost observer correction | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | qualification_review_resumed; coordinator | First campaign incomplete on intended Richards retention; prepare reviewed graph-aware oracle without changing kernel or limits |
+| GC / structural source | [Object-map inventory](gc-nursery-old-work/status.md) | restart_audit | Thirty-minute isolated iterator prototype; native and performance held |
+| VM / compiler-backend helpers | [Tail state ABI](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Plan v2 reviewed; prepare strict per-arm build/root/stats helpers, then independent review |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

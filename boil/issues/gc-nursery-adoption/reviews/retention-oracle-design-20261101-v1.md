@@ -1,0 +1,28 @@
+# Richards retention amendment: independent design review
+
+Disposition: **ACCEPT for bounded host helper preparation**. No helper implementation, native witness, campaign, bound change, runtime change or performance acceptance is granted by this review itself. Root must separately authorize preparation and then review its frozen helpers before a finite actual witness. A fresh complete campaign remains a further decision after those witnesses pass.
+
+Exact inputs:
+
+| Input | SHA-256 |
+| --- | --- |
+| `retention-oracle-amendment-20261101-v1.md` | `53d3cd6e8c42241212cc95af6f131c138cecf2405211789e8f87a939e27573ff` |
+| `retention-observer-diagnosis-20261101-v1.md` | `4548da4121b0cca0f47e4d45ea2c6a1bcdcfc6e242344b781b2fb9a3f418cff6` |
+| Exact Richards kernel | `c5e9375d4d1070899ab79dbfd9301329435d3918871e762be3468cb565b88a74` |
+| Diagnosis host receipt | `2aee7de03ff2d83f9129c0a778a71587c8a7c256007a74f558ee998824ffecfb` |
+
+The accepted failure audit remains authoritative: 46 raw partial durations are not campaign scores, and the original retention failure cannot be retroactively accepted by subtracting 112. This amendment instead requires a new independently verified graph at each retention point. It changes no workload, task roots, hot interval, call count or collection order. The 16 KiB total byte bound and 32-object unexplained-growth bound remain intact.
+
+Source supports the proposed graph model. Each iteration creates six exact task instances and six matching records; the constructor chains new tasks to the persistent global head. Eight packets each own a newly created four-element data list. Warmup, the staged hot call and three later calls at loops two give cumulative iteration counts six/eight/ten at the retention points, hence 168/224/280 expected explicit nodes. These arithmetic expectations are not observed identities and must never supply an allowance without the actual typed witness.
+
+The frozen amendment incorporates the concrete proof obligations raised during preview: exact task order/roles; distinct task/record/list ownership; identity-deduplicated legal repeated packet paths; bounded cycle/overlong/missing/extra-node rejection; direct scalar/field checks against a pinned exhaustive source field inventory; and `gc.is_tracked` on every credited node. No class, numeric, static, borrowed or untracked node receives allowance. In the supported single-main-interpreter domain, the current `_PyGC_GetObjects` filter uses the same GC/tracked predicates. This is the relevant population correspondence, not a claim that an arbitrary graph walker can enumerate all heap objects.
+
+The independent graph delta is subtracted only after all three complete graph checks pass. A leaked owner outside that graph still changes the residual count; the required 33-new-unexplained-owners-per-batch negative must fail despite valid graph counts and byte growth below the unchanged limit. Missing/aliased/wrong-type members and fabricated allowances must fail before subtraction. This is a finite retention witness, not a proof that every possible leak is absent: unrelated shrinking populations can still affect a net growth comparison, as with the original finite bound.
+
+All witness scratch must be released before returning scalar results, including at the final point. The proposal preallocates result storage before setup and runs traversal after the existing scalar readings; it adds no explicit major or hot observation. Earlier temporary scratch can be reclaimed by the next already-planned major. Final scratch is outside any later retention measurement and must not be retained merely to validate itself. Actual source review must verify this lifecycle rather than accepting a host mock as native proof.
+
+I independently checked the inspection asymmetry in exact historical e9 `Python/gc_live.c`: disabled-age `_PyGC_GetObjects` uses `snapshot()`, which enters a manual collection. Adopted/cadence inspection directly enumerates without collecting. The amendment correctly labels three explicit majors plus the historical inspection-induced entries, leaves their order unchanged, and makes no equality claim for total post-hot collections. Neither this asymmetry nor the new graph traversal belongs inside the measured hot interval.
+
+The proposed later four-process feedback exposure is proportionate: the same source-derived normal wrapper on each of the three images, plus one cadence negative with 33 unexplained tracked owners added per retention batch. With five workload calls per process this is twenty calls and twelve explicit majors, plus the historical inspection-induced collections. It must use a clearly labeled diagnostic clock stub and retain no performance score; a zero diagnostic duration must not be passed off as a valid positive elapsed sample. The separate frozen helper contract must bind actual origins, all graph values, the nominated negative failure, raw streams, deadline and cleanup before root grants those processes. Host synthetic graph/membership/arithmetic controls remain necessary but do not replace this actual evidence.
+
+There are no blocking design findings in the exact amendment. The 20-minute host-preparation ceiling is a proposal for root to grant, not a running clock inferred from this review. No new native, workload, timing, compiler, probe or graph implementation ran during this independent review. The previous incomplete campaign, its failed assertion and its unscored durations remain preserved. A future complete 132-process campaign requires its own explicit exposure and clock within the unchanged 04:18:11 UTC overall limit; no appended samples or automatic retry follows.

@@ -1364,3 +1364,23 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   relative16word bound and owner/observer/metadata closure explicit. Native loops
   deferred; no source/compiler/target grant. Exact sourcefile/cache/handler-ID cut
   requested before a separate finite attempt. [Design](issues/jit-quickened-block/design.md).
+- 2026-11-01 15:16 UTC: Original GC deadline15:14:44 has passed. Tracing-GC work
+  remained closed from07:09; RC main acceptance/images remain unchanged. No GC
+  optimization resumed or selector introduced. Current work is the separate
+  reviewed IR block design; exactsource cut pending, no implementation grant.
+- 2026-11-01 15:16:01 UTC: Loom revision28 includes the reviewed one-site IR block
+  contract and committed third rejection41af1295. Exact readback10,605 characters,
+  two Mermaids; snapshot SHA256 3070305f00cec915b371bd166efdb7fff4e2aa4923e3f2d1a35e0f0c0be1fe5c. Earlier revisions immutable;
+  no rendered-layout or production acceptance claim.
+
+- 2026-11-01 15:26:30 UTC: Quickened-block source cut06263fe8 peer ACCEPTbf7b4a06/3a75d53b.
+  One isolated45minute source attempt from11aefbdd, checkpoint2026-11-01T15:36:30.877552+00:00;
+  completeoldID/format/302table and exec-only127/pristine closure plus2/14global
+  hook removal orSTOP. Explicit24paths includesexistinggeneratedtests; no new
+  execfields/DSL/ISA/loops/cachemagic/GC/selectors or compiler/native authority.
+  [Grant](issues/jit-quickened-block/source-grant-20261101-v1.json).
+- 2026-11-01 15:28:11 UTC: Loom detailedrev29 update rejected by automatic
+  review for sensitive repository/benchmark payload; no retry of that payload.
+  Safer high-level architecture/lifecycle summary accepted asrev29, exact
+  readback1,838characters/twoMermaids, SHAef1ab590162abddc93f01a1d9b0e0dae23f9db24ef7296526faf45b04f940ff0.
+  Exact evidence remains local. Earlier revisions retained.

@@ -283,3 +283,14 @@ full29 admission loss/cleanup, closed frame filters and read-only selected IR
 entry design. Exact readback9,522 characters/two Mermaid blocks; snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v27.md`,
 SHA256 `5fb560565f6b4be114821db970e1706b0dbe268fb6837d8b3cfd26d2388f9f36`. No rendered-layout check or production acceptance.
+
+Revision28 (15:16:01 UTC) links the committed third rejection and reviewed
+one-site interior arithmetic-block contract. Exact readback10,605 characters/
+two Mermaid blocks; snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v28.md`,
+SHA256 `3070305f00cec915b371bd166efdb7fff4e2aa4923e3f2d1a35e0f0c0be1fe5c`. Source implementation remains ungranted.
+
+Revision29 (15:28:11 UTC) records a high-level two-Mermaid architecture and
+lifecycle summary, RC retained and bounded quickened-block work underway.
+Detailed update was rejected by automatic approval review for sensitive payload;
+the accepted summary omits repository identifiers and raw benchmark details.
+Exact readback1,838characters, SHA256ef1ab590162abddc93f01a1d9b0e0dae23f9db24ef7296526faf45b04f940ff0.

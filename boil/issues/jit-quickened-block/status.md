@@ -1,6 +1,6 @@
 # Selected IR block entry
 
-**Design accepted; exact source cut under review. No implementation or execution grant.**
+**Source attempt authorized; compiler, native execution and integration held.**
 All three global frame-entry native experiments are rejected. Main runs the
 accepted RC images; source11aefbdd and its measured loss stay frozen.
 
@@ -18,9 +18,10 @@ observer invalidation and owner retirement. Interruptible backedge periodic
 checks and await/yield behavior must remain intact. Existing TryEntry's
 word-one/RESUME contract does not cover an arbitrary interior block.
 
-restart_audit designs; coroutine_design_review reviews. Deliver one concrete
-source cut and early rejection conditions before any separate finite source
-grant. The later gate order is focused behavior and actual emitted-path checks,
+restart_audit implements in the isolated quickened-block worktree;
+coroutine_design_review reviews independently; qualification_review_resumed
+prepares held fresh feedback. The [source grant](source-grant-20261101-v1.json)
+authorizes 45 minutes with a ten-minute compatibility/entry checkpoint. The later gate order is focused behavior and actual emitted-path checks,
 then one fixed all29 comparison; publication/fullLib only after useful elapsed.
 Do not reopen old filters or tracing GC, add runtime selectors, infer dynamic
 counts from source, or introduce text/RSS-only performance vetoes.
@@ -32,3 +33,7 @@ and handler-ID/cache closure must precede the separate bounded source grant.
 The old frame filter and its obsolete fixture interface must be removed when
 replacing the entry path. The unscored witness needs the new block contract;
 scored commands, workload exposure and numerical rules remain unchanged.
+
+Source scope accepted in [independent review](source-cut-review-20261101-v1.md).
+Start 2026-11-01T15:26:30.877552+00:00; checkpoint 2026-11-01T15:36:30.877552+00:00;
+deadline 2026-11-01T16:11:30.877552+00:00. No automatic extension.

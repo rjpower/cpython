@@ -1,0 +1,11 @@
+# Held landing import correction
+
+The independent review found a real defect in the uninstalled v2 proposal: `build_once.py` evaluated `BUILD = build_path(VARIANT)` before importing `build_path`. Its five controls exercised the configuration shim, rather than the composed builder, and missed the resulting `NameError`. The frozen v2 proposal, receipt, and passing limited controls remain unchanged; they do not establish executable readiness.
+
+The additive v3 patch moves that import before the first use. Only the proposed builder body changes relative to v2. All other proposed helper bodies, the four-row/3600-second scope, the 42 smoke IDs, and the c4a projection/protected-file proof are unchanged. Neither proposal has been installed as the future main executor.
+
+Five new host controls pass against actual copied helper bodies in project-owned smoke scratch. They import the builder and the supervisor/feedback/current-inputs/contracts/cleanup closure under release and debug argv, from cold and deliberately displaced cached-module states. They verify module origins, dependency object identity, physical build routes, and delegation to the actual main source guard. Actual build, focus, and supervisor functions reach a mocked activation boundary with every subprocess launch forbidden. An exact-hash reconstruction of the v2 builder reproduces `NameError`, so the new smoke detects the specific missed defect.
+
+The scratch binding and plan are explicitly synthetic host fixtures. They provide no source/native acceptance, activation, compiler, merge, image, or test evidence. The real main HEAD, c4a native qualification, merge/protected-file bridge, source/tool/product inventories, final argv/output/timeout controls, and independent final helper review remain pending. Actual final materialization must bind them before native activation; this correction grants none.
+
+Artifacts remain in the existing `build/rc-landing-helper-preparation-20261101-v1` directory: `landing-materialization-v3.patch`, `materialization-spec-v3.json`, `composed_import_controls_v3.py`, `composed-import-controls-v3.log`, and `landing-import-correction-receipt-v3.json`. Copied bodies and synthetic fixture inputs are retained under its `composed-import-v3` subdirectory for inspection.

@@ -998,3 +998,30 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   preparation retains8ehistory andnormalizesprotectedstatuscodes; actualmerge
   HEAD/nativequalification/bridge remainnull. Loomrev15 readback14,756chars/
   twoMermaids10:15:57, snapshotfd4a30a35954 recorded. No integration/JITclaim.
+- 2026-11-01 10:30 UTC: V4 source/helper admission independently ACCEPTdaf717da/e46e4e67:
+  sourcec4ac/semanticbridge0282/timeerratum04c5,4new admissioncontrols andactual
+  7,137-inputpreflight;11unchangedcontrolscarried,55failedv3filespreserved.
+  Rootactivation10:21:41.809100-11:41:41.809100(hash84863118), native44236
+  terminal0observed10:27:47. Allfive rowlaunch/verifications returned0.
+  Cleanregeneration; both packagingprofiles86tests/ninestandard skips; foreign
+  negativescompleted; CPU16tests/oneLinuxMSVCskip SUCCESS. Cleanup10:27:08idle/
+  ownedcachegone. Independent actualoutcome reviewpending: no finalqualification
+  ormergeclaimyet. [Helper review](issues/rc-integration/packaging-helper-review-20261101-v4.md).
+- 2026-11-01 10:30 UTC: Independent c4a landingaddendum acceptedsourcefacts butwithheld
+  uninstalledmaterializationv2for BUILD-before-import NameError. Additivev3
+  moves onlythatimport, preservesv2 andrunsfiveactualcopied-body composition
+  controls; exactv2hashnegative reproducesNameError. Independentreview replay
+  passes, sealpending actualpackaging priority. ConcreteONElandinghelperclosure
+  maybestagedHOST-only; mergedHEAD/qualifiedsource/actualbridge remainnull until
+  review/merge. No target, extra cohort, historicalbuild overwrite orJITgrant.
+  [Correction](issues/rc-integration/landing-materialization-import-correction-20261101-v3.md).
+- 2026-11-01 10:34 UTC: IndependentACTUALv4 outcomeACCEPTecbaa788/29773f78:7,295completion
+  artifacts/7,137inputs; clean7,064tracked-pathregeneration; bothprofiles86/0/9
+  withactualwith_pip; fourforeignCLIreturns0/0/1/1 andcompleteconfig/inventories;
+  CPU15PASS+oneMSVCskip,32successfuldirectcalls/15six-run outputs/no reference
+  warninglines; all5verifies/uniquesweeps/currentidle. Rootdeclaresactualc4ac
+  candidatequalifiedforordinarydeclaredscope, retainingallhistorical/semantic
+  limits andunsupportedglobalcheckerfailures. No RCparity/JIT/mainpassclaim.
+  Rootproceeds toreviewedlocalmerge afterownprosecheckpoint andprotectedsnapshot;
+  actualmergedbridge/freshmain2builds+42smokes/image remain. No remotepush.
+  [Outcome](issues/rc-integration/packaging-outcome-review-20261101-v4.md).

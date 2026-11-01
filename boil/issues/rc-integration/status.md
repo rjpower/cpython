@@ -1,6 +1,6 @@
 # Qualify and integrate the selected RC runtime
 
-- State: selected; qualification pending; not integrated
+- State: candidate qualified for ordinary supported scope; main integration pending
 - Owner: coordinator
 - Source: `c4acfdde9d794345cd1f7001bcc7198d7d810f2d`, `boil/rc-successor`; canonical Clinic successor of8e132, clean
 - Worktree: `build/worktrees/rc-successor`
@@ -14,7 +14,21 @@ compiler/interpreter and eight-byte NaN-boxed frame representation. Do not
 introduce a collector selector or claim that RC has reached performance parity.
 Later core-wide inline heap values and their ABI are deferred.
 
-At10:17 UTC, the [whole-profile scope decision](stackref-gate-decision-20261101-v1.md)
+At10:33 UTC, [independent actual outcome review](packaging-outcome-review-20261101-v4.md)
+accepts packaging v4 and closes the selected candidate's remaining declared
+qualification gates. Main merge, exact source/protected-file bridge and fresh
+main images/smokes remain. Packaging v4 session44236 is terminal0, observed10:27:47, under its fixed
+10:21:41-11:41:41 inclusive window. Its source/bridge and
+[minimal helper delta](packaging-helper-review-20261101-v4.md) are independently
+accepted. Regeneration returned0 with no tracked changes and completed
+verification. Debug/release ensurepip+venv each returned SUCCESS86 tests/nine
+standard skips, and the foreign-wheel row returned0; their row verifications
+completed. The original CPU extension/refcount suite returned SUCCESS16 tests,
+one standard Linux MSVC skip. All five rows and verifications returned0;
+completion exists and cleanup10:27:08 confirms idle/cache removal. All evidence
+retains its actual source/profile scope. No native job is active.
+
+The [whole-profile scope decision](stackref-gate-decision-20261101-v1.md)
 is adopted after independent review: global `Py_STACKREF_DEBUG` is unsupported
 and unvalidated for this ordinary RC landing. Its failed partial run and all
 twelve failure families remain unresolved; no upstream comparison method ran.
@@ -59,7 +73,8 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | Last targeted ownership/refleak tranche | coordinator | Closed through reviewed additive result reuse; no further bespoke cohort |
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
 | Safety profiles | coordinator | ASan composite accepted; whole global StackRef profile withdrawn after independent review, failures retained. No further upstream repairs |
-| Extension and generation closure | qualification_review_resumed; coordinator | v3 regeneration failed; later four rows did not run. Canonical c4ac/marker restore/semantic bridge accepted; v4 host controls/preflight pass, independent helper review precedes retry |
+| Extension and generation closure | coordinator | Closed through independently accepted actual v4 outcome; no further cohort |
+| Main integration | coordinator; coroutine_design_review; qualification_review_resumed | Commit own prose, preserve exact protected files, merge qualified c4ac locally, review actual source bridge, then fresh main release/debug builds and42 smokes each |
 | First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
 
 The earlier upstream control64610

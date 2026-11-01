@@ -30,6 +30,10 @@ fresh-process rounds and the variability rule before scores. Borderline,
 inconsistent, invalid or missing evidence does not establish parity. A known
 critical correctness failure cannot qualify a candidate.
 
+The [fixed measurement protocol](measurement-protocol.md) declares the early
+three-arm storage pilot and the full-29 three-round consistency decision before
+either active prototype has scores. There are no adaptive extra samples.
+
 Aim for an early measured candidate by 05:14, broad evidence by 09:14 and the
 final performance decision by 13:14, leaving time for qualification. These are
 reporting checkpoints, not reasons to delay a ready measurement. The hard

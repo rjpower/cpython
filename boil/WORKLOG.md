@@ -465,3 +465,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Accepted site selection and granted the isolated region source prototype,
   03:22–04:07 UTC. No speedup or compiler eligibility is claimed.
   [Outcome](issues/fundamental-runtime-design/region-site-outcome-review-20261101-v2.md).
+- 2026-11-01: Published hard-GC-budget Loom revision3 with exact readback and
+  retained Mermaid diagrams. Declared rotating fresh-process storage pilot and
+  full-29 parity rounds before either prototype's scores. Deferred extra source
+  ablation unless a specific attribution question requires it; the unchanged
+  parent already measures net cost. No native attempt has been added.
+  [Protocol](issues/gc-parity-deadline/measurement-protocol.md).

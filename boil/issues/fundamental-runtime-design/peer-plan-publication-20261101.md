@@ -44,5 +44,5 @@ The accepted current comparison/branch capture replaces pending capture text.
 Both code-organization Mermaid diagrams remain. Exact readback matched all
 8,825 characters and two Mermaid blocks; no rendered-layout check is claimed.
 Local snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v3.md`
-has SHA256 `0858e74a6c10f57ee2689ff6e32486e7c028afd21de3b4c580a245325a56b9ba`.
+has SHA256 `00aed0107d738b3a1cc5dbdebc6156cde7a379d58f4c03886dcfe619cf6331eb`.
 Publication confers no performance or runtime adoption credit.

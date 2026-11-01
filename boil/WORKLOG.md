@@ -1859,3 +1859,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Design instance-slot and shared last-owner retirement cuts; no runtime claim.
   Publish/read back Loom53 exactly,42,457characters/five diagrams.
   [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-01 23:50 UTC: Independently accept corrected specialized O-call
+  production source and close its window early. Receipt26e01bbf binds
+  actual generated publication/release/reload;40host/foursyntax pass.
+  Keep invalid earlier capsule-lifetime witness and unstable fixture syntax
+  as historical evidence; corrected fixture binding remains separate.
+  Slot/shared-retirement designs under review; no native runtime claim.
+  [Disposition](issues/pyvalue-rc-restoration/o-caller-source-disposition-20261101-v1.json).

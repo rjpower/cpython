@@ -10,7 +10,7 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Foundation frozen early and independently source-accepted: 39 host tests, seven generators/eight products and six selected syntax checks pass. A separate specialized O-call successor has 40 host tests and four syntax checks passing; its corrected actual emitted handler is under independent review. Wider providers/native/Clinic consumers remain open. |
+| restart_audit | Foundation frozen early and independently source-accepted: 39 host tests, seven generators/eight products and six selected syntax checks pass. The separate specialized O-call production successor is independently source-accepted with 40 host tests/four syntax checks passing. Its source window closed early; fixture composition continues separately. Wider providers/native/Clinic consumers remain open. |
 | coordinator | Tuple/member/cell storage, shared value operations and value iteration independently accepted as partial source. Set checkpoint v5 is independently accepted: six files/eight parsed tests and two passing provisional syntax units. Its source window closed early. Python instance-slot migration is design-only. |
 | coroutine_design_review | List/structseq component, fixed native-scope engine and bounded dictionary clear/release increment independently source-accepted. Whole dictionary remains incomplete. Adding a real End-cleanup failure fixture, then designing the next internal dictionary-provider cut. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
@@ -110,15 +110,18 @@ The [opaque extension design](../../design/extension-api.md) and its
 direction and authorized implementation respectively. Actual generated
 publication/reload and finalizer ordering remain source review obligations.
 
-## Source checkpoints at 23:44 UTC
+## Source checkpoints at 23:49 UTC
 
 Foundation receipt `7cb1d9e6` pins 82 owned paths, seven provider handoffs and
 six shared context paths. Independent freeze review `2a49f58d` accepts only
 that dependent component. Its boxed common-constant table is a required followup.
 Native-scope receipt `59fd5663` accepts the engine and gateway, without claiming
 actual VM composition. Corrected O checkpoint v2 (`5940dafe`) checks errors
-before reconstructing possibly invalid execution state; independent review is
-pending. Earlier v1 is retained as the counterexample.
+before reconstructing possibly invalid execution state. Independent review
+`26e01bbf` accepts its actual generated production handler; the
+[disposition](o-caller-source-disposition-20261101-v1.json) closes the source
+window early. Earlier v1 is retained as the counterexample. Corrected runtime
+fixtures still require exact binding and eventual candidate execution.
 
 Dictionary clear/release receipt `bfa98144` accepts seven function fragments and
 three AST-only language-finalizer tests. It does not accept the unfinished

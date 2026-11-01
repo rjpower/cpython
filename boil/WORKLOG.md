@@ -1563,3 +1563,18 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   interpreter specializations from proposed method/trace SSA. The write-up must
   specify RC store order, before/after/error recovery, dependency lifetimes and
   opaque-call continuation; M1 currently falls back before STORE_ATTR.
+- 2026-11-01 18:15 UTC: IR walkthrough and LuaJIT dictionary-prediction comparison
+  pass independent design review96382265/ff6c85a6. Adopted planning contracts
+  separate receiver protocol/type/layout, value representation, feedback,
+  ownership/effects and method/trace SSA. Review corrected BEFORE publication,
+  fresh guards after boxing and pre-reserved AFTER recovery. Dictionary access
+  is a same-IR hypothesis using current-base/key/location proof; no storage winner
+  or speedup is claimed. Canonical decisionfbf52422 links exact documents.
+  [IR design](design/jit-ir-feedback/design.md),
+  [dictionary comparison](design/jit-ir-feedback/dictionary-storage-comparison.md).
+- 2026-11-01 18:15 UTC: Published/read back IR Loom revision1,26,342characters/
+  two diagrams, SHA256b7d65513; runtime-work-breakdown revision38 records accepted
+  native behavior and the reviewed IR,24,602characters/two diagrams, SHA625af242.
+  All30 relative document links checked; no rendered-layout claim. Parallel work
+  continues on a concrete natural-admission/attribute-coverage source proposal;
+  all native sessions are terminal and no new execution grant is active.

@@ -1,6 +1,6 @@
 # Cohesive method and tracing JIT
 
-**M1 focused native behavior accepted. Detailed IR/feedback design and natural admission are next.**
+**M1 focused native behavior accepted; detailed IR/feedback design reviewed. Natural admission is next.**
 
 User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
 an end-to-end method and tracing JIT. The JIT is the selected direction;
@@ -59,9 +59,14 @@ attribute specialization remains available through exact fallback.
 - coroutine_design_review: prior research complete; later provider-capacity errors
   were reassigned without repeated retries or a model change.
 
-The latest question requires a concrete attribute-lowering design, beyond the
-architecture's existing guard/effect/FrameState contracts. Distinguish current
-interpreter feedback from proposed optimizer facts and from hardware registers.
+The user-requested [IR walkthrough](../../design/jit-ir-feedback/design.md) and
+[dictionary comparison](../../design/jit-ir-feedback/dictionary-storage-comparison.md)
+passed [independent review](ir-feedback-design-review-20261101-v1.md).
+The [decision](ir-feedback-design-decision-20261101-v1.json) adopts their typed
+SSA, guard/effect/ownership and recovery contracts for implementation planning.
+It distinguishes current interpreter feedback from proposed optimizer facts
+and hardware registers. Dictionary-location specialization is a concrete
+same-IR hypothesis; a storage rewrite or permanent alternate mode is not selected.
 Natural admission and a fixed call/loop/object/suspension workload slice precede
 observed-loop SSA, then layered guards, CSE/DCE, representation selection,
 register allocation and guarded inlining. Broad timing and expensive qualification

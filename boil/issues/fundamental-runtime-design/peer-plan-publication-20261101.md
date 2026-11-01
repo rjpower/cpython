@@ -336,3 +336,15 @@ readback 22,776 characters/two Mermaid diagrams; snapshot SHA256
 f12c53928fe1faf00681e4d7e6947cc79a3e94a0536c9c9ec1d43c1509b8a33a.
 It distinguishes actual backend byte emission from runtime execution and records
 the correction to semantic code lifetime and affected-code fallback scope.
+
+Revision38 (18:15:43 UTC) records independently accepted M1 native behavior and
+links the detailed IR/feedback and dictionary-prediction design. Exact readback
+24,602 characters/two diagrams; snapshot SHA256
+625af242832ce3483b609d44bfd448c21a1c02ab5632dc69132ed84e767ea631.
+
+The new [IR design artifact](http://127.0.0.1:7878/s/6rydgj13/artifacts/jit-ir-feedback-design),
+revision1 (18:15:13 UTC), contains both reviewed documents and two diagrams.
+Exact readback26,342characters; snapshot SHA256
+b7d65513668521103a0a5d6cac8476953861e70eafd5642fd78d34bf9b794768.
+The documents specify future typed SSA and a dictionary-location experiment;
+they do not select a storage rewrite or claim a performance result.

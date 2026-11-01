@@ -156,10 +156,36 @@ SSA/verifier/allocator against synthetic events. Seven actual-source syntax
 commands passed, but their receipt does not establish exact compiled byte
 identity; that limitation remains explicit. This permits continued source work
 under the same21:31:13 cutoff, with no final source or native acceptance.
-Register PHI moves and scalar folding/CSE are now being completed/reviewed;
-genuine rooted DCE, recovery/lifetime, complete emission/failure evidence and
-runtime fixtures remain. Inherited validation producers preserve10,392closed
-files; the planned36-method roster and fresh debug build remain unbound/held.
+Register PHI moves, folding/CSE and rooted backward DCE are now in source.
+Versioned host fixtures exercise the actual verifier/allocator, malformed maps,
+dead-definition removal and six physical spills. Backend emission/failure checks
+pass without executing emitted code; eight syntax checks now pin source bytes
+and compiler streams. Eight runtime methods are drafted; independent review is
+correcting path coverage before final source freeze and review.
+
+The held validation controller plans 36 methods and passes five mocked host
+controls. Its [unbound receipt](../../../build/jit-method-m3-helper-preparation-20261101-v1/unbound-host-receipt.json)
+records two rows, a future 1,800-second inclusive window and first-failure stop.
+It preserves 10,392 closed files and keeps a fresh lock-only profile. Draft
+controller review found no blocker; exact frozen-source binding and final
+readiness review remain mandatory. No activation exists.
+
+The [recording-budget clarification](m3-recording-budget-clarification-20261101-v1.json)
+closes indefinite temporary-hook overhead when the nominated loop is unvisited:
+4,096 temporary-Unit events, distinct from the unchanged512-event active buffer,
+then settle at a validated AFTER boundary. Normal baseline Units acquire no
+recorder budget. Replacement/free must revalidate before borrowed exec access;
+terminal actions touch pinned metadata and defer cold retirement to fresh entry.
+The selected-loop policy and source deadline remain unchanged. Native evidence
+must establish successful typed execution/backedge, rather than an attempted
+trace-entry marker alone.
+
+Repeated source-word occurrences now reject this first trace format because a
+Python return PC would otherwise select an ambiguous import adapter. Baseline
+execution remains available. Independent review also found that inherited
+compiler scratch is excluded from the process byte counter despite the reviewed
+compiler-inclusive 8 MiB bound. The author is correcting cold allocation
+accounting within the original source cutoff; the quota contract is unchanged.
 
 The [six-program diagnostic](m2-workload-diagnostics-20261101-v1.md) is now complete:
 six valid fresh processes, zero manual compile requests, no reference arm or

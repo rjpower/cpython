@@ -1,6 +1,16 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision45 at20:34:54 UTC records the timely independently
+Latest publication: revision46 at20:54:41 UTC records source-level PHI/CSE/DCE,
+SSA/backend fixture and exact-source syntax progress, recorder lifetime and
+ambiguous-return-map fixes, corrected runtime fixtures and held controller
+preparation. Exact readback matches 28,828 characters and two Mermaid blocks;
+snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v46.md`
+has SHA256 `676fe9552c8f8498904c4aa42448efc1c7e5f525e3b9f93190b9097d050b930b`.
+The original source cutoff remains fixed. No emitted bytes have executed;
+final source freeze/review and native validation remain pending. Mermaid source
+and readback were checked; rendered layout was not inspected.
+
+Revision45 at20:34:54 UTC records the timely independently
 accepted M3 partial checkpoint, explicit synthetic-input/syntax-identity limits,
 unfinished optimizer/runtime work and held36-method validation preparation.
 Exact readback matches27,370characters and two Mermaid blocks; snapshot

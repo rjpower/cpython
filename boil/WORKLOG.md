@@ -1748,3 +1748,24 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   partial checkpoint, actual source-review findings and explicit evidence limits,
   unfinished optimizer/runtime work and held36-method validation preparation.
   No source-cap extension, M3 completion/native execution or speed claim.
+- 2026-11-01 20:46 UTC: Post-checkpoint review closes two recorder lifetime gaps:
+  replacement/free followed by stale exec access/early raw-action return, and
+  indefinite hooks when another hot loop bypasses the nominated loop. Reviewed
+  clarificationbb54d18b selects4096temporary-Unit events, distinct from512active
+  record capacity, with validatedAFTER settling and fresh-owner terminal cleanup.
+  Initial root draft conflating the capacities is preserved before publication.
+  BackwardDCE/physicalPHIs and strengthened graph verification are now in source;
+  full checks remain pending. Reviewer flags attemptedtraceentry as insufficient
+  success evidence; existing fixtures must prove actualtyped/nativebackedge work.
+  No cap extension, candidate execution or completion credit.
+- 2026-11-01 20:55 UTC: Prepare the held 36-method debug controller and pass all
+  five mocked host controls. Unbound receipt96006f40 preserves 10,392 closed
+  files, two planned rows/1,800 seconds inclusive, first-failure stop, lock-only
+  fresh profile and no activation. Independent draft review finds no blocker;
+  frozen-source AST binding and final readiness remain required. Source review
+  closes ambiguous duplicate-word recovery maps and corrects tests that missed
+  their intended native paths. Backend spill/emission/failure and eight pinned
+  syntax checks pass without emitted-code execution. Reviewer finds inherited
+  scratch excluded from the reviewed compiler-inclusive quota; author will
+  enforce that contract within the original cap. Publish/read back Loom46,
+  28,828 characters/two diagrams, snapshot676fe955. No M3 source/native acceptance.

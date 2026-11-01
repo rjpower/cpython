@@ -916,6 +916,40 @@ class TestObservedLoops(unittest.TestCase):
         self.assertFalse(alternate_info.get("trace", {}).get("optimized", False))
         self.assertFalse(alternate_info.get("trace", {}).get("recording", False))
 
+        ledger = []
+
+        def callback(value):
+            ledger.append(value)
+            return value + 2
+
+        def short(n, cb):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + cb(i)
+                i = i + 1
+            return total
+
+        self.assertTrue(_testinternalcapi.jit_method_compile(short))
+        initial = self.info(short)
+        self.assertTrue(initial["trace"]["recording"])
+        self.assertEqual(short(0, callback), 0)
+        self.assertEqual(short(1, callback), 2)
+        settled = self.info(short)
+        self.assertTrue(settled["active"])
+        self.assertTrue(settled["entry_seen"])
+        self.assertTrue(settled["return_resume_seen"])
+        self.assertFalse(settled["trace"]["recording"])
+        self.assertNotEqual(settled["address"], initial["address"])
+        self.assertEqual(settled["compile_attempts"], initial["compile_attempts"] + 1)
+        for n in (1, 3, 7):
+            self.assertEqual(short(n, callback), n * (n - 1) // 2 + 2 * n)
+        final = self.info(short)
+        self.assertEqual(final["address"], settled["address"])
+        self.assertEqual(final["code"], settled["code"])
+        self.assertEqual(final["compile_attempts"], settled["compile_attempts"])
+        self.assertEqual(ledger, [0] + [0] + list(range(3)) + list(range(7)))
+
     def test_boxed_identity_and_owner_release_reentry(self):
         imported = int("1000000")
         ledger = []

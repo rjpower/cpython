@@ -523,23 +523,55 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return 0;
     }
     _PyJitCodeUnit *unit = exec->jit->unit;
-    if (unit->recording_exhausted) {
-        exec->jit->record_attempted = 1;
-        _PyJit_DetachExec(exec);
-        if (PyErr_Occurred()) return -1;
-        if (code->_co_exec != exec || frame->ir_words != exec->words) {
-            PyErr_SetString(PyExc_SystemError, "JIT recorder retirement changed executing words");
-            return -1;
-        }
-        return 0;
-    }
     Py_ssize_t word = next_instr - exec->words;
     if (unit->detached || word < 0 || word >= unit->nwords ||
+        tstate->current_frame != frame ||
         (unit->graph != NULL && !tstate->interp->opt_config.tagged_values_enabled) ||
         unit->interpreter_id != PyInterpreterState_GetID(tstate->interp) ||
         !_PyJit_ObserversAllow(tstate, frame) ||
         unit->epoch != jit_epoch(tstate) || unit->generation != exec->jit->generation) {
         return 0;
+    }
+    if (unit->recording_exhausted) {
+        if (unit->source_stamp != jit_source_stamp(code)) return 0;
+        /* The old RETURN touched only pinned metadata. A new live frame now
+         * supplies the code owner for this one cold baseline settlement. */
+        unit->refs++;
+        _PyJitContext temporary = {.tstate = tstate, .frame = frame,
+            .next_instr = next_instr, .unit = unit, .code = code, .expected_exec = exec};
+        int replaced = _PyJit_ReplaceRecorded(&temporary, NULL);
+        int released = _PyJit_ReleaseActivation(&temporary);
+        if (replaced < 0 || released < 0) return -1;
+
+        /* Release can reenter too. Never follow the old unit or derive an
+         * address from the old raw PC after the cold transaction. */
+        if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
+            code->_co_exec != exec || frame->ir_words != exec->words ||
+            word >= exec->nwords) {
+            PyErr_SetString(PyExc_SystemError, "JIT recorder settlement changed executing words");
+            return -1;
+        }
+        /* RESUME already served its poll. Only synchronize a changed epoch;
+         * ordinary fallback must see the current pending word's handler. */
+        if (code->_co_instrumentation_version != jit_epoch(tstate) &&
+            (_Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred())) return -1;
+        if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
+            code->_co_exec != exec || frame->ir_words != exec->words ||
+            word >= exec->nwords) {
+            PyErr_SetString(PyExc_SystemError, "JIT recorder synchronization changed executing words");
+            return -1;
+        }
+        if (exec->jit == NULL || exec->jit == &initial_building ||
+            exec->jit->building || exec->jit->unit == NULL) return 0;
+        unit = exec->jit->unit;
+        if (unit->detached || unit->recording || unit->recording_exhausted ||
+            unit->graph != NULL || word >= unit->nwords ||
+            unit->source_stamp != jit_source_stamp(code) ||
+            unit->interpreter_id != PyInterpreterState_GetID(tstate->interp) ||
+            unit->epoch != jit_epoch(tstate) || unit->generation != exec->jit->generation ||
+            !_PyJit_ObserversAllow(tstate, frame) || unit->offsets[word] < 0 ||
+            (size_t)unit->offsets[word] + 4 > unit->code_size) return 0;
+        next_instr = exec->words + word;
     }
     unit->refs++;
     *ctx = (_PyJitContext){.tstate = tstate, .frame = frame, .next_instr = next_instr,

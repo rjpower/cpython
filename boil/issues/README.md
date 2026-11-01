@@ -13,10 +13,10 @@ and switch to the prepared reference-counting successor. See the
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [V2 native outcome](fundamental-runtime-design/region-native-outcome-20261101-v2.md) | restart_audit | Debug build passed; cases blocked by missing output directory. V3 repair by 04:38 with exact build reuse |
-| RC fallback preparation | [Accepted RC-only source](fundamental-runtime-design/rc-source-review-20261101-v1.md) | coroutine_design_review | Host-only native helper preparation by 04:40; no promotion |
-| GC / allocator | [Accepted v4 helpers](fundamental-runtime-design/span-native-helper-review-20261101-v4.md) | coordinator | Fresh v4 batch active, session 76892, ceiling 05:08:23 UTC |
-| Early elapsed / RSS | [Fixed protocol](gc-parity-deadline/measurement-protocol.md) | qualification_review_resumed | Host-only pilot preparation by 04:40; candidate products and outcome pending |
+| Compiler / IR | [Accepted focused outcome](fundamental-runtime-design/region-native-outcome-review-20261101-v3.md) | coroutine_design_review; restart_audit | 34 debug +34 release PASS; registered-site/emitted witness and final elapsed bindings by 04:48/04:45 |
+| RC fallback preparation | [Accepted helpers](fundamental-runtime-design/rc-native-helper-review-20261101-v1.md) | coordinator | Native batch active, session75555, ceiling05:17:38; no promotion |
+| GC / allocator | [V4 actual outcome](fundamental-runtime-design/span-native-outcome-review-20261101-v4.md) | qualification_review_resumed | Debug26 PASS; release lifetime failure. Two-child diagnostic preparation by04:40; timing blocked |
+| Early elapsed / RSS | [Fixed protocols](gc-parity-deadline/measurement-protocol.md) | coordinator | IR template reviewed, final binding pending; storage template held on correctness |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces

@@ -551,3 +551,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   image where its immutable build-plan bridge permits. No runtime change or
   selected case result follows from this host failure.
   [IR outcome](issues/fundamental-runtime-design/region-native-outcome-20261101-v2.md).
+- 2026-11-01: Integrated-storage v4 debug passed all26 selected cases; release
+  stopped at04:27:22 after four passes on the allocator-wrapper lifetime
+  assertion. Independent actual-outcome review preserves every case/root/product
+  and idle receipt. Cause unresolved; observational diagnosis is being prepared,
+  with no source weakening or timing readiness.
+  [Outcome](issues/fundamental-runtime-design/span-native-outcome-review-20261101-v4.md).
+- 2026-11-01: Repaired IR v3 reused the exact verified debug image and completed
+  all34 selected cases in debug and release, zero skips, at04:31:28. Root
+  session45680 returned zero; independent actual-outcome review accepted focused
+  behavior only. Prepare actual registered-site/emission witness and fixed
+  elapsed bindings. RC feedback source/helpers also passed review; activated
+  four fresh build/test rows04:32:38–05:17:38, session75555, preparation only.
+  [IR outcome](issues/fundamental-runtime-design/region-native-outcome-review-20261101-v3.md).

@@ -29,68 +29,59 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **04:23:23 UTC**, stable-span v4 native batch is active, session **76892**,
-inclusive ceiling **05:08:23 UTC**. Hard GC cutoff remains 15:14:44.
-No prototype has earned performance acceptance or integration.
+As of **04:33 UTC**, RC fallback feedback is the sole active native batch,
+**04:32:38–05:17:38 UTC**, session **75555**. This is preparation, not collector
+selection or promotion. The GC parity cutoff remains **15:14:44 UTC**.
+No performance increment or parity has been accepted.
 
-- **Integrated storage:** frozen source `34deae3b29260aea286b0c4017b963e092a2db62`
-  in `build/worktrees/gc-integrated-spans`. Initial source and the supported-call
-  and forced-manual-collection witness corrections passed independent review.
-  The [v3 helper review](span-native-helper-review-20261101-v3.md) binds fresh
-  debug-v3/release-v3 products, the unchanged 26-case selection and four exact
-  release skips. Four rows build/test debug then release, stopping on first
-  failure. V1 aborted in an unusable legacy C-API fixture; v2 built successfully
-  but exposed a disabled-GC witness mistake. Both failures remain preserved:
-  [v1 outcome](span-native-outcome-20261101-v1.md),
-  [v2 outcome](span-native-outcome-20261101-v2.md). V3 failed to import the test
-  extension because the new manual-collection entry is internal to the core:
-  [v3 outcome](span-native-outcome-20261101-v3.md). Narrow correction
-  `7d10d5bfd33cb7302df8008065c4dd637e453478` moves the witness body behind an
-  existing-style exported core test hook. Independent source review and
-  fresh v4 helper preparation follow; no selected case ran in v3.
-  The [v4 source review](span-link-review-20261101-v4.md) and
-  [helper review](span-native-helper-review-20261101-v4.md) passed; fresh v4
-  debug/release build and focused tests are active.
-- **Early elapsed/RSS:** host-only preparation through **04:40**, checkpoint
-  **04:25**, pending successful v3 products and outcome acceptance. Use the
-  fixed three-arm/four-workload/two-round protocol; occupancy vectors are
-  unavailable. No benchmark launch or additional executor is authorized yet.
-- **Interpreter regions:** frozen clean source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
-  passed [independent source review](region-source-review-20261101-v1.md).
-  Seven generated products reproduce; 78 ordinary host methods and one existing
-  expected failure; twelve new native methods remain unexecuted. V1 helper
-  review passed, but root's preflight mistakenly rejected an empty build
-  directory and then invoked the supervisor without activation. The supervisor
-  correctly refused; no compiler, gate or target ran. Preserve that failed
-  preactivation evidence. Minimal host-only v2 rebinding runs through **04:25**,
-  checkpoint **04:18**; no source change or native launch is granted by it.
-  V2 then passed host review and activated at 04:20:07. Its debug build passed,
-  but the wrapper stopped at 04:21:47 before cases because its output directory
-  was missing: [outcome](region-native-outcome-20261101-v2.md). Separate v3
-  repair is bounded by **04:38**, checkpoint **04:30**; reuse the valid debug
-  image through an exact immutable receipt bridge, with actual output-write
-  preflight. Source/34-case contract are unchanged.
+- **Interpreter regions:** clean source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
+  passed independent source review and actual [focused outcome review](region-native-outcome-review-20261101-v3.md).
+  Debug and release each passed all 34 selected methods, zero skips, with
+  source/configuration/product/origin/observer/root and terminal idle checks.
+  V3 completed at 04:31:28; root session45680 returned zero. The exact prior
+  valid debug image was reused; release image SHA256
+  `e20e982ec814b8842929b600690cd615c7d1d49f5b582a570d545ab65c53e70b`.
+  Earlier v1 missing-activation refusal and [v2 missing-output-directory failure](region-native-outcome-20261101-v2.md)
+  remain failed, with no selected-case credit. Separate v3 preparation proved
+  actual output writes and preserved every old receipt.
+- **IR deciding evidence:** one registered-site warmup and complete linked-path
+  capture are being prepared through **04:48**, checkpoint **04:38**. No stats
+  or dynamic fast/fallback count is claimed. The [fixed elapsed protocol](region-elapsed-protocol-20261101.md)
+  and [held helper template](region-elapsed-template-review-20261101-v1.md)
+  are reviewed. Final actual candidate bindings run through **04:45**,
+  checkpoint **04:38**. No workload, emission capture or timing has run.
+- **Integrated storage:** clean source `7d10d5bfd33cb7302df8008065c4dd637e453478`
+  passed source/helper review. Actual [v4 outcome review](span-native-outcome-review-20261101-v4.md)
+  records debug26 PASS, then release five cases: four PASS, one lifetime
+  assertion failure inside the custom allocator wrapper. Batch stopped at
+  **04:27:22**, root session76892 returned one; both images are idle and all
+  products/evidence preserved. The cause is unresolved, including possible
+  conservative optimized C roots; no timing is allowed. Earlier v1 fixture,
+  v2 disabled-GC witness and v3 hidden-symbol failures remain failed.
+- **Storage diagnosis:** host-only two-child observational preparation through
+  **04:40**, existing v4 debug/release products, no source edit. Preserve the
+  original assertion and distinguish observed post-thread-exit lifetime from
+  a causal claim about stale C roots. A proposed public-free forwarding witness
+  must exercise the actual wrapper, not bypass it with SpanFree/MiFree. Native
+  diagnosis requires separate reviewed activation. The fixed three-arm storage
+  [elapsed template](span-elapsed-template-review-20261101-v4.md) remains held.
 - **RC successor:** coherent restoration `1440f8c6fd1`, RC-only closure
   `d7df12b1d81722927e71d9734c70eeafdccfee73`, isolated in
-  `build/worktrees/rc-successor`. [Independent source review](rc-source-review-20261101-v1.md)
-  accepts first native feedback: exact ownership projection and artifacts match,
-  both generated products reproduce, 26 generator methods pass. Source review
-  is not native qualification. Host-only feedback preparation runs through
-  **04:40**, checkpoint **04:25**; historical verifier APIs only, fixed RC policy,
-  fresh products. Canonical autoconf and broader qualification remain pending.
+  `build/worktrees/rc-successor`. Independent [source](rc-source-review-20261101-v1.md)
+  and [helper](rc-native-helper-review-20261101-v1.md) reviews passed. Current
+  four-row feedback builds/tests debug then release, 39 cases each with zero
+  allowed skips. Fixed Linux/GIL/computed/mimalloc/boxed-shapes policy;
+  diagnostic verifier explicitly OFF, historical count/holes APIs only. No
+  canonical configure regeneration or broader qualification is claimed.
 
-The shared stats baseline completed and passed
-[independent outcome review](shared-baseline-outcome-review-20261101-v1.md).
-The current Fibonacci site capture completed at 03:17:49 and passed
-[outcome review](region-site-outcome-review-20261101-v2.md): words4/5,
-971,140 integer-compare/false-branch pairs over four loops, 27 actual collections,
-zero fallback/unpinned rows. This nominates the family; it proves neither
-compiler admission nor elapsed benefit. Original failed capture v1 is retained.
-
+Shared baseline and current Fibonacci site evidence remain accepted:
+[baseline outcome](shared-baseline-outcome-review-20261101-v1.md),
+[site outcome](region-site-outcome-review-20261101-v2.md). The baseline site
+nominates comparison/branch traffic; it is not candidate admission or speed.
 Old retention-oracle, VM0, structural-GC and nursery-adoption helpers remain
-held/deferred. Their expired grants authorize no new invocation. Regex
-implementation remains paused. Native gates and quiet measurements serialize;
-independent source/review work may overlap. Retain one adopted runtime policy.
+held/deferred; expired grants authorize no invocation. Regex implementation is
+paused. Native work and quiet measurements serialize; independent source/review
+work can overlap. Retain one adopted runtime policy.
 
 ## Next decision
 

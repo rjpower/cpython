@@ -6,7 +6,13 @@ An unchanged old test errors after a zero-iteration call causes recorder
 retirement to discard its installed baseline. The
 [independent outcome](m3-debug-outcome-review-20261101-v1.md) and
 [failed decision](m3-debug-decision-20261101-v1.json) preserve this result;
-whole M3 behavior is not accepted. A reviewed, isolated correction is underway.
+whole M3 behavior is not accepted. A reviewed correction is frozen and
+source-accepted; its runtime remains unvalidated.
+
+User steering now prioritizes [universal PyValue restoration under RC](../pyvalue-rc-restoration/status.md).
+The correction froze/source-passed at95be1d28; its bound next native batch is
+held and unactivated while the value contract is reconciled. Preserve the JIT
+implementation and all prior evidence; no corrected runtime result is claimed.
 
 M2 focused natural-method debug behavior remains accepted: 28 passes, zero skips.
 Six registered-program diagnostics subsequently completed with no native-entry

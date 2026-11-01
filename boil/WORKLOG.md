@@ -1798,3 +1798,20 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   worktree,21:19:16–21:34:16UTC,900s/no extension; no candidate runs. Preserve
   all36IDs/old28AST and original failed attempt. Publish/read back Loom48,
   32,080characters/two diagrams, snapshote9862911. [Failed decision](issues/jit-e2e-system/m3-debug-decision-20261101-v1.json).
+- 2026-11-01 21:32 UTC: User reaffirms universal NaN-tagged PyValue in interpreter
+  operations and heap containers. Audit confirms actual earlier implementation
+  98f38e1d/20693f43 was removed by RC restoration1440f8c6, including public/internal
+  value headers, implementation and container/API work. Collector fallback was
+  broadened into representation rollback; correct that scope error. Keep RC and
+  restore universal values with real ownership/traversal/API lifetime contracts;
+  do not re-enable tracing GC. A audits dependencies; C reviews independently.
+  JIT correction95be1d28 froze/source-passed early (35host/runtime syntax0),
+  decision9a465c7a; bound controller remains unactivated, no corrected runtime
+  result. Prior failed source/image/evidence remain immutable. [Restoration issue](issues/pyvalue-rc-restoration/status.md).
+- 2026-11-01 21:35 UTC: Publish/read back Loom49 with the universal-PyValue
+  restoration requirement and exact rollback provenance,34,989characters/three
+  diagrams,snapshot47cfc278. Correct README/board/architecture and hold bound JIT
+  controller without activation, cache or native products. A/C independently
+  audit representation/RC ownership/API dependencies; no restoration code or
+  candidate execution yet. Existing JIT and qualified interim RC evidence stay
+  preserved; the original universal-value requirement is not reduced to frames.

@@ -31,7 +31,9 @@ yield/resume and observation obey real frame and initialized-home contracts.
 Linux/GIL builds, exact int32 values and non-NaN doubles may be inline in an
 eight-byte frame value. Other values retain object references and ownership.
 Heap container fields and shape slots remain boxed; a core-wide inline heap
-representation and its ABI were deferred during RC integration.
+representation and its ABI were removed during RC restoration. The user has
+reaffirmed that [universal PyValues must be restored under RC](../issues/pyvalue-rc-restoration/status.md).
+The boxed heap is an interim implementation, not the selected final design.
 
 Borrowing, stealing, duplicating and closing a reference are semantic operations.
 Closing a mortal object can run a destructor and reenter Python. Boxing at a C

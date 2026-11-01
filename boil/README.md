@@ -8,9 +8,11 @@ roughly 2× on simple arithmetic is guidance, not a numerical gate.
 **Current decision (2026-11-01):** stop tracing-GC optimization and adopt the
 [reference-counting successor](issues/rc-integration/status.md). Candidate
 qualification, local integration and fresh release/debug checks are accepted.
-Register IR, eight-byte NaN-boxed frame values and boxed-slot shapes are retained. Later
-core-wide inline heap values and their ABI are deferred. No collector switch
-will be added. [Decision and evidence](issues/gc-parity-deadline/decision-20261101.md).
+Register IR, eight-byte NaN-boxed frame values and boxed-slot shapes are retained.
+The RC restoration also removed universal heap PyValues; the user has reaffirmed
+that they must be [restored under RC](issues/pyvalue-rc-restoration/status.md).
+Boxed heap fields are the current interim implementation, not the target. No
+collector switch will be added. [Earlier decision and evidence](issues/gc-parity-deadline/decision-20261101.md).
 
 Current images, built from `eba351fee7d`:
 
@@ -26,6 +28,7 @@ The first JIT increment is an isolated experiment; these images contain no new J
 | Need | Start here |
 | --- | --- |
 | Current work, owners and next actions | [Issue board](issues/README.md) |
+| Required universal values under RC | [PyValue restoration](issues/pyvalue-rc-restoration/status.md) |
 | Runtime structure and contracts | [Runtime architecture](design/runtime-architecture.md) |
 | Proposed integrated runtime and experiments | [IR, VM and allocator/collector reassessment](design/integrated-runtime-candidate.md) |
 | Current hypotheses and parallel assignments | [Runtime work after peer review](design/runtime-work-breakdown.md) |

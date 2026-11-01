@@ -11,6 +11,12 @@ fresh main builds and integration checks are accepted. No full29 GC or RC parity
 
 ## Workstreams and decisions
 
+**Current priority:** restore the universal PyValue representation that was
+removed with the RC restoration. The user reaffirmed that collector fallback
+must retain value-based interpreter operations and heap containers. RC remains
+selected; see [PyValue restoration](pyvalue-rc-restoration/status.md). New JIT
+native validation is held while its value contract is reconciled.
+
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
@@ -20,7 +26,8 @@ fresh main builds and integration checks are accepted. No full29 GC or RC parity
 | JIT entry PC ABI | [Separate hypothesis](jit-entry-pc-abi/status.md) | coroutine_design_review; restart_audit; qualification_review_resumed; coordinator | Focused behavior and pilot passed; full29 GM +2.26%/+1.94% rejects599897. No publication, late qualification or resampling. Separate admission hypothesis below; RC stays active |
 | JIT entry admission | [Bounded source attempt](jit-entry-admission/status.md) | restart_audit; coroutine_design_review; qualification_review_resumed; coordinator | Closed: focused mechanism passed, full29 +0.52%/+0.45% rejects11aefbdd. No publication, late qualification or resampling; frame filters closed |
 | Selected IR block entry | [Component evidence](jit-quickened-block/status.md) | coordinator | Source accepted, unexecuted; superseded as a tier by user feedback36. Interrupted activation did not take effect |
-| Method and tracing JIT | [M3 partial checkpoint passed; implementation continues](jit-e2e-system/status.md) | restart_audit; qualification_review_resumed; coordinator | M2 passes28methods; six workload diagnostics expose0/12queriedentry witnesses and drive2helper additions. M3 checkpoint author20:27/reviewer20:31 passes with12source copies,34host checks and actualSSA/RA fixture; syntax identity limitation retained. Register PHIs/passes/recovery/runtime work continues under original21:31UTC cap. Native build held; no speed claim or main integration |
+| Universal values | [Restore PyValue under RC](pyvalue-rc-restoration/status.md) | restart_audit; qualification_review_resumed; coordinator | Audit removed implementation and review one universal representation with RC ownership; original GC source and all JIT work preserved |
+| Method and tracing JIT | [M3 partial native evidence](jit-e2e-system/status.md) | coordinator | Fresh build passes;35/36methods pass including8trace tests. Zero-loop correction95be1d28 is frozen/source-accepted; next native batch held for universal-value restoration. No speed claim or primary integration |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |

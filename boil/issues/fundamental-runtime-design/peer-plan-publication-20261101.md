@@ -1,6 +1,17 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision48 at21:20:10 UTC records fresh build success,
+Latest publication: revision49 at21:34:24 UTC records the user's universal
+PyValue requirement, exact implemented/deleted provenance and the scope error
+in broadening RC fallback into representation rollback. Restore one universal
+value ABI under RC; both agents audit ownership/API dependencies. JIT correction
+95be1d28 is source-accepted and its bound controller is held, unactivated.
+Exact readback matches 34,989 characters/three Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v49.md`
+has SHA256 `47cfc27878b95176906271083d78939a02507ee4511498d0537bb5c48ae970d1`.
+No representation restoration or corrected native outcome is claimed. Mermaid
+source/readback, not rendered layout, checked.
+
+Revision48 at21:20:10 UTC records fresh build success,
 35 passes/one old admission regression, all eight observed-loop tests passing,
 closed failed batch/cleanup and the separate reviewed terminal-settlement
 correction. Exact readback matches 32,080 characters/two Mermaid blocks;

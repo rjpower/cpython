@@ -5,6 +5,9 @@
 and the `PyValue` interfaces described below are not its current ABI. See the
 [runtime architecture](runtime-architecture.md) and
 [method/tracing JIT design](jit-e2e-system.md) for current and proposed contracts.
+The user has reaffirmed that [universal PyValues must be restored under RC](../issues/pyvalue-rc-restoration/status.md).
+This document records real earlier implementation; its tracing-only ownership
+assumptions require adaptation, not removal of the universal representation.
 
 `Include/pyvalue.h` defines the tagged value representation. Exact int32 and
 non-NaN doubles can be inline; object-valued cases retain object identity.

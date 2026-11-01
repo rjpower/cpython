@@ -564,3 +564,28 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   elapsed bindings. RC feedback source/helpers also passed review; activated
   four fresh build/test rows04:32:38–05:17:38, session75555, preparation only.
   [IR outcome](issues/fundamental-runtime-design/region-native-outcome-review-20261101-v3.md).
+- 2026-11-01: RC first feedback completed04:35:44 UTC; root session75555
+  returned zero. Independent replay accepts all39 exact methods in both fresh
+  images, zero skips, real RC ownership/cycle/frame and ABI contracts, unchanged
+  products and idle cleanup. Fallback is working but not fully qualified or
+  selected. No verifier or performance credit.
+  [Outcome](issues/fundamental-runtime-design/rc-native-outcome-review-20261101-v1.md).
+- 2026-11-01: Two GC lifetime observations completed with nonreproduction under
+  changed observer/thread call graphs; original cause remains inconclusive and
+  release remains failed. Independent design review accepted separate public
+  raw-free and actual published-sweep witnesses. Cold source5a457c73 froze early
+  at04:55:30, production policy unchanged; exact source/helper reviews follow.
+  [Design review](issues/fundamental-runtime-design/span-wrapper-public-free-design-review-20261101-v1.md).
+- 2026-11-01: Actual registered IR site selected303 and linked paths proved
+  bool-home/second-dispatch removal, with nine added admission guards/reloads.
+  The fixed quiet campaign04:49–04:50 completed80values/eight origin witnesses.
+  Independent review REJECTS the increment: coroutines+10.86%/+14.11%, GM4
+  +16.21%/+13.74%, strong generator/Richards losses. No extra samples or broad
+  qualification. Revise the existing unchanged-runtime compiler/backend
+  control before another local IR rewrite; no assumed tail win.
+  [Elapsed decision](issues/fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md).
+- 2026-11-01: Published guarded Loom work-breakdown revision4 with measured IR
+  rejection, unresolved GC status, working RC fallback and both organization
+  diagrams. Exact readback and local snapshot match10,517characters. The fixed
+  15:14:44 UTC cutoff is unchanged; parity remains unproven.
+  [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).

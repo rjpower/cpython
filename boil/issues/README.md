@@ -13,11 +13,11 @@ and switch to the prepared reference-counting successor. See the
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [Accepted focused outcome](fundamental-runtime-design/region-native-outcome-review-20261101-v3.md) | coroutine_design_review; restart_audit | 34 debug +34 release PASS; registered-site/emitted witness and final elapsed bindings by 04:48/04:45 |
-| RC fallback preparation | [Accepted helpers](fundamental-runtime-design/rc-native-helper-review-20261101-v1.md) | coordinator | Native batch active, session75555, ceiling05:17:38; no promotion |
-| GC / allocator | [V4 actual outcome](fundamental-runtime-design/span-native-outcome-review-20261101-v4.md) | qualification_review_resumed | Debug26 PASS; release lifetime failure. Two-child diagnostic preparation by04:40; timing blocked |
-| Early elapsed / RSS | [Fixed protocols](gc-parity-deadline/measurement-protocol.md) | coordinator | IR template reviewed, final binding pending; storage template held on correctness |
-| Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
+| Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | restart_audit | Revise existing unchanged-runtime compiler/backend control by05:15; no new local IR source attempt |
+| RC fallback preparation | [Accepted focused outcome](fundamental-runtime-design/rc-native-outcome-review-20261101-v1.md) | coordinator | 39 debug +39 release PASS; canonical configure/broader qualification remain |
+| GC / allocator | [Execution state](fundamental-runtime-design/status.md) | qualification_review_resumed; coroutine_design_review | Cold fixture source5a457c73 frozen; exact source/helper review by05:08; fresh native feedback next |
+| Early elapsed / RSS | [Fixed protocols](gc-parity-deadline/measurement-protocol.md) | coordinator | IR rejected on valid two-round scores; storage held on correctness |
+| Interpreter / backend | [Existing controls](h1-tail-dispatch/status.md) | restart_audit; coordinator | Proposed nonstats controls; compiler and dispatch effects separate, no cross-compiler GC-parity claim |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline
@@ -70,6 +70,7 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 
 ## Rejected
 
+- [Compiler-proven compare/branch regions](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md): local bool-home/second-dispatch removal verified, but coroutine medians regressed 10.86% and 14.11%; four-row geometric means regressed 16.21% and 13.74%. No further samples or qualification.
 - [Handler-local slot bases](interpreter-dispatch-state/status.md): coroutine medians regressed 11.98% and 11.00%; all controls also regressed. Native store removal did not earn an elapsed improvement.
 - [Thirteen constant-operand handlers](interpreter-constant-operands/status.md): coroutine medians regressed 4.47% and 11.64% in the fixed elapsed comparison; controls also regressed. Code size was diagnostic, not the rejection rule.
 - [Bulk frame transfer](frame-transfer-bulk/status.md): no repeatable gain in two matched process rounds; no further qualification.

@@ -94,15 +94,20 @@ isolated. Independent source review has accepted first native feedback;
 actual native validation remains.
 
 The [integrated-storage candidate](../fundamental-runtime-design/status.md)
-passed all26 focused debug cases in v4, then release stopped at04:27:22 UTC
-on a lifetime assertion inside the allocator wrapper. The cause is unresolved;
-no elapsed readiness follows. All four native failures remain preserved.
-The independent [actual v4 review](../fundamental-runtime-design/span-native-outcome-review-20261101-v4.md)
-records four release passes before the failure, not a completed release cohort.
+remains correctness-blocked: v4 passed 26 debug cases, then failed release's
+allocator-wrapper lifetime assertion after four passes. Diagnostic changed-call-
+graph nonreproduction is inconclusive about the original cause. The reviewed
+cold fixture correction froze at5a457c73; exact source/helper review and fresh
+native feedback come before any storage timing.
 
-Interpreter-region40498 passed34 cases in each image, zero skips. Its
-registered-site/emitted-path and fixed elapsed preparations continue in parallel.
-The RC-only closured7df12b passed source/helper review and has a fresh native
-preparation batch active **04:32:38–05:17:38 UTC**, session **75555**. This does
-not select RC early or extend the GC cutoff. No candidate has earned parity
-or integration.
+The separate IR region increment passed semantics and actual work-removal
+checks, then was **rejected**: coroutine elapsed +10.86%/+14.11%, four-row
+geometric means +16.21%/+13.74%. That supplies the first measured decision before
+05:14; it supplies no GC parity credit and will not be composed into a candidate.
+The existing unchanged-runtime compiler/backend control is being revised without
+native authority or any cross-compiler parity claim.
+
+The isolated RC-only closured7df12b passed all39 focused methods in both images,
+zero skips, with independent actual-outcome acceptance and idle cleanup. It is
+a working fallback candidate, not a selected collector or fully qualified core.
+No native job is currently active. No candidate has earned parity or integration.

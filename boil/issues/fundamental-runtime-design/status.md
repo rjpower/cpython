@@ -29,59 +29,61 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **04:33 UTC**, RC fallback feedback is the sole active native batch,
-**04:32:38–05:17:38 UTC**, session **75555**. This is preparation, not collector
-selection or promotion. The GC parity cutoff remains **15:14:44 UTC**.
-No performance increment or parity has been accepted.
+As of **04:58 UTC**, no native job is active. The first measured increment
+was rejected before the 05:14 checkpoint. **GC parity remains unproven**;
+the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
+unchanged. Rejected branches and every failure remain preserved.
 
-- **Interpreter regions:** clean source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
-  passed independent source review and actual [focused outcome review](region-native-outcome-review-20261101-v3.md).
-  Debug and release each passed all 34 selected methods, zero skips, with
-  source/configuration/product/origin/observer/root and terminal idle checks.
-  V3 completed at 04:31:28; root session45680 returned zero. The exact prior
-  valid debug image was reused; release image SHA256
-  `e20e982ec814b8842929b600690cd615c7d1d49f5b582a570d545ab65c53e70b`.
-  Earlier v1 missing-activation refusal and [v2 missing-output-directory failure](region-native-outcome-20261101-v2.md)
-  remain failed, with no selected-case credit. Separate v3 preparation proved
-  actual output writes and preserved every old receipt.
-- **IR deciding evidence:** one registered-site warmup and complete linked-path
-  capture are being prepared through **04:48**, checkpoint **04:38**. No stats
-  or dynamic fast/fallback count is claimed. The [fixed elapsed protocol](region-elapsed-protocol-20261101.md)
-  and [held helper template](region-elapsed-template-review-20261101-v1.md)
-  are reviewed. Final actual candidate bindings run through **04:45**,
-  checkpoint **04:38**. No workload, emission capture or timing has run.
-- **Integrated storage:** clean source `7d10d5bfd33cb7302df8008065c4dd637e453478`
-  passed source/helper review. Actual [v4 outcome review](span-native-outcome-review-20261101-v4.md)
-  records debug26 PASS, then release five cases: four PASS, one lifetime
-  assertion failure inside the custom allocator wrapper. Batch stopped at
-  **04:27:22**, root session76892 returned one; both images are idle and all
-  products/evidence preserved. The cause is unresolved, including possible
-  conservative optimized C roots; no timing is allowed. Earlier v1 fixture,
-  v2 disabled-GC witness and v3 hidden-symbol failures remain failed.
-- **Storage diagnosis:** host-only two-child observational preparation through
-  **04:40**, existing v4 debug/release products, no source edit. Preserve the
-  original assertion and distinguish observed post-thread-exit lifetime from
-  a causal claim about stale C roots. A proposed public-free forwarding witness
-  must exercise the actual wrapper, not bypass it with SpanFree/MiFree. Native
-  diagnosis requires separate reviewed activation. The fixed three-arm storage
-  [elapsed template](span-elapsed-template-review-20261101-v4.md) remains held.
-- **RC successor:** coherent restoration `1440f8c6fd1`, RC-only closure
-  `d7df12b1d81722927e71d9734c70eeafdccfee73`, isolated in
-  `build/worktrees/rc-successor`. Independent [source](rc-source-review-20261101-v1.md)
-  and [helper](rc-native-helper-review-20261101-v1.md) reviews passed. Current
-  four-row feedback builds/tests debug then release, 39 cases each with zero
-  allowed skips. Fixed Linux/GIL/computed/mimalloc/boxed-shapes policy;
-  diagnostic verifier explicitly OFF, historical count/holes APIs only. No
-  canonical configure regeneration or broader qualification is claimed.
+- **IR compare/branch regions — REJECT:** source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
+  passed 34 methods in each image, actual registered-site admission and complete
+  linked-path review. The fixed pilot nevertheless regressed coroutines
+  **10.86% / 14.11%** and the four-row geometric mean **16.21% / 13.74%**.
+  Generators and Richards regressed in both rounds; RSS changes were small and
+  mixed. [Independent elapsed decision](region-elapsed-outcome-review-20261101-v1.md).
+  Session42219 returned zero, all 80 values/eight origin witnesses valid, both
+  images idle. No new samples, full-29 campaign or expensive qualification for
+  this increment. Verified home/second-dispatch removal and nine added guards/
+  reloads explain the next question, not a proven slowdown decomposition.
+- **Compiler/backend control:** host-only revision of the existing unchanged-
+  runtime GCC-computed/Clang-computed/Clang-tail experiment, through **05:15**,
+  checkpoint **05:07**. Compiler and dispatch contrasts stay separate, tail is
+  not presumed superior, and no native/source invocation is granted. Current
+  GCC parity protocol is not satisfied by a cross-compiler timing comparison.
+- **Integrated storage — correctness blocked:** original source and all four
+  failed batches remain intact. V4 `7d10d5b` passed debug26, then release stopped
+  after four passes on the allocator-wrapper lifetime assertion. [Actual review](span-native-outcome-review-20261101-v4.md).
+  Two later observations completed with no reproduction under changed call
+  graphs. Their result is **inconclusive about the original cause**, with no
+  original release-case credit: `build/span-wrapper-outcome-v1/outcome.md`.
+- **Cold fixture correction:** source froze early at **04:55:30**, clean
+  `5a457c738310f9dd762c88743af9042258841c74`, six files. The independently
+  [reviewed design](span-wrapper-public-free-design-review-20261101-v1.md)
+  separates public raw-free forwarding from actual published sweep while the
+  wrapper remains installed. Producer-thread exit removes its native roots;
+  main retains only weakref/encoded key. Production allocator/collector policy
+  is unchanged. Host22 (one expected failure), six source audits and 21 native
+  test methods/three child templates check successfully; native tests are
+  unexecuted. Exact source review and fresh v5 helper preparation end **05:08**,
+  checkpoints **05:02 / 05:01**; 27 selected methods, four unchanged release
+  skips, actual directory/import checks. No timing before fresh native success.
+- **RC successor — focused behavior accepted:** clean
+  `d7df12b1d81722927e71d9734c70eeafdccfee73` passed **39 exact methods in each
+  fresh image, zero skips**. Four rows completed at04:35:44, session75555
+  returned zero; root independently replayed actual methods/origins/config/
+  product and idle checks. [Outcome](rc-native-outcome-review-20261101-v1.md).
+  This is a working fallback candidate, not collector selection, performance,
+  canonical configure regeneration, full qualification or integration.
 
-Shared baseline and current Fibonacci site evidence remain accepted:
-[baseline outcome](shared-baseline-outcome-review-20261101-v1.md),
-[site outcome](region-site-outcome-review-20261101-v2.md). The baseline site
-nominates comparison/branch traffic; it is not candidate admission or speed.
+The fixed [storage pilot](../gc-parity-deadline/measurement-protocol.md) and
+reviewed held helpers await a usable corrected image. The rejected IR increment
+will not be composed into a GC parity candidate. Loom
+[runtime-work-breakdown revision4](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-work-breakdown)
+retains both code-organization diagrams and these measured dispositions.
+
 Old retention-oracle, VM0, structural-GC and nursery-adoption helpers remain
-held/deferred; expired grants authorize no invocation. Regex implementation is
-paused. Native work and quiet measurements serialize; independent source/review
-work can overlap. Retain one adopted runtime policy.
+held/deferred; their expired grants authorize no invocation. Regex implementation
+is paused. Native work and quiet measurements serialize; source/review may
+proceed in parallel. One adopted collector policy remains required.
 
 ## Next decision
 

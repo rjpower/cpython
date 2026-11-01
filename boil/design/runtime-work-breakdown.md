@@ -9,6 +9,14 @@ tool session 78126 returned zero. This plan is subject to independent review
 before new native execution. The earlier integrated architecture remains a
 target under investigation, not a performance result.
 
+Current execution is owned by the [issue state](../issues/fundamental-runtime-design/status.md).
+The original plan below is retained as the reviewed starting point. The later
+comparison-region implementation was [rejected on measured elapsed](../issues/fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md),
+despite verified local work removal. Integrated storage remains correctness-
+blocked; the RC fallback has passed focused debug/release testing. The hard
+15:14:44 UTC GC cutoff governs the remaining work. No rejected prototype is
+adopted merely because it implements this plan.
+
 ## What changes
 
 The prior ranking had three GC items and one IR region. That did not reflect

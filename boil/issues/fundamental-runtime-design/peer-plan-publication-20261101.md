@@ -46,3 +46,19 @@ Both code-organization Mermaid diagrams remain. Exact readback matched all
 Local snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v3.md`
 has SHA256 `00aed0107d738b3a1cc5dbdebc6156cde7a379d58f4c03886dcfe619cf6331eb`.
 Publication confers no performance or runtime adoption credit.
+
+## Measured decisions, revision 4
+
+At 04:56:48 UTC, appended guarded revision 4 to the same artifact. It records
+the independently rejected IR region's actual elapsed losses, accepted local
+work-removal evidence and added guard/reload costs; unresolved GC release
+failure and diagnostic nonreproduction; cold fixture correction under review;
+and actual RC debug/release39-case passes. The unchanged-runtime compiler/
+backend comparison remains a proposal, with no cross-compiler parity claim.
+The hard GC cutoff and fixed all-29 decision remain unchanged.
+
+Exact revision-4 readback matched all 10,517 characters and both Mermaid blocks.
+Local snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v4.md`
+has SHA256 `f4778e1275a7c481c75eaba56269d54c34cf8fed07cf747fc8c94f837a029001`.
+Only source/readback was checked; no rendered-layout verification is claimed.
+Earlier revisions and the unedited peer review remain preserved.

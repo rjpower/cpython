@@ -87,9 +87,20 @@ compilation, memory and retry cost; it is not a performance claim.
 Source inspection corrected one proposal inventory error: BUILD_CONST_KEY_MAP
 does not exist in this tree. Constant-key dictionary construction uses BUILD_MAP,
 which is covered; no opcode will be invented to satisfy the mistaken list.
-Intermediate host failures remain preserved. The corrected host-v3 run passes 31
-generator methods; nine actual new-worktree translation units pass syntax-only
-checks. Source and fixtures are still changing, so these are intermediate checks.
+Four closure adapters bring the callable-helper count from 63 to 82.
+
+The [partial checkpoint](m2-checkpoint-decision-20261101-v1.json) passed before
+19:05:56. The author sealed at 19:00:25; independent review at 19:02:16 verified
+all 21 source hashes, 33 host methods, nine distinct actual-source syntax checks,
+all 290 old metadata format rows and the appended private IDs. Generated normal
+return, exception and generator-creation consumers are present. Historical host
+and syntax failures remain preserved. This permits continued source work under
+the original cap, without final source or runtime acceptance.
+
+The [policy clarification](m2-policy-clarification-20261101-v1.json) fixes bootstrap
+resource backoff before state exists, and records the explicit leaf-renomination
+limit after observation ends. Final natural observer, resource, pending-capacity
+and coroutine fixtures, exact-source review and fresh native checks remain.
 
 Only host generation/tests, bounded syntax checks and standalone byte-emission
 fixtures are currently allowed. No M2 candidate executable or generated machine

@@ -1609,3 +1609,25 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   absent from this tree: the slice covers15 existing forms, including BUILD_MAP,
   without inventing an opcode. Review continues on observer changes, cold-call
   retry and caller-continuation lifetime. No source acceptance or runtime claim.
+- 2026-11-01 18:59 UTC: Independent M2 replay passes 33 generator methods,
+  preserving all old metadata rows and appending private IDs 302–304. There are
+  82 callable helpers: the prior 63 plus 15 listed existing forms and four
+  closure adapters. Root prepared an unexecuted diagnostic runner for the fixed
+  six registered programs; AST/source-hash checks resolve every named target.
+  It requests no compilation, retains unchanged kernels/scored driver, separates
+  extra correctness checks from entry witnesses, and explicitly cannot infer
+  helper frequency or isolated compiler time from seen bits/process duration.
+  Native validation and workload execution remain held pending coherent source.
+- 2026-11-01 19:03 UTC: Accepted M2's timely partial source checkpoint, not final
+  source acceptance: author 1126bc40 sealed 19:00:25; independent c8e656a4/
+  41d936d3 sealed 19:02:16 and verified all 21 source hashes, 33 host methods,
+  nine distinct syntax checks and unchanged old metadata. Root decision ee5f499d
+  retains the original 20:05:56 cap. Fixed bootstrap backoff uses a process scalar
+  before per-state storage exists; existing state/flow fast paths bypass it.
+  Final cold-reentry, observer, capacity and coroutine fixtures remain pending.
+  No candidate build/runtime/timing authority. [Checkpoint](issues/jit-e2e-system/m2-checkpoint-decision-20261101-v1.json).
+- 2026-11-01 19:04 UTC: Published and exactly read back Loom revision40,
+  27,395 characters/two diagrams, snapshot af61b1dd. It records the timely M2
+  checkpoint, fixed inventory/backoff policy, explicit leaf-renomination limit
+  and remaining native/workload/SSA gates. No source-cap extension or performance
+  claim; all expensive execution gates remain held.

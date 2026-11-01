@@ -1,0 +1,39 @@
+{
+  "utc": "2026-11-01T19:01:00+00:00",
+  "decision": "FIX_INVENTORY_AND_DEFINE_BOOTSTRAP_BACKOFF_WITHIN_EXISTING_M2_ATTEMPT",
+  "source_grant": {
+    "path": "boil/issues/jit-e2e-system/m2-source-grant-20261101-v1.json",
+    "sha256": "1fbca2568e5c7f90ae68c97b6df2a058bb1ad4137b68c21f654b51965aba5b6d"
+  },
+  "inventory_correction": {
+    "absent_proposal_form": "BUILD_CONST_KEY_MAP",
+    "actual_dictionary_literal_form": "BUILD_MAP",
+    "enumerated_existing_forms_added": 15,
+    "closure_adapters_added": ["COPY_FREE_VARS", "MAKE_CELL", "LOAD_DEREF", "STORE_DEREF"],
+    "prior_callable_helpers": 63,
+    "checkpoint_callable_helpers": 82,
+    "new_opcode_invention_authorized": false
+  },
+  "bootstrap_backoff": {
+    "reason": "An initial JitState or evaluator JitFlow allocation failure occurs before per-state cooldown storage exists.",
+    "policy": "Use one process-level scalar backoff of 4096 eligible bootstrap allocation events following optional initial allocation or byte-reservation failure.",
+    "eligible_paths": [
+      "Already warming ordinary CALL nomination requiring initial JitState",
+      "Real warming periodic backedge requiring initial JitState",
+      "Native CALL preparation requiring an absent evaluator JitFlow"
+    ],
+    "existing_state_or_flow_fast_path": "Bypass bootstrap backoff when the required state or flow already exists.",
+    "existing_compile_resource_backoff": "Retain the separate per-state 4096 eligible-event cooldown.",
+    "error_behavior": "Preserve actual errors and revalidate after callback-capable allocation or cleanup.",
+    "concurrency": "Process scalar consumption and publication must use the project's atomic conventions.",
+    "ordinary_frame_entry_checks_added": false,
+    "runtime_policy_selector_added": false
+  },
+  "observer_recovery_limit": "Loop heads rearm after observation ends. A detached leaf can be nominated by a fresh ordinary CALL site; an already specialized caller has no new per-call lookup solely to renominate the leaf. This is an optimization-liveness limit, not permanent unsupported status.",
+  "byte_budget_scope": "Charge retained Unit metadata, ops, offsets and rounded mapping, plus allocated JitState and evaluator JitFlow. Keep retired pinned artifacts charged until final free. Bounded compiler scratch is separate; 8 MiB is not an RSS cap.",
+  "original_source_deadline_utc": "2026-11-01T20:05:56.305708+00:00",
+  "source_extension_authorized": false,
+  "source_paths_added": [],
+  "candidate_build_runtime_timing_authorized": false,
+  "final_source_acceptance": false
+}

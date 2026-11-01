@@ -354,3 +354,10 @@ natural-method implementation, with checkpoint19:05:56/source cap20:05:56UTC.
 Exact readback25,485characters/two diagrams; snapshot SHA256
 004c2d1d4b9ccf5d5600c9c770b6e3e2f3cc595fba43818d032536687b233227.
 M2 candidate execution and timing remain separately held.
+
+Revision40 (19:03:57 UTC) records M2's timely partial source checkpoint,
+the corrected helper inventory and remaining natural/reentry fixtures. Exact
+readback 27,395 characters/two diagrams; snapshot SHA256
+af61b1dde96ea5dd318803b364a5f266e1ef5e460a2b96458b95c58716f55003.
+The original source cap remains 20:05:56 UTC; source is not frozen and no M2
+candidate runtime or timing has executed.

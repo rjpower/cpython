@@ -8,7 +8,8 @@
 - Current cadence candidate: `47ccf35e21a94fde9351d1c2e4571bf207257a4c`
 - Branch/worktree: `boil/gc-nursery-adoption`; `build/worktrees/nursery-adoption`
 - Dispatch started: 2026-10-31 20:18:11 UTC; overall deadline 2026-11-01 04:18:11 UTC
-- Current feedback deadline: 2026-11-01 00:14:59.201344 UTC, unchanged after the first build failure
+- First-feedback deadline (closed): 2026-11-01 00:14:59.201344 UTC, unchanged through corrections
+- Release-readiness deadline (closed): 2026-11-01 01:05:46.376648 UTC
 - Decision: keep mandatory nursery admission and real minors; automatic cadence remains an experiment
 
 ## Hypothesis
@@ -83,9 +84,18 @@ six-row release preparation froze early under isolated
 `build/nursery-cadence-release-readiness-v1`: two fresh matched O3 builds, two
 source-defined focus rows and two registered stale-root rows. Its release
 roster explicitly allows two existing debug-only skips and expects fifty-two
-normal children; debug child counts are not reused. Independent helper review
-is underway. Native execution waits for terminal slot-base feedback; no
-performance workload or counter probe has run here.
+normal children; debug child counts are not reused. Independent
+[release-helper review](reviews/cadence-release-helper-preparation-20261101-v1.md)
+accepted the exact preparation. After terminal IR cleanup, root activated it
+at 00:20:46.376648 UTC, deadline 01:05:46.376648. All six rows completed
+at 00:26:15.145783 UTC; root confirmed session 61492 terminal exit 0 and all
+six idle cleanup records. Independent release outcome review is pending.
+The [release execution record](release-feedback-results.md) owns actual rows.
+No performance workload or counter probe has run here.
+
+New benchmark activation is held during the user's holistic design review.
+The all-old scan and individual death processing remain structural costs;
+schedule correctness alone establishes no useful generational performance.
 
 ## Next
 

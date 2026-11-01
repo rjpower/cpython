@@ -7,8 +7,8 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| GC / release cost preparation | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | restart_audit / qualification_review_resumed | Focused outcome accepted; review two fresh matched release builds and affected correctness before elapsed comparison |
-| IR / slot-base native feedback | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | coordinator / coroutine_design_review | Reviewed seventeen-row batch active; establish actual entry/root behavior and emitted-work outcome |
+| GC / release outcome and architecture review | [Nursery adoption without a global switch](gc-nursery-adoption/status.md) | coroutine_design_review / qualification_review_resumed | Six native rows terminal; audit outcome and bind actual cost inputs while new benchmarks remain held for design reassessment |
+| IR / elapsed preparation | [Preserve common evaluator state](interpreter-dispatch-state/status.md) | restart_audit / coordinator | Behavior/emission reviews accepted; finish held quiet preparation alongside holistic VM/compiler review |
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

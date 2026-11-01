@@ -57,9 +57,15 @@ Host-only helper preparation froze early at 00:07:50 UTC within its
 transition controls, affected modules, stale-root controls and bounded native
 inspection. Independent [helper review](reviews/helper-preparation-20261101-v1.md)
 accepted the exact preparation. Root activated it at 00:12:00.978874 UTC,
-deadline 00:57:00.978874, session 60831 live. The
+deadline 00:57:00.978874. All seventeen rows completed at 00:19:10.994248;
+root confirmed session 60831 terminal exit 0 at 00:19:12 with idle cleanup.
+Independent [behavior review](reviews/native-behavior-outcome-20261101-v1.md)
+accepted the exact native scope; [emission review](reviews/native-emission-outcome-20261101-v1.md)
+confirmed targeted exit stores removed but frame/IP stack traffic worsened.
+Neither establishes an elapsed benefit. The
 [native execution record](native-feedback-results.md) owns actual row outcomes;
-no behavior, emitted-work or elapsed result is credited at launch. Native
-batches serialize; performance and landing remain held.
+the [elapsed plan](performance-plan.md) is independently accepted for host-only
+quiet-helper preparation, 00:20–00:40 UTC. Scoring and landing remain held,
+including during the user's holistic architecture/collector reassessment.
 The [research results](results.md) and native/source inventory retain the
 287-handler, 19-join, five-label and 26-reload entry proof and its limits.

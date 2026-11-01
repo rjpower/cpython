@@ -276,3 +276,19 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   45-minute deadline. GC release-helper review proceeds independently while
   its native builds wait. No timing or performance credit follows at launch.
   [IR execution](issues/interpreter-dispatch-state/native-feedback-results.md).
+- 2026-11-01: Slot-base native batch completed all seventeen rows with terminal
+  idle cleanup. Early native review finds the targeted exit transport removed
+  but added frame/IP stack traffic; elapsed remains unmeasured. Activated the
+  independently reviewed six-row GC release batch, reusing the historical image
+  and preserving exact release guards. Held slot-base timing now has an accepted
+  fixed-sample/noise plan; host preparation is separate from scoring.
+  [IR evidence](issues/interpreter-dispatch-state/native-feedback-results.md),
+  [GC release execution](issues/gc-nursery-adoption/release-feedback-results.md).
+- 2026-11-01: GC release batch completed all six rows with terminal idle cleanup;
+  independent outcome review remains open. Slot-base behavior/emission reviews
+  accepted their exact scopes without a speed claim. At the user's request,
+  reassessed the whole VM/IR/GC design against LuaJIT and its proposed collector:
+  all-old nursery scanning, per-object inventory/reclamation, compiler-controlled
+  interpreter registers and value/native boxing remain explicit opportunities.
+  New benchmarks stay held during this design assessment; host preparation
+  continues and no runtime alternative is being added.

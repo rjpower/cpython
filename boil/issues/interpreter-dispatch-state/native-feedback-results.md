@@ -1,9 +1,12 @@
 # Slot-base first native feedback
 
-Active, not an outcome. Root activated the independently reviewed seventeen-row
+Root activated the independently reviewed seventeen-row
 batch at **2026-11-01 00:12:00.978874 UTC**, with a fixed deadline of
-**00:57:00.978874 UTC**. Root execution session **60831** is live. No behavior,
-emitted-work, elapsed or landing pass is credited at launch.
+**00:57:00.978874 UTC**. It completed at **00:19:10.994248 UTC**; root confirmed
+session **60831 terminal exit 0 at 00:19:12 UTC**. Independent
+[behavior](reviews/native-behavior-outcome-20261101-v1.md) and
+[emitted-work](reviews/native-emission-outcome-20261101-v1.md) reviews accepted
+their exact scopes; no elapsed or landing result exists.
 
 | Binding | Identity |
 | --- | --- |
@@ -46,3 +49,29 @@ Observation timeout cannot authorize a restart. GC release-build preparation
 may continue on the host, but its native batch remains held until this one
 is terminal and cleaned up. Neither quiet elapsed work nor broad qualification
 belongs to this batch.
+
+## Terminal observations and held elapsed preparation
+
+All seventeen rows returned successfully. Every post-gate cleanup observed
+no live target before deadline; the last cleanup was 00:19:06.301181 UTC.
+Actual module totals, skip identities, roots and overlapping selections belong
+to independent outcome review, not an inferred unique test count.
+
+Early author and independent disassembly agree that the nominated outgoing
+slot-cache pairs disappear, while frame/IP become stack-resident and common
+handlers gain traffic. Evaluator text is 157,884 versus 142,471 bytes, about
+10.82% growth, diagnostic only. These observations establish neither a speedup
+nor the cause of elapsed behavior; full branch review remains open.
+
+The independently accepted [elapsed plan](performance-plan.md) is held for
+concrete quiet-helper preparation, 00:20–00:40 UTC with checkpoint 00:30.
+Its [plan review](reviews/performance-plan-20261101-v1.md) is SHA256
+`9f2bd0c79e658611b5a6f7b9617db53e328ea350ad9fbf1c5311e8109d557c8a`.
+Before any score freeze, clarify the inherited origin policy: eight separate
+unmeasured origin calls use **loops=1**. The sixteen scored cells each warm up
+at their registered workload count before five serial timed calls. Thus the
+campaign has twenty-four warmup calls, with distinct origin/scoring loop
+counts. No registered-loop origin coverage is claimed. This differs from the
+GC cost plan's twelve registered-loop origin processes. Preserve these exact
+commands and distinction in the eventual manifest; no new target or probe is
+authorized by host preparation.

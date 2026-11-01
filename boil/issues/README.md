@@ -7,15 +7,15 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| Shared attribution baseline | [Revised work plan](../design/runtime-work-breakdown.md) | qualification_review_resumed; coordinator | Prepare one unchanged-runtime computed debug/stats image and eighteen counter processes; native held |
+| Shared attribution baseline | [Execution state](fundamental-runtime-design/status.md) | coordinator | Running one unchanged-runtime computed debug/stats build and reviewed focused/counter rows; deadline 03:26:08 UTC |
 | Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Map a reusable value/effect-aware region lowering increment; operand-locality proposal remains held |
-| Shared baseline review | [Revised work plan](../design/runtime-work-breakdown.md) | restart_audit | Independently check the exact build/census helpers; no native activation yet |
+| Independent review | [Interpreter region](fundamental-runtime-design/interpreter-region-execution-20261101.md) | restart_audit | Review the reusable compiler/generator boundary and all ordinary exits |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
 | GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Map one stable-span cohort across publication, lookup, inventory and reclamation; identify the minimum eligibility census |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; native baseline
-preparation remains held for exact review and activation. Old cadence, VM0 and
+source/helper review passed and the one finite batch is active. Old cadence, VM0 and
 structural-GC helper drafts are preserved and unactivated. Their expired grants
 are not resumed by the new assignments.
 

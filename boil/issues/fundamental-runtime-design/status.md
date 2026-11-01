@@ -1,8 +1,8 @@
 # Fundamental runtime design review
 
-- State: shared baseline under review; interpreter and integrated allocator/collector increments prioritized
+- State: shared baseline build running; interpreter and integrated allocator/collector designs under review
 - Updated: 2026-11-01
-- Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (native),
+- Owner: coordinator; coroutine_design_review (IR/VM, GC review), restart_audit (IR review),
   qualification_review_resumed (shared baseline and GC)
 - Source: maintained head `5ef8c34d9bf`; isolated candidates retain their own identities
 - Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
@@ -21,8 +21,17 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-No native job is running. Retention-oracle v3 helpers passed root host review but
-remain held, with readiness flags false and no activation. VM0 build helpers and
+One native batch is running: reviewed shared GCC computed/debug/stats baseline,
+activated 02:41:08.977 UTC with inclusive deadline 03:26:08.977 UTC. Actual tool
+session **20126** and host supervisor PID **1348070** were live at 02:41:45;
+the configure step had reached compilation. Monitor that same handle; an
+observation timeout does not grant a restart. Exact activation, per-row
+launch/result/cleanup and terminal evidence live under
+`build/worktrees/vm-compiler-backend/build/shared-attribution-gcc-stats-v1`.
+The first unexpected failure stops the batch; no automatic retry or extension.
+
+Retention-oracle v3 helpers passed root host review but remain held, with
+readiness flags false and no activation. VM0 build helpers and
 the structural-GC failed-prefix witness preparation are suspended at their saved
 checkpoints. The object-map source prototype has passed bounded source review;
 it has no native or performance acceptance.
@@ -45,7 +54,11 @@ host tests passing. Its independent [review](counter-retention-review-20261101.m
 records exact bytes, meaningful controls and limits.
 
 The shared stats preparation froze early at 02:31:45, with no native launch.
-Independent helper review runs 02:31–02:46, checkpoint 02:39. A preview origin
+Independent [helper review](shared-stats-helper-review-20261101-v1.md) accepted
+the exact frozen capsule before activation. Root's
+[source/scope review](shared-baseline-source-review-20261101.md) and actual
+02:37:10 preflight verified its source, driver, helper and lock bindings.
+A preview origin
 finding was withdrawn after replaying the actual pinned-helper admission;
 an additional host regression accepts that observer and rejects an unbound path.
 
@@ -58,6 +71,10 @@ New source-only assignments map a reusable value/effect-aware interpreter region
 increment (02:33–02:48, checkpoint 02:40). They reuse the existing research and
 must specify executable steps rather than another survey. No runtime patch,
 compiler, target or extra census is authorized by these assignments.
+The [interpreter execution proposal](interpreter-region-execution-20261101.md)
+froze early and is under independent review, 02:42–02:57 (checkpoint 02:49).
+The integrated-storage design's independent review runs 02:40–02:55
+(checkpoint 02:47). Both reviews remain source/light only during the build.
 
 The first census has six registered workloads/eighteen warmup-low-high processes;
 it supplies existing entry/pair/box counters, not per-state death eligibility or

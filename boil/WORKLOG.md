@@ -398,3 +398,12 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   The plan owns compiler facts, backend controls, native conversions and GC
   eligibility separately; shared baseline helpers remain unactivated.
   [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01: Corrected the execution emphasis on the user's clarification:
+  interpreter architecture and integrated allocator/collector work are primary;
+  regex extraction is a frozen, paused proposal. Assigned short executable maps
+  for reusable value/effect-aware region lowering and stable-span ownership,
+  reusing the existing research. Shared stats helpers froze early and entered
+  independent review; no native launch or runtime speedup is claimed. Corrected
+  stale issue-board ownership and distinguished the deferred nursery deadline
+  from the separately scoped baseline window.
+  [Current state](issues/fundamental-runtime-design/status.md).

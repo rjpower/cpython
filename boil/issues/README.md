@@ -8,16 +8,21 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline | [Revised work plan](../design/runtime-work-breakdown.md) | qualification_review_resumed; coordinator | Prepare one unchanged-runtime computed debug/stats image and eighteen counter processes; native held |
-| Compiler / IR | [Operand facts](fundamental-runtime-design/status.md) | coroutine_design_review | Design static locality propagation for ADD cleanup with complete readers and source control |
-| Values / native | [Native interfaces](value-native-interfaces/status.md) | restart_audit | Design regex code-list extraction and its identity/error/root control; current site attribution still needed |
+| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Map a reusable value/effect-aware region lowering increment; operand-locality proposal remains held |
+| Shared baseline review | [Revised work plan](../design/runtime-work-breakdown.md) | restart_audit | Independently check the exact build/census helpers; no native activation yet |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC, queued | [Actual death eligibility](fundamental-runtime-design/fable-gc-audit-20261101.md) | qualification_review_resumed | Observe completed-coroutine eligibility before a death/storage shortcut or remembered-set change |
+| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Map one stable-span cohort across publication, lookup, inventory and reclamation; identify the minimum eligibility census |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; native baseline
 preparation remains held for exact review and activation. Old cadence, VM0 and
 structural-GC helper drafts are preserved and unactivated. Their expired grants
 are not resumed by the new assignments.
+
+The user clarified that holistic interpreter and GC improvements take priority.
+Regex extraction is a frozen, paused native-interface proposal, not the next
+implementation. The six baseline consumers remain a small shared observation
+set; their inclusion does not select six separate optimization projects.
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
@@ -43,7 +48,6 @@ future allocator, copying, lifecycle and barrier design at once.
 
 ## Unassigned follow-ups
 
-- [Value/native interfaces](value-native-interfaces/status.md).
 - [Verification orchestration](verification-orchestration/status.md).
 - [Root/checker audit](root-checker-audit/status.md).
 
@@ -83,6 +87,7 @@ contracts. Roughly 2× interpreter speed is guidance, not a numerical gate.
 - [Minimal nursery and shared shape admission](nursery-shape-landing/status.md):
   exact source, combined qualification, actual merge bridge, release/debug smokes
   and independent closure accepted at d98291018c9. The temporary nursery control
-  will be removed by the adoption track; no new speedup is claimed.
+  remains retirement debt while adoption is deferred; the next collector
+  adoption must select one policy and remove the control. No new speedup is claimed.
 - [GC cleanup and scanning](gc-cleanup-scanning/status.md): qualified, integrated
   and measured. This is the comparison baseline for the new experiments.

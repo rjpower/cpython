@@ -1,10 +1,10 @@
 # Fundamental runtime design review
 
-- State: revised work plan reviewed; reporting integrated; baseline preparation and IR/native designs active
+- State: shared baseline under review; interpreter and integrated allocator/collector increments prioritized
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (native),
   qualification_review_resumed (shared baseline and GC)
-- Source: maintained head `4615e52c9bb`; isolated candidates retain their own identities
+- Source: maintained head `5ef8c34d9bf`; isolated candidates retain their own identities
 - Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
 
 ## Question
@@ -27,8 +27,10 @@ the structural-GC failed-prefix witness preparation are suspended at their saved
 checkpoints. The object-map source prototype has passed bounded source review;
 it has no native or performance acceptance.
 
-The 04:18:11 UTC integration boundary is unchanged. Research does not grant a
-new build, timing campaign, source correction or extension to an expired task.
+The old nursery-adoption dispatch's 04:18:11 UTC integration boundary is
+unchanged; that dispatch is deferred. The separately scoped shared baseline
+has its own activation-relative 45-minute inclusive window. Research does not
+grant a new build, timing campaign, source correction or extension to an expired task.
 Any resumed task receives an explicit remaining scope and clock.
 
 ## Next decision
@@ -42,11 +44,25 @@ Counter-retention reporting is integrated at `129131574a8`, with sixteen related
 host tests passing. Its independent [review](counter-retention-review-20261101.md)
 records exact bytes, meaningful controls and limits.
 
-Current grants are the held shared stats preparation (02:12–02:37), static
-operand-locality design (02:27–02:47) and regex extraction design (02:27–02:47).
+The shared stats preparation froze early at 02:31:45, with no native launch.
+Independent helper review runs 02:31–02:46, checkpoint 02:39. A preview origin
+finding was withdrawn after replaying the actual pinned-helper admission;
+an additional host regression accepts that observer and rejects an unbound path.
+
+The user clarified that holistic interpreter and GC improvements take priority.
+The [operand-locality design](operand-locality-design-20261101.md) and
+[regex extraction design](../value-native-interfaces/regex-code-extraction-design-20261101.md)
+are frozen proposals, not implementation grants. Regex implementation is paused.
+New source-only assignments map a reusable value/effect-aware interpreter region
+(02:34–02:49, checkpoint 02:41) and one integrated stable-span allocator/collector
+increment (02:33–02:48, checkpoint 02:40). They reuse the existing research and
+must specify executable steps rather than another survey. No runtime patch,
+compiler, target or extra census is authorized by these assignments.
+
 The first census has six registered workloads/eighteen warmup-low-high processes;
 it supplies existing entry/pair/box counters, not per-state death eligibility or
-release timings. The old architecture scope and frozen proposals below remain
+release timings. This is shared evidence, not a commitment to optimize regex.
+The old architecture scope and frozen proposals below remain
 historical evidence, not an implementation queue that must be completed.
 
 ## Prior design sequence

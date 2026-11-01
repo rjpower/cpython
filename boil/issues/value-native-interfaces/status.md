@@ -1,6 +1,6 @@
 # Value and native interfaces
 
-- State: regex extraction hypothesis design active; implementation held
+- State: regex extraction design frozen; implementation paused for interpreter/GC priority
 - Updated: 2026-11-01
 - Owner: restart_audit; coordinator selects and integrates
 - Dependencies: source-bound attribution and a settled callback/root contract
@@ -15,11 +15,15 @@ dominance from stdlib benchmark names. Historical regex conversions are high;
 json_loads/unpickle recorded zero inline boxes in that older census. Counts do
 not supply current time, fresh allocations or per-site attribution.
 
-A host-only exact-path/source-control design runs 02:27–02:47 UTC, checkpoint
-02:37. The shared computed-stats preparation supplies the proposed current
-regex/json/unpickle observations. No conversion, callback ABI or float cache is
-implemented or selected. The integrated reporting journal preserves actual
-native-PC rows for this decision.
+The [exact-path/source-control design](regex-code-extraction-design-20261101.md)
+froze early, SHA256
+`2a4a64285b646c26db84fbbb2742077fa25c6fd1879b391ef807da7c2e185a0b`.
+It proposes a nonnegative inline-int code-word read with the old fallback and
+error order. At the user's clarification, implementation and site follow-up
+are paused: holistic interpreter and integrated allocator/collector work take
+priority. The small shared baseline still includes regex/json/unpickle as
+observations, without selecting a native-interface implementation. No conversion,
+callback ABI or float cache is implemented or accepted.
 
 Remaining boundaries include numeric/container/comparison/hash slots, wrapper
 argument conversion, Clinic residue and inline numeric receivers. Receiver,

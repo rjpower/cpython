@@ -3,10 +3,11 @@
 Each issue's `status.md` owns its state. Experiments have a hypothesis, concrete
 budget and integrate/reject decision; see the [template](_template/status.md).
 
-**Hard GC cutoff: 2026-11-01 15:14:44 UTC.** Reach geometric-mean elapsed parity
-across all 29 registered workloads against matched upstream, or stop tracing GC
-and switch to the prepared reference-counting successor. See the
-[twelve-hour decision and gate ordering](gc-parity-deadline/status.md).
+**GC work closed early at 07:09 UTC on 2026-11-01.** All measured candidates
+were rejected; select the reference-counting successor and qualify it before
+integration. No full29 GC or RC parity claim. See the
+[decision](gc-parity-deadline/decision-20261101.md) and
+[active RC integration issue](rc-integration/status.md).
 
 ## Running in parallel
 
@@ -14,8 +15,9 @@ and switch to the prepared reference-counting successor. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC fallback preparation | [Next compatibility design](fundamental-runtime-design/rc-next-qualification-design-review-20261101-root.md) | restart_audit; coordinator | Host helpers through06:40/checkpoint06:28; new C-API/embedding tranche on existing images; no native yet |
-| GC / inventory | [Debug build audit failure](gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md) | qualification_review_resumed; coroutine_design_review | Source correction through06:30/checkpoint06:22; no checker exemption, native/tests held |
+| RC qualification | [Selected runtime](rc-integration/status.md) | restart_audit; coordinator | Last targeted/refleak helpers by07:40, independent review by07:43; then broad qualification |
+| First native JIT design | Source-grounded candidate, pending publication | qualification_review_resumed | Finite design by07:45; no implementation or working-tier claim |
+| GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |
 
@@ -24,7 +26,7 @@ the GC-heavy ranking. Counter-retention tooling is integrated; the baseline
 completed and passed independent outcome review. Old cadence, VM0 and
 structural-GC helper drafts are preserved and unactivated. Their expired grants
 are not resumed by the new assignments.
-The maintained-baseline page-map port is a separate scoped source attempt.
+The maintained-baseline page-map port was separately tested and rejected.
 
 The user clarified that holistic interpreter and GC improvements take priority.
 Regex extraction is a frozen, paused native-interface proposal, not the next
@@ -34,9 +36,9 @@ set; their inclusion does not select six separate optimization projects.
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.
 Qualify each coherent increment once. Temporary source comparisons remain
-experiments, not permanent runtime choices. The earlier recommendation to retain
-the particular nursery design is under review; keeping or rejecting it must
-still produce one maintained policy.
+experiments, not permanent runtime choices. The collector decision is RC with
+cyclic collection; qualification precedes integration, and no permanent runtime
+collector option is added.
 
 ## Prior GC sequence, held for design review
 

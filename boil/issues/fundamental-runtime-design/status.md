@@ -1,13 +1,19 @@
 # Fundamental runtime design review
 
-- State: IR/spans/Clang rejected; GCC selected; page-map build failed audit, source correction; hard GC cutoff set
+- State: GC rejected early; RC selected, qualification and first JIT design active
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
 - Source: baseline clean `417a9443a59`; storage prototype base `5ece3dc211a`; maintained runtime unchanged
 - Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
 
-**User's hard GC cutoff: 2026-11-01 15:14:44 UTC.** The
+**GC work closed early at 07:09 UTC.** The
+[collector decision](../gc-parity-deadline/decision-20261101.md) selects RC
+pending [qualification](../rc-integration/status.md). No tracing-GC grants
+remain. The primary checkout still has the tracing runtime; no collector switch
+or performance parity is claimed. The earlier contract below is historical.
+
+The user's original hard GC cutoff was **2026-11-01 15:14:44 UTC**. The
 [twelve-hour decision](../gc-parity-deadline/status.md) and
 [machine-readable budget](../gc-parity-deadline/budget.json) govern all new GC
 work: valid all-29 geometric-mean elapsed parity against matched upstream, or
@@ -29,9 +35,18 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **06:18 UTC**, no native job is active. GC parity remains unproven;
-the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
-unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
+As of **07:18 UTC**, no native job is active. The final page-map pilot has
+independent [elapsed rejection](../gc-nursery-old-work/reviews/maintained-object-map-elapsed-outcome-20261101-v2.md):
+coroutines +8.02%/+5.48%, four-row means +4.41%/+4.20% versus parent. RC source
+d7df is selected, with39 initial methods per image, exact canonical generation
+and another50 debug/48 release invocations independently accepted. The last
+targeted ownership/refleak tranche and its independent review are in preparation;
+the coordinator prepares broad qualification while the third agent designs the
+first native JIT candidate against the actual RC IR. No broad qualification,
+integration, RC speedup or working native tier is claimed.
+
+The following snapshots retain the path to that decision. Rejected sources,
+failed attempts and raw evidence remain preserved; their old grants are closed.
 
 - **IR regions — REJECT:** source40498 passed34 selected methods per image and
   demonstrated local home/dispatch removal, then slowed coroutines10.86%/14.11%
@@ -76,9 +91,18 @@ unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
   at06:13:43; it stopped06:15:20 on debug GC audit before tests/release.
   [Failure](../gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md)
   and587 products/idle cleanup verified. Minimal source correction runs
-  through06:30/checkpoint06:22, without checker exemptions; no native or
-  performance acceptance. Elapsed preparation paused; RC helper preparation
-  overlaps correction.
+  finished early as3a9, independently source/helper accepted. Debug observer
+  now lives beside the original flag-clear store; release classifier/callback
+  and type snapshot stay exact. No new precision boundary or checker exemption.
+  Fresh v2 stopped at release audit06:34:38: debug16 passed, release tests0,
+  performance0. [Rejected outcome](../gc-nursery-old-work/reviews/maintained-object-map-native-outcome-20261101-v2.md).
+  A separately reviewed one-marker callback-boundary hypothesis76fb is now in
+  fresh v3 native session82961. It completed and independent review accepts
+  debug16/release15+one skip,440/423 collections, zero fallback/unpinned.
+  The fixed pilot then completed120 values/twelve origins,21198 terminal0,
+  three-build idle cleanup. Initial coroutine+8.02%/+5.48%, GM4+4.41%/+4.20%
+  versus parent are losses; independent raw review pending. No extra samples
+  or expensive qualification. Earlier failures stay failed.
 - **RC fallback — focused behavior and canonical generation accepted:** d7df
   passed39 methods in both fresh images, zero skips.
   [Native outcome](rc-native-outcome-review-20261101-v1.md).

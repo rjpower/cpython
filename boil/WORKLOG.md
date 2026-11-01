@@ -398,6 +398,21 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   The plan owns compiler facts, backend controls, native conversions and GC
   eligibility separately; shared baseline helpers remain unactivated.
   [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01 07:20 UTC: Final targeted helpers independently accepted; root
+  rechecked all41 readiness artifacts,7,177 inputs, composed argv, existing
+  image products and global/build/dual-executable idle state. Activation
+  07:20:01–07:50:01 inclusive; native session68982 runs35 debug/35 release and
+  standard `-R4:5` on8 methods, with unchanged leak callback and both custom
+  observers bypassed. Independent actual review and broad-plan preparation
+  overlap; no retry, new cohort, full qualification or integration credit.
+  [Helper review](issues/fundamental-runtime-design/rc-final-targeted-helper-review-20261101-v1.md).
+- 2026-11-01 07:21 UTC: Session68982 terminal1 after both semantic rows passed
+  and the standard refleak harness reported SUCCESS. The custom natural-output
+  reader rejected standard progress characters concatenated with verbose IDs.
+  Preserve failed batch and actual block-delta report; no target rerun. Root
+  verified all global/shared/build locks and both target executables idle.
+  Independent review scopes an additive host-reader correction and exact
+  existing-result reuse; no full-batch passing credit yet.
 - 2026-11-01: Corrected the execution emphasis on the user's clarification:
   interpreter architecture and integrated allocator/collector work are primary;
   regex extraction is a frozen, paused proposal. Assigned short executable maps
@@ -669,3 +684,54 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   source correction through06:30, with independent review and fresh builds.
   RC new ownership/embedding helper preparation overlaps, without native calls.
   [Failure](issues/gc-nursery-old-work/maintained-object-map-native-failure-20261101-v1.md).
+- 2026-11-01 06:31 UTC: Corrected page-map source3a9 passed exact independent
+  source/helper review. Remove debug wrapper, observe actual mark-clear in the
+  original callback, preserve release classifier/type snapshot and checker
+  strength. Root explicitly authorized fresh v2, launched session85319 at
+  06:30:50 with07:15:50 inclusive ceiling; failed v1 stays closed. Held elapsed
+  and RC compatibility helper preparation overlap; hard cutoff unchanged.
+  [Source review](issues/gc-nursery-old-work/reviews/maintained-object-map-source-review-20261101-v2.md).
+- 2026-11-01 06:39 UTC: Reject object-map v2 after release GC audit failure.
+  Debug16 strict-witness passes remain partial; release tests/timing0. Verified
+  588 debug/587 release products and idle global/build locks. New bounded design
+  reviews ordinary page-callback boundary; no automatic rebuild or exemption.
+  [Outcome](issues/gc-nursery-old-work/reviews/maintained-object-map-native-outcome-20261101-v2.md).
+- 2026-11-01 06:46 UTC: RC compatibility v3 launch failed before selected tests:
+  malformed arguments used a tracked script as lock and ran Python on uv ELF.
+  Root preserved failure and restored only that file's exact d7df bytes/mode;
+  source clean, all executable/build/global locks idle. Correct actual command
+  roles and test the composed gate before another independently reviewed batch.
+  [Failure](issues/fundamental-runtime-design/rc-compatibility-launch-failure-20261101-v3.md).
+- 2026-11-01 06:47 UTC: Separately reviewed one-marker callback-boundary76fb
+  source/helpers accepted. Root checked full launch argument roles, budget,
+  GCC selection and idle locks, then launched fresh v3 session82961 at06:46:35,
+  ceiling07:31:35 inclusive. Any further precision edge stops this hypothesis.
+  Held elapsed and RC launcher corrections proceed without target calls.
+  [Design](issues/gc-nursery-old-work/reviews/maintained-object-map-callback-boundary-design-20261101-v3.md).
+- 2026-11-01 07:00 UTC: Independent actual RC v4 compatibility acceptance:
+  debug50/release48, zero skips, all37 distinct target programs/expected aborts
+  and embedding returns bound;584 products/image and dual-executable idle
+  cleanup verify. Earlier malformed v3 remains failed, restored source exact.
+  [Outcome](issues/fundamental-runtime-design/rc-compatibility-native-outcome-review-20261101-v4.md).
+- 2026-11-01 07:02 UTC: Page-map v3 independently passed focused native review:
+  debug16/release15+one declared skip,440/423 collections, fallback/unpinned0.
+  Root reviewed exact pilot bindings, acquired actual quiet acknowledgments and
+  launched07:00:44; session21198 terminal0,120 values/twelve origins complete,
+  all three builds idle. Hold released07:02:20. Raw elapsed review underway;
+  initial losses do not authorize more samples or expensive qualification.
+  [Focused outcome](issues/gc-nursery-old-work/reviews/maintained-object-map-native-outcome-20261101-v3.md).
+- 2026-11-01 07:09 UTC: Independent fixed-pilot review rejects the final
+  object-map source: coroutines +8.02%/+5.48%, four-row means +4.41%/+4.20%
+  versus parent, with all120 values/twelve origins and cleanup validated.
+  Coordinator closes tracing-GC work early after about3h55m and selects RC
+  d7df pending qualification. No full29 or RC parity claim, deadline extension
+  or runtime collector switch. Preserve every source/failure/product; unused
+  budget grants no further GC attempt. Parallel final targeted/refleak helpers,
+  independent review, broad qualification plan and first native JIT design.
+  [Decision](issues/gc-parity-deadline/decision-20261101.md).
+- 2026-11-01 07:18 UTC: Updated board, process and selected-RC integration issue.
+  Loom revisions9/10 replace accumulated snapshots with the measured decisions,
+  actual RC code-organization and staged qualification/JIT Mermaid diagrams.
+  Exact readback verified; revision10 corrects revision9's future status label.
+  No rendered-layout check or runtime integration claimed.
+  [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).

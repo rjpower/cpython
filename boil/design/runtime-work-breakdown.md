@@ -10,6 +10,14 @@ before new native execution. The earlier integrated architecture remains a
 target under investigation, not a performance result.
 
 Current execution is owned by the [issue state](../issues/fundamental-runtime-design/status.md).
+At **07:09 UTC**, the coordinator [closed GC work early and selected RC](../issues/gc-parity-deadline/decision-20261101.md).
+The page-map pilot was independently rejected on elapsed. All measured
+IR/storage/backend candidates are now closed; GCC computed remains selected.
+[RC qualification](../issues/rc-integration/status.md) and a source-grounded
+first native JIT design are the active parallel tracks. The main checkout
+changes only after the RC landing gates pass. No tracing-GC grants remain.
+
+The following account records the plan and its earlier execution snapshots.
 The original plan below is retained as the reviewed starting point. The later
 comparison-region implementation was [rejected on measured elapsed](../issues/fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md),
 despite verified local work removal. Integrated storage was also

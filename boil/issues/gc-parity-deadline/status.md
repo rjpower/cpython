@@ -1,10 +1,23 @@
 # Twelve-hour tracing-GC decision
 
-- State: active hard budget; parity unproven
+- State: closed early; tracing GC rejected, RC selected pending qualification
 - Owner: coordinator
 - Start: **2026-11-01 03:14:44 UTC**
 - Cutoff: **2026-11-01 15:14:44 UTC**; no silent extension
 - Machine-readable authority: [budget.json](budget.json), 43,200 seconds, plus the narrow [pre-score compiler-profile addendum](compiler-profile-addendum-20261101.json)
+
+**Decision at 07:09:42 UTC:** stop tracing-GC optimization after 3h55m and
+select RC source `d7df12b1d817`. The final page-map candidate lost both fixed
+rounds; no measured candidate survived. This is an engineering stop, not proof
+that tracing GC cannot win. Neither full29 GC parity nor RC performance parity
+has been established. [Decision](decision-20261101.md),
+[machine-readable closure](decision-20261101.json),
+[active RC qualification](../rc-integration/status.md).
+
+Original budget and protocol bytes remain historical evidence. The closure
+supersedes their active execution state: no further tracing-GC source, build or
+measurement grants without new explicit user direction. The original cutoff
+was not extended. The contract and progress snapshots below are historical.
 
 The user requires tracing GC to reach upstream parity averaged across the test
 suite within twelve hours. Otherwise stop tracing-GC optimization and restore
@@ -148,5 +161,30 @@ a working fallback candidate, not a selected collector or fully qualified core.
 Canonical Autoconf reproduction then matched every source byte; ownership/modes
 were restored and independently verified, as were1,268 old product/evidence files.
 That obligation is closed without a new source commit or native rerun.
-No native job is active. No candidate has earned parity or integration.
-Page-map correction and held RC compatibility helper preparation overlap.
+Corrected page-map v2 stopped06:34:38 on the release GC audit. Debug16 passed,
+but no release tests/timing ran; the implementation attempt is rejected.
+A separate independently reviewed one-marker callback-boundary hypothesis76fb
+is running fresh v3 session82961,06:46:35–07:31:35 inclusive. Any further
+precision edge stops it. No checker exemption, timebox extension or parity
+credit. Held elapsed preparation overlaps compilation.
+
+RC compatibility v3 failed its malformed launcher before selected tests and
+accidentally truncated a tracked gate script. Root restored only that file to
+exact committed d7df bytes/mode and verified global/build/dual-executable idle
+cleanup. Current host-only correction adds actual argument-role validation and
+fixture execution before another activation. Original39-case/canonical passes
+remain separate; no new compatibility credit.
+
+At07:02, the final page-map native source76fb has focused debug/release
+acceptance and a completed fixed120-value pilot,21198 terminal0/three builds
+idle. Initial parent-relative coroutine+8.02%/+5.48%, GM4+4.41%/+4.20%
+fail its gates; independent raw review is underway. There is no surviving
+promising measured GC candidate or all29 parity claim. Early RC selection is
+being assessed on evidence rather than consuming the unused ceiling on a new
+speculative rewrite. Original cutoff/budget bytes remain unchanged.
+
+RC corrected v4 completed and passed independent actual review:50 debug/48
+release methods, zero skips, all37 actual target programs including twelve
+embedded executables and two required aborts. Both584-product sets and dual
+executable idle cleanup verify; no broad qualification or performance claim.
+[Accepted outcome](../fundamental-runtime-design/rc-compatibility-native-outcome-review-20261101-v4.md).

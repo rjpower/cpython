@@ -98,3 +98,33 @@ Exact readback matches14,442 characters and two Mermaid blocks. Local snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v7.md`
 SHA256 `30b4238493fce45071ce27f3c6a7ae3d6c7284e912092e48055fbf14c9658e20`.
 No rendered-layout verification or runtime adoption is claimed.
+
+## Preserved native failure, revision 8
+
+At06:25:17 UTC, guarded revision8 records the debug-build audit failure and
+idle cleanup, the bounded debug-observer correction design, and parallel RC
+compatibility preparation. It preserves the failed build and rejects the
+proposed type-snapshot reload; fresh exact source/native review remains required.
+
+Exact readback matches15,570 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v8.md`
+SHA256 `f7c4ac7abcc425929bdf9ebc0e6c3aacbda3bc64f1d12dc3f13f34f8d2be4c9a`.
+No rendered-layout verification or runtime adoption is claimed.
+
+## RC selection and remaining gates, revisions 9–10
+
+At07:18:04 UTC, guarded revision9 replaced the accumulated execution snapshots
+with the early RC decision, all fixed experiment dispositions, actual selected
+RC code organization, qualification stages and the first JIT design boundary.
+At07:18:19 UTC, revision10 corrected its future07:23 status label to07:18.
+The original snapshots remain available as immutable earlier revisions.
+
+Revision10 exact readback matches7,930 characters and two Mermaid blocks.
+Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v10.md`
+SHA256 `2a15ea6a90d457726151a719cd0f108e7690c4cab88c77fed2289a150fb9f401`.
+Revision9 snapshot SHA256
+`9ea73c8ca90531859451dd300fb088f527675f075f4630463175a25e43a3fc86`.
+No rendered-layout verification, broad qualification, integration, RC parity
+or working native tier is claimed. The [RC issue](../rc-integration/status.md)
+owns current execution.

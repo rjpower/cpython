@@ -5,6 +5,14 @@ NaN-boxed values, shapes and tracing garbage collection without reference counts
 The upstream base is `321925c92c9`. Interpreter improvements precede JIT work;
 roughly 2× on simple arithmetic is guidance, not a numerical gate.
 
+**Current decision (2026-11-01):** stop tracing-GC optimization and adopt the
+[reference-counting successor](issues/rc-integration/status.md), subject to
+remaining qualification. The main checkout still contains the tracing runtime;
+the selected RC source is isolated until those gates pass. Register IR,
+eight-byte NaN-boxed frame values and boxed-slot shapes are retained. Later
+core-wide inline heap values and their ABI are deferred. No collector switch
+will be added. [Decision and evidence](issues/gc-parity-deadline/decision-20261101.md).
+
 | Need | Start here |
 | --- | --- |
 | Current work, owners and next actions | [Issue board](issues/README.md) |

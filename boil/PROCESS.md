@@ -21,6 +21,16 @@ its hypothesis, budget, dependencies, decision and next action.
   activation must not add a file after its inventory check.
 - **Decide:** integrate the useful increment or reject it. Follow-ups receive
   their own scope and budget; they do not extend an experiment silently.
+  Check the latest machine-readable decision as well as the original budget.
+  The GC budget is closed early; unused time does not authorize another attempt.
+- **Validate launch composition:** before any lock is opened, check the actual
+  shell/gate/lock/interpreter/command roles in the complete argument vector.
+  Replay a host fixture through the composed wrapper. Recheck before launch;
+  valid individual helpers do not prove their composition.
+- **Match gates to the runtime:** carry exact unchanged evidence, and state
+  which checks apply. RC qualification cannot require removed tracing-root
+  getters or claim their absent counters are zero. Refleak observation must
+  leave the measured callback unchanged and retain no per-iteration records.
 - **Report:** update issue status at meaningful transitions and agreed
   checkpoints. Keep [WORKLOG](WORKLOG.md) to brief outcomes with links;
   follow the [documentation rules](DOCUMENTATION.md).

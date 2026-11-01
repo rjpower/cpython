@@ -10,9 +10,9 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Public PyValue and ownership API, actual frame/call publication, scoped scalar bridge owners and generator changes. Seven generators/eight products regenerate; 39 host generator tests and six selected provisional C checks pass. Wider providers/native/Clinic consumers remain open. Fixed-arity call emission, guard restart cleanup and tail-call coverage remain under review. |
-| coordinator | Tuple/member/cell storage, shared value operations and value iteration. The original 12-file component and new 19-file cell/iteration checkpoint are independently accepted as partial source. Set storage and its test adapter pass provisional syntax checks; seven focused tests are parsed, not executed. The six-file source component is under independent review. |
-| coroutine_design_review | List/structseq 13-file component accepted as partial source, including sort/mutation/traversal and ownership tests. Dictionary storage/tests have a frozen seven-file partial checkpoint. The opaque extension design passed independent review; now implementing the fixed native-scope engine and one actual O-call gateway with the foundation owner. |
+| restart_audit | Foundation frozen early and independently source-accepted: 39 host tests, seven generators/eight products and six selected syntax checks pass. A separate specialized O-call successor has 40 host tests and four syntax checks passing; its corrected actual emitted handler is under independent review. Wider providers/native/Clinic consumers remain open. |
+| coordinator | Tuple/member/cell storage, shared value operations and value iteration independently accepted as partial source. Set checkpoint v5 is independently accepted: six files/eight parsed tests and two passing provisional syntax units. Its source window closed early. Python instance-slot migration is design-only. |
+| coroutine_design_review | List/structseq component, fixed native-scope engine and bounded dictionary clear/release increment independently source-accepted. Whole dictionary remains incomplete. Adding a real End-cleanup failure fixture, then designing the next internal dictionary-provider cut. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
 Component evidence is retained under `build/pyvalue-root-container-checkpoint-20261101-v1`,
@@ -92,9 +92,12 @@ See [extension API direction](extension-api-direction-20261101.md) and the
 Complete dict/set/instance storage, the core semantic and native-call surfaces,
 parser/Clinic and bundled consumers, and `boilvalrc1` import/cache/wheel identity.
 Then build and qualify one coherent runtime. Provisional checks use the old debug
-pyconfig only for diagnostics; they are not candidate builds. The foundation's
-source ceiling is 23:49:40 UTC; set's first edit was 22:33:01 UTC, giving a
-00:03:01 UTC ceiling. Neither budget has been extended.
+pyconfig only for diagnostics; they are not candidate builds. The foundation
+froze early; its budget is closed. The separate
+[O-call successor](o-caller-source-grant-20261101-v1.md) runs from 23:29 to
+23:59 UTC. Set's first edit was 22:33:01 UTC, giving a 00:03:01 UTC ceiling.
+The dictionary cut retains its original 00:00:46 ceiling; the native-scope
+fixture delta retains 00:10:49. No original source budget has been extended.
 
 Measure the unified-value register interpreter with verified JIT-off execution
 and existing basic optimizations before returning to JIT performance work. The
@@ -106,3 +109,28 @@ The [opaque extension design](../../design/extension-api.md) and its
 [first source slice](native-scope-source-grant-20261101-v1.md) are reviewed
 direction and authorized implementation respectively. Actual generated
 publication/reload and finalizer ordering remain source review obligations.
+
+## Source checkpoints at 23:44 UTC
+
+Foundation receipt `7cb1d9e6` pins 82 owned paths, seven provider handoffs and
+six shared context paths. Independent freeze review `2a49f58d` accepts only
+that dependent component. Its boxed common-constant table is a required followup.
+Native-scope receipt `59fd5663` accepts the engine and gateway, without claiming
+actual VM composition. Corrected O checkpoint v2 (`5940dafe`) checks errors
+before reconstructing possibly invalid execution state; independent review is
+pending. Earlier v1 is retained as the counterexample.
+
+Dictionary clear/release receipt `bfa98144` accepts seven function fragments and
+three AST-only language-finalizer tests. It does not accept the unfinished
+dictionary or the superseded API-removal script. Set checkpoint v5 patch
+`7c439a22` includes NULL1 initialization, value keys and first-error-preserving
+release/status propagation. Its eight tests are unexecuted.
+Independent set review `4d2d38df` accepts that dependent component; the
+[source disposition](set-source-disposition-20261101-v1.json) closes its window.
+
+Required remaining cuts include dictionary providers/mutations and raw consumers,
+Python instance slots and allocation, canonical constants, shared VM displaced-
+local retirement/error/reload, other native families, parser/Clinic, bundled
+consumers and private ABI identity. A passing source component does not close
+these dependencies. Full HPy conformance does not gate the internal interpreter
+checkpoint.

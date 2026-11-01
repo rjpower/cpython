@@ -44,16 +44,18 @@ fallible boxing cannot be hidden behind a borrowed-pointer API without one.
 ## Current work
 
 The [restoration design](design.md) passed independent review. The
-[foundation implementation](foundation-implementation-20261101-v1.md) is now
-authorized on source `95be1d28` in the isolated universal-value worktree.
+[foundation implementation](foundation-implementation-20261101-v1.md) froze early
+and passed independent component source review on `95be1d28` in the isolated
+universal-value worktree. Dependent storage and native cuts continue.
 
-- restart_audit implements the value/ownership foundation and actual frame/call
-  publication paths, then the dependent container and native-interface cuts.
+- restart_audit has frozen the value/ownership foundation and now closes the
+  separately bounded specialized O-call publication/reload successor.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
 - coroutine_design_review implements list/structseq storage and iteration;
-  that partial source component is independently accepted. The agent now designs
-  the opaque extension API and gradual rebuilt-source bridge. The coordinator
+  that partial source component is independently accepted. Its native-scope
+  engine and bounded dictionary clear/release component are source-accepted;
+  actual native cleanup fixtures and dictionary closure continue. The coordinator
   implements tuple/cell/member/iteration and set storage; partial tuple/member
   and cell/iteration components are independently accepted as source only.
 - The coordinator maintains the log and monitoring loop, prepares qualification

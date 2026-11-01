@@ -1851,3 +1851,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Set storage/test syntaxPASS, seven tests parsed, callback/GC review fixes
   retained; no runtime tests or speed claims. Loom52 read back exactly,
   39,933characters/five diagrams. [Design](design/extension-api.md).
+- 2026-11-01 23:46 UTC: Freeze independently accepted foundation and native-scope
+  components; accept bounded dictionary clear/release and final set-v5 source.
+  Set source window closed early; eight tests AST-only, two syntax units pass.
+  Separate O-call successor corrects rejected-state read before reconstruction;
+  40 host tests/four syntax units pass, emitted/fixture review still pending.
+  Design instance-slot and shared last-owner retirement cuts; no runtime claim.
+  Publish/read back Loom53 exactly,42,457characters/five diagrams.
+  [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).

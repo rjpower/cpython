@@ -51,4 +51,13 @@ Stage 1 names the actual route: `_CALL_NON_PY_GENERAL` and specialized `_CALL_BU
 
 The first checks exercise canonical scalar/object results, displaced owners, callbacks during boxing, OOM, abort, pending exceptions and exact-once cleanup through both cold and warmed real dispatch. Later slices add field cycles, globals/subinterpreters, buffer leases and ABI rejection. Completing HPy ecosystem coverage is not a prerequisite for completing and measuring the internal universal-value interpreter checkpoint.
 
+Implementation status, 2026-11-01 23:44 UTC: the fixed scope engine and gateway
+passed independent component source review. A separate
+[specialized O-call successor](../issues/pyvalue-rc-restoration/o-caller-source-grant-20261101-v1.md)
+now supplies actual generated publication and post-cleanup reload; its corrected
+checkpoint has 40 host tests and four selected syntax checks passing, with
+independent emitted-code review pending. Generic dispatch/NOARGS adoption,
+other calling conventions, the HPy backend and rebuilt-extension conformance
+remain required later work. No candidate native execution is claimed.
+
 The detailed source cut, wrapper-family classification, official-source limitations, and retained dictionary rejection/supersession evidence are in [the design proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md). The existing 660-path consumer census remains the migration inventory; this design does not replace it or authorize broad API removals.

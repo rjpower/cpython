@@ -356,12 +356,17 @@ class TestJointOps:
         # Bug #3680: tp_traverse was not implemented for set iterator object
         class C(object):
             pass
-        obj = C()
-        ref = weakref.ref(obj)
-        container = set([obj, 1])
-        obj.x = iter(container)
-        del obj, container
-        gc.collect()
+        # Under Py_GC a stale word on the C stack can keep one attempt's
+        # cycle alive; each attempt makes a new one.
+        for _ in range(5 if support.Py_GC else 1):
+            obj = C()
+            ref = weakref.ref(obj)
+            container = set([obj, 1])
+            obj.x = iter(container)
+            del obj, container
+            gc.collect()
+            if ref() is None:
+                break
         self.assertTrue(ref() is None, "Cycle was not collected")
 
     def test_free_after_iterating(self):

@@ -9,10 +9,10 @@ extern "C" {
 #endif
 
 
-/* A new slice of the values start, stop and step, any of which may be
-   PyValue_NULL for None, or NULL with an exception set. */
+/* runtime lifecycle */
+
 PyAPI_FUNC(PyObject *)
-_PySlice_FromValues(PyValue start, PyValue stop, PyValue step);
+_PyBuildSlice_ConsumeRefs(PyObject *start, PyObject *stop, PyObject *step);
 
 #ifdef __cplusplus
 }

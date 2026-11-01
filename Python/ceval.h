@@ -8,7 +8,6 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
 #include "pycore_code.h"
-#include "pycore_descrobject.h"   // _PyPropertyObject
 #include "pycore_dict.h"
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
@@ -33,7 +32,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_range.h"         // _PyRangeIterObject
 #include "pycore_setobject.h"     // _PySet_Update()
-#include "pycore_sliceobject.h"   // _PySlice_FromValues()
+#include "pycore_sliceobject.h"   // _PyBuildSlice_ConsumeRefs
 #include "pycore_sysmodule.h"     // _PySys_GetOptionalAttrString()
 #include "pycore_template.h"      // _PyTemplate_Build()
 #include "pycore_traceback.h"     // _PyTraceBack_FromFrame
@@ -44,7 +43,7 @@
 #include "opcode.h"
 #include "pydtrace.h"
 #include "setobject.h"
-#include "pycore_value.h"
+#include "pycore_stackref.h"
 
 #include <stdbool.h>              // bool
 
@@ -52,7 +51,7 @@
 #  error "ceval.c must be build with Py_BUILD_CORE define for best performance"
 #endif
 
-#if !defined(Py_DEBUG)
+#if !defined(Py_DEBUG) && !defined(Py_TRACE_REFS)
 // GH-89279: The MSVC compiler does not inline these static inline functions
 // in PGO build in _PyEval_EvalFrameDefault(), because this function is over
 // the limit of PGO, and that limit cannot be configured.
@@ -60,37 +59,120 @@
 // preprocessor.
 
 #undef Py_IS_TYPE
-#define Py_IS_TYPE(ob, tp) (_PyObject_SHAPE(ob)->type == (tp))
+#define Py_IS_TYPE(ob, type) \
+    (_PyObject_CAST(ob)->ob_type == (type))
 
+#undef Py_XDECREF
+#define Py_XDECREF(arg) \
+    do { \
+        PyObject *xop = _PyObject_CAST(arg); \
+        if (xop != NULL) { \
+            Py_DECREF(xop); \
+        } \
+    } while (0)
+
+#if defined(Py_GC)
+
+// Py_DECREF and _Py_DECREF_SPECIALIZED are already no-ops.
+
+#elif !defined(Py_GIL_DISABLED)
+
+#undef Py_DECREF
+#define Py_DECREF(arg) \
+    do { \
+        PyObject *op = _PyObject_CAST(arg); \
+        if (_Py_IsImmortal(op)) { \
+            _Py_DECREF_IMMORTAL_STAT_INC(); \
+            break; \
+        } \
+        _Py_DECREF_STAT_INC(); \
+        if (--op->ob_refcnt == 0) { \
+            _PyReftracerTrack(op, PyRefTracer_DESTROY); \
+            destructor dealloc = Py_TYPE(op)->tp_dealloc; \
+            (*dealloc)(op); \
+        } \
+    } while (0)
+
+#undef _Py_DECREF_SPECIALIZED
+#define _Py_DECREF_SPECIALIZED(arg, dealloc) \
+    do { \
+        PyObject *op = _PyObject_CAST(arg); \
+        if (_Py_IsImmortal(op)) { \
+            _Py_DECREF_IMMORTAL_STAT_INC(); \
+            break; \
+        } \
+        _Py_DECREF_STAT_INC(); \
+        if (--op->ob_refcnt == 0) { \
+            _PyReftracerTrack(op, PyRefTracer_DESTROY); \
+            destructor d = (destructor)(dealloc); \
+            d(op); \
+        } \
+    } while (0)
+
+#else // Py_GIL_DISABLED
+
+#undef Py_DECREF
+#define Py_DECREF(arg) \
+    do { \
+        PyObject *op = _PyObject_CAST(arg); \
+        uint32_t local = _Py_atomic_load_uint32_relaxed(&op->ob_ref_local); \
+        if (local == _Py_IMMORTAL_REFCNT_LOCAL) { \
+            _Py_DECREF_IMMORTAL_STAT_INC(); \
+            break; \
+        } \
+        _Py_DECREF_STAT_INC(); \
+        if (_Py_IsOwnedByCurrentThread(op)) { \
+            local--; \
+            _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, local); \
+            if (local == 0) { \
+                _Py_MergeZeroLocalRefcount(op); \
+            } \
+        } \
+        else { \
+            _Py_DecRefShared(op); \
+        } \
+    } while (0)
+
+#undef _Py_DECREF_SPECIALIZED
+#define _Py_DECREF_SPECIALIZED(arg, dealloc) Py_DECREF(arg)
+
+#endif
 #endif
 
 static void
 check_invalid_reentrancy(void)
 {
+#if defined(Py_DEBUG) && defined(Py_GIL_DISABLED)
+    // In the free-threaded build, the interpreter must not be re-entered if
+    // the world-is-stopped.  If so, that's a bug somewhere (quite likely in
+    // the painfully complex typeobject code).
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    assert(!interp->stoptheworld.world_stopped);
+#endif
 }
 
 
 #ifdef Py_DEBUG
 static void
-dump_item(PyValue item)
+dump_item(_PyStackRef item)
 {
-    if (PyValue_IsNull(item)) {
+    if (PyStackRef_IsNull(item)) {
         printf("<NULL>");
         return;
     }
-    if (_PyValue_IsMalformed(item)) {
+    if (PyStackRef_IsMalformed(item)) {
         printf("<INVALID>");
         return;
     }
-    if (_PyValue_IsTaggedIndex(item)) {
-        printf("%" PRId64, (int64_t)_PyValue_UntagIndex(item));
+    if (PyStackRef_IsTaggedIndex(item)) {
+        printf("%" PRId64, (int64_t)PyStackRef_UntagIndex(item));
         return;
     }
-    if (PyValue_IsInline(item)) {
-        printf("<inline %s>", PyValue_Type(item)->tp_name);
+    if (PyStackRef_IsInline(item)) {
+        printf("<inline %s>", PyStackRef_TYPE(item)->tp_name);
         return;
     }
-    PyObject *obj = PyValue_ObjectBorrow(item);
+    PyObject *obj = PyStackRef_AsPyObjectBorrow(item);
     if (obj == NULL) {
         printf("<nil>");
         return;
@@ -103,7 +185,7 @@ dump_item(PyValue item)
 static void
 dump_stack(_PyInterpreterFrame *frame)
 {
-    PyValue *slots = _PyFrame_Slots(frame);
+    _PyStackRef *slots = _PyFrame_Slots(frame);
     int nlocalsplus = _PyFrame_GetCode(frame)->co_nlocalsplus;
     int nslots = _PyFrame_NumSlots(frame);
     PyObject *exc = PyErr_GetRaisedException();
@@ -134,7 +216,9 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 {
     _PyIRWord word = *next_instr;
     uint32_t a = IR_A(word), b = IR_B(word), c = IR_C(word), d = IR_D(word);
-    const char *name = _PyOpcode_OpName[opcode];
+    const char *name = opcode < IR_FIRST_ONLY_HANDLER
+        ? _PyOpcode_OpName[opcode]
+        : _PyIR_OnlyNames[opcode - IR_FIRST_ONLY_HANDLER];
     assert(name != NULL);
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         printf("0: %s\n    ir %s %u %u %u %u\n", name, name, a, b, c, d);
@@ -142,7 +226,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
         return;
     }
     dump_stack(frame);
-    _PyFrame_CheckValues(frame);
+    _PyStackRef_CheckFrame(frame);
     /* First the word index and the instruction that the handler stands
      * for, with its oparg; then the handler and its fields, on a line
      * without a colon. */
@@ -162,8 +246,8 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)
 {
-    PyObject *fobj = PyValue_ObjectBorrow(frame->f_funcobj);
-    if (!(PyValue_Type(frame->f_executable) == &PyCode_Type) ||
+    PyObject *fobj = PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
+    if (!PyStackRef_CodeCheck(frame->f_executable) ||
         fobj == NULL ||
         !PyFunction_Check(fobj)
     ) {
@@ -197,7 +281,7 @@ lltrace_resume_frame(_PyInterpreterFrame *frame)
     PyErr_SetRaisedException(exc);
 }
 
-Py_GC_PRECISE static int
+static int
 maybe_lltrace_resume_frame(_PyInterpreterFrame *frame, PyObject *globals)
 {
     if (globals == NULL) {
@@ -252,12 +336,10 @@ static int get_exception_handler(PyCodeObject *, int, int*, int*, int*);
 
 typedef struct {
     _PyInterpreterFrame frame;
-    PyValue stack[1];
+    _PyStackRef stack[1];
 } _PyEntryFrame;
 
-/* The span holds the exception while the tools run, so that this checks
-   clean where a precise helper (_PyEval_MonitorRaise) inlines it. */
-Py_GC_PRECISE static int
+static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)
 {
@@ -267,10 +349,6 @@ do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     PyObject *exc = PyErr_GetRaisedException();
     assert(exc != NULL);
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, exc);
     int err = _Py_call_instrumentation_arg(tstate, event, frame, instr, exc);
     if (err == 0) {
         PyErr_SetRaisedException(exc);
@@ -279,7 +357,6 @@ do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
         assert(PyErr_Occurred());
         Py_DECREF(exc);
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return err;
 }
 
@@ -302,21 +379,18 @@ no_tools_for_local_event(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     }
 }
 
-Py_GC_PRECISE static Py_NO_INLINE int
+static int
 monitor_handled(PyThreadState *tstate,
                 _PyInterpreterFrame *frame,
                 _PyInstr *instr, PyObject *exc)
 {
-    if (_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS) {
-        return 0;
-    }
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_EXCEPTION_HANDLED)) {
         return 0;
     }
     return _Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_EXCEPTION_HANDLED, frame, instr, exc);
 }
 
-Py_GC_PRECISE static Py_NO_INLINE void
+static void
 monitor_throw(PyThreadState *tstate,
               _PyInterpreterFrame *frame,
               _PyInstr *instr)
@@ -327,7 +401,7 @@ monitor_throw(PyThreadState *tstate,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_PY_THROW);
 }
 
-Py_GC_PRECISE static Py_NO_INLINE void
+static void
 monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *instr)
 {
@@ -337,7 +411,7 @@ monitor_reraise(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do_monitor_exc(tstate, frame, instr, PY_MONITORING_EVENT_RERAISE);
 }
 
-Py_GC_PRECISE static Py_NO_INLINE int
+static int
 monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *instr, PyObject *value)
 {
@@ -354,7 +428,7 @@ monitor_stop_iteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
-Py_GC_PRECISE static Py_NO_INLINE void
+static void
 monitor_unwind(PyThreadState *tstate,
                _PyInterpreterFrame *frame,
                _PyInstr *instr)
@@ -435,20 +509,11 @@ get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler
 
 
 /* Logic for the raise statement (too complicated for inlining).
-   This *consumes* a reference count to each of its arguments.
-   Precise: the span holds exc and cause, which the messages and the cause's
-   test read after the calls that make instances (the parameter rule), and
-   the instance or the class, and the cause made (the result rule). */
-Py_GC_PRECISE static Py_NO_INLINE int
+   This *consumes* a reference count to each of its arguments. */
+static int
 do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
 {
     PyObject *type = NULL, *value = NULL;
-    int res = 0;
-    PyValue slots[4];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, exc);
-    _PyValueSpan_AppendObject(&span, cause);
 
     if (exc == NULL) {
         /* Reraise */
@@ -457,13 +522,12 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
         if (Py_IsNone(exc) || exc == NULL) {
             _PyErr_SetString(tstate, PyExc_RuntimeError,
                              "No active exception to reraise");
-            goto done;
+            return 0;
         }
         Py_INCREF(exc);
         assert(PyExceptionInstance_Check(exc));
         _PyErr_SetRaisedException(tstate, exc);
-        res = 1;
-        goto done;
+        return 1;
     }
 
     /* We support the following forms of raise:
@@ -476,7 +540,6 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
         value = _PyObject_CallNoArgs(exc);
         if (value == NULL)
             goto raise_error;
-        _PyValueSpan_AppendObject(&span, value);
         if (!PyExceptionInstance_Check(value)) {
             _PyErr_Format(tstate, PyExc_TypeError,
                           "calling %R should have returned an instance of "
@@ -488,7 +551,6 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
     else if (PyExceptionInstance_Check(exc)) {
         value = exc;
         type = PyExceptionInstance_Class(exc);
-        _PyValueSpan_AppendObject(&span, type);
         Py_INCREF(type);
     }
     else {
@@ -509,7 +571,6 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
             fixed_cause = _PyObject_CallNoArgs(cause);
             if (fixed_cause == NULL)
                 goto raise_error;
-            _PyValueSpan_AppendObject(&span, fixed_cause);
             if (!PyExceptionInstance_Check(fixed_cause)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "calling %R should have returned an instance of "
@@ -540,15 +601,13 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause)
     /* _PyErr_SetObject incref's its arguments */
     Py_DECREF(value);
     Py_DECREF(type);
-    goto done;
+    return 0;
 
 raise_error:
     Py_XDECREF(value);
     Py_XDECREF(type);
     Py_XDECREF(cause);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return 0;
 }
 
 /* Disable unused label warnings.  They are handy for debugging, even

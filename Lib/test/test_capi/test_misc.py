@@ -61,6 +61,10 @@ def decode_stderr(err):
     return err.decode('utf-8', 'replace').replace('\r', '')
 
 
+def requires_subinterpreters(meth):
+    """Decorator to skip a test if subinterpreters are not supported."""
+    return unittest.skipIf(_interpreters is None,
+                           'subinterpreters required')(meth)
 
 
 def testfunction(self):
@@ -397,6 +401,10 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(ValueError, buildvalue, '[C ]i', -1, 2)
         self.assertRaises(ValueError, buildvalue, '{Ci }i', -1, 2, 3)
 
+    @support.requires_refcounting
+    def test_buildvalue_N(self):
+        _testcapi.test_buildvalue_N()
+
     def test_sequence_repeat_subtypes(self):
         # List subtype:
         class CustomList(list): ...
@@ -569,6 +577,65 @@ class CAPITest(unittest.TestCase):
     def test_null_type_doc(self):
         self.assertEqual(_testcapi.NullTpDocType.__doc__, None)
 
+    @support.requires_refcounting
+    def test_subclass_of_heap_gc_ctype_with_tpdealloc_decrefs_once(self):
+        class HeapGcCTypeSubclass(_testcapi.HeapGcCType):
+            def __init__(self):
+                self.value2 = 20
+                super().__init__()
+
+        subclass_instance = HeapGcCTypeSubclass()
+        type_refcnt = sys.getrefcount(HeapGcCTypeSubclass)
+
+        # Test that subclass instance was fully created
+        self.assertEqual(subclass_instance.value, 10)
+        self.assertEqual(subclass_instance.value2, 20)
+
+        # Test that the type reference count is only decremented once
+        del subclass_instance
+        self.assertEqual(type_refcnt - 1, sys.getrefcount(HeapGcCTypeSubclass))
+
+    @support.requires_refcounting
+    def test_subclass_of_heap_gc_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
+        class A(_testcapi.HeapGcCType):
+            def __init__(self):
+                self.value2 = 20
+                super().__init__()
+
+        class B(A):
+            def __init__(self):
+                super().__init__()
+
+            def __del__(self):
+                self.__class__ = A
+                A.refcnt_in_del = sys.getrefcount(A)
+                B.refcnt_in_del = sys.getrefcount(B)
+
+        subclass_instance = B()
+        type_refcnt = sys.getrefcount(B)
+        new_type_refcnt = sys.getrefcount(A)
+
+        # Test that subclass instance was fully created
+        self.assertEqual(subclass_instance.value, 10)
+        self.assertEqual(subclass_instance.value2, 20)
+
+        del subclass_instance
+
+        # Test that setting __class__ modified the reference counts of the types
+        if support.Py_DEBUG:
+            # gh-89373: In debug mode, _Py_Dealloc() keeps a strong reference
+            # to the type while calling tp_dealloc()
+            self.assertEqual(type_refcnt, B.refcnt_in_del)
+        else:
+            self.assertEqual(type_refcnt - 1, B.refcnt_in_del)
+        self.assertEqual(new_type_refcnt + 1, A.refcnt_in_del)
+
+        # Test that the original type already has decreased its refcnt
+        self.assertEqual(type_refcnt - 1, sys.getrefcount(B))
+
+        # Test that subtype_dealloc decref the newly assigned __class__ only once
+        self.assertEqual(new_type_refcnt, sys.getrefcount(A))
+
     def test_heaptype_with_dict(self):
         for cls in (
             _testcapi.HeapCTypeWithDict,
@@ -618,52 +685,6 @@ class CAPITest(unittest.TestCase):
         inst = _testcapi.HeapCTypeWithNegativeDict()
         self.assertEqual({}, inst.__dict__)
 
-    def test_heaptype_dict_survives_collection(self):
-        # These types have no tp_traverse, so only the collector's own
-        # visit of the dict word keeps the instance dict alive.
-        class Payload:
-            pass
-        for cls in (
-            _testcapi.HeapCTypeWithDict,
-            _testcapi.HeapCTypeWithDict2,
-            _testcapi.HeapCTypeWithNegativeDict,
-        ):
-            with self.subTest(cls=cls):
-                inst = cls()
-                payload = Payload()
-                ref = weakref.ref(payload)
-                inst.foo = payload
-                del payload
-                support.gc_collect()
-                junk = [{"x": i} for i in range(1000)]
-                self.assertIs(inst.foo, ref())
-                self.assertIsNotNone(ref())
-                self.assertEqual(list(inst.__dict__), ["foo"])
-                del junk
-
-    def test_heaptype_managed_dict_survives_collection(self):
-        # The type's traverse does not call PyObject_VisitManagedDict, so
-        # only the collector's own visit keeps the attributes alive, in the
-        # shape slots and in dictionary mode.
-        class Payload:
-            pass
-        cls = _testcapi.HeapCTypeWithManagedDictNoVisit
-        for dict_mode in (False, True):
-            with self.subTest(dict_mode=dict_mode):
-                inst = cls()
-                if dict_mode:
-                    inst.__dict__
-                payload = Payload()
-                ref = weakref.ref(payload)
-                inst.foo = payload
-                del payload
-                support.gc_collect()
-                junk = [{"x": i} for i in range(1000)]
-                self.assertIs(inst.foo, ref())
-                self.assertIsNotNone(ref())
-                self.assertEqual(inst.__dict__, {"foo": ref()})
-                del junk
-
     def test_heaptype_with_weakref(self):
         for cls in (
             _testcapi.HeapCTypeWithWeakref,
@@ -673,10 +694,7 @@ class CAPITest(unittest.TestCase):
                 inst = cls()
                 ref = weakref.ref(inst)
                 self.assertEqual(ref(), inst)
-                # The type's weaklist field names no storage: the weak
-                # references are in the interpreter's weak reference table.
-                self.assertIsNone(inst.weakreflist)
-                self.assertEqual(weakref.getweakrefs(inst), [ref])
+                self.assertEqual(inst.weakreflist, ref)
 
     def test_heaptype_with_managed_weakref(self):
         inst = _testcapi.HeapCTypeWithManagedWeakref()
@@ -715,6 +733,74 @@ class CAPITest(unittest.TestCase):
         b = bytes(inst)
         self.assertEqual(b, b"1234")
 
+    @support.requires_refcounting
+    def test_c_subclass_of_heap_ctype_with_tpdealloc_decrefs_once(self):
+        subclass_instance = _testcapi.HeapCTypeSubclass()
+        type_refcnt = sys.getrefcount(_testcapi.HeapCTypeSubclass)
+
+        # Test that subclass instance was fully created
+        self.assertEqual(subclass_instance.value, 10)
+        self.assertEqual(subclass_instance.value2, 20)
+
+        # Test that the type reference count is only decremented once
+        del subclass_instance
+        self.assertEqual(type_refcnt - 1, sys.getrefcount(_testcapi.HeapCTypeSubclass))
+
+    @support.requires_refcounting
+    def test_c_subclass_of_heap_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
+        subclass_instance = HeapCTypeSubclassWithFinalizer()
+        type_refcnt = sys.getrefcount(HeapCTypeSubclassWithFinalizer)
+        new_type_refcnt = sys.getrefcount(HeapCTypeSubclass)
+
+        # Test that subclass instance was fully created
+        self.assertEqual(subclass_instance.value, 10)
+        self.assertEqual(subclass_instance.value2, 20)
+
+        # The tp_finalize slot will set __class__ to HeapCTypeSubclass
+        del subclass_instance
+
+        # Test that setting __class__ modified the reference counts of the types
+        #
+        # This is highly sensitive to implementation details and may break in the future.
+        #
+        # We expect the refcount on the old type, HeapCTypeSubclassWithFinalizer, to
+        # remain the same: the finalizer gets a strong reference (+1) when it gets the
+        # type from the module and setting __class__ decrements the refcount (-1).
+        #
+        # We expect the refcount on the new type, HeapCTypeSubclass, to increase by 2:
+        # the finalizer get a strong reference (+1) when it gets the type from the
+        # module and setting __class__ increments the refcount (+1).
+        expected_type_refcnt = type_refcnt
+        expected_new_type_refcnt = new_type_refcnt + 2
+
+        if not Py_GIL_DISABLED:
+            # In default builds the result returned from sys.getrefcount
+            # includes a temporary reference that is created by the interpreter
+            # when it pushes its argument on the operand stack. This temporary
+            # reference is not included in the result returned by Py_REFCNT, which
+            # is used in the finalizer.
+            #
+            # In free-threaded builds the result returned from sys.getrefcount
+            # does not include the temporary reference. Types use deferred
+            # refcounting and the interpreter will not create a new reference
+            # for deferred values on the operand stack.
+            expected_type_refcnt -= 1
+            expected_new_type_refcnt -= 1
+
+        if support.Py_DEBUG:
+            # gh-89373: In debug mode, _Py_Dealloc() keeps a strong reference
+            # to the type while calling tp_dealloc()
+            expected_type_refcnt += 1
+
+        self.assertEqual(expected_type_refcnt, HeapCTypeSubclassWithFinalizer.refcnt_in_del)
+        self.assertEqual(expected_new_type_refcnt, HeapCTypeSubclass.refcnt_in_del)
+
+        # Test that the original type already has decreased its refcnt
+        self.assertEqual(type_refcnt - 1, sys.getrefcount(HeapCTypeSubclassWithFinalizer))
+
+        # Test that subtype_dealloc decref the newly assigned __class__ only once
+        self.assertEqual(new_type_refcnt, sys.getrefcount(HeapCTypeSubclass))
+
     def test_heaptype_with_setattro(self):
         obj = _testcapi.HeapCTypeSetattr()
         self.assertEqual(obj.pvalue, 10)
@@ -722,25 +808,6 @@ class CAPITest(unittest.TestCase):
         self.assertEqual(obj.pvalue, 12)
         del obj.value
         self.assertEqual(obj.pvalue, 0)
-
-    def test_heaptype_with_setattro_conversions(self):
-        # The setter takes int() of the value, then a C long.
-        class Index:
-            def __int__(self):
-                return 14
-        obj = _testcapi.HeapCTypeSetattr()
-        for value, expected in ((100001, 100001), (2.7, 2), ("13", 13),
-                                (Index(), 14), (True, 1)):
-            with self.subTest(value=value):
-                obj.value = value
-                self.assertEqual(obj.pvalue, expected)
-        for value, exc in (("x", ValueError), (2**70, OverflowError),
-                           (None, TypeError)):
-            with self.subTest(value=value):
-                obj.value = 7
-                with self.assertRaises(exc):
-                    obj.value = value
-                self.assertEqual(obj.pvalue, 7)
 
     def test_heaptype_with_custom_metaclass(self):
         metaclass = _testcapi.HeapCTypeMetaclass
@@ -1491,8 +1558,7 @@ class TestPendingCalls(unittest.TestCase):
                 self.assertNotEqual(task.requester_tid, task.runner_tid)
                 self.assertNotIn(task.requester_tid, runner_tids)
 
-    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
-    @support.requires_subinterpreters
+    @requires_subinterpreters
     @support.skip_if_sanitizer("gh-129824: race on assign_version_tag", thread=True)
     def test_isolated_subinterpreter(self):
         # We exercise the most important permutations.
@@ -1750,7 +1816,6 @@ class TestPendingCalls(unittest.TestCase):
         self.assertEqual(stderr, b"")
 
 
-@support.requires_subinterpreters
 class SubinterpreterTest(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
@@ -1823,8 +1888,7 @@ class SubinterpreterTest(unittest.TestCase):
         # test fails, assume that the environment in this process may
         # be altered and suspect.
 
-    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
-    @support.requires_subinterpreters
+    @requires_subinterpreters
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
     def test_configured_settings(self):
         """
@@ -1857,8 +1921,8 @@ class SubinterpreterTest(unittest.TestCase):
         kwlist[-1] = 'own_gil'
 
         expected_to_work = {
-            (True, True, True, True, True, False, False):
-                (ALL_FLAGS & ~EXTENSIONS, False),
+            (True, True, True, True, True, True, True):
+                (ALL_FLAGS, True),
             (True, False, False, False, False, False, False):
                 (OBMALLOC, False),
             (False, False, False, True, False, True, False):
@@ -1867,8 +1931,6 @@ class SubinterpreterTest(unittest.TestCase):
 
         expected_to_fail = {
             (False, False, False, False, False, False, False),
-            # One GIL per heap domain: boil/PROCESS.md section 0.2.
-            (True, True, True, True, True, True, True),
         }
 
         # gh-117649: The free-threaded build does not currently allow
@@ -2060,10 +2122,9 @@ class SubinterpreterTest(unittest.TestCase):
         subinterp_attr_id = os.read(r, 100)
         self.assertEqual(main_attr_id, subinterp_attr_id)
 
-    @unittest.skipIf(_interpreters is None, 'subinterpreters required')
     @threading_helper.requires_working_threading()
     @unittest.skipUnless(hasattr(os, "pipe"), "requires os.pipe()")
-    @support.requires_subinterpreters
+    @requires_subinterpreters
     def test_pending_call_creates_thread_subinterpreter(self):
         interpreters = import_helper.import_module("concurrent.interpreters")
         r, w = os.pipe()
@@ -2099,7 +2160,7 @@ class SubinterpreterTest(unittest.TestCase):
         os.close(r)
 
 
-@unittest.skipIf(_interpreters is None, 'requires _interpreters')
+@requires_subinterpreters
 class InterpreterConfigTests(unittest.TestCase):
 
     supported = {
@@ -2249,7 +2310,6 @@ class InterpreterConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     _interpreters.new_config(gil=value)
 
-    @support.requires_subinterpreters
     def test_interp_init(self):
         questionable = [
             # strange
@@ -2271,16 +2331,15 @@ class InterpreterConfigTests(unittest.TestCase):
                 allow_threads=False,
                 allow_daemon_threads=True,
             ),
+            dict(
+                gil='own',
+                use_main_obmalloc=True,
+            ),
         ]
         invalid = [
             dict(
                 use_main_obmalloc=False,
                 check_multi_interp_extensions=False
-            ),
-            # One GIL per heap domain: boil/PROCESS.md section 0.2.
-            dict(
-                gil='own',
-                use_main_obmalloc=True,
             ),
         ]
         if Py_GIL_DISABLED:
@@ -2311,7 +2370,6 @@ class InterpreterConfigTests(unittest.TestCase):
                 with self.subTest(f'valid: {config}'):
                     check(config)
 
-    @support.requires_subinterpreters
     def test_get_config(self):
         @contextlib.contextmanager
         def new_interp(config):
@@ -2357,7 +2415,7 @@ class InterpreterConfigTests(unittest.TestCase):
             self.assert_ns_equal(config, orig)
 
 
-@unittest.skipIf(_interpreters is None, 'requires _interpreters')
+@requires_subinterpreters
 class InterpreterIDTests(unittest.TestCase):
 
     def add_interp_cleanup(self, interpid):
@@ -2386,7 +2444,6 @@ class InterpreterIDTests(unittest.TestCase):
         interpid = convert(MyInt())
         self.assertEqual(interpid, 10)
 
-    @support.requires_subinterpreters
     def test_conversion_from_interpreter(self):
         convert = _testinternalcapi.normalize_interp_id
         interpid = self.new_interpreter()
@@ -2416,7 +2473,6 @@ class InterpreterIDTests(unittest.TestCase):
             with self.assertRaises(OverflowError):
                 convert(badid)
 
-    @support.requires_subinterpreters
     def test_lookup_exists(self):
         interpid = self.new_interpreter()
         self.assertTrue(
@@ -2427,7 +2483,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             _testinternalcapi.interpreter_exists(interpid))
 
-    @support.requires_subinterpreters
     def test_lookup_destroyed(self):
         interpid = _interpreters.create()
         _interpreters.destroy(interpid)
@@ -2441,7 +2496,6 @@ class InterpreterIDTests(unittest.TestCase):
             _interpreters.decref,
         )
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_does_not_exist(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2484,7 +2538,6 @@ class InterpreterIDTests(unittest.TestCase):
             with self.assertRaises(_interpreters.InterpreterNotFoundError):
                 decref(interpid)
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_initial(self):
         is_linked = _testinternalcapi.interpreter_refcount_linked
         get_refcount, _, _ = self.get_refcount_helpers()
@@ -2497,7 +2550,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(linked)
         self.assertEqual(refcount, 0)
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_never_linked(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2521,7 +2573,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertEqual(
             0, get_refcount(interpid))
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_link_unlink(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2544,7 +2595,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             is_linked(interpid))
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_link_incref_decref(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2570,7 +2620,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertFalse(
             exists(interpid))
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_incref_link(self):
         is_linked = _testinternalcapi.interpreter_refcount_linked
         link = _testinternalcapi.link_interpreter_refcount
@@ -2589,7 +2638,6 @@ class InterpreterIDTests(unittest.TestCase):
         self.assertEqual(
             1, get_refcount(interpid))
 
-    @support.requires_subinterpreters
     def test_linked_lifecycle_link_incref_unlink_decref(self):
         exists = _testinternalcapi.interpreter_exists
         is_linked = _testinternalcapi.interpreter_refcount_linked
@@ -2657,83 +2705,6 @@ class TestStaticTypes(unittest.TestCase):
             self.assertIs(type(cls), type(object));
 
 
-class MainInterpreterOnlyTests(unittest.TestCase):
-
-    def test_c_creation_rejected_without_side_effects(self):
-        # Configured, legacy, bare-state and internal allocator entrypoints.
-        for api in range(4):
-            for detached in (False, True):
-                with self.subTest(api=api, detached=detached):
-                    _testinternalcapi.check_interpreter_creation_rejected(
-                        api, detached)
-
-    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
-    def test_python_creation_rejected(self):
-        from concurrent import interpreters
-
-        self.assertIs(sys.implementation.supports_isolated_interpreters, False)
-        main = interpreters.get_main()
-        self.assertEqual(interpreters.get_current(), main)
-        before = _interpreters.list_all()
-        for create in (_interpreters.create, interpreters.create):
-            with self.subTest(create=create):
-                with self.assertRaises(interpreters.InterpreterError) as cm:
-                    create()
-                messages = []
-                exc = cm.exception
-                while exc is not None:
-                    messages.append(str(exc))
-                    exc = exc.__context__
-                self.assertIn('subinterpreters are not supported',
-                              '\n'.join(messages))
-                self.assertEqual(_interpreters.list_all(), before)
-                self.assertEqual(interpreters.get_current(), main)
-
-    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
-    def test_existing_c_creation_seams_rejected(self):
-        for whence in (_interpreters.WHENCE_UNKNOWN,
-                       _interpreters.WHENCE_LEGACY_CAPI,
-                       _interpreters.WHENCE_CAPI,
-                       _interpreters.WHENCE_XI):
-            with self.subTest(whence=whence):
-                with self.assertRaisesRegex(_interpreters.InterpreterError,
-                                            'creation failed'):
-                    _testinternalcapi.create_interpreter(whence=whence)
-
-    @threading_helper.reap_threads
-    @threading_helper.requires_working_threading()
-    def test_main_interpreter_threads(self):
-        main_thread = threading.get_ident()
-        seen = []
-
-        def callback():
-            # This helper calls back through PyGILState_Ensure on native
-            # threads as well as on this Python-created thread.
-            seen.append(threading.get_ident())
-
-        def target():
-            _testcapi._test_thread_state(callback)
-
-        thread = threading.Thread(target=target)
-        thread.start()
-        threading_helper.join_thread(thread)
-        self.assertEqual(len(seen), 5)
-        self.assertNotIn(main_thread, seen)
-
-    @unittest.skipIf(_interpreters is None, 'requires _interpreters')
-    @threading_helper.reap_threads
-    @threading_helper.requires_working_threading()
-    def test_interpreter_pool_rejected(self):
-        from concurrent.futures import InterpreterPoolExecutor
-        from concurrent.futures.interpreter import BrokenInterpreterPool
-
-        with self.assertLogs('concurrent.futures', level='CRITICAL'):
-            with InterpreterPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(abs, -1)
-                with self.assertRaises(BrokenInterpreterPool):
-                    future.result(timeout=support.SHORT_TIMEOUT)
-
-
 class TestThreadState(unittest.TestCase):
 
     @threading_helper.reap_threads
@@ -2789,29 +2760,25 @@ class TestThreadState(unittest.TestCase):
         ret = assert_python_ok('-X', 'tracemalloc', '-c', code)
         self.assertIn(b'callback called', ret.out)
 
-    @support.requires_subinterpreters
     def test_gilstate_matches_current(self):
         _testcapi.test_current_tstate_matches()
 
 
-# C tests that observe an object's death as its last reference goes; they
-# test API (capsule destructors, weak references, PyRefTracer events) that
-# the tracing collector serves, and need a collection before the check.
-# Not collected until they are rewritten.
-C_TESTS_OBSERVING_PROMPT_DEATH = {
+# C tests that check reference counts or uniqueness, or that an object dies
+# as its last reference goes, which Py_GC does not provide.  Py_GC also
+# does not untrack frozensets of atoms.
+REFCOUNTING_C_TESTS = {
+    'test_buildvalue_N',
+    'test_bytes_resize_tracer',
     'test_capsule',
+    'test_frozenset_add_in_capi_tracking_immutable',
+    'test_py_set_immortal',
+    'test_py_try_inc_ref',
+    'test_refcount_funcs',
+    'test_refcount_macros',
     'test_reftracer',
+    'test_thread_state_release_with_destructor',
     'test_weakref_capi',
-}
-
-C_TESTS_REQUIRING_SUBINTERPRETERS = {
-    '_testcapi.test_current_tstate_matches',
-    '_testcapi.test_atexit',
-    '_testcapi.test_interpreter_guards',
-    '_testcapi.test_thread_state_ensure_crossinterp',
-    '_testcapi.test_interp_view_after_shutdown',
-    '_testcapi.test_thread_state_ensure_view',
-    '_testinternalcapi.test_interp_guard_countdown',
 }
 
 
@@ -2822,11 +2789,9 @@ def get_test_funcs(mod, exclude_prefix=None):
             continue
         if exclude_prefix is not None and name.startswith(exclude_prefix):
             continue
-        if name in C_TESTS_OBSERVING_PROMPT_DEATH:
-            continue
         func = getattr(mod, name)
-        if f'{mod.__name__}.{name}' in C_TESTS_REQUIRING_SUBINTERPRETERS:
-            func = support.requires_subinterpreters(func)
+        if name in REFCOUNTING_C_TESTS:
+            func = support.requires_refcounting(func)
         funcs[name] = func
     return funcs
 
@@ -2984,16 +2949,13 @@ class Test_Pep523API(unittest.TestCase):
         actual_calls = []
         start = SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
         count = start + SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
-        # A collection would run finalizers, whose frames the recorder
-        # would see too.
-        with support.disable_gc():
-            try:
-                for i in range(count):
-                    if i == start:
-                        _testinternalcapi.set_eval_frame_record(actual_calls)
-                    func()
-            finally:
-                _testinternalcapi.set_eval_frame_default()
+        try:
+            for i in range(count):
+                if i == start:
+                    _testinternalcapi.set_eval_frame_record(actual_calls)
+                func()
+        finally:
+            _testinternalcapi.set_eval_frame_default()
         expected_calls = names * SUFFICIENT_TO_DEOPT_AND_SPECIALIZE
         self.assertEqual(len(expected_calls), len(actual_calls))
         for expected, actual in zip(expected_calls, actual_calls, strict=True):
@@ -3105,15 +3067,12 @@ class Test_Pep523AllowSpecialization(unittest.TestCase):
             func()
 
         actual_calls = []
-        # A collection would run finalizers, whose frames the recorder
-        # would see too.
-        with support.disable_gc():
-            try:
-                _testinternalcapi.set_eval_frame_record(actual_calls)
-                for _ in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE):
-                    func()
-            finally:
-                _testinternalcapi.set_eval_frame_default()
+        try:
+            _testinternalcapi.set_eval_frame_record(actual_calls)
+            for _ in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE):
+                func()
+        finally:
+            _testinternalcapi.set_eval_frame_default()
 
         # Without allow_specialization, every call including inner() goes
         # through the eval frame
@@ -3233,6 +3192,24 @@ class TestVersions(unittest.TestCase):
             with self.subTest(hexversion=hex(expected)):
                 result = Py_PACK_VERSION(*args)
                 self.assertEqual(result, expected)
+
+
+class TestCEval(unittest.TestCase):
+   @support.requires_refcounting
+   def test_ceval_decref(self):
+        code = textwrap.dedent("""
+            import _testcapi
+            _testcapi.toggle_reftrace_printer(True)
+            l1 = []
+            l2 = []
+            del l1
+            del l2
+            _testcapi.toggle_reftrace_printer(False)
+        """)
+        _, out, _ = assert_python_ok("-c", code)
+        lines = out.decode("utf-8").splitlines()
+        self.assertEqual(lines.count("CREATE list"), 2)
+        self.assertEqual(lines.count("DESTROY list"), 2)
 
 
 @unittest.skipUnless(support.Py_DEBUG, 'need Py_DEBUG')

@@ -59,28 +59,20 @@ PyDoc_STRVAR(range_iterator___setstate____doc__,
 "Set state information for unpickling.");
 
 #define RANGE_ITERATOR___SETSTATE___METHODDEF    \
-    {"__setstate__", _PyCFunction_CAST(range_iterator___setstate__), METH_O, range_iterator___setstate____doc__},
+    {"__setstate__", (PyCFunction)range_iterator___setstate__, METH_O, range_iterator___setstate____doc__},
 
 static PyObject *
 range_iterator___setstate___impl(_PyRangeIterObject *r, PyObject *state);
 
-static PyValue
-range_iterator___setstate__(PyObject *r, PyValue arg)
+static PyObject *
+range_iterator___setstate__(PyObject *r, PyObject *state)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *state;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    state = PyValue_Object(arg);
-    if (state == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(r);
-    _return_value = range_iterator___setstate___impl((_PyRangeIterObject *)r, state);
+    return_value = range_iterator___setstate___impl((_PyRangeIterObject *)r, state);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -139,38 +131,30 @@ PyDoc_STRVAR(longrange_iterator___setstate____doc__,
 "Set state information for unpickling.");
 
 #define LONGRANGE_ITERATOR___SETSTATE___METHODDEF    \
-    {"__setstate__", _PyCFunction_CAST(longrange_iterator___setstate__), METH_O, longrange_iterator___setstate____doc__},
+    {"__setstate__", (PyCFunction)longrange_iterator___setstate__, METH_O, longrange_iterator___setstate____doc__},
 
 static PyObject *
 longrange_iterator___setstate___impl(longrangeiterobject *r, PyObject *state);
 
-static PyValue
-longrange_iterator___setstate__(PyObject *r, PyValue arg)
+static PyObject *
+longrange_iterator___setstate__(PyObject *r, PyObject *state)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *state;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    state = PyValue_Object(arg);
-    if (state == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(r);
-    _return_value = longrange_iterator___setstate___impl((longrangeiterobject *)r, state);
+    return_value = longrange_iterator___setstate___impl((longrangeiterobject *)r, state);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
-static PyValue
+static PyObject *
 longrangeiter_next_impl(longrangeiterobject *self);
 
-static PyValue
+static PyObject *
 longrangeiter_next(PyObject *self)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = longrangeiter_next_impl((longrangeiterobject *)self);
@@ -178,4 +162,4 @@ longrangeiter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=c6c54ee6566017c5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e31cc65008f9db4f input=a9049054013a1b77]*/

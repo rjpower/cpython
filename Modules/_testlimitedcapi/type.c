@@ -2,6 +2,12 @@
 // Do no check PyType_Check() so Python tests can pass arbitrary objects,
 // even if it's likely to crash.
 
+// Need limited C API version 3.14 for PyType_Freeze()
+#include "pyconfig.h"   // Py_GIL_DISABLED
+#if !defined(Py_GIL_DISABLED) && !defined(Py_LIMITED_API)
+#  define Py_LIMITED_API 0x030e0000
+#endif
+
 #include "parts.h"
 #include "util.h"
 
@@ -27,117 +33,89 @@ get_heaptype_for_name(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 
 // Test PyType_GetName()
-static PyValue
-get_type_name(PyObject *self, PyValue value)
+static PyObject*
+get_type_name(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
-    return PyValue_FromResult(PyType_GetName(type));
+    return PyType_GetName(type);
 }
 
 
 // Test PyType_GetQualName()
-static PyValue
-get_type_qualname(PyObject *self, PyValue value)
+static PyObject*
+get_type_qualname(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
-    return PyValue_FromResult(PyType_GetQualName(type));
+    return PyType_GetQualName(type);
 }
 
 
 // Test PyType_GetFullyQualifiedName()
-static PyValue
-get_type_fullyqualname(PyObject *self, PyValue value)
+static PyObject*
+get_type_fullyqualname(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
-    return PyValue_FromResult(PyType_GetFullyQualifiedName(type));
+    return PyType_GetFullyQualifiedName(type);
 }
 
 
 // Test PyType_GetModuleName()
-static PyValue
-get_type_module_name(PyObject *self, PyValue value)
+static PyObject*
+get_type_module_name(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
-    return PyValue_FromResult(PyType_GetModuleName(type));
+    return PyType_GetModuleName(type);
 }
 
 
 // Test PyType_Modified()
-static PyValue
-type_modified(PyObject *self, PyValue value)
+static PyObject*
+type_modified(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     PyType_Modified(type);
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 
 // Test PyType_Ready()
-static PyValue
-type_ready(PyObject *self, PyValue value)
+static PyObject*
+type_ready(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     assert(!PyErr_Occurred());
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     if (PyType_Ready(type) < 0) {
         assert(PyErr_Occurred());
-        return PyValue_NULL;
+        return NULL;
     }
     assert(!PyErr_Occurred());
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 
 // Test PyType_Freeze()
-static PyValue
-type_freeze(PyObject *module, PyValue value)
+static PyObject *
+type_freeze(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     if (PyType_Freeze(type) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 
@@ -154,19 +132,15 @@ type_clearcache(PyObject *module, PyObject *Py_UNUSED(arg))
 
 
 // Test PyType_GetFlags()
-static PyValue
-type_getflags(PyObject *module, PyValue value)
+static PyObject *
+type_getflags(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     PyTypeObject *type = (PyTypeObject*)arg;
 
     unsigned long flags = PyType_GetFlags(type);
     assert(!PyErr_Occurred());
-    return PyValue_FromResult(PyLong_FromUnsignedLong(flags));
+    return PyLong_FromUnsignedLong(flags);
 }
 
 
@@ -188,15 +162,15 @@ type_issubtype(PyObject *module, PyObject *args)
 
 static PyMethodDef test_methods[] = {
     {"get_heaptype_for_name", get_heaptype_for_name, METH_NOARGS},
-    {"get_type_name", _PyCFunction_CAST(get_type_name), METH_O},
-    {"get_type_qualname",  _PyCFunction_CAST(get_type_qualname), METH_O},
-    {"get_type_fullyqualname", _PyCFunction_CAST(get_type_fullyqualname), METH_O},
-    {"get_type_module_name", _PyCFunction_CAST(get_type_module_name), METH_O},
-    {"type_ready", _PyCFunction_CAST(type_ready), METH_O},
-    {"type_modified", _PyCFunction_CAST(type_modified), METH_O},
-    {"type_freeze", _PyCFunction_CAST(type_freeze), METH_O},
+    {"get_type_name", get_type_name, METH_O},
+    {"get_type_qualname",  get_type_qualname, METH_O},
+    {"get_type_fullyqualname", get_type_fullyqualname, METH_O},
+    {"get_type_module_name", get_type_module_name, METH_O},
+    {"type_ready", type_ready, METH_O},
+    {"type_modified", type_modified, METH_O},
+    {"type_freeze", type_freeze, METH_O},
     {"type_clearcache", type_clearcache, METH_NOARGS},
-    {"type_getflags", _PyCFunction_CAST(type_getflags), METH_O},
+    {"type_getflags", type_getflags, METH_O},
     {"type_issubtype", type_issubtype, METH_VARARGS},
     {NULL},
 };

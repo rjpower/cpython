@@ -180,23 +180,23 @@ lazy_import_dealloc(PyObject *op)
 }
 
 /* Specialize the error message for failed attribute lookups. */
-static PyValue
+static PyObject *
 lazy_import_getattro(PyObject *op, PyObject *name)
 {
-    PyValue value = _PyObject_GenericGetAttrWithDict(
+    PyObject *value = _PyObject_GenericGetAttrWithDict(
         op, name, NULL, /* suppress */ 1);
-    if (!PyValue_IsNull(value) || PyErr_Occurred()) {
+    if (value != NULL || PyErr_Occurred()) {
         return value;
     }
     PyObject *lz_name = lazy_import_name(PyLazyImportObject_CAST(op));
     if (lz_name == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     PyErr_Format(PyExc_AttributeError,
                  "cannot access attribute %R on unresolved lazy import %R",
                  name, lz_name);
     Py_DECREF(lz_name);
-    return PyValue_NULL;
+    return NULL;
 }
 
 // The dotted name of the object that resolving the placeholder returns.

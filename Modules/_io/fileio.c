@@ -80,6 +80,7 @@ typedef struct {
        modified outside of the fileio object / Python (ex. gh-90102, GH-121941,
        gh-109523). */
     struct _Py_stat_struct *stat_atopen;
+    PyObject *weakreflist;
     PyObject *dict;
 } fileio;
 
@@ -219,6 +220,7 @@ fileio_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->truncate = 0;
     self->stat_atopen = NULL;
     self->closefd = 1;
+    self->weakreflist = NULL;
     return (PyObject *) self;
 }
 
@@ -582,7 +584,7 @@ fileio_dealloc(PyObject *op)
         PyMem_Free(self->stat_atopen);
         self->stat_atopen = NULL;
     }
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, self->weakreflist);
     (void)fileio_clear(op);
 
     PyTypeObject *tp = Py_TYPE(op);
@@ -1364,6 +1366,7 @@ static PyGetSetDef fileio_getsetlist[] = {
 
 static PyMemberDef fileio_members[] = {
     {"_finalizing", Py_T_BOOL, offsetof(fileio, finalizing), 0},
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(fileio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(fileio, dict), Py_READONLY},
     {NULL}
 };
@@ -1386,6 +1389,6 @@ PyType_Spec _Py_fileio_spec = {
     .name = "_io.FileIO",
     .basicsize = sizeof(fileio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = fileio_slots,
 };

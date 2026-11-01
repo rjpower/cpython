@@ -314,29 +314,6 @@ Known values:
     Python 3.16a1 3714 (register passes; JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP)
     Python 3.16a1 3715 (UNARY_NOT tests the truth of any value)
     Python 3.16a1 3716 (a call may store its result in a local)
-    Python 3.16a1 3717 (a result copied from an input may take a folded store)
-    Python 3.16a1 3718 (marshal shares the references of equal int32 and float values)
-    Python 3.16a1 3719 (BINARY_OP_POWER_FLOAT)
-    Python 3.16a1 3720 (remove BINARY_OP_POWER_FLOAT)
-    Python 3.16a1 3721 (the shape in the header: shape handlers on by default,
-                        48-byte attribute feedback entries)
-    Python 3.16a1 3722 (LOAD_ATTR_PROPERTY's entry holds the property and its
-                        handler reads the getter)
-    Python 3.16a1 3723 (shape slots replace inline values: shape-guarded
-                        method, class-value, member and hint handlers, the
-                        entry's own dictoffset; the instance-value handlers
-                        are deleted)
-    Python 3.16a1 3724 (LOAD_ATTR_SHAPE_POLY: two to four shapes from the
-                        site's poly table)
-    Python 3.16a1 3725 (shape and type versions paired by consumer; a
-                        poly row of the same shape is replaced)
-    Python 3.16a1 3726 (slot kinds: the shape stores guard the value's kind,
-                        _GUARD_SLOT_KIND, kept in the attribute entry)
-    Python 3.16a1 3727 (member sites guard the class version in the shape)
-    Python 3.16a1 3728 (no-dict class loads on the shape handlers;
-                        STORE_ATTR_SHAPE_POLY, LOAD_ATTR_METHOD_LAZY_DICT)
-    Python 3.16a1 3729 (copy propagation: a pending load dies at an op that
-                        may run Python code)
 
     Python 3.17 will start with 3750
 
@@ -346,7 +323,7 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3729
+#define PYC_MAGIC_NUMBER 3716
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

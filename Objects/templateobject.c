@@ -15,7 +15,7 @@ typedef struct {
 #define templateiterobject_CAST(op) \
     (assert(_PyTemplateIter_CheckExact(op)), _Py_CAST(templateiterobject*, (op)))
 
-static PyValue
+static PyObject *
 templateiter_next(PyObject *op)
 {
     templateiterobject *self = templateiterobject_CAST(op);
@@ -24,7 +24,7 @@ templateiter_next(PyObject *op)
         item = PyIter_Next(self->stringsiter);
         self->from_strings = 0;
         if (item == NULL) {
-            return PyValue_NULL;
+            return NULL;
         }
         if (PyUnicode_GET_LENGTH(item) == 0) {
             Py_SETREF(item, PyIter_Next(self->interpolationsiter));
@@ -35,7 +35,7 @@ templateiter_next(PyObject *op)
         item = PyIter_Next(self->interpolationsiter);
         self->from_strings = 1;
     }
-    return PyValue_FromResult(item);
+    return item;
 }
 
 static void
@@ -313,7 +313,7 @@ _PyTemplate_Concat(PyObject *self, PyObject *other)
     return NULL;
 }
 
-static PyValue
+static PyObject *
 template_values_get(PyObject *op, void *Py_UNUSED(data))
 {
     templateobject *self = templateobject_CAST(op);
@@ -321,7 +321,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
     Py_ssize_t len = PyTuple_GET_SIZE(self->interpolations);
     PyObject *values = PyTuple_New(PyTuple_GET_SIZE(self->interpolations));
     if (values == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     for (Py_ssize_t i = 0; i < len; i++) {
@@ -329,7 +329,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
         PyTuple_SET_ITEM(values, i, _PyInterpolation_GetValueRef(item));
     }
 
-    return PyValue_FromResult(values);
+    return values;
 }
 
 static PyMemberDef template_members[] = {
@@ -373,7 +373,7 @@ template_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
 
 static PyMethodDef template_methods[] = {
     {"__reduce__", template_reduce, METH_NOARGS, NULL},
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue),
+    {"__class_getitem__", Py_GenericAlias,
      METH_O|METH_CLASS,
      // note that this is not supported in typeshed, and it is not clear if the
      // type for this is a simple TypeVar or a TypeVarTuple

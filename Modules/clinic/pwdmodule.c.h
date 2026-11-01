@@ -13,29 +13,21 @@ PyDoc_STRVAR(pwd_getpwuid__doc__,
 "See `help(pwd)` for more on password database entries.");
 
 #define PWD_GETPWUID_METHODDEF    \
-    {"getpwuid", _PyCFunction_CAST(pwd_getpwuid), METH_O, pwd_getpwuid__doc__},
+    {"getpwuid", (PyCFunction)pwd_getpwuid, METH_O, pwd_getpwuid__doc__},
 
 static PyObject *
 pwd_getpwuid_impl(PyObject *module, uid_t uid);
 
-static PyValue
-pwd_getpwuid(PyObject *module, PyValue arg)
+static PyObject *
+pwd_getpwuid(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     uid_t uid;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Uid_Converter(_arg, &uid)) {
-            goto exit;
-        }
+    if (!_Py_Uid_Converter(arg, &uid)) {
+        goto exit;
     }
-    _return_value = pwd_getpwuid_impl(module, uid);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pwd_getpwuid_impl(module, uid);
 
 exit:
     return return_value;
@@ -50,31 +42,23 @@ PyDoc_STRVAR(pwd_getpwnam__doc__,
 "See `help(pwd)` for more on password database entries.");
 
 #define PWD_GETPWNAM_METHODDEF    \
-    {"getpwnam", _PyCFunction_CAST(pwd_getpwnam), METH_O, pwd_getpwnam__doc__},
+    {"getpwnam", (PyCFunction)pwd_getpwnam, METH_O, pwd_getpwnam__doc__},
 
 static PyObject *
 pwd_getpwnam_impl(PyObject *module, PyObject *name);
 
-static PyValue
-pwd_getpwnam(PyObject *module, PyValue arg)
+static PyObject *
+pwd_getpwnam(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *name;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("getpwnam", "argument", "str", _arg);
-            goto exit;
-        }
-        name = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("getpwnam", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = pwd_getpwnam_impl(module, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = arg;
+    return_value = pwd_getpwnam_impl(module, name);
 
 exit:
     return return_value;
@@ -107,4 +91,4 @@ pwd_getpwall(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef PWD_GETPWALL_METHODDEF
     #define PWD_GETPWALL_METHODDEF
 #endif /* !defined(PWD_GETPWALL_METHODDEF) */
-/*[clinic end generated code: output=9660e1167414a811 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5bca0b2c2f4c5e89 input=a9049054013a1b77]*/

@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -22,27 +23,22 @@ static PyObject *
 signal_default_int_handler_impl(PyObject *module, int signalnum,
                                 PyObject *frame);
 
-static PyValue
-signal_default_int_handler(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_default_int_handler(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
     PyObject *frame;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("default_int_handler", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsIntValue(args[0]);
+    signalnum = PyLong_AsInt(args[0]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    frame = PyValue_Object(args[1]);
-    if (frame == NULL) {
-        goto exit;
-    }
-    _return_value = signal_default_int_handler_impl(module, signalnum, frame);
-    return_value = PyValue_FromResult(_return_value);
+    frame = args[1];
+    return_value = signal_default_int_handler_impl(module, signalnum, frame);
 
 exit:
     return return_value;
@@ -57,19 +53,19 @@ PyDoc_STRVAR(signal_alarm__doc__,
 "Arrange for SIGALRM to arrive after the given number of seconds.");
 
 #define SIGNAL_ALARM_METHODDEF    \
-    {"alarm", _PyCFunction_CAST(signal_alarm), METH_O, signal_alarm__doc__},
+    {"alarm", (PyCFunction)signal_alarm, METH_O, signal_alarm__doc__},
 
 static long
 signal_alarm_impl(PyObject *module, int seconds);
 
-static PyValue
-signal_alarm(PyObject *module, PyValue arg)
+static PyObject *
+signal_alarm(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int seconds;
     long _return_value;
 
-    seconds = PyLong_AsIntValue(arg);
+    seconds = PyLong_AsInt(arg);
     if (seconds == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -77,7 +73,7 @@ signal_alarm(PyObject *module, PyValue arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromLongLong((long long)_return_value);
+    return_value = PyLong_FromLong(_return_value);
 
 exit:
     return return_value;
@@ -114,24 +110,22 @@ PyDoc_STRVAR(signal_raise_signal__doc__,
 "Send a signal to the executing process.");
 
 #define SIGNAL_RAISE_SIGNAL_METHODDEF    \
-    {"raise_signal", _PyCFunction_CAST(signal_raise_signal), METH_O, signal_raise_signal__doc__},
+    {"raise_signal", (PyCFunction)signal_raise_signal, METH_O, signal_raise_signal__doc__},
 
 static PyObject *
 signal_raise_signal_impl(PyObject *module, int signalnum);
 
-static PyValue
-signal_raise_signal(PyObject *module, PyValue arg)
+static PyObject *
+signal_raise_signal(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
-    PyObject *_return_value;
 
-    signalnum = PyLong_AsIntValue(arg);
+    signalnum = PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_raise_signal_impl(module, signalnum);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_raise_signal_impl(module, signalnum);
 
 exit:
     return return_value;
@@ -157,27 +151,22 @@ PyDoc_STRVAR(signal_signal__doc__,
 static PyObject *
 signal_signal_impl(PyObject *module, int signalnum, PyObject *handler);
 
-static PyValue
-signal_signal(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_signal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
     PyObject *handler;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("signal", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsIntValue(args[0]);
+    signalnum = PyLong_AsInt(args[0]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    handler = PyValue_Object(args[1]);
-    if (handler == NULL) {
-        goto exit;
-    }
-    _return_value = signal_signal_impl(module, signalnum, handler);
-    return_value = PyValue_FromResult(_return_value);
+    handler = args[1];
+    return_value = signal_signal_impl(module, signalnum, handler);
 
 exit:
     return return_value;
@@ -196,24 +185,22 @@ PyDoc_STRVAR(signal_getsignal__doc__,
 "  anything else -- the callable Python object used as a handler");
 
 #define SIGNAL_GETSIGNAL_METHODDEF    \
-    {"getsignal", _PyCFunction_CAST(signal_getsignal), METH_O, signal_getsignal__doc__},
+    {"getsignal", (PyCFunction)signal_getsignal, METH_O, signal_getsignal__doc__},
 
 static PyObject *
 signal_getsignal_impl(PyObject *module, int signalnum);
 
-static PyValue
-signal_getsignal(PyObject *module, PyValue arg)
+static PyObject *
+signal_getsignal(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
-    PyObject *_return_value;
 
-    signalnum = PyLong_AsIntValue(arg);
+    signalnum = PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_getsignal_impl(module, signalnum);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_getsignal_impl(module, signalnum);
 
 exit:
     return return_value;
@@ -230,24 +217,22 @@ PyDoc_STRVAR(signal_strsignal__doc__,
 "description. Raises :exc:`ValueError` if *signalnum* is invalid.");
 
 #define SIGNAL_STRSIGNAL_METHODDEF    \
-    {"strsignal", _PyCFunction_CAST(signal_strsignal), METH_O, signal_strsignal__doc__},
+    {"strsignal", (PyCFunction)signal_strsignal, METH_O, signal_strsignal__doc__},
 
 static PyObject *
 signal_strsignal_impl(PyObject *module, int signalnum);
 
-static PyValue
-signal_strsignal(PyObject *module, PyValue arg)
+static PyObject *
+signal_strsignal(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
-    PyObject *_return_value;
 
-    signalnum = PyLong_AsIntValue(arg);
+    signalnum = PyLong_AsInt(arg);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_strsignal_impl(module, signalnum);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_strsignal_impl(module, signalnum);
 
 exit:
     return return_value;
@@ -270,27 +255,25 @@ PyDoc_STRVAR(signal_siginterrupt__doc__,
 static PyObject *
 signal_siginterrupt_impl(PyObject *module, int signalnum, int flag);
 
-static PyValue
-signal_siginterrupt(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_siginterrupt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int signalnum;
     int flag;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("siginterrupt", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsIntValue(args[0]);
+    signalnum = PyLong_AsInt(args[0]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    flag = PyLong_AsIntValue(args[1]);
+    flag = PyLong_AsInt(args[1]);
     if (flag == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_siginterrupt_impl(module, signalnum, flag);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_siginterrupt_impl(module, signalnum, flag);
 
 exit:
     return return_value;
@@ -316,14 +299,15 @@ static PyObject *
 signal_set_wakeup_fd_impl(PyObject *module, PyObject *fdobj,
                           int warn_on_full_buffer);
 
-static PyValue
-signal_set_wakeup_fd(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+signal_set_wakeup_fd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -346,31 +330,26 @@ signal_set_wakeup_fd(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *fdobj;
     int warn_on_full_buffer = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    fdobj = PyValue_Object(args[0]);
-    if (fdobj == NULL) {
-        goto exit;
-    }
+    fdobj = args[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    warn_on_full_buffer = PyObject_IsTrueValue(args[1]);
+    warn_on_full_buffer = PyObject_IsTrue(args[1]);
     if (warn_on_full_buffer < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = signal_set_wakeup_fd_impl(module, fdobj, warn_on_full_buffer);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_set_wakeup_fd_impl(module, fdobj, warn_on_full_buffer);
 
 exit:
     return return_value;
@@ -396,36 +375,28 @@ static PyObject *
 signal_setitimer_impl(PyObject *module, int which, PyObject *seconds,
                       PyObject *interval);
 
-static PyValue
-signal_setitimer(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_setitimer(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int which;
     PyObject *seconds;
     PyObject *interval = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setitimer", nargs, 2, 3)) {
         goto exit;
     }
-    which = PyLong_AsIntValue(args[0]);
+    which = PyLong_AsInt(args[0]);
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    seconds = PyValue_Object(args[1]);
-    if (seconds == NULL) {
-        goto exit;
-    }
+    seconds = args[1];
     if (nargs < 3) {
         goto skip_optional;
     }
-    interval = PyValue_Object(args[2]);
-    if (interval == NULL) {
-        goto exit;
-    }
+    interval = args[2];
 skip_optional:
-    _return_value = signal_setitimer_impl(module, which, seconds, interval);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_setitimer_impl(module, which, seconds, interval);
 
 exit:
     return return_value;
@@ -442,24 +413,22 @@ PyDoc_STRVAR(signal_getitimer__doc__,
 "Returns current value of given itimer.");
 
 #define SIGNAL_GETITIMER_METHODDEF    \
-    {"getitimer", _PyCFunction_CAST(signal_getitimer), METH_O, signal_getitimer__doc__},
+    {"getitimer", (PyCFunction)signal_getitimer, METH_O, signal_getitimer__doc__},
 
 static PyObject *
 signal_getitimer_impl(PyObject *module, int which);
 
-static PyValue
-signal_getitimer(PyObject *module, PyValue arg)
+static PyObject *
+signal_getitimer(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int which;
-    PyObject *_return_value;
 
-    which = PyLong_AsIntValue(arg);
+    which = PyLong_AsInt(arg);
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_getitimer_impl(module, which);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_getitimer_impl(module, which);
 
 exit:
     return return_value;
@@ -481,32 +450,24 @@ PyDoc_STRVAR(signal_pthread_sigmask__doc__,
 static PyObject *
 signal_pthread_sigmask_impl(PyObject *module, int how, sigset_t mask);
 
-static PyValue
-signal_pthread_sigmask(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_pthread_sigmask(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int how;
     sigset_t mask;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pthread_sigmask", nargs, 2, 2)) {
         goto exit;
     }
-    how = PyLong_AsIntValue(args[0]);
+    how = PyLong_AsInt(args[0]);
     if (how == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Sigset_Converter(_arg, &mask)) {
-            goto exit;
-        }
+    if (!_Py_Sigset_Converter(args[1], &mask)) {
+        goto exit;
     }
-    _return_value = signal_pthread_sigmask_impl(module, how, mask);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_pthread_sigmask_impl(module, how, mask);
 
 exit:
     return return_value;
@@ -552,29 +513,21 @@ PyDoc_STRVAR(signal_sigwait__doc__,
 "signal and returns the signal number.");
 
 #define SIGNAL_SIGWAIT_METHODDEF    \
-    {"sigwait", _PyCFunction_CAST(signal_sigwait), METH_O, signal_sigwait__doc__},
+    {"sigwait", (PyCFunction)signal_sigwait, METH_O, signal_sigwait__doc__},
 
 static PyObject *
 signal_sigwait_impl(PyObject *module, sigset_t sigset);
 
-static PyValue
-signal_sigwait(PyObject *module, PyValue arg)
+static PyObject *
+signal_sigwait(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     sigset_t sigset;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Sigset_Converter(_arg, &sigset)) {
-            goto exit;
-        }
+    if (!_Py_Sigset_Converter(arg, &sigset)) {
+        goto exit;
     }
-    _return_value = signal_sigwait_impl(module, sigset);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_sigwait_impl(module, sigset);
 
 exit:
     return return_value;
@@ -618,29 +571,21 @@ PyDoc_STRVAR(signal_sigwaitinfo__doc__,
 "Returns a struct_siginfo containing information about the signal.");
 
 #define SIGNAL_SIGWAITINFO_METHODDEF    \
-    {"sigwaitinfo", _PyCFunction_CAST(signal_sigwaitinfo), METH_O, signal_sigwaitinfo__doc__},
+    {"sigwaitinfo", (PyCFunction)signal_sigwaitinfo, METH_O, signal_sigwaitinfo__doc__},
 
 static PyObject *
 signal_sigwaitinfo_impl(PyObject *module, sigset_t sigset);
 
-static PyValue
-signal_sigwaitinfo(PyObject *module, PyValue arg)
+static PyObject *
+signal_sigwaitinfo(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     sigset_t sigset;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Sigset_Converter(_arg, &sigset)) {
-            goto exit;
-        }
+    if (!_Py_Sigset_Converter(arg, &sigset)) {
+        goto exit;
     }
-    _return_value = signal_sigwaitinfo_impl(module, sigset);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_sigwaitinfo_impl(module, sigset);
 
 exit:
     return return_value;
@@ -665,32 +610,21 @@ static PyObject *
 signal_sigtimedwait_impl(PyObject *module, sigset_t sigset,
                          PyObject *timeout_obj);
 
-static PyValue
-signal_sigtimedwait(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_sigtimedwait(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     sigset_t sigset;
     PyObject *timeout_obj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("sigtimedwait", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Sigset_Converter(_arg, &sigset)) {
-            goto exit;
-        }
-    }
-    timeout_obj = PyValue_Object(args[1]);
-    if (timeout_obj == NULL) {
+    if (!_Py_Sigset_Converter(args[0], &sigset)) {
         goto exit;
     }
-    _return_value = signal_sigtimedwait_impl(module, sigset, timeout_obj);
-    return_value = PyValue_FromResult(_return_value);
+    timeout_obj = args[1];
+    return_value = signal_sigtimedwait_impl(module, sigset, timeout_obj);
 
 exit:
     return return_value;
@@ -713,49 +647,41 @@ static PyObject *
 signal_pthread_kill_impl(PyObject *module, unsigned long thread_id,
                          int signalnum);
 
-static PyValue
-signal_pthread_kill(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_pthread_kill(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned long thread_id;
     int signalnum;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pthread_kill", nargs, 2, 2)) {
         goto exit;
     }
+    if (!PyIndex_Check(args[0])) {
+        _PyArg_BadArgument("pthread_kill", "argument 1", "int", args[0]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &thread_id, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("pthread_kill", "argument 1", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &thread_id, sizeof(unsigned long),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned long)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
-    signalnum = PyLong_AsIntValue(args[1]);
+    signalnum = PyLong_AsInt(args[1]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_pthread_kill_impl(module, thread_id, signalnum);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_pthread_kill_impl(module, thread_id, signalnum);
 
 exit:
     return return_value;
@@ -778,62 +704,51 @@ static PyObject *
 signal_pidfd_send_signal_impl(PyObject *module, int pidfd, int signalnum,
                               PyObject *siginfo, unsigned int flags);
 
-static PyValue
-signal_pidfd_send_signal(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+signal_pidfd_send_signal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int pidfd;
     int signalnum;
     PyObject *siginfo = Py_None;
     unsigned int flags = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("pidfd_send_signal", nargs, 2, 4)) {
         goto exit;
     }
-    pidfd = PyLong_AsIntValue(args[0]);
+    pidfd = PyLong_AsInt(args[0]);
     if (pidfd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    signalnum = PyLong_AsIntValue(args[1]);
+    signalnum = PyLong_AsInt(args[1]);
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    siginfo = PyValue_Object(args[2]);
-    if (siginfo == NULL) {
-        goto exit;
-    }
+    siginfo = args[2];
     if (nargs < 4) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[3], &flags, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &flags, sizeof(unsigned int),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned int)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = signal_pidfd_send_signal_impl(module, pidfd, signalnum, siginfo, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = signal_pidfd_send_signal_impl(module, pidfd, signalnum, siginfo, flags);
 
 exit:
     return return_value;
@@ -892,4 +807,4 @@ exit:
 #ifndef SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
     #define SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
 #endif /* !defined(SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF) */
-/*[clinic end generated code: output=2563a5a82640d1f0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2a04ec31f49b1c93 input=a9049054013a1b77]*/

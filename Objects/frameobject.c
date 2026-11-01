@@ -45,13 +45,13 @@ class frame "PyFrameObject *" "&PyFrame_Type"
 static PyObject *
 framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
-    PyValue *fast = _PyFrame_GetLocalsArray(frame);
+    _PyStackRef *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
-    if (PyValue_IsInline(fast[i])) {
-        return PyValue_Object(fast[i]);
+    if (PyStackRef_IsInline(fast[i])) {
+        return PyStackRef_AsPyObjectNewBoxed(fast[i]);
     }
-    PyObject *value = PyValue_ObjectBorrow(fast[i]);
+    PyObject *value = PyStackRef_AsPyObjectBorrow(fast[i]);
     PyObject *cell = NULL;
 
     if (value == NULL) {
@@ -89,7 +89,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
-    if (PyValue_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
+    if (PyStackRef_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
         return true;
     }
     PyObject *value = framelocalsproxy_getval(frame, co, i);
@@ -278,7 +278,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
 {
     /* Merge locals into fast locals */
     PyFrameObject *frame = PyFrameLocalsProxyObject_CAST(self)->frame;
-    PyValue *fast = _PyFrame_GetLocalsArray(frame->f_frame);
+    _PyStackRef *fast = _PyFrame_GetLocalsArray(frame->f_frame);
     PyCodeObject *co = _PyFrame_GetCode(frame->f_frame);
 
     int i = framelocalsproxy_getkeyindex(frame, key, false, NULL);
@@ -292,26 +292,27 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         }
 
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
-        PyValue oldvalue = fast[i];
+        _PyStackRef oldvalue = fast[i];
         PyObject *cell = NULL;
         if (kind == CO_FAST_FREE) {
             // The cell was set when the frame was created from
             // the function's closure.
-            assert(!PyValue_IsNull(oldvalue) && PyCell_Check(PyValue_ObjectBorrow(oldvalue)));
-            cell = PyValue_ObjectBorrow(oldvalue);
-        } else if (kind & CO_FAST_CELL && PyValue_IsObject(oldvalue)) {
-            PyObject *as_obj = PyValue_ObjectBorrow(oldvalue);
+            assert(!PyStackRef_IsNull(oldvalue) && PyCell_Check(PyStackRef_AsPyObjectBorrow(oldvalue)));
+            cell = PyStackRef_AsPyObjectBorrow(oldvalue);
+        } else if (kind & CO_FAST_CELL && PyStackRef_IsObject(oldvalue)) {
+            PyObject *as_obj = PyStackRef_AsPyObjectBorrow(oldvalue);
             if (PyCell_Check(as_obj)) {
                 cell = as_obj;
             }
         }
         if (cell != NULL) {
-            PyCell_SET(cell, value);
-        } else if (PyValue_IsInline(oldvalue)) {
+            Py_XINCREF(value);
+            PyCell_SetTakeRef((PyCellObject *)cell, value);
+        } else if (PyStackRef_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
-            fast[i] = PyValue_FromObject(value);
-        } else if (value != PyValue_ObjectBorrow(oldvalue)) {
-            PyObject *old_obj = PyValue_ObjectBorrow(fast[i]);
+            fast[i] = PyStackRef_FromPyObjectNew(value);
+        } else if (value != PyStackRef_AsPyObjectBorrow(oldvalue)) {
+            PyObject *old_obj = PyStackRef_AsPyObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
                 if (add_overwritten_fast_local(frame, old_obj) < 0) {
                     return -1;
@@ -319,8 +320,10 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
                 // f_overwritten_fast_locals now keeps old_obj alive until the
                 // frame dies, so LOAD_FAST_BORROW references to it elsewhere
                 // on the stack stay valid after the slot's own reference goes.
+                _Py_stackref_allow_borrows_outlive_close(fast[i]);
+                PyStackRef_CLOSE(fast[i]);
             }
-            fast[i] = PyValue_FromObject(value);
+            fast[i] = PyStackRef_FromPyObjectNew(value);
         }
         return 0;
     }
@@ -806,54 +809,39 @@ framelocalsproxy_contains(PyObject *self, PyObject *key)
     return 0;
 }
 
-static PyValue
-framelocalsproxy___contains__(PyObject *self, PyValue key_value)
+static PyObject* framelocalsproxy___contains__(PyObject *self, PyObject *key)
 {
-    PyObject *key = PyValue_Object(key_value);
-    if (key == NULL) {
-        return PyValue_NULL;
-    }
     int result = framelocalsproxy_contains(self, key);
     if (result < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyBool_FromLong(result));
+    return PyBool_FromLong(result);
 }
 
-static PyValue
-framelocalsproxy_update(PyObject *self, PyValue other_value)
+static PyObject*
+framelocalsproxy_update(PyObject *self, PyObject *other)
 {
-    PyObject *other = PyValue_Object(other_value);
-    if (other == NULL) {
-        return PyValue_NULL;
-    }
     if (framelocalsproxy_merge(self, other) < 0) {
         PyErr_SetString(PyExc_TypeError, "update() argument must be dict or another FrameLocalsProxy");
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-framelocalsproxy_get(PyObject* self, const PyValue *args, Py_ssize_t nargs)
+static PyObject*
+framelocalsproxy_get(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
 {
     if (nargs < 1 || nargs > 2) {
         PyErr_SetString(PyExc_TypeError, "get expected 1 or 2 arguments");
-        return PyValue_NULL;
+        return NULL;
     }
 
-    PyObject *key = PyValue_Object(args[0]);
-    if (key == NULL) {
-        return PyValue_NULL;
-    }
+    PyObject *key = args[0];
     PyObject *default_value = Py_None;
 
     if (nargs == 2) {
-        default_value = PyValue_Object(args[1]);
-        if (default_value == NULL) {
-            return PyValue_NULL;
-        }
+        default_value = args[1];
     }
 
     PyObject *result = framelocalsproxy_getitem(self, key);
@@ -861,33 +849,27 @@ framelocalsproxy_get(PyObject* self, const PyValue *args, Py_ssize_t nargs)
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_Clear();
-            return PyValue_FromResult(Py_XNewRef(default_value));
+            return Py_XNewRef(default_value);
         }
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromResult(result);
+    return result;
 }
 
-static PyValue
-framelocalsproxy_setdefault(PyObject* self, const PyValue *args, Py_ssize_t nargs)
+static PyObject*
+framelocalsproxy_setdefault(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
 {
     if (nargs < 1 || nargs > 2) {
         PyErr_SetString(PyExc_TypeError, "setdefault expected 1 or 2 arguments");
-        return PyValue_NULL;
+        return NULL;
     }
 
-    PyObject *key = PyValue_Object(args[0]);
-    if (key == NULL) {
-        return PyValue_NULL;
-    }
+    PyObject *key = args[0];
     PyObject *default_value = Py_None;
 
     if (nargs == 2) {
-        default_value = PyValue_Object(args[1]);
-        if (default_value == NULL) {
-            return PyValue_NULL;
-        }
+        default_value = args[1];
     }
 
     PyObject *result = framelocalsproxy_getitem(self, key);
@@ -896,73 +878,67 @@ framelocalsproxy_setdefault(PyObject* self, const PyValue *args, Py_ssize_t narg
         if (PyErr_ExceptionMatches(PyExc_KeyError)) {
             PyErr_Clear();
             if (framelocalsproxy_setitem(self, key, default_value) < 0) {
-                return PyValue_NULL;
+                return NULL;
             }
-            return PyValue_FromResult(Py_XNewRef(default_value));
+            return Py_XNewRef(default_value);
         }
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromResult(result);
+    return result;
 }
 
-static PyValue
-framelocalsproxy_pop(PyObject* self, const PyValue *args, Py_ssize_t nargs)
+static PyObject*
+framelocalsproxy_pop(PyObject* self, PyObject *const *args, Py_ssize_t nargs)
 {
     if (!_PyArg_CheckPositional("pop", nargs, 1, 2)) {
-        return PyValue_NULL;
+        return NULL;
     }
 
-    PyObject *key = PyValue_Object(args[0]);
-    if (key == NULL) {
-        return PyValue_NULL;
-    }
+    PyObject *key = args[0];
     PyObject *default_value = NULL;
 
     if (nargs == 2) {
-        default_value = PyValue_Object(args[1]);
-        if (default_value == NULL) {
-            return PyValue_NULL;
-        }
+        default_value = args[1];
     }
 
     PyFrameObject *frame = PyFrameLocalsProxyObject_CAST(self)->frame;
 
     int i = framelocalsproxy_getkeyindex(frame, key, false, NULL);
     if (i == -2) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (i >= 0) {
         PyErr_SetString(PyExc_ValueError, "cannot remove local variables from FrameLocalsProxy");
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyObject *result = NULL;
 
     if (frame->f_extra_locals == NULL) {
         if (default_value != NULL) {
-            return PyValue_FromResult(Py_XNewRef(default_value));
+            return Py_XNewRef(default_value);
         } else {
             _PyErr_SetKeyError(key);
-            return PyValue_NULL;
+            return NULL;
         }
     }
 
     if (PyDict_Pop(frame->f_extra_locals, key, &result) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (result == NULL) {
         if (default_value != NULL) {
-            return PyValue_FromResult(Py_XNewRef(default_value));
+            return Py_XNewRef(default_value);
         } else {
             _PyErr_SetKeyError(key);
-            return PyValue_NULL;
+            return NULL;
         }
     }
 
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyObject*
@@ -1013,20 +989,10 @@ static PyMappingMethods framelocalsproxy_as_mapping = {
     .mp_ass_subscript = framelocalsproxy_setitem,
 };
 
-static PyValue
-framelocalsproxy___getitem__(PyObject *self, PyValue key)
-{
-    PyObject *key_o = PyValue_Object(key);
-    if (key_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(framelocalsproxy_getitem(self, key_o));
-}
-
 static PyMethodDef framelocalsproxy_methods[] = {
-    {"__contains__", _PyCFunction_CAST(framelocalsproxy___contains__), METH_O | METH_COEXIST, NULL},
-    {"__getitem__", _PyCFunction_CAST(framelocalsproxy___getitem__), METH_O | METH_COEXIST, NULL},
-    {"update", _PyCFunction_CAST(framelocalsproxy_update), METH_O, NULL},
+    {"__contains__", framelocalsproxy___contains__, METH_O | METH_COEXIST, NULL},
+    {"__getitem__", framelocalsproxy_getitem, METH_O | METH_COEXIST, NULL},
+    {"update", framelocalsproxy_update, METH_O, NULL},
     {"__reversed__", framelocalsproxy_reversed, METH_NOARGS, NULL},
     {"copy", framelocalsproxy_copy, METH_NOARGS, NULL},
     {"keys", framelocalsproxy_keys, METH_NOARGS, NULL},
@@ -1947,7 +1913,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyValue_IsNull(self->f_frame->base[i]);
+        unbound += PyStackRef_IsNull(self->f_frame->base[i]);
     }
     if (unbound) {
         const char *e = "assigning None to %d unbound local%s";
@@ -1958,8 +1924,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         // Do this in a second pass to avoid writing a bunch of Nones when
         // warnings are being treated as errors and the previous bit raises:
         for (int i = 0; i < code->co_nlocalsplus; i++) {
-            if (PyValue_IsNull(self->f_frame->base[i])) {
-                self->f_frame->base[i] = _PyValue_None;
+            if (PyStackRef_IsNull(self->f_frame->base[i])) {
+                self->f_frame->base[i] = PyStackRef_None;
                 unbound--;
             }
         }
@@ -1970,18 +1936,21 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         start_stack = pop_value(start_stack);
     }
     /* The temporary at depth d is in slot co_nlocalsplus + d */
-    PyValue *stack_base = _PyFrame_Stackbase(self->f_frame);
+    _PyStackRef *stack_base = _PyFrame_Stackbase(self->f_frame);
     int depth = stack_depth(start_stack);
     while (start_stack > best_stack) {
         depth--;
-        PyValue popped = stack_base[depth];
-        stack_base[depth] = PyValue_NULL;
+        _PyStackRef popped = stack_base[depth];
+        stack_base[depth] = PyStackRef_NULL;
         if (top_of_stack(start_stack) == Except) {
             /* Pop exception stack as well as the evaluation stack */
-            PyObject *exc = PyValue_ObjectBorrow(popped);
+            PyObject *exc = PyStackRef_AsPyObjectBorrow(popped);
             assert(PyExceptionInstance_Check(exc) || exc == Py_None);
             PyThreadState *tstate = _PyThreadState_GET();
             Py_XSETREF(tstate->exc_info->exc_value, exc == Py_None ? NULL : exc);
+        }
+        else {
+            PyStackRef_XCLOSE(popped);
         }
         start_stack = pop_value(start_stack);
     }
@@ -2084,24 +2053,25 @@ frame_dealloc(PyObject *op)
         _PyObject_GC_UNTRACK(f);
     }
 
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, f->f_weakreflist);
 
-    /* GH-106092: f->f_frame may point to a frame that no longer exists.
-     * Avoid dereferencing it unless we know it still points to valid
-     * memory. */
+    /* GH-106092: If f->f_frame was on the stack and we reached the maximum
+     * nesting depth for deallocations, the trashcan may have delayed this
+     * deallocation until after f->f_frame is freed. Avoid dereferencing
+     * f->f_frame unless we know it still points to valid memory. */
     _PyInterpreterFrame *frame = (_PyInterpreterFrame *)f->_f_frame_data;
 
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
         int nslots = _PyFrame_NumSlots(frame);
-        frame->f_executable = PyValue_NULL;
-        frame->f_funcobj = PyValue_NULL;
+        PyStackRef_CLEAR(frame->f_executable);
+        PyStackRef_CLEAR(frame->f_funcobj);
         Py_CLEAR(frame->f_locals);
-        PyValue *locals = _PyFrame_GetLocalsArray(frame);
-        PyValue *sp = locals + nslots;
+        _PyStackRef *locals = _PyFrame_GetLocalsArray(frame);
+        _PyStackRef *sp = locals + nslots;
         while (sp > locals) {
             sp--;
-            *sp = PyValue_NULL;
+            PyStackRef_CLEAR(*sp);
         }
     }
     Py_CLEAR(f->f_back);
@@ -2138,11 +2108,11 @@ frame_tp_clear(PyObject *op)
     Py_CLEAR(f->f_overwritten_fast_locals);
 
     /* all slots */
-    PyValue *locals = _PyFrame_GetLocalsArray(f->f_frame);
-    PyValue *sp = locals + _PyFrame_NumSlots(f->f_frame);
+    _PyStackRef *locals = _PyFrame_GetLocalsArray(f->f_frame);
+    _PyStackRef *sp = locals + _PyFrame_NumSlots(f->f_frame);
     while (sp > locals) {
         sp--;
-        *sp = PyValue_NULL;
+        PyStackRef_CLEAR(*sp);
     }
     Py_CLEAR(f->f_frame->f_locals);
     return 0;
@@ -2238,13 +2208,12 @@ PyTypeObject PyFrame_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     PyObject_GenericSetAttr,                    /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
     0,                                          /* tp_doc */
     frame_traverse,                             /* tp_traverse */
     frame_tp_clear,                             /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    OFF(f_weakreflist),                         /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     frame_methods,                              /* tp_methods */
@@ -2259,7 +2228,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
            PyFunctionObject *func, PyObject *locals)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    _PyFrame_Initialize(tstate, frame, PyValue_FromObject(func),
+    _PyFrame_Initialize(tstate, frame, PyStackRef_FromPyObjectNew(func),
                         Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
 }
 
@@ -2280,6 +2249,7 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_extra_locals = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;
+    f->f_weakreflist = NULL;
     return f;
 }
 
@@ -2337,7 +2307,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
           && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
-          && (PyValue_Type(frame->f_funcobj) == &PyFunction_Type)))
+          && PyStackRef_FunctionCheck(frame->f_funcobj)))
     {
         /* Free vars are initialized */
         return;
@@ -2349,7 +2319,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
         PyObject *o = PyTuple_GET_ITEM(closure, i);
-        frame->base[offset + i] = PyValue_FromObject(o);
+        frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
@@ -2378,15 +2348,15 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
 
     PyObject *value = NULL;
     {
-        if (PyValue_IsInline(frame->base[i])) {
-            value = PyValue_Object(frame->base[i]);
+        if (PyStackRef_IsInline(frame->base[i])) {
+            value = PyStackRef_AsPyObjectNewBoxed(frame->base[i]);
             if (value == NULL) {
                 return -1;
             }
             *pvalue = value;
             return 1;
         }
-        value = PyValue_ObjectBorrow(frame->base[i]);
+        value = PyStackRef_AsPyObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));
@@ -2587,21 +2557,21 @@ PyObject*
 PyFrame_GetLocals(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return PyValue_Object(frame_locals_get((PyObject *)frame, NULL));
+    return frame_locals_get((PyObject *)frame, NULL);
 }
 
 PyObject*
 PyFrame_GetGlobals(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return PyValue_Object(frame_globals_get((PyObject *)frame, NULL));
+    return frame_globals_get((PyObject *)frame, NULL);
 }
 
 PyObject*
 PyFrame_GetBuiltins(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return PyValue_Object(frame_builtins_get((PyObject *)frame, NULL));
+    return frame_builtins_get((PyObject *)frame, NULL);
 }
 
 int
@@ -2620,5 +2590,5 @@ PyObject *
 PyFrame_GetGenerator(PyFrameObject *frame)
 {
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    return PyValue_Object(frame_generator_get((PyObject *)frame, NULL));
+    return frame_generator_get((PyObject *)frame, NULL);
 }

@@ -11,7 +11,7 @@
  * current handler and its feedback.
  */
 
-#define NEED_IR_METADATA            // defines _PyIR_Formats and handler properties
+#define NEED_IR_METADATA            // defines _PyIR_Formats, _PyIR_OnlyNames
 #include "Python.h"
 
 #include "pycore_backoff.h"         // adaptive_counter_warmup()
@@ -22,7 +22,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_value.h"
+#include "pycore_stackref.h"        // Py_STACKREF_INLINE_VALUES
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
@@ -59,7 +59,13 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 int
 _PyIR_BaseOpcode(int handler)
 {
-    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    if (handler == IR_JUMP) {
+        return JUMP_FORWARD;
+    }
+    if (handler >= IR_FIRST_ONLY_HANDLER) {
+        handler = _PyIR_Formats[handler].shadow;
+        assert(handler < IR_FIRST_ONLY_HANDLER);
+    }
     return _PyOpcode_Deopt[handler];
 }
 
@@ -200,16 +206,51 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     return _PyIR_FbEntry(exec->entries, (uint32_t)fb);
 }
 
+/* Whether every value stays boxed: in a build without inline values, or
+ * under PYTHON_TAGGED_VALUES=0.  The assembler emits the inline constant
+ * handlers in every build, so that code objects do not depend on it. */
+static inline int
+inline_values_off(void)
+{
+#ifdef Py_STACKREF_INLINE_VALUES
+    return !_PyInterpreterState_GET()->opt_config.tagged_values_enabled;
+#else
+    return 1;
+#endif
+}
+
+/* The boxing form of an inline constant handler if values stay boxed, or
+ * handler itself */
+static inline int
+boxing_handler(int handler)
+{
+    if (inline_values_off()) {
+        switch (handler) {
+            case LOAD_SMALL_INT_INLINE:
+                return LOAD_SMALL_INT;
+            case LOAD_CONST_INLINE_INT:
+            case LOAD_CONST_INLINE_FLOAT:
+                return LOAD_CONST;
+        }
+    }
+    return handler;
+}
+
+int
+_PyCode_GenericHandler(PyCodeObject *co, int i)
+{
+    return boxing_handler(_PyCode_InstrHandler(co, i));
+}
+
 int
 _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
     int handler = _PyCode_InstrHandler(co, i);
     if (_PyIR_BaseOpcode(handler) == opcode) {
-        return handler;
+        return boxing_handler(handler);
     }
     // The instrumented twin of a NOFB form is NOFB too
-    if (_PyIR_HasProperty(handler, _PyIR_H_NOFB)
-        && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
+    if (handler >= IR_FIRST_ONLY_HANDLER && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
         && _PyIR_FormatOf(opcode)->nofb != 0)
     {
         return _PyIR_FormatOf(opcode)->nofb;
@@ -259,6 +300,14 @@ make_exec(PyCodeObject *co)
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
+    if (inline_values_off()) {
+        for (Py_ssize_t i = 0; i < nwords; i++) {
+            int handler = boxing_handler(IR_HANDLER(words[i]));
+            if (handler != IR_HANDLER(words[i])) {
+                _PyIR_SetHandler(&words[i], handler);
+            }
+        }
+    }
     if (fb_size == 0) {
         return exec;
     }
@@ -271,8 +320,12 @@ make_exec(PyCodeObject *co)
     shared->kind = FB_COUNTER;
     shared->state = FB_OFF;
     shared->counter = initial_unreachable_backoff_counter();
+#ifdef Py_GIL_DISABLED
+    int enable_counters = 0;
+#else
     int enable_counters = ENABLE_SPECIALIZATION
         && _PyInterpreterState_GET()->opt_config.specialization_enabled;
+#endif
     _Py_BackoffCounter counter = enable_counters
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
     const uint32_t *fbinit = _PyCode_FBINIT(co);

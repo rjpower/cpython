@@ -149,7 +149,7 @@ call_error_callback(PyObject *errors, PyObject *exc)
     return r;
 }
 
-static PyValue
+static PyObject *
 codecctx_errors_get(PyObject *op, void *Py_UNUSED(closure))
 {
     const char *errors;
@@ -162,19 +162,15 @@ codecctx_errors_get(PyObject *op, void *Py_UNUSED(closure))
     else if (self->errors == ERROR_REPLACE)
         errors = "replace";
     else {
-        return PyValue_FromObject(self->errors);
+        return Py_NewRef(self->errors);
     }
 
-    return PyValue_FromResult(PyUnicode_FromString(errors));
+    return PyUnicode_FromString(errors);
 }
 
 static int
-codecctx_errors_set(PyObject *op, PyValue value_v, void *Py_UNUSED(closure))
+codecctx_errors_set(PyObject *op, PyObject *value, void *Py_UNUSED(closure))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyObject *cb;
     const char *str;
     MultibyteStatefulCodecContext *self = _MultibyteStatefulCodecContext_CAST(op);
@@ -1968,7 +1964,6 @@ mbstreamwriter_traverse(PyObject *op, visitproc visit, void *arg)
         Py_VISIT(self->errors);
     Py_VISIT(self->stream);
     Py_VISIT(self->codec_owner);
-    Py_VISIT(self->pending);
     return 0;
 }
 
@@ -1981,7 +1976,6 @@ mbstreamwriter_dealloc(PyObject *op)
     ERROR_DECREF(self->errors);
     Py_XDECREF(self->stream);
     Py_XDECREF(self->codec_owner);
-    Py_CLEAR(self->pending);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -2029,8 +2023,8 @@ _multibytecodec.__create_codec
 [clinic start generated code]*/
 
 static PyObject *
-_multibytecodec___create_codec_impl(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=3f49ac588e37a7db input=6840b2a6b183fcfa]*/
+_multibytecodec___create_codec(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=cfa3dce8260e809d input=6840b2a6b183fcfa]*/
 {
     MultibyteCodecObject *self;
 

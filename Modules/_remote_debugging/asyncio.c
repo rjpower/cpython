@@ -8,18 +8,6 @@
 #include "_remote_debugging.h"
 #include "debug_offsets_validation.h"
 
-/* The type of an object whose header word is HEADER: the header holds the
-   object's shape, and the shape its type. */
-static int
-read_object_type(RemoteUnwinderObject *unwinder, uintptr_t header,
-                 uintptr_t *type_addr)
-{
-    uintptr_t shape_addr = header & _Py_HEADER_SHAPE_MASK;
-    return read_ptr(unwinder,
-                    shape_addr + (uintptr_t)unwinder->debug_offsets.shape.type,
-                    type_addr);
-}
-
 /* ============================================================================
  * ASYNCIO DEBUG ADDRESS FUNCTIONS
  * ============================================================================ */
@@ -165,10 +153,8 @@ iterate_set_entries(
             return -1;
         }
 
-        // A task is an object: its value is its address.
-        uintptr_t key_addr = entry.key.bits;
-        if (key_addr != 0 && key_addr < _PyValue_PTR_LIMIT
-            && entry.hash != -1) {
+        uintptr_t key_addr = (uintptr_t)entry.key;
+        if (key_addr != 0 && entry.hash != -1) {
             if (parse_task(unwinder, key_addr, awaited_by) < 0) {
                 return -1;
             }
@@ -217,18 +203,10 @@ parse_task_name(
     }
 
     // Now read the type object to get the flags
-    uintptr_t type_addr;
-    if (read_object_type(unwinder,
-            GET_MEMBER(uintptr_t, task_name_obj, unwinder->debug_offsets.pyobject.ob_header),
-            &type_addr) < 0)
-    {
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read task name type object");
-        return NULL;
-    }
     char type_obj[SIZEOF_TYPE_OBJ];
     err = _Py_RemoteDebug_PagedReadRemoteMemory(
         &unwinder->handle,
-        type_addr,
+        GET_MEMBER(uintptr_t, task_name_obj, unwinder->debug_offsets.pyobject.ob_type),
         SIZEOF_TYPE_OBJ,
         type_obj);
     if (err < 0) {
@@ -274,22 +252,13 @@ get_coro_like_address(
     *coro_addr = 0;
 
     // Skip user classes that share a name with the generator types below
-    uintptr_t header;
-    unsigned long tp_flags;
-    if (read_ptr(unwinder, addr + (uintptr_t)unwinder->debug_offsets.pyobject.ob_header,
-                 &header) < 0)
-    {
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read awaitable type");
-        return -1;
-    }
     uintptr_t type_addr;
-    if (read_object_type(unwinder, header, &type_addr) < 0) {
-        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read awaitable type");
-        return -1;
-    }
-    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
-            type_addr + (uintptr_t)unwinder->debug_offsets.type_object.tp_flags,
-            sizeof(tp_flags), &tp_flags) < 0)
+    unsigned long tp_flags;
+    if (read_ptr(unwinder, addr + (uintptr_t)unwinder->debug_offsets.pyobject.ob_type,
+                 &type_addr) < 0
+        || _Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                type_addr + (uintptr_t)unwinder->debug_offsets.type_object.tp_flags,
+                sizeof(tp_flags), &tp_flags) < 0)
     {
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read awaitable type");
         return -1;

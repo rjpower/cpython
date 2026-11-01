@@ -68,22 +68,15 @@
 #endif
 
 #ifdef Py_STATS
-/* Count target entries, before their predicted labels.  The activation's
- * sequence advances even while aggregate updates are disabled. */
+/* The handlers of the register IR that have no opcode have no statistics. */
 #define INSTRUCTION_STATS(op) \
     do { \
-        int entry_opcode = (op); \
-        assert(entry_opcode >= 0 && entry_opcode < IR_NUM_HANDLERS); \
-        assert(_PyIR_HandlerFlags[entry_opcode] & _PyIR_H_DISPATCH); \
-        assert(lastopcode >= 0 && lastopcode < IR_NUM_HANDLERS); \
-        assert(lastopcode == 0 || \
-               (_PyIR_HandlerFlags[lastopcode] & _PyIR_H_DISPATCH)); \
-        PyStats *s = _PyStats_GET(); \
-        if (s != NULL) { \
-            s->opcode_stats[entry_opcode].execution_count++; \
-            s->opcode_stats[lastopcode].pair_count[entry_opcode]++; \
+        if ((op) < 256) { \
+            PyStats *s = _PyStats_GET(); \
+            OPCODE_EXE_INC(op); \
+            if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
+            lastopcode = op; \
         } \
-        lastopcode = entry_opcode; \
     } while (0)
 #else
 #define INSTRUCTION_STATS(op) ((void)0)
@@ -96,10 +89,10 @@
 #   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
@@ -118,9 +111,9 @@
 #       define Py_MUSTTAIL __attribute__((musttail))
 #       define Py_PRESERVE_NONE_CC __attribute__((preserve_none))
 #   endif
-    typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+    typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-#   define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+#   define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 /* A handler finds the frame in the thread state, which is not one of the
  * registers that the handlers pass on. */
 #   define TAIL_CALL_LOAD_FRAME() \
@@ -236,7 +229,11 @@ do { \
 #define LLTRACE_RESUME_FRAME() ((void)0)
 #endif
 
+#ifdef Py_GIL_DISABLED
+#define QSBR_QUIESCENT_STATE(tstate) _Py_qsbr_quiescent_state(((_PyThreadStateImpl *)tstate)->qsbr)
+#else
 #define QSBR_QUIESCENT_STATE(tstate)
+#endif
 
 
 /* Do interpreter dispatch accounting for tracing and instrumentation */
@@ -263,14 +260,19 @@ do { \
         JUMP_TO_LABEL(start_frame);                              \
     } while (0)
 
-/* Tuple access macros.  GETITEM reads a tuple of objects that are never
-   inline, such as the names of a code object, without boxing; constants are
-   read as values (PyTuple_GET_VALUE). */
+/* Tuple access macros */
 
+#ifndef Py_DEBUG
+#define GETITEM(v, i) PyTuple_GET_ITEM((v), (i))
+#else
 static inline PyObject *
 GETITEM(PyObject *v, Py_ssize_t i) {
-    return PyValue_ObjectBorrow(PyTuple_GET_VALUE(v, i));
+    assert(PyTuple_Check(v));
+    assert(i >= 0);
+    assert(i < PyTuple_GET_SIZE(v));
+    return PyTuple_GET_ITEM(v, i);
 }
+#endif
 
 /* Code access macros */
 
@@ -330,9 +332,15 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 //  UNLOCK_OBJECT(op);
 //
 // NOTE: The object must be unlocked on every exit code path and you should
-// avoid any potentially escaping calls while the object is locked.
+// avoid any potentially escaping calls (like PyStackRef_CLOSE) while the
+// object is locked.
+#ifdef Py_GIL_DISABLED
+#  define LOCK_OBJECT(op) PyMutex_LockFast(&(_PyObject_CAST(op))->ob_mutex)
+#  define UNLOCK_OBJECT(op) PyMutex_Unlock(&(_PyObject_CAST(op))->ob_mutex)
+#else
 #  define LOCK_OBJECT(op) (1)
 #  define UNLOCK_OBJECT(op) ((void)0)
+#endif
 
 #define GLOBALS() frame->f_globals
 #define BUILTINS() frame->f_builtins
@@ -363,6 +371,24 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define ADAPTIVE_COUNTER_TRIGGERS(FB) \
     ((FB) != NULL && backoff_counter_triggers((FB)->counter))
 
+#ifdef Py_GIL_DISABLED
+/* Counters are unreachable when thread-local bytecode is disabled,
+ * so there is no need to update them. */
+#define ADVANCE_ADAPTIVE_COUNTER(FB) \
+    do { \
+        if ((FB) != NULL && !backoff_counter_is_unreachable((FB)->counter)) { \
+            (FB)->counter = advance_backoff_counter((FB)->counter); \
+        } \
+    } while (0);
+
+#define PAUSE_ADAPTIVE_COUNTER(FB) \
+    do { \
+        _PyFbHeader *fb_ = (FB); \
+        if (fb_ != NULL && !backoff_counter_is_unreachable(fb_->counter)) { \
+            fb_->counter = pause_backoff_counter(fb_->counter); \
+        } \
+    } while (0);
+#else
 #define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
         if ((FB) != NULL) { \
@@ -377,6 +403,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
             fb_->counter = pause_backoff_counter(fb_->counter); \
         } \
     } while (0);
+#endif
 
 #ifdef ENABLE_SPECIALIZATION
 /* Multiple threads may execute these concurrently if thread-local bytecode is
@@ -416,7 +443,7 @@ do { \
 } while (0);
 
 
-Py_GC_PRECISE static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
+static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
     return (tstate->py_recursion_remaining-- <= 0) &&
         _Py_CheckRecursiveCallPy(tstate);
 }
@@ -435,12 +462,48 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* There's no STORE_IP(), it's inlined by the code generator. */
 
 
-/* PyValue macros */
+/* Stackref macros */
 
+/* How much scratch space to give stackref to PyObject* conversion. */
+#define MAX_STACKREF_SCRATCH 10
+
+#ifdef Py_GC
+/* The collector scans the C stack conservatively, which includes the eval
+   loop's frame: a C array of object pointers there keeps its last objects
+   alive until another instruction reuses the slots.  Such an array is
+   cleared after the call that needed it; the barrier keeps the stores,
+   which are dead to the compiler. */
+#define _PyGC_CLEAR_ARRAY(ARR) \
+    do { \
+        memset((ARR), 0, sizeof(ARR)); \
+        __asm__ volatile("" : : "r"(ARR) : "memory"); \
+    } while (0)
+
+/* The unused slots of the scratch array are cleared too, or the words that
+   earlier calls left in that stack memory would keep their objects alive. */
+#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
+    /* +1 because vectorcall might use -1 to write self */ \
+    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1] = {0}; \
+    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+#else
+#define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
+
+#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
+    /* +1 because vectorcall might use -1 to write self */ \
+    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1]; \
+    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+#endif
+
+#define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
+    /* +1 because we +1 previously */ \
+    _PyObjectArray_Free(NAME - 1, NAME##_temp); \
+    _PyGC_CLEAR_ARRAY(NAME##_temp);
+
+#define CONVERSION_FAILED(NAME) ((NAME) == NULL)
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
-Py_GC_PRECISE static inline int
+static inline int
 check_periodics(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
@@ -450,7 +513,7 @@ check_periodics(PyThreadState *tstate) {
     return 0;
 }
 
-Py_GC_PRECISE static inline int
+static inline int
 check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
@@ -471,6 +534,21 @@ check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
 static inline bool
 gen_try_set_executing(PyGenObject *gen)
 {
+#ifdef Py_GIL_DISABLED
+    if (!_PyObject_IsUniquelyReferenced((PyObject *)gen)) {
+        int8_t frame_state = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
+        while (frame_state < FRAME_SUSPENDED_YIELD_FROM_LOCKED) {
+            if (_Py_atomic_compare_exchange_int8(&gen->gi_frame_state,
+                                                 &frame_state,
+                                                 FRAME_EXECUTING)) {
+                return true;
+            }
+        }
+        // NB: We return false for FRAME_SUSPENDED_YIELD_FROM_LOCKED as well.
+        // That case is rare enough that we can just handle it in the deopt.
+        return false;
+    }
+#endif
     // Use faster non-atomic modifications in the GIL-enabled build and when
     // the object is uniquely referenced in the free-threaded build.
     if (gen->gi_frame_state < FRAME_EXECUTING) {
@@ -492,31 +570,74 @@ gen_try_set_executing(PyGenObject *gen)
 #define IR_SLOT(F) (slots[(F)])
 
 /* Whether field F names a local, a cell or a free variable rather than a
- * temporary: the executing copy keeps co_nlocalsplus in its header.  A
- * handler that consumes an input read through a temporary leaves NULL in
- * the slot, so that a dead temporary keeps nothing alive (the collector
- * marks every slot); a local keeps its value. */
+ * temporary: the executing copy keeps co_nlocalsplus in its header.  An
+ * input read through a local is borrowed; one read through a temporary is
+ * the handler's, which it takes, leaving NULL in the slot. */
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
+/* REF, read through field F and known to be a pointer, borrowed if F names
+ * a local. */
+static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
+#ifdef Py_STACKREF_DEBUG
+#  define IR_BORROW_KNOWN(REF, F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_Borrow(REF) : (REF))
+#else
+#  define IR_BORROW_KNOWN(REF, F) \
+    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
+#endif
+
+/* The box of an inline value read through field F, which belongs to the
+ * slot if F names a temporary.  A local keeps its inline value, and the
+ * handler drops the box as it would a temporary's. */
+#define IR_KEEP_BOX(REF, F) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = (REF); \
+        } \
+    } while (0)
+
+/* Before a deopt, drop REF, an object input read through field F, if F
+ * names a local: the family head reads the local again.  REF is a borrow,
+ * which only the Py_STACKREF_DEBUG checker counts, or the box of the
+ * local's inline value. */
+#define IR_DROP_BORROW(REF, F) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            PyStackRef_CLOSE(REF); \
+        } \
+    } while (0)
+
+/* An input that the handler consumes as it is, through field F: a
+ * temporary, or a borrow of the local that F names, which is what
+ * LOAD_FAST_BORROW would have pushed. */
+#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
+#  define IR_LOAD_BORROWED(F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
+#else
+#  define IR_LOAD_BORROWED(F) \
+    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
+        | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
+#endif
+
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
-Py_GC_PRECISE static inline int
-_PyValue_Truth(PyValue ref)
+static inline int
+_PyStackRef_Truth(_PyStackRef ref)
 {
-    if (_PyValue_IsTrue(ref)) {
+    if (PyStackRef_IsTrue(ref)) {
         return 1;
     }
-    if (_PyValue_IsFalse(ref) || _PyValue_IsNone(ref)) {
+    if (PyStackRef_IsFalse(ref) || PyStackRef_IsNone(ref)) {
         return 0;
     }
-    if (PyValue_IsInlineInt(ref)) {
-        return PyValue_Int32(ref) != 0;
+    if (PyStackRef_IsInlineInt(ref)) {
+        return PyStackRef_InlineInt(ref) != 0;
     }
-    if (PyValue_IsInlineFloat(ref)) {
-        return PyValue_Double(ref) != 0.0;
+    if (PyStackRef_IsInlineFloat(ref)) {
+        return PyStackRef_InlineFloat(ref) != 0.0;
     }
-    return PyObject_IsTrue(PyValue_ObjectBorrow(ref));
+    return PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(ref));
 }
 
 /* The handler takes the input that it read through field F: a temporary's
@@ -524,7 +645,7 @@ _PyValue_Truth(PyValue ref)
 #define IR_CONSUME_INPUT(F) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = PyValue_NULL; \
+            IR_SLOT(F) = PyStackRef_NULL; \
         } \
     } while (0)
 
@@ -540,18 +661,26 @@ _PyValue_Truth(PyValue ref)
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
-        assert(PyValue_IsNull(SLOT)); \
+        assert(PyStackRef_IsNull(SLOT)); \
         (SLOT) = (V); \
     } while (0)
 
 /* The result V goes to dst field F, which may name a local (a folded
- * STORE_FAST, _PyIR_STORE_DST).  A temporary's slot holds NULL, or V when
- * the handler wrote it there before. */
+ * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
+ * it, as STORE_FAST does.  A temporary's slot holds NULL, or V when the
+ * handler wrote it there before (IR_STORE_TEMP_DST). */
 #define IR_STORE_DST(F, V) \
     do { \
-        assert(IR_IS_LOCAL(F) || PyValue_IsNull(IR_SLOT(F)) \
-               || (IR_SLOT(F)).bits == (V).bits); \
-        IR_SLOT(F) = (V); \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = (V); \
+            PyStackRef_XCLOSE(ir_old); \
+        } \
+        else { \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            IR_SLOT(F) = (V); \
+        } \
     } while (0)
 
 /* Before code that may run other code, the result V goes to dst field F
@@ -559,28 +688,30 @@ _PyValue_Truth(PyValue ref)
 #define IR_STORE_TEMP_DST(F, V) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            assert(PyValue_IsNull(IR_SLOT(F)) \
-                   || (IR_SLOT(F)).bits == (V).bits); \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
             IR_SLOT(F) = (V); \
         } \
     } while (0)
 
 /* A window-style handler whose dst field F may name a local moves its
- * result from SLOT of its window there. */
+ * result from SLOT of its window there, releasing the local's old value. */
 #define IR_MOVE_TO_DST(F, SLOT) \
     do { \
         if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
             IR_SLOT(F) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
+            (SLOT) = PyStackRef_NULL; \
+            PyStackRef_XCLOSE(ir_old); \
         } \
     } while (0)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \
-        PyValue *ir_p = (PTR); \
+        _PyStackRef *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyValue_NULL; \
+            ir_p[ir_i] = PyStackRef_NULL; \
         } \
     } while (0)
 
@@ -620,7 +751,12 @@ _PyValue_Truth(PyValue ref)
 #else
 #  define IR_SKIP_RESUME_EMSCRIPTEN() 1
 #endif
+#ifdef Py_GIL_DISABLED
+#  define IR_SKIP_RESUME_TLBC() \
+    (frame->tlbc_index == ((_PyThreadStateImpl *)tstate)->tlbc_index)
+#else
 #  define IR_SKIP_RESUME_TLBC() 1
+#endif
 #define IR_SKIP_RESUME() \
     do { \
         if (IR_HANDLER(*next_instr) == RESUME && \
@@ -638,11 +774,6 @@ _PyValue_Truth(PyValue ref)
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
 
-/* A `stores_early` handler's store of V in the slot that CALLER named for
- * it, made before the handler unlinks or clears the frame that held V, so
- * that a collection there finds V in a frame (note 11 section 4.4). */
-#define IR_RETURN_EARLY(CALLER, V) _PyFrame_SetReturnValue((CALLER), (V))
-
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \
     _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \
@@ -650,3 +781,4 @@ _PyValue_Truth(PyValue ref)
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     ((void)(HANDLER), \
      _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
+

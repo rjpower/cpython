@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_overlapped_CreateIoCompletionPort__doc__,
 "CreateIoCompletionPort($module, handle, port, key, concurrency, /)\n"
@@ -24,60 +24,34 @@ _overlapped_CreateIoCompletionPort_impl(PyObject *module, HANDLE FileHandle,
                                         ULONG_PTR CompletionKey,
                                         DWORD NumberOfConcurrentThreads);
 
-static PyValue
-_overlapped_CreateIoCompletionPort(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_CreateIoCompletionPort(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE FileHandle;
     HANDLE ExistingCompletionPort;
     ULONG_PTR CompletionKey;
     DWORD NumberOfConcurrentThreads;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CreateIoCompletionPort", nargs, 4, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        FileHandle = PyLong_AsVoidPtr(_arg);
-        if (!FileHandle && PyErr_Occurred()) {
-            goto exit;
-        }
+    FileHandle = PyLong_AsVoidPtr(args[0]);
+    if (!FileHandle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        ExistingCompletionPort = PyLong_AsVoidPtr(_arg);
-        if (!ExistingCompletionPort && PyErr_Occurred()) {
-            goto exit;
-        }
+    ExistingCompletionPort = PyLong_AsVoidPtr(args[1]);
+    if (!ExistingCompletionPort && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        CompletionKey = (uintptr_t)PyLong_AsVoidPtr(_arg);
-        if (!CompletionKey && PyErr_Occurred()) {
-            goto exit;
-        }
+    CompletionKey = (uintptr_t)PyLong_AsVoidPtr(args[2]);
+    if (!CompletionKey && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &NumberOfConcurrentThreads)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[3], &NumberOfConcurrentThreads)) {
+        goto exit;
     }
-    _return_value = _overlapped_CreateIoCompletionPort_impl(module, FileHandle, ExistingCompletionPort, CompletionKey, NumberOfConcurrentThreads);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_CreateIoCompletionPort_impl(module, FileHandle, ExistingCompletionPort, CompletionKey, NumberOfConcurrentThreads);
 
 exit:
     return return_value;
@@ -99,38 +73,24 @@ _overlapped_GetQueuedCompletionStatus_impl(PyObject *module,
                                            HANDLE CompletionPort,
                                            DWORD Milliseconds);
 
-static PyValue
-_overlapped_GetQueuedCompletionStatus(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_GetQueuedCompletionStatus(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE CompletionPort;
     DWORD Milliseconds;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("GetQueuedCompletionStatus", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        CompletionPort = PyLong_AsVoidPtr(_arg);
-        if (!CompletionPort && PyErr_Occurred()) {
-            goto exit;
-        }
+    CompletionPort = PyLong_AsVoidPtr(args[0]);
+    if (!CompletionPort && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &Milliseconds)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &Milliseconds)) {
+        goto exit;
     }
-    _return_value = _overlapped_GetQueuedCompletionStatus_impl(module, CompletionPort, Milliseconds);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_GetQueuedCompletionStatus_impl(module, CompletionPort, Milliseconds);
 
 exit:
     return return_value;
@@ -152,60 +112,34 @@ _overlapped_PostQueuedCompletionStatus_impl(PyObject *module,
                                             ULONG_PTR CompletionKey,
                                             OVERLAPPED *Overlapped);
 
-static PyValue
-_overlapped_PostQueuedCompletionStatus(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_PostQueuedCompletionStatus(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE CompletionPort;
     DWORD NumberOfBytes;
     ULONG_PTR CompletionKey;
     OVERLAPPED *Overlapped;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("PostQueuedCompletionStatus", nargs, 4, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        CompletionPort = PyLong_AsVoidPtr(_arg);
-        if (!CompletionPort && PyErr_Occurred()) {
-            goto exit;
-        }
+    CompletionPort = PyLong_AsVoidPtr(args[0]);
+    if (!CompletionPort && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &NumberOfBytes)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &NumberOfBytes)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        CompletionKey = (uintptr_t)PyLong_AsVoidPtr(_arg);
-        if (!CompletionKey && PyErr_Occurred()) {
-            goto exit;
-        }
+    CompletionKey = (uintptr_t)PyLong_AsVoidPtr(args[2]);
+    if (!CompletionKey && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Overlapped = PyLong_AsVoidPtr(_arg);
-        if (!Overlapped && PyErr_Occurred()) {
-            goto exit;
-        }
+    Overlapped = PyLong_AsVoidPtr(args[3]);
+    if (!Overlapped && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_PostQueuedCompletionStatus_impl(module, CompletionPort, NumberOfBytes, CompletionKey, Overlapped);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_PostQueuedCompletionStatus_impl(module, CompletionPort, NumberOfBytes, CompletionKey, Overlapped);
 
 exit:
     return return_value;
@@ -227,60 +161,34 @@ _overlapped_RegisterWaitWithQueue_impl(PyObject *module, HANDLE Object,
                                        OVERLAPPED *Overlapped,
                                        DWORD Milliseconds);
 
-static PyValue
-_overlapped_RegisterWaitWithQueue(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_RegisterWaitWithQueue(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Object;
     HANDLE CompletionPort;
     OVERLAPPED *Overlapped;
     DWORD Milliseconds;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("RegisterWaitWithQueue", nargs, 4, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Object = PyLong_AsVoidPtr(_arg);
-        if (!Object && PyErr_Occurred()) {
-            goto exit;
-        }
+    Object = PyLong_AsVoidPtr(args[0]);
+    if (!Object && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        CompletionPort = PyLong_AsVoidPtr(_arg);
-        if (!CompletionPort && PyErr_Occurred()) {
-            goto exit;
-        }
+    CompletionPort = PyLong_AsVoidPtr(args[1]);
+    if (!CompletionPort && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Overlapped = PyLong_AsVoidPtr(_arg);
-        if (!Overlapped && PyErr_Occurred()) {
-            goto exit;
-        }
+    Overlapped = PyLong_AsVoidPtr(args[2]);
+    if (!Overlapped && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &Milliseconds)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[3], &Milliseconds)) {
+        goto exit;
     }
-    _return_value = _overlapped_RegisterWaitWithQueue_impl(module, Object, CompletionPort, Overlapped, Milliseconds);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_RegisterWaitWithQueue_impl(module, Object, CompletionPort, Overlapped, Milliseconds);
 
 exit:
     return return_value;
@@ -293,30 +201,22 @@ PyDoc_STRVAR(_overlapped_UnregisterWait__doc__,
 "Unregister wait handle.");
 
 #define _OVERLAPPED_UNREGISTERWAIT_METHODDEF    \
-    {"UnregisterWait", _PyCFunction_CAST(_overlapped_UnregisterWait), METH_O, _overlapped_UnregisterWait__doc__},
+    {"UnregisterWait", (PyCFunction)_overlapped_UnregisterWait, METH_O, _overlapped_UnregisterWait__doc__},
 
 static PyObject *
 _overlapped_UnregisterWait_impl(PyObject *module, HANDLE WaitHandle);
 
-static PyValue
-_overlapped_UnregisterWait(PyObject *module, PyValue arg)
+static PyObject *
+_overlapped_UnregisterWait(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE WaitHandle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        WaitHandle = PyLong_AsVoidPtr(_arg);
-        if (!WaitHandle && PyErr_Occurred()) {
-            goto exit;
-        }
+    WaitHandle = PyLong_AsVoidPtr(arg);
+    if (!WaitHandle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_UnregisterWait_impl(module, WaitHandle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_UnregisterWait_impl(module, WaitHandle);
 
 exit:
     return return_value;
@@ -335,39 +235,25 @@ static PyObject *
 _overlapped_UnregisterWaitEx_impl(PyObject *module, HANDLE WaitHandle,
                                   HANDLE Event);
 
-static PyValue
-_overlapped_UnregisterWaitEx(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_UnregisterWaitEx(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE WaitHandle;
     HANDLE Event;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("UnregisterWaitEx", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        WaitHandle = PyLong_AsVoidPtr(_arg);
-        if (!WaitHandle && PyErr_Occurred()) {
-            goto exit;
-        }
+    WaitHandle = PyLong_AsVoidPtr(args[0]);
+    if (!WaitHandle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Event = PyLong_AsVoidPtr(_arg);
-        if (!Event && PyErr_Occurred()) {
-            goto exit;
-        }
+    Event = PyLong_AsVoidPtr(args[1]);
+    if (!Event && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_UnregisterWaitEx_impl(module, WaitHandle, Event);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_UnregisterWaitEx_impl(module, WaitHandle, Event);
 
 exit:
     return return_value;
@@ -390,52 +276,41 @@ _overlapped_CreateEvent_impl(PyObject *module, PyObject *EventAttributes,
                              BOOL ManualReset, BOOL InitialState,
                              const wchar_t *Name);
 
-static PyValue
-_overlapped_CreateEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_CreateEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *EventAttributes;
     BOOL ManualReset;
     BOOL InitialState;
     const wchar_t *Name = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CreateEvent", nargs, 4, 4)) {
         goto exit;
     }
-    EventAttributes = PyValue_Object(args[0]);
-    if (EventAttributes == NULL) {
-        goto exit;
-    }
-    ManualReset = PyLong_AsIntValue(args[1]);
+    EventAttributes = args[0];
+    ManualReset = PyLong_AsInt(args[1]);
     if (ManualReset == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    InitialState = PyLong_AsIntValue(args[2]);
+    InitialState = PyLong_AsInt(args[2]);
     if (InitialState == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            Name = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            Name = PyUnicode_AsWideCharString(_arg, NULL);
-            if (Name == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("CreateEvent", "argument 4", "str or None", _arg);
+    if (args[3] == Py_None) {
+        Name = NULL;
+    }
+    else if (PyUnicode_Check(args[3])) {
+        Name = PyUnicode_AsWideCharString(args[3], NULL);
+        if (Name == NULL) {
             goto exit;
         }
     }
-    _return_value = _overlapped_CreateEvent_impl(module, EventAttributes, ManualReset, InitialState, Name);
-    return_value = PyValue_FromResult(_return_value);
+    else {
+        _PyArg_BadArgument("CreateEvent", "argument 4", "str or None", args[3]);
+        goto exit;
+    }
+    return_value = _overlapped_CreateEvent_impl(module, EventAttributes, ManualReset, InitialState, Name);
 
 exit:
     /* Cleanup for Name */
@@ -451,30 +326,22 @@ PyDoc_STRVAR(_overlapped_SetEvent__doc__,
 "Set event.");
 
 #define _OVERLAPPED_SETEVENT_METHODDEF    \
-    {"SetEvent", _PyCFunction_CAST(_overlapped_SetEvent), METH_O, _overlapped_SetEvent__doc__},
+    {"SetEvent", (PyCFunction)_overlapped_SetEvent, METH_O, _overlapped_SetEvent__doc__},
 
 static PyObject *
 _overlapped_SetEvent_impl(PyObject *module, HANDLE Handle);
 
-static PyValue
-_overlapped_SetEvent(PyObject *module, PyValue arg)
+static PyObject *
+_overlapped_SetEvent(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Handle = PyLong_AsVoidPtr(_arg);
-        if (!Handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    Handle = PyLong_AsVoidPtr(arg);
+    if (!Handle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_SetEvent_impl(module, Handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_SetEvent_impl(module, Handle);
 
 exit:
     return return_value;
@@ -487,30 +354,22 @@ PyDoc_STRVAR(_overlapped_ResetEvent__doc__,
 "Reset event.");
 
 #define _OVERLAPPED_RESETEVENT_METHODDEF    \
-    {"ResetEvent", _PyCFunction_CAST(_overlapped_ResetEvent), METH_O, _overlapped_ResetEvent__doc__},
+    {"ResetEvent", (PyCFunction)_overlapped_ResetEvent, METH_O, _overlapped_ResetEvent__doc__},
 
 static PyObject *
 _overlapped_ResetEvent_impl(PyObject *module, HANDLE Handle);
 
-static PyValue
-_overlapped_ResetEvent(PyObject *module, PyValue arg)
+static PyObject *
+_overlapped_ResetEvent(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Handle = PyLong_AsVoidPtr(_arg);
-        if (!Handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    Handle = PyLong_AsVoidPtr(arg);
+    if (!Handle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_ResetEvent_impl(module, Handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_ResetEvent_impl(module, Handle);
 
 exit:
     return return_value;
@@ -530,33 +389,25 @@ PyDoc_STRVAR(_overlapped_BindLocal__doc__,
 static PyObject *
 _overlapped_BindLocal_impl(PyObject *module, HANDLE Socket, int Family);
 
-static PyValue
-_overlapped_BindLocal(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_BindLocal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Socket;
     int Family;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("BindLocal", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Socket = PyLong_AsVoidPtr(_arg);
-        if (!Socket && PyErr_Occurred()) {
-            goto exit;
-        }
+    Socket = PyLong_AsVoidPtr(args[0]);
+    if (!Socket && PyErr_Occurred()) {
+        goto exit;
     }
-    Family = PyLong_AsIntValue(args[1]);
+    Family = PyLong_AsInt(args[1]);
     if (Family == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _overlapped_BindLocal_impl(module, Socket, Family);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_BindLocal_impl(module, Socket, Family);
 
 exit:
     return return_value;
@@ -569,29 +420,21 @@ PyDoc_STRVAR(_overlapped_FormatMessage__doc__,
 "Return error message for an error code.");
 
 #define _OVERLAPPED_FORMATMESSAGE_METHODDEF    \
-    {"FormatMessage", _PyCFunction_CAST(_overlapped_FormatMessage), METH_O, _overlapped_FormatMessage__doc__},
+    {"FormatMessage", (PyCFunction)_overlapped_FormatMessage, METH_O, _overlapped_FormatMessage__doc__},
 
 static PyObject *
 _overlapped_FormatMessage_impl(PyObject *module, DWORD code);
 
-static PyValue
-_overlapped_FormatMessage(PyObject *module, PyValue arg)
+static PyObject *
+_overlapped_FormatMessage(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     DWORD code;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &code)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(arg, &code)) {
+        goto exit;
     }
-    _return_value = _overlapped_FormatMessage_impl(module, code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_FormatMessage_impl(module, code);
 
 exit:
     return return_value;
@@ -614,6 +457,7 @@ _overlapped_Overlapped(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -636,13 +480,13 @@ _overlapped_Overlapped(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     HANDLE event = INVALID_HANDLE_VALUE;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -650,15 +494,9 @@ _overlapped_Overlapped(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    {
-        PyObject *_arg = PyValue_Object(fastargs[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        event = PyLong_AsVoidPtr(_arg);
-        if (!event && PyErr_Occurred()) {
-            goto exit;
-        }
+    event = PyLong_AsVoidPtr(fastargs[0]);
+    if (!event && PyErr_Occurred()) {
+        goto exit;
     }
 skip_optional_pos:
     return_value = _overlapped_Overlapped_impl(type, event);
@@ -701,12 +539,11 @@ PyDoc_STRVAR(_overlapped_Overlapped_getresult__doc__,
 static PyObject *
 _overlapped_Overlapped_getresult_impl(OverlappedObject *self, BOOL wait);
 
-static PyValue
-_overlapped_Overlapped_getresult(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_getresult(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     BOOL wait = FALSE;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("getresult", nargs, 0, 1)) {
         goto exit;
@@ -714,13 +551,12 @@ _overlapped_Overlapped_getresult(PyObject *self, const PyValue *args, Py_ssize_t
     if (nargs < 1) {
         goto skip_optional;
     }
-    wait = PyLong_AsIntValue(args[0]);
+    wait = PyLong_AsInt(args[0]);
     if (wait == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _overlapped_Overlapped_getresult_impl((OverlappedObject *)self, wait);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_getresult_impl((OverlappedObject *)self, wait);
 
 exit:
     return return_value;
@@ -739,38 +575,24 @@ static PyObject *
 _overlapped_Overlapped_ReadFile_impl(OverlappedObject *self, HANDLE handle,
                                      DWORD size);
 
-static PyValue
-_overlapped_Overlapped_ReadFile(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_ReadFile(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     DWORD size;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ReadFile", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &size)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &size)) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_ReadFile_impl((OverlappedObject *)self, handle, size);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_ReadFile_impl((OverlappedObject *)self, handle, size);
 
 exit:
     return return_value;
@@ -789,38 +611,24 @@ static PyObject *
 _overlapped_Overlapped_ReadFileInto_impl(OverlappedObject *self,
                                          HANDLE handle, Py_buffer *bufobj);
 
-static PyValue
-_overlapped_Overlapped_ReadFileInto(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_ReadFileInto(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ReadFileInto", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_ReadFileInto_impl((OverlappedObject *)self, handle, &bufobj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_ReadFileInto_impl((OverlappedObject *)self, handle, &bufobj);
 
 exit:
     /* Cleanup for bufobj */
@@ -844,52 +652,32 @@ static PyObject *
 _overlapped_Overlapped_WSARecv_impl(OverlappedObject *self, HANDLE handle,
                                     DWORD size, DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_WSARecv(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSARecv(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     DWORD size;
     DWORD flags = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSARecv", nargs, 2, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &size)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &size)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &flags)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = _overlapped_Overlapped_WSARecv_impl((OverlappedObject *)self, handle, size, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WSARecv_impl((OverlappedObject *)self, handle, size, flags);
 
 exit:
     return return_value;
@@ -909,48 +697,28 @@ _overlapped_Overlapped_WSARecvInto_impl(OverlappedObject *self,
                                         HANDLE handle, Py_buffer *bufobj,
                                         DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_WSARecvInto(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSARecvInto(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
     DWORD flags;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSARecvInto", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &flags)) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_WSARecvInto_impl((OverlappedObject *)self, handle, &bufobj, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WSARecvInto_impl((OverlappedObject *)self, handle, &bufobj, flags);
 
 exit:
     /* Cleanup for bufobj */
@@ -974,38 +742,24 @@ static PyObject *
 _overlapped_Overlapped_WriteFile_impl(OverlappedObject *self, HANDLE handle,
                                       Py_buffer *bufobj);
 
-static PyValue
-_overlapped_Overlapped_WriteFile(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WriteFile(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WriteFile", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_WriteFile_impl((OverlappedObject *)self, handle, &bufobj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WriteFile_impl((OverlappedObject *)self, handle, &bufobj);
 
 exit:
     /* Cleanup for bufobj */
@@ -1029,48 +783,28 @@ static PyObject *
 _overlapped_Overlapped_WSASend_impl(OverlappedObject *self, HANDLE handle,
                                     Py_buffer *bufobj, DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_WSASend(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSASend(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
     DWORD flags;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSASend", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &flags)) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_WSASend_impl((OverlappedObject *)self, handle, &bufobj, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WSASend_impl((OverlappedObject *)self, handle, &bufobj, flags);
 
 exit:
     /* Cleanup for bufobj */
@@ -1095,39 +829,25 @@ _overlapped_Overlapped_AcceptEx_impl(OverlappedObject *self,
                                      HANDLE ListenSocket,
                                      HANDLE AcceptSocket);
 
-static PyValue
-_overlapped_Overlapped_AcceptEx(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_AcceptEx(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE ListenSocket;
     HANDLE AcceptSocket;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("AcceptEx", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        ListenSocket = PyLong_AsVoidPtr(_arg);
-        if (!ListenSocket && PyErr_Occurred()) {
-            goto exit;
-        }
+    ListenSocket = PyLong_AsVoidPtr(args[0]);
+    if (!ListenSocket && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        AcceptSocket = PyLong_AsVoidPtr(_arg);
-        if (!AcceptSocket && PyErr_Occurred()) {
-            goto exit;
-        }
+    AcceptSocket = PyLong_AsVoidPtr(args[1]);
+    if (!AcceptSocket && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_AcceptEx_impl((OverlappedObject *)self, ListenSocket, AcceptSocket);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_AcceptEx_impl((OverlappedObject *)self, ListenSocket, AcceptSocket);
 
 exit:
     return return_value;
@@ -1149,40 +869,26 @@ _overlapped_Overlapped_ConnectEx_impl(OverlappedObject *self,
                                       HANDLE ConnectSocket,
                                       PyObject *AddressObj);
 
-static PyValue
-_overlapped_Overlapped_ConnectEx(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_ConnectEx(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE ConnectSocket;
     PyObject *AddressObj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ConnectEx", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        ConnectSocket = PyLong_AsVoidPtr(_arg);
-        if (!ConnectSocket && PyErr_Occurred()) {
-            goto exit;
-        }
+    ConnectSocket = PyLong_AsVoidPtr(args[0]);
+    if (!ConnectSocket && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyTuple_Check(_arg)) {
-            _PyArg_BadArgument("ConnectEx", "argument 2", "tuple", _arg);
-            goto exit;
-        }
-        AddressObj = _arg;
+    if (!PyTuple_Check(args[1])) {
+        _PyArg_BadArgument("ConnectEx", "argument 2", "tuple", args[1]);
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_ConnectEx_impl((OverlappedObject *)self, ConnectSocket, AddressObj);
-    return_value = PyValue_FromResult(_return_value);
+    AddressObj = args[1];
+    return_value = _overlapped_Overlapped_ConnectEx_impl((OverlappedObject *)self, ConnectSocket, AddressObj);
 
 exit:
     return return_value;
@@ -1200,38 +906,24 @@ static PyObject *
 _overlapped_Overlapped_DisconnectEx_impl(OverlappedObject *self,
                                          HANDLE Socket, DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_DisconnectEx(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_DisconnectEx(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Socket;
     DWORD flags;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("DisconnectEx", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Socket = PyLong_AsVoidPtr(_arg);
-        if (!Socket && PyErr_Occurred()) {
-            goto exit;
-        }
+    Socket = PyLong_AsVoidPtr(args[0]);
+    if (!Socket && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &flags)) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_DisconnectEx_impl((OverlappedObject *)self, Socket, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_DisconnectEx_impl((OverlappedObject *)self, Socket, flags);
 
 exit:
     return return_value;
@@ -1254,10 +946,10 @@ _overlapped_Overlapped_TransmitFile_impl(OverlappedObject *self,
                                          DWORD count_to_write,
                                          DWORD count_per_send, DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_TransmitFile(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_TransmitFile(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Socket;
     HANDLE File;
     DWORD offset;
@@ -1265,78 +957,34 @@ _overlapped_Overlapped_TransmitFile(PyObject *self, const PyValue *args, Py_ssiz
     DWORD count_to_write;
     DWORD count_per_send;
     DWORD flags;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("TransmitFile", nargs, 7, 7)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Socket = PyLong_AsVoidPtr(_arg);
-        if (!Socket && PyErr_Occurred()) {
-            goto exit;
-        }
+    Socket = PyLong_AsVoidPtr(args[0]);
+    if (!Socket && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        File = PyLong_AsVoidPtr(_arg);
-        if (!File && PyErr_Occurred()) {
-            goto exit;
-        }
+    File = PyLong_AsVoidPtr(args[1]);
+    if (!File && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &offset)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &offset)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &offset_high)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[3], &offset_high)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &count_to_write)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[4], &count_to_write)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[5]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &count_per_send)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[5], &count_per_send)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[6]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[6], &flags)) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_TransmitFile_impl((OverlappedObject *)self, Socket, File, offset, offset_high, count_to_write, count_per_send, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_TransmitFile_impl((OverlappedObject *)self, Socket, File, offset, offset_high, count_to_write, count_per_send, flags);
 
 exit:
     return return_value;
@@ -1349,31 +997,23 @@ PyDoc_STRVAR(_overlapped_Overlapped_ConnectNamedPipe__doc__,
 "Start overlapped wait for a client to connect.");
 
 #define _OVERLAPPED_OVERLAPPED_CONNECTNAMEDPIPE_METHODDEF    \
-    {"ConnectNamedPipe", _PyCFunction_CAST(_overlapped_Overlapped_ConnectNamedPipe), METH_O, _overlapped_Overlapped_ConnectNamedPipe__doc__},
+    {"ConnectNamedPipe", (PyCFunction)_overlapped_Overlapped_ConnectNamedPipe, METH_O, _overlapped_Overlapped_ConnectNamedPipe__doc__},
 
 static PyObject *
 _overlapped_Overlapped_ConnectNamedPipe_impl(OverlappedObject *self,
                                              HANDLE Pipe);
 
-static PyValue
-_overlapped_Overlapped_ConnectNamedPipe(PyObject *self, PyValue arg)
+static PyObject *
+_overlapped_Overlapped_ConnectNamedPipe(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE Pipe;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        Pipe = PyLong_AsVoidPtr(_arg);
-        if (!Pipe && PyErr_Occurred()) {
-            goto exit;
-        }
+    Pipe = PyLong_AsVoidPtr(arg);
+    if (!Pipe && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_ConnectNamedPipe_impl((OverlappedObject *)self, Pipe);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_ConnectNamedPipe_impl((OverlappedObject *)self, Pipe);
 
 exit:
     return return_value;
@@ -1386,35 +1026,27 @@ PyDoc_STRVAR(_overlapped_Overlapped_ConnectPipe__doc__,
 "Connect to the pipe for asynchronous I/O (overlapped).");
 
 #define _OVERLAPPED_OVERLAPPED_CONNECTPIPE_METHODDEF    \
-    {"ConnectPipe", _PyCFunction_CAST(_overlapped_Overlapped_ConnectPipe), METH_O, _overlapped_Overlapped_ConnectPipe__doc__},
+    {"ConnectPipe", (PyCFunction)_overlapped_Overlapped_ConnectPipe, METH_O, _overlapped_Overlapped_ConnectPipe__doc__},
 
 static PyObject *
 _overlapped_Overlapped_ConnectPipe_impl(OverlappedObject *self,
                                         const wchar_t *Address);
 
-static PyValue
-_overlapped_Overlapped_ConnectPipe(PyObject *self, PyValue arg)
+static PyObject *
+_overlapped_Overlapped_ConnectPipe(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const wchar_t *Address = NULL;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("ConnectPipe", "argument", "str", _arg);
-            goto exit;
-        }
-        Address = PyUnicode_AsWideCharString(_arg, NULL);
-        if (Address == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("ConnectPipe", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_ConnectPipe_impl((OverlappedObject *)self, Address);
-    return_value = PyValue_FromResult(_return_value);
+    Address = PyUnicode_AsWideCharString(arg, NULL);
+    if (Address == NULL) {
+        goto exit;
+    }
+    return_value = _overlapped_Overlapped_ConnectPipe_impl((OverlappedObject *)self, Address);
 
 exit:
     /* Cleanup for Address */
@@ -1436,40 +1068,26 @@ static PyObject *
 _overlapped_WSAConnect_impl(PyObject *module, HANDLE ConnectSocket,
                             PyObject *AddressObj);
 
-static PyValue
-_overlapped_WSAConnect(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_WSAConnect(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE ConnectSocket;
     PyObject *AddressObj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSAConnect", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        ConnectSocket = PyLong_AsVoidPtr(_arg);
-        if (!ConnectSocket && PyErr_Occurred()) {
-            goto exit;
-        }
+    ConnectSocket = PyLong_AsVoidPtr(args[0]);
+    if (!ConnectSocket && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyTuple_Check(_arg)) {
-            _PyArg_BadArgument("WSAConnect", "argument 2", "tuple", _arg);
-            goto exit;
-        }
-        AddressObj = _arg;
+    if (!PyTuple_Check(args[1])) {
+        _PyArg_BadArgument("WSAConnect", "argument 2", "tuple", args[1]);
+        goto exit;
     }
-    _return_value = _overlapped_WSAConnect_impl(module, ConnectSocket, AddressObj);
-    return_value = PyValue_FromResult(_return_value);
+    AddressObj = args[1];
+    return_value = _overlapped_WSAConnect_impl(module, ConnectSocket, AddressObj);
 
 exit:
     return return_value;
@@ -1489,60 +1107,34 @@ _overlapped_Overlapped_WSASendTo_impl(OverlappedObject *self, HANDLE handle,
                                       Py_buffer *bufobj, DWORD flags,
                                       PyObject *AddressObj);
 
-static PyValue
-_overlapped_Overlapped_WSASendTo(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSASendTo(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
     DWORD flags;
     PyObject *AddressObj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSASendTo", nargs, 4, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &flags)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyTuple_Check(_arg)) {
-            _PyArg_BadArgument("WSASendTo", "argument 4", "tuple", _arg);
-            goto exit;
-        }
-        AddressObj = _arg;
+    if (!PyTuple_Check(args[3])) {
+        _PyArg_BadArgument("WSASendTo", "argument 4", "tuple", args[3]);
+        goto exit;
     }
-    _return_value = _overlapped_Overlapped_WSASendTo_impl((OverlappedObject *)self, handle, &bufobj, flags, AddressObj);
-    return_value = PyValue_FromResult(_return_value);
+    AddressObj = args[3];
+    return_value = _overlapped_Overlapped_WSASendTo_impl((OverlappedObject *)self, handle, &bufobj, flags, AddressObj);
 
 exit:
     /* Cleanup for bufobj */
@@ -1567,52 +1159,32 @@ _overlapped_Overlapped_WSARecvFrom_impl(OverlappedObject *self,
                                         HANDLE handle, DWORD size,
                                         DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_WSARecvFrom(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSARecvFrom(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     DWORD size;
     DWORD flags = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSARecvFrom", nargs, 2, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &size)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &size)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &flags)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = _overlapped_Overlapped_WSARecvFrom_impl((OverlappedObject *)self, handle, size, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WSARecvFrom_impl((OverlappedObject *)self, handle, size, flags);
 
 exit:
     return return_value;
@@ -1632,62 +1204,36 @@ _overlapped_Overlapped_WSARecvFromInto_impl(OverlappedObject *self,
                                             HANDLE handle, Py_buffer *bufobj,
                                             DWORD size, DWORD flags);
 
-static PyValue
-_overlapped_Overlapped_WSARecvFromInto(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_overlapped_Overlapped_WSARecvFromInto(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     Py_buffer bufobj = {NULL, NULL};
     DWORD size;
     DWORD flags = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WSARecvFromInto", nargs, 3, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bufobj, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &bufobj, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &size)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[2], &size)) {
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &flags)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[3], &flags)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = _overlapped_Overlapped_WSARecvFromInto_impl((OverlappedObject *)self, handle, &bufobj, size, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _overlapped_Overlapped_WSARecvFromInto_impl((OverlappedObject *)self, handle, &bufobj, size, flags);
 
 exit:
     /* Cleanup for bufobj */
@@ -1697,4 +1243,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=d8ea9dc0ed342da8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0ecaf45a09539599 input=a9049054013a1b77]*/

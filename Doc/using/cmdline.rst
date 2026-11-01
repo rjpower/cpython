@@ -550,13 +550,12 @@ Miscellaneous options
 
      .. versionadded:: 3.3
 
-   * ``-X showrefcount`` is accepted and has no effect: nothing is reference
-     counted.
+   * ``-X showrefcount`` to output the total reference count and number of used
+     memory blocks when the program finishes or after each statement in the
+     interactive interpreter. This only works on :ref:`debug builds
+     <debug-build>`.
 
      .. versionadded:: 3.4
-
-     .. versionchanged:: 3.16
-        It no longer outputs the total reference count.
 
    * ``-X tracemalloc`` to start tracing Python memory allocations using the
      :mod:`tracemalloc` module. By default, only the most recent frame is
@@ -1430,6 +1429,16 @@ conflict.
    See also the :option:`-X lazy_imports <-X>` command-line option.
 
    .. versionadded:: 3.15
+
+.. envvar:: PYTHON_TAGGED_VALUES
+
+   If set to ``0``, the interpreter keeps every :class:`int` and :class:`float`
+   in a heap object instead of holding small ints and most floats in its
+   evaluation stack and local variables.
+   This is meant for comparing the two when investigating a problem. Only
+   applies to 64-bit builds without :option:`--disable-gil`.
+
+   .. versionadded:: 3.16
 
 Debug-mode variables
 ~~~~~~~~~~~~~~~~~~~~

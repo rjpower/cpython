@@ -16,8 +16,27 @@ typedef struct {
 } _PyCoCached;
 
 
+#ifdef Py_GIL_DISABLED
+
+/* Each thread specializes a thread-local copy of the bytecode in free-threaded
+ * builds. These copies are stored on the code object in a `_PyCodeArray`. The
+ * first entry in the array always points to the "main" copy of the bytecode
+ * that is stored at the end of the code object.
+ */
+typedef struct {
+    Py_ssize_t size;
+    char *entries[1];
+} _PyCodeArray;
+
+#define _PyCode_DEF_UNIQUE_ID() \
+    Py_ssize_t _co_unique_id;     /* ID used for per-thread refcounting */
+
+#define _PyCode_DEF_THREAD_LOCAL_BYTECODE() \
+    _PyCodeArray *co_tlbc;
+#else
 #define _PyCode_DEF_UNIQUE_ID()
 #define _PyCode_DEF_THREAD_LOCAL_BYTECODE()
+#endif
 
 /* The executing copy of the words, with the feedback vector (see
    Include/internal/pycore_ir.h); NULL until the first call. */
@@ -80,6 +99,7 @@ typedef struct {
     PyObject *co_name;            /* unicode (name, for reference) */          \
     PyObject *co_qualname;        /* unicode (qualname, for reference) */      \
     PyObject *co_linetable;       /* bytes object that holds location info */  \
+    PyObject *co_weakreflist;     /* to support weakrefs to code objects */    \
     _PyCoCached *_co_cached;      /* cached co_* attributes */                 \
     uintptr_t _co_instrumentation_version; /* current instrumentation version */ \
     struct _PyCoMonitoringData *_co_monitoring; /* Monitoring data */          \
@@ -147,7 +167,7 @@ struct PyCodeObject _PyCode_DEF(1);
 
 PyAPI_DATA(PyTypeObject) PyCode_Type;
 
-#define PyCode_Check(op) _Py_IS_ROOT_SHAPE((op), &PyCode_Type)
+#define PyCode_Check(op) Py_IS_TYPE((op), &PyCode_Type)
 
 static inline Py_ssize_t PyCode_GetNumFree(PyCodeObject *op) {
     assert(PyCode_Check(op));

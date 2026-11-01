@@ -12,24 +12,22 @@ PyDoc_STRVAR(resource_getrusage__doc__,
 "\n");
 
 #define RESOURCE_GETRUSAGE_METHODDEF    \
-    {"getrusage", _PyCFunction_CAST(resource_getrusage), METH_O, resource_getrusage__doc__},
+    {"getrusage", (PyCFunction)resource_getrusage, METH_O, resource_getrusage__doc__},
 
 static PyObject *
 resource_getrusage_impl(PyObject *module, int who);
 
-static PyValue
-resource_getrusage(PyObject *module, PyValue arg)
+static PyObject *
+resource_getrusage(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int who;
-    PyObject *_return_value;
 
-    who = PyLong_AsIntValue(arg);
+    who = PyLong_AsInt(arg);
     if (who == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = resource_getrusage_impl(module, who);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = resource_getrusage_impl(module, who);
 
 exit:
     return return_value;
@@ -43,24 +41,22 @@ PyDoc_STRVAR(resource_getrlimit__doc__,
 "\n");
 
 #define RESOURCE_GETRLIMIT_METHODDEF    \
-    {"getrlimit", _PyCFunction_CAST(resource_getrlimit), METH_O, resource_getrlimit__doc__},
+    {"getrlimit", (PyCFunction)resource_getrlimit, METH_O, resource_getrlimit__doc__},
 
 static PyObject *
 resource_getrlimit_impl(PyObject *module, int resource);
 
-static PyValue
-resource_getrlimit(PyObject *module, PyValue arg)
+static PyObject *
+resource_getrlimit(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int resource;
-    PyObject *_return_value;
 
-    resource = PyLong_AsIntValue(arg);
+    resource = PyLong_AsInt(arg);
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = resource_getrlimit_impl(module, resource);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = resource_getrlimit_impl(module, resource);
 
 exit:
     return return_value;
@@ -77,27 +73,22 @@ PyDoc_STRVAR(resource_setrlimit__doc__,
 static PyObject *
 resource_setrlimit_impl(PyObject *module, int resource, PyObject *limits);
 
-static PyValue
-resource_setrlimit(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+resource_setrlimit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int resource;
     PyObject *limits;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setrlimit", nargs, 2, 2)) {
         goto exit;
     }
-    resource = PyLong_AsIntValue(args[0]);
+    resource = PyLong_AsInt(args[0]);
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    limits = PyValue_Object(args[1]);
-    if (limits == NULL) {
-        goto exit;
-    }
-    _return_value = resource_setrlimit_impl(module, resource, limits);
-    return_value = PyValue_FromResult(_return_value);
+    limits = args[1];
+    return_value = resource_setrlimit_impl(module, resource, limits);
 
 exit:
     return return_value;
@@ -117,42 +108,31 @@ static PyObject *
 resource_prlimit_impl(PyObject *module, pid_t pid, int resource,
                       PyObject *limits);
 
-static PyValue
-resource_prlimit(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+resource_prlimit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     pid_t pid;
     int resource;
     PyObject *limits = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("prlimit", nargs, 2, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        pid = PyLong_AsPid(_arg);
-        if (pid == (pid_t)(-1) && PyErr_Occurred()) {
-            goto exit;
-        }
+    pid = PyLong_AsPid(args[0]);
+    if (pid == (pid_t)(-1) && PyErr_Occurred()) {
+        goto exit;
     }
-    resource = PyLong_AsIntValue(args[1]);
+    resource = PyLong_AsInt(args[1]);
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    limits = PyValue_Object(args[2]);
-    if (limits == NULL) {
-        goto exit;
-    }
+    limits = args[2];
 skip_optional:
-    _return_value = resource_prlimit_impl(module, pid, resource, limits);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = resource_prlimit_impl(module, pid, resource, limits);
 
 exit:
     return return_value;
@@ -194,4 +174,4 @@ exit:
 #ifndef RESOURCE_PRLIMIT_METHODDEF
     #define RESOURCE_PRLIMIT_METHODDEF
 #endif /* !defined(RESOURCE_PRLIMIT_METHODDEF) */
-/*[clinic end generated code: output=b0f729e189a0aa8c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4044ef9ffbf7278b input=a9049054013a1b77]*/

@@ -30,7 +30,6 @@
 #include "pycore_signal.h"        // Py_NSIG
 #include "pycore_time.h"          // _PyLong_FromTime_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
-#include "pycore_value.h"         // _PyValue_IsNone()
 #include "pycore_typeobject.h"    // _PyType_AddMethod()
 #include "pycore_warnings.h"      // _PyWarnings_AfterFork()
 
@@ -715,32 +714,16 @@ run_at_forkers(PyObject *lst, int reverse)
     }
 }
 
-int
-_PyOS_BeforeFork(void)
+void
+PyOS_BeforeFork(void)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     run_at_forkers(interp->before_forkers, 1);
 
     _PyImport_AcquireLock(interp);
     _PyEval_StopTheWorldAll(&_PyRuntime);
-    if (interp->gc.queue_draining) {
-        _PyEval_StartTheWorldAll(&_PyRuntime);
-        _PyImport_ReleaseLock(interp);
-        PyErr_SetString(PyExc_RuntimeError,
-                        "cannot fork while GC callbacks are running");
-        return -1;
-    }
     HEAD_LOCK(&_PyRuntime);
     _PyWarnings_BeforeFork(interp);
-    return 0;
-}
-
-void
-PyOS_BeforeFork(void)
-{
-    if (_PyOS_BeforeFork() < 0) {
-        Py_FatalError("cannot fork while GC callbacks are running");
-    }
 }
 
 void
@@ -791,6 +774,10 @@ PyOS_AfterFork_Child(void)
     tstate->native_thread_id = PyThread_get_thread_native_id();
 #endif
 
+#ifdef Py_GIL_DISABLED
+    _Py_brc_after_fork(tstate->interp);
+    _Py_qsbr_after_fork((_PyThreadStateImpl *)tstate);
+#endif
 
     // Ideally we could guarantee tstate is running main.
     _PyInterpreterState_ReinitRunningMain(tstate);
@@ -1122,18 +1109,6 @@ _PyLong_FromDev(dev_t dev)
     }
 #endif
     return PyLong_FromUnsignedLongLong((unsigned long long)dev);
-}
-
-/* _PyLong_FromDev() for a parser which returns a value. */
-static PyValue
-_PyValue_FromDev(dev_t dev)
-{
-#ifdef NODEV
-    if (dev == NODEV) {
-        return PyValue_FromLongLong((long long)dev);
-    }
-#endif
-    return PyValue_FromUnsignedLongLong((unsigned long long)dev);
 }
 
 
@@ -1740,6 +1715,16 @@ idtype_t_converter(PyObject *arg, void *addr)
     return 1;
 }
 #endif
+
+static PyObject *
+PyLong_FromPy_off_t(Py_off_t offset)
+{
+#ifdef HAVE_LARGEFILE_SUPPORT
+    return PyLong_FromLongLong(offset);
+#else
+    return PyLong_FromLong(offset);
+#endif
+}
 
 #ifdef HAVE_SIGSET_T
 /* Convert an iterable of integers to a sigset.
@@ -2616,8 +2601,9 @@ statresult_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
        st_?time might be set to None. Initialize it
        from the int slots.  */
     for (i = 7; i <= 9; i++) {
-        if (_PyValue_IsNone(result->ob_item[i+3])) {
-            result->ob_item[i+3] = result->ob_item[i];
+        if (result->ob_item[i+3] == Py_None) {
+            Py_DECREF(Py_None);
+            result->ob_item[i+3] = Py_NewRef(result->ob_item[i]);
         }
     }
     return (PyObject*)result;
@@ -3237,8 +3223,6 @@ class dev_t_return_converter(unsigned_long_return_converter):
     type = 'dev_t'
     conversion_fn = '_PyLong_FromDev'
     unsigned_cast = '(dev_t)'
-    value_conversion_fn = '_PyValue_FromDev'
-    value_cast = ''
 
 class idtype_t_converter(CConverter):
     type = 'idtype_t'
@@ -3270,9 +3254,7 @@ class intptr_t_converter(CConverter):
 
 class Py_off_t_return_converter(long_return_converter):
     type = 'Py_off_t'
-    conversion_fn = 'PyLong_FromLongLong'
-    cast = '(long long)'
-    value_conversion_fn = 'PyValue_FromLongLong'
+    conversion_fn = 'PyLong_FromPy_off_t'
 
 class confname_converter(CConverter):
     type="int"
@@ -3289,7 +3271,7 @@ class confname_converter(CConverter):
         """, argname=argname, converter=self.converter, table=self.table)
 
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=f63794bafc91b2b6]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=7ceccf55bb600f61]*/
 
 /*[clinic input]
 
@@ -3392,15 +3374,15 @@ static PyMemberDef pystatx_result_members[] = {
 
 
 #define STATX_GET_UINT(ATTR, MASK) \
-    static PyValue \
+    static PyObject* \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            return PyValue_FromObject(Py_None); \
+            Py_RETURN_NONE; \
         } \
         unsigned long value = self->stx.ATTR; \
-        return PyValue_FromUnsignedLongLong(value); \
+        return PyLong_FromUnsignedLong(value); \
     }
 
 STATX_GET_UINT(stx_uid, STATX_UID)
@@ -3423,27 +3405,27 @@ STATX_GET_UINT(stx_atomic_write_unit_max_opt, STATX_WRITE_ATOMIC)
 #endif
 
 
-static PyValue
+static PyObject*
 pystatx_result_get_stx_mode(PyObject *op, void *Py_UNUSED(context))
 {
     Py_statx_result *self = Py_statx_result_CAST(op);
     if (!(self->stx.stx_mask & (STATX_TYPE | STATX_MODE))) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromUnsignedLongLong(self->stx.stx_mode);
+    return PyLong_FromUnsignedLong(self->stx.stx_mode);
 }
 
 
 #define STATX_GET_ULONGLONG(ATTR, MASK) \
-    static PyValue \
+    static PyObject* \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            return PyValue_FromObject(Py_None); \
+            Py_RETURN_NONE; \
         } \
         unsigned long long value = self->stx.ATTR; \
-        return PyValue_FromUnsignedLongLong(value); \
+        return PyLong_FromUnsignedLongLong(value); \
     }
 
 STATX_GET_ULONGLONG(stx_blocks, STATX_BLOCKS)
@@ -3458,16 +3440,16 @@ STATX_GET_ULONGLONG(stx_subvol, STATX_SUBVOL)
 
 
 #define STATX_GET_DOUBLE(ATTR, MASK) \
-    static PyValue \
+    static PyObject* \
     pystatx_result_get_##ATTR(PyObject *op, void *Py_UNUSED(context)) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            return PyValue_FromObject(Py_None); \
+            Py_RETURN_NONE; \
         } \
         struct statx_timestamp *ts = &self->stx.ATTR; \
         double sec = ((double)ts->tv_sec + ts->tv_nsec * 1e-9); \
-        return PyValue_FromDouble(sec); \
+        return PyFloat_FromDouble(sec); \
     }
 
 STATX_GET_DOUBLE(stx_atime, STATX_ATIME)
@@ -3476,18 +3458,17 @@ STATX_GET_DOUBLE(stx_ctime, STATX_CTIME)
 STATX_GET_DOUBLE(stx_mtime, STATX_MTIME)
 
 #define STATX_GET_NSEC(ATTR, MEMBER, MASK) \
-    static PyValue \
+    static PyObject* \
     pystatx_result_get_##ATTR(PyObject *op, void *context) \
     { \
         Py_statx_result *self = Py_statx_result_CAST(op); \
         if (!(self->stx.stx_mask & MASK)) { \
-            return PyValue_FromObject(Py_None); \
+            Py_RETURN_NONE; \
         } \
         struct statx_timestamp *ts = &self->stx.MEMBER; \
         _posixstate *state = PyType_GetModuleState(Py_TYPE(op)); \
         assert(state != NULL); \
-        return PyValue_FromResult( \
-            stat_nanosecond_timestamp(state, ts->tv_sec, ts->tv_nsec)); \
+        return stat_nanosecond_timestamp(state, ts->tv_sec, ts->tv_nsec); \
     }
 
 STATX_GET_NSEC(stx_atime_ns, stx_atime, STATX_ATIME)
@@ -3582,25 +3563,22 @@ pystatx_result_repr(PyObject *op)
 
     for (size_t i = 0; i < Py_ARRAY_LENGTH(pystatx_result_getset) - 1; ++i) {
         PyGetSetDef *d = &pystatx_result_getset[i];
-        PyValue v = d->get(op, d->closure);
-        if (PyValue_IsNull(v)) {
+        PyObject *o = d->get(op, d->closure);
+        if (o == NULL) {
             goto error;
         }
-        if (PyValue_Is(v, PyValue_FromObject(Py_None))) {
+        if (o == Py_None) {
             continue;
         }
 
         WRITE_ASCII(", ");
         WRITE_ASCII(d->name);
         WRITE_ASCII("=");
-        // The repr of the value, so that an inline number is not boxed.
-        PyValue repr = PyObject_ReprValue(v);
-        if (PyValue_IsNull(repr)) {
+        if (PyUnicodeWriter_WriteRepr(writer, o) < 0) {
+            Py_DECREF(o);
             goto error;
         }
-        if (PyUnicodeWriter_WriteStr(writer, PyValue_ObjectBorrow(repr)) < 0) {
-            goto error;
-        }
+        Py_DECREF(o);
     }
 
     WRITE_ASCII(")");
@@ -8653,9 +8631,7 @@ os_fork1_impl(PyObject *module)
         PyErr_SetString(PyExc_RuntimeError, "fork not supported for subinterpreters");
         return NULL;
     }
-    if (_PyOS_BeforeFork() < 0) {
-        return NULL;
-    }
+    PyOS_BeforeFork();
     pid = fork1();
     int saved_errno = errno;
     if (pid == 0) {
@@ -8708,9 +8684,7 @@ os_fork_impl(PyObject *module)
     if (PySys_Audit("os.fork", NULL) < 0) {
         return NULL;
     }
-    if (_PyOS_BeforeFork() < 0) {
-        return NULL;
-    }
+    PyOS_BeforeFork();
     pid = fork();
     int saved_errno = errno;
     if (pid == 0) {
@@ -9596,9 +9570,7 @@ os_forkpty_impl(PyObject *module)
     if (PySys_Audit("os.forkpty", NULL) < 0) {
         return NULL;
     }
-    if (_PyOS_BeforeFork() < 0) {
-        return NULL;
-    }
+    PyOS_BeforeFork();
     pid = forkpty(&master_fd, NULL, NULL, NULL);
     if (pid == 0) {
         /* child: this clobbers and resets the import lock. */
@@ -10527,8 +10499,8 @@ Set the groups of the current process to list.
 [clinic start generated code]*/
 
 static PyObject *
-os_setgroups_impl(PyObject *module, PyObject *groups)
-/*[clinic end generated code: output=4d4c65fcc8539606 input=fa742ca3daf85a7e]*/
+os_setgroups(PyObject *module, PyObject *groups)
+/*[clinic end generated code: output=3fcb32aad58c5ecd input=fa742ca3daf85a7e]*/
 {
     if (!PySequence_Check(groups)) {
         PyErr_SetString(PyExc_TypeError, "setgroups argument must be a sequence");
@@ -16858,7 +16830,7 @@ static PyMethodDef DirEntry_methods[] = {
     OS_DIRENTRY_STAT_METHODDEF
     OS_DIRENTRY_INODE_METHODDEF
     OS_DIRENTRY___FSPATH___METHODDEF
-    {"__class_getitem__",       _PyCFunction_CAST(Py_GenericAliasValue),
+    {"__class_getitem__",       Py_GenericAlias,
     METH_O|METH_CLASS,          PyDoc_STR("DirEntry is generic over the type of the path (str or bytes)")},
     {NULL}
 };
@@ -17165,7 +17137,7 @@ ScandirIterator_closedir(ScandirIterator *iterator)
     }
 }
 
-static PyValue
+static PyObject *
 ScandirIterator_iternext(PyObject *op)
 {
     ScandirIterator *iterator = ScandirIterator_CAST(op);
@@ -17213,7 +17185,7 @@ ScandirIterator_iternext(PyObject *op)
         PyObject *module = PyType_GetModule(Py_TYPE(iterator));
         PyObject *entry = DirEntry_from_find_data(module, &iterator->path, &file_data);
         if (entry != NULL) {
-            return PyValue_FromObject(entry);
+            return entry;
         }
     }
     else if (error != ERROR_SUCCESS && error != ERROR_NO_MORE_FILES) {
@@ -17223,7 +17195,7 @@ ScandirIterator_iternext(PyObject *op)
 
     /* Error or no more files */
     ScandirIterator_closedir(iterator);
-    return PyValue_NULL;
+    return NULL;
 }
 
 #else /* POSIX */
@@ -17259,7 +17231,7 @@ ScandirIterator_closedir(ScandirIterator *iterator)
     }
 }
 
-static PyValue
+static PyObject *
 ScandirIterator_iternext(PyObject *op)
 {
     ScandirIterator *iterator = ScandirIterator_CAST(op);
@@ -17336,7 +17308,7 @@ ScandirIterator_iternext(PyObject *op)
             PyMem_RawFree(name);
         }
         if (entry != NULL) {
-            return PyValue_FromObject(entry);
+            return entry;
         }
     }
     else if (no_memory) {
@@ -17349,7 +17321,7 @@ ScandirIterator_iternext(PyObject *op)
 
     /* Error or no more files */
     ScandirIterator_closedir(iterator);
-    return PyValue_NULL;
+    return NULL;
 }
 
 #endif
@@ -17377,9 +17349,9 @@ Close the scandir iterator.
 [clinic start generated code]*/
 
 static PyObject *
-os_ScandirIterator___exit___impl(PyObject *self, const PyValue *exc_info,
+os_ScandirIterator___exit___impl(PyObject *self, PyObject * const *exc_info,
                                  Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=e564994c7b8fad1d input=ff3ffe83ae605a36]*/
+/*[clinic end generated code: output=5d3941725a7c97c7 input=ff3ffe83ae605a36]*/
 {
     ScandirIterator_closedir(ScandirIterator_CAST(self));
     Py_RETURN_NONE;

@@ -19,15 +19,13 @@
 #include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
 #include "pycore_code.h"
 #include "pycore_compile.h"
-#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
-#include "pycore_list.h"          // _PyList_AppendValue()
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_stats.h"
-#include "pycore_tuple.h"         // _PyTuple_FromPair(), _PyTuple_FromValues()
+#include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 
 #include "cpython/code.h"
@@ -464,12 +462,10 @@ const_cache_insert(PyObject *const_cache, PyObject *o, bool recursive)
             return NULL;
         }
         Py_ssize_t i = 0, pos = 0;
-        PyValue item;
+        PyObject *item;
         Py_hash_t hash;
-        while (_PySet_NextValue(o, &pos, &item, &hash)) {
-            PyObject *item_o = PyValue_Object(item);
-            PyObject *k = item_o == NULL ? NULL :
-                const_cache_insert(const_cache, item_o, recursive);
+        while (_PySet_NextEntry(o, &pos, &item, &hash)) {
+            PyObject *k = const_cache_insert(const_cache, item, recursive);
             if (k == NULL) {
                 Py_DECREF(tuple);
                 Py_DECREF(key);
@@ -512,26 +508,26 @@ merge_consts_recursive(PyObject *const_cache, PyObject *o)
 Py_ssize_t
 _PyCompile_DictAddObj(PyObject *dict, PyObject *o)
 {
-    PyValue key = PyValue_FromObject(o);
-    PyValue v;
+    PyObject *v;
     Py_ssize_t arg;
 
-    int found = _PyDict_GetItemValue(dict, key, &v);
-    if (found < 0) {
+    if (PyDict_GetItemRef(dict, o, &v) < 0) {
         return ERROR;
     }
-    if (!found) {
+    if (!v) {
         arg = PyDict_GET_SIZE(dict);
-        v = PyValue_FromLongLong(arg);
-        if (PyValue_IsNull(v)) {
+        v = PyLong_FromSsize_t(arg);
+        if (!v) {
             return ERROR;
         }
-        if (_PyDict_SetItemValue((PyDictObject *)dict, key, v) < 0) {
+        if (PyDict_SetItem(dict, o, v) < 0) {
+            Py_DECREF(v);
             return ERROR;
         }
     }
     else
-        arg = PyLong_AsLongValue(v);
+        arg = PyLong_AsLong(v);
+    Py_DECREF(v);
     return arg;
 }
 
@@ -552,21 +548,24 @@ static PyObject *
 list2dict(PyObject *list)
 {
     Py_ssize_t i, n;
+    PyObject *v, *k;
     PyObject *dict = PyDict_New();
     if (!dict) return NULL;
 
     n = PyList_Size(list);
     for (i = 0; i < n; i++) {
-        PyValue v = PyValue_FromLongLong(i);
-        if (PyValue_IsNull(v)) {
+        v = PyLong_FromSsize_t(i);
+        if (!v) {
             Py_DECREF(dict);
             return NULL;
         }
-        if (_PyDict_SetItemValue((PyDictObject *)dict,
-                                 PyList_GET_VALUE(list, i), v) < 0) {
+        k = PyList_GET_ITEM(list, i);
+        if (PyDict_SetItem(dict, k, v) < 0) {
+            Py_DECREF(v);
             Py_DECREF(dict);
             return NULL;
         }
+        Py_DECREF(v);
     }
     return dict;
 }
@@ -583,7 +582,7 @@ static PyObject *
 dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 {
     Py_ssize_t i = offset, num_keys, key_i;
-    PyObject *k, *dest = PyDict_New();
+    PyObject *k, *v, *dest = PyDict_New();
     PyObject *sorted_keys;
 
     assert(offset >= 0);
@@ -609,36 +608,36 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 
     for (key_i = 0; key_i < num_keys; key_i++) {
         k = PyList_GET_ITEM(sorted_keys, key_i);
-        PyValue v;
-        int found = _PyDict_GetItemValue(src, PyValue_FromObject(k), &v);
-        if (found <= 0) {
-            if (found == 0) {
+        v = PyDict_GetItemWithError(src, k);
+        if (!v) {
+            if (!PyErr_Occurred()) {
                 PyErr_SetObject(PyExc_KeyError, k);
             }
             Py_DECREF(sorted_keys);
             Py_DECREF(dest);
             return NULL;
         }
-        long vi = PyLong_AsLongValue(v);
+        long vi = PyLong_AsLong(v);
         if (vi == -1 && PyErr_Occurred()) {
             Py_DECREF(sorted_keys);
             Py_DECREF(dest);
             return NULL;
         }
         if (SYMBOL_TO_SCOPE(vi) == scope_type || vi & flag) {
-            PyValue item = PyValue_FromLongLong(i);
-            if (PyValue_IsNull(item)) {
+            PyObject *item = PyLong_FromSsize_t(i);
+            if (item == NULL) {
                 Py_DECREF(sorted_keys);
                 Py_DECREF(dest);
                 return NULL;
             }
             i++;
-            if (_PyDict_SetItemValue((PyDictObject *)dest,
-                                     PyValue_FromObject(k), item) < 0) {
+            if (PyDict_SetItem(dest, k, item) < 0) {
                 Py_DECREF(sorted_keys);
+                Py_DECREF(item);
                 Py_DECREF(dest);
                 return NULL;
             }
+            Py_DECREF(item);
         }
     }
     Py_DECREF(sorted_keys);
@@ -649,12 +648,14 @@ static int
 add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
 {
     Py_ssize_t pos = 0;
-    PyValue k, v;
-    // The names are strings and the flags are int32, so neither is boxed.
-    while (_PyDict_NextValue(symbols, &pos, &k, &v, NULL)) {
-        long flags = PyValue_Int32(v);
+    PyObject *k, *v;
+    while (PyDict_Next(symbols, &pos, &k, &v)) {
+        long flags = PyLong_AsLong(v);
+        if (flags == -1 && PyErr_Occurred()) {
+            return ERROR;
+        }
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_Add(names, PyValue_ObjectBorrow(k)) < 0) {
+            if (PySet_Add(names, k) < 0) {
                 return ERROR;
             }
         }
@@ -1092,11 +1093,11 @@ _PyCompile_GetRefType(compiler *c, PyObject *name)
 static int
 dict_lookup_arg(PyObject *dict, PyObject *name)
 {
-    PyValue v;
-    if (_PyDict_GetItemValue(dict, PyValue_FromObject(name), &v) <= 0) {
+    PyObject *v = PyDict_GetItemWithError(dict, name);
+    if (v == NULL) {
         return ERROR;
     }
-    return PyLong_AsLongValue(v);
+    return PyLong_AsLong(v);
 }
 
 int
@@ -1278,21 +1279,23 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
         return ERROR;
     }
     Py_DECREF(ptr);
-    PyValue index;
+    PyObject *index;
     if (c->u->u_scope_type == COMPILE_SCOPE_MODULE || c->u->u_in_conditional_block) {
-        index = PyValue_FromLongLong(c->u->u_next_conditional_annotation_index);
-        // The caller takes the index as an object.
-        *conditional_annotation_index = PyValue_Object(index);
-        if (*conditional_annotation_index == NULL) {
+        index = PyLong_FromLong(c->u->u_next_conditional_annotation_index);
+        if (index == NULL) {
             return ERROR;
         }
+        *conditional_annotation_index = Py_NewRef(index);
         c->u->u_next_conditional_annotation_index++;
     }
     else {
-        index = PyValue_FromLongLong(-1);
+        index = PyLong_FromLong(-1);
+        if (index == NULL) {
+            return ERROR;
+        }
     }
-    int rc = _PyList_AppendValue(
-        (PyListObject *)c->u->u_conditional_annotation_indices, index);
+    int rc = PyList_Append(c->u->u_conditional_annotation_indices, index);
+    Py_DECREF(index);
     RETURN_IF_ERROR(rc);
     return SUCCESS;
 }
@@ -1461,25 +1464,24 @@ _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj)
 static PyObject *
 consts_dict_keys_inorder(PyObject *dict)
 {
-    PyObject *consts;
-    PyValue k, v;
+    PyObject *consts, *k, *v;
     Py_ssize_t i, pos = 0, size = PyDict_GET_SIZE(dict);
 
     consts = PyList_New(size);   /* PyCode_Optimize() requires a list */
     if (consts == NULL)
         return NULL;
-    // A constant key can be inline, and an index is, so nothing is boxed.
-    while (_PyDict_NextValue(dict, &pos, &k, &v, NULL)) {
-        i = PyValue_Int32(v);
+    while (PyDict_Next(dict, &pos, &k, &v)) {
+        assert(PyLong_CheckExact(v));
+        i = PyLong_AsLong(v);
         /* The keys of the dictionary can be tuples wrapping a constant.
          * (see _PyCompile_DictAddObj and _PyCode_ConstantKey). In that case
          * the object we want is always second. */
-        if (PyValue_Type(k) == &PyTuple_Type) {
-            k = PyTuple_GET_VALUE(PyValue_ObjectBorrow(k), 1);
+        if (PyTuple_CheckExact(k)) {
+            k = PyTuple_GET_ITEM(k, 1);
         }
         assert(i < size);
         assert(i >= 0);
-        PyList_SET_VALUE(consts, i, k);
+        PyList_SET_ITEM(consts, i, Py_NewRef(k));
     }
     return consts;
 }
@@ -1548,7 +1550,7 @@ intern_constant(PyObject *const_cache, PyObject *o)
     }
     else {
         PySliceObject *slice = (PySliceObject *)o;
-        items = _PyTuple_FromValues(&slice->start, 3);
+        items = PyTuple_Pack(3, slice->start, slice->stop, slice->step);
     }
     if (items == NULL) {
         Py_DECREF(key);

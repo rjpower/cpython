@@ -3,7 +3,6 @@
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
 #include "pycore_flowgraph.h"
 #include "pycore_compile.h"
-#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_long.h"          // _PY_IS_SMALL_INT()
@@ -13,7 +12,7 @@
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_regcfg.h"          // _PyRegCfg_Build()
-#include "pycore_value.h"           // PyValue_ObjectBorrow()
+#include "pycore_stackref.h"        // PyStackRef_AsPyObjectBorrow()
 
 #include <stdbool.h>
 
@@ -1344,7 +1343,7 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
     }
     if (opcode == LOAD_COMMON_CONSTANT) {
         assert(oparg < NUM_COMMON_CONSTANTS);
-        return PyValue_Object(
+        return PyStackRef_AsPyObjectBorrow(
             _PyInterpreterState_GET()->common_consts[oparg]);
     }
 
@@ -3943,26 +3942,27 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
         fixed[i] = nlocals + i;
     }
 
-    // The names are strings and the indices int32: nothing is boxed.
-    PyValue name_value, cellindex;
+    PyObject *varname, *cellindex;
     Py_ssize_t pos = 0;
-    while (_PyDict_NextValue(umd->u_cellvars, &pos, &name_value, &cellindex, NULL)) {
-        PyValue varindex;
-        int found = _PyDict_GetItemValue(umd->u_varnames, name_value,
-                                         &varindex);
-        if (found < 0) {
+    while (PyDict_Next(umd->u_cellvars, &pos, &varname, &cellindex)) {
+        PyObject *varindex;
+        if (PyDict_GetItemRef(umd->u_varnames, varname, &varindex) < 0) {
             goto error;
         }
-        if (!found) {
+        if (varindex == NULL) {
             continue;
         }
 
-        int argoffset = PyLong_AsIntValue(varindex);
+        int argoffset = PyLong_AsInt(varindex);
+        Py_DECREF(varindex);
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
-        int oldindex = PyValue_Int32(cellindex);
+        int oldindex = PyLong_AsInt(cellindex);
+        if (oldindex == -1 && PyErr_Occurred()) {
+            goto error;
+        }
         fixed[oldindex] = argoffset;
     }
     return fixed;

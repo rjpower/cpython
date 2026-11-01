@@ -216,6 +216,7 @@ typedef struct {
     unsigned int closefd : 1;
     char finalizing;
     unsigned int blksize;
+    PyObject *weakreflist;
     PyObject *dict;
     char buf[SMALLBUF];
     wchar_t wbuf;
@@ -299,6 +300,7 @@ winconsoleio_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->writable = 0;
         self->closefd = 0;
         self->blksize = 0;
+        self->weakreflist = NULL;
     }
 
     return (PyObject *) self;
@@ -517,7 +519,7 @@ winconsoleio_dealloc(PyObject *op)
     if (_PyIOBase_finalize(op) < 0)
         return;
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, self->weakreflist);
     Py_CLEAR(self->dict);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -1256,6 +1258,7 @@ static PyGetSetDef winconsoleio_getsetlist[] = {
 static PyMemberDef winconsoleio_members[] = {
     {"_blksize", Py_T_UINT, offsetof(winconsoleio, blksize), 0},
     {"_finalizing", Py_T_BOOL, offsetof(winconsoleio, finalizing), 0},
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(winconsoleio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(winconsoleio, dict), Py_READONLY},
     {NULL}
 };
@@ -1279,7 +1282,7 @@ PyType_Spec _Py_winconsoleio_spec = {
     .name = "_io._WindowsConsoleIO",
     .basicsize = sizeof(winconsoleio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = winconsoleio_slots,
 };
 

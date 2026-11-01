@@ -12,7 +12,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_structs.h"       // PyValue
+#include "pycore_structs.h"       // _PyStackRef
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@ enum _frameowner {
 };
 
 struct _PyInterpreterFrame {
-    PyValue f_executable; /* Deferred or strong reference (code object or None) */
+    _PyStackRef f_executable; /* Deferred or strong reference (code object or None) */
     struct _PyInterpreterFrame *previous;
     /* Slot 0: co_nlocalsplus locals, cells and free variables, then
      * co_stacksize temporaries.  Every slot holds a value or NULL; a
@@ -35,11 +35,11 @@ struct _PyInterpreterFrame {
      * consumed is NULL.  The slots of a frame on the frame stack are on the
      * thread's value stack; a generator and a frame object keep them in
      * owned_slots. */
-    PyValue *base;
+    _PyStackRef *base;
     /* For a frame on the frame stack, the top of the value stack before it
      * was pushed, which popping it restores */
-    PyValue *saved_top;
-    PyValue f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
+    _PyStackRef *saved_top;
+    _PyStackRef f_funcobj; /* Deferred or strong reference. Only valid if not on C stack */
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_builtins; /* Borrowed reference. Only valid if not on C stack */
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
@@ -49,6 +49,10 @@ struct _PyInterpreterFrame {
      * into: the bases of jump targets and feedback indices. */
     _PyInstr *ir_words;
     char *ir_feedback;
+#ifdef Py_GIL_DISABLED
+    /* Index of thread-local bytecode containing instr_ptr. */
+    int32_t tlbc_index;
+#endif
     /* The slot that receives the value when control comes back to this
      * frame: the dst of the call it is making, or for a suspended
      * generator the slot of the value it yielded, where the value sent in
@@ -61,7 +65,7 @@ struct _PyInterpreterFrame {
     uint8_t lltrace:5;
 #endif
     /* The slots of a frame that owns them, which base then points to */
-    PyValue owned_slots[1];
+    _PyStackRef owned_slots[1];
 };
 
 
@@ -69,6 +73,8 @@ struct _PyInterpreterFrame {
    and coroutine objects. */
 #define _PyGenObject_HEAD(prefix)                                           \
     PyObject_HEAD                                                           \
+    /* List of weak reference. */                                           \
+    PyObject *prefix##_weakreflist;                                         \
     /* Name of the generator. */                                            \
     PyObject *prefix##_name;                                                \
     /* Qualified name of the generator. */                                  \

@@ -1,4 +1,5 @@
 import gc
+import sys
 import doctest
 import unittest
 import collections
@@ -1279,6 +1280,18 @@ class WeakMethodTestCase(unittest.TestCase):
         gc.collect()
         self.assertEqual(calls, [r])
 
+    @support.cpython_only
+    @support.requires_refcounting
+    def test_no_cycles(self):
+        # A WeakMethod doesn't create any reference cycle to itself.
+        o = Object(1)
+        def cb(_):
+            pass
+        r = weakref.WeakMethod(o.some_method, cb)
+        wr = weakref.ref(r)
+        del r
+        self.assertIs(wr(), None)
+
     def test_equality(self):
         def _eq(a, b):
             self.assertTrue(a == b)
@@ -2241,7 +2254,9 @@ class FinalizeTestCase(unittest.TestCase):
         pass
 
     def _collect_if_necessary(self):
-        support.gc_collect()
+        # we create no ref-cycles so in CPython no gc should be needed
+        if sys.implementation.name != 'cpython' or support.Py_GC:
+            support.gc_collect()
 
     def test_finalize(self):
         def add(x,y,z):

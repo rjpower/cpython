@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -22,14 +23,15 @@ PyDoc_STRVAR(_wmi_exec_query__doc__,
 static PyObject *
 _wmi_exec_query_impl(PyObject *module, PyObject *query);
 
-static PyValue
-_wmi_exec_query(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_wmi_exec_query(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -52,30 +54,22 @@ _wmi_exec_query(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *query;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("exec_query", "argument 'query'", "str", _arg);
-            goto exit;
-        }
-        query = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("exec_query", "argument 'query'", "str", args[0]);
+        goto exit;
     }
-    _return_value = _wmi_exec_query_impl(module, query);
-    return_value = PyValue_FromResult(_return_value);
+    query = args[0];
+    return_value = _wmi_exec_query_impl(module, query);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=475cf9a169d0d1fb input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f246d0e568cc2d2c input=a9049054013a1b77]*/

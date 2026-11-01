@@ -1,18 +1,13 @@
 #include "Python.h"
 
-#include "pycore_opcode_metadata.h" // _PyOpcode_OpName, _PyOpcode_Deopt
-#include "pycore_ir.h"              // _PyIR_HandlerFlags
+#include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pylifecycle.h"     // _PyOS_URandomNonblock()
 #include "pycore_tstate.h"
-#include "osdefs.h"                 // MAXPATHLEN
 #include "pycore_initconfig.h"      // _PyStatus_OK()
 #include "pycore_pystate.h"         // _PyThreadState_GET()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
-#include "pycore_shape.h"           // _Py_DICT_MODE_NREASONS
-#include "pycore_stats.h"           // _PY_BOX_SITES
 
-#include <dlfcn.h>                 // dladdr()
 #include <stdlib.h> // rand()
 
 #ifdef Py_STATS
@@ -27,8 +22,13 @@ _PyStats_GetLocal(void)
     return NULL;
 }
 
+#ifdef Py_GIL_DISABLED
+#define STATS_LOCK(interp) PyMutex_Lock(&interp->pystats_mutex)
+#define STATS_UNLOCK(interp) PyMutex_Unlock(&interp->pystats_mutex)
+#else
 #define STATS_LOCK(interp)
 #define STATS_UNLOCK(interp)
+#endif
 
 
 #define ADD_STAT_TO_DICT(res, field) \
@@ -143,26 +143,25 @@ _Py_GetSpecializationStats(void) {
 static void
 print_spec_stats(FILE *out, OpcodeStats *stats)
 {
-    int entries = 0;
-    for (int i = 0; i < IR_NUM_HANDLERS; i++) {
-        entries += (_PyIR_HandlerFlags[i] & _PyIR_H_METADATA) != 0;
-    }
-    fprintf(out, "Handler entry coverage version : 2\n");
-#if _Py_TAIL_CALL_INTERP
-    fprintf(out, "Handler entry dispatch mode : 1\n");
-#else
-    fprintf(out, "Handler entry dispatch mode : 0\n");
-#endif
-    fprintf(out, "Handler domain count : %d\n", IR_NUM_HANDLERS);
-    fprintf(out, "Handler metadata entries : %d\n", entries);
-    for (int i = 0; i < IR_NUM_HANDLERS; i++) {
-        if (!(_PyIR_HandlerFlags[i] & _PyIR_H_METADATA)) {
-            continue;
+    /* Mark some opcodes as specializable for stats,
+     * even though we don't specialize them yet. */
+    fprintf(out, "opcode[BINARY_SLICE].specializable : 1\n");
+    fprintf(out, "opcode[STORE_SLICE].specializable : 1\n");
+    fprintf(out, "opcode[GET_ITER].specializable : 1\n");
+    for (int i = 0; i < 256; i++) {
+        if (_PyOpcode_Caches[i]) {
+            /* Ignore jumps as they cannot be specialized */
+            switch (i) {
+                case POP_JUMP_IF_FALSE:
+                case POP_JUMP_IF_TRUE:
+                case POP_JUMP_IF_NONE:
+                case POP_JUMP_IF_NOT_NONE:
+                case JUMP_BACKWARD:
+                    break;
+                default:
+                    fprintf(out, "opcode[%s].specializable : 1\n", _PyOpcode_OpName[i]);
+            }
         }
-        assert(_PyOpcode_OpName[i] != NULL);
-        fprintf(out, "opcode[%s].handler_id : %d\n", _PyOpcode_OpName[i], i);
-        fprintf(out, "opcode[%s].base_id : %d\n", _PyOpcode_OpName[i], _PyOpcode_Deopt[i]);
-        fprintf(out, "opcode[%s].handler_flags : %d\n", _PyOpcode_OpName[i], _PyIR_HandlerFlags[i]);
         PRINT_STAT(i, specialization.success);
         PRINT_STAT(i, specialization.failure);
         PRINT_STAT(i, specialization.hit);
@@ -178,9 +177,8 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
                     PRIu64 "\n", _PyOpcode_OpName[i], j, val);
             }
         }
-        for (int j = 0; j < IR_NUM_HANDLERS; j++) {
+        for (int j = 0; j < 256; j++) {
             if (stats[i].pair_count[j]) {
-                assert(_PyIR_HandlerFlags[j] & _PyIR_H_DISPATCH);
                 fprintf(out, "opcode[%s].pair_count[%s] : %" PRIu64 "\n",
                         _PyOpcode_OpName[i], _PyOpcode_OpName[j], stats[i].pair_count[j]);
             }
@@ -205,6 +203,8 @@ print_call_stats(FILE *out, CallStats *stats)
 static void
 print_object_stats(FILE *out, ObjectStats *stats)
 {
+    fprintf(out, "Object allocations from freelist: %" PRIu64 "\n", stats->from_freelist);
+    fprintf(out, "Object frees to freelist: %" PRIu64 "\n", stats->to_freelist);
     fprintf(out, "Object allocations: %" PRIu64 "\n", stats->allocations);
     fprintf(out, "Object allocations to 512 bytes: %" PRIu64 "\n", stats->allocations512);
     fprintf(out, "Object allocations to 4 kbytes: %" PRIu64 "\n", stats->allocations4k);
@@ -219,18 +219,10 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object interpreter immortal decrefs: %" PRIu64 "\n", stats->interpreter_immortal_decrefs);
     fprintf(out, "Object immortal increfs: %" PRIu64 "\n", stats->immortal_increfs);
     fprintf(out, "Object immortal decrefs: %" PRIu64 "\n", stats->immortal_decrefs);
-    static const char *const dict_mode_reasons[] = {
-        "str name", "capacity", "shape limit", "class assigned",
-        "dict assigned", "dict deleted", "on request",
-    };
-    static_assert(Py_ARRAY_LENGTH(dict_mode_reasons) == _Py_DICT_MODE_NREASONS,
-                  "a name for each _PyDictModeReason");
-    static_assert(Py_ARRAY_LENGTH(stats->dict_mode) == _Py_DICT_MODE_NREASONS,
-                  "a counter for each _PyDictModeReason");
-    for (int i = 0; i < _Py_DICT_MODE_NREASONS; i++) {
-        fprintf(out, "Object materialize dict (%s): %" PRIu64 "\n",
-                dict_mode_reasons[i], stats->dict_mode[i]);
-    }
+    fprintf(out, "Object materialize dict (on request): %" PRIu64 "\n", stats->dict_materialized_on_request);
+    fprintf(out, "Object materialize dict (new key): %" PRIu64 "\n", stats->dict_materialized_new_key);
+    fprintf(out, "Object materialize dict (too big): %" PRIu64 "\n", stats->dict_materialized_too_big);
+    fprintf(out, "Object materialize dict (str subclass): %" PRIu64 "\n", stats->dict_materialized_str_subclass);
     fprintf(out, "Object method cache hits: %" PRIu64 "\n", stats->type_cache_hits);
     fprintf(out, "Object method cache misses: %" PRIu64 "\n", stats->type_cache_misses);
     fprintf(out, "Object method cache too big: %" PRIu64 "\n", stats->type_cache_too_big);
@@ -243,33 +235,6 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object inline int boxes: %" PRIu64 "\n", stats->inline_int_boxes);
     fprintf(out, "Object inline float boxes: %" PRIu64 "\n", stats->inline_float_boxes);
     fprintf(out, "Object inline array boxes: %" PRIu64 "\n", stats->inline_array_boxes);
-    static const char *const box_kinds[] = {
-        "container store", "attribute store", "call into C", "return to C",
-    };
-    uint64_t classified = 0;
-    for (int i = 0; i < (int)Py_ARRAY_LENGTH(box_kinds); i++) {
-        fprintf(out, "Object boxes (%s): %" PRIu64 "\n", box_kinds[i], stats->value_boxes[i]);
-        classified += stats->value_boxes[i];
-    }
-    fprintf(out, "Object boxes (other): %" PRIu64 "\n",
-            stats->inline_int_boxes + stats->inline_float_boxes - classified);
-    for (int i = 0; i < _PY_BOX_SITES; i++) {
-        if (stats->box_site_count[i] == 0) {
-            continue;
-        }
-        // An offset into the file that addr2line resolves.
-        Dl_info info;
-        uintptr_t pc = stats->box_site_pc[i];
-        if (dladdr((void *)pc, &info) && info.dli_fname != NULL) {
-            fprintf(out, "Object box site[%s+0x%" PRIxPTR "]: %" PRIu64 "\n",
-                    info.dli_fname, pc - (uintptr_t)info.dli_fbase,
-                    stats->box_site_count[i]);
-        }
-        else {
-            fprintf(out, "Object box site[0x%" PRIxPTR "]: %" PRIu64 "\n",
-                    pc, stats->box_site_count[i]);
-        }
-    }
 }
 
 static void
@@ -284,6 +249,15 @@ print_gc_stats(FILE *out, GCStats *stats)
     }
 }
 
+#ifdef Py_GIL_DISABLED
+static void
+print_ft_stats(FILE *out, FTStats *stats)
+{
+    fprintf(out, "Mutex sleeps (mutex_sleeps): %" PRIu64 "\n", stats->mutex_sleeps);
+    fprintf(out, "QSBR polls (qsbr_polls): %" PRIu64 "\n", stats->qsbr_polls);
+    fprintf(out, "World stops (world_stops): %" PRIu64 "\n", stats->world_stops);
+}
+#endif
 
 static void
 print_rare_event_stats(FILE *out, RareEventStats *stats)
@@ -304,9 +278,152 @@ print_stats(FILE *out, PyStats *stats)
     print_call_stats(out, &stats->call_stats);
     print_object_stats(out, &stats->object_stats);
     print_gc_stats(out, stats->gc_stats);
+#ifdef Py_GIL_DISABLED
+    print_ft_stats(out, &stats->ft_stats);
+#endif
     print_rare_event_stats(out, &stats->rare_event_stats);
 }
 
+#ifdef Py_GIL_DISABLED
+
+static void
+merge_specialization_stats(SpecializationStats *dest, const SpecializationStats *src)
+{
+    dest->success += src->success;
+    dest->failure += src->failure;
+    dest->hit += src->hit;
+    dest->deferred += src->deferred;
+    dest->miss += src->miss;
+    dest->deopt += src->deopt;
+    for (int i = 0; i < SPECIALIZATION_FAILURE_KINDS; i++) {
+        dest->failure_kinds[i] += src->failure_kinds[i];
+    }
+}
+
+static void
+merge_opcode_stats_array(OpcodeStats *dest, const OpcodeStats *src)
+{
+    for (int i = 0; i < 256; i++) {
+        merge_specialization_stats(&dest[i].specialization, &src[i].specialization);
+        dest[i].execution_count += src[i].execution_count;
+        dest[i].boxes += src[i].boxes;
+        for (int j = 0; j < 256; j++) {
+            dest[i].pair_count[j] += src[i].pair_count[j];
+        }
+    }
+}
+
+static void
+merge_call_stats(CallStats *dest, const CallStats *src)
+{
+    dest->inlined_py_calls += src->inlined_py_calls;
+    dest->pyeval_calls += src->pyeval_calls;
+    dest->frames_pushed += src->frames_pushed;
+    dest->frame_objects_created += src->frame_objects_created;
+    for (int i = 0; i < EVAL_CALL_KINDS; i++) {
+        dest->eval_calls[i] += src->eval_calls[i];
+    }
+}
+
+static void
+merge_object_stats(ObjectStats *dest, const ObjectStats *src)
+{
+    dest->increfs += src->increfs;
+    dest->decrefs += src->decrefs;
+    dest->interpreter_increfs += src->interpreter_increfs;
+    dest->interpreter_decrefs += src->interpreter_decrefs;
+    dest->immortal_increfs += src->immortal_increfs;
+    dest->immortal_decrefs += src->immortal_decrefs;
+    dest->interpreter_immortal_increfs += src->interpreter_immortal_increfs;
+    dest->interpreter_immortal_decrefs += src->interpreter_immortal_decrefs;
+    dest->allocations += src->allocations;
+    dest->allocations512 += src->allocations512;
+    dest->allocations4k += src->allocations4k;
+    dest->allocations_big += src->allocations_big;
+    dest->frees += src->frees;
+    dest->to_freelist += src->to_freelist;
+    dest->from_freelist += src->from_freelist;
+    dest->inline_values += src->inline_values;
+    dest->dict_materialized_on_request += src->dict_materialized_on_request;
+    dest->dict_materialized_new_key += src->dict_materialized_new_key;
+    dest->dict_materialized_too_big += src->dict_materialized_too_big;
+    dest->dict_materialized_str_subclass += src->dict_materialized_str_subclass;
+    dest->type_cache_hits += src->type_cache_hits;
+    dest->type_cache_misses += src->type_cache_misses;
+    dest->type_cache_dunder_hits += src->type_cache_dunder_hits;
+    dest->type_cache_dunder_misses += src->type_cache_dunder_misses;
+    dest->type_cache_too_big += src->type_cache_too_big;
+    dest->type_cache_invalidations += src->type_cache_invalidations;
+    dest->type_cache_resizes += src->type_cache_resizes;
+    dest->inline_ints_created += src->inline_ints_created;
+    dest->inline_floats_created += src->inline_floats_created;
+    dest->inline_int_boxes += src->inline_int_boxes;
+    dest->inline_float_boxes += src->inline_float_boxes;
+    dest->inline_array_boxes += src->inline_array_boxes;
+    dest->object_visits += src->object_visits;
+}
+
+static void
+merge_ft_stats(FTStats *dest, const FTStats *src)
+{
+    dest->mutex_sleeps = src->mutex_sleeps;
+    dest->qsbr_polls = src->qsbr_polls;
+    dest->world_stops = src->world_stops;
+}
+
+static void
+merge_rare_event_stats(RareEventStats *dest, const RareEventStats *src)
+{
+    dest->set_class += src->set_class;
+    dest->set_bases += src->set_bases;
+    dest->set_eval_frame_func += src->set_eval_frame_func;
+    dest->builtin_dict += src->builtin_dict;
+    dest->func_modification += src->func_modification;
+    dest->watched_dict_modification += src->watched_dict_modification;
+    dest->watched_globals_modification += src->watched_globals_modification;
+}
+
+static void
+merge_gc_stats_array(GCStats *dest, const GCStats *src)
+{
+    for (int i = 0; i < NUM_GENERATIONS; i++) {
+        dest[i].collections += src[i].collections;
+        dest[i].object_visits += src[i].object_visits;
+        dest[i].objects_collected += src[i].objects_collected;
+        dest[i].objects_transitively_reachable += src[i].objects_transitively_reachable;
+        dest[i].objects_not_transitively_reachable += src[i].objects_not_transitively_reachable;
+    }
+}
+
+void
+stats_zero_thread(_PyThreadStateImpl *tstate)
+{
+    // Zero the thread local stat counters
+    if (tstate->pystats_struct) {
+        memset(tstate->pystats_struct, 0, sizeof(PyStats));
+    }
+}
+
+// merge stats for a single thread into the global structure
+void
+stats_merge_thread(_PyThreadStateImpl *tstate)
+{
+    PyStats *src = tstate->pystats_struct;
+    PyStats *dest = ((PyThreadState *)tstate)->interp->pystats_struct;
+
+    if (src == NULL || dest == NULL) {
+        return;
+    }
+
+    // Merge each category of stats using the helper functions.
+    merge_opcode_stats_array(dest->opcode_stats, src->opcode_stats);
+    merge_call_stats(&dest->call_stats, &src->call_stats);
+    merge_object_stats(&dest->object_stats, &src->object_stats);
+    merge_ft_stats(&dest->ft_stats, &src->ft_stats);
+    merge_rare_event_stats(&dest->rare_event_stats, &src->rare_event_stats);
+    merge_gc_stats_array(dest->gc_stats, src->gc_stats);
+}
+#endif // Py_GIL_DISABLED
 
 // toggle stats collection on or off for all threads
 static int
@@ -335,7 +452,16 @@ stats_toggle_on_off(PyThreadState *tstate, int on)
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, ts) {
         PyStats *s = NULL;
         if (interp->pystats_enabled) {
+#ifdef Py_GIL_DISABLED
+            _PyThreadStateImpl *ts_impl = (_PyThreadStateImpl *)ts;
+            if (ts_impl->pystats_struct == NULL) {
+                // first activation for this thread, allocate structure
+                ts_impl->pystats_struct = PyMem_RawCalloc(1, sizeof(PyStats));
+            }
+            s = ts_impl->pystats_struct;
+#else
             s = ts->interp->pystats_struct;
+#endif
         }
         ts->pystats = s;
     }
@@ -356,6 +482,11 @@ stats_zero_all(void)
     }
     PyInterpreterState *interp = tstate->interp;
     _PyEval_StopTheWorld(interp);
+#ifdef Py_GIL_DISABLED
+    _Py_FOR_EACH_TSTATE_UNLOCKED(interp, ts) {
+        stats_zero_thread((_PyThreadStateImpl *)ts);
+    }
+#endif
     if (interp->pystats_struct) {
         memset(interp->pystats_struct, 0, sizeof(PyStats));
     }
@@ -375,6 +506,12 @@ stats_merge_all(void)
     }
     PyInterpreterState *interp = tstate->interp;
     _PyEval_StopTheWorld(interp);
+#ifdef Py_GIL_DISABLED
+    _Py_FOR_EACH_TSTATE_UNLOCKED(interp, ts) {
+        stats_merge_thread((_PyThreadStateImpl *)ts);
+        stats_zero_thread((_PyThreadStateImpl *)ts);
+    }
+#endif
     _PyEval_StartTheWorld(interp);
 }
 
@@ -444,12 +581,7 @@ _Py_PrintSpecializationStats(int to_file)
 # ifdef MS_WINDOWS
         const char *dirname = "c:\\temp\\py_stats\\";
 # else
-        /* PYTHON_STATS_DIR names a directory for the files of one run, which
-           a process inherits even with -E; the default is shared. */
-        const char *dirname = getenv("PYTHON_STATS_DIR");
-        if (dirname == NULL || dirname[0] == '\0') {
-            dirname = "/tmp/py_stats";
-        }
+        const char *dirname = "/tmp/py_stats/";
 # endif
         /* Use random 160 bit number as file name,
         * to avoid both accidental collisions and
@@ -462,16 +594,10 @@ _Py_PrintSpecializationStats(int to_file)
             hex_name[2*i+1] = Py_hexdigits[(rand[i]>>4)&15];
         }
         hex_name[40] = '\0';
-        char buf[MAXPATHLEN + 1];
-# ifdef MS_WINDOWS
-        int n = snprintf(buf, sizeof(buf), "%s%s.txt", dirname, hex_name);
-# else
-        int n = snprintf(buf, sizeof(buf), "%s/%s.txt", dirname, hex_name);
-# endif
-        FILE *fout = NULL;
-        if (0 < n && (size_t)n < sizeof(buf)) {
-            fout = fopen(buf, "w");
-        }
+        char buf[64];
+        assert(strlen(dirname) + 40 + strlen(".txt") < 64);
+        sprintf(buf, "%s%s.txt", dirname, hex_name);
+        FILE *fout = fopen(buf, "w");
         if (fout) {
             out = fout;
         }
@@ -506,12 +632,27 @@ _PyStats_InterpInit(PyInterpreterState *interp)
 bool
 _PyStats_ThreadInit(PyInterpreterState *interp, _PyThreadStateImpl *tstate)
 {
+#ifdef Py_GIL_DISABLED
+    if (FT_ATOMIC_LOAD_INT_RELAXED(interp->pystats_enabled)) {
+        assert(interp->pystats_struct != NULL);
+        tstate->pystats_struct = PyMem_RawCalloc(1, sizeof(PyStats));
+        if (tstate->pystats_struct == NULL) {
+            return false;
+        }
+    }
+#endif
     return true;
 }
 
 void
 _PyStats_ThreadFini(_PyThreadStateImpl *tstate)
 {
+#ifdef Py_GIL_DISABLED
+    STATS_LOCK(((PyThreadState *)tstate)->interp);
+    stats_merge_thread(tstate);
+    STATS_UNLOCK(((PyThreadState *)tstate)->interp);
+    PyMem_RawFree(tstate->pystats_struct);
+#endif
 }
 
 void
@@ -521,7 +662,11 @@ _PyStats_Attach(_PyThreadStateImpl *tstate_impl)
     PyThreadState *tstate = (PyThreadState *)tstate_impl;
     PyInterpreterState *interp = tstate->interp;
     if (FT_ATOMIC_LOAD_INT_RELAXED(interp->pystats_enabled)) {
+#ifdef Py_GIL_DISABLED
+        s = ((_PyThreadStateImpl *)tstate)->pystats_struct;
+#else
         s = tstate->interp->pystats_struct;
+#endif
     }
     else {
         s = NULL;

@@ -24,6 +24,7 @@ struct _pycontextobject {
     PyObject_HEAD
     PyContext *ctx_prev;
     PyHamtObject *ctx_vars;
+    PyObject *ctx_weakreflist;
     int ctx_entered;
 };
 
@@ -32,9 +33,11 @@ struct _pycontextvarobject {
     PyObject_HEAD
     PyObject *var_name;
     PyObject *var_default;
+#ifndef Py_GIL_DISABLED
     PyObject *var_cached;
     uint64_t var_cached_tsid;
     uint64_t var_cached_tsver;
+#endif
     Py_hash_t var_hash;
 };
 

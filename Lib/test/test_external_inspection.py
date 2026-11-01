@@ -1,4 +1,3 @@
-from test import support
 import asyncio
 import unittest
 import os
@@ -215,6 +214,11 @@ skip_if_not_supported = unittest.skipIf(
 )
 
 
+def requires_subinterpreters(meth):
+    """Decorator to skip a test if subinterpreters are not supported."""
+    return unittest.skipIf(interpreters is None, "subinterpreters required")(
+        meth
+    )
 
 
 # ============================================================================
@@ -1975,13 +1979,12 @@ while True:
                 self.assertNotIn(("leaf", "<native>"), zip(names, names[1:]))
             self.assertGreater(samples, 1000)
 
-    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @skip_if_not_supported
     @unittest.skipIf(
         sys.platform == "linux" and not PROCESS_VM_READV_SUPPORTED,
         "Test only runs on Linux with process_vm_readv support",
     )
-    @support.requires_subinterpreters
+    @requires_subinterpreters
     def test_subinterpreter_stack_trace(self):
         port = find_unused_port()
 
@@ -2105,13 +2108,12 @@ while True:
             finally:
                 _cleanup_sockets(*client_sockets, server_socket)
 
-    @unittest.skipIf(interpreters is None, 'subinterpreters required')
     @skip_if_not_supported
     @unittest.skipIf(
         sys.platform == "linux" and not PROCESS_VM_READV_SUPPORTED,
         "Test only runs on Linux with process_vm_readv support",
     )
-    @support.requires_subinterpreters
+    @requires_subinterpreters
     def test_multiple_subinterpreters_with_threads(self):
         port = find_unused_port()
 

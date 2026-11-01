@@ -2,12 +2,15 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
+#endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(test_empty_function__doc__,
@@ -38,31 +41,23 @@ PyDoc_STRVAR(objects_converter__doc__,
 static PyObject *
 objects_converter_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyValue
-objects_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+objects_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("objects_converter", nargs, 1, 2)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional:
-    _return_value = objects_converter_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = objects_converter_impl(module, a, b);
 
 exit:
     return return_value;
@@ -74,31 +69,23 @@ PyDoc_STRVAR(bytes_object_converter__doc__,
 "\n");
 
 #define BYTES_OBJECT_CONVERTER_METHODDEF    \
-    {"bytes_object_converter", _PyCFunction_CAST(bytes_object_converter), METH_O, bytes_object_converter__doc__},
+    {"bytes_object_converter", (PyCFunction)bytes_object_converter, METH_O, bytes_object_converter__doc__},
 
 static PyObject *
 bytes_object_converter_impl(PyObject *module, PyBytesObject *a);
 
-static PyValue
-bytes_object_converter(PyObject *module, PyValue arg)
+static PyObject *
+bytes_object_converter(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyBytesObject *a;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyBytes_Check(_arg)) {
-            _PyArg_BadArgument("bytes_object_converter", "argument", "bytes", _arg);
-            goto exit;
-        }
-        a = (PyBytesObject *)_arg;
+    if (!PyBytes_Check(arg)) {
+        _PyArg_BadArgument("bytes_object_converter", "argument", "bytes", arg);
+        goto exit;
     }
-    _return_value = bytes_object_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    a = (PyBytesObject *)arg;
+    return_value = bytes_object_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -110,31 +97,23 @@ PyDoc_STRVAR(byte_array_object_converter__doc__,
 "\n");
 
 #define BYTE_ARRAY_OBJECT_CONVERTER_METHODDEF    \
-    {"byte_array_object_converter", _PyCFunction_CAST(byte_array_object_converter), METH_O, byte_array_object_converter__doc__},
+    {"byte_array_object_converter", (PyCFunction)byte_array_object_converter, METH_O, byte_array_object_converter__doc__},
 
 static PyObject *
 byte_array_object_converter_impl(PyObject *module, PyByteArrayObject *a);
 
-static PyValue
-byte_array_object_converter(PyObject *module, PyValue arg)
+static PyObject *
+byte_array_object_converter(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyByteArrayObject *a;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyByteArray_Check(_arg)) {
-            _PyArg_BadArgument("byte_array_object_converter", "argument", "bytearray", _arg);
-            goto exit;
-        }
-        a = (PyByteArrayObject *)_arg;
+    if (!PyByteArray_Check(arg)) {
+        _PyArg_BadArgument("byte_array_object_converter", "argument", "bytearray", arg);
+        goto exit;
     }
-    _return_value = byte_array_object_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    a = (PyByteArrayObject *)arg;
+    return_value = byte_array_object_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -146,31 +125,23 @@ PyDoc_STRVAR(unicode_converter__doc__,
 "\n");
 
 #define UNICODE_CONVERTER_METHODDEF    \
-    {"unicode_converter", _PyCFunction_CAST(unicode_converter), METH_O, unicode_converter__doc__},
+    {"unicode_converter", (PyCFunction)unicode_converter, METH_O, unicode_converter__doc__},
 
 static PyObject *
 unicode_converter_impl(PyObject *module, PyObject *a);
 
-static PyValue
-unicode_converter(PyObject *module, PyValue arg)
+static PyObject *
+unicode_converter(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("unicode_converter", "argument", "str", _arg);
-            goto exit;
-        }
-        a = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("unicode_converter", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = unicode_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    a = arg;
+    return_value = unicode_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -187,14 +158,13 @@ PyDoc_STRVAR(bool_converter__doc__,
 static PyObject *
 bool_converter_impl(PyObject *module, int a, int b, int c);
 
-static PyValue
-bool_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+bool_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int a = 1;
     int b = 1;
     int c = 1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("bool_converter", nargs, 0, 3)) {
         goto exit;
@@ -202,27 +172,26 @@ bool_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyObject_IsTrueValue(args[0]);
+    a = PyObject_IsTrue(args[0]);
     if (a < 0) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyObject_IsTrueValue(args[1]);
+    b = PyObject_IsTrue(args[1]);
     if (b < 0) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    c = PyLong_AsIntValue(args[2]);
+    c = PyLong_AsInt(args[2]);
     if (c == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = bool_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = bool_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -239,15 +208,14 @@ PyDoc_STRVAR(bool_converter_c_default__doc__,
 static PyObject *
 bool_converter_c_default_impl(PyObject *module, int a, int b, int c, int d);
 
-static PyValue
-bool_converter_c_default(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+bool_converter_c_default(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int a = 1;
     int b = 0;
     int c = -2;
     int d = -3;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("bool_converter_c_default", nargs, 0, 4)) {
         goto exit;
@@ -255,34 +223,33 @@ bool_converter_c_default(PyObject *module, const PyValue *args, Py_ssize_t nargs
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyObject_IsTrueValue(args[0]);
+    a = PyObject_IsTrue(args[0]);
     if (a < 0) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyObject_IsTrueValue(args[1]);
+    b = PyObject_IsTrue(args[1]);
     if (b < 0) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    c = PyObject_IsTrueValue(args[2]);
+    c = PyObject_IsTrue(args[2]);
     if (c < 0) {
         goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    d = PyObject_IsTrueValue(args[3]);
+    d = PyObject_IsTrue(args[3]);
     if (d < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = bool_converter_c_default_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = bool_converter_c_default_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -303,10 +270,10 @@ char_converter_impl(PyObject *module, char a, char b, char c, char d, char e,
                     char f, char g, char h, char i, char j, char k, char l,
                     char m, char n);
 
-static PyValue
-char_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+char_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     char a = 'A';
     char b = '\a';
     char c = '\b';
@@ -321,7 +288,6 @@ char_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     char l = '\\';
     char m = '\0';
     char n = '\377';
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("char_converter", nargs, 0, 14)) {
         goto exit;
@@ -329,468 +295,383 @@ char_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[0])) {
+        if (PyBytes_GET_SIZE(args[0]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 1 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[0]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 1 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            a = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 1 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            a = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 1", "a byte string of length 1", _arg);
+        a = PyBytes_AS_STRING(args[0])[0];
+    }
+    else if (PyByteArray_Check(args[0])) {
+        if (PyByteArray_GET_SIZE(args[0]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 1 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[0]));
             goto exit;
         }
+        a = PyByteArray_AS_STRING(args[0])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 1", "a byte string of length 1", args[0]);
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[1])) {
+        if (PyBytes_GET_SIZE(args[1]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 2 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[1]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 2 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            b = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 2 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            b = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 2", "a byte string of length 1", _arg);
+        b = PyBytes_AS_STRING(args[1])[0];
+    }
+    else if (PyByteArray_Check(args[1])) {
+        if (PyByteArray_GET_SIZE(args[1]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 2 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[1]));
             goto exit;
         }
+        b = PyByteArray_AS_STRING(args[1])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 2", "a byte string of length 1", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[2])) {
+        if (PyBytes_GET_SIZE(args[2]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 3 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[2]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 3 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            c = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 3 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            c = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 3", "a byte string of length 1", _arg);
+        c = PyBytes_AS_STRING(args[2])[0];
+    }
+    else if (PyByteArray_Check(args[2])) {
+        if (PyByteArray_GET_SIZE(args[2]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 3 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[2]));
             goto exit;
         }
+        c = PyByteArray_AS_STRING(args[2])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 3", "a byte string of length 1", args[2]);
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[3])) {
+        if (PyBytes_GET_SIZE(args[3]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 4 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[3]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 4 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            d = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 4 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            d = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 4", "a byte string of length 1", _arg);
+        d = PyBytes_AS_STRING(args[3])[0];
+    }
+    else if (PyByteArray_Check(args[3])) {
+        if (PyByteArray_GET_SIZE(args[3]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 4 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[3]));
             goto exit;
         }
+        d = PyByteArray_AS_STRING(args[3])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 4", "a byte string of length 1", args[3]);
+        goto exit;
     }
     if (nargs < 5) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[4])) {
+        if (PyBytes_GET_SIZE(args[4]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 5 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[4]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 5 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            e = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 5 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            e = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 5", "a byte string of length 1", _arg);
+        e = PyBytes_AS_STRING(args[4])[0];
+    }
+    else if (PyByteArray_Check(args[4])) {
+        if (PyByteArray_GET_SIZE(args[4]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 5 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[4]));
             goto exit;
         }
+        e = PyByteArray_AS_STRING(args[4])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 5", "a byte string of length 1", args[4]);
+        goto exit;
     }
     if (nargs < 6) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[5]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[5])) {
+        if (PyBytes_GET_SIZE(args[5]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 6 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[5]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 6 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            f = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 6 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            f = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 6", "a byte string of length 1", _arg);
+        f = PyBytes_AS_STRING(args[5])[0];
+    }
+    else if (PyByteArray_Check(args[5])) {
+        if (PyByteArray_GET_SIZE(args[5]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 6 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[5]));
             goto exit;
         }
+        f = PyByteArray_AS_STRING(args[5])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 6", "a byte string of length 1", args[5]);
+        goto exit;
     }
     if (nargs < 7) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[6]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[6])) {
+        if (PyBytes_GET_SIZE(args[6]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 7 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[6]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 7 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            g = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 7 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            g = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 7", "a byte string of length 1", _arg);
+        g = PyBytes_AS_STRING(args[6])[0];
+    }
+    else if (PyByteArray_Check(args[6])) {
+        if (PyByteArray_GET_SIZE(args[6]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 7 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[6]));
             goto exit;
         }
+        g = PyByteArray_AS_STRING(args[6])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 7", "a byte string of length 1", args[6]);
+        goto exit;
     }
     if (nargs < 8) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[7]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[7])) {
+        if (PyBytes_GET_SIZE(args[7]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 8 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[7]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 8 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            h = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 8 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            h = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 8", "a byte string of length 1", _arg);
+        h = PyBytes_AS_STRING(args[7])[0];
+    }
+    else if (PyByteArray_Check(args[7])) {
+        if (PyByteArray_GET_SIZE(args[7]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 8 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[7]));
             goto exit;
         }
+        h = PyByteArray_AS_STRING(args[7])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 8", "a byte string of length 1", args[7]);
+        goto exit;
     }
     if (nargs < 9) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[8]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[8])) {
+        if (PyBytes_GET_SIZE(args[8]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 9 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[8]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 9 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            i = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 9 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            i = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 9", "a byte string of length 1", _arg);
+        i = PyBytes_AS_STRING(args[8])[0];
+    }
+    else if (PyByteArray_Check(args[8])) {
+        if (PyByteArray_GET_SIZE(args[8]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 9 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[8]));
             goto exit;
         }
+        i = PyByteArray_AS_STRING(args[8])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 9", "a byte string of length 1", args[8]);
+        goto exit;
     }
     if (nargs < 10) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[9]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[9])) {
+        if (PyBytes_GET_SIZE(args[9]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 10 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[9]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 10 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            j = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 10 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            j = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 10", "a byte string of length 1", _arg);
+        j = PyBytes_AS_STRING(args[9])[0];
+    }
+    else if (PyByteArray_Check(args[9])) {
+        if (PyByteArray_GET_SIZE(args[9]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 10 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[9]));
             goto exit;
         }
+        j = PyByteArray_AS_STRING(args[9])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 10", "a byte string of length 1", args[9]);
+        goto exit;
     }
     if (nargs < 11) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[10]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[10])) {
+        if (PyBytes_GET_SIZE(args[10]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 11 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[10]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 11 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            k = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 11 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            k = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 11", "a byte string of length 1", _arg);
+        k = PyBytes_AS_STRING(args[10])[0];
+    }
+    else if (PyByteArray_Check(args[10])) {
+        if (PyByteArray_GET_SIZE(args[10]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 11 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[10]));
             goto exit;
         }
+        k = PyByteArray_AS_STRING(args[10])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 11", "a byte string of length 1", args[10]);
+        goto exit;
     }
     if (nargs < 12) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[11]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[11])) {
+        if (PyBytes_GET_SIZE(args[11]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 12 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[11]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 12 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            l = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 12 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            l = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 12", "a byte string of length 1", _arg);
+        l = PyBytes_AS_STRING(args[11])[0];
+    }
+    else if (PyByteArray_Check(args[11])) {
+        if (PyByteArray_GET_SIZE(args[11]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 12 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[11]));
             goto exit;
         }
+        l = PyByteArray_AS_STRING(args[11])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 12", "a byte string of length 1", args[11]);
+        goto exit;
     }
     if (nargs < 13) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[12]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[12])) {
+        if (PyBytes_GET_SIZE(args[12]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 13 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[12]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 13 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            m = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 13 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            m = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 13", "a byte string of length 1", _arg);
+        m = PyBytes_AS_STRING(args[12])[0];
+    }
+    else if (PyByteArray_Check(args[12])) {
+        if (PyByteArray_GET_SIZE(args[12]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 13 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[12]));
             goto exit;
         }
+        m = PyByteArray_AS_STRING(args[12])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 13", "a byte string of length 1", args[12]);
+        goto exit;
     }
     if (nargs < 14) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[13]);
-        if (_arg == NULL) {
+    if (PyBytes_Check(args[13])) {
+        if (PyBytes_GET_SIZE(args[13]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 14 must be a byte string of length 1, "
+                "not a bytes object of length %zd",
+                PyBytes_GET_SIZE(args[13]));
             goto exit;
         }
-        if (PyBytes_Check(_arg)) {
-            if (PyBytes_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 14 must be a byte string of length 1, "
-                    "not a bytes object of length %zd",
-                    PyBytes_GET_SIZE(_arg));
-                goto exit;
-            }
-            n = PyBytes_AS_STRING(_arg)[0];
-        }
-        else if (PyByteArray_Check(_arg)) {
-            if (PyByteArray_GET_SIZE(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "char_converter(): argument 14 must be a byte string of length 1, "
-                    "not a bytearray object of length %zd",
-                    PyByteArray_GET_SIZE(_arg));
-                goto exit;
-            }
-            n = PyByteArray_AS_STRING(_arg)[0];
-        }
-        else {
-            _PyArg_BadArgument("char_converter", "argument 14", "a byte string of length 1", _arg);
+        n = PyBytes_AS_STRING(args[13])[0];
+    }
+    else if (PyByteArray_Check(args[13])) {
+        if (PyByteArray_GET_SIZE(args[13]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "char_converter(): argument 14 must be a byte string of length 1, "
+                "not a bytearray object of length %zd",
+                PyByteArray_GET_SIZE(args[13]));
             goto exit;
         }
+        n = PyByteArray_AS_STRING(args[13])[0];
+    }
+    else {
+        _PyArg_BadArgument("char_converter", "argument 14", "a byte string of length 1", args[13]);
+        goto exit;
     }
 skip_optional:
-    _return_value = char_converter_impl(module, a, b, c, d, e, f, g, h, i, j, k, l, m, n);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = char_converter_impl(module, a, b, c, d, e, f, g, h, i, j, k, l, m, n);
 
 exit:
     return return_value;
@@ -808,14 +689,13 @@ static PyObject *
 unsigned_char_converter_impl(PyObject *module, unsigned char a,
                              unsigned char b, unsigned char c);
 
-static PyValue
-unsigned_char_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+unsigned_char_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned char a = 12;
     unsigned char b = 34;
     unsigned char c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unsigned_char_converter", nargs, 0, 3)) {
         goto exit;
@@ -824,86 +704,67 @@ unsigned_char_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+        long ival = PyLong_AsLong(args[0]);
+        if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        {
-            long ival = PyLong_AsLong(_arg);
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
-            else if (ival < 0) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "unsigned byte integer is less than minimum");
-                goto exit;
-            }
-            else if (ival > UCHAR_MAX) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "unsigned byte integer is greater than maximum");
-                goto exit;
-            }
-            else {
-                a = (unsigned char) ival;
-            }
+        else if (ival < 0) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "unsigned byte integer is less than minimum");
+            goto exit;
+        }
+        else if (ival > UCHAR_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "unsigned byte integer is greater than maximum");
+            goto exit;
+        }
+        else {
+            a = (unsigned char) ival;
         }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        long ival = PyLong_AsLong(args[1]);
+        if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        {
-            long ival = PyLong_AsLong(_arg);
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
-            else if (ival < 0) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "unsigned byte integer is less than minimum");
-                goto exit;
-            }
-            else if (ival > UCHAR_MAX) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "unsigned byte integer is greater than maximum");
-                goto exit;
-            }
-            else {
-                b = (unsigned char) ival;
-            }
+        else if (ival < 0) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "unsigned byte integer is less than minimum");
+            goto exit;
+        }
+        else if (ival > UCHAR_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "unsigned byte integer is greater than maximum");
+            goto exit;
+        }
+        else {
+            b = (unsigned char) ival;
         }
     }
     if (nargs < 3) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &c, sizeof(unsigned char),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &c, sizeof(unsigned char),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned char)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned char)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = unsigned_char_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = unsigned_char_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -920,12 +781,11 @@ PyDoc_STRVAR(short_converter__doc__,
 static PyObject *
 short_converter_impl(PyObject *module, short a);
 
-static PyValue
-short_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+short_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     short a = 12;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("short_converter", nargs, 0, 1)) {
         goto exit;
@@ -934,33 +794,26 @@ short_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+        long ival = PyLong_AsLong(args[0]);
+        if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        {
-            long ival = PyLong_AsLong(_arg);
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
-            else if (ival < SHRT_MIN) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "signed short integer is less than minimum");
-                goto exit;
-            }
-            else if (ival > SHRT_MAX) {
-                PyErr_SetString(PyExc_OverflowError,
-                                "signed short integer is greater than maximum");
-                goto exit;
-            }
-            else {
-                a = (short) ival;
-            }
+        else if (ival < SHRT_MIN) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed short integer is less than minimum");
+            goto exit;
+        }
+        else if (ival > SHRT_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "signed short integer is greater than maximum");
+            goto exit;
+        }
+        else {
+            a = (short) ival;
         }
     }
 skip_optional:
-    _return_value = short_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = short_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -978,14 +831,13 @@ static PyObject *
 unsigned_short_converter_impl(PyObject *module, unsigned short a,
                               unsigned short b, unsigned short c);
 
-static PyValue
-unsigned_short_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+unsigned_short_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned short a = 12;
     unsigned short b = 34;
     unsigned short c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unsigned_short_converter", nargs, 0, 3)) {
         goto exit;
@@ -993,55 +845,36 @@ unsigned_short_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedShort_Converter(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedShort_Converter(args[0], &a)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedShort_Converter(_arg, &b)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedShort_Converter(args[1], &b)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &c, sizeof(unsigned short),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &c, sizeof(unsigned short),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned short)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned short)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = unsigned_short_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = unsigned_short_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1058,14 +891,13 @@ PyDoc_STRVAR(int_converter__doc__,
 static PyObject *
 int_converter_impl(PyObject *module, int a, int b, int c);
 
-static PyValue
-int_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+int_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int a = 12;
     int b = 34;
     int c = '-';
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("int_converter", nargs, 0, 3)) {
         goto exit;
@@ -1073,41 +905,34 @@ int_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyLong_AsIntValue(args[0]);
+    a = PyLong_AsInt(args[0]);
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyLong_AsIntValue(args[1]);
+    b = PyLong_AsInt(args[1]);
     if (b == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("int_converter", "argument 3", "a unicode character", _arg);
-            goto exit;
-        }
-        if (PyUnicode_GET_LENGTH(_arg) != 1) {
-            PyErr_Format(PyExc_TypeError,
-                "int_converter(): argument 3 must be a unicode character, "
-                "not a string of length %zd",
-                PyUnicode_GET_LENGTH(_arg));
-            goto exit;
-        }
-        c = PyUnicode_READ_CHAR(_arg, 0);
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("int_converter", "argument 3", "a unicode character", args[2]);
+        goto exit;
     }
+    if (PyUnicode_GET_LENGTH(args[2]) != 1) {
+        PyErr_Format(PyExc_TypeError,
+            "int_converter(): argument 3 must be a unicode character, "
+            "not a string of length %zd",
+            PyUnicode_GET_LENGTH(args[2]));
+        goto exit;
+    }
+    c = PyUnicode_READ_CHAR(args[2], 0);
 skip_optional:
-    _return_value = int_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = int_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1125,14 +950,13 @@ static PyObject *
 unsigned_int_converter_impl(PyObject *module, unsigned int a, unsigned int b,
                             unsigned int c);
 
-static PyValue
-unsigned_int_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+unsigned_int_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned int a = 12;
     unsigned int b = 34;
     unsigned int c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unsigned_int_converter", nargs, 0, 3)) {
         goto exit;
@@ -1140,55 +964,36 @@ unsigned_int_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedInt_Converter(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedInt_Converter(args[0], &a)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedInt_Converter(_arg, &b)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedInt_Converter(args[1], &b)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &c, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &c, sizeof(unsigned int),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned int)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = unsigned_int_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = unsigned_int_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1205,12 +1010,11 @@ PyDoc_STRVAR(long_converter__doc__,
 static PyObject *
 long_converter_impl(PyObject *module, long a);
 
-static PyValue
-long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+long_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     long a = 12;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("long_converter", nargs, 0, 1)) {
         goto exit;
@@ -1218,13 +1022,12 @@ long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyLong_AsLongValue(args[0]);
+    a = PyLong_AsLong(args[0]);
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = long_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = long_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1242,14 +1045,13 @@ static PyObject *
 unsigned_long_converter_impl(PyObject *module, unsigned long a,
                              unsigned long b, unsigned long c);
 
-static PyValue
-unsigned_long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+unsigned_long_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned long a = 12;
     unsigned long b = 34;
     unsigned long c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unsigned_long_converter", nargs, 0, 3)) {
         goto exit;
@@ -1257,59 +1059,40 @@ unsigned_long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[0], &a)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLong_Converter(_arg, &b)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLong_Converter(args[1], &b)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("unsigned_long_converter", "argument 3", "int", args[2]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &c, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("unsigned_long_converter", "argument 3", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &c, sizeof(unsigned long),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned long)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = unsigned_long_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = unsigned_long_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1326,12 +1109,11 @@ PyDoc_STRVAR(long_long_converter__doc__,
 static PyObject *
 long_long_converter_impl(PyObject *module, long long a);
 
-static PyValue
-long_long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+long_long_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     long long a = 12;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("long_long_converter", nargs, 0, 1)) {
         goto exit;
@@ -1339,13 +1121,12 @@ long_long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyLong_AsLongLongValue(args[0]);
+    a = PyLong_AsLongLong(args[0]);
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = long_long_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = long_long_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1363,14 +1144,13 @@ static PyObject *
 unsigned_long_long_converter_impl(PyObject *module, unsigned long long a,
                                   unsigned long long b, unsigned long long c);
 
-static PyValue
-unsigned_long_long_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+unsigned_long_long_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned long long a = 12;
     unsigned long long b = 34;
     unsigned long long c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unsigned_long_long_converter", nargs, 0, 3)) {
         goto exit;
@@ -1378,59 +1158,40 @@ unsigned_long_long_converter(PyObject *module, const PyValue *args, Py_ssize_t n
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLongLong_Converter(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLongLong_Converter(args[0], &a)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedLongLong_Converter(_arg, &b)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedLongLong_Converter(args[1], &b)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("unsigned_long_long_converter", "argument 3", "int", args[2]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &c, sizeof(unsigned long long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("unsigned_long_long_converter", "argument 3", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &c, sizeof(unsigned long long),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned long long)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned long long)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = unsigned_long_long_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = unsigned_long_long_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1450,10 +1211,10 @@ py_ssize_t_converter_impl(PyObject *module, Py_ssize_t a, Py_ssize_t b,
                           Py_ssize_t c, Py_ssize_t d, Py_ssize_t e,
                           Py_ssize_t f, Py_ssize_t g);
 
-static PyValue
-py_ssize_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+py_ssize_t_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t a = 12;
     Py_ssize_t b = 34;
     Py_ssize_t c = 56;
@@ -1461,7 +1222,6 @@ py_ssize_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     Py_ssize_t e = 90;
     Py_ssize_t f = -12;
     Py_ssize_t g = -34;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("py_ssize_t_converter", nargs, 0, 7)) {
         goto exit;
@@ -1471,9 +1231,10 @@ py_ssize_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[0]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[0]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1485,9 +1246,10 @@ py_ssize_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[1]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[1]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1497,80 +1259,63 @@ py_ssize_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_convert_optional_to_ssize_t(_arg, &c)) {
-            goto exit;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[2], &c)) {
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[3]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[3]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         d = ival;
-            if (d < 0) {
-                PyErr_SetString(PyExc_ValueError,
-                                "d cannot be negative");
-                goto exit;
-            }
+        if (d < 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "d cannot be negative");
+            goto exit;
+        }
     }
     if (nargs < 5) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_convert_optional_to_non_negative_ssize_t(_arg, &e)) {
-            goto exit;
-        }
+    if (!_Py_convert_optional_to_non_negative_ssize_t(args[4], &e)) {
+        goto exit;
     }
     if (nargs < 6) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[5]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[5]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         f = ival;
-            if (f < 0) {
-                PyErr_SetString(PyExc_ValueError,
-                                "f cannot be negative");
-                goto exit;
-            }
+        if (f < 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "f cannot be negative");
+            goto exit;
+        }
     }
     if (nargs < 7) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[6]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_convert_optional_to_non_negative_ssize_t(_arg, &g)) {
-            goto exit;
-        }
+    if (!_Py_convert_optional_to_non_negative_ssize_t(args[6], &g)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = py_ssize_t_converter_impl(module, a, b, c, d, e, f, g);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = py_ssize_t_converter_impl(module, a, b, c, d, e, f, g);
 
 exit:
     return return_value;
@@ -1588,14 +1333,13 @@ static PyObject *
 slice_index_converter_impl(PyObject *module, Py_ssize_t a, Py_ssize_t b,
                            Py_ssize_t c);
 
-static PyValue
-slice_index_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+slice_index_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t a = 12;
     Py_ssize_t b = 34;
     Py_ssize_t c = 56;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("slice_index_converter", nargs, 0, 3)) {
         goto exit;
@@ -1603,42 +1347,23 @@ slice_index_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyEval_SliceIndex(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyEval_SliceIndex(args[0], &a)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyEval_SliceIndexNotNone(_arg, &b)) {
-            goto exit;
-        }
+    if (!_PyEval_SliceIndexNotNone(args[1], &b)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyEval_SliceIndex(_arg, &c)) {
-            goto exit;
-        }
+    if (!_PyEval_SliceIndex(args[2], &c)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = slice_index_converter_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = slice_index_converter_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1655,12 +1380,11 @@ PyDoc_STRVAR(size_t_converter__doc__,
 static PyObject *
 size_t_converter_impl(PyObject *module, size_t a);
 
-static PyValue
-size_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+size_t_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     size_t a = 12;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("size_t_converter", nargs, 0, 1)) {
         goto exit;
@@ -1668,18 +1392,11 @@ size_t_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_Size_t_Converter(_arg, &a)) {
-            goto exit;
-        }
+    if (!_PyLong_Size_t_Converter(args[0], &a)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = size_t_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = size_t_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1696,12 +1413,11 @@ PyDoc_STRVAR(float_converter__doc__,
 static PyObject *
 float_converter_impl(PyObject *module, float a);
 
-static PyValue
-float_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+float_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     float a = 12.5;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("float_converter", nargs, 0, 1)) {
         goto exit;
@@ -1709,13 +1425,18 @@ float_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = (float) PyFloat_AsDoubleValue(args[0]);
-    if (a == -1.0 && PyErr_Occurred()) {
-        goto exit;
+    if (PyFloat_CheckExact(args[0])) {
+        a = (float) (PyFloat_AS_DOUBLE(args[0]));
+    }
+    else
+    {
+        a = (float) PyFloat_AsDouble(args[0]);
+        if (a == -1.0 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
 skip_optional:
-    _return_value = float_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = float_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1732,12 +1453,11 @@ PyDoc_STRVAR(double_converter__doc__,
 static PyObject *
 double_converter_impl(PyObject *module, double a);
 
-static PyValue
-double_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+double_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     double a = 12.5;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("double_converter", nargs, 0, 1)) {
         goto exit;
@@ -1745,13 +1465,18 @@ double_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyFloat_AsDoubleValue(args[0]);
-    if (a == -1.0 && PyErr_Occurred()) {
-        goto exit;
+    if (PyFloat_CheckExact(args[0])) {
+        a = PyFloat_AS_DOUBLE(args[0]);
+    }
+    else
+    {
+        a = PyFloat_AsDouble(args[0]);
+        if (a == -1.0 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
 skip_optional:
-    _return_value = double_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = double_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1763,30 +1488,22 @@ PyDoc_STRVAR(py_complex_converter__doc__,
 "\n");
 
 #define PY_COMPLEX_CONVERTER_METHODDEF    \
-    {"py_complex_converter", _PyCFunction_CAST(py_complex_converter), METH_O, py_complex_converter__doc__},
+    {"py_complex_converter", (PyCFunction)py_complex_converter, METH_O, py_complex_converter__doc__},
 
 static PyObject *
 py_complex_converter_impl(PyObject *module, Py_complex a);
 
-static PyValue
-py_complex_converter(PyObject *module, PyValue arg)
+static PyObject *
+py_complex_converter(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_complex a;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        a = PyComplex_AsCComplex(_arg);
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
+    a = PyComplex_AsCComplex(arg);
+    if (PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = py_complex_converter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = py_complex_converter_impl(module, a);
 
 exit:
     return return_value;
@@ -1804,22 +1521,20 @@ static PyObject *
 str_converter_impl(PyObject *module, const char *a, const char *b,
                    const char *c, Py_ssize_t c_length);
 
-static PyValue
-str_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+str_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *a = "a";
     const char *b = "b";
     const char *c = "c";
     Py_ssize_t c_length;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "|sys#:str_converter",
         &a, &b, &c, &c_length)) {
         goto exit;
     }
-    _return_value = str_converter_impl(module, a, b, c, c_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = str_converter_impl(module, a, b, c, c_length);
 
 exit:
     return return_value;
@@ -1837,22 +1552,20 @@ static PyObject *
 str_converter_encoding_impl(PyObject *module, char *a, char *b, char *c,
                             Py_ssize_t c_length);
 
-static PyValue
-str_converter_encoding(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+str_converter_encoding(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     char *a = NULL;
     char *b = NULL;
     char *c = NULL;
     Py_ssize_t c_length;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "esetet#:str_converter_encoding",
         "idna", &a, "idna", &b, "idna", &c, &c_length)) {
         goto exit;
     }
-    _return_value = str_converter_encoding_impl(module, a, b, c, c_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = str_converter_encoding_impl(module, a, b, c, c_length);
     /* Post parse cleanup for a */
     PyMem_FREE(a);
     /* Post parse cleanup for b */
@@ -1875,20 +1588,18 @@ PyDoc_STRVAR(py_buffer_converter__doc__,
 static PyObject *
 py_buffer_converter_impl(PyObject *module, Py_buffer *a, Py_buffer *b);
 
-static PyValue
-py_buffer_converter(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+py_buffer_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer a = {NULL, NULL};
     Py_buffer b = {NULL, NULL};
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "z*w*:py_buffer_converter",
         &a, &b)) {
         goto exit;
     }
-    _return_value = py_buffer_converter_impl(module, &a, &b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = py_buffer_converter_impl(module, &a, &b);
 
 exit:
     /* Cleanup for a */
@@ -1914,14 +1625,15 @@ PyDoc_STRVAR(keywords__doc__,
 static PyObject *
 keywords_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyValue
-keywords(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keywords(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1944,26 +1656,18 @@ keywords(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwna
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = keywords_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = keywords_impl(module, a, b);
 
 exit:
     return return_value;
@@ -1980,14 +1684,15 @@ PyDoc_STRVAR(keywords_kwonly__doc__,
 static PyObject *
 keywords_kwonly_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyValue
-keywords_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keywords_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2010,26 +1715,18 @@ keywords_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = keywords_kwonly_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = keywords_kwonly_impl(module, a, b);
 
 exit:
     return return_value;
@@ -2046,14 +1743,15 @@ PyDoc_STRVAR(keywords_opt__doc__,
 static PyObject *
 keywords_opt_impl(PyObject *module, PyObject *a, PyObject *b, PyObject *c);
 
-static PyValue
-keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2076,41 +1774,30 @@ keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        b = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_pos:
-    _return_value = keywords_opt_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = keywords_opt_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2128,14 +1815,15 @@ static PyObject *
 keywords_opt_kwonly_impl(PyObject *module, PyObject *a, PyObject *b,
                          PyObject *c, PyObject *d);
 
-static PyValue
-keywords_opt_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keywords_opt_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2158,31 +1846,24 @@ keywords_opt_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        b = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -2191,22 +1872,15 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_kwonly:
-    _return_value = keywords_opt_kwonly_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = keywords_opt_kwonly_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2224,14 +1898,15 @@ static PyObject *
 keywords_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                          PyObject *c);
 
-static PyValue
-keywords_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keywords_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2254,41 +1929,30 @@ keywords_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        b = args[1];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_kwonly:
-    _return_value = keywords_kwonly_opt_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = keywords_kwonly_opt_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2305,14 +1969,15 @@ PyDoc_STRVAR(posonly_keywords__doc__,
 static PyObject *
 posonly_keywords_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyValue
-posonly_keywords(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_keywords(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2335,26 +2000,18 @@ posonly_keywords(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = posonly_keywords_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = posonly_keywords_impl(module, a, b);
 
 exit:
     return return_value;
@@ -2371,14 +2028,15 @@ PyDoc_STRVAR(posonly_kwonly__doc__,
 static PyObject *
 posonly_kwonly_impl(PyObject *module, PyObject *a, PyObject *b);
 
-static PyValue
-posonly_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2401,26 +2059,18 @@ posonly_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = posonly_kwonly_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = posonly_kwonly_impl(module, a, b);
 
 exit:
     return return_value;
@@ -2438,14 +2088,15 @@ static PyObject *
 posonly_keywords_kwonly_impl(PyObject *module, PyObject *a, PyObject *b,
                              PyObject *c);
 
-static PyValue
-posonly_keywords_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_keywords_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2468,31 +2119,20 @@ posonly_keywords_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     PyObject *a;
     PyObject *b;
     PyObject *c;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    _return_value = posonly_keywords_kwonly_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    return_value = posonly_keywords_kwonly_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2510,14 +2150,15 @@ static PyObject *
 posonly_keywords_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                           PyObject *c, PyObject *d);
 
-static PyValue
-posonly_keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2540,46 +2181,32 @@ posonly_keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *b;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_pos:
-    _return_value = posonly_keywords_opt_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_keywords_opt_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2597,14 +2224,15 @@ static PyObject *
 posonly_opt_keywords_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                               PyObject *c, PyObject *d);
 
-static PyValue
-posonly_opt_keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_opt_keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2627,51 +2255,37 @@ posonly_opt_keywords_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional_posonly;
     }
     noptargs--;
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_pos:
-    _return_value = posonly_opt_keywords_opt_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_opt_keywords_opt_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2689,14 +2303,15 @@ static PyObject *
 posonly_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                         PyObject *c, PyObject *d);
 
-static PyValue
-posonly_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2719,46 +2334,32 @@ posonly_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *b;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_kwonly:
-    _return_value = posonly_kwonly_opt_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_kwonly_opt_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2776,14 +2377,15 @@ static PyObject *
 posonly_opt_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                             PyObject *c, PyObject *d);
 
-static PyValue
-posonly_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_opt_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2806,51 +2408,37 @@ posonly_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional_posonly;
     }
     noptargs--;
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_kwonly:
-    _return_value = posonly_opt_kwonly_opt_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_opt_kwonly_opt_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2868,14 +2456,15 @@ static PyObject *
 posonly_keywords_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                                  PyObject *c, PyObject *d, PyObject *e);
 
-static PyValue
-posonly_keywords_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_keywords_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2898,51 +2487,34 @@ posonly_keywords_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     PyObject *a;
     PyObject *b;
     PyObject *c;
     PyObject *d = Py_None;
     PyObject *e = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
+    c = args[2];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[3])) {
-        d = PyValue_Object(args[3]);
-        if (d == NULL) {
-            goto exit;
-        }
+    if (args[3]) {
+        d = args[3];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
+    e = args[4];
 skip_optional_kwonly:
-    _return_value = posonly_keywords_kwonly_opt_impl(module, a, b, c, d, e);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_keywords_kwonly_opt_impl(module, a, b, c, d, e);
 
 exit:
     return return_value;
@@ -2962,14 +2534,15 @@ posonly_keywords_opt_kwonly_opt_impl(PyObject *module, PyObject *a,
                                      PyObject *b, PyObject *c, PyObject *d,
                                      PyObject *e);
 
-static PyValue
-posonly_keywords_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_keywords_opt_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2992,36 +2565,26 @@ posonly_keywords_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *b;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
     PyObject *e = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -3030,22 +2593,15 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[3])) {
-        d = PyValue_Object(args[3]);
-        if (d == NULL) {
-            goto exit;
-        }
+    if (args[3]) {
+        d = args[3];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
+    e = args[4];
 skip_optional_kwonly:
-    _return_value = posonly_keywords_opt_kwonly_opt_impl(module, a, b, c, d, e);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_keywords_opt_kwonly_opt_impl(module, a, b, c, d, e);
 
 exit:
     return return_value;
@@ -3065,14 +2621,15 @@ posonly_opt_keywords_opt_kwonly_opt_impl(PyObject *module, PyObject *a,
                                          PyObject *b, PyObject *c,
                                          PyObject *d);
 
-static PyValue
-posonly_opt_keywords_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_opt_keywords_opt_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3095,40 +2652,30 @@ posonly_opt_keywords_opt_kwonly_opt(PyObject *module, const PyValue *args, Py_ss
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional_posonly;
     }
     noptargs--;
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[2])) {
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+    if (args[2]) {
+        c = args[2];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -3137,13 +2684,9 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_kwonly:
-    _return_value = posonly_opt_keywords_opt_kwonly_opt_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_opt_keywords_opt_kwonly_opt_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -3160,14 +2703,15 @@ PyDoc_STRVAR(keyword_only_parameter__doc__,
 static PyObject *
 keyword_only_parameter_impl(PyObject *module, PyObject *a);
 
-static PyValue
-keyword_only_parameter(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+keyword_only_parameter(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3190,21 +2734,16 @@ keyword_only_parameter(PyObject *module, const PyValue *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *a;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    _return_value = keyword_only_parameter_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    return_value = keyword_only_parameter_impl(module, a);
 
 exit:
     return return_value;
@@ -3221,19 +2760,17 @@ PyDoc_STRVAR(varpos__doc__,
 static PyObject *
 varpos_impl(PyObject *module, PyObject *args);
 
-static PyValue
-varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+varpos(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = varpos_impl(module, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = varpos_impl(module, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -3254,32 +2791,24 @@ static PyObject *
 posonly_varpos_impl(PyObject *module, PyObject *a, PyObject *b,
                     PyObject *args);
 
-static PyValue
-posonly_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+posonly_varpos(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("posonly_varpos", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    __clinic_args = _PyTuple_FromValues(args + 2, nargs - 2);
+    a = args[0];
+    b = args[1];
+    __clinic_args = PyTuple_FromArray(args + 2, nargs - 2);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = posonly_varpos_impl(module, a, b, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_varpos_impl(module, a, b, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -3300,38 +2829,30 @@ static PyObject *
 posonly_req_opt_varpos_impl(PyObject *module, PyObject *a, PyObject *b,
                             PyObject *args);
 
-static PyValue
-posonly_req_opt_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+posonly_req_opt_varpos(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b = Py_False;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("posonly_req_opt_varpos", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional:
     __clinic_args = nargs > 2
-        ? _PyTuple_FromValues(args + 2, nargs - 2)
+        ? PyTuple_FromArray(args + 2, nargs - 2)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = posonly_req_opt_varpos_impl(module, a, b, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_req_opt_varpos_impl(module, a, b, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -3352,14 +2873,15 @@ static PyObject *
 posonly_poskw_varpos_impl(PyObject *module, PyObject *a, PyObject *b,
                           PyObject *args);
 
-static PyValue
-posonly_poskw_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_poskw_varpos(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3382,34 +2904,26 @@ posonly_poskw_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     PyObject *a;
     PyObject *b;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
+    b = fastargs[1];
     __clinic_args = nargs > 2
-        ? _PyTuple_FromValues(args + 2, nargs - 2)
+        ? PyTuple_FromArray(args + 2, nargs - 2)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = posonly_poskw_varpos_impl(module, a, b, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_poskw_varpos_impl(module, a, b, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -3429,14 +2943,15 @@ PyDoc_STRVAR(poskw_varpos__doc__,
 static PyObject *
 poskw_varpos_impl(PyObject *module, PyObject *a, PyObject *args);
 
-static PyValue
-poskw_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+poskw_varpos(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3459,29 +2974,24 @@ poskw_varpos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     PyObject *a;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     __clinic_args = nargs > 1
-        ? _PyTuple_FromValues(args + 1, nargs - 1)
+        ? PyTuple_FromArray(args + 1, nargs - 1)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = poskw_varpos_impl(module, a, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = poskw_varpos_impl(module, a, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -3502,14 +3012,15 @@ static PyObject *
 poskw_varpos_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *args,
                              int b);
 
-static PyValue
-poskw_varpos_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+poskw_varpos_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3532,39 +3043,34 @@ poskw_varpos_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = Py_MIN(nargs, 1) + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *__clinic_args = NULL;
     int b = 0;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    b = PyObject_IsTrueValue(fastargs[1]);
+    b = PyObject_IsTrue(fastargs[1]);
     if (b < 0) {
         goto exit;
     }
 skip_optional_kwonly:
     __clinic_args = nargs > 1
-        ? _PyTuple_FromValues(args + 1, nargs - 1)
+        ? PyTuple_FromArray(args + 1, nargs - 1)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = poskw_varpos_kwonly_opt_impl(module, a, __clinic_args, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = poskw_varpos_kwonly_opt_impl(module, a, __clinic_args, b);
 
 exit:
     /* Cleanup for args */
@@ -3585,14 +3091,15 @@ static PyObject *
 poskw_varpos_kwonly_opt2_impl(PyObject *module, PyObject *a, PyObject *args,
                               PyObject *b, PyObject *c);
 
-static PyValue
-poskw_varpos_kwonly_opt2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+poskw_varpos_kwonly_opt2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3615,49 +3122,38 @@ poskw_varpos_kwonly_opt2(PyObject *module, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
-    const PyValue *fastargs;
+    PyObject *argsbuf[3];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = Py_MIN(nargs, 1) + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *__clinic_args = NULL;
     PyObject *b = Py_False;
     PyObject *c = Py_False;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        b = PyValue_Object(fastargs[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (fastargs[1]) {
+        b = fastargs[1];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    c = PyValue_Object(fastargs[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = fastargs[2];
 skip_optional_kwonly:
     __clinic_args = nargs > 1
-        ? _PyTuple_FromValues(args + 1, nargs - 1)
+        ? PyTuple_FromArray(args + 1, nargs - 1)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = poskw_varpos_kwonly_opt2_impl(module, a, __clinic_args, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = poskw_varpos_kwonly_opt2_impl(module, a, __clinic_args, b, c);
 
 exit:
     /* Cleanup for args */
@@ -3677,14 +3173,15 @@ PyDoc_STRVAR(varpos_kwonly_opt__doc__,
 static PyObject *
 varpos_kwonly_opt_impl(PyObject *module, PyObject *args, PyObject *b);
 
-static PyValue
-varpos_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+varpos_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3707,12 +3204,11 @@ varpos_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = 0 + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *__clinic_args = NULL;
     PyObject *b = Py_False;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
@@ -3722,17 +3218,13 @@ varpos_kwonly_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    b = PyValue_Object(fastargs[0]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = fastargs[0];
 skip_optional_kwonly:
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = varpos_kwonly_opt_impl(module, __clinic_args, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = varpos_kwonly_opt_impl(module, __clinic_args, b);
 
 exit:
     /* Cleanup for args */
@@ -3753,14 +3245,15 @@ static PyObject *
 varpos_kwonly_req_opt_impl(PyObject *module, PyObject *args, PyObject *a,
                            PyObject *b, PyObject *c);
 
-static PyValue
-varpos_kwonly_req_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+varpos_kwonly_req_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3783,47 +3276,36 @@ varpos_kwonly_req_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
-    const PyValue *fastargs;
+    PyObject *argsbuf[3];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = 0 + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *__clinic_args = NULL;
     PyObject *a;
     PyObject *b = Py_False;
     PyObject *c = Py_False;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 1, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        b = PyValue_Object(fastargs[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (fastargs[1]) {
+        b = fastargs[1];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    c = PyValue_Object(fastargs[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = fastargs[2];
 skip_optional_kwonly:
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = varpos_kwonly_req_opt_impl(module, __clinic_args, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = varpos_kwonly_req_opt_impl(module, __clinic_args, a, b, c);
 
 exit:
     /* Cleanup for args */
@@ -3841,21 +3323,19 @@ PyDoc_STRVAR(varpos_array__doc__,
     {"varpos_array", _PyCFunction_CAST(varpos_array), METH_FASTCALL, varpos_array__doc__},
 
 static PyObject *
-varpos_array_impl(PyObject *module, const PyValue *args,
+varpos_array_impl(PyObject *module, PyObject * const *args,
                   Py_ssize_t args_length);
 
-static PyValue
-varpos_array(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+varpos_array(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *__clinic_args;
+    PyObject *return_value = NULL;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
 
     __clinic_args = args;
     args_length = nargs;
-    _return_value = varpos_array_impl(module, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = varpos_array_impl(module, __clinic_args, args_length);
 
     return return_value;
 }
@@ -3870,33 +3350,25 @@ PyDoc_STRVAR(posonly_varpos_array__doc__,
 
 static PyObject *
 posonly_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                          const PyValue *args, Py_ssize_t args_length);
+                          PyObject * const *args, Py_ssize_t args_length);
 
-static PyValue
-posonly_varpos_array(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+posonly_varpos_array(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("posonly_varpos_array", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
     __clinic_args = args + 2;
     args_length = nargs - 2;
-    _return_value = posonly_varpos_array_impl(module, a, b, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_varpos_array_impl(module, a, b, __clinic_args, args_length);
 
 exit:
     return return_value;
@@ -3912,38 +3384,30 @@ PyDoc_STRVAR(posonly_req_opt_varpos_array__doc__,
 
 static PyObject *
 posonly_req_opt_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                                  const PyValue *args,
+                                  PyObject * const *args,
                                   Py_ssize_t args_length);
 
-static PyValue
-posonly_req_opt_varpos_array(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+posonly_req_opt_varpos_array(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b = Py_False;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("posonly_req_opt_varpos_array", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional:
     __clinic_args = nargs > 2 ? args + 2 : args;
     args_length = Py_MAX(0, nargs - 2);
-    _return_value = posonly_req_opt_varpos_array_impl(module, a, b, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_req_opt_varpos_array_impl(module, a, b, __clinic_args, args_length);
 
 exit:
     return return_value;
@@ -3959,16 +3423,18 @@ PyDoc_STRVAR(posonly_poskw_varpos_array__doc__,
 
 static PyObject *
 posonly_poskw_varpos_array_impl(PyObject *module, PyObject *a, PyObject *b,
-                                const PyValue *args, Py_ssize_t args_length);
+                                PyObject * const *args,
+                                Py_ssize_t args_length);
 
-static PyValue
-posonly_poskw_varpos_array(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+posonly_poskw_varpos_array(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3991,31 +3457,23 @@ posonly_poskw_varpos_array(PyObject *module, const PyValue *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     PyObject *a;
     PyObject *b;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
+    b = fastargs[1];
     __clinic_args = nargs > 2 ? args + 2 : args;
     args_length = Py_MAX(0, nargs - 2);
-    _return_value = posonly_poskw_varpos_array_impl(module, a, b, __clinic_args, args_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = posonly_poskw_varpos_array_impl(module, a, b, __clinic_args, args_length);
 
 exit:
     return return_value;
@@ -4030,27 +3488,22 @@ PyDoc_STRVAR(only_group__doc__,
 static PyObject *
 only_group_impl(PyObject *module, int group_right_1, PyObject *a);
 
-static PyValue
-only_group(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+only_group(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int group_right_1 = 0;
     PyObject *a = NULL;
-    PyObject *_return_value;
 
     if (nargs > 1) {
         PyErr_SetString(PyExc_TypeError, "only_group requires 0 to 1 arguments");
         goto exit;
     }
     if (nargs >= 1) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
+        a = args[0];
         group_right_1 = 1;
     }
-    _return_value = only_group_impl(module, group_right_1, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = only_group_impl(module, group_right_1, a);
 
 exit:
     return return_value;
@@ -4066,15 +3519,14 @@ static PyObject *
 group_and_opt_impl(PyObject *module, int group_left_1, PyObject *a,
                    PyObject *b, PyObject *c);
 
-static PyValue
-group_and_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+group_and_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int group_left_1 = 0;
     PyObject *a = NULL;
     PyObject *b = NULL;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     Py_ssize_t offset = 0;
     if (nargs > 3) {
@@ -4082,27 +3534,17 @@ group_and_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+        a = args[0];
+        b = args[1];
         offset += 2;
         group_left_1 = 1;
     }
     if (nargs <= offset) {
         goto skip_optional;
     }
-    c = PyValue_Object(args[offset]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[offset];
 skip_optional:
-    _return_value = group_and_opt_impl(module, group_left_1, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = group_and_opt_impl(module, group_left_1, a, b, c);
 
 exit:
     return return_value;
@@ -4119,46 +3561,32 @@ two_groups_on_left_impl(PyObject *module, int group_left_1, PyObject *a,
                         PyObject *b, int group_left_2, PyObject *c,
                         PyObject *d);
 
-static PyValue
-two_groups_on_left(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+two_groups_on_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int group_left_1 = 0;
     PyObject *a = NULL;
     PyObject *b = NULL;
     int group_left_2 = 0;
     PyObject *c = NULL;
     PyObject *d;
-    PyObject *_return_value;
 
     if (nargs < 1 || nargs > 4) {
         PyErr_SetString(PyExc_TypeError, "two_groups_on_left requires 1 to 4 arguments");
         goto exit;
     }
     if (nargs >= 3) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+        a = args[0];
+        b = args[1];
         group_left_1 = 1;
     }
     if (nargs == 2 || nargs == 4) {
-        c = PyValue_Object(args[nargs - 2]);
-        if (c == NULL) {
-            goto exit;
-        }
+        c = args[nargs - 2];
         group_left_2 = 1;
     }
-    d = PyValue_Object(args[nargs - 1]);
-    if (d == NULL) {
-        goto exit;
-    }
-    _return_value = two_groups_on_left_impl(module, group_left_1, a, b, group_left_2, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    d = args[nargs - 1];
+    return_value = two_groups_on_left_impl(module, group_left_1, a, b, group_left_2, c, d);
 
 exit:
     return return_value;
@@ -4175,46 +3603,32 @@ two_groups_on_right_impl(PyObject *module, PyObject *a, int group_right_1,
                          PyObject *b, int group_right_2, PyObject *c,
                          PyObject *d);
 
-static PyValue
-two_groups_on_right(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+two_groups_on_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     int group_right_1 = 0;
     PyObject *b = NULL;
     int group_right_2 = 0;
     PyObject *c = NULL;
     PyObject *d = NULL;
-    PyObject *_return_value;
 
     if (nargs < 1 || nargs > 4) {
         PyErr_SetString(PyExc_TypeError, "two_groups_on_right requires 1 to 4 arguments");
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs == 2 || nargs == 4) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+        b = args[1];
         group_right_1 = 1;
     }
     if (nargs >= 3) {
-        c = PyValue_Object(args[nargs - 2]);
-        if (c == NULL) {
-            goto exit;
-        }
-        d = PyValue_Object(args[nargs - 1]);
-        if (d == NULL) {
-            goto exit;
-        }
+        c = args[nargs - 2];
+        d = args[nargs - 1];
         group_right_2 = 1;
     }
-    _return_value = two_groups_on_right_impl(module, a, group_right_1, b, group_right_2, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = two_groups_on_right_impl(module, a, group_right_1, b, group_right_2, c, d);
 
 exit:
     return return_value;
@@ -4230,17 +3644,16 @@ static PyObject *
 group_and_two_opt_impl(PyObject *module, int group_left_1, PyObject *a,
                        PyObject *b, PyObject *c, PyObject *d, PyObject *e);
 
-static PyValue
-group_and_two_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+group_and_two_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int group_left_1 = 0;
     PyObject *a = NULL;
     PyObject *b = NULL;
     PyObject *c = NULL;
     PyObject *d = Py_None;
     PyObject *e = Py_None;
-    PyObject *_return_value;
 
     Py_ssize_t offset = 0;
     if (nargs > 5) {
@@ -4248,38 +3661,22 @@ group_and_two_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
-        c = PyValue_Object(args[2]);
-        if (c == NULL) {
-            goto exit;
-        }
+        a = args[0];
+        b = args[1];
+        c = args[2];
         offset += 3;
         group_left_1 = 1;
     }
     if (nargs <= offset) {
         goto skip_optional;
     }
-    d = PyValue_Object(args[offset]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[offset];
     if (nargs <= offset + 1) {
         goto skip_optional;
     }
-    e = PyValue_Object(args[offset + 1]);
-    if (e == NULL) {
-        goto exit;
-    }
+    e = args[offset + 1];
 skip_optional:
-    _return_value = group_and_two_opt_impl(module, group_left_1, a, b, c, d, e);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = group_and_two_opt_impl(module, group_left_1, a, b, c, d, e);
 
 exit:
     return return_value;
@@ -4298,14 +3695,15 @@ static PyObject *
 gh_32092_oob_impl(PyObject *module, PyObject *pos1, PyObject *pos2,
                   PyObject *varargs, PyObject *kw1, PyObject *kw2);
 
-static PyValue
-gh_32092_oob(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+gh_32092_oob(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4328,54 +3726,40 @@ gh_32092_oob(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
-    const PyValue *fastargs;
+    PyObject *argsbuf[4];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = Py_MIN(nargs, 2) + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *pos1;
     PyObject *pos2;
     PyObject *varargs = NULL;
     PyObject *kw1 = Py_None;
     PyObject *kw2 = Py_None;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    pos1 = PyValue_Object(fastargs[0]);
-    if (pos1 == NULL) {
-        goto exit;
-    }
-    pos2 = PyValue_Object(fastargs[1]);
-    if (pos2 == NULL) {
-        goto exit;
-    }
+    pos1 = fastargs[0];
+    pos2 = fastargs[1];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        kw1 = PyValue_Object(fastargs[2]);
-        if (kw1 == NULL) {
-            goto exit;
-        }
+    if (fastargs[2]) {
+        kw1 = fastargs[2];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    kw2 = PyValue_Object(fastargs[3]);
-    if (kw2 == NULL) {
-        goto exit;
-    }
+    kw2 = fastargs[3];
 skip_optional_kwonly:
     varargs = nargs > 2
-        ? _PyTuple_FromValues(args + 2, nargs - 2)
+        ? PyTuple_FromArray(args + 2, nargs - 2)
         : PyTuple_New(0);
     if (varargs == NULL) {
         goto exit;
     }
-    _return_value = gh_32092_oob_impl(module, pos1, pos2, varargs, kw1, kw2);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = gh_32092_oob_impl(module, pos1, pos2, varargs, kw1, kw2);
 
 exit:
     /* Cleanup for varargs */
@@ -4397,14 +3781,15 @@ static PyObject *
 gh_32092_kw_pass_impl(PyObject *module, PyObject *pos, PyObject *args,
                       PyObject *kw);
 
-static PyValue
-gh_32092_kw_pass(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+gh_32092_kw_pass(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4427,39 +3812,31 @@ gh_32092_kw_pass(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = Py_MIN(nargs, 1) + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *pos;
     PyObject *__clinic_args = NULL;
     PyObject *kw = Py_None;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    pos = PyValue_Object(fastargs[0]);
-    if (pos == NULL) {
-        goto exit;
-    }
+    pos = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    kw = PyValue_Object(fastargs[1]);
-    if (kw == NULL) {
-        goto exit;
-    }
+    kw = fastargs[1];
 skip_optional_kwonly:
     __clinic_args = nargs > 1
-        ? _PyTuple_FromValues(args + 1, nargs - 1)
+        ? PyTuple_FromArray(args + 1, nargs - 1)
         : PyTuple_New(0);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = gh_32092_kw_pass_impl(module, pos, __clinic_args, kw);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = gh_32092_kw_pass_impl(module, pos, __clinic_args, kw);
 
 exit:
     /* Cleanup for args */
@@ -4480,19 +3857,17 @@ PyDoc_STRVAR(gh_99233_refcount__doc__,
 static PyObject *
 gh_99233_refcount_impl(PyObject *module, PyObject *args);
 
-static PyValue
-gh_99233_refcount(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+gh_99233_refcount(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = gh_99233_refcount_impl(module, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = gh_99233_refcount_impl(module, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -4513,20 +3888,18 @@ PyDoc_STRVAR(gh_99240_double_free__doc__,
 static PyObject *
 gh_99240_double_free_impl(PyObject *module, char *a, char *b);
 
-static PyValue
-gh_99240_double_free(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+gh_99240_double_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     char *a = NULL;
     char *b = NULL;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "eses:gh_99240_double_free",
         "idna", &a, "idna", &b)) {
         goto exit;
     }
-    _return_value = gh_99240_double_free_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = gh_99240_double_free_impl(module, a, b);
     /* Post parse cleanup for a */
     PyMem_FREE(a);
     /* Post parse cleanup for b */
@@ -4550,14 +3923,15 @@ static PyObject *
 null_or_tuple_for_varargs_impl(PyObject *module, PyObject *name,
                                PyObject *constraints, int covariant);
 
-static PyValue
-null_or_tuple_for_varargs(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+null_or_tuple_for_varargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4580,39 +3954,34 @@ null_or_tuple_for_varargs(PyObject *module, const PyValue *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = Py_MIN(nargs, 1) + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *name;
     PyObject *constraints = NULL;
     int covariant = 0;
-    PyObject *_return_value;
 
     fastargs = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    name = PyValue_Object(fastargs[0]);
-    if (name == NULL) {
-        goto exit;
-    }
+    name = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    covariant = PyObject_IsTrueValue(fastargs[1]);
+    covariant = PyObject_IsTrue(fastargs[1]);
     if (covariant < 0) {
         goto exit;
     }
 skip_optional_kwonly:
     constraints = nargs > 1
-        ? _PyTuple_FromValues(args + 1, nargs - 1)
+        ? PyTuple_FromArray(args + 1, nargs - 1)
         : PyTuple_New(0);
     if (constraints == NULL) {
         goto exit;
     }
-    _return_value = null_or_tuple_for_varargs_impl(module, name, constraints, covariant);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = null_or_tuple_for_varargs_impl(module, name, constraints, covariant);
 
 exit:
     /* Cleanup for constraints */
@@ -4632,14 +4001,15 @@ PyDoc_STRVAR(clone_f1__doc__,
 static PyObject *
 clone_f1_impl(PyObject *module, const char *path);
 
-static PyValue
-clone_f1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+clone_f1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4662,31 +4032,23 @@ clone_f1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwna
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     const char *path;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("clone_f1", "argument 'path'", "str", _arg);
-            goto exit;
-        }
-        path = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (path == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("clone_f1", "argument 'path'", "str", args[0]);
+        goto exit;
     }
-    _return_value = clone_f1_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    path = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (path == NULL) {
+        goto exit;
+    }
+    return_value = clone_f1_impl(module, path);
 
 exit:
     return return_value;
@@ -4703,14 +4065,15 @@ PyDoc_STRVAR(clone_f2__doc__,
 static PyObject *
 clone_f2_impl(PyObject *module, const char *path);
 
-static PyValue
-clone_f2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+clone_f2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4733,31 +4096,23 @@ clone_f2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwna
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     const char *path;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("clone_f2", "argument 'path'", "str", _arg);
-            goto exit;
-        }
-        path = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (path == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("clone_f2", "argument 'path'", "str", args[0]);
+        goto exit;
     }
-    _return_value = clone_f2_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    path = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (path == NULL) {
+        goto exit;
+    }
+    return_value = clone_f2_impl(module, path);
 
 exit:
     return return_value;
@@ -4774,14 +4129,15 @@ PyDoc_STRVAR(clone_with_conv_f1__doc__,
 static PyObject *
 clone_with_conv_f1_impl(PyObject *module, custom_t path);
 
-static PyValue
-clone_with_conv_f1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+clone_with_conv_f1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4804,12 +4160,11 @@ clone_with_conv_f1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     custom_t path = {
                 .name = "clone_with_conv_f1",
             };
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -4819,18 +4174,11 @@ clone_with_conv_f1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!custom_converter(_arg, &path)) {
-            goto exit;
-        }
+    if (!custom_converter(args[0], &path)) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = clone_with_conv_f1_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = clone_with_conv_f1_impl(module, path);
 
 exit:
     return return_value;
@@ -4847,14 +4195,15 @@ PyDoc_STRVAR(clone_with_conv_f2__doc__,
 static PyObject *
 clone_with_conv_f2_impl(PyObject *module, custom_t path);
 
-static PyValue
-clone_with_conv_f2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+clone_with_conv_f2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4877,12 +4226,11 @@ clone_with_conv_f2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     custom_t path = {
                 .name = "clone_with_conv_f2",
             };
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -4892,18 +4240,11 @@ clone_with_conv_f2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!custom_converter(_arg, &path)) {
-            goto exit;
-        }
+    if (!custom_converter(args[0], &path)) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = clone_with_conv_f2_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = clone_with_conv_f2_impl(module, path);
 
 exit:
     return return_value;
@@ -4920,14 +4261,15 @@ PyDoc_STRVAR(alias_pos__doc__,
 static PyObject *
 alias_pos_impl(PyObject *module, PyObject *a);
 
-static PyValue
-alias_pos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+alias_pos(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -4950,10 +4292,9 @@ alias_pos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -4963,11 +4304,8 @@ alias_pos(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
+    if (args[0]) {
+        a = args[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -4976,19 +4314,15 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[0])) {
+    if (args[0]) {
         PyErr_Format(PyExc_TypeError,
                 "argument for alias_pos() given by "
                 "name ('b') and %s", 0 < nargs ? "position (1)" : "name ('a')");
         goto exit;
     }
-    a = PyValue_Object(args[1]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[1];
 skip_optional_kwonly:
-    _return_value = alias_pos_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = alias_pos_impl(module, a);
 
 exit:
     return return_value;
@@ -5005,14 +4339,15 @@ PyDoc_STRVAR(alias_kwonly__doc__,
 static PyObject *
 alias_kwonly_impl(PyObject *module, PyObject *a);
 
-static PyValue
-alias_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+alias_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5035,10 +4370,9 @@ alias_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -5048,28 +4382,21 @@ alias_kwonly(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[0])) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
+    if (args[0]) {
+        a = args[0];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[0])) {
+    if (args[0]) {
         PyErr_Format(PyExc_TypeError,
                 "argument for alias_kwonly() given by "
                 "name ('b') and name ('a')");
         goto exit;
     }
-    a = PyValue_Object(args[1]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[1];
 skip_optional_kwonly:
-    _return_value = alias_kwonly_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = alias_kwonly_impl(module, a);
 
 exit:
     return return_value;
@@ -5087,14 +4414,14 @@ static PyObject *
 _testclinic_TestClass_get_defining_class_impl(PyObject *self,
                                               PyTypeObject *cls);
 
-static PyValue
-_testclinic_TestClass_get_defining_class(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_testclinic_TestClass_get_defining_class(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "get_defining_class() takes no arguments");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(_testclinic_TestClass_get_defining_class_impl(self, cls));
+    return _testclinic_TestClass_get_defining_class_impl(self, cls);
 }
 
 PyDoc_STRVAR(_testclinic_TestClass_get_defining_class_arg__doc__,
@@ -5110,14 +4437,15 @@ _testclinic_TestClass_get_defining_class_arg_impl(PyObject *self,
                                                   PyTypeObject *cls,
                                                   PyObject *arg);
 
-static PyValue
-_testclinic_TestClass_get_defining_class_arg(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_testclinic_TestClass_get_defining_class_arg(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5140,21 +4468,16 @@ _testclinic_TestClass_get_defining_class_arg(PyObject *self, PyTypeObject *cls, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *arg;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    arg = PyValue_Object(args[0]);
-    if (arg == NULL) {
-        goto exit;
-    }
-    _return_value = _testclinic_TestClass_get_defining_class_arg_impl(self, cls, arg);
-    return_value = PyValue_FromResult(_return_value);
+    arg = args[0];
+    return_value = _testclinic_TestClass_get_defining_class_arg_impl(self, cls, arg);
 
 exit:
     return return_value;
@@ -5172,22 +4495,20 @@ static PyObject *
 _testclinic_TestClass_defclass_varpos_impl(PyObject *self, PyTypeObject *cls,
                                            PyObject *args);
 
-static PyValue
-_testclinic_TestClass_defclass_varpos(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_testclinic_TestClass_defclass_varpos(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("defclass_varpos", kwnames)) {
         goto exit;
     }
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = _testclinic_TestClass_defclass_varpos_impl(self, cls, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testclinic_TestClass_defclass_varpos_impl(self, cls, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -5210,14 +4531,13 @@ _testclinic_TestClass_defclass_posonly_varpos_impl(PyObject *self,
                                                    PyObject *a, PyObject *b,
                                                    PyObject *args);
 
-static PyValue
-_testclinic_TestClass_defclass_posonly_varpos(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_testclinic_TestClass_defclass_posonly_varpos(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("defclass_posonly_varpos", kwnames)) {
         goto exit;
@@ -5225,20 +4545,13 @@ _testclinic_TestClass_defclass_posonly_varpos(PyObject *self, PyTypeObject *cls,
     if (!_PyArg_CheckPositional("defclass_posonly_varpos", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    __clinic_args = _PyTuple_FromValues(args + 2, nargs - 2);
+    a = args[0];
+    b = args[1];
+    __clinic_args = PyTuple_FromArray(args + 2, nargs - 2);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = _testclinic_TestClass_defclass_posonly_varpos_impl(self, cls, a, b, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testclinic_TestClass_defclass_posonly_varpos_impl(self, cls, a, b, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -5299,14 +4612,8 @@ _testclinic_TestClass_posonly_varpos_no_fastcall(PyObject *type, PyObject *args)
     if (!_PyArg_CheckPositional("posonly_varpos_no_fastcall", PyTuple_GET_SIZE(args), 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
+    b = PyTuple_GET_ITEM(args, 1);
     __clinic_args = PyTuple_GetSlice(args, 2, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
         goto exit;
@@ -5345,17 +4652,11 @@ _testclinic_TestClass_posonly_req_opt_varpos_no_fastcall(PyObject *type, PyObjec
     if (!_PyArg_CheckPositional("posonly_req_opt_varpos_no_fastcall", PyTuple_GET_SIZE(args), 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    b = PyTuple_GET_ITEM(args, 1);
 skip_optional:
     __clinic_args = PyTuple_GetSlice(args, 2, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
@@ -5392,6 +4693,7 @@ _testclinic_TestClass_posonly_poskw_varpos_no_fastcall(PyObject *type, PyObject 
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5414,26 +4716,20 @@ _testclinic_TestClass_posonly_poskw_varpos_no_fastcall(PyObject *type, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *a;
     PyObject *b;
     PyObject *__clinic_args = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
+    b = fastargs[1];
     __clinic_args = PyTuple_GetSlice(args, 2, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
         goto exit;
@@ -5457,14 +4753,14 @@ PyDoc_STRVAR(_testclinic_TestClass_varpos_array_no_fastcall__doc__,
 
 static PyObject *
 _testclinic_TestClass_varpos_array_no_fastcall_impl(PyTypeObject *type,
-                                                    const PyValue *args,
+                                                    PyObject * const *args,
                                                     Py_ssize_t args_length);
 
 static PyObject *
 _testclinic_TestClass_varpos_array_no_fastcall(PyObject *type, PyObject *args)
 {
     PyObject *return_value = NULL;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
     __clinic_args = _PyTuple_ITEMS(args);
@@ -5486,7 +4782,7 @@ static PyObject *
 _testclinic_TestClass_posonly_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                             PyObject *a,
                                                             PyObject *b,
-                                                            const PyValue *args,
+                                                            PyObject * const *args,
                                                             Py_ssize_t args_length);
 
 static PyObject *
@@ -5495,20 +4791,14 @@ _testclinic_TestClass_posonly_varpos_array_no_fastcall(PyObject *type, PyObject 
     PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
     if (!_PyArg_CheckPositional("posonly_varpos_array_no_fastcall", PyTuple_GET_SIZE(args), 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
+    b = PyTuple_GET_ITEM(args, 1);
     __clinic_args = _PyTuple_ITEMS(args) + 2;
     args_length = PyTuple_GET_SIZE(args) - 2;
     return_value = _testclinic_TestClass_posonly_varpos_array_no_fastcall_impl((PyTypeObject *)type, a, b, __clinic_args, args_length);
@@ -5529,7 +4819,7 @@ static PyObject *
 _testclinic_TestClass_posonly_req_opt_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                                     PyObject *a,
                                                                     PyObject *b,
-                                                                    const PyValue *args,
+                                                                    PyObject * const *args,
                                                                     Py_ssize_t args_length);
 
 static PyObject *
@@ -5538,23 +4828,17 @@ _testclinic_TestClass_posonly_req_opt_varpos_array_no_fastcall(PyObject *type, P
     PyObject *return_value = NULL;
     PyObject *a;
     PyObject *b = Py_False;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
     if (!_PyArg_CheckPositional("posonly_req_opt_varpos_array_no_fastcall", PyTuple_GET_SIZE(args), 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    b = PyTuple_GET_ITEM(args, 1);
 skip_optional:
     __clinic_args = PyTuple_GET_SIZE(args) > 2 ? _PyTuple_ITEMS(args) + 2 : _PyTuple_ITEMS(args);
     args_length = Py_MAX(0, PyTuple_GET_SIZE(args) - 2);
@@ -5576,7 +4860,7 @@ static PyObject *
 _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall_impl(PyTypeObject *type,
                                                                   PyObject *a,
                                                                   PyObject *b,
-                                                                  const PyValue *args,
+                                                                  PyObject * const *args,
                                                                   Py_ssize_t args_length);
 
 static PyObject *
@@ -5587,6 +4871,7 @@ _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall(PyObject *type, PyO
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5609,27 +4894,21 @@ _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall(PyObject *type, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *a;
     PyObject *b;
-    const PyValue *__clinic_args;
+    PyObject * const *__clinic_args;
     Py_ssize_t args_length;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
+    b = fastargs[1];
     __clinic_args = PyTuple_GET_SIZE(args) > 2 ? _PyTuple_ITEMS(args) + 2 : _PyTuple_ITEMS(args);
     args_length = Py_MAX(0, PyTuple_GET_SIZE(args) - 2);
     return_value = _testclinic_TestClass_posonly_poskw_varpos_array_no_fastcall_impl((PyTypeObject *)type, a, b, __clinic_args, args_length);
@@ -5642,7 +4921,7 @@ static PyObject *
 vc_plain_new_impl(PyTypeObject *type, PyObject *a);
 
 static PyObject *
-vc_plain_new_helper(PyTypeObject *type, const PyValue *args,
+vc_plain_new_helper(PyTypeObject *type, PyObject *const *args,
     Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5650,6 +4929,7 @@ vc_plain_new_helper(PyTypeObject *type, const PyValue *args,
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5672,8 +4952,8 @@ vc_plain_new_helper(PyTypeObject *type, const PyValue *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = nargs + nkw - 0;
     PyObject *a = Py_None;
 
@@ -5685,10 +4965,7 @@ vc_plain_new_helper(PyTypeObject *type, const PyValue *args,
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
 skip_optional_pos:
     return_value = vc_plain_new_impl(type, a);
 
@@ -5699,17 +4976,16 @@ exit:
 static PyObject *
 vc_plain_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_plain_new_helper(type, _PyTuple_ITEMS(args),
+    return vc_plain_new_helper(type, _PyTuple_CAST(args)->ob_item,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
 }
 
-static PyValue
-vc_plain_vectorcall(PyValue type_value, const PyValue *args,
+static PyObject *
+vc_plain_vectorcall(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
-    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *a = Py_None;
@@ -5719,30 +4995,25 @@ vc_plain_vectorcall(PyValue type_value, const PyValue *args,
      * vectorcall doesn't deal e.g. with users reassigning __init__. */
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     if (kwnames != NULL || nargs > 1) {
-        return PyValue_FromResult(vc_plain_new_helper(_PyType_CAST(type),
-            args, nargs,
+        return vc_plain_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames));
+            NULL, kwnames);
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
 skip_optional:
     return_value = vc_plain_new_impl(_PyType_CAST(type), a);
 
-exit:
-    return PyValue_FromResult(return_value);
+    return return_value;
 }
 
 static int
 vc_posorkw_init_impl(PyObject *self, PyObject *a, PyObject *b);
 
 static int
-vc_posorkw_init_helper(PyObject *self, const PyValue *args,
+vc_posorkw_init_helper(PyObject *self, PyObject *const *args,
     Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 {
     int return_value = -1;
@@ -5750,6 +5021,7 @@ vc_posorkw_init_helper(PyObject *self, const PyValue *args,
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5772,8 +5044,8 @@ vc_posorkw_init_helper(PyObject *self, const PyValue *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = nargs + nkw - 1;
     PyObject *a;
     PyObject *b = Py_None;
@@ -5783,17 +5055,11 @@ vc_posorkw_init_helper(PyObject *self, const PyValue *args,
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = fastargs[1];
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = vc_posorkw_init_impl(self, a, b);
@@ -5806,17 +5072,16 @@ exit:
 static int
 vc_posorkw_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return vc_posorkw_init_helper(self, _PyTuple_ITEMS(args),
+    return vc_posorkw_init_helper(self, _PyTuple_CAST(args)->ob_item,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
 }
 
-static PyValue
-vc_posorkw_vectorcall(PyValue type_value, const PyValue *args,
+static PyObject *
+vc_posorkw_vectorcall(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
-    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *self;
@@ -5832,28 +5097,22 @@ vc_posorkw_vectorcall(PyValue type_value, const PyValue *args,
         self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),
             (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);
         if (self == NULL) {
-            return PyValue_NULL;
+            return NULL;
         }
         _result = vc_posorkw_init_helper(self, args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
             NULL, kwnames);
         if (_result != 0) {
             Py_DECREF(self);
-            return PyValue_NULL;
+            return NULL;
         }
-        return PyValue_FromObject(self);
+        return self;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional:
     self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),
         (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);
@@ -5870,14 +5129,14 @@ skip_optional:
     return_value = self;
 
 exit:
-    return PyValue_FromResult(return_value);
+    return return_value;
 }
 
 static PyObject *
 vc_base_new_impl(PyTypeObject *type, PyObject *a, PyObject *b);
 
 static PyObject *
-vc_base_new_helper(PyTypeObject *type, const PyValue *args,
+vc_base_new_helper(PyTypeObject *type, PyObject *const *args,
     Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5885,6 +5144,7 @@ vc_base_new_helper(PyTypeObject *type, const PyValue *args,
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -5907,8 +5167,8 @@ vc_base_new_helper(PyTypeObject *type, const PyValue *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = nargs + nkw - 1;
     PyObject *a;
     PyObject *b = Py_None;
@@ -5918,17 +5178,11 @@ vc_base_new_helper(PyTypeObject *type, const PyValue *args,
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = fastargs[1];
 skip_optional_pos:
     return_value = vc_base_new_impl(type, a, b);
 
@@ -5939,17 +5193,16 @@ exit:
 static PyObject *
 vc_base_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_base_new_helper(type, _PyTuple_ITEMS(args),
+    return vc_base_new_helper(type, _PyTuple_CAST(args)->ob_item,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
 }
 
-static PyValue
-vc_base_vectorcall(PyValue type_value, const PyValue *args,
+static PyObject *
+vc_base_vectorcall(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
-    PyObject *type = PyValue_ObjectBorrow(type_value);
     PyObject *return_value = NULL;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     PyObject *a;
@@ -5960,34 +5213,26 @@ vc_base_vectorcall(PyValue type_value, const PyValue *args,
      * vectorcall doesn't deal e.g. with users reassigning __init__. */
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     if (kwnames != NULL || nargs < 1 || nargs > 2) {
-        return PyValue_FromResult(vc_base_new_helper(_PyType_CAST(type),
-            args, nargs,
+        return vc_base_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames));
+            NULL, kwnames);
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional:
     return_value = vc_base_new_impl(_PyType_CAST(type), a, b);
 
-exit:
-    return PyValue_FromResult(return_value);
+    return return_value;
 }
 
 static PyObject *
 vc_kwonly_new_impl(PyTypeObject *type, PyObject *a, PyObject *b);
 
 static PyObject *
-vc_kwonly_new_helper(PyTypeObject *type, const PyValue *args,
+vc_kwonly_new_helper(PyTypeObject *type, PyObject *const *args,
     Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
@@ -5995,6 +5240,7 @@ vc_kwonly_new_helper(PyTypeObject *type, const PyValue *args,
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -6017,8 +5263,8 @@ vc_kwonly_new_helper(PyTypeObject *type, const PyValue *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t noptargs = nargs + nkw - 1;
     PyObject *a;
     PyObject *b = Py_None;
@@ -6028,17 +5274,11 @@ vc_kwonly_new_helper(PyTypeObject *type, const PyValue *args,
     if (!fastargs) {
         goto exit;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    b = PyValue_Object(fastargs[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = fastargs[1];
 skip_optional_kwonly:
     return_value = vc_kwonly_new_impl(type, a, b);
 
@@ -6049,26 +5289,24 @@ exit:
 static PyObject *
 vc_kwonly_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_kwonly_new_helper(type, _PyTuple_ITEMS(args),
+    return vc_kwonly_new_helper(type, _PyTuple_CAST(args)->ob_item,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
         kwargs, NULL);
 }
 
-static PyValue
-vc_kwonly_vectorcall(PyValue type_value, const PyValue *args,
+static PyObject *
+vc_kwonly_vectorcall(PyObject *type, PyObject *const *args,
     size_t nargsf, PyObject *kwnames)
 {
-    PyObject *type = PyValue_ObjectBorrow(type_value);
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
 
     assert(_PyType_CAST(type)->tp_new == vc_kwonly_new);
     /* Make sure the type object is immutable: the generated
      * vectorcall doesn't deal e.g. with users reassigning __init__. */
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
-    return PyValue_FromResult(vc_kwonly_new_helper(_PyType_CAST(type),
-        args, nargs,
+    return vc_kwonly_new_helper(_PyType_CAST(type), args, nargs,
         kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-        NULL, kwnames));
+        NULL, kwnames);
 }
-/*[clinic end generated code: output=5546b54075c25b89 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b54b37db716469cd input=a9049054013a1b77]*/

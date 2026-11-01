@@ -2,12 +2,15 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
+#endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(lone_kwds__doc__,
@@ -71,14 +74,8 @@ kwds_with_pos_only(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("kwds_with_pos_only", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
+    b = PyTuple_GET_ITEM(args, 1);
     if (kwargs == NULL) {
         __clinic_kwds = PyDict_New();
         if (__clinic_kwds == NULL) {
@@ -120,17 +117,11 @@ kwds_with_optional_pos_only(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("kwds_with_optional_pos_only", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    b = PyTuple_GET_ITEM(args, 1);
 skip_optional:
     if (kwargs == NULL) {
         __clinic_kwds = PyDict_New();
@@ -214,14 +205,8 @@ kwds_with_pos_only_and_stararg(PyObject *module, PyObject *args, PyObject *kwarg
     if (!_PyArg_CheckPositional("kwds_with_pos_only_and_stararg", PyTuple_GET_SIZE(args), 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyValue_Object(PyTuple_GET_VALUE(args, 0));
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (b == NULL) {
-        goto exit;
-    }
+    a = PyTuple_GET_ITEM(args, 0);
+    b = PyTuple_GET_ITEM(args, 1);
     __clinic_args = PyTuple_GetSlice(args, 2, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
         goto exit;
@@ -245,4 +230,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=2c59a045d1641d1b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=27a7ba9440b9a884 input=a9049054013a1b77]*/

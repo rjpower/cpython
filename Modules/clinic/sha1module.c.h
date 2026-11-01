@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -19,14 +20,14 @@ PyDoc_STRVAR(SHA1Type_copy__doc__,
 static PyObject *
 SHA1Type_copy_impl(SHA1object *self, PyTypeObject *cls);
 
-static PyValue
-SHA1Type_copy(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+SHA1Type_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(SHA1Type_copy_impl((SHA1object *)self, cls));
+    return SHA1Type_copy_impl((SHA1object *)self, cls);
 }
 
 PyDoc_STRVAR(SHA1Type_digest__doc__,
@@ -72,26 +73,18 @@ PyDoc_STRVAR(SHA1Type_update__doc__,
 "Update this hash object\'s state with the provided string.");
 
 #define SHA1TYPE_UPDATE_METHODDEF    \
-    {"update", _PyCFunction_CAST(SHA1Type_update), METH_O, SHA1Type_update__doc__},
+    {"update", (PyCFunction)SHA1Type_update, METH_O, SHA1Type_update__doc__},
 
 static PyObject *
 SHA1Type_update_impl(SHA1object *self, PyObject *obj);
 
-static PyValue
-SHA1Type_update(PyObject *self, PyValue arg)
+static PyObject *
+SHA1Type_update(PyObject *self, PyObject *obj)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *obj;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        goto exit;
-    }
-    _return_value = SHA1Type_update_impl((SHA1object *)self, obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = SHA1Type_update_impl((SHA1object *)self, obj);
 
-exit:
     return return_value;
 }
 
@@ -108,14 +101,15 @@ static PyObject *
 _sha1_sha1_impl(PyObject *module, PyObject *data, int usedforsecurity,
                 PyObject *string_obj);
 
-static PyValue
-_sha1_sha1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_sha1_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -138,12 +132,11 @@ _sha1_sha1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *data = NULL;
     int usedforsecurity = 1;
     PyObject *string_obj = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -153,11 +146,8 @@ _sha1_sha1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        data = PyValue_Object(args[0]);
-        if (data == NULL) {
-            goto exit;
-        }
+    if (args[0]) {
+        data = args[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -166,8 +156,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        usedforsecurity = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        usedforsecurity = PyObject_IsTrue(args[1]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -175,15 +165,11 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string_obj = PyValue_Object(args[2]);
-    if (string_obj == NULL) {
-        goto exit;
-    }
+    string_obj = args[2];
 skip_optional_kwonly:
-    _return_value = _sha1_sha1_impl(module, data, usedforsecurity, string_obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _sha1_sha1_impl(module, data, usedforsecurity, string_obj);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=c7c833a27050db5a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fd5a917404b68c4f input=a9049054013a1b77]*/

@@ -1,12 +1,10 @@
 #include "Python.h"
 #include "pycore_code.h"            // write_location_entry_start()
 #include "pycore_compile.h"
-#include "pycore_dict.h"              // _PyDict_NextValue()
 #include "pycore_flowgraph.h"
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
-#include "pycore_pyerrors.h"        // _PyErr_RaiseSyntaxError()
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_symtable.h"        // _Py_SourceLocation
@@ -375,19 +373,21 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
 static PyObject *
 dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
 {
-    PyObject *tuple;
-    PyValue k, v;
+    PyObject *tuple, *k, *v;
     Py_ssize_t pos = 0, size = PyDict_GET_SIZE(dict);
 
     tuple = PyTuple_New(size);
     if (tuple == NULL)
         return NULL;
-    // The values are int32 indices, so nothing is boxed.
-    while (_PyDict_NextValue(dict, &pos, &k, &v, NULL)) {
-        Py_ssize_t i = PyValue_Int32(v);
+    while (PyDict_Next(dict, &pos, &k, &v)) {
+        Py_ssize_t i = PyLong_AsSsize_t(v);
+        if (i == -1 && PyErr_Occurred()) {
+            Py_DECREF(tuple);
+            return NULL;
+        }
         assert((i - offset) < size);
         assert((i - offset) >= 0);
-        PyTuple_SET_VALUE(tuple, i - offset, k);
+        PyTuple_SET_ITEM(tuple, i - offset, Py_NewRef(k));
     }
     return tuple;
 }
@@ -400,11 +400,10 @@ static int
 compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                         int flags, PyObject *names, PyObject *kinds)
 {
-    PyValue kv, v;
-    PyObject *k;
+    PyObject *k, *v;
     Py_ssize_t pos = 0;
 
-    // Set the locals kinds.  The names are strings and the offsets int32.  Arg vars fill the first portion of the list.
+    // Set the locals kinds.  Arg vars fill the first portion of the list.
     struct {
         int count;
         _PyLocals_Kind kind;
@@ -421,9 +420,11 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         max = argvarkinds[i].count < 0
             ? INT_MAX
             : max + argvarkinds[i].count;
-        while (pos < max && _PyDict_NextValue(umd->u_varnames, &pos, &kv, &v, NULL)) {
-            k = PyValue_ObjectBorrow(kv);
-            int offset = PyValue_Int32(v);
+        while (pos < max && PyDict_Next(umd->u_varnames, &pos, &k, &v)) {
+            int offset = PyLong_AsInt(v);
+            if (offset == -1 && PyErr_Occurred()) {
+                return ERROR;
+            }
             assert(offset >= 0);
             assert(offset < nlocalsplus);
 
@@ -451,8 +452,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     // This counter mirrors the fix done in fix_cell_offsets().
     int numdropped = 0, cellvar_offset = -1;
     pos = 0;
-    while (_PyDict_NextValue(umd->u_cellvars, &pos, &kv, &v, NULL)) {
-        k = PyValue_ObjectBorrow(kv);
+    while (PyDict_Next(umd->u_cellvars, &pos, &k, &v)) {
         int has_name = PyDict_Contains(umd->u_varnames, k);
         RETURN_IF_ERROR(has_name);
         if (has_name) {
@@ -461,7 +461,10 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             continue;
         }
 
-        cellvar_offset = PyValue_Int32(v);
+        cellvar_offset = PyLong_AsInt(v);
+        if (cellvar_offset == -1 && PyErr_Occurred()) {
+            return ERROR;
+        }
         assert(cellvar_offset >= 0);
         cellvar_offset += nlocals - numdropped;
         assert(cellvar_offset < nlocalsplus);
@@ -469,9 +472,11 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     }
 
     pos = 0;
-    while (_PyDict_NextValue(umd->u_freevars, &pos, &kv, &v, NULL)) {
-        k = PyValue_ObjectBorrow(kv);
-        int offset = PyValue_Int32(v);
+    while (PyDict_Next(umd->u_freevars, &pos, &k, &v)) {
+        int offset = PyLong_AsInt(v);
+        if (offset == -1 && PyErr_Occurred()) {
+            return ERROR;
+        }
         assert(offset >= 0);
         offset += nlocals - numdropped;
         assert(offset < nlocalsplus);
@@ -635,6 +640,9 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
+    // The executing copy runs the boxing forms instead in a build without
+    // inline values or under PYTHON_TAGGED_VALUES=0 (Python/ir.c), so the
+    // words do not depend on the build.
     if (opcode == LOAD_SMALL_INT) {
         return LOAD_SMALL_INT_INLINE;
     }
@@ -773,9 +781,6 @@ layout(struct assembler *a, _PyRegCfg *cfg)
 static int
 encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
 {
-    if (!_PyIR_HasProperty(op->handler, _PyIR_H_PRISTINE)) {
-        return too_large("handler", op->handler);
-    }
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
@@ -825,11 +830,7 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[r] = 0;
         }
     }
-    if (!_PyIR_MakeWord(op->handler, fields[0], fields[1], fields[2],
-                        fields[3], word))
-    {
-        return too_large("handler", op->handler);
-    }
+    *word = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
     return SUCCESS;
 }
 
@@ -844,7 +845,13 @@ static int
 assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                int nlocalsplus, int stacksize)
 {
-    assert(nlocalsplus + stacksize <= IR_MAX_SLOTS);
+    if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
+        PyErr_Format(PyExc_SystemError,
+                     "the code needs %d slots for its locals, cells, free "
+                     "variables and stack, and the register IR has at most %d",
+                     nlocalsplus + stacksize, IR_MAX_SLOTS);
+        return ERROR;
+    }
     RETURN_IF_ERROR(assign_handlers(a, cfg, consts));
     RETURN_IF_ERROR(layout(a, cfg));
 
@@ -908,18 +915,6 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     // co_stacksize keeps its meaning for tools: the slots for temporaries,
     // which compaction may make fewer than the deepest stack
     int stacksize = cfg->ntemps;
-    if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
-        // An instruction names a slot in a 12-bit field (note 06, 2.3), so
-        // the locals, cells, free variables and temporaries of one code
-        // object are limited, as upstream limits the number of arguments.
-        PyObject *msg = PyUnicode_FromString(
-            "too many local variables and temporaries");
-        if (msg != NULL) {
-            _PyErr_RaiseSyntaxError(msg, filename, umd->u_firstlineno, 1,
-                                    umd->u_firstlineno, 1);
-        }
-        return NULL;
-    }
     struct assembler a;
     memset(&a, 0, sizeof(a));
     int res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);

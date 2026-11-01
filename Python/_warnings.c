@@ -1,5 +1,4 @@
 #include "Python.h"
-#include "pycore_dict.h"          // _PyDict_GetItemValue()
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_genobject.h"     // PyAsyncGenObject
 #include "pycore_import.h"        // _PyImport_GetModules()
@@ -226,32 +225,29 @@ get_warnings_attr(PyInterpreterState *interp, PyObject *attr, int try_import)
 {
     PyObject *warnings_module, *obj;
 
-    /* Finalizers can run after the modules dictionary has been cleared. */
-    if (!_PyImport_GetModules(interp)) {
-        return NULL;
-    }
-    warnings_module = PyImport_GetModule(&_Py_ID(warnings));
-    if (warnings_module == Py_None) {
-        /* An explicit sys.modules block must not trigger another import. */
-        Py_DECREF(warnings_module);
-        return NULL;
-    }
-    if (warnings_module == NULL && !PyErr_Occurred() && try_import
-        && !_Py_IsInterpreterFinalizing(interp)
-        && interp->imports.importlib != NULL)
-    {
-        /* Warning delivery can interrupt a frame with restricted builtins.
-           Use interpreter import machinery, not that frame's __import__. */
-        warnings_module = PyImport_ImportModuleLevelObject(
-            &_Py_ID(warnings), NULL, NULL, NULL, 0);
-    }
-    if (warnings_module == NULL) {
-        /* Keep the C fallback for unavailable warnings, but report genuine
-           failures in initialization or warning helpers. */
-        if (try_import && PyErr_ExceptionMatches(PyExc_ImportError)) {
-            PyErr_Clear();
+    /* don't try to import after the start of the Python finallization */
+    if (try_import && !_Py_IsInterpreterFinalizing(interp)) {
+        warnings_module = PyImport_Import(&_Py_ID(warnings));
+        if (warnings_module == NULL) {
+            /* Fallback to the C implementation if we cannot get
+               the Python implementation */
+            if (PyErr_ExceptionMatches(PyExc_ImportError)) {
+                PyErr_Clear();
+            }
+            return NULL;
         }
-        return NULL;
+    }
+    else {
+        /* if we're so late into Python finalization that the module dict is
+           gone, then we can't even use PyImport_GetModule without triggering
+           an interpreter abort.
+        */
+        if (!_PyImport_GetModules(interp)) {
+            return NULL;
+        }
+        warnings_module = PyImport_GetModule(&_Py_ID(warnings));
+        if (warnings_module == NULL)
+            return NULL;
     }
 
     (void)PyObject_GetOptionalAttr(warnings_module, attr, &obj);
@@ -465,7 +461,7 @@ filter_search(PyInterpreterState *interp, PyObject *category,
     /* Avoid the filters list changing while we iterate over it. */
     Py_BEGIN_CRITICAL_SECTION(filters);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(filters); i++) {
-        PyObject *tmp_item, *action, *msg, *cat, *mod;
+        PyObject *tmp_item, *action, *msg, *cat, *mod, *ln_obj;
         Py_ssize_t ln;
         int is_subclass, good_msg, good_mod;
 
@@ -483,7 +479,7 @@ filter_search(PyInterpreterState *interp, PyObject *category,
         msg = PyTuple_GET_ITEM(tmp_item, 1);
         cat = PyTuple_GET_ITEM(tmp_item, 2);
         mod = PyTuple_GET_ITEM(tmp_item, 3);
-        PyValue ln_value = PyTuple_GET_VALUE(tmp_item, 4);
+        ln_obj = PyTuple_GET_ITEM(tmp_item, 4);
 
         if (!PyUnicode_Check(action)) {
             PyErr_Format(PyExc_TypeError,
@@ -515,7 +511,7 @@ filter_search(PyInterpreterState *interp, PyObject *category,
             break;
         }
 
-        ln = PyLong_AsSsize_tValue(ln_value);
+        ln = PyLong_AsSsize_t(ln_obj);
         if (ln == -1 && PyErr_Occurred()) {
             Py_DECREF(tmp_item);
             result = false;
@@ -599,6 +595,8 @@ static int
 already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
                int should_set)
 {
+    PyObject *already_warned;
+
     if (key == NULL)
         return -1;
 
@@ -606,38 +604,34 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
     assert(st != NULL);
     assert(warnings_lock_held(st));
 
-    // The version is an int, which is inline: reading and storing it
-    // makes no box.
-    PyValue version_key = PyValue_FromObject(&_Py_ID(version));
-    PyValue version;
-    int found = _PyDict_GetItemValue(registry, version_key, &version);
-    if (found < 0) {
+    PyObject *version_obj;
+    if (PyDict_GetItemRef(registry, &_Py_ID(version), &version_obj) < 0) {
         return -1;
     }
     bool should_update_version = (
-        !found
-        || PyValue_Type(version) != &PyLong_Type
-        || PyLong_AsLongValue(version) != st->filters_version
+        version_obj == NULL
+        || !PyLong_CheckExact(version_obj)
+        || PyLong_AsLong(version_obj) != st->filters_version
     );
+    Py_XDECREF(version_obj);
     if (should_update_version) {
         PyDict_Clear(registry);
-        version = PyValue_FromLongLong(st->filters_version);
-        if (PyValue_IsNull(version))
+        version_obj = PyLong_FromLong(st->filters_version);
+        if (version_obj == NULL)
             return -1;
-        if (_PyDict_SetItemValue((PyDictObject *)registry, version_key,
-                                 version) < 0) {
+        if (PyDict_SetItem(registry, &_Py_ID(version), version_obj) < 0) {
+            Py_DECREF(version_obj);
             return -1;
         }
+        Py_DECREF(version_obj);
     }
     else {
-        PyValue already_warned;
-        found = _PyDict_GetItemValue(registry, PyValue_FromObject(key),
-                                     &already_warned);
-        if (found < 0) {
+        if (PyDict_GetItemRef(registry, key, &already_warned) < 0) {
             return -1;
         }
-        if (found) {
-            int rc = PyObject_IsTrueValue(already_warned);
+        if (already_warned != NULL) {
+            int rc = PyObject_IsTrue(already_warned);
+            Py_DECREF(already_warned);
             if (rc != 0)
                 return rc;
         }
@@ -833,18 +827,16 @@ warn_explicit(PyThreadState *tstate, PyObject *category, PyObject *message,
             goto cleanup;
     }
 
+    lineno_obj = PyLong_FromLong(lineno);
+    if (lineno_obj == NULL)
+        goto cleanup;
+
     if (source == Py_None) {
         source = NULL;
     }
 
-    /* Create key.  The line number is inline: only showing the warning
-       boxes it. */
-    PyValue key_items[3] = {
-        PyValue_FromObject(text),
-        PyValue_FromObject(category),
-        PyValue_FromLongLong(lineno),
-    };
-    key = _PyTuple_FromValues(key_items, 3);
+    /* Create key. */
+    key = PyTuple_Pack(3, text, category, lineno_obj);
     if (key == NULL)
         goto cleanup;
 
@@ -905,9 +897,6 @@ warn_explicit(PyThreadState *tstate, PyObject *category, PyObject *message,
     if (rc == 1)  /* Already warned for this module. */
         goto return_none;
     if (rc == 0) {
-        lineno_obj = PyValue_Object(key_items[2]);
-        if (lineno_obj == NULL)
-            goto cleanup;
         if (call_show_warning(tstate, category, text, message, filename,
                               lineno, lineno_obj, sourceline, source, module) < 0)
             goto cleanup;

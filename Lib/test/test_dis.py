@@ -779,7 +779,8 @@ dis_nested_0 = """\
                BUILD_TUPLE              1  r2 <- r2
                LOAD_CONST               0 (<code object foo at 0x..., file "%s", line %d>)  r3 <-
                MAKE_FUNCTION         r3 <- r3
-               SET_FUNCTION_ATTRIBUTE   8 (closure)  r1 <- r2, r3
+               SET_FUNCTION_ATTRIBUTE   8 (closure)  r2 <- r2, r3
+               STORE_FAST               1 (foo)  <- r2
 
 %4d           RETURN_VALUE          <- r1
 """ % (_h.__code__.co_firstlineno,
@@ -894,10 +895,13 @@ dis_load_test_quickened_code = """\
        load_test.__code__.co_firstlineno + 2)
 
 def quickened_ints(disassembly):
-    """LOAD_SMALL_INT quickens to the instruction that loads the int
-    inline."""
-    return disassembly.replace("LOAD_SMALL_INT       ",
-                               "LOAD_SMALL_INT_INLINE")
+    """Builds with tagged values quicken LOAD_SMALL_INT to the instruction
+    that loads the int inline."""
+    _testinternalcapi = import_helper.import_module("_testinternalcapi")
+    if getattr(_testinternalcapi, "TAGGED_VALUES", False):
+        return disassembly.replace("LOAD_SMALL_INT       ",
+                                   "LOAD_SMALL_INT_INLINE")
+    return disassembly
 
 def loop_test():
     for i in [1, 2, 3] * 3:
@@ -1308,18 +1312,15 @@ class DisTests(DisTestBase):
     @cpython_only
     @requires_specialization
     def test_load_attr_specialize(self):
-        # Not __class__: the type is in the header word with the collector's
-        # flags, so it is not a slot that LOAD_ATTR_SLOT can read.
-        import math
         load_attr_quicken = """\
   0           RESUME                   0
 
-  1           LOAD_NAME                0 (math)  r0 <-
-              LOAD_ATTR_MODULE         2 (pi)  r0 <- r0
+  1           LOAD_CONST               0 ('a')  r0 <-
+              LOAD_ATTR_SLOT           0 (__class__)  r0 <- r0
               RETURN_VALUE          <- r0
 """
-        co = compile("math.pi", "", "eval")
-        self.code_quicken(lambda: exec(co, {'math': math}, {}))
+        co = compile("'a'.__class__", "", "eval")
+        self.code_quicken(lambda: exec(co, {}, {}))
         got = self.get_disassembly(co, adaptive=True)
         self.do_disassembly_compare(got, load_attr_quicken)
 
@@ -1352,14 +1353,17 @@ class DisTests(DisTestBase):
     @requires_specialization
     def test_loop_with_conditional_at_end_is_quickened(self):
         _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        # PYTHON_TAGGED_VALUES=0 leaves range loops unspecialized.
+        range_loops = getattr(_testinternalcapi, "TAGGED_VALUES", True)
         def for_loop_true(x):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                 if x:
                     pass
 
         for_loop_true(True)
-        self.assertIn('FOR_ITER_RANGE',
-                      self.get_disassembly(for_loop_true, adaptive=True))
+        if range_loops:
+            self.assertIn('FOR_ITER_RANGE',
+                          self.get_disassembly(for_loop_true, adaptive=True))
 
         def for_loop_false(x):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1367,8 +1371,9 @@ class DisTests(DisTestBase):
                     pass
 
         for_loop_false(False)
-        self.assertIn('FOR_ITER_RANGE',
-                      self.get_disassembly(for_loop_false, adaptive=True))
+        if range_loops:
+            self.assertIn('FOR_ITER_RANGE',
+                          self.get_disassembly(for_loop_false, adaptive=True))
 
         def while_loop():
             i = 0
@@ -1408,8 +1413,6 @@ class DisTests(DisTestBase):
         fields = {
             ("kind", "arg"),
             ("kind", "state", "counter", "arg", "first", "second"),
-            ("kind", "state", "counter", "arg", "type_version", "second",
-             "shape"),
         }
         for quickened in (False, True):
             for adaptive in (False, True):
@@ -1432,33 +1435,6 @@ class DisTests(DisTestBase):
                                        in instr.cache_info)["state"]
                                   for instr in with_fb]
                         self.assertIn(b"\x01", states)  # MONO
-
-    @cpython_only
-    @requires_specialization
-    def test_show_caches_attr_guard(self):
-        # An attribute entry shows the pair its plan is guarded by: the
-        # receiver's type version and shape
-        _testcapi = import_helper.import_module("_testcapi")
-        _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        class C:
-            def __init__(self):
-                self.x = 1
-        def f(o):
-            return o.x
-        reset_code(f)
-        o = C()
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            f(o)
-        [load] = [instr for instr in dis.get_instructions(
-                      f, show_caches=True, adaptive=True)
-                  if instr.opname.startswith("LOAD_ATTR")]
-        info = {name: int.from_bytes(data, sys.byteorder)
-                for name, _, data in load.cache_info}
-        self.assertEqual(info["type_version"], _testcapi.type_get_version(C))
-        self.assertNotEqual(info["shape"], 0)
-        text = self.get_disassembly(f, show_caches=True, adaptive=True)
-        self.assertIn(f"type_version: {info['type_version']}", text)
-        self.assertIn(f"shape: {hex(info['shape'])}", text)
 
     @cpython_only
     def test_show_currinstr_with_cache(self):
@@ -1799,18 +1775,19 @@ expected_opinfo_outer = [
   make_inst(opname='LOAD_CONST', arg=1, argval=code_object_f, argrepr=repr(code_object_f), offset=7, start_offset=7, starts_line=False, line_number=2, dst=5),
   make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=8, start_offset=8, starts_line=False, line_number=2, dst=5, srcs=(5,)),
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=9, start_offset=9, starts_line=False, line_number=2, dst=4, srcs=(4, 5)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=10, start_offset=10, starts_line=False, line_number=2, dst=2, srcs=(3, 4)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=11, start_offset=11, starts_line=True, line_number=7, dst=3, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
-  make_inst(opname='LOAD_DEREF', arg=0, argval='a', argrepr='a', offset=12, start_offset=12, starts_line=False, line_number=7, dst=5),
-  make_inst(opname='LOAD_DEREF', arg=1, argval='b', argrepr='b', offset=13, start_offset=13, starts_line=False, line_number=7, dst=6),
-  make_inst(opname='LOAD_COMMON_CONSTANT', arg=8, argval='', argrepr="''", offset=14, start_offset=14, starts_line=False, line_number=7, dst=7),
-  make_inst(opname='LOAD_SMALL_INT', arg=1, argval=1, argrepr='', offset=15, start_offset=15, starts_line=False, line_number=7, handler='LOAD_SMALL_INT_INLINE', dst=8),
-  make_inst(opname='BUILD_LIST', arg=0, argval=0, argrepr='', offset=16, start_offset=16, starts_line=False, line_number=7, dst=9, srcs=(9,)),
-  make_inst(opname='BUILD_MAP', arg=0, argval=0, argrepr='', offset=17, start_offset=17, starts_line=False, line_number=7, dst=10, srcs=(10,)),
-  make_inst(opname='LOAD_CONST', arg=2, argval='Hello world!', argrepr="'Hello world!'", offset=18, start_offset=18, starts_line=False, line_number=7, dst=11),
-  make_inst(opname='CALL', arg=7, argval=7, argrepr='', offset=19, start_offset=19, starts_line=False, line_number=7, dst=3, srcs=(3,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x07\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=7, srcs=(3,)),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=True, line_number=8, srcs=(2,)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=10, start_offset=10, starts_line=False, line_number=2, dst=3, srcs=(3, 4)),
+  make_inst(opname='STORE_FAST', arg=2, argval='f', argrepr='f', offset=11, start_offset=11, starts_line=False, line_number=2, srcs=(3,)),
+  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=12, start_offset=12, starts_line=True, line_number=7, dst=3, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
+  make_inst(opname='LOAD_DEREF', arg=0, argval='a', argrepr='a', offset=13, start_offset=13, starts_line=False, line_number=7, dst=5),
+  make_inst(opname='LOAD_DEREF', arg=1, argval='b', argrepr='b', offset=14, start_offset=14, starts_line=False, line_number=7, dst=6),
+  make_inst(opname='LOAD_COMMON_CONSTANT', arg=8, argval='', argrepr="''", offset=15, start_offset=15, starts_line=False, line_number=7, dst=7),
+  make_inst(opname='LOAD_SMALL_INT', arg=1, argval=1, argrepr='', offset=16, start_offset=16, starts_line=False, line_number=7, handler='LOAD_SMALL_INT_INLINE', dst=8),
+  make_inst(opname='BUILD_LIST', arg=0, argval=0, argrepr='', offset=17, start_offset=17, starts_line=False, line_number=7, dst=9, srcs=(9,)),
+  make_inst(opname='BUILD_MAP', arg=0, argval=0, argrepr='', offset=18, start_offset=18, starts_line=False, line_number=7, dst=10, srcs=(10,)),
+  make_inst(opname='LOAD_CONST', arg=2, argval='Hello world!', argrepr="'Hello world!'", offset=19, start_offset=19, starts_line=False, line_number=7, dst=11),
+  make_inst(opname='CALL', arg=7, argval=7, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=7, dst=3, srcs=(3,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x07\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=7, srcs=(3,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=True, line_number=8, srcs=(2,)),
 ]
 
 expected_opinfo_f = [
@@ -1827,15 +1804,16 @@ expected_opinfo_f = [
   make_inst(opname='LOAD_CONST', arg=1, argval=code_object_inner, argrepr=repr(code_object_inner), offset=10, start_offset=10, starts_line=False, line_number=3, dst=7),
   make_inst(opname='MAKE_FUNCTION', arg=None, argval=None, argrepr='', offset=11, start_offset=11, starts_line=False, line_number=3, dst=7, srcs=(7,)),
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=12, start_offset=12, starts_line=False, line_number=3, dst=6, srcs=(6, 7)),
-  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=13, start_offset=13, starts_line=False, line_number=3, dst=2, srcs=(5, 6)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=14, start_offset=14, starts_line=True, line_number=5, dst=5, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
-  make_inst(opname='LOAD_DEREF', arg=3, argval='a', argrepr='a', offset=15, start_offset=15, starts_line=False, line_number=5, dst=7),
-  make_inst(opname='LOAD_DEREF', arg=4, argval='b', argrepr='b', offset=16, start_offset=16, starts_line=False, line_number=5, dst=8),
-  make_inst(opname='LOAD_DEREF', arg=0, argval='c', argrepr='c', offset=17, start_offset=17, starts_line=False, line_number=5, dst=9),
-  make_inst(opname='LOAD_DEREF', arg=1, argval='d', argrepr='d', offset=18, start_offset=18, starts_line=False, line_number=5, dst=10),
-  make_inst(opname='CALL', arg=4, argval=4, argrepr='', offset=19, start_offset=19, starts_line=False, line_number=5, dst=5, srcs=(5,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x04\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=5, srcs=(5,)),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=True, line_number=6, srcs=(2,)),
+  make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=13, start_offset=13, starts_line=False, line_number=3, dst=5, srcs=(5, 6)),
+  make_inst(opname='STORE_FAST', arg=2, argval='inner', argrepr='inner', offset=14, start_offset=14, starts_line=False, line_number=3, srcs=(5,)),
+  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=15, start_offset=15, starts_line=True, line_number=5, dst=5, fb=1, cache_info=[('kind', 1, b'\x05'), ('arg', 3, b'\x01\x00\x00')]),
+  make_inst(opname='LOAD_DEREF', arg=3, argval='a', argrepr='a', offset=16, start_offset=16, starts_line=False, line_number=5, dst=7),
+  make_inst(opname='LOAD_DEREF', arg=4, argval='b', argrepr='b', offset=17, start_offset=17, starts_line=False, line_number=5, dst=8),
+  make_inst(opname='LOAD_DEREF', arg=0, argval='c', argrepr='c', offset=18, start_offset=18, starts_line=False, line_number=5, dst=9),
+  make_inst(opname='LOAD_DEREF', arg=1, argval='d', argrepr='d', offset=19, start_offset=19, starts_line=False, line_number=5, dst=10),
+  make_inst(opname='CALL', arg=4, argval=4, argrepr='', offset=20, start_offset=20, starts_line=False, line_number=5, dst=5, srcs=(5,), fb=2, cache_info=[('kind', 1, b'\x06'), ('arg', 3, b'\x04\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=5, srcs=(5,)),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=True, line_number=6, srcs=(2,)),
 ]
 
 expected_opinfo_inner = [

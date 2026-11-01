@@ -46,6 +46,7 @@ typedef struct {
     PyDateTime_TZInfo base;
     PyObject *key;
     PyObject *file_repr;
+    PyObject *weakreflist;
     size_t num_transitions;
     size_t num_ttinfos;
     int64_t *trans_list_utc;
@@ -413,7 +414,7 @@ zoneinfo_dealloc(PyObject *obj_self)
     PyTypeObject *tp = Py_TYPE(self);
     PyObject_GC_UnTrack(self);
 
-    FT_CLEAR_WEAKREFS(obj_self);
+    FT_CLEAR_WEAKREFS(obj_self, self->weakreflist);
 
     if (self->trans_list_utc != NULL) {
         PyMem_Free(self->trans_list_utc);
@@ -664,30 +665,26 @@ zoneinfo_ZoneInfo_tzname_impl(PyObject *self, PyTypeObject *cls,
 
 #define GET_DT_TZINFO PyDateTime_DATE_GET_TZINFO
 
-static PyValue
-zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
+static PyObject *
+zoneinfo_fromutc(PyObject *obj_self, PyObject *dt)
 {
-    PyObject *dt = PyValue_Object(arg);
-    if (dt == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyDateTime_Check(dt)) {
         PyErr_SetString(PyExc_TypeError,
                         "fromutc: argument must be a datetime");
-        return PyValue_NULL;
+        return NULL;
     }
     if (GET_DT_TZINFO(dt) != obj_self) {
         PyErr_SetString(PyExc_ValueError,
                         "fromutc: dt.tzinfo "
                         "is not self");
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyZoneInfo_ZoneInfo *self = PyZoneInfo_ZoneInfo_CAST(obj_self);
 
     int64_t timestamp;
     if (get_local_timestamp(dt, &timestamp)) {
-        return PyValue_NULL;
+        return NULL;
     }
     size_t num_trans = self->num_transitions;
 
@@ -745,7 +742,7 @@ zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
 
     PyObject *tmp = PyNumber_Add(dt, tti->utcoff);
     if (tmp == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (fold) {
@@ -757,18 +754,18 @@ zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
             PyObject *replace = PyObject_GetAttrString(tmp, "replace");
             Py_DECREF(tmp);
             if (replace == NULL) {
-                return PyValue_NULL;
+                return NULL;
             }
             PyObject *args = PyTuple_New(0);
             if (args == NULL) {
                 Py_DECREF(replace);
-                return PyValue_NULL;
+                return NULL;
             }
             PyObject *kwargs = PyDict_New();
             if (kwargs == NULL) {
                 Py_DECREF(replace);
                 Py_DECREF(args);
-                return PyValue_NULL;
+                return NULL;
             }
 
             dt = NULL;
@@ -781,14 +778,14 @@ zoneinfo_fromutc(PyObject *obj_self, PyValue arg)
             Py_DECREF(replace);
 
             if (dt == NULL) {
-                return PyValue_NULL;
+                return NULL;
             }
         }
     }
     else {
         dt = tmp;
     }
-    return PyValue_FromResult(dt);
+    return dt;
 }
 
 static PyObject *
@@ -2688,7 +2685,7 @@ static PyMethodDef zoneinfo_methods[] = {
     ZONEINFO_ZONEINFO_UTCOFFSET_METHODDEF
     ZONEINFO_ZONEINFO_DST_METHODDEF
     ZONEINFO_ZONEINFO_TZNAME_METHODDEF
-    {"fromutc", _PyCFunction_CAST(zoneinfo_fromutc), METH_O,
+    {"fromutc", zoneinfo_fromutc, METH_O,
      PyDoc_STR("Given a datetime with local time in UTC, retrieve an adjusted "
                "datetime in local time.")},
     {"__reduce__", zoneinfo_reduce, METH_NOARGS,
@@ -2704,6 +2701,10 @@ static PyMemberDef zoneinfo_members[] = {
      .type = Py_T_OBJECT_EX,
      .flags = Py_READONLY,
      .doc = NULL},
+    {.name = "__weaklistoffset__",
+     .offset = offsetof(PyZoneInfo_ZoneInfo, weakreflist),
+     .type = Py_T_PYSSIZET,
+     .flags = Py_READONLY},
     {NULL}, /* Sentinel */
 };
 
@@ -2724,8 +2725,7 @@ static PyType_Spec zoneinfo_spec = {
     .name = "zoneinfo.ZoneInfo",
     .basicsize = sizeof(PyZoneInfo_ZoneInfo),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
-              Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
     .slots = zoneinfo_slots,
 };
 

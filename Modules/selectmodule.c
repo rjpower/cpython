@@ -1126,14 +1126,14 @@ select_devpoll_close_impl(devpollObject *self)
     Py_RETURN_NONE;
 }
 
-static PyValue
+static PyObject *
 devpoll_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     devpollObject *self = devpollObject_CAST(op);
     if (self->fd_devpoll < 0) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
 /*[clinic input]
@@ -1454,14 +1454,14 @@ select_epoll_close_impl(pyEpoll_Object *self)
 }
 
 
-static PyValue
+static PyObject *
 pyepoll_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     pyEpoll_Object *self = pyEpoll_Object_CAST(op);
     if (self->epfd < 0) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
 /*[clinic input]
@@ -2272,14 +2272,14 @@ select_kqueue_close_impl(kqueue_queue_Object *self)
     Py_RETURN_NONE;
 }
 
-static PyValue
+static PyObject *
 kqueue_queue_get_closed(PyObject *op, void *Py_UNUSED(closure))
 {
     kqueue_queue_Object *self = kqueue_queue_Object_CAST(op);
     if (self->kqfd < 0) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
 /*[clinic input]

@@ -14,6 +14,8 @@ typedef struct {
     pysqlite_Connection *connection;
     sqlite3_blob *blob;
     int offset;
+
+    PyObject *in_weakreflist;
 } pysqlite_Blob;
 
 int pysqlite_blob_setup_types(PyObject *mod);

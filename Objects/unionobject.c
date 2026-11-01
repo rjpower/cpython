@@ -13,6 +13,7 @@ typedef struct {
     PyObject *hashable_args;  // frozenset or NULL
     PyObject *unhashable_args;  // tuple or NULL
     PyObject *parameters;
+    PyObject *weakreflist;
 } unionobject;
 
 static void
@@ -21,7 +22,7 @@ unionobject_dealloc(PyObject *self)
     unionobject *alias = (unionobject *)self;
 
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(self);
+    FT_CLEAR_WEAKREFS(self, alias->weakreflist);
 
     Py_XDECREF(alias->args);
     Py_XDECREF(alias->hashable_args);
@@ -359,26 +360,26 @@ static PyMappingMethods union_as_mapping = {
     .mp_subscript = union_getitem,
 };
 
-static PyValue
+static PyObject *
 union_parameters(PyObject *self, void *Py_UNUSED(unused))
 {
     unionobject *alias = (unionobject *)self;
     if (union_init_parameters(alias) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromObject(alias->parameters);
+    return Py_NewRef(alias->parameters);
 }
 
-static PyValue
+static PyObject *
 union_name(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(PyUnicode_FromString("Union"));
+    return PyUnicode_FromString("Union");
 }
 
-static PyValue
+static PyObject *
 union_origin(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyValue_FromObject(&_PyUnion_Type);
+    return Py_NewRef(&_PyUnion_Type);
 }
 
 static PyGetSetDef union_properties[] = {
@@ -417,7 +418,7 @@ static const char* const cls_attrs[] = {
         NULL,
 };
 
-static PyValue
+static PyObject *
 union_getattro(PyObject *self, PyObject *name)
 {
     unionobject *alias = (unionobject *)self;
@@ -427,8 +428,7 @@ union_getattro(PyObject *self, PyObject *name)
                 break;
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
-                return PyObject_GetAttrValue(
-                    PyValue_FromObject((PyObject *)Py_TYPE(alias)), name);
+                return PyObject_GetAttr((PyObject *) Py_TYPE(alias), name);
             }
         }
     }
@@ -503,30 +503,22 @@ _Py_union_from_tuple(PyObject *args)
     return make_union(&ub);
 }
 
-static PyValue
-union_class_getitem(PyObject *cls, PyValue args_value)
+static PyObject *
+union_class_getitem(PyObject *cls, PyObject *args)
 {
-    PyObject *args = PyValue_Object(args_value);
-    if (args == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(_Py_union_from_tuple(args));
+    return _Py_union_from_tuple(args);
 }
 
-static PyValue
-union_mro_entries(PyObject *self, PyValue args_value)
+static PyObject *
+union_mro_entries(PyObject *self, PyObject *args)
 {
-    PyObject *args = PyValue_Object(args_value);
-    if (args == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(PyErr_Format(PyExc_TypeError,
-                        "Cannot subclass %R", self));
+    return PyErr_Format(PyExc_TypeError,
+                        "Cannot subclass %R", self);
 }
 
 static PyMethodDef union_methods[] = {
-    {"__mro_entries__", _PyCFunction_CAST(union_mro_entries), METH_O},
-    {"__class_getitem__", _PyCFunction_CAST(union_class_getitem), METH_O|METH_CLASS,
+    {"__mro_entries__", union_mro_entries, METH_O},
+    {"__class_getitem__", union_class_getitem, METH_O|METH_CLASS,
      PyDoc_STR("Create a union containing the given types")},
     {0}
 };
@@ -541,8 +533,7 @@ PyTypeObject _PyUnion_Type = {
     .tp_dealloc = unionobject_dealloc,
     .tp_alloc = PyType_GenericAlloc,
     .tp_free = PyObject_GC_Del,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-                Py_TPFLAGS_MANAGED_WEAKREF,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = union_traverse,
     .tp_hash = union_hash,
     .tp_getattro = union_getattro,
@@ -553,6 +544,7 @@ PyTypeObject _PyUnion_Type = {
     .tp_as_number = &union_as_number,
     .tp_repr = union_repr,
     .tp_getset = union_properties,
+    .tp_weaklistoffset = offsetof(unionobject, weakreflist),
 };
 
 static PyObject *
@@ -597,6 +589,7 @@ make_union(unionbuilder *ub)
     result->args = args;
     result->hashable_args = hashable_args;
     result->unhashable_args = unhashable_args;
+    result->weakreflist = NULL;
     _PyObject_GC_TRACK(result);
     return (PyObject*)result;
 error:

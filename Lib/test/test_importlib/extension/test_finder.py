@@ -1,4 +1,4 @@
-from test.support import is_apple_mobile
+from test.support import is_apple_mobile, Py_GIL_DISABLED
 from test.test_importlib import abc, util
 
 machinery = util.import_importlib('importlib.machinery')
@@ -69,12 +69,18 @@ class FinderTests(abc.FinderTests):
         elif 'cygwin' in sys.platform:
             pass
         else:
-            # There is no stable ABI, so no abi3 or abi3t suffix.
-            self.assertNotIn(".abi3.so", suffixes)
-            self.assertNotIn(".abi3t.so", suffixes)
+            if Py_GIL_DISABLED:
+                self.assertNotIn(".abi3.so", suffixes)
+            else:
+                self.assertIn(".abi3.so", suffixes)
+            self.assertIn(".abi3t.so", suffixes)
+
             if platform:
-                self.assertNotIn(f".abi3-{platform}.so", suffixes)
-                self.assertNotIn(f".abi3t-{platform}.so", suffixes)
+                if Py_GIL_DISABLED:
+                    self.assertNotIn(f".abi3-{platform}.so", suffixes)
+                else:
+                    self.assertIn(f".abi3-{platform}.so", suffixes)
+                self.assertIn(f".abi3t-{platform}.so", suffixes)
 
 
 (Frozen_FinderTests,

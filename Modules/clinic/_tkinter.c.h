@@ -3,7 +3,6 @@ preserve
 [clinic start generated code]*/
 
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
-#include "pycore_tuple.h"         // _PyTuple_FromValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(_tkinter_tkapp_call__doc__,
@@ -17,19 +16,17 @@ PyDoc_STRVAR(_tkinter_tkapp_call__doc__,
 static PyObject *
 _tkinter_tkapp_call_impl(TkappObject *self, PyObject *args);
 
-static PyValue
-_tkinter_tkapp_call(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_call(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = _tkinter_tkapp_call_impl((TkappObject *)self, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_call_impl((TkappObject *)self, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -44,34 +41,26 @@ PyDoc_STRVAR(_tkinter_tkapp_eval__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EVAL_METHODDEF    \
-    {"eval", _PyCFunction_CAST(_tkinter_tkapp_eval), METH_O, _tkinter_tkapp_eval__doc__},
+    {"eval", (PyCFunction)_tkinter_tkapp_eval, METH_O, _tkinter_tkapp_eval__doc__},
 
 static PyObject *
 _tkinter_tkapp_eval_impl(TkappObject *self, const char *script);
 
-static PyValue
-_tkinter_tkapp_eval(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_eval(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *script;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("eval", "argument", "str", _arg);
-            goto exit;
-        }
-        script = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (script == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("eval", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_eval_impl((TkappObject *)self, script);
-    return_value = PyValue_FromResult(_return_value);
+    script = _PyUnicode_AsUTF8NoNUL(arg);
+    if (script == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_eval_impl((TkappObject *)self, script);
 
 exit:
     return return_value;
@@ -83,34 +72,26 @@ PyDoc_STRVAR(_tkinter_tkapp_evalfile__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EVALFILE_METHODDEF    \
-    {"evalfile", _PyCFunction_CAST(_tkinter_tkapp_evalfile), METH_O, _tkinter_tkapp_evalfile__doc__},
+    {"evalfile", (PyCFunction)_tkinter_tkapp_evalfile, METH_O, _tkinter_tkapp_evalfile__doc__},
 
 static PyObject *
 _tkinter_tkapp_evalfile_impl(TkappObject *self, const char *fileName);
 
-static PyValue
-_tkinter_tkapp_evalfile(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_evalfile(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *fileName;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("evalfile", "argument", "str", _arg);
-            goto exit;
-        }
-        fileName = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (fileName == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("evalfile", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_evalfile_impl((TkappObject *)self, fileName);
-    return_value = PyValue_FromResult(_return_value);
+    fileName = _PyUnicode_AsUTF8NoNUL(arg);
+    if (fileName == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_evalfile_impl((TkappObject *)self, fileName);
 
 exit:
     return return_value;
@@ -122,34 +103,26 @@ PyDoc_STRVAR(_tkinter_tkapp_record__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_RECORD_METHODDEF    \
-    {"record", _PyCFunction_CAST(_tkinter_tkapp_record), METH_O, _tkinter_tkapp_record__doc__},
+    {"record", (PyCFunction)_tkinter_tkapp_record, METH_O, _tkinter_tkapp_record__doc__},
 
 static PyObject *
 _tkinter_tkapp_record_impl(TkappObject *self, const char *script);
 
-static PyValue
-_tkinter_tkapp_record(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_record(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *script;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("record", "argument", "str", _arg);
-            goto exit;
-        }
-        script = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (script == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("record", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_record_impl((TkappObject *)self, script);
-    return_value = PyValue_FromResult(_return_value);
+    script = _PyUnicode_AsUTF8NoNUL(arg);
+    if (script == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_record_impl((TkappObject *)self, script);
 
 exit:
     return return_value;
@@ -161,34 +134,26 @@ PyDoc_STRVAR(_tkinter_tkapp_adderrorinfo__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_ADDERRORINFO_METHODDEF    \
-    {"adderrorinfo", _PyCFunction_CAST(_tkinter_tkapp_adderrorinfo), METH_O, _tkinter_tkapp_adderrorinfo__doc__},
+    {"adderrorinfo", (PyCFunction)_tkinter_tkapp_adderrorinfo, METH_O, _tkinter_tkapp_adderrorinfo__doc__},
 
 static PyObject *
 _tkinter_tkapp_adderrorinfo_impl(TkappObject *self, const char *msg);
 
-static PyValue
-_tkinter_tkapp_adderrorinfo(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_adderrorinfo(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *msg;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("adderrorinfo", "argument", "str", _arg);
-            goto exit;
-        }
-        msg = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (msg == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("adderrorinfo", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_adderrorinfo_impl((TkappObject *)self, msg);
-    return_value = PyValue_FromResult(_return_value);
+    msg = _PyUnicode_AsUTF8NoNUL(arg);
+    if (msg == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_adderrorinfo_impl((TkappObject *)self, msg);
 
 exit:
     return return_value;
@@ -200,26 +165,18 @@ PyDoc_STRVAR(_tkinter_tkapp_getint__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_GETINT_METHODDEF    \
-    {"getint", _PyCFunction_CAST(_tkinter_tkapp_getint), METH_O, _tkinter_tkapp_getint__doc__},
+    {"getint", (PyCFunction)_tkinter_tkapp_getint, METH_O, _tkinter_tkapp_getint__doc__},
 
 static PyObject *
 _tkinter_tkapp_getint_impl(TkappObject *self, PyObject *arg);
 
-static PyValue
-_tkinter_tkapp_getint(PyObject *self, PyValue arg_)
+static PyObject *
+_tkinter_tkapp_getint(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *arg;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    arg = PyValue_Object(arg_);
-    if (arg == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_getint_impl((TkappObject *)self, arg);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_getint_impl((TkappObject *)self, arg);
 
-exit:
     return return_value;
 }
 
@@ -229,26 +186,18 @@ PyDoc_STRVAR(_tkinter_tkapp_getdouble__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_GETDOUBLE_METHODDEF    \
-    {"getdouble", _PyCFunction_CAST(_tkinter_tkapp_getdouble), METH_O, _tkinter_tkapp_getdouble__doc__},
+    {"getdouble", (PyCFunction)_tkinter_tkapp_getdouble, METH_O, _tkinter_tkapp_getdouble__doc__},
 
 static PyObject *
 _tkinter_tkapp_getdouble_impl(TkappObject *self, PyObject *arg);
 
-static PyValue
-_tkinter_tkapp_getdouble(PyObject *self, PyValue arg_)
+static PyObject *
+_tkinter_tkapp_getdouble(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *arg;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    arg = PyValue_Object(arg_);
-    if (arg == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_getdouble_impl((TkappObject *)self, arg);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_getdouble_impl((TkappObject *)self, arg);
 
-exit:
     return return_value;
 }
 
@@ -258,26 +207,18 @@ PyDoc_STRVAR(_tkinter_tkapp_getboolean__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_GETBOOLEAN_METHODDEF    \
-    {"getboolean", _PyCFunction_CAST(_tkinter_tkapp_getboolean), METH_O, _tkinter_tkapp_getboolean__doc__},
+    {"getboolean", (PyCFunction)_tkinter_tkapp_getboolean, METH_O, _tkinter_tkapp_getboolean__doc__},
 
 static PyObject *
 _tkinter_tkapp_getboolean_impl(TkappObject *self, PyObject *arg);
 
-static PyValue
-_tkinter_tkapp_getboolean(PyObject *self, PyValue arg_)
+static PyObject *
+_tkinter_tkapp_getboolean(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *arg;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    arg = PyValue_Object(arg_);
-    if (arg == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_getboolean_impl((TkappObject *)self, arg);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_getboolean_impl((TkappObject *)self, arg);
 
-exit:
     return return_value;
 }
 
@@ -287,34 +228,26 @@ PyDoc_STRVAR(_tkinter_tkapp_exprstring__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EXPRSTRING_METHODDEF    \
-    {"exprstring", _PyCFunction_CAST(_tkinter_tkapp_exprstring), METH_O, _tkinter_tkapp_exprstring__doc__},
+    {"exprstring", (PyCFunction)_tkinter_tkapp_exprstring, METH_O, _tkinter_tkapp_exprstring__doc__},
 
 static PyObject *
 _tkinter_tkapp_exprstring_impl(TkappObject *self, const char *s);
 
-static PyValue
-_tkinter_tkapp_exprstring(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_exprstring(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *s;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("exprstring", "argument", "str", _arg);
-            goto exit;
-        }
-        s = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (s == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("exprstring", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_exprstring_impl((TkappObject *)self, s);
-    return_value = PyValue_FromResult(_return_value);
+    s = _PyUnicode_AsUTF8NoNUL(arg);
+    if (s == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_exprstring_impl((TkappObject *)self, s);
 
 exit:
     return return_value;
@@ -326,34 +259,26 @@ PyDoc_STRVAR(_tkinter_tkapp_exprlong__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EXPRLONG_METHODDEF    \
-    {"exprlong", _PyCFunction_CAST(_tkinter_tkapp_exprlong), METH_O, _tkinter_tkapp_exprlong__doc__},
+    {"exprlong", (PyCFunction)_tkinter_tkapp_exprlong, METH_O, _tkinter_tkapp_exprlong__doc__},
 
 static PyObject *
 _tkinter_tkapp_exprlong_impl(TkappObject *self, const char *s);
 
-static PyValue
-_tkinter_tkapp_exprlong(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_exprlong(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *s;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("exprlong", "argument", "str", _arg);
-            goto exit;
-        }
-        s = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (s == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("exprlong", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_exprlong_impl((TkappObject *)self, s);
-    return_value = PyValue_FromResult(_return_value);
+    s = _PyUnicode_AsUTF8NoNUL(arg);
+    if (s == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_exprlong_impl((TkappObject *)self, s);
 
 exit:
     return return_value;
@@ -365,34 +290,26 @@ PyDoc_STRVAR(_tkinter_tkapp_exprdouble__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EXPRDOUBLE_METHODDEF    \
-    {"exprdouble", _PyCFunction_CAST(_tkinter_tkapp_exprdouble), METH_O, _tkinter_tkapp_exprdouble__doc__},
+    {"exprdouble", (PyCFunction)_tkinter_tkapp_exprdouble, METH_O, _tkinter_tkapp_exprdouble__doc__},
 
 static PyObject *
 _tkinter_tkapp_exprdouble_impl(TkappObject *self, const char *s);
 
-static PyValue
-_tkinter_tkapp_exprdouble(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_exprdouble(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *s;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("exprdouble", "argument", "str", _arg);
-            goto exit;
-        }
-        s = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (s == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("exprdouble", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_exprdouble_impl((TkappObject *)self, s);
-    return_value = PyValue_FromResult(_return_value);
+    s = _PyUnicode_AsUTF8NoNUL(arg);
+    if (s == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_exprdouble_impl((TkappObject *)self, s);
 
 exit:
     return return_value;
@@ -404,34 +321,26 @@ PyDoc_STRVAR(_tkinter_tkapp_exprboolean__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_EXPRBOOLEAN_METHODDEF    \
-    {"exprboolean", _PyCFunction_CAST(_tkinter_tkapp_exprboolean), METH_O, _tkinter_tkapp_exprboolean__doc__},
+    {"exprboolean", (PyCFunction)_tkinter_tkapp_exprboolean, METH_O, _tkinter_tkapp_exprboolean__doc__},
 
 static PyObject *
 _tkinter_tkapp_exprboolean_impl(TkappObject *self, const char *s);
 
-static PyValue
-_tkinter_tkapp_exprboolean(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_exprboolean(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *s;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("exprboolean", "argument", "str", _arg);
-            goto exit;
-        }
-        s = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (s == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("exprboolean", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_exprboolean_impl((TkappObject *)self, s);
-    return_value = PyValue_FromResult(_return_value);
+    s = _PyUnicode_AsUTF8NoNUL(arg);
+    if (s == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_exprboolean_impl((TkappObject *)self, s);
 
 exit:
     return return_value;
@@ -443,26 +352,18 @@ PyDoc_STRVAR(_tkinter_tkapp_splitlist__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_SPLITLIST_METHODDEF    \
-    {"splitlist", _PyCFunction_CAST(_tkinter_tkapp_splitlist), METH_O, _tkinter_tkapp_splitlist__doc__},
+    {"splitlist", (PyCFunction)_tkinter_tkapp_splitlist, METH_O, _tkinter_tkapp_splitlist__doc__},
 
 static PyObject *
 _tkinter_tkapp_splitlist_impl(TkappObject *self, PyObject *arg);
 
-static PyValue
-_tkinter_tkapp_splitlist(PyObject *self, PyValue arg_)
+static PyObject *
+_tkinter_tkapp_splitlist(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *arg;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    arg = PyValue_Object(arg_);
-    if (arg == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_splitlist_impl((TkappObject *)self, arg);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_splitlist_impl((TkappObject *)self, arg);
 
-exit:
     return return_value;
 }
 
@@ -478,37 +379,26 @@ static PyObject *
 _tkinter_tkapp_createcommand_impl(TkappObject *self, const char *name,
                                   PyObject *func);
 
-static PyValue
-_tkinter_tkapp_createcommand(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_createcommand(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
     PyObject *func;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("createcommand", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("createcommand", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
-    }
-    func = PyValue_Object(args[1]);
-    if (func == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("createcommand", "argument 1", "str", args[0]);
         goto exit;
     }
-    _return_value = _tkinter_tkapp_createcommand_impl((TkappObject *)self, name, func);
-    return_value = PyValue_FromResult(_return_value);
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    func = args[1];
+    return_value = _tkinter_tkapp_createcommand_impl((TkappObject *)self, name, func);
 
 exit:
     return return_value;
@@ -520,34 +410,26 @@ PyDoc_STRVAR(_tkinter_tkapp_deletecommand__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_DELETECOMMAND_METHODDEF    \
-    {"deletecommand", _PyCFunction_CAST(_tkinter_tkapp_deletecommand), METH_O, _tkinter_tkapp_deletecommand__doc__},
+    {"deletecommand", (PyCFunction)_tkinter_tkapp_deletecommand, METH_O, _tkinter_tkapp_deletecommand__doc__},
 
 static PyObject *
 _tkinter_tkapp_deletecommand_impl(TkappObject *self, const char *name);
 
-static PyValue
-_tkinter_tkapp_deletecommand(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_deletecommand(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("deletecommand", "argument", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("deletecommand", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _tkinter_tkapp_deletecommand_impl((TkappObject *)self, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = _PyUnicode_AsUTF8NoNUL(arg);
+    if (name == NULL) {
+        goto exit;
+    }
+    return_value = _tkinter_tkapp_deletecommand_impl((TkappObject *)self, name);
 
 exit:
     return return_value;
@@ -567,32 +449,24 @@ static PyObject *
 _tkinter_tkapp_createfilehandler_impl(TkappObject *self, PyObject *file,
                                       int mask, PyObject *func);
 
-static PyValue
-_tkinter_tkapp_createfilehandler(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_createfilehandler(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *file;
     int mask;
     PyObject *func;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("createfilehandler", nargs, 3, 3)) {
         goto exit;
     }
-    file = PyValue_Object(args[0]);
-    if (file == NULL) {
-        goto exit;
-    }
-    mask = PyLong_AsIntValue(args[1]);
+    file = args[0];
+    mask = PyLong_AsInt(args[1]);
     if (mask == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    func = PyValue_Object(args[2]);
-    if (func == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_createfilehandler_impl((TkappObject *)self, file, mask, func);
-    return_value = PyValue_FromResult(_return_value);
+    func = args[2];
+    return_value = _tkinter_tkapp_createfilehandler_impl((TkappObject *)self, file, mask, func);
 
 exit:
     return return_value;
@@ -608,26 +482,18 @@ PyDoc_STRVAR(_tkinter_tkapp_deletefilehandler__doc__,
 "\n");
 
 #define _TKINTER_TKAPP_DELETEFILEHANDLER_METHODDEF    \
-    {"deletefilehandler", _PyCFunction_CAST(_tkinter_tkapp_deletefilehandler), METH_O, _tkinter_tkapp_deletefilehandler__doc__},
+    {"deletefilehandler", (PyCFunction)_tkinter_tkapp_deletefilehandler, METH_O, _tkinter_tkapp_deletefilehandler__doc__},
 
 static PyObject *
 _tkinter_tkapp_deletefilehandler_impl(TkappObject *self, PyObject *file);
 
-static PyValue
-_tkinter_tkapp_deletefilehandler(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_deletefilehandler(PyObject *self, PyObject *file)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *file;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    file = PyValue_Object(arg);
-    if (file == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_deletefilehandler_impl((TkappObject *)self, file);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_deletefilehandler_impl((TkappObject *)self, file);
 
-exit:
     return return_value;
 }
 
@@ -662,27 +528,22 @@ static PyObject *
 _tkinter_tkapp_createtimerhandler_impl(TkappObject *self, int milliseconds,
                                        PyObject *func);
 
-static PyValue
-_tkinter_tkapp_createtimerhandler(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_createtimerhandler(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int milliseconds;
     PyObject *func;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("createtimerhandler", nargs, 2, 2)) {
         goto exit;
     }
-    milliseconds = PyLong_AsIntValue(args[0]);
+    milliseconds = PyLong_AsInt(args[0]);
     if (milliseconds == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    func = PyValue_Object(args[1]);
-    if (func == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_createtimerhandler_impl((TkappObject *)self, milliseconds, func);
-    return_value = PyValue_FromResult(_return_value);
+    func = args[1];
+    return_value = _tkinter_tkapp_createtimerhandler_impl((TkappObject *)self, milliseconds, func);
 
 exit:
     return return_value;
@@ -699,12 +560,11 @@ PyDoc_STRVAR(_tkinter_tkapp_mainloop__doc__,
 static PyObject *
 _tkinter_tkapp_mainloop_impl(TkappObject *self, int threshold);
 
-static PyValue
-_tkinter_tkapp_mainloop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_mainloop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int threshold = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("mainloop", nargs, 0, 1)) {
         goto exit;
@@ -712,13 +572,12 @@ _tkinter_tkapp_mainloop(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    threshold = PyLong_AsIntValue(args[0]);
+    threshold = PyLong_AsInt(args[0]);
     if (threshold == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _tkinter_tkapp_mainloop_impl((TkappObject *)self, threshold);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_mainloop_impl((TkappObject *)self, threshold);
 
 exit:
     return return_value;
@@ -735,12 +594,11 @@ PyDoc_STRVAR(_tkinter_tkapp_dooneevent__doc__,
 static PyObject *
 _tkinter_tkapp_dooneevent_impl(TkappObject *self, int flags);
 
-static PyValue
-_tkinter_tkapp_dooneevent(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_dooneevent(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int flags = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dooneevent", nargs, 0, 1)) {
         goto exit;
@@ -748,13 +606,12 @@ _tkinter_tkapp_dooneevent(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flags = PyLong_AsIntValue(args[0]);
+    flags = PyLong_AsInt(args[0]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _tkinter_tkapp_dooneevent_impl((TkappObject *)self, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_dooneevent_impl((TkappObject *)self, flags);
 
 exit:
     return return_value;
@@ -823,12 +680,11 @@ PyDoc_STRVAR(_tkinter_tkapp_wantobjects__doc__,
 static PyObject *
 _tkinter_tkapp_wantobjects_impl(TkappObject *self, int value);
 
-static PyValue
-_tkinter_tkapp_wantobjects(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_tkapp_wantobjects(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int value = -1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("wantobjects", nargs, 0, 1)) {
         goto exit;
@@ -836,13 +692,12 @@ _tkinter_tkapp_wantobjects(PyObject *self, const PyValue *args, Py_ssize_t nargs
     if (nargs < 1) {
         goto skip_optional;
     }
-    value = PyLong_AsIntValue(args[0]);
+    value = PyLong_AsInt(args[0]);
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _tkinter_tkapp_wantobjects_impl((TkappObject *)self, value);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_wantobjects_impl((TkappObject *)self, value);
 
 exit:
     return return_value;
@@ -855,26 +710,18 @@ PyDoc_STRVAR(_tkinter_tkapp_settrace__doc__,
 "Set the tracing function.");
 
 #define _TKINTER_TKAPP_SETTRACE_METHODDEF    \
-    {"settrace", _PyCFunction_CAST(_tkinter_tkapp_settrace), METH_O, _tkinter_tkapp_settrace__doc__},
+    {"settrace", (PyCFunction)_tkinter_tkapp_settrace, METH_O, _tkinter_tkapp_settrace__doc__},
 
 static PyObject *
 _tkinter_tkapp_settrace_impl(TkappObject *self, PyObject *func);
 
-static PyValue
-_tkinter_tkapp_settrace(PyObject *self, PyValue arg)
+static PyObject *
+_tkinter_tkapp_settrace(PyObject *self, PyObject *func)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *func;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    func = PyValue_Object(arg);
-    if (func == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter_tkapp_settrace_impl((TkappObject *)self, func);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_tkapp_settrace_impl((TkappObject *)self, func);
 
-exit:
     return return_value;
 }
 
@@ -919,28 +766,7 @@ PyDoc_STRVAR(_tkinter__flatten__doc__,
 "\n");
 
 #define _TKINTER__FLATTEN_METHODDEF    \
-    {"_flatten", _PyCFunction_CAST(_tkinter__flatten), METH_O, _tkinter__flatten__doc__},
-
-static PyObject *
-_tkinter__flatten_impl(PyObject *module, PyObject *item);
-
-static PyValue
-_tkinter__flatten(PyObject *module, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *item;
-    PyObject *_return_value;
-
-    item = PyValue_Object(arg);
-    if (item == NULL) {
-        goto exit;
-    }
-    _return_value = _tkinter__flatten_impl(module, item);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"_flatten", (PyCFunction)_tkinter__flatten, METH_O, _tkinter__flatten__doc__},
 
 PyDoc_STRVAR(_tkinter_create__doc__,
 "create($module, screenName=None, baseName=\'\', className=\'Tk\',\n"
@@ -966,10 +792,10 @@ _tkinter_create_impl(PyObject *module, const char *screenName,
                      int interactive, int wantobjects, int wantTk, int sync,
                      const char *use);
 
-static PyValue
-_tkinter_create(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_tkinter_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *screenName = NULL;
     const char *baseName = "";
     const char *className = "Tk";
@@ -978,7 +804,6 @@ _tkinter_create(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     int wantTk = 1;
     int sync = 0;
     const char *use = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("create", nargs, 0, 8)) {
         goto exit;
@@ -986,112 +811,87 @@ _tkinter_create(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (args[0] == Py_None) {
+        screenName = NULL;
+    }
+    else if (PyUnicode_Check(args[0])) {
+        screenName = _PyUnicode_AsUTF8NoNUL(args[0]);
+        if (screenName == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            screenName = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            screenName = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (screenName == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("create", "argument 1", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("create", "argument 1", "str or None", args[0]);
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create", "argument 2", "str", _arg);
-            goto exit;
-        }
-        baseName = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (baseName == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("create", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    baseName = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (baseName == NULL) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create", "argument 3", "str", _arg);
-            goto exit;
-        }
-        className = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (className == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("create", "argument 3", "str", args[2]);
+        goto exit;
+    }
+    className = _PyUnicode_AsUTF8NoNUL(args[2]);
+    if (className == NULL) {
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    interactive = PyObject_IsTrueValue(args[3]);
+    interactive = PyObject_IsTrue(args[3]);
     if (interactive < 0) {
         goto exit;
     }
     if (nargs < 5) {
         goto skip_optional;
     }
-    wantobjects = PyLong_AsIntValue(args[4]);
+    wantobjects = PyLong_AsInt(args[4]);
     if (wantobjects == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 6) {
         goto skip_optional;
     }
-    wantTk = PyObject_IsTrueValue(args[5]);
+    wantTk = PyObject_IsTrue(args[5]);
     if (wantTk < 0) {
         goto exit;
     }
     if (nargs < 7) {
         goto skip_optional;
     }
-    sync = PyObject_IsTrueValue(args[6]);
+    sync = PyObject_IsTrue(args[6]);
     if (sync < 0) {
         goto exit;
     }
     if (nargs < 8) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[7]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            use = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            use = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (use == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("create", "argument 8", "str or None", _arg);
+    if (args[7] == Py_None) {
+        use = NULL;
+    }
+    else if (PyUnicode_Check(args[7])) {
+        use = _PyUnicode_AsUTF8NoNUL(args[7]);
+        if (use == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("create", "argument 8", "str or None", args[7]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _tkinter_create_impl(module, screenName, baseName, className, interactive, wantobjects, wantTk, sync, use);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_create_impl(module, screenName, baseName, className, interactive, wantobjects, wantTk, sync, use);
 
 exit:
     return return_value;
@@ -1107,24 +907,22 @@ PyDoc_STRVAR(_tkinter_setbusywaitinterval__doc__,
 "an animation.");
 
 #define _TKINTER_SETBUSYWAITINTERVAL_METHODDEF    \
-    {"setbusywaitinterval", _PyCFunction_CAST(_tkinter_setbusywaitinterval), METH_O, _tkinter_setbusywaitinterval__doc__},
+    {"setbusywaitinterval", (PyCFunction)_tkinter_setbusywaitinterval, METH_O, _tkinter_setbusywaitinterval__doc__},
 
 static PyObject *
 _tkinter_setbusywaitinterval_impl(PyObject *module, int new_val);
 
-static PyValue
-_tkinter_setbusywaitinterval(PyObject *module, PyValue arg)
+static PyObject *
+_tkinter_setbusywaitinterval(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int new_val;
-    PyObject *_return_value;
 
-    new_val = PyLong_AsIntValue(arg);
+    new_val = PyLong_AsInt(arg);
     if (new_val == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _tkinter_setbusywaitinterval_impl(module, new_val);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _tkinter_setbusywaitinterval_impl(module, new_val);
 
 exit:
     return return_value;
@@ -1165,4 +963,4 @@ exit:
 #ifndef _TKINTER_TKAPP_DELETEFILEHANDLER_METHODDEF
     #define _TKINTER_TKAPP_DELETEFILEHANDLER_METHODDEF
 #endif /* !defined(_TKINTER_TKAPP_DELETEFILEHANDLER_METHODDEF) */
-/*[clinic end generated code: output=3201f7f7d6dbfe65 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=229ae8ed00ee4e40 input=a9049054013a1b77]*/

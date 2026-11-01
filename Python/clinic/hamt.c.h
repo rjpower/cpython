@@ -16,27 +16,19 @@ PyDoc_STRVAR(hamt_set__doc__,
 static PyObject *
 hamt_set_impl(PyHamtObject *self, PyObject *key, PyObject *val);
 
-static PyValue
-hamt_set(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+hamt_set(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *key;
     PyObject *val;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set", nargs, 2, 2)) {
         goto exit;
     }
-    key = PyValue_Object(args[0]);
-    if (key == NULL) {
-        goto exit;
-    }
-    val = PyValue_Object(args[1]);
-    if (val == NULL) {
-        goto exit;
-    }
-    _return_value = hamt_set_impl((PyHamtObject *)self, key, val);
-    return_value = PyValue_FromResult(_return_value);
+    key = args[0];
+    val = args[1];
+    return_value = hamt_set_impl((PyHamtObject *)self, key, val);
 
 exit:
     return return_value;
@@ -54,33 +46,25 @@ PyDoc_STRVAR(hamt_get__doc__,
 static PyObject *
 hamt_get_impl(PyHamtObject *self, PyObject *key, PyObject *def);
 
-static PyValue
-hamt_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+hamt_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *key;
     PyObject *def = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
-    key = PyValue_Object(args[0]);
-    if (key == NULL) {
-        goto exit;
-    }
+    key = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    def = PyValue_Object(args[1]);
-    if (def == NULL) {
-        goto exit;
-    }
+    def = args[1];
 skip_optional:
-    _return_value = hamt_get_impl((PyHamtObject *)self, key, def);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = hamt_get_impl((PyHamtObject *)self, key, def);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=8b5b34721eab82dc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2531b93a9a37546f input=a9049054013a1b77]*/

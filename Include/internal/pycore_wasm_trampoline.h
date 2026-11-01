@@ -33,22 +33,10 @@ _PyWasm_TrampolineCall(PyCFunctionWithKeywords func,
                        PyObject* args,
                        PyObject* kw);
 
-// The tp_call form, on values (callfunc).
-PyValue
-_PyWasm_TrampolineCallValue(callfunc func,
-                            PyObject* self,
-                            PyObject* args,
-                            PyObject* kw);
-
-PyValue
-_PyWasm_TrampolineCallGetter(getter func,
-                             PyObject* self,
-                             void* closure);
-
 int
 _PyWasm_TrampolineCallSetter(setter func,
                              PyObject* self,
-                             PyValue val,
+                             PyObject* val,
                              void* closure);
 
 #define _PyCFunction_TrampolineCall(meth, self, args) \
@@ -57,14 +45,12 @@ _PyWasm_TrampolineCallSetter(setter func,
 #define _PyCFunctionWithKeywords_TrampolineCall(meth, self, args, kw) \
     _PyWasm_TrampolineCall((meth), (self), (args), (kw))
 
-#define _PyCallFunc_TrampolineCall(call, self, args, kw) \
-    _PyWasm_TrampolineCallValue((call), (self), (args), (kw))
-
 #define descr_set_trampoline_call(set, obj, value, closure)                 \
     _PyWasm_TrampolineCallSetter((set), (obj), (value), (closure))
 
 #define descr_get_trampoline_call(get, obj, closure)                \
-    _PyWasm_TrampolineCallGetter((get), (obj), (closure))
+    _PyWasm_TrampolineCall(_PyCFunctionWithKeywords_CAST(get), (obj), \
+                           (PyObject*)(closure), NULL)
 
 
 #else // defined(__wasm__) && defined(PY_CALL_TRAMPOLINE)
@@ -76,9 +62,6 @@ _PyWasm_TrampolineCallSetter(setter func,
 
 #define _PyCFunctionWithKeywords_TrampolineCall(meth, self, args, kw) \
     (meth)((self), (args), (kw))
-
-#define _PyCallFunc_TrampolineCall(call, self, args, kw) \
-    (call)((self), (args), (kw))
 
 #define descr_set_trampoline_call(set, obj, value, closure) \
     (set)((obj), (value), (closure))

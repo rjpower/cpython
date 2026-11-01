@@ -4,6 +4,8 @@
 
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
+#include "pycore_ceval.h"         // _PyEval_SetProfile()
+#include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
@@ -702,11 +704,8 @@ PyObject* get_cfunc_from_callable(PyObject* callable, PyObject* self_arg, PyObje
         if (self_arg == missing) {
             return NULL;
         }
-        PyValue meth_v = Py_TYPE(callable)->tp_descr_get(
+        PyObject *meth = Py_TYPE(callable)->tp_descr_get(
             callable, self_arg, (PyObject*)Py_TYPE(self_arg));
-        _PyValue_CheckSlotResult(meth_v, Py_TYPE(callable), "tp_descr_get");
-        // A method descriptor's binding: a builtin method, never inline.
-        PyObject *meth = PyValue_Object(meth_v);
         if (meth == NULL) {
             PyErr_Clear();
             return NULL;
@@ -992,17 +991,35 @@ profiler_traverse(PyObject *op, visitproc visit, void *arg)
     return RotatingTree_Enum(self->profilerEntries, visit_entry, &v);
 }
 
-/* The profiler installs no profile function: enable() registers bound
-   methods with sys.monitoring, which keep it alive while they are
-   registered.  A dead profiler therefore has nothing to remove, even with
-   POF_ENABLED still set (its tool was freed by someone else).  The dealloc
-   must not touch the thread's profile function, which belongs to whoever
-   set it, such as the profile module. */
+/* Removing the profile function runs code (audit hooks), which a dealloc
+   that the sweep of a tracing collector makes may not do; the collector
+   calls the finalizer first. */
+static void
+profiler_finalize(PyObject *op)
+{
+    ProfilerObject *self = ProfilerObject_CAST(op);
+    if (self->flags & POF_ENABLED) {
+        PyThreadState *tstate = _PyThreadState_GET();
+        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
+            PyErr_FormatUnraisable("Exception ignored while "
+                                   "destroying _lsprof profiler");
+        }
+        self->flags &= ~POF_ENABLED;
+    }
+}
+
 static void
 profiler_dealloc(PyObject *op)
 {
     ProfilerObject *self = ProfilerObject_CAST(op);
     PyObject_GC_UnTrack(self);
+    if (self->flags & POF_ENABLED) {
+        PyThreadState *tstate = _PyThreadState_GET();
+        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
+            PyErr_FormatUnraisable("Exception ignored while "
+                                   "destroying _lsprof profiler");
+        }
+    }
 
     /* Drop the external timer before flushing: it is Python code, and the
        profiler can be deallocated by the garbage collector. */
@@ -1076,6 +1093,7 @@ static PyType_Slot _lsprof_profiler_type_spec_slots[] = {
     {Py_tp_dealloc, profiler_dealloc},
     {Py_tp_init, profiler_init},
     {Py_tp_traverse, profiler_traverse},
+    {Py_tp_finalize, profiler_finalize},
     {0, 0}
 };
 

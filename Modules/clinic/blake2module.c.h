@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(py_blake2b_new__doc__,
 "blake2b(data=b\'\', *, digest_size=_blake2.blake2b.MAX_DIGEST_SIZE,\n"
@@ -34,6 +34,7 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 14
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -56,8 +57,8 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[14];
-    const PyValue *fastargs;
+    PyObject *argsbuf[14];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *data_obj = NULL;
@@ -75,7 +76,7 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int usedforsecurity = 1;
     PyObject *string = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -83,11 +84,8 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        data_obj = PyValue_Object(fastargs[0]);
-        if (data_obj == NULL) {
-            goto exit;
-        }
+    if (fastargs[0]) {
+        data_obj = fastargs[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -96,8 +94,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        digest_size = PyLong_AsIntValue(fastargs[1]);
+    if (fastargs[1]) {
+        digest_size = PyLong_AsInt(fastargs[1]);
         if (digest_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -105,50 +103,32 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &key, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[2]) {
+        if (PyObject_GetBuffer(fastargs[2], &key, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &salt, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[3]) {
+        if (PyObject_GetBuffer(fastargs[3], &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[4]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &person, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[4]) {
+        if (PyObject_GetBuffer(fastargs[4], &person, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[5])) {
-        fanout = PyLong_AsIntValue(fastargs[5]);
+    if (fastargs[5]) {
+        fanout = PyLong_AsInt(fastargs[5]);
         if (fanout == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -156,8 +136,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[6])) {
-        depth = PyLong_AsIntValue(fastargs[6]);
+    if (fastargs[6]) {
+        depth = PyLong_AsInt(fastargs[6]);
         if (depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -165,36 +145,24 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[7])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[7]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_UnsignedLong_Converter(_arg, &leaf_size)) {
-                goto exit;
-            }
+    if (fastargs[7]) {
+        if (!_PyLong_UnsignedLong_Converter(fastargs[7], &leaf_size)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[8])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[8]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_UnsignedLongLong_Converter(_arg, &node_offset)) {
-                goto exit;
-            }
+    if (fastargs[8]) {
+        if (!_PyLong_UnsignedLongLong_Converter(fastargs[8], &node_offset)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[9])) {
-        node_depth = PyLong_AsIntValue(fastargs[9]);
+    if (fastargs[9]) {
+        node_depth = PyLong_AsInt(fastargs[9]);
         if (node_depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -202,8 +170,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[10])) {
-        inner_size = PyLong_AsIntValue(fastargs[10]);
+    if (fastargs[10]) {
+        inner_size = PyLong_AsInt(fastargs[10]);
         if (inner_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -211,8 +179,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[11])) {
-        last_node = PyObject_IsTrueValue(fastargs[11]);
+    if (fastargs[11]) {
+        last_node = PyObject_IsTrue(fastargs[11]);
         if (last_node < 0) {
             goto exit;
         }
@@ -220,8 +188,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[12])) {
-        usedforsecurity = PyObject_IsTrueValue(fastargs[12]);
+    if (fastargs[12]) {
+        usedforsecurity = PyObject_IsTrue(fastargs[12]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -229,10 +197,7 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = PyValue_Object(fastargs[13]);
-    if (string == NULL) {
-        goto exit;
-    }
+    string = fastargs[13];
 skip_optional_kwonly:
     return_value = py_blake2b_new_impl(type, data_obj, digest_size, &key, &salt, &person, fanout, depth, leaf_size, node_offset, node_depth, inner_size, last_node, usedforsecurity, string);
 
@@ -278,6 +243,7 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 14
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -300,8 +266,8 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[14];
-    const PyValue *fastargs;
+    PyObject *argsbuf[14];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *data_obj = NULL;
@@ -319,7 +285,7 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int usedforsecurity = 1;
     PyObject *string = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -327,11 +293,8 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        data_obj = PyValue_Object(fastargs[0]);
-        if (data_obj == NULL) {
-            goto exit;
-        }
+    if (fastargs[0]) {
+        data_obj = fastargs[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -340,8 +303,8 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        digest_size = PyLong_AsIntValue(fastargs[1]);
+    if (fastargs[1]) {
+        digest_size = PyLong_AsInt(fastargs[1]);
         if (digest_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -349,50 +312,32 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &key, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[2]) {
+        if (PyObject_GetBuffer(fastargs[2], &key, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &salt, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[3]) {
+        if (PyObject_GetBuffer(fastargs[3], &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[4]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &person, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (fastargs[4]) {
+        if (PyObject_GetBuffer(fastargs[4], &person, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[5])) {
-        fanout = PyLong_AsIntValue(fastargs[5]);
+    if (fastargs[5]) {
+        fanout = PyLong_AsInt(fastargs[5]);
         if (fanout == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -400,8 +345,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[6])) {
-        depth = PyLong_AsIntValue(fastargs[6]);
+    if (fastargs[6]) {
+        depth = PyLong_AsInt(fastargs[6]);
         if (depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -409,36 +354,24 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[7])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[7]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_UnsignedLong_Converter(_arg, &leaf_size)) {
-                goto exit;
-            }
+    if (fastargs[7]) {
+        if (!_PyLong_UnsignedLong_Converter(fastargs[7], &leaf_size)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[8])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[8]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_UnsignedLongLong_Converter(_arg, &node_offset)) {
-                goto exit;
-            }
+    if (fastargs[8]) {
+        if (!_PyLong_UnsignedLongLong_Converter(fastargs[8], &node_offset)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[9])) {
-        node_depth = PyLong_AsIntValue(fastargs[9]);
+    if (fastargs[9]) {
+        node_depth = PyLong_AsInt(fastargs[9]);
         if (node_depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -446,8 +379,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[10])) {
-        inner_size = PyLong_AsIntValue(fastargs[10]);
+    if (fastargs[10]) {
+        inner_size = PyLong_AsInt(fastargs[10]);
         if (inner_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -455,8 +388,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[11])) {
-        last_node = PyObject_IsTrueValue(fastargs[11]);
+    if (fastargs[11]) {
+        last_node = PyObject_IsTrue(fastargs[11]);
         if (last_node < 0) {
             goto exit;
         }
@@ -464,8 +397,8 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[12])) {
-        usedforsecurity = PyObject_IsTrueValue(fastargs[12]);
+    if (fastargs[12]) {
+        usedforsecurity = PyObject_IsTrue(fastargs[12]);
         if (usedforsecurity < 0) {
             goto exit;
         }
@@ -473,10 +406,7 @@ skip_optional_pos:
             goto skip_optional_kwonly;
         }
     }
-    string = PyValue_Object(fastargs[13]);
-    if (string == NULL) {
-        goto exit;
-    }
+    string = fastargs[13];
 skip_optional_kwonly:
     return_value = py_blake2s_new_impl(type, data_obj, digest_size, &key, &salt, &person, fanout, depth, leaf_size, node_offset, node_depth, inner_size, last_node, usedforsecurity, string);
 
@@ -509,14 +439,14 @@ PyDoc_STRVAR(_blake2_blake2b_copy__doc__,
 static PyObject *
 _blake2_blake2b_copy_impl(Blake2Object *self, PyTypeObject *cls);
 
-static PyValue
-_blake2_blake2b_copy(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_blake2_blake2b_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(_blake2_blake2b_copy_impl((Blake2Object *)self, cls));
+    return _blake2_blake2b_copy_impl((Blake2Object *)self, cls);
 }
 
 PyDoc_STRVAR(_blake2_blake2b_update__doc__,
@@ -526,26 +456,18 @@ PyDoc_STRVAR(_blake2_blake2b_update__doc__,
 "Update this hash object\'s state with the provided bytes-like object.");
 
 #define _BLAKE2_BLAKE2B_UPDATE_METHODDEF    \
-    {"update", _PyCFunction_CAST(_blake2_blake2b_update), METH_O, _blake2_blake2b_update__doc__},
+    {"update", (PyCFunction)_blake2_blake2b_update, METH_O, _blake2_blake2b_update__doc__},
 
 static PyObject *
 _blake2_blake2b_update_impl(Blake2Object *self, PyObject *data);
 
-static PyValue
-_blake2_blake2b_update(PyObject *self, PyValue arg)
+static PyObject *
+_blake2_blake2b_update(PyObject *self, PyObject *data)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *data;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    data = PyValue_Object(arg);
-    if (data == NULL) {
-        goto exit;
-    }
-    _return_value = _blake2_blake2b_update_impl((Blake2Object *)self, data);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _blake2_blake2b_update_impl((Blake2Object *)self, data);
 
-exit:
     return return_value;
 }
 
@@ -584,4 +506,4 @@ _blake2_blake2b_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return _blake2_blake2b_hexdigest_impl((Blake2Object *)self);
 }
-/*[clinic end generated code: output=e89588c1fe77b3cf input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5f76c18211cd7f8f input=a9049054013a1b77]*/

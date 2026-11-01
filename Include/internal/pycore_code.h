@@ -29,11 +29,13 @@ extern "C" {
 
 
 extern PyStatus _PyCode_Init(PyInterpreterState *interp);
-/* The collector makes these calls of the dealloc's before the
+#ifdef Py_GC
+/* Under Py_GC the collector makes these calls of the dealloc's before the
    sweep, where they may run code (Python/gc_live.c): the code watchers'
    DESTROY event and the co_extra free functions.  The dealloc does not. */
 extern int _PyCode_HasExtraFree(PyObject *co);
 extern void _PyCode_Destroy(PyObject *co);
+#endif
 extern void _PyCode_Fini(PyInterpreterState *interp);
 
 
@@ -186,7 +188,7 @@ extern int _PyLineTable_PreviousAddressRange(PyCodeAddressRange *range);
 // and can be called without an attached tstate. Used by dump_frame() in
 // Python/traceback.c. The function uses heuristics to detect freed memory,
 // it's not 100% reliable.
-PyAPI_FUNC(int) _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
+extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 
 
 
@@ -195,36 +197,35 @@ PyAPI_FUNC(int) _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 /* Specialization functions, these are exported only for other re-generated
  * interpreters to call */
 
-PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
+PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(_PyStackRef global_super, _PyStackRef cls,
                                          _PyInstr *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValue owner, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_LoadAttr(_PyStackRef owner, _PyInstr *instr,
                                     PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValue owner, PyValue value,
-                                          _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_StoreAttr(_PyStackRef owner, _PyInstr *instr,
                                      PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
                                       _PyInstr *instr, PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValue container, PyValue sub,
+PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(_PyStackRef container, _PyStackRef sub,
                                        _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_Call(PyValue callable, PyValue self_or_null,
+PyAPI_FUNC(void) _Py_Specialize_Call(_PyStackRef callable, _PyStackRef self_or_null,
                                 _PyInstr *instr, int nargs);
-PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_CallKw(_PyStackRef callable, _PyInstr *instr,
                                   int nargs);
-PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValue lhs, PyValue rhs, _PyInstr *instr,
-                                    int oparg, PyValue *locals);
-PyAPI_FUNC(void) _Py_Specialize_CompareOp(PyValue lhs, PyValue rhs,
+PyAPI_FUNC(void) _Py_Specialize_BinaryOp(_PyStackRef lhs, _PyStackRef rhs, _PyInstr *instr,
+                                    int oparg, _PyStackRef *locals);
+PyAPI_FUNC(void) _Py_Specialize_CompareOp(_PyStackRef lhs, _PyStackRef rhs,
                                      _PyInstr *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(_PyStackRef seq, _PyInstr *instr,
                                           int oparg);
-PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
-PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ToBool(PyValue value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValue value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValue item, PyValue value,
+PyAPI_FUNC(void) _Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *instr, int oparg);
+PyAPI_FUNC(void) _Py_Specialize_Send(_PyStackRef receiver, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_ToBool(_PyStackRef value, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(_PyStackRef value, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_ContainsOp(_PyStackRef item, _PyStackRef value,
                                            _PyInstr *instr);
-PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_GatherStats_GetIter(_PyStackRef iterable);
+PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(_PyStackRef func_st, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.
  */
@@ -324,10 +325,9 @@ adaptive_counter_backoff(_Py_BackoffCounter counter) {
 
 /* Specialization Extensions */
 
-/* callbacks for an external specialization.  The operands are values, so
-   an int or float operand may be inline. */
-typedef int (*binaryopguardfunc)(PyValue lhs, PyValue rhs);
-typedef PyObject *(*binaryopactionfunc)(PyValue lhs, PyValue rhs);
+/* callbacks for an external specialization */
+typedef int (*binaryopguardfunc)(PyObject *lhs, PyObject *rhs);
+typedef PyObject *(*binaryopactionfunc)(PyObject *lhs, PyObject *rhs);
 
 typedef struct {
     int oparg;
@@ -372,6 +372,47 @@ struct _PyCode3 _PyCode_DEF(3);
 
 PyAPI_DATA(const struct _PyCode3) _Py_InitCleanup;
 
+#ifdef Py_GIL_DISABLED
+
+static inline _PyCodeArray *
+_PyCode_GetTLBCArray(PyCodeObject *co)
+{
+    return _Py_STATIC_CAST(_PyCodeArray *,
+                           _Py_atomic_load_ptr_acquire(&co->co_tlbc));
+}
+
+// Return a pointer to the thread-local bytecode for the current thread, if it
+// exists.
+static inline _Py_CODEUNIT *
+_PyCode_GetTLBCFast(PyThreadState *tstate, PyCodeObject *co)
+{
+    _PyCodeArray *code = _PyCode_GetTLBCArray(co);
+    int32_t idx = ((_PyThreadStateImpl*) tstate)->tlbc_index;
+    if (idx < code->size && code->entries[idx] != NULL) {
+        return (_Py_CODEUNIT *) code->entries[idx];
+    }
+    return NULL;
+}
+
+
+// Reserve an index for the current thread into thread-local bytecode
+// arrays
+//
+// Returns the reserved index or -1 on error.
+extern int32_t _Py_ReserveTLBCIndex(PyInterpreterState *interp);
+
+// Release an index returned by _Py_ReserveTLBCIndex() that was never stored
+// in a PyThreadState.
+extern void _Py_UnreserveTLBCIndex(PyInterpreterState *interp, int32_t index);
+
+// Release the current thread's index into thread-local bytecode arrays
+extern void _Py_ClearTLBCIndex(_PyThreadStateImpl *tstate);
+
+// Free all TLBC copies not associated with live threads.
+//
+// Returns 0 on success or -1 on error.
+extern int _Py_ClearUnusedTLBC(PyInterpreterState *interp);
+#endif
 
 
 typedef struct {

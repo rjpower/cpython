@@ -2660,7 +2660,7 @@ _channelid_shared(PyThreadState *tstate, PyObject *obj, _PyXIData_t *data)
     return 0;
 }
 
-static PyValue
+static PyObject *
 channelid_end(PyObject *self, void *end)
 {
     int force = 1;
@@ -2674,23 +2674,23 @@ channelid_end(PyObject *self, void *end)
             assert(obj == NULL);
             PyObject *mod = get_module_from_type(Py_TYPE(self));
             if (mod == NULL) {
-                return PyValue_NULL;
+                return NULL;
             }
             (void)handle_channel_error(err, mod, cidobj->cid);
             Py_DECREF(mod);
-            return PyValue_NULL;
+            return NULL;
         }
         assert(obj != NULL);
-        return PyValue_FromResult(obj);
+        return obj;
     }
 
     if (cidobj->end == CHANNEL_SEND) {
-        return PyValue_FromResult(PyUnicode_InternFromString("send"));
+        return PyUnicode_InternFromString("send");
     }
     if (cidobj->end == CHANNEL_RECV) {
-        return PyValue_FromResult(PyUnicode_InternFromString("recv"));
+        return PyUnicode_InternFromString("recv");
     }
-    return PyValue_FromResult(PyUnicode_InternFromString("both"));
+    return PyUnicode_InternFromString("both");
 }
 
 static int _channelid_end_send = CHANNEL_SEND;

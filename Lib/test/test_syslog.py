@@ -79,7 +79,6 @@ class Test(unittest.TestCase):
         finally:
             sys.setswitchinterval(orig_si)
 
-    @support.requires_subinterpreters
     def test_subinterpreter_syslog(self):
         # syslog.syslog() is not allowed in subinterpreters, but only if
         # syslog.openlog() hasn't been called in the main interpreter yet.
@@ -108,7 +107,6 @@ class Test(unittest.TestCase):
         finally:
             syslog.closelog()
 
-    @support.requires_subinterpreters
     def test_subinterpreter_openlog(self):
         try:
             code = dedent('''
@@ -126,7 +124,6 @@ class Test(unittest.TestCase):
         finally:
             syslog.closelog()
 
-    @support.requires_subinterpreters
     def test_subinterpreter_closelog(self):
         syslog.openlog('python')
         try:
@@ -145,7 +142,6 @@ class Test(unittest.TestCase):
         finally:
             syslog.closelog()
 
-    @support.requires_subinterpreters
     @threading_helper.requires_working_threading()
     def test_subinterpreter_concurrent_syslog(self):
         # gh-158929: This used to crash.

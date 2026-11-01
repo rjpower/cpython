@@ -1838,9 +1838,12 @@ PyConfig
 
    .. c:member:: int show_ref_count
 
+      Show total reference count at exit (excluding :term:`immortal` objects)?
+
       Set to ``1`` by :option:`-X showrefcount <-X>` command line option.
 
-      It has no effect: nothing is reference counted.
+      Needs a :ref:`debug build of Python <debug-build>` (the ``Py_REF_DEBUG``
+      macro must be defined).
 
       Default: ``0``.
 

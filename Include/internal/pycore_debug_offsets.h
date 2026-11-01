@@ -49,11 +49,19 @@ extern "C" {
 #define _GENERATE_DEBUG_SECTION_LINUX(name)
 #endif
 
+#ifdef Py_GIL_DISABLED
+# define _Py_Debug_gilruntimestate_enabled offsetof(struct _gil_runtime_state, enabled)
+# define _Py_Debug_Free_Threaded 1
+# define _Py_Debug_code_object_co_tlbc offsetof(PyCodeObject, co_tlbc)
+# define _Py_Debug_interpreter_frame_tlbc_index offsetof(_PyInterpreterFrame, tlbc_index)
+# define _Py_Debug_interpreter_state_tlbc_generation offsetof(PyInterpreterState, tlbc_indices.tlbc_generation)
+#else
 # define _Py_Debug_gilruntimestate_enabled 0
 # define _Py_Debug_Free_Threaded 0
 # define _Py_Debug_code_object_co_tlbc 0
 # define _Py_Debug_interpreter_frame_tlbc_index 0
 # define _Py_Debug_interpreter_state_tlbc_generation 0
+#endif
 
 // The register IR has no thread-local bytecode.
 # undef _Py_Debug_code_object_co_tlbc
@@ -148,19 +156,11 @@ typedef struct _Py_DebugOffsets {
         uint64_t co_tlbc;
     } code_object;
 
-    // PyObject offset; the header word's bits 0-47 (_Py_HEADER_SHAPE_MASK)
-    // are the address of the object's shape, whose shape.type field is the
-    // object's type.
+    // PyObject offset;
     struct _pyobject {
         uint64_t size;
-        uint64_t ob_header;
+        uint64_t ob_type;
     } pyobject;
-
-    // _PyShape offset (Include/object.h).
-    struct _shape {
-        uint64_t size;
-        uint64_t type;
-    } shape;
 
     // PyTypeObject object offset;
     struct _type_object {
@@ -175,6 +175,7 @@ typedef struct _Py_DebugOffsets {
     // PyHeapTypeObject offset;
     struct _heap_type_object {
         uint64_t size;
+        uint64_t ht_cached_keys;
     } heap_type_object;
 
     // PyTuple object offset;
@@ -203,6 +204,7 @@ typedef struct _Py_DebugOffsets {
     struct _dict_object {
         uint64_t size;
         uint64_t ma_keys;
+        uint64_t ma_values;
     } dict_object;
 
     // PyFloat object offset;
@@ -341,11 +343,7 @@ typedef struct _Py_DebugOffsets {
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \
-        .ob_header = offsetof(PyObject, ob_header), \
-    }, \
-    .shape = { \
-        .size = sizeof(_PyShape), \
-        .type = offsetof(_PyShape, type), \
+        .ob_type = offsetof(PyObject, ob_type), \
     }, \
     .type_object = { \
         .size = sizeof(PyTypeObject), \
@@ -357,6 +355,7 @@ typedef struct _Py_DebugOffsets {
     }, \
     .heap_type_object = { \
         .size = sizeof(PyHeapTypeObject), \
+        .ht_cached_keys = offsetof(PyHeapTypeObject, ht_cached_keys), \
     }, \
     .tuple_object = { \
         .size = sizeof(PyTupleObject), \
@@ -377,6 +376,7 @@ typedef struct _Py_DebugOffsets {
     .dict_object = { \
         .size = sizeof(PyDictObject), \
         .ma_keys = offsetof(PyDictObject, ma_keys), \
+        .ma_values = offsetof(PyDictObject, ma_values), \
     }, \
     .float_object = { \
         .size = sizeof(PyFloatObject), \

@@ -2,15 +2,11 @@
 #include "util.h"
 
 
-static PyValue
-list_get_size(PyObject *Py_UNUSED(module), PyValue obj_value)
+static PyObject *
+list_get_size(PyObject *Py_UNUSED(module), PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(obj_value);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_SIZE_VALUE(PyList_GET_SIZE(obj));
+    RETURN_SIZE(PyList_GET_SIZE(obj));
 }
 
 
@@ -43,15 +39,11 @@ list_set_item(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 
-static PyValue
-list_clear(PyObject* Py_UNUSED(module), PyValue obj_value)
+static PyObject *
+list_clear(PyObject* Py_UNUSED(module), PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(obj_value);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_INT_VALUE(PyList_Clear(obj));
+    RETURN_INT(PyList_Clear(obj));
 }
 
 
@@ -112,10 +104,10 @@ test_list_api(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 
 static PyMethodDef test_methods[] = {
-    {"list_get_size", _PyCFunction_CAST(list_get_size), METH_O},
+    {"list_get_size", list_get_size, METH_O},
     {"list_get_item", list_get_item, METH_VARARGS},
     {"list_set_item", list_set_item, METH_VARARGS},
-    {"list_clear", _PyCFunction_CAST(list_clear), METH_O},
+    {"list_clear", list_clear, METH_O},
     {"list_extend", list_extend, METH_VARARGS},
     {"test_list_api", test_list_api, METH_NOARGS},
     {NULL},

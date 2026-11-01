@@ -3,19 +3,17 @@
 
 #include "Python.h"
 #include "pycore_compile.h"       // _PyCompile_GetUnaryIntrinsicName
-#include "pycore_dict.h"          // _PyDict_SetItemValue()
 #include "pycore_function.h"      // _Py_set_function_type_params()
 #include "pycore_genobject.h"     // _PyAsyncGenValueWrapperNew
 #include "pycore_interpframe.h"   // _PyFrame_GetLocals()
 #include "pycore_intrinsics.h"    // INTRINSIC_PRINT
 #include "pycore_list.h"          // _PyList_AsTupleAndClear()
-#include "pycore_object.h"
+#include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
 #include "pycore_setobject.h"     // _PySet_Freeze()
 #include "pycore_pyerrors.h"      // _PyErr_SetString()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_typevarobject.h" // _Py_make_typevar()
 #include "pycore_unicodeobject.h" // _PyUnicode_FromASCII()
-#include "pycore_value.h"         // _PyValueRoot_PushObject()
 
 
 /******** Unary functions ********/
@@ -42,7 +40,7 @@ print_expr(PyThreadState* Py_UNUSED(ignored), PyObject *value)
 static int
 import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
 {
-    PyObject *all, *dict, *name;
+    PyObject *all, *dict, *name, *value;
     int skip_leading_underscores = 0;
     int pos, err;
 
@@ -107,16 +105,15 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
                 continue;
             }
         }
-        PyValue value = PyObject_GetAttrValue(PyValue_FromObject(v), name);
-        if (PyValue_IsNull(value))
+        value = PyObject_GetAttr(v, name);
+        if (value == NULL)
             err = -1;
         else if (PyDict_CheckExact(locals))
-            err = _PyDict_SetItemValue((PyDictObject *)locals,
-                                       PyValue_FromObject(name), value);
+            err = PyDict_SetItem(locals, name, value);
         else
-            err = PyObject_SetItemValue(PyValue_FromObject(locals),
-                                        PyValue_FromObject(name), value);
+            err = PyObject_SetItem(locals, name, value);
         Py_DECREF(name);
+        Py_XDECREF(value);
         if (err < 0)
             break;
     }
@@ -200,6 +197,9 @@ list_to_tuple(PyThreadState* unused, PyObject *v)
        freshly-built, uniquely-referenced temporary list, so steal its items
        into the tuple instead of copying them. */
     assert(PyList_CheckExact(v));
+#ifndef Py_GC  // reference counts are constant under Py_GC
+    assert(_PyObject_IsUniquelyReferenced(v));
+#endif
     return _PyList_AsTupleAndClear((PyListObject *)v);
 }
 
@@ -214,6 +214,9 @@ static PyObject *
 make_frozenset(PyThreadState* Py_UNUSED(ignored), PyObject *set)
 {
     assert(PySet_CheckExact(set));
+#ifndef Py_GC  // reference counts are constant under Py_GC
+    assert(_PyObject_IsUniquelyReferenced(set));
+#endif
     return _PySet_Freeze(set);
 }
 
@@ -237,24 +240,6 @@ _PyIntrinsics_UnaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_TYPEALIAS, _Py_make_typealias)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_BUILD_FROZENSET, make_frozenset)
 };
-
-/* The unary intrinsic oparg of value, for CALL_INTRINSIC_1: unary + takes
-   the value, and the others its object, boxed if it is inline. */
-PyValue
-_PyIntrinsics_CallUnaryValue(PyThreadState *tstate, int oparg, PyValue value)
-{
-    if (oparg == INTRINSIC_UNARY_POSITIVE) {
-        return PyNumber_PositiveValue(value);
-    }
-    _PyValueRoot root;
-    PyObject *value_o = _PyValueRoot_PushObject(tstate, &root, value, _PY_BOX_OTHER);
-    PyObject *res = NULL;
-    if (value_o != NULL) {
-        res = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
-    }
-    _PyThreadState_PopValueRoot(tstate, &root);
-    return res == NULL ? PyValue_NULL : PyValue_FromObject(res);
-}
 
 
 /******** Binary functions ********/

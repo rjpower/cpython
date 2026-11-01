@@ -53,10 +53,6 @@ PyAPI_FUNC(PyObject *) _PyGC_TraceGetHoles(PyInterpreterState *interp);
 /* The number of verifications that ran.  Export for _testinternalcapi. */
 PyAPI_FUNC(Py_ssize_t) _PyGC_TraceCount(PyInterpreterState *interp);
 
-/* The active live verifier mode: 0 off, 1 retain, 2 kill.  Extra bits are
- * 1 pymem and 2 structs.  Read collector state, not its environment. */
-PyAPI_FUNC(int) _PyGC_TraceGetVerifyMode(PyInterpreterState *interp, int *extra);
-
 /* Remember a static (not heap allocated) type passed to PyType_Ready() so
  * that the mark can traverse it as a root. */
 extern void _PyGC_TraceRegisterStaticType(PyInterpreterState *interp,
@@ -95,18 +91,8 @@ extern int _PyGC_TraceVisitInterp(PyInterpreterState *interp, visitproc visit,
 extern PyTypeObject **_PyGC_TraceStaticTypes(PyInterpreterState *interp,
                                              Py_ssize_t *n);
 /* Visit what op refers to: tp_traverse, _PyType_TraverseStatic() for a
- * static type, the heap type of a non-GC instance, and the instance's
- * attribute storage (PyObject_VisitManagedDict()). */
+ * static type, and the heap type of a non-GC instance. */
 extern int _PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg);
-
-/* Does an instance of TP hold its dict at tp_dictoffset?  The collector
- * visits that word whatever tp_traverse does (note 09 section 6). */
-static inline int
-_PyGC_HasDictWord(PyTypeObject *tp)
-{
-    return tp->tp_dictoffset != 0
-           && !(tp->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-}
 
 /* Store the callee-saved registers in regs[24].  regs is passed in a
  * register that is not callee-saved, so that computing it cannot overwrite
@@ -146,112 +132,30 @@ _PyGC_CaptureRegisters(uintptr_t *regs)
 #endif
 }
 
-/* The stack pointer, or 0 where it cannot be read.  Inlined, so that it is
- * the caller's. */
-static inline __attribute__((always_inline)) uintptr_t
-_PyGC_StackAddress(void)
-{
-#if _Py__has_builtin(__builtin_stack_address)
-    return (uintptr_t)__builtin_stack_address();
-#elif defined(__GNUC__) && defined(__x86_64__)
-    uintptr_t sp;
-    __asm__ volatile("movq %%rsp, %0" : "=r"(sp));
-    return sp;
-#elif defined(__GNUC__) && defined(__aarch64__)
-    uintptr_t sp;
-    __asm__ volatile("mov %0, sp" : "=r"(sp));
-    return sp;
-#else
-    return 0;
-#endif
-}
-
-/* The live collector, which owns memory.  Python/gc_live.c has
+#ifdef Py_GC
+/* The live collector, which owns memory under Py_GC.  Python/gc_live.c has
  * the policy: when to collect, finalizers, weak references, the sweep and
  * the gc module's view.  The mark and the heap walks are here, in
  * Python/gc_trace.c, beside the verifier's, whose roots they share. */
 
-/* The object map: one bit for each 8-byte word of the address space below
- * 2**48, set for the first word of every heap block's initialized object.
- * _Py_NewReference() sets it and freeing the block clears it (see
- * Objects/obmalloc.c), so whether a block holds an object is never guessed
- * from its contents: a block of raw data in an object heap, a free block
- * whose first word is an encoded free-list link and an object under
- * construction all have a clear bit.  The header word is all type and flags.
- *
- * The map has two levels: _PyGC_object_map has one entry for each 32 MiB
- * chunk of the address space, the size and alignment of a mimalloc segment,
- * and points to the chunk's bits, 512 KiB, mapped when the first object in
- * the chunk is made.  Both are anonymous mappings, which the conservative
- * scan of the loaded objects' data segments never reads, and their pages
- * are only resident where objects are: the bits cost 1/64 of the heap.
- * A chunk is one segment and a segment has one owning thread, so the bits
- * are written without atomics; the entries are installed with a
- * compare-exchange. */
-#define _PyGC_MAP_CHUNK_SHIFT 25
-#define _PyGC_MAP_CHUNKS ((size_t)1 << (48 - _PyGC_MAP_CHUNK_SHIFT))
-#define _PyGC_MAP_CHUNK_WORDS \
-    (((size_t)1 << _PyGC_MAP_CHUNK_SHIFT) / sizeof(void *) / 64)
-
-extern uint64_t **_PyGC_object_map;
-extern uint64_t *_PyGC_ObjectMapChunk(uintptr_t addr);
-
-static inline uint64_t *
-_PyGC_ObjectMapWord(uintptr_t addr, uint64_t *chunk)
-{
-    return &chunk[(addr >> 9) & (_PyGC_MAP_CHUNK_WORDS - 1)];
-}
-
-static inline uint64_t
-_PyGC_ObjectMapBit(uintptr_t addr)
-{
-    return (uint64_t)1 << ((addr >> 3) & 63);
-}
-
-static inline uint64_t *
-_PyGC_ObjectMapChunkOf(uintptr_t addr)
-{
-    uint64_t **map = (uint64_t **)_Py_atomic_load_ptr_relaxed(&_PyGC_object_map);
-    return map != NULL
-        ? (uint64_t *)_Py_atomic_load_ptr_relaxed(&map[addr >> _PyGC_MAP_CHUNK_SHIFT])
-        : NULL;
-}
-
-/* Does the block at op hold an initialized object? */
+/* Does the block at op hold an initialized object?  _Py_NewReference()
+ * writes the header word; freeing the block clears it.  The reference count
+ * half is a constant under Py_GC, which makes a stray match in a block of
+ * raw data unlikely. */
 static inline int
-_PyGC_IsHeapObject(const PyObject *op)
+_PyGC_IsObjectHeader(const PyObject *op)
 {
-    uintptr_t addr = (uintptr_t)op;
-    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
-    return chunk != NULL
-        && (*_PyGC_ObjectMapWord(addr, chunk) & _PyGC_ObjectMapBit(addr)) != 0;
+    uint64_t w = (uint64_t)op->ob_refcnt_full;
+    uint32_t refcnt = (uint32_t)w;
+    return ((w >> 32) & 0xffff) == _Py_GC_OBJECT_MAGIC
+        && ((w >> 48) & _Py_GC_HEAP_FLAG) != 0
+        && (refcnt == _Py_GC_REFCNT || refcnt == _Py_IMMORTAL_INITIAL_REFCNT);
 }
 
-static inline void
-_PyGC_ObjectMapSet(PyObject *op)
-{
-    uintptr_t addr = (uintptr_t)op;
-    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
-    if (chunk == NULL) {
-        chunk = _PyGC_ObjectMapChunk(addr);
-    }
-    *_PyGC_ObjectMapWord(addr, chunk) |= _PyGC_ObjectMapBit(addr);
-}
-
-static inline void
-_PyGC_ObjectMapClear(PyObject *op)
-{
-    uintptr_t addr = (uintptr_t)op;
-    uint64_t *chunk = _PyGC_ObjectMapChunkOf(addr);
-    if (chunk != NULL) {
-        *_PyGC_ObjectMapWord(addr, chunk) &= ~_PyGC_ObjectMapBit(addr);
-    }
-}
-
-/* Potential work for a dead object at classification, so later passes skip
- * unrelated objects without reading them.  Resurrection is rechecked. */
-#define _PyGC_DEAD_WEAKREFS  (1 << 0)  /* a weakref registry or static type list */
-#define _PyGC_DEAD_FINALIZE  (1 << 1)  /* an unfinalized, non-noop tp_finalize */
+/* What the collection does with a dead object, from its type, so that its
+ * passes over the dead objects skip most without reading them. */
+#define _PyGC_DEAD_WEAKREFS  (1 << 0)  /* the type supports weak references */
+#define _PyGC_DEAD_FINALIZE  (1 << 1)  /* tp_finalize */
 #define _PyGC_DEAD_DEL       (1 << 2)  /* a legacy tp_del */
 #define _PyGC_DEAD_FIRST     (1 << 3)  /* its dealloc reads its referents:
                                           swept first */
@@ -262,52 +166,15 @@ _PyGC_ObjectMapClear(PyObject *op)
                                           destructor, or release a buffer to
                                           Python code: the collector does
                                           that before the sweep */
-#define _PyGC_DEAD_KILLED    (1 << 7)  /* PYTHON_GCVERIFY=kill killed it: its
-                                          frees are quarantined */
-#define _PyGC_DEAD_BUFFER    (1 << 8)  /* exact memoryview or managed buffer:
-                                          may need retention while exported */
 
-/* An unreachable object found by the mark: its address, the size of its
- * block, and its _PyGC_DEAD_* kinds.  The object starts its block. */
+/* An unreachable object found by the mark: its address, the size and
+ * pre-header size of its block, and its _PyGC_DEAD_* kinds. */
 typedef struct {
     PyObject *op;
     uint32_t block_size;
+    uint16_t presize;
     uint16_t kinds;
 } _PyGCDeadObject;
-
-/* The root phase's counters (note 11 section 9).  The conservative scans
- * count the words they read by class, and the words of them that hit an
- * object; the stack scan counts the eval-loop words it excludes.  Each time
- * is in nanoseconds and includes the marking that its roots cause.  The
- * walk's counters (frames, descriptor cache, fallbacks) are zero until the
- * walk exists, so that every build reports one schema.  unpinned counts the
- * other threads visited with an unpinned detach record, whose stacks are
- * scanned conservatively (note 11 question 16).  Under PYTHON_GCVERIFY=retain
- * or kill, verify_q counts the objects that only the roots outside A reach
- * and verify_candidates the objects that such a collection listed and a
- * later one reached from A (work/10a-1.md item 7). */
-#define _PyGC_SCAN_STACK    0  /* C stacks */
-#define _PyGC_SCAN_REGS     1  /* captured register arrays */
-#define _PyGC_SCAN_MEM      2  /* PyMem blocks the scans lead to */
-#define _PyGC_SCAN_SHALLOW  3  /* blocks of objects marked without traversal */
-#define _PyGC_SCAN_DATA     4  /* writable data segments */
-#define _PyGC_SCAN_STRUCTS  5  /* thread and interpreter structs, data stacks */
-#define _PyGC_SCAN_CLASSES  6
-#define _PyGC_SCAN_CLASS_NAMES \
-    {"stack", "regs", "mem", "shallow", "data", "structs"}
-
-#define _PyGC_ROOT_STATS_FIELDS(X) \
-    X(collections) X(threads) X(frames_walked) X(cache_hits) X(cache_misses) X(cache_flushes) \
-    X(fallbacks) X(unpinned) X(verify_q) X(verify_candidates) X(precise_ns) \
-    X(stack_ns) X(data_ns) X(structs_ns) X(roots_ns)
-
-typedef struct _PyGCRootStats {
-#define _PyGC_ROOT_STATS_FIELD(name) int64_t name;
-    _PyGC_ROOT_STATS_FIELDS(_PyGC_ROOT_STATS_FIELD)
-#undef _PyGC_ROOT_STATS_FIELD
-    int64_t words[_PyGC_SCAN_CLASSES];
-    int64_t hits[_PyGC_SCAN_CLASSES];
-} _PyGCRootStats;
 
 typedef struct {
     _PyGCDeadObject *dead;    // from malloc(); the caller frees it
@@ -317,96 +184,23 @@ typedef struct {
     Py_ssize_t live_bytes;    // the blocks of the reachable objects
     Py_ssize_t nmarked;
     Py_ssize_t nshallow;
-    _PyGCRootStats roots;     // this collection's root phase
-    /* Step 7a: the domain the mark covered, with its mimalloc
-       sub-processes, pinned (GCState.queue_pins) until the collection
-       has routed its calls (note 13 section 3.2). */
-    int ndomain;
-    PyInterpreterState *domain[64];
-    void *subproc[64];
 } _PyGCMarkResult;
 
 /* Mark everything reachable from the roots of the interpreters that share
  * tstate's object heaps, then walk the heaps: a marked object is unmarked,
  * an unmarked one gets _Py_GC_DEAD_FLAG and is listed.  Returns -1, with
  * nothing listed or flagged, if the collector's own memory ran out. */
-extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res,
-                             int young);
+extern int _PyGC_TraceLiveMark(PyThreadState *tstate, _PyGCMarkResult *res);
 
-/* Step 7a: the interpreter of res's domain whose heap holds op's block,
- * or NULL if op is in none of them (a static object). */
-extern PyInterpreterState *_PyGC_LiveOwner(const _PyGCMarkResult *res,
-                                           PyObject *op);
-
-/* The interpreter's descriptor cache for the stack walk (Python/gc_walk.c),
- * or NULL if the collector's state cannot be allocated. */
-extern struct _PyGCWalkCache *_PyGC_LiveWalkCache(PyInterpreterState *interp);
-
-#ifdef Py_DEBUG
-/* The verifier's kill mode: while it is set, the frees of that thread state
- * (PyObject_Free(), PyMem_Free() and the free in a moving realloc) put the
- * block in quarantine (_PyGC_Quarantine()) instead of freeing it.  The sweep
- * sets it around the dealloc and the free of each object that kill killed.
- * It is per thread: interpreters with their own GIL sweep at once. */
-extern _Py_thread_local PyThreadState *_PyGC_quarantine_tstate;
-/* Quarantine the mimalloc block at ptr: fill it with PYMEM_DEADBYTE, poison
- * it under ASan, and free it 16 collections later. */
-extern void _PyGC_Quarantine(void *ptr);
-#endif
-
-/* For the test of the verifier's retain mode: create [None], hold it only in
- * a PyMem block that this core frame points to, call callable, and return
- * the list if give_back is set, else None. */
-PyAPI_FUNC(PyObject *) _PyGC_TestHoldInCoreMem(PyObject *callable,
-                                               int give_back);
-
-/* Deterministic post-B carrier attribution fixture; no real marks change. */
-PyAPI_FUNC(PyObject *) _PyGC_TestCarrierOrigins(int shape, int reverse);
-
-/* For the borrowing tests (10a-2.md section 4): borrow list[0], or with
- * _PyGC_BORROW_WEAK the target of the weak reference container; call
- * callback, which drops every other reference to it; collect; and return
- * the borrowed object's type name.  The function is precise and holds the
- * borrow in its span; with _PyGC_BORROW_BARE a frame registered precise
- * holds it with no span, which kill catches at the use. */
-#define _PyGC_BORROW_WEAK 1
-#define _PyGC_BORROW_BARE 2
-PyAPI_FUNC(PyObject *) _PyGC_TestBorrowAcross(PyObject *container,
-                                              PyObject *callback, int kind);
+/* Record the caller's callee-saved registers and stack pointer as the place
+ * the collection was entered: the mark scans the calling thread's stack from
+ * there up, not from its own frame, below which lie stale words.  Call it
+ * first; reset gc_trace.entry_sp to the value it had before when done. */
+extern void _PyGC_TraceCaptureEntry(void);
 
 /* The classes of roots (_PyGC_TRACE_ROOT_*) that each alone reach the object
  * at addr, or -1.  For debugging; export for _testinternalcapi. */
 PyAPI_FUNC(int) _PyGC_TraceLiveRootsOf(PyThreadState *tstate, uintptr_t addr);
-/* The same for the object at *hidden ^ mask, read after each mark, so that
- * the caller's stack need not hold its address. */
-PyAPI_FUNC(int) _PyGC_TraceLiveRootsOfHidden(
-    PyThreadState *tstate, const volatile uintptr_t *hidden, uintptr_t mask);
-
-/* PYTHON_GCSTACKHITS=1 (work/10a-1.md, next to retain mode): which frame
- * holds an object.  Each live mark lists every object that it reaches first
- * from a conservatively scanned C stack or register word, the word's
- * object first and then what the mark reaches through it, with the word
- * and the frame that the stack walk gives the word to.  What a word reaches
- * through a PyMem block it points to is scanned later and not listed. */
-typedef struct {
-    uintptr_t op;           // the object
-    uintptr_t word;         // the root word's address, or 0 for a register
-    uintptr_t value;        // the word: op, or the object op was reached from
-    uintptr_t pc, sp, cfa;  // the word's frame, by the walk; pc 0 if none
-    int scan_class;         // _PyGC_SCAN_STACK or _PyGC_SCAN_REGS
-    int64_t collection;     // the live mark's number, from 1
-    char type_name[48];     // op's type when it was listed
-} _PyGCStackHit;
-
-/* The hits listed since the last clear, and the number dropped for want
- * of memory; NULL and 0 unless PYTHON_GCSTACKHITS is set.  Export for
- * _testinternalcapi. */
-PyAPI_FUNC(const _PyGCStackHit *) _PyGC_TraceStackHits(
-    PyInterpreterState *interp, size_t *n, int64_t *dropped);
-PyAPI_FUNC(void) _PyGC_TraceClearStackHits(PyInterpreterState *interp);
-/* "image+offset (function+offset)" for pc, through dladdr(), the function
- * where the image exports it.  Export for _testinternalcapi. */
-PyAPI_FUNC(void) _PyGC_TraceOwnerOf(uintptr_t pc, char *buf, size_t size);
 
 /* For tests of the segment map that the live mark looks objects up in: the
  * object found at addr (or containing it, if interior is set), or 0; four
@@ -435,15 +229,9 @@ extern int _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit,
  * unless a collection cannot run here; the allocation follows. */
 extern void _PyGC_LiveOnThreshold(PyThreadState *tstate);
 
-/* Collect now, from C code that may hold objects only in C locals, leaving
- * the finalizers and weak reference callbacks to the eval breaker: 1 if a
- * collection ran, 0 if one cannot run here.  An allocation that failed
- * calls this before it gives up. */
-extern int _PyGC_LiveCollectHere(PyThreadState *tstate);
-
 #ifdef Py_DEBUG
-/* A dealloc that the sweep called did what a dealloc must not do in
-   the sweep: allocate an object, which may refer to the dead, or run Python
+/* A dealloc that the sweep called did what a dealloc must not do under
+   Py_GC: allocate an object, which may refer to the dead, or run Python
    code, which may reach them.  what says which; this aborts. */
 extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
                                                   const char *what);
@@ -459,12 +247,11 @@ extern void _Py_NO_RETURN _PyGC_LiveSweepViolation(PyThreadState *tstate,
 
 /* Clear a local whose address was taken, such as PyDict_Next()'s
  * out-parameters: it stays in its frame after its last use, where the
- * conservative scan of the stack would keep its object alive.  The local is
- * a PyObject * or a PyValue, and zero bits are NULL for both.  The barrier
+ * conservative scan of the stack would keep its object alive.  The barrier
  * keeps the store, which is dead to the compiler. */
 #  define _PyGC_CLEAR_LOCAL(var) \
     do { \
-        memset(&(var), 0, sizeof(var)); \
+        (var) = NULL; \
         __asm__ volatile("" : : "r"(&(var)) : "memory"); \
     } while (0)
 
@@ -478,23 +265,40 @@ extern void _PyGC_LiveAddImmortal(PyObject *op);
 extern void _PyGC_LiveKeepThreads(PyThreadState *list);
 extern PyThreadState *_PyGC_LiveKeptThreads(PyInterpreterState *interp);
 
+/* Zero the C stack below the caller's frame, where the collector's entry
+ * frames go next.  Their padding would otherwise keep the stale words that
+ * earlier calls left there, which the scan takes for roots. */
+extern void _PyGC_LiveClearStack(void);
+
 /* Free the block of a dead object that the sweep has deallocated
  * (PyObject_Free() without looking the block up). */
 extern void _PyGC_FreeDeadBlock(PyObject *op, void *block);
 
-/* The root phase's counters, summed over the collections of interp, and
- * those of its last collection.  Export for _testinternalcapi. */
-PyAPI_FUNC(void) _PyGC_LiveGetRootStats(PyInterpreterState *interp,
-                                        _PyGCRootStats *total,
-                                        _PyGCRootStats *last);
+/* The same for the eval loop's frame, which has padding too, and spill
+ * slots that a call writes only on some paths. */
+extern void _PyGC_LiveClearEvalStack(void);
 
 /* Totals for gc.get_stats(): the bytes the sweeps freed, the bytes the last
  * collection found live, and the longest pause in seconds. */
 extern void _PyGC_LiveGetStats(PyInterpreterState *interp,
                                Py_ssize_t *bytes_freed, Py_ssize_t *live_bytes,
                                double *pause_max);
+#endif
 
+#ifndef Py_GC
+#  define _PyGC_CLEAR_LOCAL(var) ((void)0)
+#endif
 
+/* Record the calling thread's callee-saved registers and stack pointer in
+ * its thread state, before it releases the GIL, so that a collection in
+ * another thread can scan them.  It must be called before the caller
+ * changes any callee-saved register, so call it first. */
+#if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
+PyAPI_FUNC(void) _PyGC_TraceCaptureThread(void);
+#  define _PyGC_TRACE_CAPTURE_THREAD() _PyGC_TraceCaptureThread()
+#else
+#  define _PyGC_TRACE_CAPTURE_THREAD() ((void)0)
+#endif
 
 #ifdef __cplusplus
 }

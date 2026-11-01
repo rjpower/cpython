@@ -4,83 +4,63 @@
 #include "frameobject.h"          // PyFrame_New()
 
 
-static PyValue
-frame_getlocals(PyObject *self, PyValue frame_value)
+static PyObject *
+frame_getlocals(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(frame_value);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyFrame_GetLocals((PyFrameObject *)frame));
+    return PyFrame_GetLocals((PyFrameObject *)frame);
 }
 
 
-static PyValue
-frame_getglobals(PyObject *self, PyValue frame_value)
+static PyObject *
+frame_getglobals(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(frame_value);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyFrame_GetGlobals((PyFrameObject *)frame));
+    return PyFrame_GetGlobals((PyFrameObject *)frame);
 }
 
 
-static PyValue
-frame_getgenerator(PyObject *self, PyValue frame_value)
+static PyObject *
+frame_getgenerator(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(frame_value);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyFrame_GetGenerator((PyFrameObject *)frame));
+    return PyFrame_GetGenerator((PyFrameObject *)frame);
 }
 
 
-static PyValue
-frame_getbuiltins(PyObject *self, PyValue frame_value)
+static PyObject *
+frame_getbuiltins(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(frame_value);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyFrame_GetBuiltins((PyFrameObject *)frame));
+    return PyFrame_GetBuiltins((PyFrameObject *)frame);
 }
 
 
-static PyValue
-frame_getlasti(PyObject *self, PyValue frame_value)
+static PyObject *
+frame_getlasti(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(frame_value);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
     int lasti = PyFrame_GetLasti((PyFrameObject *)frame);
     if (lasti < 0) {
         assert(lasti == -1);
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromResult(PyLong_FromLong(lasti));
+    return PyLong_FromLong(lasti);
 }
 
 
@@ -135,11 +115,11 @@ frame_getvarstring(PyObject *self, PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"frame_getlocals", _PyCFunction_CAST(frame_getlocals), METH_O, NULL},
-    {"frame_getglobals", _PyCFunction_CAST(frame_getglobals), METH_O, NULL},
-    {"frame_getgenerator", _PyCFunction_CAST(frame_getgenerator), METH_O, NULL},
-    {"frame_getbuiltins", _PyCFunction_CAST(frame_getbuiltins), METH_O, NULL},
-    {"frame_getlasti", _PyCFunction_CAST(frame_getlasti), METH_O, NULL},
+    {"frame_getlocals", frame_getlocals, METH_O, NULL},
+    {"frame_getglobals", frame_getglobals, METH_O, NULL},
+    {"frame_getgenerator", frame_getgenerator, METH_O, NULL},
+    {"frame_getbuiltins", frame_getbuiltins, METH_O, NULL},
+    {"frame_getlasti", frame_getlasti, METH_O, NULL},
     {"frame_new", frame_new, METH_VARARGS, NULL},
     {"frame_getvar", frame_getvar, METH_VARARGS, NULL},
     {"frame_getvarstring", frame_getvarstring, METH_VARARGS, NULL},

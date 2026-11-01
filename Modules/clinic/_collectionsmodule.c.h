@@ -3,11 +3,12 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(deque_pop__doc__,
 "pop($self, /)\n"
@@ -64,28 +65,20 @@ PyDoc_STRVAR(deque_append__doc__,
 "Add an element to the right side of the deque.");
 
 #define DEQUE_APPEND_METHODDEF    \
-    {"append", _PyCFunction_CAST(deque_append), METH_O, deque_append__doc__},
+    {"append", (PyCFunction)deque_append, METH_O, deque_append__doc__},
 
 static PyObject *
 deque_append_impl(dequeobject *deque, PyObject *item);
 
-static PyValue
-deque_append(PyObject *deque, PyValue arg)
+static PyObject *
+deque_append(PyObject *deque, PyObject *item)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *item;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    item = PyValue_Object(arg);
-    if (item == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_append_impl((dequeobject *)deque, item);
+    return_value = deque_append_impl((dequeobject *)deque, item);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -96,28 +89,20 @@ PyDoc_STRVAR(deque_appendleft__doc__,
 "Add an element to the left side of the deque.");
 
 #define DEQUE_APPENDLEFT_METHODDEF    \
-    {"appendleft", _PyCFunction_CAST(deque_appendleft), METH_O, deque_appendleft__doc__},
+    {"appendleft", (PyCFunction)deque_appendleft, METH_O, deque_appendleft__doc__},
 
 static PyObject *
 deque_appendleft_impl(dequeobject *deque, PyObject *item);
 
-static PyValue
-deque_appendleft(PyObject *deque, PyValue arg)
+static PyObject *
+deque_appendleft(PyObject *deque, PyObject *item)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *item;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    item = PyValue_Object(arg);
-    if (item == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_appendleft_impl((dequeobject *)deque, item);
+    return_value = deque_appendleft_impl((dequeobject *)deque, item);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -128,28 +113,20 @@ PyDoc_STRVAR(deque_extend__doc__,
 "Extend the right side of the deque with elements from the iterable.");
 
 #define DEQUE_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(deque_extend), METH_O, deque_extend__doc__},
+    {"extend", (PyCFunction)deque_extend, METH_O, deque_extend__doc__},
 
 static PyObject *
 deque_extend_impl(dequeobject *deque, PyObject *iterable);
 
-static PyValue
-deque_extend(PyObject *deque, PyValue arg)
+static PyObject *
+deque_extend(PyObject *deque, PyObject *iterable)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *iterable;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    iterable = PyValue_Object(arg);
-    if (iterable == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_extend_impl((dequeobject *)deque, iterable);
+    return_value = deque_extend_impl((dequeobject *)deque, iterable);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -160,28 +137,20 @@ PyDoc_STRVAR(deque_extendleft__doc__,
 "Extend the left side of the deque with elements from the iterable.");
 
 #define DEQUE_EXTENDLEFT_METHODDEF    \
-    {"extendleft", _PyCFunction_CAST(deque_extendleft), METH_O, deque_extendleft__doc__},
+    {"extendleft", (PyCFunction)deque_extendleft, METH_O, deque_extendleft__doc__},
 
 static PyObject *
 deque_extendleft_impl(dequeobject *deque, PyObject *iterable);
 
-static PyValue
-deque_extendleft(PyObject *deque, PyValue arg)
+static PyObject *
+deque_extendleft(PyObject *deque, PyObject *iterable)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *iterable;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    iterable = PyValue_Object(arg);
-    if (iterable == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_extendleft_impl((dequeobject *)deque, iterable);
+    return_value = deque_extendleft_impl((dequeobject *)deque, iterable);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -299,12 +268,11 @@ PyDoc_STRVAR(deque_rotate__doc__,
 static PyObject *
 deque_rotate_impl(dequeobject *deque, Py_ssize_t n);
 
-static PyValue
-deque_rotate(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+deque_rotate(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t n = 1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("rotate", nargs, 0, 1)) {
         goto exit;
@@ -314,9 +282,10 @@ deque_rotate(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[0]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[0]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -325,9 +294,8 @@ deque_rotate(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_rotate_impl((dequeobject *)deque, n);
+    return_value = deque_rotate_impl((dequeobject *)deque, n);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -364,23 +332,19 @@ PyDoc_STRVAR(deque_count__doc__,
 "Return number of occurrences of value.");
 
 #define DEQUE_COUNT_METHODDEF    \
-    {"count", _PyCFunction_CAST(deque_count), METH_O, deque_count__doc__},
+    {"count", (PyCFunction)deque_count, METH_O, deque_count__doc__},
 
 static PyObject *
-deque_count_impl(dequeobject *deque, PyValue v);
+deque_count_impl(dequeobject *deque, PyObject *v);
 
-static PyValue
-deque_count(PyObject *deque, PyValue arg)
+static PyObject *
+deque_count(PyObject *deque, PyObject *v)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue v;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    v = arg;
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_count_impl((dequeobject *)deque, v);
+    return_value = deque_count_impl((dequeobject *)deque, v);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -412,17 +376,16 @@ PyDoc_STRVAR(deque_index__doc__,
     {"index", _PyCFunction_CAST(deque_index), METH_FASTCALL, deque_index__doc__},
 
 static PyObject *
-deque_index_impl(dequeobject *deque, PyValue v, Py_ssize_t start,
+deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
                  Py_ssize_t stop);
 
-static PyValue
-deque_index(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+deque_index(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue v;
+    PyObject *return_value = NULL;
+    PyObject *v;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
@@ -431,32 +394,19 @@ deque_index(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyEval_SliceIndexNotNone(_arg, &start)) {
-            goto exit;
-        }
+    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyEval_SliceIndexNotNone(_arg, &stop)) {
-            goto exit;
-        }
+    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
+        goto exit;
     }
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_index_impl((dequeobject *)deque, v, start, stop);
+    return_value = deque_index_impl((dequeobject *)deque, v, start, stop);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -474,36 +424,32 @@ PyDoc_STRVAR(deque_insert__doc__,
 static PyObject *
 deque_insert_impl(dequeobject *deque, Py_ssize_t index, PyObject *value);
 
-static PyValue
-deque_insert(PyObject *deque, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+deque_insert(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t index;
     PyObject *value;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[0]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[0]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    value = PyValue_Object(args[1]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[1];
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_insert_impl((dequeobject *)deque, index, value);
+    return_value = deque_insert_impl((dequeobject *)deque, index, value);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -531,23 +477,19 @@ PyDoc_STRVAR(deque_remove__doc__,
 "Remove first occurrence of value.");
 
 #define DEQUE_REMOVE_METHODDEF    \
-    {"remove", _PyCFunction_CAST(deque_remove), METH_O, deque_remove__doc__},
+    {"remove", (PyCFunction)deque_remove, METH_O, deque_remove__doc__},
 
 static PyObject *
-deque_remove_impl(dequeobject *deque, PyValue value);
+deque_remove_impl(dequeobject *deque, PyObject *value);
 
-static PyValue
-deque_remove(PyObject *deque, PyValue arg)
+static PyObject *
+deque_remove(PyObject *deque, PyObject *value)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue value;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    value = arg;
     Py_BEGIN_CRITICAL_SECTION(deque);
-    _return_value = deque_remove_impl((dequeobject *)deque, value);
+    return_value = deque_remove_impl((dequeobject *)deque, value);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -602,6 +544,7 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -624,14 +567,14 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *iterable = NULL;
     PyObject *maxlenobj = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -639,19 +582,13 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        iterable = PyValue_Object(fastargs[0]);
-        if (iterable == NULL) {
-            goto exit;
-        }
+    if (fastargs[0]) {
+        iterable = fastargs[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    maxlenobj = PyValue_Object(fastargs[1]);
-    if (maxlenobj == NULL) {
-        goto exit;
-    }
+    maxlenobj = fastargs[1];
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(deque);
     return_value = deque_init_impl((dequeobject *)deque, iterable, maxlenobj);
@@ -716,27 +653,19 @@ static PyObject *
 _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                                   PyObject *iterable);
 
-static PyValue
-_collections__count_elements(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_collections__count_elements(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *mapping;
     PyObject *iterable;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_count_elements", nargs, 2, 2)) {
         goto exit;
     }
-    mapping = PyValue_Object(args[0]);
-    if (mapping == NULL) {
-        goto exit;
-    }
-    iterable = PyValue_Object(args[1]);
-    if (iterable == NULL) {
-        goto exit;
-    }
-    _return_value = _collections__count_elements_impl(module, mapping, iterable);
-    return_value = PyValue_FromResult(_return_value);
+    mapping = args[0];
+    iterable = args[1];
+    return_value = _collections__count_elements_impl(module, mapping, iterable);
 
 exit:
     return return_value;
@@ -762,22 +691,20 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(PyTuple_GET_VALUE(args, 0));
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(PyTuple_GET_ITEM(args, 0));
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    doc = PyValue_Object(PyTuple_GET_VALUE(args, 1));
-    if (doc == NULL) {
-        goto exit;
-    }
+    doc = PyTuple_GET_ITEM(args, 1);
     return_value = tuplegetter_new_impl(type, index, doc);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=395022204106241d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=de400069cf6f11a4 input=a9049054013a1b77]*/

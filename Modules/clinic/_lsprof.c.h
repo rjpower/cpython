@@ -3,11 +3,11 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 PyDoc_STRVAR(_lsprof_Profiler_getstats__doc__,
 "getstats($self, /)\n"
@@ -43,20 +43,18 @@ PyDoc_STRVAR(_lsprof_Profiler_getstats__doc__,
 static PyObject *
 _lsprof_Profiler_getstats_impl(ProfilerObject *self, PyTypeObject *cls);
 
-static PyValue
-_lsprof_Profiler_getstats(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_lsprof_Profiler_getstats(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "getstats() takes no arguments");
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler_getstats_impl((ProfilerObject *)self, cls);
+    return_value = _lsprof_Profiler_getstats_impl((ProfilerObject *)self, cls);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -74,29 +72,21 @@ static PyObject *
 _lsprof_Profiler__pystart_callback_impl(ProfilerObject *self, PyObject *code,
                                         PyObject *instruction_offset);
 
-static PyValue
-_lsprof_Profiler__pystart_callback(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_lsprof_Profiler__pystart_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *code;
     PyObject *instruction_offset;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_pystart_callback", nargs, 2, 2)) {
         goto exit;
     }
-    code = PyValue_Object(args[0]);
-    if (code == NULL) {
-        goto exit;
-    }
-    instruction_offset = PyValue_Object(args[1]);
-    if (instruction_offset == NULL) {
-        goto exit;
-    }
+    code = args[0];
+    instruction_offset = args[1];
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler__pystart_callback_impl((ProfilerObject *)self, code, instruction_offset);
+    return_value = _lsprof_Profiler__pystart_callback_impl((ProfilerObject *)self, code, instruction_offset);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -115,34 +105,23 @@ _lsprof_Profiler__pythrow_callback_impl(ProfilerObject *self, PyObject *code,
                                         PyObject *instruction_offset,
                                         PyObject *exception);
 
-static PyValue
-_lsprof_Profiler__pythrow_callback(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_lsprof_Profiler__pythrow_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *code;
     PyObject *instruction_offset;
     PyObject *exception;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_pythrow_callback", nargs, 3, 3)) {
         goto exit;
     }
-    code = PyValue_Object(args[0]);
-    if (code == NULL) {
-        goto exit;
-    }
-    instruction_offset = PyValue_Object(args[1]);
-    if (instruction_offset == NULL) {
-        goto exit;
-    }
-    exception = PyValue_Object(args[2]);
-    if (exception == NULL) {
-        goto exit;
-    }
+    code = args[0];
+    instruction_offset = args[1];
+    exception = args[2];
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler__pythrow_callback_impl((ProfilerObject *)self, code, instruction_offset, exception);
+    return_value = _lsprof_Profiler__pythrow_callback_impl((ProfilerObject *)self, code, instruction_offset, exception);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -162,34 +141,23 @@ _lsprof_Profiler__pyreturn_callback_impl(ProfilerObject *self,
                                          PyObject *instruction_offset,
                                          PyObject *retval);
 
-static PyValue
-_lsprof_Profiler__pyreturn_callback(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_lsprof_Profiler__pyreturn_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *code;
     PyObject *instruction_offset;
     PyObject *retval;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_pyreturn_callback", nargs, 3, 3)) {
         goto exit;
     }
-    code = PyValue_Object(args[0]);
-    if (code == NULL) {
-        goto exit;
-    }
-    instruction_offset = PyValue_Object(args[1]);
-    if (instruction_offset == NULL) {
-        goto exit;
-    }
-    retval = PyValue_Object(args[2]);
-    if (retval == NULL) {
-        goto exit;
-    }
+    code = args[0];
+    instruction_offset = args[1];
+    retval = args[2];
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler__pyreturn_callback_impl((ProfilerObject *)self, code, instruction_offset, retval);
+    return_value = _lsprof_Profiler__pyreturn_callback_impl((ProfilerObject *)self, code, instruction_offset, retval);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -208,39 +176,25 @@ _lsprof_Profiler__ccall_callback_impl(ProfilerObject *self, PyObject *code,
                                       PyObject *instruction_offset,
                                       PyObject *callable, PyObject *self_arg);
 
-static PyValue
-_lsprof_Profiler__ccall_callback(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_lsprof_Profiler__ccall_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *code;
     PyObject *instruction_offset;
     PyObject *callable;
     PyObject *self_arg;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_ccall_callback", nargs, 4, 4)) {
         goto exit;
     }
-    code = PyValue_Object(args[0]);
-    if (code == NULL) {
-        goto exit;
-    }
-    instruction_offset = PyValue_Object(args[1]);
-    if (instruction_offset == NULL) {
-        goto exit;
-    }
-    callable = PyValue_Object(args[2]);
-    if (callable == NULL) {
-        goto exit;
-    }
-    self_arg = PyValue_Object(args[3]);
-    if (self_arg == NULL) {
-        goto exit;
-    }
+    code = args[0];
+    instruction_offset = args[1];
+    callable = args[2];
+    self_arg = args[3];
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler__ccall_callback_impl((ProfilerObject *)self, code, instruction_offset, callable, self_arg);
+    return_value = _lsprof_Profiler__ccall_callback_impl((ProfilerObject *)self, code, instruction_offset, callable, self_arg);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -261,39 +215,25 @@ _lsprof_Profiler__creturn_callback_impl(ProfilerObject *self, PyObject *code,
                                         PyObject *callable,
                                         PyObject *self_arg);
 
-static PyValue
-_lsprof_Profiler__creturn_callback(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_lsprof_Profiler__creturn_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *code;
     PyObject *instruction_offset;
     PyObject *callable;
     PyObject *self_arg;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("_creturn_callback", nargs, 4, 4)) {
         goto exit;
     }
-    code = PyValue_Object(args[0]);
-    if (code == NULL) {
-        goto exit;
-    }
-    instruction_offset = PyValue_Object(args[1]);
-    if (instruction_offset == NULL) {
-        goto exit;
-    }
-    callable = PyValue_Object(args[2]);
-    if (callable == NULL) {
-        goto exit;
-    }
-    self_arg = PyValue_Object(args[3]);
-    if (self_arg == NULL) {
-        goto exit;
-    }
+    code = args[0];
+    instruction_offset = args[1];
+    callable = args[2];
+    self_arg = args[3];
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler__creturn_callback_impl((ProfilerObject *)self, code, instruction_offset, callable, self_arg);
+    return_value = _lsprof_Profiler__creturn_callback_impl((ProfilerObject *)self, code, instruction_offset, callable, self_arg);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -319,14 +259,15 @@ static PyObject *
 _lsprof_Profiler_enable_impl(ProfilerObject *self, int subcalls,
                              int builtins);
 
-static PyValue
-_lsprof_Profiler_enable(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_lsprof_Profiler_enable(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -349,11 +290,10 @@ _lsprof_Profiler_enable(PyObject *self, const PyValue *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int subcalls = 1;
     int builtins = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -363,8 +303,8 @@ _lsprof_Profiler_enable(PyObject *self, const PyValue *args, Py_ssize_t nargs, P
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        subcalls = PyObject_IsTrueValue(args[0]);
+    if (args[0]) {
+        subcalls = PyObject_IsTrue(args[0]);
         if (subcalls < 0) {
             goto exit;
         }
@@ -372,15 +312,14 @@ _lsprof_Profiler_enable(PyObject *self, const PyValue *args, Py_ssize_t nargs, P
             goto skip_optional_pos;
         }
     }
-    builtins = PyObject_IsTrueValue(args[1]);
+    builtins = PyObject_IsTrue(args[1]);
     if (builtins < 0) {
         goto exit;
     }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _lsprof_Profiler_enable_impl((ProfilerObject *)self, subcalls, builtins);
+    return_value = _lsprof_Profiler_enable_impl((ProfilerObject *)self, subcalls, builtins);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -457,6 +396,7 @@ profiler_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -479,8 +419,8 @@ profiler_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
-    const PyValue *fastargs;
+    PyObject *argsbuf[4];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *timer = NULL;
@@ -488,7 +428,7 @@ profiler_init(PyObject *self, PyObject *args, PyObject *kwargs)
     int subcalls = 1;
     int builtins = 1;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -496,26 +436,29 @@ profiler_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        timer = PyValue_Object(fastargs[0]);
-        if (timer == NULL) {
-            goto exit;
+    if (fastargs[0]) {
+        timer = fastargs[0];
+        if (!--noptargs) {
+            goto skip_optional_pos;
+        }
+    }
+    if (fastargs[1]) {
+        if (PyFloat_CheckExact(fastargs[1])) {
+            timeunit = PyFloat_AS_DOUBLE(fastargs[1]);
+        }
+        else
+        {
+            timeunit = PyFloat_AsDouble(fastargs[1]);
+            if (timeunit == -1.0 && PyErr_Occurred()) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        timeunit = PyFloat_AsDoubleValue(fastargs[1]);
-        if (timeunit == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (!PyValue_IsNull(fastargs[2])) {
-        subcalls = PyObject_IsTrueValue(fastargs[2]);
+    if (fastargs[2]) {
+        subcalls = PyObject_IsTrue(fastargs[2]);
         if (subcalls < 0) {
             goto exit;
         }
@@ -523,7 +466,7 @@ profiler_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    builtins = PyObject_IsTrueValue(fastargs[3]);
+    builtins = PyObject_IsTrue(fastargs[3]);
     if (builtins < 0) {
         goto exit;
     }
@@ -533,4 +476,4 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=4f4d1f94082c650b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=af26a0b0ddcc3351 input=a9049054013a1b77]*/

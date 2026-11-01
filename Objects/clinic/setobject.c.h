@@ -55,21 +55,19 @@ PyDoc_STRVAR(set_update__doc__,
     {"update", _PyCFunction_CAST(set_update), METH_FASTCALL, set_update__doc__},
 
 static PyObject *
-set_update_impl(PySetObject *so, const PyValue *others,
+set_update_impl(PySetObject *so, PyObject * const *others,
                 Py_ssize_t others_length);
 
-static PyValue
-set_update(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_update(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_update_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_update_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -156,21 +154,19 @@ PyDoc_STRVAR(set_union__doc__,
     {"union", _PyCFunction_CAST(set_union), METH_FASTCALL, set_union__doc__},
 
 static PyObject *
-set_union_impl(PySetObject *so, const PyValue *others,
+set_union_impl(PySetObject *so, PyObject * const *others,
                Py_ssize_t others_length);
 
-static PyValue
-set_union(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_union(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_union_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_union_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -185,21 +181,19 @@ PyDoc_STRVAR(set_intersection_multi__doc__,
     {"intersection", _PyCFunction_CAST(set_intersection_multi), METH_FASTCALL, set_intersection_multi__doc__},
 
 static PyObject *
-set_intersection_multi_impl(PySetObject *so, const PyValue *others,
+set_intersection_multi_impl(PySetObject *so, PyObject * const *others,
                             Py_ssize_t others_length);
 
-static PyValue
-set_intersection_multi(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_intersection_multi(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_intersection_multi_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_intersection_multi_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -214,21 +208,19 @@ PyDoc_STRVAR(set_intersection_update_multi__doc__,
     {"intersection_update", _PyCFunction_CAST(set_intersection_update_multi), METH_FASTCALL, set_intersection_update_multi__doc__},
 
 static PyObject *
-set_intersection_update_multi_impl(PySetObject *so, const PyValue *others,
+set_intersection_update_multi_impl(PySetObject *so, PyObject * const *others,
                                    Py_ssize_t others_length);
 
-static PyValue
-set_intersection_update_multi(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_intersection_update_multi(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_intersection_update_multi_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_intersection_update_multi_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -240,28 +232,20 @@ PyDoc_STRVAR(set_isdisjoint__doc__,
 "Return True if two sets have a null intersection.");
 
 #define SET_ISDISJOINT_METHODDEF    \
-    {"isdisjoint", _PyCFunction_CAST(set_isdisjoint), METH_O, set_isdisjoint__doc__},
+    {"isdisjoint", (PyCFunction)set_isdisjoint, METH_O, set_isdisjoint__doc__},
 
 static PyObject *
 set_isdisjoint_impl(PySetObject *so, PyObject *other);
 
-static PyValue
-set_isdisjoint(PyObject *so, PyValue arg)
+static PyObject *
+set_isdisjoint(PyObject *so, PyObject *other)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *other;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    other = PyValue_Object(arg);
-    if (other == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION2(so, other);
-    _return_value = set_isdisjoint_impl((PySetObject *)so, other);
+    return_value = set_isdisjoint_impl((PySetObject *)so, other);
     Py_END_CRITICAL_SECTION2();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -275,21 +259,19 @@ PyDoc_STRVAR(set_difference_update__doc__,
     {"difference_update", _PyCFunction_CAST(set_difference_update), METH_FASTCALL, set_difference_update__doc__},
 
 static PyObject *
-set_difference_update_impl(PySetObject *so, const PyValue *others,
+set_difference_update_impl(PySetObject *so, PyObject * const *others,
                            Py_ssize_t others_length);
 
-static PyValue
-set_difference_update(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_difference_update(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_difference_update_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_difference_update_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -304,21 +286,19 @@ PyDoc_STRVAR(set_difference_multi__doc__,
     {"difference", _PyCFunction_CAST(set_difference_multi), METH_FASTCALL, set_difference_multi__doc__},
 
 static PyObject *
-set_difference_multi_impl(PySetObject *so, const PyValue *others,
+set_difference_multi_impl(PySetObject *so, PyObject * const *others,
                           Py_ssize_t others_length);
 
-static PyValue
-set_difference_multi(PyObject *so, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+set_difference_multi(PyObject *so, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *others;
+    PyObject *return_value = NULL;
+    PyObject * const *others;
     Py_ssize_t others_length;
-    PyObject *_return_value;
 
     others = args;
     others_length = nargs;
-    _return_value = set_difference_multi_impl((PySetObject *)so, others, others_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_difference_multi_impl((PySetObject *)so, others, others_length);
 
     return return_value;
 }
@@ -330,26 +310,18 @@ PyDoc_STRVAR(set_symmetric_difference_update__doc__,
 "Update the set, keeping only elements found in either set, but not in both.");
 
 #define SET_SYMMETRIC_DIFFERENCE_UPDATE_METHODDEF    \
-    {"symmetric_difference_update", _PyCFunction_CAST(set_symmetric_difference_update), METH_O, set_symmetric_difference_update__doc__},
+    {"symmetric_difference_update", (PyCFunction)set_symmetric_difference_update, METH_O, set_symmetric_difference_update__doc__},
 
 static PyObject *
 set_symmetric_difference_update_impl(PySetObject *so, PyObject *other);
 
-static PyValue
-set_symmetric_difference_update(PyObject *so, PyValue arg)
+static PyObject *
+set_symmetric_difference_update(PyObject *so, PyObject *other)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *other;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    other = PyValue_Object(arg);
-    if (other == NULL) {
-        goto exit;
-    }
-    _return_value = set_symmetric_difference_update_impl((PySetObject *)so, other);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set_symmetric_difference_update_impl((PySetObject *)so, other);
 
-exit:
     return return_value;
 }
 
@@ -360,28 +332,20 @@ PyDoc_STRVAR(set_symmetric_difference__doc__,
 "Return a new set with elements in either the set or other but not both.");
 
 #define SET_SYMMETRIC_DIFFERENCE_METHODDEF    \
-    {"symmetric_difference", _PyCFunction_CAST(set_symmetric_difference), METH_O, set_symmetric_difference__doc__},
+    {"symmetric_difference", (PyCFunction)set_symmetric_difference, METH_O, set_symmetric_difference__doc__},
 
 static PyObject *
 set_symmetric_difference_impl(PySetObject *so, PyObject *other);
 
-static PyValue
-set_symmetric_difference(PyObject *so, PyValue arg)
+static PyObject *
+set_symmetric_difference(PyObject *so, PyObject *other)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *other;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    other = PyValue_Object(arg);
-    if (other == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION2(so, other);
-    _return_value = set_symmetric_difference_impl((PySetObject *)so, other);
+    return_value = set_symmetric_difference_impl((PySetObject *)so, other);
     Py_END_CRITICAL_SECTION2();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -392,28 +356,20 @@ PyDoc_STRVAR(set_issubset__doc__,
 "Report whether another set contains this set.");
 
 #define SET_ISSUBSET_METHODDEF    \
-    {"issubset", _PyCFunction_CAST(set_issubset), METH_O, set_issubset__doc__},
+    {"issubset", (PyCFunction)set_issubset, METH_O, set_issubset__doc__},
 
 static PyObject *
 set_issubset_impl(PySetObject *so, PyObject *other);
 
-static PyValue
-set_issubset(PyObject *so, PyValue arg)
+static PyObject *
+set_issubset(PyObject *so, PyObject *other)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *other;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    other = PyValue_Object(arg);
-    if (other == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION2(so, other);
-    _return_value = set_issubset_impl((PySetObject *)so, other);
+    return_value = set_issubset_impl((PySetObject *)so, other);
     Py_END_CRITICAL_SECTION2();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -424,28 +380,20 @@ PyDoc_STRVAR(set_issuperset__doc__,
 "Report whether this set contains another set.");
 
 #define SET_ISSUPERSET_METHODDEF    \
-    {"issuperset", _PyCFunction_CAST(set_issuperset), METH_O, set_issuperset__doc__},
+    {"issuperset", (PyCFunction)set_issuperset, METH_O, set_issuperset__doc__},
 
 static PyObject *
 set_issuperset_impl(PySetObject *so, PyObject *other);
 
-static PyValue
-set_issuperset(PyObject *so, PyValue arg)
+static PyObject *
+set_issuperset(PyObject *so, PyObject *other)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *other;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    other = PyValue_Object(arg);
-    if (other == NULL) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION2(so, other);
-    _return_value = set_issuperset_impl((PySetObject *)so, other);
+    return_value = set_issuperset_impl((PySetObject *)so, other);
     Py_END_CRITICAL_SECTION2();
-    return_value = PyValue_FromResult(_return_value);
 
-exit:
     return return_value;
 }
 
@@ -458,23 +406,19 @@ PyDoc_STRVAR(set_add__doc__,
 "This has no effect if the element is already present.");
 
 #define SET_ADD_METHODDEF    \
-    {"add", _PyCFunction_CAST(set_add), METH_O, set_add__doc__},
+    {"add", (PyCFunction)set_add, METH_O, set_add__doc__},
 
 static PyObject *
-set_add_impl(PySetObject *so, PyValue key);
+set_add_impl(PySetObject *so, PyObject *key);
 
-static PyValue
-set_add(PyObject *so, PyValue arg)
+static PyObject *
+set_add(PyObject *so, PyObject *key)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue key;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
-    _return_value = set_add_impl((PySetObject *)so, key);
+    return_value = set_add_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -486,21 +430,17 @@ PyDoc_STRVAR(set___contains____doc__,
 "x.__contains__(y) <==> y in x.");
 
 #define SET___CONTAINS___METHODDEF    \
-    {"__contains__", _PyCFunction_CAST(set___contains__), METH_O|METH_COEXIST, set___contains____doc__},
+    {"__contains__", (PyCFunction)set___contains__, METH_O|METH_COEXIST, set___contains____doc__},
 
 static PyObject *
-set___contains___impl(PySetObject *so, PyValue key);
+set___contains___impl(PySetObject *so, PyObject *key);
 
-static PyValue
-set___contains__(PyObject *so, PyValue arg)
+static PyObject *
+set___contains__(PyObject *so, PyObject *key)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue key;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    key = arg;
-    _return_value = set___contains___impl((PySetObject *)so, key);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = set___contains___impl((PySetObject *)so, key);
 
     return return_value;
 }
@@ -512,21 +452,17 @@ PyDoc_STRVAR(frozenset___contains____doc__,
 "x.__contains__(y) <==> y in x.");
 
 #define FROZENSET___CONTAINS___METHODDEF    \
-    {"__contains__", _PyCFunction_CAST(frozenset___contains__), METH_O|METH_COEXIST, frozenset___contains____doc__},
+    {"__contains__", (PyCFunction)frozenset___contains__, METH_O|METH_COEXIST, frozenset___contains____doc__},
 
 static PyObject *
-frozenset___contains___impl(PySetObject *so, PyValue key);
+frozenset___contains___impl(PySetObject *so, PyObject *key);
 
-static PyValue
-frozenset___contains__(PyObject *so, PyValue arg)
+static PyObject *
+frozenset___contains__(PyObject *so, PyObject *key)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue key;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    key = arg;
-    _return_value = frozenset___contains___impl((PySetObject *)so, key);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = frozenset___contains___impl((PySetObject *)so, key);
 
     return return_value;
 }
@@ -540,23 +476,19 @@ PyDoc_STRVAR(set_remove__doc__,
 "If the element is not a member, raise a KeyError.");
 
 #define SET_REMOVE_METHODDEF    \
-    {"remove", _PyCFunction_CAST(set_remove), METH_O, set_remove__doc__},
+    {"remove", (PyCFunction)set_remove, METH_O, set_remove__doc__},
 
 static PyObject *
-set_remove_impl(PySetObject *so, PyValue key);
+set_remove_impl(PySetObject *so, PyObject *key);
 
-static PyValue
-set_remove(PyObject *so, PyValue arg)
+static PyObject *
+set_remove(PyObject *so, PyObject *key)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue key;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
-    _return_value = set_remove_impl((PySetObject *)so, key);
+    return_value = set_remove_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -571,23 +503,19 @@ PyDoc_STRVAR(set_discard__doc__,
 "an exception when an element is missing from the set.");
 
 #define SET_DISCARD_METHODDEF    \
-    {"discard", _PyCFunction_CAST(set_discard), METH_O, set_discard__doc__},
+    {"discard", (PyCFunction)set_discard, METH_O, set_discard__doc__},
 
 static PyObject *
-set_discard_impl(PySetObject *so, PyValue key);
+set_discard_impl(PySetObject *so, PyObject *key);
 
-static PyValue
-set_discard(PyObject *so, PyValue arg)
+static PyObject *
+set_discard(PyObject *so, PyObject *key)
 {
-    PyValue return_value = PyValue_NULL;
-    PyValue key;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    key = arg;
     Py_BEGIN_CRITICAL_SECTION(so);
-    _return_value = set_discard_impl((PySetObject *)so, key);
+    return_value = set_discard_impl((PySetObject *)so, key);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -639,4 +567,4 @@ set___sizeof__(PyObject *so, PyObject *Py_UNUSED(ignored))
 
     return return_value;
 }
-/*[clinic end generated code: output=5feba840be2c9ad2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5d794137d2614aaf input=a9049054013a1b77]*/

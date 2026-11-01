@@ -1,4 +1,3 @@
-import gc
 import pickle
 import threading
 from textwrap import dedent
@@ -16,10 +15,6 @@ from .utils import _run_output, TestBase as _TestBase
 
 HUGE_TIMEOUT = 3600
 REPLACE = _crossinterp._UNBOUND_CONSTANT_TO_FLAG[_crossinterp.UNBOUND]
-
-
-class HeapQueueID(int):
-    """Keep a queue ID boxed across the C call's allocation-failure window."""
 
 
 def get_num_queues():
@@ -44,7 +39,6 @@ class LowLevelTests(TestBase):
     # encountered by the high-level module, thus they
     # mostly shouldn't matter as much.
 
-    @support.requires_subinterpreters
     def test_highlevel_reloaded(self):
         # See gh-115490 (https://github.com/python/cpython/issues/115490).
         interp = interpreters.create()
@@ -134,7 +128,6 @@ class QueueTests(TestBase):
             with self.assertRaises(TypeError):
                 queues.create('1')
 
-    @support.requires_subinterpreters
     def test_shareable(self):
         queue1 = queues.create()
 
@@ -314,98 +307,6 @@ class TestQueueOps(TestBase):
 
         self.assertEqual(actual, expected)
 
-    def test_memoryview_metadata_and_independent_release(self):
-        queue = queues.create()
-        for readonly in (False, True):
-            for first in ('sent', 'received'):
-                with self.subTest(readonly=readonly, first=first):
-                    backing = bytearray(range(12))
-                    with memoryview(backing) as base, base[1::2] as sliced:
-                        sent = sliced.toreadonly() if readonly else sliced[:]
-                        with sent:
-                            queue.put(sent)
-                            with queue.get() as received:
-                                self.assertIsNot(received, sent)
-                                self.assertIs(received.obj, backing)
-                                for attr in ('format', 'shape', 'strides',
-                                             'itemsize', 'ndim', 'nbytes',
-                                             'readonly'):
-                                    self.assertEqual(getattr(received, attr),
-                                                     getattr(sent, attr))
-                                if first == 'sent':
-                                    sent.release()
-                                    backing[3] = 42
-                                    self.assertEqual(received[1], 42)
-                                else:
-                                    received.release()
-                                    backing[3] = 42
-                                    self.assertEqual(sent[1], 42)
-                    backing.extend(b'x')
-
-    @support.nomemtest
-    def test_memoryview_receive_failure_disposes_acquisition(self):
-        import _testcapi
-        queue = queues.create()
-        # Exact int IDs may be stored inline and need a box in the C wrapper.
-        # The plain int subtype stays boxed and its converter allocates nothing.
-        qid = HeapQueueID(queue.id)
-        with self.assertRaises(queues.QueueEmpty):
-            _queues.get(qid)
-        backing = bytearray(b'abc')
-        with memoryview(backing) as sent:
-            queue.put(sent)
-            # Queue lookup/pop allocates nothing. Fail construction of the
-            # receiving view; XID disposal must still release the sent export.
-            with support.disable_gc(), self.assertRaises(MemoryError):
-                _testcapi.call_with_nomemory(0, 1, _queues.get, qid)
-            sent.release()
-        self.assertTrue(queue.empty())
-        backing.extend(b'd')
-
-    def test_memoryview_resurrection_preserves_acquisition(self):
-        queue = queues.create()
-        saved, released = [], []
-
-        class Exporter:
-            def __init__(self):
-                self.data = bytearray(b'queue payload')
-            def __buffer__(self, flags):
-                return memoryview(self.data)
-            def __release_buffer__(self, view):
-                released.append(view.tobytes())
-
-        class Holder:
-            def __del__(self):
-                saved.append(self.view)
-
-        def make_cycle():
-            with memoryview(Exporter()) as sent:
-                queue.put(sent)
-                holder = Holder()
-                holder.view = queue.get()
-                holder.cycle = holder
-
-        with support.disable_gc():
-            make_cycle()
-            support.gc_collect()
-            self.assertEqual(len(saved), 1)
-            self.assertEqual(released, [])
-            self.assertEqual(saved[0].tobytes(), b'queue payload')
-            gc.collect()
-            self.assertEqual(released, [])
-            saved.pop().release()
-            support.gc_collect()
-            self.assertEqual(released, [b'queue payload'])
-
-    def test_memoryview_discard_releases_acquisition(self):
-        queue = queues.create()
-        backing = bytearray(b'abc')
-        with memoryview(backing) as sent:
-            queue.put(sent)
-            _queues.destroy(queue.id)
-            sent.release()
-        backing.extend(b'd')
-
     def test_put_timeout(self):
         queue = queues.create(2)
         queue.put(None)
@@ -500,7 +401,6 @@ class TestQueueOps(TestBase):
                 self.assertEqual(obj, obj2)
                 self.assertIsNot(obj, obj2)
 
-    @support.requires_subinterpreters
     def test_put_get_same_interpreter(self):
         interp = interpreters.create()
         interp.exec(dedent("""
@@ -517,7 +417,6 @@ class TestQueueOps(TestBase):
                     assert obj is not orig, 'expected: obj is not orig'
                     """))
 
-    @support.requires_subinterpreters
     def test_put_get_different_interpreters(self):
         interp = interpreters.create()
         queue1 = queues.create()
@@ -556,7 +455,6 @@ class TestQueueOps(TestBase):
                 self.assertEqual(obj2, b'eggs')
                 self.assertNotEqual(id(obj2), int(out))
 
-    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter(self):
         def common(queue, unbound=None, presize=0):
             if not unbound:
@@ -651,7 +549,6 @@ class TestQueueOps(TestBase):
             with self.assertRaises(queues.QueueEmpty):
                 queue.get_nowait()
 
-    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter_mixed(self):
         queue = queues.create()
         interp = interpreters.create()
@@ -686,7 +583,6 @@ class TestQueueOps(TestBase):
         self.assertIs(obj3, queues.UNBOUND)
         self.assertEqual(queue.qsize(), 0)
 
-    @support.requires_subinterpreters
     def test_put_cleared_with_subinterpreter_multiple(self):
         queue = queues.create()
         interp1 = interpreters.create()

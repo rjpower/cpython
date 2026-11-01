@@ -8,11 +8,13 @@ import struct
 import sys
 import traceback
 import unittest
-from test.support import import_helper, script_helper
+from test.support import import_helper, requires_refcounting, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
+roundtrip = getattr(_testinternalcapi, "stackref_box_roundtrip", None)
 inline_locals = getattr(_testinternalcapi, "inline_locals", None)
+# Absent from builds without inline values, false under PYTHON_TAGGED_VALUES=0.
+TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)
 THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
 
 
@@ -86,6 +88,7 @@ def distinct(value):
     return type(value)(str(value))
 
 
+@unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
 class IdentityTest(unittest.TestCase):
     """An int that fits in int32 and a float other than NaN have value
     identity, whether held inline or boxed, in any number of boxes."""
@@ -224,6 +227,7 @@ def bits_float(bits):
     return struct.unpack("<d", struct.pack("<Q", bits))[0]
 
 
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineIntTest(unittest.TestCase):
 
     @classmethod
@@ -243,6 +247,23 @@ class InlineIntTest(unittest.TestCase):
                      "BINARY_OP_MULTIPLY_INT", "FOR_ITER_RANGE"):
             self.assertIn(name, names)
         self.assertIn("BINARY_OP_ADD_INT", opnames(add3))
+
+    def test_boxing_leaves_the_local_inline(self):
+        # x + k reads x through its field (Python/regcfg_passes.c folds the load)
+        # and boxes it for the generic add.  The box is the handler's, as
+        # the box of the borrowed temporary was: x keeps its inline value.
+        class Keep:
+            def __radd__(self, other):
+                seen.append(inline_locals(sys._getframe(1)))
+                return 0
+        def f(k):
+            x = 2000
+            x + k
+            return x
+        seen = []
+        for _ in range(THRESHOLD + 2):
+            self.assertEqual(f(Keep()), 2000)
+        self.assertEqual(seen, [{"x"}] * (THRESHOLD + 2))
 
     def test_overflow(self):
         def add(a, b):
@@ -324,6 +345,13 @@ class InlineIntTest(unittest.TestCase):
                 self.assertEqual(hash(x), hash(distinct(value)))
                 d[x] = value
                 self.assertEqual(d[distinct(value)], value)
+
+    @requires_refcounting
+    def test_getrefcount(self):
+        def f():
+            x = 70000
+            return sys.getrefcount(x)
+        self.assertGreater(warm(f), 0)
 
     def test_frame_locals(self):
         def f():
@@ -439,6 +467,7 @@ def reference(op, a, b):
               int(str(b)) if type(b) is int else float(repr(b)))
 
 
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineFloatTest(unittest.TestCase):
 
     @classmethod
@@ -461,32 +490,6 @@ class InlineFloatTest(unittest.TestCase):
             self.assertIn(name, names)
         self.assertNotIn("BINARY_OP_EXTEND", names)
         self.assertEqual(f(3), (1.125, True))
-
-    def test_power(self):
-        # ** has no specialisation: the generic handler's value protocol
-        # computes float ** float without a box.
-        def g(x, y):
-            p = x ** y
-            frame = sys._getframe()
-            return inline_locals(frame)
-        self.assertIn("p", warm(g, 2.0, -1.5))
-        def f(x, y):
-            return x ** y
-        warm(f, 2.0, -1.5)
-        for x, y in [(2.0, -1.5), (2.0, 3), (3, 0.5), (1.0, 1e308),
-                     (0.5, 2000.0), (1e-300, 0.5), (2.5, 0.0)]:
-            with self.subTest(x=x, y=y):
-                self.assertEqual(f(x, y), operator.pow(x, y))
-                self.assertIs(type(f(x, y)), float)
-        # The cases that are not pow() exit to BINARY_OP.
-        self.assertEqual(f(-8.0, 1/3), operator.pow(-8.0, 1/3))
-        self.assertIs(type(f(-8.0, 1/3)), complex)
-        self.assertEqual(f(-2.0, 2.0), 4.0)
-        self.assertRaises(ZeroDivisionError, f, 0.0, -1.0)
-        self.assertRaises(OverflowError, f, 10.0, 400.0)
-        self.assertTrue(math.isnan(f(float("nan"), 2.0)))
-        self.assertEqual(f(math.inf, 2.0), math.inf)
-        self.assertEqual(f(2.0, -math.inf), 0.0)
 
     def test_results_are_inline(self):
         def f(a, b, i):
@@ -678,6 +681,7 @@ class InlineFloatTest(unittest.TestCase):
         self.assertEqual(warm(lambda: f"{x}"), "1.5")
 
 
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineIntOpsTest(unittest.TestCase):
 
     @classmethod
@@ -767,6 +771,7 @@ class Sliceable:
         self.stored = key, value
 
 
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineSliceTest(unittest.TestCase):
 
     @classmethod
@@ -838,6 +843,7 @@ class InlineSliceTest(unittest.TestCase):
             store((1, 2, 3), make_inline(1), make_inline(2), [5])
 
 
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
 class InlineCallTest(unittest.TestCase):
 
     @classmethod
@@ -875,255 +881,37 @@ class InlineCallTest(unittest.TestCase):
         self.assertTrue(f(make_inline(1), (int, 5)))
 
 
-class ContainerCanonicalTest(unittest.TestCase):
-    """A tuple or a list holds an int that fits in int32 or a float other
-    than NaN as its value: a box stored through the C API is not kept, and
-    every read gives a value identical to what was stored."""
 
-    def setUp(self):
-        self.capi = import_helper.import_module("_testcapi")
-        self.limited = import_helper.import_module("_testlimitedcapi")
+@unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
+class SwitchTest(unittest.TestCase):
 
-    VALUES = (70000, -2**31, 2**31 - 1, 1.5, -0.0, math.inf, 5e-324)
-
-    def check_read(self, value, read):
-        self.assertIs(read, value)
-        self.assertEqual(id(read), id(value))
-        self.assertIs(type(read), type(value))
-
-    def test_list_set_item(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                box = distinct(value)
-                lst = [None, None]
-                self.limited.list_setitem(lst, 0, box)
-                self.capi.list_set_item(lst, 1, distinct(value))
-                self.check_read(value, lst[0])
-                self.check_read(lst[0], lst[1])
-                self.check_read(value, self.limited.list_getitem(lst, 0))
-                self.check_read(value, self.capi.list_get_item(lst, 1))
-                self.assertEqual(lst.index(value), 0)
-                self.assertEqual(lst.count(box), 2)
-                self.assertIn(value, lst)
-
-    def test_tuple_set_item(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                t = self.limited.tuple_pack(2, distinct(value), distinct(value))
-                self.check_read(value, t[0])
-                self.check_read(t[0], t[1])
-                self.check_read(value, self.limited.tuple_getitem(t, 1))
-                self.check_read(value, self.capi.tuple_get_item(t, 0))
-                self.assertEqual(hash(t), hash((value, value)))
-                self.assertEqual(t, (value, value))
-
-    def test_containers_from_c(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                src = [distinct(value), distinct(value)]
-                for got in (tuple(src), list(src), self.limited.list_astuple(src),
-                            src[:], src * 2, sorted(src)):
-                    for item in got:
-                        self.check_read(value, item)
-
-    def test_cell(self):
-        import types
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                cell = types.CellType(distinct(value))
-                self.check_read(value, cell.cell_contents)
-                cell.cell_contents = distinct(value)
-                self.check_read(value, cell.cell_contents)
-                self.assertEqual(cell, types.CellType(value))
-                self.assertEqual(gc.get_referents(cell), [])
-
-                def outer(x):
-                    def inner():
-                        return x
-                    return inner
-                f = outer(distinct(value))
-                self.check_read(value, f())
-                self.check_read(value, f.__closure__[0].cell_contents)
-        self.assertLess(types.CellType(), types.CellType(0))
-        self.assertEqual(types.CellType(), types.CellType())
-
-    def test_dict(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                d = {}
-                self.limited.dict_setitem(d, distinct(value), distinct(value))
-                self.check_read(value, d[value])
-                self.check_read(value, self.limited.dict_getitem(d, value))
-                rc, pos, key, item = self.limited.dict_next(d, 0)
-                self.check_read(value, key)
-                self.check_read(value, item)
-                self.check_read(value, next(iter(d)))
-                self.check_read(value, next(reversed(d)))
-                for pair in (next(iter(d.items())), next(reversed(d.items()))):
-                    self.check_read(value, pair[0])
-                    self.check_read(value, pair[1])
-                self.check_read(value, list(d.values())[0])
-                self.check_read(value, d.get(distinct(value)))
-                self.check_read(value, d.setdefault(distinct(value), None))
-                self.assertEqual(d, {value: value})
-                self.assertEqual(gc.get_referents(d), [])
-                key, item = d.copy().popitem()
-                self.check_read(value, key)
-                self.check_read(value, item)
-                self.check_read(value, d.pop(value))
-                self.assertEqual(d, {})
-
-    def test_dict_mixed_keys(self):
-        # 1, 1.0 and True are one key; the first key stored is kept.
-        d = {1: 'a'}
-        d[1.0] = 'b'
-        d[True] = 'c'
-        self.assertEqual(d, {1: 'c'})
-        self.assertIs(type(next(iter(d))), int)
-        keys = [70000, 2.5, 2**40, 'x', -0.0, (1, 2.5)]
-        d = dict.fromkeys(keys, 1.5)
-        for key in keys:
-            self.assertIn(key, d)
-            self.check_read(1.5, d[key])
-        self.assertIn(0, d)  # -0.0 == 0
-        self.assertEqual(list(d), keys)
-
-    def test_instance_attributes(self):
-        class C:
-            pass
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                c = C()
-                c.a = distinct(value)
-                setattr(c, 'b', distinct(value))
-                for _ in range(3):  # specialised and unspecialised reads
-                    self.check_read(value, c.a)
-                    self.check_read(value, getattr(c, 'b'))
-                self.assertEqual(gc.get_referents(c), [C])
-                d = c.__dict__
-                self.check_read(value, d['a'])
-                c.a = distinct(value)
-                self.check_read(value, d['a'])
-                d['b'] = distinct(value)
-                self.check_read(value, c.b)
-                del c.a
-                self.assertEqual(d, {'b': value})
-
-    def test_slots(self):
-        class C:
-            __slots__ = ('a', 'b')
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                c = C()
-                c.a = distinct(value)
-                setattr(c, 'b', distinct(value))
-                for _ in range(3):  # specialised and unspecialised reads
-                    self.check_read(value, c.a)
-                    self.check_read(value, getattr(c, 'b'))
-                    self.check_read(value, C.a.__get__(c))
-                self.assertEqual(gc.get_referents(c), [C])
-                del c.a
-                with self.assertRaises(AttributeError):
-                    c.a
-                with self.assertRaises(AttributeError):
-                    del c.a
-                self.assertFalse(hasattr(c, 'a'))
-                C.b.__set__(c, distinct(value))
-                self.check_read(value, c.b)
-
-    def test_set(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                for s in ({distinct(value), 'a'},
-                          frozenset([distinct(value), 'a']),
-                          set([distinct(value), 'a'])):
-                    (item,) = [x for x in s if x != 'a']
-                    self.check_read(value, item)
-                    self.assertIn(distinct(value), s)
-                    self.assertEqual(gc.get_referents(s), ['a'])
-                s = {distinct(value)}
-                s.add(distinct(value))
-                self.assertEqual(len(s), 1)
-                self.check_read(value, s.pop())
-                s = set()
-                self.limited.set_add(s, distinct(value))
-                self.check_read(value, next(iter(s)))
-                self.assertEqual(self.limited.set_contains(s, distinct(value)), 1)
-                self.check_read(value, next(iter(s | {'b'} - {'b'})))
-
-    def test_set_mixed_int_float(self):
-        s = {1, 2.0, -0.0}
-        self.assertIn(1.0, s)
-        self.assertIn(2, s)
-        self.assertIn(0, s)
-        self.assertEqual(len(s | {1.0, 2, 0}), 3)
-        self.assertEqual(dict.fromkeys(s).keys(), s)
-
-    def test_globals(self):
-        for value in self.VALUES:
-            with self.subTest(value=value):
-                ns = {'v': distinct(value)}
-                exec("def f():\n    return v\n", ns)
-                for _ in range(3):
-                    self.check_read(value, ns['f']())
-                ns['v'] = distinct(value)
-                self.check_read(value, ns['f']())
-
-    def test_outside_int32_is_an_object(self):
-        x = distinct(2**40)
-        lst = [None]
-        self.limited.list_setitem(lst, 0, x)
-        self.assertIs(lst[0], x)
-        self.assertIsNot(lst[0], distinct(2**40))
-        self.assertEqual(gc.get_referents(lst), [x])
-
-    def test_inline_items_are_not_referents(self):
-        self.assertEqual(gc.get_referents([1, 2.5, -3]), [])
-        self.assertEqual(gc.get_referents((70000, 1e10)), [])
-
-    def test_sort_mixed(self):
-        values = [3, 2.5, -1, 2**40, 0.0, -2**31, 1e300, 7]
-        self.assertEqual(sorted(values), sorted(values, key=float))
-        self.assertEqual(sorted(values, reverse=True),
-                         sorted(values, key=float, reverse=True))
-        pairs = [(v, i) for i, v in enumerate(values)]
-        self.assertEqual([v for v, _ in sorted(pairs)], sorted(values))
-
-
-class BoxFailureTest(unittest.TestCase):
-    """A box that cannot be made at first is made again after a collection;
-    an accessor that cannot report an error aborts if that fails too."""
-
-    CODE = (
-        "import _testcapi\n"
-        "t = (int('70000'),)\n"
-        "_testcapi.set_nomemory({start}, {stop})\n"
-        "x = _testcapi.tuple_get_item(t, 0)\n"
-        "_testcapi.remove_mem_hooks()\n"
-        "print(x)\n")
-
-    def setUp(self):
-        import_helper.import_module("_testcapi")
-
-    def run_failing(self, start, stop):
-        code = self.CODE.format(start=start, stop=stop)
-        return script_helper.run_python_until_end("-c", code)[0]
-
-    def test_accessor_aborts_and_one_failure_is_recovered(self):
-        # Find the allocation that is PyTuple_GET_ITEM()'s box: from it on,
-        # every allocation fails, and the accessor aborts naming itself.
-        for start in range(30):
-            res = self.run_failing(start, 0)
-            if b"PyTuple_GET_ITEM: out of memory" in res.err:
-                break
-        else:
-            self.fail("PyTuple_GET_ITEM() never aborted")
-        self.assertNotEqual(res.rc, 0)
-        # When that allocation alone fails, the box made after the
-        # collection succeeds.
-        res = self.run_failing(start, start + 1)
-        self.assertEqual(res.rc, 0, res.err)
-        self.assertEqual(res.out.strip(), b"70000")
+    def test_tagged_values_off(self):
+        code = """if 1:
+            import dis, sys, _testinternalcapi
+            assert not _testinternalcapi.TAGGED_VALUES
+            def f(n):
+                total = 0
+                for i in range(n):
+                    total += i * 3
+                return total
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                assert f(10) == 135
+            names = {i.opname for i in dis.get_instructions(f, adaptive=True)}
+            assert "LOAD_SMALL_INT" in names, names
+            assert "LOAD_SMALL_INT_INLINE" not in names, names
+            assert "FOR_ITER_RANGE" not in names, names
+            assert 70000 is int("70000")
+            def g(a, b):
+                return 1.5 * a + b, a // 2, a / b
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                assert g(2.0, 1) == (4.0, 1.0, 2.0)
+            names = {i.opname for i in dis.get_instructions(g, adaptive=True)}
+            assert "LOAD_CONST" in names, names
+            assert "LOAD_CONST_INLINE_FLOAT" not in names, names
+            assert not any(n.startswith("BINARY_OP_") for n in names), names
+            assert _testinternalcapi.inline_locals(sys._getframe()) == set()
+        """
+        script_helper.assert_python_ok("-c", code, PYTHON_TAGGED_VALUES="0")
 
 
 if __name__ == "__main__":

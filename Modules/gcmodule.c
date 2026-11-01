@@ -68,7 +68,6 @@ gc_isenabled_impl(PyObject *module)
 }
 
 /*[clinic input]
-@gc_precise
 gc.collect -> Py_ssize_t
 
     generation: int(c_default="NUM_GENERATIONS - 1") = 2
@@ -82,9 +81,9 @@ is raised if the generation number is invalid.
 The number of unreachable objects is returned.
 [clinic start generated code]*/
 
-Py_GC_PRECISE static Py_ssize_t
+static Py_ssize_t
 gc_collect_impl(PyObject *module, int generation)
-/*[clinic end generated code: output=19c10754ec95e0b6 input=5522594227122a88]*/
+/*[clinic end generated code: output=b697e633043233c7 input=40720128b682d879]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
@@ -93,6 +92,12 @@ gc_collect_impl(PyObject *module, int generation)
         return -1;
     }
 
+#ifdef Py_GC
+    // The call that just returned, often the one that dropped the garbage
+    // that this collection is meant to free, left words where the frame of
+    // _PyGC_Collect() goes next.
+    _PyGC_LiveClearStack();
+#endif
     return _PyGC_Collect(tstate, generation, _Py_GC_REASON_MANUAL);
 }
 
@@ -161,6 +166,7 @@ gc_set_threshold_impl(PyObject *module, int threshold0, int group_right_1,
 {
     GCState *gcstate = get_gc_state();
 
+#if defined(Py_GC)
     /* The tracing collector collects when the bytes allocated since the last
        collection pass max(threshold0, the bytes live after it).  The other
        thresholds are kept but unused. */
@@ -173,6 +179,26 @@ gc_set_threshold_impl(PyObject *module, int threshold0, int group_right_1,
     if (group_right_2) {
         gcstate->generations[2].threshold = threshold2;
     }
+#elif !defined(Py_GIL_DISABLED)
+    gcstate->generations[0].threshold = threshold0;
+    if (group_right_1) {
+        gcstate->generations[1].threshold = threshold1;
+    }
+    if (group_right_2) {
+        gcstate->generations[2].threshold = threshold2;
+    }
+#else
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    _PyEval_StopTheWorld(interp);
+    gcstate->young.threshold = threshold0;
+    if (group_right_1) {
+        gcstate->old[0].threshold = threshold1;
+    }
+    if (group_right_2) {
+        gcstate->old[1].threshold = threshold2;
+    }
+    _PyEval_StartTheWorld(interp);
+#endif
     Py_RETURN_NONE;
 }
 
@@ -187,10 +213,22 @@ gc_get_threshold_impl(PyObject *module)
 /*[clinic end generated code: output=7902bc9f41ecbbd8 input=286d79918034d6e6]*/
 {
     GCState *gcstate = get_gc_state();
+#if defined(Py_GC)
     return Py_BuildValue("(nii)",
                          gcstate->alloc_threshold,
                          gcstate->generations[1].threshold,
                          gcstate->generations[2].threshold);
+#elif !defined(Py_GIL_DISABLED)
+    return Py_BuildValue("(iii)",
+                         gcstate->generations[0].threshold,
+                         gcstate->generations[1].threshold,
+                         gcstate->generations[2].threshold);
+#else
+    return Py_BuildValue("(iii)",
+                         gcstate->young.threshold,
+                         gcstate->old[0].threshold,
+                         gcstate->old[1].threshold);
+#endif
 }
 
 /*[clinic input]
@@ -205,13 +243,35 @@ gc_get_count_impl(PyObject *module)
 {
     GCState *gcstate = get_gc_state();
 
+#ifdef Py_GIL_DISABLED
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    struct _gc_thread_state *gc = &tstate->gc;
 
+    // Don't flush: record_allocation() checks the threshold only when it fills.
+    int young = _Py_atomic_load_int_relaxed(&gcstate->young.count);
+    young += (int)gc->alloc_count;
+    if (young < 0) {
+        young = 0;
+    }
+#endif
+
+#if defined(Py_GC)
     // The bytes allocated since the last collection
     return Py_BuildValue("(nii)", gcstate->alloc_bytes, 0, 0);
+#elif !defined(Py_GIL_DISABLED)
+    return Py_BuildValue("(iii)",
+                         gcstate->generations[0].count,
+                         gcstate->generations[1].count,
+                         gcstate->generations[2].count);
+#else
+    return Py_BuildValue("(iii)",
+                         young,
+                         gcstate->old[0].count,
+                         gcstate->old[1].count);
+#endif
 }
 
 /*[clinic input]
-@gc_precise
 gc.get_referrers
 
     *objs: tuple
@@ -219,25 +279,16 @@ gc.get_referrers
 Return the list of objects that directly refer to any of 'objs'.
 [clinic start generated code]*/
 
-Py_GC_PRECISE static PyObject *
+static PyObject *
 gc_get_referrers_impl(PyObject *module, PyObject *objs)
-/*[clinic end generated code: output=7cf1564ff8e75c27 input=d98c07b7b8dcbd85]*/
+/*[clinic end generated code: output=929d6dff26f609b9 input=9102be7ebee69ee3]*/
 {
-    /* This frame is precise, so that a stale word in it cannot keep an
-       object that the snapshot's collection should free; objs is held in
-       a span across the audit hook and the collection. */
-    PyValue slots[1];
-    _PyValueRoot span;
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, objs);
-
-    PyObject *result = NULL;
-    if (PySys_Audit("gc.get_referrers", "(O)", objs) >= 0) {
-        result = _PyGC_GetReferrers(tstate->interp, objs);
+    if (PySys_Audit("gc.get_referrers", "(O)", objs) < 0) {
+        return NULL;
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    return _PyGC_GetReferrers(interp, objs);
 }
 
 /* Append obj to list; return true if error (out of memory), false if OK. */
@@ -355,9 +406,15 @@ gc_get_stats_impl(PyObject *module)
     /* To get consistent values despite allocations while constructing
        the result list, we use a snapshot of the running stats. */
     GCState *gcstate = get_gc_state();
+#ifdef Py_GIL_DISABLED
+    PyMutex_Lock(&gcstate->stats_mutex);
+#endif
     stats[0] = gcstate->generation_stats->young.items[gcstate->generation_stats->young.index];
     stats[1] = gcstate->generation_stats->old[0].items[gcstate->generation_stats->old[0].index];
     stats[2] = gcstate->generation_stats->old[1].items[gcstate->generation_stats->old[1].index];
+#ifdef Py_GIL_DISABLED
+    PyMutex_Unlock(&gcstate->stats_mutex);
+#endif
 
     PyObject *result = PyList_New(0);
     if (result == NULL)
@@ -375,6 +432,7 @@ gc_get_stats_impl(PyObject *module)
                             );
         if (dict == NULL)
             goto error;
+#ifdef Py_GC
         // Every collection is of the whole heap, counted as generation 2.
         if (i == NUM_GENERATIONS - 1) {
             Py_ssize_t bytes_freed, live_bytes;
@@ -392,6 +450,7 @@ gc_get_stats_impl(PyObject *module)
             }
             Py_DECREF(v);
         }
+#endif
         if (PyList_Append(result, dict)) {
             Py_DECREF(dict);
             goto error;

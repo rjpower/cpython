@@ -189,97 +189,97 @@ Those include:
 
 * `DEOPT_IF(cond, instruction)`. Deoptimize if `cond` is met.
 * `ERROR_IF(cond)`. Jump to error handler if `cond` is true.
-* `DEAD(x)`. The input `x` is no longer used: the instruction is done with it.
-* `INPUTS_DEAD()`. All inputs are no longer used.
+* `DECREF_INPUTS()`. Generate `Py_DECREF()` calls for the input stack effects.
 * `SYNC_SP()`. Synchronizes the physical stack pointer with the stack effects.
 * `INSTRUCTION_SIZE`. Replaced with the size of the instruction which is equal
 to `1 + INLINE_CACHE_ENTRIES`.
 
-Nothing is reference counted, so dropping a value needs no code; `DEAD()` and
-`INPUTS_DEAD()` only tell the generator that an input is no longer used. An
-input stays in its stack slot until the handler leaves it, at a final dispatch,
-an error exit, or a `SYNC_SP()` or stack save, so the collector still finds it
-there across an escaping call made after it died. At an escaping call, a dead
-input may not lie below a live one.
+Note that the use of `DECREF_INPUTS()` is optional -- manual calls
+to `Py_DECREF()` or other approaches are also acceptable
+(e.g. calling an API that "steals" a reference).
 
 Variables can either be defined in the input, output, or in the C code.
 Variables defined in the input may not be assigned in the C code.
-If an `ERROR_IF` occurs, all values will be removed from the stack.
+If an `ERROR_IF` occurs, all values will be removed from the stack;
+they must already be `DECREF`'ed by the code block.
 If a `DEOPT_IF` occurs, no values will be removed from the stack or
-the instruction stream, and no output may have been created.
+the instruction stream; no values must have been `DECREF`'ed or created.
 
 These requirements result in the following constraints on the use of
 `DEOPT_IF` and `ERROR_IF` in any instruction's code block:
 
-1. Until the last `DEOPT_IF`, no objects may be allocated.
-2. Before the first `ERROR_IF`, all inputs must be dead, with the exception
+1. Until the last `DEOPT_IF`, no objects may be allocated, `INCREF`ed,
+   or `DECREF`ed.
+2. Before the first `ERROR_IF`, all input values must be `DECREF`ed,
+   and no objects may be allocated or `INCREF`ed, with the exception
    of attempting to create an object and checking for success using
-   `ERROR_IF(result == NULL)`.
+   `ERROR_IF(result == NULL)`. (TODO: Unclear what to do with
+   intermediate results.)
 3. No `DEOPT_IF` may follow an `ERROR_IF` in the same block.
 
 (There is some wiggle room: these rules apply to dynamic code paths,
 not to static occurrences in the source code.)
 
-If code detects an error condition before its inputs are dead, two idioms
-are valid:
+If code detects an error condition before the first `DECREF` of an input,
+two idioms are valid:
 
 - Use `goto error`.
-- Use a block ending in `INPUTS_DEAD()` and `ERROR_IF(true)`.
+- Use a block containing the appropriate `DECREF` calls ending in
+  `ERROR_IF(true)`.
 
 An example of the latter would be:
 ```cc
     res = PyObject_Add(left, right);
     if (res == NULL) {
-        INPUTS_DEAD();
+        DECREF_INPUTS();
         ERROR_IF(true);
     }
 ```
 
-### Roots
-
-The collector does not scan the eval loop's own C frame when a collection
-starts in an escaping call or at the eval breaker; it finds the handler's
-values in frame slots instead. A C local that holds an object and is used
-after an escaping call must therefore hold a value that the collector finds
-another way: a stack item, a constant of the code, an attribute of the frame,
-a static object, or a pointer into one of those. A value the call creates or
-returns, kept only in a C local, is an error at build time
-(`Tools/cases_generator/root_check.py`). Such a value belongs in an output, or
-in a `_PyValueRoot`, which the collector visits precisely.
-
 ### Inline values
 
-A stack item may hold an int or a float without a heap object (see `Include/internal/pycore_value.h`). Such an
+On 64-bit builds without free threading, a stack item may hold an int or a
+float without a heap object (see `Include/internal/pycore_stackref.h`). Such an
 inline value must be boxed before C code treats it as a `PyObject *`.
 
 The generator finds each scalar input whose name a uop passes, as the whole
-argument, to `PyValue_ObjectBorrow` outside an `assert()`. Before the uop's body it
+argument, to `PyStackRef_AsPyObjectBorrow`, `PyStackRef_AsPyObjectNew` or
+`PyStackRef_AsPyObjectSteal` outside an `assert()`. Before the uop's body it
 emits one of two checks for that input, marked unlikely:
 
 * In a guard, a uop that may deopt or exit but does not escape and only peeks
   at its inputs, it exits if the input is not a pointer. The guard then sees
   only objects, and the specialized family member never meets an inline value.
-* In any other uop, it declares a local `x_object`, sets it to a new box
-  (`_PyValue_BoxInline`) if `x` is inline and to `PyValue_ObjectBorrow(x)`
-  otherwise, and replaces the uop's `PyValue_ObjectBorrow(x)` with `x_object`.
+* In any other uop, it boxes an inline value with `x = PyStackRef_Box(x)`.
   If boxing fails, it jumps to `error` with all inputs still on the stack.
   In `Py_STATS` builds each box counts towards the instruction's `boxes`
-  statistic. The slot keeps the inline value: a box is never stored in it.
-  If the uop escapes, the generator also declares a `_PyValueRoot x_root`,
-  pushes it holding the box before each escaping statement and pops it after,
-  so that the collector keeps the box alive across the call. An escaping
-  statement that assigns to a boxed input is an error at build time.
+  statistic.
+  The box is written back to the input's stack slot when the uop peeks at the
+  input or when this or a later uop of the instruction may deopt, exit, escape
+  or fail, so that code which reads the stack sees the box. Otherwise the slot
+  is overwritten by the uop's outputs and is not written.
 
-A uop that contains `assert(PyValue_IsObject(name));` declares that the
+While the input is still in its stack slot, the check reads the slot in memory,
+which is shorter than testing the loaded value.
+
+A uop that contains `assert(PyStackRef_IsObject(name));` declares that the
 input `name` is never an inline value, and the generator emits no check for it.
 An input checked once is not checked again by later uops of the same
 instruction, until the code assigns to it. Array inputs are not checked; C
-helpers that convert PyValue arrays must box their elements. Code that
-converts a PyValue by another route, or that handles inline values itself,
+helpers that convert stackref arrays must box their elements. Code that
+converts a stackref by another route, or that handles inline values itself,
 should use the `inline_ok` annotation and box explicitly where needed. Accessors
-that read inline values, such as `PyValue_Type()` and
-`_PyValue_CompactInt()`, are not conversions, so a uop that reads an
+that read inline values, such as `PyStackRef_TYPE()` and
+`PyStackRef_CompactIntValue()`, are not conversions, so a uop that reads an
 input only through them needs no box.
+
+An input that was checked, boxed or declared an object, and a variable assigned
+from such an input or from a `PyStackRef_FromPyObject...()` constructor, is
+known to be a pointer. `PyStackRef_CLOSE`, `PyStackRef_XCLOSE`,
+`PyStackRef_CLOSE_SPECIALIZED`, `PyStackRef_DUP` and
+`PyStackRef_AsPyObjectSteal` on such a variable, and the generator's own close
+of such an input, become the `_PyStackRef_..._POINTER` variants, which test
+only the reference count tag.
 
 ### Semantics
 
@@ -305,6 +305,7 @@ Some examples:
 ```C
     inst ( LOAD_FAST, (-- value) ) {
         value = frame->f_localsplus[oparg];
+        Py_INCREF(value);
     }
 ```
 This would generate:
@@ -312,6 +313,7 @@ This would generate:
     TARGET(LOAD_FAST) {
         PyObject *value;
         value = frame->f_localsplus[oparg];
+        Py_INCREF(value);
         PUSH(value);
         DISPATCH();
     }
@@ -367,8 +369,9 @@ For explanations see "Generating the interpreter" below.
     op ( LOAD_INSTANCE_VALUE, (owner, index/1 -- null if (oparg & 1), res) ) {
         res = _PyDictOrValues_GetValues(dorv)->values[index];
         DEOPT_IF(res == NULL);
+        Py_INCREF(res);
         null = NULL;
-        DEAD(owner);
+        Py_DECREF(owner);
     }
 ```
 ```C
@@ -381,8 +384,9 @@ For explanations see "Generating the interpreter" below.
         char *addr = (char *)owner + index;
         res = *(PyObject **)addr;
         DEOPT_IF(res == NULL);
+        Py_INCREF(res);
         null = NULL;
-        DEAD(owner);
+        Py_DECREF(owner);
     }
 ```
 ```C
@@ -402,10 +406,13 @@ For explanations see "Generating the interpreter" below.
         if (hook == NULL) {
             _PyErr_SetString(tstate, PyExc_RuntimeError,
                                 "lost sys.displayhook");
+            Py_DECREF(value);
             goto error;
         }
         res = PyObject_CallOneArg(hook, value);
+        Py_DECREF(value);
         ERROR_IF(res == NULL);
+        Py_DECREF(res);
     }
 ```
 
@@ -468,7 +475,9 @@ rather than popping and pushing, such that `LOAD_ATTR_SLOT` would look something
             PyObject *null;
             PyObject *res = *(PyObject **)addr;
             if (res == NULL) goto deopt;
+            Py_INCREF(res);
             null = NULL;
+            Py_DECREF(owner);
             if (oparg & 1) {
                 stack_pointer[0] = null;
                 stack_pointer += 1;

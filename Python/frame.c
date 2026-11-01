@@ -5,26 +5,16 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
-#include "pycore_value.h"         // _Py_VISIT_VALUE()
+#include "pycore_stackref.h"      // _Py_VISIT_STACKREF()
 
-
-int
-_PyFrame_VisitHeader(_PyInterpreterFrame *frame, visitproc visit, void *arg)
-{
-    Py_VISIT(frame->frame_obj);
-    Py_VISIT(frame->f_locals);
-    _Py_VISIT_VALUE(frame->f_funcobj);
-    _Py_VISIT_VALUE(frame->f_executable);
-    return 0;
-}
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    int err = _PyFrame_VisitHeader(frame, visit, arg);
-    if (err) {
-        return err;
-    }
+    Py_VISIT(frame->frame_obj);
+    Py_VISIT(frame->f_locals);
+    _Py_VISIT_STACKREF(frame->f_funcobj);
+    _Py_VISIT_STACKREF(frame->f_executable);
     return _PyGC_VisitFrameStack(frame, visit, arg);
 }
 
@@ -49,8 +39,16 @@ _PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
     // here.
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     f->f_frame = frame;
+#ifdef Py_GIL_DISABLED
+    PyFrameObject *expected = NULL;
+    if (!_Py_atomic_compare_exchange_ptr(&frame->frame_obj, &expected, f)) {
+        Py_DECREF(f);
+        return expected;
+    }
+#else
     assert(frame->frame_obj == NULL);
     frame->frame_obj = f;
+#endif
     return f;
 }
 
@@ -62,6 +60,9 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     _PyFrame_Copy(frame, new_frame);
+    // _PyFrame_Copy moves the reference to the executable, but the caller
+    // still clears frame->f_executable, so give the source frame its own.
+    frame->f_executable = PyStackRef_DUP(new_frame->f_executable);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     if (_PyFrame_IsIncomplete(new_frame)) {
@@ -76,7 +77,6 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     if (prev) {
         assert(prev->owner < FRAME_OWNED_BY_INTERPRETER);
         PyObject *exc = PyErr_GetRaisedException();
-        _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_TAKE_OWNERSHIP);
         /* Link PyFrameObjects.f_back and remove link through _PyInterpreterFrame.previous */
         PyFrameObject *back = _PyFrame_GetFrameObject(prev);
         if (back == NULL) {
@@ -99,34 +99,36 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
 #ifdef Py_DEBUG
 // An index is valid only on the evaluation stack, never in a local.
 static bool
-is_well_formed(PyValue ref, bool in_stack)
+is_well_formed(_PyStackRef ref, bool in_stack)
 {
-    if (PyValue_IsInlineInt(ref)) {
-        return ((ref).bits >> 32) == (_PyValue_INT_BASE >> 32);
+#ifdef Py_STACKREF_INLINE_VALUES
+    if (PyStackRef_IsInlineInt(ref)) {
+        return (_PyStackRef_BITS(ref) >> 32) == (Py_INT_BASE >> 32);
     }
-    if (PyValue_IsInlineFloat(ref)) {
-        return !isnan(PyValue_Double(ref));
+    if (PyStackRef_IsInlineFloat(ref)) {
+        return !isnan(PyStackRef_InlineFloat(ref));
     }
-    if (_PyValue_IsTaggedIndex(ref)) {
+#endif
+    if (PyStackRef_IsTaggedIndex(ref)) {
         return in_stack;
     }
-    if (PyValue_IsNull(ref)) {
+    if (PyStackRef_IsNull(ref)) {
         return true;
     }
-    return !_PyValue_IsMalformed(ref)
-           && Py_TYPE(PyValue_ObjectBorrow(ref)) != NULL;
+    return !PyStackRef_IsMalformed(ref)
+           && Py_TYPE(PyStackRef_AsPyObjectBorrow(ref)) != NULL;
 }
 
 void
-_PyFrame_CheckValues(_PyInterpreterFrame *frame)
+_PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
 {
-    PyValue *stack_base = _PyFrame_Stackbase(frame);
-    PyValue *end = frame->base + _PyFrame_NumSlots(frame);
-    for (PyValue *sp = frame->base; sp < end; sp++) {
+    _PyStackRef *stack_base = _PyFrame_Stackbase(frame);
+    _PyStackRef *end = frame->base + _PyFrame_NumSlots(frame);
+    for (_PyStackRef *sp = frame->base; sp < end; sp++) {
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
-                "malformed value 0x%" PRIx64 " in slot %d",
-                (uint64_t)(*sp).bits, (int)(sp - frame->base));
+                "malformed stackref 0x%" PRIx64 " in slot %d",
+                (uint64_t)_PyStackRef_BITS(*sp), (int)(sp - frame->base));
         }
     }
 }
@@ -139,13 +141,15 @@ static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
 #ifdef Py_DEBUG
-    _PyFrame_CheckValues(frame);
+    _PyStackRef_CheckFrame(frame);
 #endif
-    PyValue *locals = frame->base;
-    PyValue *sp = locals + n;
+    _PyStackRef *locals = frame->base;
+    _PyStackRef *sp = locals + n;
     while (sp > locals) {
         sp--;
-        *sp = PyValue_NULL;
+        _PyStackRef ref = *sp;
+        *sp = PyStackRef_NULL;
+        PyStackRef_XCLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
 }
@@ -169,11 +173,12 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
     if (f != NULL) {
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
-        // The frame object may outlive the frame, so it takes the frame's
-        // contents.
-        take_ownership(f, frame);
+        if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
+            take_ownership(f, frame);
+            Py_DECREF(f);
+            return;
+        }
         Py_DECREF(f);
-        return;
     }
     if (frame->owner == FRAME_OWNED_BY_THREAD) {
         // A frame on the frame stack ends with its temporaries NULL: a
@@ -184,7 +189,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     else {
         _PyFrame_ClearLocals(frame);
     }
-    frame->f_funcobj = PyValue_NULL;
+    PyStackRef_CLEAR(frame->f_funcobj);
 }
 
 /* Unstable API functions */
@@ -192,7 +197,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return PyValue_ObjectBorrow(frame->f_executable);
+    return PyStackRef_AsPyObjectNew(frame->f_executable);
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

@@ -3,8 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(warnings_acquire_lock__doc__,
@@ -69,14 +71,15 @@ warnings_warn_impl(PyObject *module, PyObject *message, PyObject *category,
                    Py_ssize_t stacklevel, PyObject *source,
                    PyTupleObject *skip_file_prefixes);
 
-static PyValue
-warnings_warn(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+warnings_warn(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -99,42 +102,36 @@ warnings_warn(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *message;
     PyObject *category = Py_None;
     Py_ssize_t stacklevel = 1;
     PyObject *source = Py_None;
     PyTupleObject *skip_file_prefixes = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    message = PyValue_Object(args[0]);
-    if (message == NULL) {
-        goto exit;
-    }
+    message = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        category = PyValue_Object(args[1]);
-        if (category == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        category = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
+    if (args[2]) {
         {
             Py_ssize_t ival = -1;
-            PyValue ivalue = PyNumber_IndexValue(args[2]);
-            if (!PyValue_IsNull(ivalue)) {
-                ival = PyLong_AsSsize_tValue(ivalue);
+            PyObject *iobj = _PyNumber_Index(args[2]);
+            if (iobj != NULL) {
+                ival = PyLong_AsSsize_t(iobj);
+                Py_DECREF(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -145,11 +142,8 @@ warnings_warn(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        source = PyValue_Object(args[3]);
-        if (source == NULL) {
-            goto exit;
-        }
+    if (args[3]) {
+        source = args[3];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -158,20 +152,13 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyTuple_Check(_arg)) {
-            _PyArg_BadArgument("warn", "argument 'skip_file_prefixes'", "tuple", _arg);
-            goto exit;
-        }
-        skip_file_prefixes = (PyTupleObject *)_arg;
+    if (!PyTuple_Check(args[4])) {
+        _PyArg_BadArgument("warn", "argument 'skip_file_prefixes'", "tuple", args[4]);
+        goto exit;
     }
+    skip_file_prefixes = (PyTupleObject *)args[4];
 skip_optional_kwonly:
-    _return_value = warnings_warn_impl(module, message, category, stacklevel, source, skip_file_prefixes);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = warnings_warn_impl(module, message, category, stacklevel, source, skip_file_prefixes);
 
 exit:
     return return_value;
@@ -194,14 +181,15 @@ warnings_warn_explicit_impl(PyObject *module, PyObject *message,
                             int lineno, PyObject *mod, PyObject *registry,
                             PyObject *module_globals, PyObject *sourceobj);
 
-static PyValue
-warnings_warn_explicit(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+warnings_warn_explicit(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -224,7 +212,7 @@ warnings_warn_explicit(PyObject *module, const PyValue *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[8];
+    PyObject *argsbuf[8];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 4;
     PyObject *message;
     PyObject *category;
@@ -234,73 +222,47 @@ warnings_warn_explicit(PyObject *module, const PyValue *args, Py_ssize_t nargs, 
     PyObject *registry = Py_None;
     PyObject *module_globals = Py_None;
     PyObject *sourceobj = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 4, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    message = PyValue_Object(args[0]);
-    if (message == NULL) {
+    message = args[0];
+    category = args[1];
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("warn_explicit", "argument 'filename'", "str", args[2]);
         goto exit;
     }
-    category = PyValue_Object(args[1]);
-    if (category == NULL) {
-        goto exit;
-    }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("warn_explicit", "argument 'filename'", "str", _arg);
-            goto exit;
-        }
-        filename = _arg;
-    }
-    lineno = PyLong_AsIntValue(args[3]);
+    filename = args[2];
+    lineno = PyLong_AsInt(args[3]);
     if (lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[4])) {
-        mod = PyValue_Object(args[4]);
-        if (mod == NULL) {
-            goto exit;
-        }
+    if (args[4]) {
+        mod = args[4];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[5])) {
-        registry = PyValue_Object(args[5]);
-        if (registry == NULL) {
-            goto exit;
-        }
+    if (args[5]) {
+        registry = args[5];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[6])) {
-        module_globals = PyValue_Object(args[6]);
-        if (module_globals == NULL) {
-            goto exit;
-        }
+    if (args[6]) {
+        module_globals = args[6];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    sourceobj = PyValue_Object(args[7]);
-    if (sourceobj == NULL) {
-        goto exit;
-    }
+    sourceobj = args[7];
 skip_optional_pos:
-    _return_value = warnings_warn_explicit_impl(module, message, category, filename, lineno, mod, registry, module_globals, sourceobj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = warnings_warn_explicit_impl(module, message, category, filename, lineno, mod, registry, module_globals, sourceobj);
 
 exit:
     return return_value;
@@ -322,4 +284,4 @@ warnings_filters_mutated_lock_held(PyObject *module, PyObject *Py_UNUSED(ignored
 {
     return warnings_filters_mutated_lock_held_impl(module);
 }
-/*[clinic end generated code: output=0e6a31af48d9b9e5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fc026d6a21e12170 input=a9049054013a1b77]*/

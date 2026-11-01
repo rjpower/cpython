@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 static int
@@ -25,6 +25,7 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 9
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -47,8 +48,8 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[9];
-    const PyValue *fastargs;
+    PyObject *argsbuf[9];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *database;
@@ -61,29 +62,32 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
     int uri = 0;
     enum autocommit_mode autocommit = LEGACY_TRANSACTION_CONTROL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    database = PyValue_Object(fastargs[0]);
-    if (database == NULL) {
-        goto exit;
-    }
+    database = fastargs[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        timeout = PyFloat_AsDoubleValue(fastargs[1]);
-        if (timeout == -1.0 && PyErr_Occurred()) {
-            goto exit;
+    if (fastargs[1]) {
+        if (PyFloat_CheckExact(fastargs[1])) {
+            timeout = PyFloat_AS_DOUBLE(fastargs[1]);
+        }
+        else
+        {
+            timeout = PyFloat_AsDouble(fastargs[1]);
+            if (timeout == -1.0 && PyErr_Occurred()) {
+                goto exit;
+            }
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        detect_types = PyLong_AsIntValue(fastargs[2]);
+    if (fastargs[2]) {
+        detect_types = PyLong_AsInt(fastargs[2]);
         if (detect_types == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -91,22 +95,16 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        {
-            PyObject *_arg = PyValue_Object(fastargs[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!isolation_level_converter(_arg, &isolation_level)) {
-                goto exit;
-            }
+    if (fastargs[3]) {
+        if (!isolation_level_converter(fastargs[3], &isolation_level)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        check_same_thread = PyObject_IsTrueValue(fastargs[4]);
+    if (fastargs[4]) {
+        check_same_thread = PyObject_IsTrue(fastargs[4]);
         if (check_same_thread < 0) {
             goto exit;
         }
@@ -114,17 +112,14 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[5])) {
-        factory = PyValue_Object(fastargs[5]);
-        if (factory == NULL) {
-            goto exit;
-        }
+    if (fastargs[5]) {
+        factory = fastargs[5];
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[6])) {
-        cache_size = PyLong_AsIntValue(fastargs[6]);
+    if (fastargs[6]) {
+        cache_size = PyLong_AsInt(fastargs[6]);
         if (cache_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -132,8 +127,8 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(fastargs[7])) {
-        uri = PyObject_IsTrueValue(fastargs[7]);
+    if (fastargs[7]) {
+        uri = PyObject_IsTrue(fastargs[7]);
         if (uri < 0) {
             goto exit;
         }
@@ -141,14 +136,8 @@ pysqlite_connection_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto skip_optional_kwonly;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(fastargs[8]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!autocommit_converter(_arg, &autocommit)) {
-            goto exit;
-        }
+    if (!autocommit_converter(fastargs[8], &autocommit)) {
+        goto exit;
     }
 skip_optional_kwonly:
     return_value = pysqlite_connection_init_impl((pysqlite_Connection *)self, database, timeout, detect_types, isolation_level, check_same_thread, factory, cache_size, uri, autocommit);
@@ -169,14 +158,15 @@ PyDoc_STRVAR(pysqlite_connection_cursor__doc__,
 static PyObject *
 pysqlite_connection_cursor_impl(pysqlite_Connection *self, PyObject *factory);
 
-static PyValue
-pysqlite_connection_cursor(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_cursor(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -199,10 +189,9 @@ pysqlite_connection_cursor(PyObject *self, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *factory = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -212,13 +201,9 @@ pysqlite_connection_cursor(PyObject *self, const PyValue *args, Py_ssize_t nargs
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    factory = PyValue_Object(args[0]);
-    if (factory == NULL) {
-        goto exit;
-    }
+    factory = args[0];
 skip_optional_pos:
-    _return_value = pysqlite_connection_cursor_impl((pysqlite_Connection *)self, factory);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_cursor_impl((pysqlite_Connection *)self, factory);
 
 exit:
     return return_value;
@@ -248,14 +233,15 @@ static PyObject *
 blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
               sqlite3_int64 row, int readonly, const char *name);
 
-static PyValue
-blobopen(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+blobopen(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -278,62 +264,43 @@ blobopen(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwname
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     const char *table;
     const char *col;
     sqlite3_int64 row;
     int readonly = 0;
     const char *name = "main";
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("blobopen", "argument 1", "str", _arg);
-            goto exit;
-        }
-        table = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (table == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("blobopen", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("blobopen", "argument 2", "str", _arg);
-            goto exit;
-        }
-        col = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (col == NULL) {
-            goto exit;
-        }
+    table = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (table == NULL) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!sqlite3_int64_converter(_arg, &row)) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("blobopen", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    col = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (col == NULL) {
+        goto exit;
+    }
+    if (!sqlite3_int64_converter(args[2], &row)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[3])) {
-        readonly = PyObject_IsTrueValue(args[3]);
+    if (args[3]) {
+        readonly = PyObject_IsTrue(args[3]);
         if (readonly < 0) {
             goto exit;
         }
@@ -341,23 +308,16 @@ blobopen(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwname
             goto skip_optional_kwonly;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("blobopen", "argument 'name'", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[4])) {
+        _PyArg_BadArgument("blobopen", "argument 'name'", "str", args[4]);
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(args[4]);
+    if (name == NULL) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = blobopen_impl((pysqlite_Connection *)self, table, col, row, readonly, name);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = blobopen_impl((pysqlite_Connection *)self, table, col, row, readonly, name);
 
 exit:
     return return_value;
@@ -438,14 +398,15 @@ pysqlite_connection_create_function_impl(pysqlite_Connection *self,
                                          int narg, PyObject *func,
                                          int deterministic);
 
-static PyValue
-pysqlite_connection_create_function(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_create_function(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -468,51 +429,40 @@ pysqlite_connection_create_function(PyObject *self, PyTypeObject *cls, const PyV
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     const char *name;
     int narg;
     PyObject *func;
     int deterministic = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create_function", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("create_function", "argument 1", "str", args[0]);
+        goto exit;
     }
-    narg = PyLong_AsIntValue(args[1]);
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    narg = PyLong_AsInt(args[1]);
     if (narg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    func = PyValue_Object(args[2]);
-    if (func == NULL) {
-        goto exit;
-    }
+    func = args[2];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    deterministic = PyObject_IsTrueValue(args[3]);
+    deterministic = PyObject_IsTrue(args[3]);
     if (deterministic < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = pysqlite_connection_create_function_impl((pysqlite_Connection *)self, cls, name, narg, func, deterministic);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_create_function_impl((pysqlite_Connection *)self, cls, name, narg, func, deterministic);
 
 exit:
     return return_value;
@@ -543,14 +493,13 @@ create_window_function_impl(pysqlite_Connection *self, PyTypeObject *cls,
                             const char *name, int num_params,
                             PyObject *aggregate_class);
 
-static PyValue
-create_window_function(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+create_window_function(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
     int num_params;
     PyObject *aggregate_class;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("create_window_function", kwnames)) {
         goto exit;
@@ -558,30 +507,20 @@ create_window_function(PyObject *self, PyTypeObject *cls, const PyValue *args, P
     if (!_PyArg_CheckPositional("create_window_function", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create_window_function", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("create_window_function", "argument 1", "str", args[0]);
+        goto exit;
     }
-    num_params = PyLong_AsIntValue(args[1]);
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    num_params = PyLong_AsInt(args[1]);
     if (num_params == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    aggregate_class = PyValue_Object(args[2]);
-    if (aggregate_class == NULL) {
-        goto exit;
-    }
-    _return_value = create_window_function_impl((pysqlite_Connection *)self, cls, name, num_params, aggregate_class);
-    return_value = PyValue_FromResult(_return_value);
+    aggregate_class = args[2];
+    return_value = create_window_function_impl((pysqlite_Connection *)self, cls, name, num_params, aggregate_class);
 
 exit:
     return return_value;
@@ -604,14 +543,13 @@ pysqlite_connection_create_aggregate_impl(pysqlite_Connection *self,
                                           const char *name, int n_arg,
                                           PyObject *aggregate_class);
 
-static PyValue
-pysqlite_connection_create_aggregate(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_create_aggregate(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
     int n_arg;
     PyObject *aggregate_class;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("create_aggregate", kwnames)) {
         goto exit;
@@ -619,30 +557,20 @@ pysqlite_connection_create_aggregate(PyObject *self, PyTypeObject *cls, const Py
     if (!_PyArg_CheckPositional("create_aggregate", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create_aggregate", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("create_aggregate", "argument 1", "str", args[0]);
+        goto exit;
     }
-    n_arg = PyLong_AsIntValue(args[1]);
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    n_arg = PyLong_AsInt(args[1]);
     if (n_arg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    aggregate_class = PyValue_Object(args[2]);
-    if (aggregate_class == NULL) {
-        goto exit;
-    }
-    _return_value = pysqlite_connection_create_aggregate_impl((pysqlite_Connection *)self, cls, name, n_arg, aggregate_class);
-    return_value = PyValue_FromResult(_return_value);
+    aggregate_class = args[2];
+    return_value = pysqlite_connection_create_aggregate_impl((pysqlite_Connection *)self, cls, name, n_arg, aggregate_class);
 
 exit:
     return return_value;
@@ -662,12 +590,11 @@ pysqlite_connection_set_authorizer_impl(pysqlite_Connection *self,
                                         PyTypeObject *cls,
                                         PyObject *callable);
 
-static PyValue
-pysqlite_connection_set_authorizer(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_set_authorizer(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *callable;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("set_authorizer", kwnames)) {
         goto exit;
@@ -675,12 +602,8 @@ pysqlite_connection_set_authorizer(PyObject *self, PyTypeObject *cls, const PyVa
     if (!_PyArg_CheckPositional("set_authorizer", nargs, 1, 1)) {
         goto exit;
     }
-    callable = PyValue_Object(args[0]);
-    if (callable == NULL) {
-        goto exit;
-    }
-    _return_value = pysqlite_connection_set_authorizer_impl((pysqlite_Connection *)self, cls, callable);
-    return_value = PyValue_FromResult(_return_value);
+    callable = args[0];
+    return_value = pysqlite_connection_set_authorizer_impl((pysqlite_Connection *)self, cls, callable);
 
 exit:
     return return_value;
@@ -711,14 +634,15 @@ pysqlite_connection_set_progress_handler_impl(pysqlite_Connection *self,
                                               PyTypeObject *cls,
                                               PyObject *callable, int n);
 
-static PyValue
-pysqlite_connection_set_progress_handler(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_set_progress_handler(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -741,26 +665,21 @@ pysqlite_connection_set_progress_handler(PyObject *self, PyTypeObject *cls, cons
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *callable;
     int n;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    callable = PyValue_Object(args[0]);
-    if (callable == NULL) {
-        goto exit;
-    }
-    n = PyLong_AsIntValue(args[1]);
+    callable = args[0];
+    n = PyLong_AsInt(args[1]);
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = pysqlite_connection_set_progress_handler_impl((pysqlite_Connection *)self, cls, callable, n);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_set_progress_handler_impl((pysqlite_Connection *)self, cls, callable, n);
 
 exit:
     return return_value;
@@ -780,12 +699,11 @@ pysqlite_connection_set_trace_callback_impl(pysqlite_Connection *self,
                                             PyTypeObject *cls,
                                             PyObject *callable);
 
-static PyValue
-pysqlite_connection_set_trace_callback(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_set_trace_callback(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *callable;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("set_trace_callback", kwnames)) {
         goto exit;
@@ -793,12 +711,8 @@ pysqlite_connection_set_trace_callback(PyObject *self, PyTypeObject *cls, const 
     if (!_PyArg_CheckPositional("set_trace_callback", nargs, 1, 1)) {
         goto exit;
     }
-    callable = PyValue_Object(args[0]);
-    if (callable == NULL) {
-        goto exit;
-    }
-    _return_value = pysqlite_connection_set_trace_callback_impl((pysqlite_Connection *)self, cls, callable);
-    return_value = PyValue_FromResult(_return_value);
+    callable = args[0];
+    return_value = pysqlite_connection_set_trace_callback_impl((pysqlite_Connection *)self, cls, callable);
 
 exit:
     return return_value;
@@ -813,25 +727,23 @@ PyDoc_STRVAR(pysqlite_connection_enable_load_extension__doc__,
 "Enable dynamic loading of SQLite extension modules.");
 
 #define PYSQLITE_CONNECTION_ENABLE_LOAD_EXTENSION_METHODDEF    \
-    {"enable_load_extension", _PyCFunction_CAST(pysqlite_connection_enable_load_extension), METH_O, pysqlite_connection_enable_load_extension__doc__},
+    {"enable_load_extension", (PyCFunction)pysqlite_connection_enable_load_extension, METH_O, pysqlite_connection_enable_load_extension__doc__},
 
 static PyObject *
 pysqlite_connection_enable_load_extension_impl(pysqlite_Connection *self,
                                                int onoff);
 
-static PyValue
-pysqlite_connection_enable_load_extension(PyObject *self, PyValue arg)
+static PyObject *
+pysqlite_connection_enable_load_extension(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int onoff;
-    PyObject *_return_value;
 
-    onoff = PyObject_IsTrueValue(arg);
+    onoff = PyObject_IsTrue(arg);
     if (onoff < 0) {
         goto exit;
     }
-    _return_value = pysqlite_connection_enable_load_extension_impl((pysqlite_Connection *)self, onoff);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_enable_load_extension_impl((pysqlite_Connection *)self, onoff);
 
 exit:
     return return_value;
@@ -855,14 +767,15 @@ pysqlite_connection_load_extension_impl(pysqlite_Connection *self,
                                         const char *extension_name,
                                         const char *entrypoint);
 
-static PyValue
-pysqlite_connection_load_extension(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_load_extension(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -885,56 +798,42 @@ pysqlite_connection_load_extension(PyObject *self, const PyValue *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     const char *extension_name;
     const char *entrypoint = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("load_extension", "argument 1", "str", _arg);
-            goto exit;
-        }
-        extension_name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (extension_name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("load_extension", "argument 1", "str", args[0]);
+        goto exit;
+    }
+    extension_name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (extension_name == NULL) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            entrypoint = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            entrypoint = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (entrypoint == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("load_extension", "argument 'entrypoint'", "str or None", _arg);
+    if (args[1] == Py_None) {
+        entrypoint = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        entrypoint = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (entrypoint == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("load_extension", "argument 'entrypoint'", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional_kwonly:
-    _return_value = pysqlite_connection_load_extension_impl((pysqlite_Connection *)self, extension_name, entrypoint);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_load_extension_impl((pysqlite_Connection *)self, extension_name, entrypoint);
 
 exit:
     return return_value;
@@ -955,38 +854,27 @@ static PyObject *
 pysqlite_connection_execute_impl(pysqlite_Connection *self, PyObject *sql,
                                  PyObject *parameters);
 
-static PyValue
-pysqlite_connection_execute(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+pysqlite_connection_execute(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *sql;
     PyObject *parameters = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("execute", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("execute", "argument 1", "str", _arg);
-            goto exit;
-        }
-        sql = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("execute", "argument 1", "str", args[0]);
+        goto exit;
     }
+    sql = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    parameters = PyValue_Object(args[1]);
-    if (parameters == NULL) {
-        goto exit;
-    }
+    parameters = args[1];
 skip_optional:
-    _return_value = pysqlite_connection_execute_impl((pysqlite_Connection *)self, sql, parameters);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_execute_impl((pysqlite_Connection *)self, sql, parameters);
 
 exit:
     return return_value;
@@ -1005,34 +893,23 @@ static PyObject *
 pysqlite_connection_executemany_impl(pysqlite_Connection *self,
                                      PyObject *sql, PyObject *parameters);
 
-static PyValue
-pysqlite_connection_executemany(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+pysqlite_connection_executemany(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *sql;
     PyObject *parameters;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("executemany", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("executemany", "argument 1", "str", _arg);
-            goto exit;
-        }
-        sql = _arg;
-    }
-    parameters = PyValue_Object(args[1]);
-    if (parameters == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("executemany", "argument 1", "str", args[0]);
         goto exit;
     }
-    _return_value = pysqlite_connection_executemany_impl((pysqlite_Connection *)self, sql, parameters);
-    return_value = PyValue_FromResult(_return_value);
+    sql = args[0];
+    parameters = args[1];
+    return_value = pysqlite_connection_executemany_impl((pysqlite_Connection *)self, sql, parameters);
 
 exit:
     return return_value;
@@ -1045,27 +922,19 @@ PyDoc_STRVAR(pysqlite_connection_executescript__doc__,
 "Executes multiple SQL statements at once.");
 
 #define PYSQLITE_CONNECTION_EXECUTESCRIPT_METHODDEF    \
-    {"executescript", _PyCFunction_CAST(pysqlite_connection_executescript), METH_O, pysqlite_connection_executescript__doc__},
+    {"executescript", (PyCFunction)pysqlite_connection_executescript, METH_O, pysqlite_connection_executescript__doc__},
 
 static PyObject *
 pysqlite_connection_executescript_impl(pysqlite_Connection *self,
                                        PyObject *script_obj);
 
-static PyValue
-pysqlite_connection_executescript(PyObject *self, PyValue arg)
+static PyObject *
+pysqlite_connection_executescript(PyObject *self, PyObject *script_obj)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *script_obj;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    script_obj = PyValue_Object(arg);
-    if (script_obj == NULL) {
-        goto exit;
-    }
-    _return_value = pysqlite_connection_executescript_impl((pysqlite_Connection *)self, script_obj);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_executescript_impl((pysqlite_Connection *)self, script_obj);
 
-exit:
     return return_value;
 }
 
@@ -1103,14 +972,15 @@ static PyObject *
 pysqlite_connection_iterdump_impl(pysqlite_Connection *self,
                                   PyObject *filter);
 
-static PyValue
-pysqlite_connection_iterdump(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_iterdump(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1133,10 +1003,9 @@ pysqlite_connection_iterdump(PyObject *self, const PyValue *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *filter = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1146,13 +1015,9 @@ pysqlite_connection_iterdump(PyObject *self, const PyValue *args, Py_ssize_t nar
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    filter = PyValue_Object(args[0]);
-    if (filter == NULL) {
-        goto exit;
-    }
+    filter = args[0];
 skip_optional_kwonly:
-    _return_value = pysqlite_connection_iterdump_impl((pysqlite_Connection *)self, filter);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_iterdump_impl((pysqlite_Connection *)self, filter);
 
 exit:
     return return_value;
@@ -1174,14 +1039,15 @@ pysqlite_connection_backup_impl(pysqlite_Connection *self,
                                 PyObject *progress, const char *name,
                                 double sleep);
 
-static PyValue
-pysqlite_connection_backup(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_backup(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1204,36 +1070,29 @@ pysqlite_connection_backup(PyObject *self, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     pysqlite_Connection *target;
     int pages = -1;
     PyObject *progress = Py_None;
     const char *name = "main";
     double sleep = 0.25;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyObject_TypeCheck(_arg, clinic_state()->ConnectionType)) {
-            _PyArg_BadArgument("backup", "argument 'target'", (clinic_state()->ConnectionType)->tp_name, _arg);
-            goto exit;
-        }
-        target = (pysqlite_Connection *)_arg;
+    if (!PyObject_TypeCheck(args[0], clinic_state()->ConnectionType)) {
+        _PyArg_BadArgument("backup", "argument 'target'", (clinic_state()->ConnectionType)->tp_name, args[0]);
+        goto exit;
     }
+    target = (pysqlite_Connection *)args[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        pages = PyLong_AsIntValue(args[1]);
+    if (args[1]) {
+        pages = PyLong_AsInt(args[1]);
         if (pages == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1241,41 +1100,37 @@ pysqlite_connection_backup(PyObject *self, const PyValue *args, Py_ssize_t nargs
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        progress = PyValue_Object(args[2]);
-        if (progress == NULL) {
+    if (args[2]) {
+        progress = args[2];
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    if (args[3]) {
+        if (!PyUnicode_Check(args[3])) {
+            _PyArg_BadArgument("backup", "argument 'name'", "str", args[3]);
+            goto exit;
+        }
+        name = _PyUnicode_AsUTF8NoNUL(args[3]);
+        if (name == NULL) {
             goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        {
-            PyObject *_arg = PyValue_Object(args[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyUnicode_Check(_arg)) {
-                _PyArg_BadArgument("backup", "argument 'name'", "str", _arg);
-                goto exit;
-            }
-            name = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (name == NULL) {
-                goto exit;
-            }
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (PyFloat_CheckExact(args[4])) {
+        sleep = PyFloat_AS_DOUBLE(args[4]);
     }
-    sleep = PyFloat_AsDoubleValue(args[4]);
-    if (sleep == -1.0 && PyErr_Occurred()) {
-        goto exit;
+    else
+    {
+        sleep = PyFloat_AsDouble(args[4]);
+        if (sleep == -1.0 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
 skip_optional_kwonly:
-    _return_value = pysqlite_connection_backup_impl((pysqlite_Connection *)self, target, pages, progress, name, sleep);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = pysqlite_connection_backup_impl((pysqlite_Connection *)self, target, pages, progress, name, sleep);
 
 exit:
     return return_value;
@@ -1296,13 +1151,12 @@ pysqlite_connection_create_collation_impl(pysqlite_Connection *self,
                                           const char *name,
                                           PyObject *callable);
 
-static PyValue
-pysqlite_connection_create_collation(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+pysqlite_connection_create_collation(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
     PyObject *callable;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("create_collation", kwnames)) {
         goto exit;
@@ -1310,26 +1164,16 @@ pysqlite_connection_create_collation(PyObject *self, PyTypeObject *cls, const Py
     if (!_PyArg_CheckPositional("create_collation", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("create_collation", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
-    }
-    callable = PyValue_Object(args[1]);
-    if (callable == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("create_collation", "argument 1", "str", args[0]);
         goto exit;
     }
-    _return_value = pysqlite_connection_create_collation_impl((pysqlite_Connection *)self, cls, name, callable);
-    return_value = PyValue_FromResult(_return_value);
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
+    }
+    callable = args[1];
+    return_value = pysqlite_connection_create_collation_impl((pysqlite_Connection *)self, cls, name, callable);
 
 exit:
     return return_value;
@@ -1357,14 +1201,15 @@ PyDoc_STRVAR(serialize__doc__,
 static PyObject *
 serialize_impl(pysqlite_Connection *self, const char *name);
 
-static PyValue
-serialize(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+serialize(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1387,10 +1232,9 @@ serialize(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnam
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     const char *name = "main";
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1400,23 +1244,16 @@ serialize(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnam
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("serialize", "argument 'name'", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("serialize", "argument 'name'", "str", args[0]);
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (name == NULL) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = serialize_impl((pysqlite_Connection *)self, name);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = serialize_impl((pysqlite_Connection *)self, name);
 
 exit:
     return return_value;
@@ -1452,14 +1289,15 @@ static PyObject *
 deserialize_impl(pysqlite_Connection *self, Py_buffer *data,
                  const char *name);
 
-static PyValue
-deserialize(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+deserialize(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1482,58 +1320,44 @@ deserialize(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     const char *name = "main";
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyUnicode_Check(args[0])) {
+        Py_ssize_t len;
+        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        if (ptr == NULL) {
             goto exit;
         }
-        if (PyUnicode_Check(_arg)) {
-            Py_ssize_t len;
-            const char *ptr = PyUnicode_AsUTF8AndSize(_arg, &len);
-            if (ptr == NULL) {
-                goto exit;
-            }
-            if (PyBuffer_FillInfo(&data, _arg, (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
-                goto exit;
-            }
+        if (PyBuffer_FillInfo(&data, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+            goto exit;
         }
-        else { /* any bytes-like object */
-            if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    }
+    else { /* any bytes-like object */
+        if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("deserialize", "argument 'name'", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("deserialize", "argument 'name'", "str", args[1]);
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (name == NULL) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = deserialize_impl((pysqlite_Connection *)self, &data, name);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = deserialize_impl((pysqlite_Connection *)self, &data, name);
 
 exit:
     /* Cleanup for data */
@@ -1582,32 +1406,21 @@ static PyObject *
 pysqlite_connection_exit_impl(pysqlite_Connection *self, PyObject *exc_type,
                               PyObject *exc_value, PyObject *exc_tb);
 
-static PyValue
-pysqlite_connection_exit(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+pysqlite_connection_exit(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *exc_type;
     PyObject *exc_value;
     PyObject *exc_tb;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    exc_type = PyValue_Object(args[0]);
-    if (exc_type == NULL) {
-        goto exit;
-    }
-    exc_value = PyValue_Object(args[1]);
-    if (exc_value == NULL) {
-        goto exit;
-    }
-    exc_tb = PyValue_Object(args[2]);
-    if (exc_tb == NULL) {
-        goto exit;
-    }
-    _return_value = pysqlite_connection_exit_impl((pysqlite_Connection *)self, exc_type, exc_value, exc_tb);
-    return_value = PyValue_FromResult(_return_value);
+    exc_type = args[0];
+    exc_value = args[1];
+    exc_tb = args[2];
+    return_value = pysqlite_connection_exit_impl((pysqlite_Connection *)self, exc_type, exc_value, exc_tb);
 
 exit:
     return return_value;
@@ -1635,27 +1448,25 @@ PyDoc_STRVAR(setlimit__doc__,
 static PyObject *
 setlimit_impl(pysqlite_Connection *self, int category, int limit);
 
-static PyValue
-setlimit(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+setlimit(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int category;
     int limit;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setlimit", nargs, 2, 2)) {
         goto exit;
     }
-    category = PyLong_AsIntValue(args[0]);
+    category = PyLong_AsInt(args[0]);
     if (category == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    limit = PyLong_AsIntValue(args[1]);
+    limit = PyLong_AsInt(args[1]);
     if (limit == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = setlimit_impl((pysqlite_Connection *)self, category, limit);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = setlimit_impl((pysqlite_Connection *)self, category, limit);
 
 exit:
     return return_value;
@@ -1671,24 +1482,22 @@ PyDoc_STRVAR(getlimit__doc__,
 "    The limit category to be queried.");
 
 #define GETLIMIT_METHODDEF    \
-    {"getlimit", _PyCFunction_CAST(getlimit), METH_O, getlimit__doc__},
+    {"getlimit", (PyCFunction)getlimit, METH_O, getlimit__doc__},
 
 static PyObject *
 getlimit_impl(pysqlite_Connection *self, int category);
 
-static PyValue
-getlimit(PyObject *self, PyValue arg)
+static PyObject *
+getlimit(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int category;
-    PyObject *_return_value;
 
-    category = PyLong_AsIntValue(arg);
+    category = PyLong_AsInt(arg);
     if (category == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = getlimit_impl((pysqlite_Connection *)self, category);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = getlimit_impl((pysqlite_Connection *)self, category);
 
 exit:
     return return_value;
@@ -1709,31 +1518,29 @@ PyDoc_STRVAR(setconfig__doc__,
 static PyObject *
 setconfig_impl(pysqlite_Connection *self, int op, int enable);
 
-static PyValue
-setconfig(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+setconfig(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int op;
     int enable = 1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setconfig", nargs, 1, 2)) {
         goto exit;
     }
-    op = PyLong_AsIntValue(args[0]);
+    op = PyLong_AsInt(args[0]);
     if (op == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    enable = PyObject_IsTrueValue(args[1]);
+    enable = PyObject_IsTrue(args[1]);
     if (enable < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = setconfig_impl((pysqlite_Connection *)self, op, enable);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = setconfig_impl((pysqlite_Connection *)self, op, enable);
 
 exit:
     return return_value;
@@ -1749,19 +1556,19 @@ PyDoc_STRVAR(getconfig__doc__,
 "    The configuration verb; one of the sqlite3.SQLITE_DBCONFIG codes.");
 
 #define GETCONFIG_METHODDEF    \
-    {"getconfig", _PyCFunction_CAST(getconfig), METH_O, getconfig__doc__},
+    {"getconfig", (PyCFunction)getconfig, METH_O, getconfig__doc__},
 
 static int
 getconfig_impl(pysqlite_Connection *self, int op);
 
-static PyValue
-getconfig(PyObject *self, PyValue arg)
+static PyObject *
+getconfig(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int op;
     int _return_value;
 
-    op = PyLong_AsIntValue(arg);
+    op = PyLong_AsInt(arg);
     if (op == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1769,7 +1576,7 @@ getconfig(PyObject *self, PyValue arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
+    return_value = PyBool_FromLong((long)_return_value);
 
 exit:
     return return_value;
@@ -1794,4 +1601,4 @@ exit:
 #ifndef DESERIALIZE_METHODDEF
     #define DESERIALIZE_METHODDEF
 #endif /* !defined(DESERIALIZE_METHODDEF) */
-/*[clinic end generated code: output=c7a6524e9fe6efff input=a9049054013a1b77]*/
+/*[clinic end generated code: output=faee86c7feaa0937 input=a9049054013a1b77]*/

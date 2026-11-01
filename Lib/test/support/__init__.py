@@ -34,6 +34,7 @@ __all__ = [
     "is_resource_enabled", "get_resource_value", "requires", "requires_resource",
     "requires_freebsd_version",
     "requires_gil_enabled", "requires_linux_version", "requires_mac_ver",
+    "requires_refcounting",
     "requires_ios_ver",
     "check_syntax_error",
     "requires_gzip", "requires_bz2", "requires_lzma", "requires_zstd",
@@ -41,7 +42,6 @@ __all__ = [
     "requires_IEEE_754", "requires_zlib",
     "has_fork_support", "requires_fork",
     "has_subprocess_support", "requires_subprocess",
-    "requires_subinterpreters",
     "has_socket_support", "requires_working_socket",
     "has_remote_subprocess_debugging", "requires_remote_subprocess_debugging",
     "anticipate_failure", "load_package_tests", "detect_api_mismatch",
@@ -679,12 +679,6 @@ def requires_subprocess():
     """Used for subprocess, os.spawn calls, fd inheritance"""
     return unittest.skipUnless(has_subprocess_support, "requires subprocess support")
 
-def requires_subinterpreters(func):
-    """Require the implementation's declared interpreter-creation support."""
-    return unittest.skipUnless(
-        sys.implementation.supports_isolated_interpreters,
-        "subinterpreters are not supported")(func)
-
 # Emscripten's socket emulation and WASI sockets have limitations.
 has_socket_support = not (
     is_emscripten
@@ -1069,11 +1063,23 @@ def expected_failure_if_gil_disabled():
         return unittest.expectedFailure
     return lambda test_case: test_case
 
+# Instance attribute access guards per-type shapes (--with-shapes)
+Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
+
+# A tracing collector owns memory instead of reference counts (--with-gc):
+# an object dies at a collection, not when its last reference goes away,
+# and the conservative scan of C stacks can keep garbage alive.
+Py_GC = bool(sysconfig.get_config_var('Py_GC'))
+
+def requires_refcounting(test):
+    """Skip a test that needs reference counts: sys.getrefcount(), or an
+    object that dies, and runs its finalizer, as its last reference goes."""
+    return unittest.skipIf(Py_GC, "needs reference counting")(test)
+
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:
-    # One word: the type pointer and the collector's flags
-    _header = 'P'
+    _header = 'nP'
 _align = '0n'
 _vheader = _header + 'n'
 
@@ -1098,8 +1104,15 @@ _TPFLAGS_BASE_EXC_SUBCLASS = 1<<30
 _TPFLAGS_TYPE_SUBCLASS = 1<<31
 
 def check_sizeof(test, o, size):
-    # Objects the collector tracks carry no header before the object
+    try:
+        import _testinternalcapi
+    except ImportError:
+        raise unittest.SkipTest("_testinternalcapi required")
     result = sys.getsizeof(o)
+    # add GC header size
+    if ((type(o) == type) and (o.__flags__ & _TPFLAGS_HEAPTYPE) or\
+        ((type(o) != type) and (type(o).__flags__ & _TPFLAGS_HAVE_GC))):
+        size += _testinternalcapi.SIZEOF_PYGC_HEAD
     msg = 'wrong size for %s: got %d, expected %d' \
             % (type(o), result, size)
     test.assertEqual(result, size, msg)
@@ -1510,6 +1523,17 @@ def no_rerun(reason):
             _has_run = True
         return wrapper
     return deco
+
+
+def refcount_test(test):
+    """Decorator for tests which involve reference counting.
+
+    To start, the decorator does not run the test if is not run by CPython.
+    After that, any trace function is unset during the test to prevent
+    unexpected refcounts caused by the trace function.
+
+    """
+    return requires_refcounting(no_tracing(cpython_only(test)))
 
 
 def requires_limited_api(test):
@@ -2176,8 +2200,13 @@ def check_free_after_iterating(test, iter, cls, args=()):
         test.assertRaises(StopIteration, next, it)
 
     # The sequence should be deallocated just after the end of iterating.
-    wrapper()
-    gc_collect()
+    # Under Py_GC a stale word on the C stack can keep one attempt's
+    # sequence alive; each attempt makes a new one.
+    for _ in range(5 if Py_GC else 1):
+        wrapper()
+        gc_collect()
+        if done:
+            break
     test.assertTrue(done)
 
 
@@ -2720,7 +2749,9 @@ def setup_venv_with_pip_setuptools(venv_dir):
 
 # True if Python is built with the Py_DEBUG macro defined: if
 # Python is built in debug mode (./configure --with-pydebug).
-Py_DEBUG = bool(sysconfig.get_config_var('Py_DEBUG'))
+# sys.gettotalrefcount() does not exist under Py_GC, which counts nothing.
+Py_DEBUG = (hasattr(sys, 'gettotalrefcount')
+            or (Py_GC and bool(sysconfig.get_config_var('Py_DEBUG'))))
 
 
 def late_deletion(obj):

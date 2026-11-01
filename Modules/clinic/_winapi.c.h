@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_long.h"          // _PyLong_Size_t_Converter()
@@ -14,24 +15,22 @@ PyDoc_STRVAR(_winapi_Overlapped_GetOverlappedResult__doc__,
 "\n");
 
 #define _WINAPI_OVERLAPPED_GETOVERLAPPEDRESULT_METHODDEF    \
-    {"GetOverlappedResult", _PyCFunction_CAST(_winapi_Overlapped_GetOverlappedResult), METH_O, _winapi_Overlapped_GetOverlappedResult__doc__},
+    {"GetOverlappedResult", (PyCFunction)_winapi_Overlapped_GetOverlappedResult, METH_O, _winapi_Overlapped_GetOverlappedResult__doc__},
 
 static PyObject *
 _winapi_Overlapped_GetOverlappedResult_impl(OverlappedObject *self, int wait);
 
-static PyValue
-_winapi_Overlapped_GetOverlappedResult(PyObject *self, PyValue arg)
+static PyObject *
+_winapi_Overlapped_GetOverlappedResult(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int wait;
-    PyObject *_return_value;
 
-    wait = PyObject_IsTrueValue(arg);
+    wait = PyObject_IsTrue(arg);
     if (wait < 0) {
         goto exit;
     }
-    _return_value = _winapi_Overlapped_GetOverlappedResult_impl((OverlappedObject *)self, wait);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_Overlapped_GetOverlappedResult_impl((OverlappedObject *)self, wait);
 
 exit:
     return return_value;
@@ -78,30 +77,22 @@ PyDoc_STRVAR(_winapi_CloseHandle__doc__,
 "Close handle.");
 
 #define _WINAPI_CLOSEHANDLE_METHODDEF    \
-    {"CloseHandle", _PyCFunction_CAST(_winapi_CloseHandle), METH_O, _winapi_CloseHandle__doc__},
+    {"CloseHandle", (PyCFunction)_winapi_CloseHandle, METH_O, _winapi_CloseHandle__doc__},
 
 static PyObject *
 _winapi_CloseHandle_impl(PyObject *module, HANDLE handle);
 
-static PyValue
-_winapi_CloseHandle(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_CloseHandle(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(arg);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_CloseHandle_impl(module, handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_CloseHandle_impl(module, handle);
 
 exit:
     return return_value;
@@ -119,14 +110,15 @@ static PyObject *
 _winapi_ConnectNamedPipe_impl(PyObject *module, HANDLE handle,
                               int use_overlapped);
 
-static PyValue
-_winapi_ConnectNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_ConnectNamedPipe(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -149,37 +141,29 @@ _winapi_ConnectNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     HANDLE handle;
     int use_overlapped = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    use_overlapped = PyObject_IsTrueValue(args[1]);
+    use_overlapped = PyObject_IsTrue(args[1]);
     if (use_overlapped < 0) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = _winapi_ConnectNamedPipe_impl(module, handle, use_overlapped);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_ConnectNamedPipe_impl(module, handle, use_overlapped);
 
 exit:
     return return_value;
@@ -200,14 +184,15 @@ _winapi_CreateEventW_impl(PyObject *module,
                           BOOL manual_reset, BOOL initial_state,
                           LPCWSTR name);
 
-static PyValue
-_winapi_CreateEventW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_CreateEventW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -245,10 +230,9 @@ _winapi_CreateEventW(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -274,10 +258,10 @@ _winapi_CreateFile_impl(PyObject *module, LPCWSTR file_name,
                         DWORD creation_disposition,
                         DWORD flags_and_attributes, HANDLE template_file);
 
-static PyValue
-_winapi_CreateFile(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreateFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR file_name = NULL;
     DWORD desired_access;
     DWORD share_mode;
@@ -296,10 +280,9 @@ _winapi_CreateFile(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for file_name */
@@ -323,10 +306,10 @@ _winapi_CreateFileMapping_impl(PyObject *module, HANDLE file_handle,
                                DWORD protect, DWORD max_size_high,
                                DWORD max_size_low, LPCWSTR name);
 
-static PyValue
-_winapi_CreateFileMapping(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreateFileMapping(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE file_handle;
     LPSECURITY_ATTRIBUTES security_attributes;
     DWORD protect;
@@ -344,10 +327,9 @@ _winapi_CreateFileMapping(PyObject *module, const PyValue *args, Py_ssize_t narg
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -368,47 +350,33 @@ static PyObject *
 _winapi_CreateJunction_impl(PyObject *module, LPCWSTR src_path,
                             LPCWSTR dst_path);
 
-static PyValue
-_winapi_CreateJunction(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreateJunction(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR src_path = NULL;
     LPCWSTR dst_path = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CreateJunction", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("CreateJunction", "argument 1", "str", _arg);
-            goto exit;
-        }
-        src_path = PyUnicode_AsWideCharString(_arg, NULL);
-        if (src_path == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("CreateJunction", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("CreateJunction", "argument 2", "str", _arg);
-            goto exit;
-        }
-        dst_path = PyUnicode_AsWideCharString(_arg, NULL);
-        if (dst_path == NULL) {
-            goto exit;
-        }
+    src_path = PyUnicode_AsWideCharString(args[0], NULL);
+    if (src_path == NULL) {
+        goto exit;
     }
-    _return_value = _winapi_CreateJunction_impl(module, src_path, dst_path);
-    return_value = PyValue_FromResult(_return_value);
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("CreateJunction", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    dst_path = PyUnicode_AsWideCharString(args[1], NULL);
+    if (dst_path == NULL) {
+        goto exit;
+    }
+    return_value = _winapi_CreateJunction_impl(module, src_path, dst_path);
 
 exit:
     /* Cleanup for src_path */
@@ -432,14 +400,15 @@ _winapi_CreateMutexW_impl(PyObject *module,
                           LPSECURITY_ATTRIBUTES security_attributes,
                           BOOL initial_owner, LPCWSTR name);
 
-static PyValue
-_winapi_CreateMutexW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_CreateMutexW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -476,10 +445,9 @@ _winapi_CreateMutexW(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -505,10 +473,10 @@ _winapi_CreateNamedPipe_impl(PyObject *module, LPCWSTR name, DWORD open_mode,
                              DWORD default_timeout,
                              LPSECURITY_ATTRIBUTES security_attributes);
 
-static PyValue
-_winapi_CreateNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreateNamedPipe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR name = NULL;
     DWORD open_mode;
     DWORD pipe_mode;
@@ -528,10 +496,9 @@ _winapi_CreateNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -557,49 +524,38 @@ PyDoc_STRVAR(_winapi_CreatePipe__doc__,
 static PyObject *
 _winapi_CreatePipe_impl(PyObject *module, PyObject *pipe_attrs, DWORD size);
 
-static PyValue
-_winapi_CreatePipe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreatePipe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *pipe_attrs;
     DWORD size;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CreatePipe", nargs, 2, 2)) {
         goto exit;
     }
-    pipe_attrs = PyValue_Object(args[0]);
-    if (pipe_attrs == NULL) {
+    pipe_attrs = args[0];
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("CreatePipe", "argument 2", "int", args[1]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &size, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("CreatePipe", "argument 2", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &size, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
-    _return_value = _winapi_CreatePipe_impl(module, pipe_attrs, size);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_CreatePipe_impl(module, pipe_attrs, size);
 
 exit:
     return return_value;
@@ -634,10 +590,10 @@ _winapi_CreateProcess_impl(PyObject *module, const wchar_t *application_name,
                            const wchar_t *current_directory,
                            PyObject *startup_info);
 
-static PyValue
-_winapi_CreateProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_CreateProcess(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const wchar_t *application_name = NULL;
     PyObject *command_line;
     PyObject *proc_attrs;
@@ -647,101 +603,66 @@ _winapi_CreateProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     PyObject *env_mapping;
     const wchar_t *current_directory = NULL;
     PyObject *startup_info;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("CreateProcess", nargs, 9, 9)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            application_name = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            application_name = PyUnicode_AsWideCharString(_arg, NULL);
-            if (application_name == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("CreateProcess", "argument 1", "str or None", _arg);
+    if (args[0] == Py_None) {
+        application_name = NULL;
+    }
+    else if (PyUnicode_Check(args[0])) {
+        application_name = PyUnicode_AsWideCharString(args[0], NULL);
+        if (application_name == NULL) {
             goto exit;
         }
     }
-    command_line = PyValue_Object(args[1]);
-    if (command_line == NULL) {
+    else {
+        _PyArg_BadArgument("CreateProcess", "argument 1", "str or None", args[0]);
         goto exit;
     }
-    proc_attrs = PyValue_Object(args[2]);
-    if (proc_attrs == NULL) {
-        goto exit;
-    }
-    thread_attrs = PyValue_Object(args[3]);
-    if (thread_attrs == NULL) {
-        goto exit;
-    }
-    inherit_handles = PyLong_AsIntValue(args[4]);
+    command_line = args[1];
+    proc_attrs = args[2];
+    thread_attrs = args[3];
+    inherit_handles = PyLong_AsInt(args[4]);
     if (inherit_handles == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[5]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("CreateProcess", "argument 6", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &creation_flags, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
-                goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
-        }
-    }
-    env_mapping = PyValue_Object(args[6]);
-    if (env_mapping == NULL) {
+    if (!PyIndex_Check(args[5])) {
+        _PyArg_BadArgument("CreateProcess", "argument 6", "int", args[5]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[7]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[5], &creation_flags, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            current_directory = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            current_directory = PyUnicode_AsWideCharString(_arg, NULL);
-            if (current_directory == NULL) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
         }
-        else {
-            _PyArg_BadArgument("CreateProcess", "argument 8", "str or None", _arg);
+    }
+    env_mapping = args[6];
+    if (args[7] == Py_None) {
+        current_directory = NULL;
+    }
+    else if (PyUnicode_Check(args[7])) {
+        current_directory = PyUnicode_AsWideCharString(args[7], NULL);
+        if (current_directory == NULL) {
             goto exit;
         }
     }
-    startup_info = PyValue_Object(args[8]);
-    if (startup_info == NULL) {
+    else {
+        _PyArg_BadArgument("CreateProcess", "argument 8", "str or None", args[7]);
         goto exit;
     }
-    _return_value = _winapi_CreateProcess_impl(module, application_name, command_line, proc_attrs, thread_attrs, inherit_handles, creation_flags, env_mapping, current_directory, startup_info);
-    return_value = PyValue_FromResult(_return_value);
+    startup_info = args[8];
+    return_value = _winapi_CreateProcess_impl(module, application_name, command_line, proc_attrs, thread_attrs, inherit_handles, creation_flags, env_mapping, current_directory, startup_info);
 
 exit:
     /* Cleanup for application_name */
@@ -774,10 +695,10 @@ _winapi_DuplicateHandle_impl(PyObject *module, HANDLE source_process_handle,
                              DWORD desired_access, BOOL inherit_handle,
                              DWORD options);
 
-static PyValue
-_winapi_DuplicateHandle(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_DuplicateHandle(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE source_process_handle;
     HANDLE source_handle;
     HANDLE target_process_handle;
@@ -789,92 +710,62 @@ _winapi_DuplicateHandle(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("DuplicateHandle", nargs, 5, 6)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        source_process_handle = PyLong_AsVoidPtr(_arg);
-        if (!source_process_handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    source_process_handle = PyLong_AsVoidPtr(args[0]);
+    if (!source_process_handle && PyErr_Occurred()) {
+        goto exit;
+    }
+    source_handle = PyLong_AsVoidPtr(args[1]);
+    if (!source_handle && PyErr_Occurred()) {
+        goto exit;
+    }
+    target_process_handle = PyLong_AsVoidPtr(args[2]);
+    if (!target_process_handle && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[3])) {
+        _PyArg_BadArgument("DuplicateHandle", "argument 4", "int", args[3]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[3], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        source_handle = PyLong_AsVoidPtr(_arg);
-        if (!source_handle && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        target_process_handle = PyLong_AsVoidPtr(_arg);
-        if (!target_process_handle && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("DuplicateHandle", "argument 4", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
-    inherit_handle = PyLong_AsIntValue(args[4]);
+    inherit_handle = PyLong_AsInt(args[4]);
     if (inherit_handle == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 6) {
         goto skip_optional;
     }
+    if (!PyIndex_Check(args[5])) {
+        _PyArg_BadArgument("DuplicateHandle", "argument 6", "int", args[5]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[5]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[5], &options, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("DuplicateHandle", "argument 6", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &options, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
@@ -884,10 +775,9 @@ skip_optional:
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     return return_value;
@@ -899,29 +789,21 @@ PyDoc_STRVAR(_winapi_ExitProcess__doc__,
 "\n");
 
 #define _WINAPI_EXITPROCESS_METHODDEF    \
-    {"ExitProcess", _PyCFunction_CAST(_winapi_ExitProcess), METH_O, _winapi_ExitProcess__doc__},
+    {"ExitProcess", (PyCFunction)_winapi_ExitProcess, METH_O, _winapi_ExitProcess__doc__},
 
 static PyObject *
 _winapi_ExitProcess_impl(PyObject *module, UINT ExitCode);
 
-static PyValue
-_winapi_ExitProcess(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_ExitProcess(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     UINT ExitCode;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyArg_Parse(_arg, "I:ExitProcess", &ExitCode)) {
-            goto exit;
-        }
+    if (!PyArg_Parse(arg, "I:ExitProcess", &ExitCode)) {
+        goto exit;
     }
-    _return_value = _winapi_ExitProcess_impl(module, ExitCode);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_ExitProcess_impl(module, ExitCode);
 
 exit:
     return return_value;
@@ -950,8 +832,7 @@ _winapi_GetCurrentProcess(PyObject *module, PyObject *Py_UNUSED(ignored))
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = Py_None;
-        goto exit;
+        Py_RETURN_NONE;
     }
     return_value = HANDLE_TO_PYNUM(_return_value);
 
@@ -966,33 +847,27 @@ PyDoc_STRVAR(_winapi_GetExitCodeProcess__doc__,
 "Return the termination status of the specified process.");
 
 #define _WINAPI_GETEXITCODEPROCESS_METHODDEF    \
-    {"GetExitCodeProcess", _PyCFunction_CAST(_winapi_GetExitCodeProcess), METH_O, _winapi_GetExitCodeProcess__doc__},
+    {"GetExitCodeProcess", (PyCFunction)_winapi_GetExitCodeProcess, METH_O, _winapi_GetExitCodeProcess__doc__},
 
 static DWORD
 _winapi_GetExitCodeProcess_impl(PyObject *module, HANDLE process);
 
-static PyValue
-_winapi_GetExitCodeProcess(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_GetExitCodeProcess(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE process;
     DWORD _return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        process = PyLong_AsVoidPtr(_arg);
-        if (!process && PyErr_Occurred()) {
-            goto exit;
-        }
+    process = PyLong_AsVoidPtr(arg);
+    if (!process && PyErr_Occurred()) {
+        goto exit;
     }
     _return_value = _winapi_GetExitCodeProcess_impl(module, process);
     if ((_return_value == PY_DWORD_MAX) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyLong_FromUnsignedLong(_return_value));
+    return_value = PyLong_FromUnsignedLong(_return_value);
 
 exit:
     return return_value;
@@ -1042,14 +917,15 @@ PyDoc_STRVAR(_winapi_GetLongPathName__doc__,
 static PyObject *
 _winapi_GetLongPathName_impl(PyObject *module, LPCWSTR path);
 
-static PyValue
-_winapi_GetLongPathName(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_GetLongPathName(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1072,31 +948,23 @@ _winapi_GetLongPathName(PyObject *module, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     LPCWSTR path = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("GetLongPathName", "argument 'path'", "str", _arg);
-            goto exit;
-        }
-        path = PyUnicode_AsWideCharString(_arg, NULL);
-        if (path == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("GetLongPathName", "argument 'path'", "str", args[0]);
+        goto exit;
     }
-    _return_value = _winapi_GetLongPathName_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    path = PyUnicode_AsWideCharString(args[0], NULL);
+    if (path == NULL) {
+        goto exit;
+    }
+    return_value = _winapi_GetLongPathName_impl(module, path);
 
 exit:
     /* Cleanup for path */
@@ -1119,29 +987,21 @@ PyDoc_STRVAR(_winapi_GetModuleFileName__doc__,
 "of the current process.");
 
 #define _WINAPI_GETMODULEFILENAME_METHODDEF    \
-    {"GetModuleFileName", _PyCFunction_CAST(_winapi_GetModuleFileName), METH_O, _winapi_GetModuleFileName__doc__},
+    {"GetModuleFileName", (PyCFunction)_winapi_GetModuleFileName, METH_O, _winapi_GetModuleFileName__doc__},
 
 static PyObject *
 _winapi_GetModuleFileName_impl(PyObject *module, HMODULE module_handle);
 
-static PyValue
-_winapi_GetModuleFileName(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_GetModuleFileName(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HMODULE module_handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyArg_Parse(_arg, "" F_HANDLE ":GetModuleFileName", &module_handle)) {
-            goto exit;
-        }
+    if (!PyArg_Parse(arg, "" F_HANDLE ":GetModuleFileName", &module_handle)) {
+        goto exit;
     }
-    _return_value = _winapi_GetModuleFileName_impl(module, module_handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_GetModuleFileName_impl(module, module_handle);
 
 exit:
     return return_value;
@@ -1166,14 +1026,15 @@ PyDoc_STRVAR(_winapi_GetShortPathName__doc__,
 static PyObject *
 _winapi_GetShortPathName_impl(PyObject *module, LPCWSTR path);
 
-static PyValue
-_winapi_GetShortPathName(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_GetShortPathName(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1196,31 +1057,23 @@ _winapi_GetShortPathName(PyObject *module, const PyValue *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     LPCWSTR path = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("GetShortPathName", "argument 'path'", "str", _arg);
-            goto exit;
-        }
-        path = PyUnicode_AsWideCharString(_arg, NULL);
-        if (path == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("GetShortPathName", "argument 'path'", "str", args[0]);
+        goto exit;
     }
-    _return_value = _winapi_GetShortPathName_impl(module, path);
-    return_value = PyValue_FromResult(_return_value);
+    path = PyUnicode_AsWideCharString(args[0], NULL);
+    if (path == NULL) {
+        goto exit;
+    }
+    return_value = _winapi_GetShortPathName_impl(module, path);
 
 exit:
     /* Cleanup for path */
@@ -1243,41 +1096,35 @@ PyDoc_STRVAR(_winapi_GetStdHandle__doc__,
 "The integer associated with the handle object is returned.");
 
 #define _WINAPI_GETSTDHANDLE_METHODDEF    \
-    {"GetStdHandle", _PyCFunction_CAST(_winapi_GetStdHandle), METH_O, _winapi_GetStdHandle__doc__},
+    {"GetStdHandle", (PyCFunction)_winapi_GetStdHandle, METH_O, _winapi_GetStdHandle__doc__},
 
 static HANDLE
 _winapi_GetStdHandle_impl(PyObject *module, DWORD std_handle);
 
-static PyValue
-_winapi_GetStdHandle(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_GetStdHandle(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     DWORD std_handle;
     HANDLE _return_value;
 
+    if (!PyIndex_Check(arg)) {
+        _PyArg_BadArgument("GetStdHandle", "argument", "int", arg);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &std_handle, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("GetStdHandle", "argument", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &std_handle, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
@@ -1286,10 +1133,9 @@ _winapi_GetStdHandle(PyObject *module, PyValue arg)
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     return return_value;
@@ -1337,10 +1183,10 @@ _winapi_MapViewOfFile_impl(PyObject *module, HANDLE file_map,
                            DWORD desired_access, DWORD file_offset_high,
                            DWORD file_offset_low, size_t number_bytes);
 
-static PyValue
-_winapi_MapViewOfFile(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_MapViewOfFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE file_map;
     DWORD desired_access;
     DWORD file_offset_high;
@@ -1351,108 +1197,78 @@ _winapi_MapViewOfFile(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("MapViewOfFile", nargs, 5, 5)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        file_map = PyLong_AsVoidPtr(_arg);
-        if (!file_map && PyErr_Occurred()) {
-            goto exit;
-        }
+    file_map = PyLong_AsVoidPtr(args[0]);
+    if (!file_map && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("MapViewOfFile", "argument 2", "int", args[1]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("MapViewOfFile", "argument 2", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("MapViewOfFile", "argument 3", "int", args[2]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &file_offset_high, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("MapViewOfFile", "argument 3", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &file_offset_high, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
+    if (!PyIndex_Check(args[3])) {
+        _PyArg_BadArgument("MapViewOfFile", "argument 4", "int", args[3]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[3], &file_offset_low, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("MapViewOfFile", "argument 4", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &file_offset_low, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_Size_t_Converter(_arg, &number_bytes)) {
-            goto exit;
-        }
+    if (!_PyLong_Size_t_Converter(args[4], &number_bytes)) {
+        goto exit;
     }
     _return_value = _winapi_MapViewOfFile_impl(module, file_map, desired_access, file_offset_high, file_offset_low, number_bytes);
     if ((_return_value == NULL) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     return return_value;
@@ -1464,29 +1280,21 @@ PyDoc_STRVAR(_winapi_UnmapViewOfFile__doc__,
 "\n");
 
 #define _WINAPI_UNMAPVIEWOFFILE_METHODDEF    \
-    {"UnmapViewOfFile", _PyCFunction_CAST(_winapi_UnmapViewOfFile), METH_O, _winapi_UnmapViewOfFile__doc__},
+    {"UnmapViewOfFile", (PyCFunction)_winapi_UnmapViewOfFile, METH_O, _winapi_UnmapViewOfFile__doc__},
 
 static PyObject *
 _winapi_UnmapViewOfFile_impl(PyObject *module, LPCVOID address);
 
-static PyValue
-_winapi_UnmapViewOfFile(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_UnmapViewOfFile(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCVOID address;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyArg_Parse(_arg, "" F_POINTER ":UnmapViewOfFile", &address)) {
-            goto exit;
-        }
+    if (!PyArg_Parse(arg, "" F_POINTER ":UnmapViewOfFile", &address)) {
+        goto exit;
     }
-    _return_value = _winapi_UnmapViewOfFile_impl(module, address);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_UnmapViewOfFile_impl(module, address);
 
 exit:
     return return_value;
@@ -1504,14 +1312,15 @@ static HANDLE
 _winapi_OpenEventW_impl(PyObject *module, DWORD desired_access,
                         BOOL inherit_handle, LPCWSTR name);
 
-static PyValue
-_winapi_OpenEventW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_OpenEventW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1534,7 +1343,7 @@ _winapi_OpenEventW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     DWORD desired_access;
     BOOL inherit_handle;
     LPCWSTR name = NULL;
@@ -1545,59 +1354,46 @@ _winapi_OpenEventW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("OpenEventW", "argument 'desired_access'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
-                goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
-        }
-    }
-    inherit_handle = PyLong_AsIntValue(args[1]);
-    if (inherit_handle == -1 && PyErr_Occurred()) {
+    if (!PyIndex_Check(args[0])) {
+        _PyArg_BadArgument("OpenEventW", "argument 'desired_access'", "int", args[0]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("OpenEventW", "argument 'name'", "str", _arg);
-            goto exit;
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
+                goto exit;
+            }
         }
-        name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (name == NULL) {
-            goto exit;
-        }
+    }
+    inherit_handle = PyLong_AsInt(args[1]);
+    if (inherit_handle == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("OpenEventW", "argument 'name'", "str", args[2]);
+        goto exit;
+    }
+    name = PyUnicode_AsWideCharString(args[2], NULL);
+    if (name == NULL) {
+        goto exit;
     }
     _return_value = _winapi_OpenEventW_impl(module, desired_access, inherit_handle, name);
     if ((_return_value == INVALID_HANDLE_VALUE) && PyErr_Occurred()) {
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -1618,14 +1414,15 @@ static HANDLE
 _winapi_OpenMutexW_impl(PyObject *module, DWORD desired_access,
                         BOOL inherit_handle, LPCWSTR name);
 
-static PyValue
-_winapi_OpenMutexW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_OpenMutexW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1648,7 +1445,7 @@ _winapi_OpenMutexW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     DWORD desired_access;
     BOOL inherit_handle;
     LPCWSTR name = NULL;
@@ -1659,59 +1456,46 @@ _winapi_OpenMutexW(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("OpenMutexW", "argument 'desired_access'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
-                goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
-        }
-    }
-    inherit_handle = PyLong_AsIntValue(args[1]);
-    if (inherit_handle == -1 && PyErr_Occurred()) {
+    if (!PyIndex_Check(args[0])) {
+        _PyArg_BadArgument("OpenMutexW", "argument 'desired_access'", "int", args[0]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("OpenMutexW", "argument 'name'", "str", _arg);
-            goto exit;
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
+                goto exit;
+            }
         }
-        name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (name == NULL) {
-            goto exit;
-        }
+    }
+    inherit_handle = PyLong_AsInt(args[1]);
+    if (inherit_handle == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("OpenMutexW", "argument 'name'", "str", args[2]);
+        goto exit;
+    }
+    name = PyUnicode_AsWideCharString(args[2], NULL);
+    if (name == NULL) {
+        goto exit;
     }
     _return_value = _winapi_OpenMutexW_impl(module, desired_access, inherit_handle, name);
     if ((_return_value == INVALID_HANDLE_VALUE) && PyErr_Occurred()) {
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -1732,10 +1516,10 @@ static HANDLE
 _winapi_OpenFileMapping_impl(PyObject *module, DWORD desired_access,
                              BOOL inherit_handle, LPCWSTR name);
 
-static PyValue
-_winapi_OpenFileMapping(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_OpenFileMapping(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     DWORD desired_access;
     BOOL inherit_handle;
     LPCWSTR name = NULL;
@@ -1744,59 +1528,46 @@ _winapi_OpenFileMapping(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("OpenFileMapping", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("OpenFileMapping", "argument 1", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
-                goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
-        }
-    }
-    inherit_handle = PyLong_AsIntValue(args[1]);
-    if (inherit_handle == -1 && PyErr_Occurred()) {
+    if (!PyIndex_Check(args[0])) {
+        _PyArg_BadArgument("OpenFileMapping", "argument 1", "int", args[0]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("OpenFileMapping", "argument 3", "str", _arg);
-            goto exit;
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
+                goto exit;
+            }
         }
-        name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (name == NULL) {
-            goto exit;
-        }
+    }
+    inherit_handle = PyLong_AsInt(args[1]);
+    if (inherit_handle == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("OpenFileMapping", "argument 3", "str", args[2]);
+        goto exit;
+    }
+    name = PyUnicode_AsWideCharString(args[2], NULL);
+    if (name == NULL) {
+        goto exit;
     }
     _return_value = _winapi_OpenFileMapping_impl(module, desired_access, inherit_handle, name);
     if ((_return_value == INVALID_HANDLE_VALUE) && PyErr_Occurred()) {
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for name */
@@ -1817,10 +1588,10 @@ static HANDLE
 _winapi_OpenProcess_impl(PyObject *module, DWORD desired_access,
                          BOOL inherit_handle, DWORD process_id);
 
-static PyValue
-_winapi_OpenProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_OpenProcess(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     DWORD desired_access;
     BOOL inherit_handle;
     DWORD process_id;
@@ -1829,59 +1600,47 @@ _winapi_OpenProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("OpenProcess", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("OpenProcess", "argument 1", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &desired_access, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
-                goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
-        }
-    }
-    inherit_handle = PyLong_AsIntValue(args[1]);
-    if (inherit_handle == -1 && PyErr_Occurred()) {
+    if (!PyIndex_Check(args[0])) {
+        _PyArg_BadArgument("OpenProcess", "argument 1", "int", args[0]);
         goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &desired_access, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("OpenProcess", "argument 3", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &process_id, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
+        }
+    }
+    inherit_handle = PyLong_AsInt(args[1]);
+    if (inherit_handle == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("OpenProcess", "argument 3", "int", args[2]);
+        goto exit;
+    }
+    {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &process_id, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
+                goto exit;
             }
         }
     }
@@ -1890,10 +1649,9 @@ _winapi_OpenProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     return return_value;
@@ -1910,37 +1668,29 @@ PyDoc_STRVAR(_winapi_PeekNamedPipe__doc__,
 static PyObject *
 _winapi_PeekNamedPipe_impl(PyObject *module, HANDLE handle, int size);
 
-static PyValue
-_winapi_PeekNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_PeekNamedPipe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     int size = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("PeekNamedPipe", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    size = PyLong_AsIntValue(args[1]);
+    size = PyLong_AsInt(args[1]);
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _winapi_PeekNamedPipe_impl(module, handle, size);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_PeekNamedPipe_impl(module, handle, size);
 
 exit:
     return return_value;
@@ -1958,14 +1708,15 @@ static PyObject *
 _winapi_LCMapStringEx_impl(PyObject *module, LPCWSTR locale, DWORD flags,
                            PyObject *src);
 
-static PyValue
-_winapi_LCMapStringEx(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_LCMapStringEx(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1988,70 +1739,50 @@ _winapi_LCMapStringEx(PyObject *module, const PyValue *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     LPCWSTR locale = NULL;
     DWORD flags;
     PyObject *src;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("LCMapStringEx", "argument 'locale'", "str", _arg);
-            goto exit;
-        }
-        locale = PyUnicode_AsWideCharString(_arg, NULL);
-        if (locale == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("LCMapStringEx", "argument 'locale'", "str", args[0]);
+        goto exit;
+    }
+    locale = PyUnicode_AsWideCharString(args[0], NULL);
+    if (locale == NULL) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("LCMapStringEx", "argument 'flags'", "int", args[1]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &flags, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("LCMapStringEx", "argument 'flags'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &flags, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("LCMapStringEx", "argument 'src'", "str", _arg);
-            goto exit;
-        }
-        src = _arg;
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("LCMapStringEx", "argument 'src'", "str", args[2]);
+        goto exit;
     }
-    _return_value = _winapi_LCMapStringEx_impl(module, locale, flags, src);
-    return_value = PyValue_FromResult(_return_value);
+    src = args[2];
+    return_value = _winapi_LCMapStringEx_impl(module, locale, flags, src);
 
 exit:
     /* Cleanup for locale */
@@ -2072,14 +1803,15 @@ static PyObject *
 _winapi_ReadFile_impl(PyObject *module, HANDLE handle, DWORD size,
                       int use_overlapped);
 
-static PyValue
-_winapi_ReadFile(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_ReadFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2102,64 +1834,50 @@ _winapi_ReadFile(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     HANDLE handle;
     DWORD size;
     int use_overlapped = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("ReadFile", "argument 'size'", "int", args[1]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &size, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("ReadFile", "argument 'size'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &size, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    use_overlapped = PyObject_IsTrueValue(args[2]);
+    use_overlapped = PyObject_IsTrue(args[2]);
     if (use_overlapped < 0) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = _winapi_ReadFile_impl(module, handle, size, use_overlapped);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_ReadFile_impl(module, handle, size, use_overlapped);
 
 exit:
     return return_value;
@@ -2176,14 +1894,15 @@ PyDoc_STRVAR(_winapi_ReleaseMutex__doc__,
 static PyObject *
 _winapi_ReleaseMutex_impl(PyObject *module, HANDLE mutex);
 
-static PyValue
-_winapi_ReleaseMutex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_ReleaseMutex(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2206,27 +1925,19 @@ _winapi_ReleaseMutex(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     HANDLE mutex;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        mutex = PyLong_AsVoidPtr(_arg);
-        if (!mutex && PyErr_Occurred()) {
-            goto exit;
-        }
+    mutex = PyLong_AsVoidPtr(args[0]);
+    if (!mutex && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_ReleaseMutex_impl(module, mutex);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_ReleaseMutex_impl(module, mutex);
 
 exit:
     return return_value;
@@ -2243,14 +1954,15 @@ PyDoc_STRVAR(_winapi_ResetEvent__doc__,
 static PyObject *
 _winapi_ResetEvent_impl(PyObject *module, HANDLE event);
 
-static PyValue
-_winapi_ResetEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_ResetEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2273,27 +1985,19 @@ _winapi_ResetEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     HANDLE event;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        event = PyLong_AsVoidPtr(_arg);
-        if (!event && PyErr_Occurred()) {
-            goto exit;
-        }
+    event = PyLong_AsVoidPtr(args[0]);
+    if (!event && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_ResetEvent_impl(module, event);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_ResetEvent_impl(module, event);
 
 exit:
     return return_value;
@@ -2310,14 +2014,15 @@ PyDoc_STRVAR(_winapi_SetEvent__doc__,
 static PyObject *
 _winapi_SetEvent_impl(PyObject *module, HANDLE event);
 
-static PyValue
-_winapi_SetEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_SetEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2340,27 +2045,19 @@ _winapi_SetEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     HANDLE event;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        event = PyLong_AsVoidPtr(_arg);
-        if (!event && PyErr_Occurred()) {
-            goto exit;
-        }
+    event = PyLong_AsVoidPtr(args[0]);
+    if (!event && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_SetEvent_impl(module, event);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_SetEvent_impl(module, event);
 
 exit:
     return return_value;
@@ -2381,43 +2078,26 @@ _winapi_SetNamedPipeHandleState_impl(PyObject *module, HANDLE named_pipe,
                                      PyObject *max_collection_count,
                                      PyObject *collect_data_timeout);
 
-static PyValue
-_winapi_SetNamedPipeHandleState(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_SetNamedPipeHandleState(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE named_pipe;
     PyObject *mode;
     PyObject *max_collection_count;
     PyObject *collect_data_timeout;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("SetNamedPipeHandleState", nargs, 4, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        named_pipe = PyLong_AsVoidPtr(_arg);
-        if (!named_pipe && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    mode = PyValue_Object(args[1]);
-    if (mode == NULL) {
+    named_pipe = PyLong_AsVoidPtr(args[0]);
+    if (!named_pipe && PyErr_Occurred()) {
         goto exit;
     }
-    max_collection_count = PyValue_Object(args[2]);
-    if (max_collection_count == NULL) {
-        goto exit;
-    }
-    collect_data_timeout = PyValue_Object(args[3]);
-    if (collect_data_timeout == NULL) {
-        goto exit;
-    }
-    _return_value = _winapi_SetNamedPipeHandleState_impl(module, named_pipe, mode, max_collection_count, collect_data_timeout);
-    return_value = PyValue_FromResult(_return_value);
+    mode = args[1];
+    max_collection_count = args[2];
+    collect_data_timeout = args[3];
+    return_value = _winapi_SetNamedPipeHandleState_impl(module, named_pipe, mode, max_collection_count, collect_data_timeout);
 
 exit:
     return return_value;
@@ -2436,20 +2116,18 @@ static PyObject *
 _winapi_TerminateProcess_impl(PyObject *module, HANDLE handle,
                               UINT exit_code);
 
-static PyValue
-_winapi_TerminateProcess(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_TerminateProcess(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     UINT exit_code;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, ""_Py_PARSE_UINTPTR"I:TerminateProcess",
         &handle, &exit_code)) {
         goto exit;
     }
-    _return_value = _winapi_TerminateProcess_impl(module, handle, exit_code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_TerminateProcess_impl(module, handle, exit_code);
 
 exit:
     return return_value;
@@ -2461,32 +2139,26 @@ PyDoc_STRVAR(_winapi_VirtualQuerySize__doc__,
 "\n");
 
 #define _WINAPI_VIRTUALQUERYSIZE_METHODDEF    \
-    {"VirtualQuerySize", _PyCFunction_CAST(_winapi_VirtualQuerySize), METH_O, _winapi_VirtualQuerySize__doc__},
+    {"VirtualQuerySize", (PyCFunction)_winapi_VirtualQuerySize, METH_O, _winapi_VirtualQuerySize__doc__},
 
 static size_t
 _winapi_VirtualQuerySize_impl(PyObject *module, LPCVOID address);
 
-static PyValue
-_winapi_VirtualQuerySize(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_VirtualQuerySize(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCVOID address;
     size_t _return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyArg_Parse(_arg, "" F_POINTER ":VirtualQuerySize", &address)) {
-            goto exit;
-        }
+    if (!PyArg_Parse(arg, "" F_POINTER ":VirtualQuerySize", &address)) {
+        goto exit;
     }
     _return_value = _winapi_VirtualQuerySize_impl(module, address);
     if ((_return_value == (size_t)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromUnsignedLongLong((unsigned long long)_return_value);
+    return_value = PyLong_FromSize_t(_return_value);
 
 exit:
     return return_value;
@@ -2503,59 +2175,45 @@ PyDoc_STRVAR(_winapi_WaitNamedPipe__doc__,
 static PyObject *
 _winapi_WaitNamedPipe_impl(PyObject *module, LPCWSTR name, DWORD timeout);
 
-static PyValue
-_winapi_WaitNamedPipe(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_WaitNamedPipe(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR name = NULL;
     DWORD timeout;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WaitNamedPipe", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("WaitNamedPipe", "argument 1", "str", _arg);
-            goto exit;
-        }
-        name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("WaitNamedPipe", "argument 1", "str", args[0]);
+        goto exit;
+    }
+    name = PyUnicode_AsWideCharString(args[0], NULL);
+    if (name == NULL) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("WaitNamedPipe", "argument 2", "int", args[1]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &timeout, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("WaitNamedPipe", "argument 2", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &timeout, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
-    _return_value = _winapi_WaitNamedPipe_impl(module, name, timeout);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_WaitNamedPipe_impl(module, name, timeout);
 
 exit:
     /* Cleanup for name */
@@ -2592,14 +2250,15 @@ _winapi_BatchedWaitForMultipleObjects_impl(PyObject *module,
                                            PyObject *handle_seq,
                                            BOOL wait_all, DWORD milliseconds);
 
-static PyValue
-_winapi_BatchedWaitForMultipleObjects(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_BatchedWaitForMultipleObjects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2622,58 +2281,47 @@ _winapi_BatchedWaitForMultipleObjects(PyObject *module, const PyValue *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *handle_seq;
     BOOL wait_all;
     DWORD milliseconds = INFINITE;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    handle_seq = PyValue_Object(args[0]);
-    if (handle_seq == NULL) {
-        goto exit;
-    }
-    wait_all = PyLong_AsIntValue(args[1]);
+    handle_seq = args[0];
+    wait_all = PyLong_AsInt(args[1]);
     if (wait_all == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("BatchedWaitForMultipleObjects", "argument 'milliseconds'", "int", args[2]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &milliseconds, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("BatchedWaitForMultipleObjects", "argument 'milliseconds'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &milliseconds, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional_pos:
-    _return_value = _winapi_BatchedWaitForMultipleObjects_impl(module, handle_seq, wait_all, milliseconds);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_BatchedWaitForMultipleObjects_impl(module, handle_seq, wait_all, milliseconds);
 
 exit:
     return return_value;
@@ -2692,58 +2340,47 @@ static PyObject *
 _winapi_WaitForMultipleObjects_impl(PyObject *module, PyObject *handle_seq,
                                     BOOL wait_flag, DWORD milliseconds);
 
-static PyValue
-_winapi_WaitForMultipleObjects(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_WaitForMultipleObjects(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *handle_seq;
     BOOL wait_flag;
     DWORD milliseconds = INFINITE;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("WaitForMultipleObjects", nargs, 2, 3)) {
         goto exit;
     }
-    handle_seq = PyValue_Object(args[0]);
-    if (handle_seq == NULL) {
-        goto exit;
-    }
-    wait_flag = PyLong_AsIntValue(args[1]);
+    handle_seq = args[0];
+    wait_flag = PyLong_AsInt(args[1]);
     if (wait_flag == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("WaitForMultipleObjects", "argument 3", "int", args[2]);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &milliseconds, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("WaitForMultipleObjects", "argument 3", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &milliseconds, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
 skip_optional:
-    _return_value = _winapi_WaitForMultipleObjects_impl(module, handle_seq, wait_flag, milliseconds);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_WaitForMultipleObjects_impl(module, handle_seq, wait_flag, milliseconds);
 
 exit:
     return return_value;
@@ -2766,10 +2403,10 @@ static long
 _winapi_WaitForSingleObject_impl(PyObject *module, HANDLE handle,
                                  DWORD milliseconds);
 
-static PyValue
-_winapi_WaitForSingleObject(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_WaitForSingleObject(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     DWORD milliseconds;
     long _return_value;
@@ -2777,39 +2414,27 @@ _winapi_WaitForSingleObject(PyObject *module, const PyValue *args, Py_ssize_t na
     if (!_PyArg_CheckPositional("WaitForSingleObject", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[1])) {
+        _PyArg_BadArgument("WaitForSingleObject", "argument 2", "int", args[1]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &milliseconds, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("WaitForSingleObject", "argument 2", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &milliseconds, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
@@ -2817,7 +2442,7 @@ _winapi_WaitForSingleObject(PyObject *module, const PyValue *args, Py_ssize_t na
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromLongLong((long long)_return_value);
+    return_value = PyLong_FromLong(_return_value);
 
 exit:
     return return_value;
@@ -2835,14 +2460,15 @@ static PyObject *
 _winapi_WriteFile_impl(PyObject *module, HANDLE handle, PyObject *buffer,
                        int use_overlapped);
 
-static PyValue
-_winapi_WriteFile(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_WriteFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2865,42 +2491,31 @@ _winapi_WriteFile(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     HANDLE handle;
     PyObject *buffer;
     int use_overlapped = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    buffer = PyValue_Object(args[1]);
-    if (buffer == NULL) {
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
         goto exit;
     }
+    buffer = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    use_overlapped = PyObject_IsTrueValue(args[2]);
+    use_overlapped = PyObject_IsTrue(args[2]);
     if (use_overlapped < 0) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = _winapi_WriteFile_impl(module, handle, buffer, use_overlapped);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_WriteFile_impl(module, handle, buffer, use_overlapped);
 
 exit:
     return return_value;
@@ -2953,14 +2568,15 @@ PyDoc_STRVAR(_winapi_GetFileType__doc__,
 static DWORD
 _winapi_GetFileType_impl(PyObject *module, HANDLE handle);
 
-static PyValue
-_winapi_GetFileType(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_GetFileType(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2983,7 +2599,7 @@ _winapi_GetFileType(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     HANDLE handle;
     DWORD _return_value;
 
@@ -2992,21 +2608,15 @@ _winapi_GetFileType(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
     _return_value = _winapi_GetFileType_impl(module, handle);
     if ((_return_value == PY_DWORD_MAX) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyLong_FromUnsignedLong(_return_value));
+    return_value = PyLong_FromUnsignedLong(_return_value);
 
 exit:
     return return_value;
@@ -3028,14 +2638,15 @@ static PyObject *
 _winapi__mimetypes_read_windows_registry_impl(PyObject *module,
                                               PyObject *on_type_read);
 
-static PyValue
-_winapi__mimetypes_read_windows_registry(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi__mimetypes_read_windows_registry(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3058,21 +2669,16 @@ _winapi__mimetypes_read_windows_registry(PyObject *module, const PyValue *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *on_type_read;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    on_type_read = PyValue_Object(args[0]);
-    if (on_type_read == NULL) {
-        goto exit;
-    }
-    _return_value = _winapi__mimetypes_read_windows_registry_impl(module, on_type_read);
-    return_value = PyValue_FromResult(_return_value);
+    on_type_read = args[0];
+    return_value = _winapi__mimetypes_read_windows_registry_impl(module, on_type_read);
 
 exit:
     return return_value;
@@ -3084,38 +2690,32 @@ PyDoc_STRVAR(_winapi_NeedCurrentDirectoryForExePath__doc__,
 "\n");
 
 #define _WINAPI_NEEDCURRENTDIRECTORYFOREXEPATH_METHODDEF    \
-    {"NeedCurrentDirectoryForExePath", _PyCFunction_CAST(_winapi_NeedCurrentDirectoryForExePath), METH_O, _winapi_NeedCurrentDirectoryForExePath__doc__},
+    {"NeedCurrentDirectoryForExePath", (PyCFunction)_winapi_NeedCurrentDirectoryForExePath, METH_O, _winapi_NeedCurrentDirectoryForExePath__doc__},
 
 static int
 _winapi_NeedCurrentDirectoryForExePath_impl(PyObject *module,
                                             LPCWSTR exe_name);
 
-static PyValue
-_winapi_NeedCurrentDirectoryForExePath(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_NeedCurrentDirectoryForExePath(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR exe_name = NULL;
     int _return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("NeedCurrentDirectoryForExePath", "argument", "str", _arg);
-            goto exit;
-        }
-        exe_name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (exe_name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("NeedCurrentDirectoryForExePath", "argument", "str", arg);
+        goto exit;
+    }
+    exe_name = PyUnicode_AsWideCharString(arg, NULL);
+    if (exe_name == NULL) {
+        goto exit;
     }
     _return_value = _winapi_NeedCurrentDirectoryForExePath_impl(module, exe_name);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
+    return_value = PyBool_FromLong((long)_return_value);
 
 exit:
     /* Cleanup for exe_name */
@@ -3145,14 +2745,15 @@ _winapi_CopyFile2_impl(PyObject *module, LPCWSTR existing_file_name,
                        LPCWSTR new_file_name, DWORD flags,
                        PyObject *progress_routine);
 
-static PyValue
-_winapi_CopyFile2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_winapi_CopyFile2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3175,83 +2776,60 @@ _winapi_CopyFile2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
     LPCWSTR existing_file_name = NULL;
     LPCWSTR new_file_name = NULL;
     DWORD flags;
     PyObject *progress_routine = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("CopyFile2", "argument 'existing_file_name'", "str", _arg);
-            goto exit;
-        }
-        existing_file_name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (existing_file_name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("CopyFile2", "argument 'existing_file_name'", "str", args[0]);
+        goto exit;
+    }
+    existing_file_name = PyUnicode_AsWideCharString(args[0], NULL);
+    if (existing_file_name == NULL) {
+        goto exit;
+    }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("CopyFile2", "argument 'new_file_name'", "str", args[1]);
+        goto exit;
+    }
+    new_file_name = PyUnicode_AsWideCharString(args[1], NULL);
+    if (new_file_name == NULL) {
+        goto exit;
+    }
+    if (!PyIndex_Check(args[2])) {
+        _PyArg_BadArgument("CopyFile2", "argument 'flags'", "int", args[2]);
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[2], &flags, sizeof(DWORD),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("CopyFile2", "argument 'new_file_name'", "str", _arg);
-            goto exit;
-        }
-        new_file_name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (new_file_name == NULL) {
-            goto exit;
-        }
-    }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("CopyFile2", "argument 'flags'", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &flags, sizeof(DWORD),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(DWORD)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(DWORD)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    progress_routine = PyValue_Object(args[3]);
-    if (progress_routine == NULL) {
-        goto exit;
-    }
+    progress_routine = args[3];
 skip_optional_pos:
-    _return_value = _winapi_CopyFile2_impl(module, existing_file_name, new_file_name, flags, progress_routine);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_CopyFile2_impl(module, existing_file_name, new_file_name, flags, progress_routine);
 
 exit:
     /* Cleanup for existing_file_name */
@@ -3281,10 +2859,10 @@ static HANDLE
 _winapi_RegisterEventSource_impl(PyObject *module, LPCWSTR unc_server_name,
                                  LPCWSTR source_name);
 
-static PyValue
-_winapi_RegisterEventSource(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_RegisterEventSource(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     LPCWSTR unc_server_name = NULL;
     LPCWSTR source_name = NULL;
     HANDLE _return_value;
@@ -3292,48 +2870,35 @@ _winapi_RegisterEventSource(PyObject *module, const PyValue *args, Py_ssize_t na
     if (!_PyArg_CheckPositional("RegisterEventSource", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            unc_server_name = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            unc_server_name = PyUnicode_AsWideCharString(_arg, NULL);
-            if (unc_server_name == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("RegisterEventSource", "argument 1", "str or None", _arg);
+    if (args[0] == Py_None) {
+        unc_server_name = NULL;
+    }
+    else if (PyUnicode_Check(args[0])) {
+        unc_server_name = PyUnicode_AsWideCharString(args[0], NULL);
+        if (unc_server_name == NULL) {
             goto exit;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("RegisterEventSource", "argument 2", "str", _arg);
-            goto exit;
-        }
-        source_name = PyUnicode_AsWideCharString(_arg, NULL);
-        if (source_name == NULL) {
-            goto exit;
-        }
+    else {
+        _PyArg_BadArgument("RegisterEventSource", "argument 1", "str or None", args[0]);
+        goto exit;
+    }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("RegisterEventSource", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    source_name = PyUnicode_AsWideCharString(args[1], NULL);
+    if (source_name == NULL) {
+        goto exit;
     }
     _return_value = _winapi_RegisterEventSource_impl(module, unc_server_name, source_name);
     if ((_return_value == INVALID_HANDLE_VALUE) && PyErr_Occurred()) {
         goto exit;
     }
     if (_return_value == NULL) {
-        return_value = PyValue_FromResult(Py_None);
-        goto exit;
+        Py_RETURN_NONE;
     }
-    return_value = PyValue_FromResult(HANDLE_TO_PYNUM(_return_value));
+    return_value = HANDLE_TO_PYNUM(_return_value);
 
 exit:
     /* Cleanup for unc_server_name */
@@ -3354,30 +2919,22 @@ PyDoc_STRVAR(_winapi_DeregisterEventSource__doc__,
 "    The handle to the event log to be deregistered.");
 
 #define _WINAPI_DEREGISTEREVENTSOURCE_METHODDEF    \
-    {"DeregisterEventSource", _PyCFunction_CAST(_winapi_DeregisterEventSource), METH_O, _winapi_DeregisterEventSource__doc__},
+    {"DeregisterEventSource", (PyCFunction)_winapi_DeregisterEventSource, METH_O, _winapi_DeregisterEventSource__doc__},
 
 static PyObject *
 _winapi_DeregisterEventSource_impl(PyObject *module, HANDLE handle);
 
-static PyValue
-_winapi_DeregisterEventSource(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_DeregisterEventSource(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(arg);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_DeregisterEventSource_impl(module, handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_DeregisterEventSource_impl(module, handle);
 
 exit:
     return return_value;
@@ -3408,73 +2965,41 @@ _winapi_ReportEvent_impl(PyObject *module, HANDLE handle,
                          unsigned short type, unsigned short category,
                          unsigned int event_id, LPCWSTR string);
 
-static PyValue
-_winapi_ReportEvent(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_winapi_ReportEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
     unsigned short type;
     unsigned short category;
     unsigned int event_id;
     LPCWSTR string = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ReportEvent", nargs, 5, 5)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(args[0]);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedShort_Converter(_arg, &type)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedShort_Converter(args[1], &type)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedShort_Converter(_arg, &category)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedShort_Converter(args[2], &category)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_PyLong_UnsignedInt_Converter(_arg, &event_id)) {
-            goto exit;
-        }
+    if (!_PyLong_UnsignedInt_Converter(args[3], &event_id)) {
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("ReportEvent", "argument 5", "str", _arg);
-            goto exit;
-        }
-        string = PyUnicode_AsWideCharString(_arg, NULL);
-        if (string == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[4])) {
+        _PyArg_BadArgument("ReportEvent", "argument 5", "str", args[4]);
+        goto exit;
     }
-    _return_value = _winapi_ReportEvent_impl(module, handle, type, category, event_id, string);
-    return_value = PyValue_FromResult(_return_value);
+    string = PyUnicode_AsWideCharString(args[4], NULL);
+    if (string == NULL) {
+        goto exit;
+    }
+    return_value = _winapi_ReportEvent_impl(module, handle, type, category, event_id, string);
 
 exit:
     /* Cleanup for string */
@@ -3490,30 +3015,22 @@ PyDoc_STRVAR(_winapi_GetProcessMemoryInfo__doc__,
 "Return the memory usage of the given process handle as a dict.");
 
 #define _WINAPI_GETPROCESSMEMORYINFO_METHODDEF    \
-    {"GetProcessMemoryInfo", _PyCFunction_CAST(_winapi_GetProcessMemoryInfo), METH_O, _winapi_GetProcessMemoryInfo__doc__},
+    {"GetProcessMemoryInfo", (PyCFunction)_winapi_GetProcessMemoryInfo, METH_O, _winapi_GetProcessMemoryInfo__doc__},
 
 static PyObject *
 _winapi_GetProcessMemoryInfo_impl(PyObject *module, HANDLE handle);
 
-static PyValue
-_winapi_GetProcessMemoryInfo(PyObject *module, PyValue arg)
+static PyObject *
+_winapi_GetProcessMemoryInfo(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     HANDLE handle;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        handle = PyLong_AsVoidPtr(_arg);
-        if (!handle && PyErr_Occurred()) {
-            goto exit;
-        }
+    handle = PyLong_AsVoidPtr(arg);
+    if (!handle && PyErr_Occurred()) {
+        goto exit;
     }
-    _return_value = _winapi_GetProcessMemoryInfo_impl(module, handle);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _winapi_GetProcessMemoryInfo_impl(module, handle);
 
 exit:
     return return_value;
@@ -3540,4 +3057,4 @@ _winapi_GetTickCount64(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef _WINAPI_GETSHORTPATHNAME_METHODDEF
     #define _WINAPI_GETSHORTPATHNAME_METHODDEF
 #endif /* !defined(_WINAPI_GETSHORTPATHNAME_METHODDEF) */
-/*[clinic end generated code: output=240dac2c1c8579a8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=15ab8b04851932e1 input=a9049054013a1b77]*/

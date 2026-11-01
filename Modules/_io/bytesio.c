@@ -22,10 +22,14 @@ typedef struct {
     Py_ssize_t pos;
     Py_ssize_t string_size;
     PyObject *dict;
+    PyObject *weakreflist;
     Py_ssize_t exports;
-    /* buf may be referenced from outside: set when buf escapes and when it
-       comes from outside, since references are not counted. */
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
+    /* buf may be referenced from outside: the free-threaded build sets it
+       when buf escapes; Py_GC, which cannot count references, also when buf
+       comes from outside. */
     int buf_shared;
+#endif
 } bytesio;
 
 #define bytesio_CAST(op)    ((bytesio *)(op))
@@ -38,9 +42,8 @@ typedef struct {
 #define bytesiobuf_CAST(op) ((bytesiobuf *)(op))
 
 /* The bytesio object can be in three states:
-  * buf has not been handed out (buf_shared == 0), the hash of buf is not
-    cached, exports == 0.
-  * buf has been handed out or its hash is cached.  exports == 0,
+  * Py_REFCNT(buf) == 1, the hash of buf is not cached, exports == 0.
+  * Py_REFCNT(buf) > 1 or the hash of buf is cached.  exports == 0,
     first modification or export causes the internal buffer copying.
   * exports > 0.  Any modifications are forbidden.  Every exported buffer
     keeps a reference to buf, so it outlives closing of the bytesio object.
@@ -83,18 +86,31 @@ check_exports(bytesio *self)
 #define HASHED_BUF(self) \
     (_PyBytes_GET_CACHED_HASH((PyBytesObject *)(self)->buf) != -1)
 
+#ifdef Py_GC
 #define SHARED_BUF(self) ((self)->buf_shared || HASHED_BUF(self))
+#elif defined(Py_GIL_DISABLED)
+#define SHARED_BUF(self) \
+    ((self)->buf_shared || !_PyObject_IsUniquelyReferenced((self)->buf) \
+     || HASHED_BUF(self))
+#else
+#define SHARED_BUF(self) \
+    (!_PyObject_IsUniquelyReferenced((self)->buf) || HASHED_BUF(self))
+#endif
 
 static inline void
 set_shared_buf(bytesio *self)
 {
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
     self->buf_shared = 1;
+#endif
 }
 
 static inline void
 clear_shared_buf(bytesio *self)
 {
+#if defined(Py_GIL_DISABLED) || defined(Py_GC)
     self->buf_shared = 0;
+#endif
 }
 
 static int
@@ -102,6 +118,12 @@ resize_unshared_buffer_lock_held(bytesio *self, Py_ssize_t size)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
+#ifdef Py_GIL_DISABLED
+    /* If the internal bytes object escaped via a zero-copy getvalue(), read(),
+       or peek(), resizing it would mutate an object visible to Python code.
+       Callers must detach first. */
+    assert(!self->buf_shared);
+#endif
     int ret = _PyBytes_ResizeKeepOnError(&self->buf, size);
     if (ret == 0) {
         clear_shared_buf(self);
@@ -768,24 +790,22 @@ _io_BytesIO_truncate_impl(bytesio *self, PyObject *size)
 _io.BytesIO.__next__ as bytesio_iternext
 [clinic start generated code]*/
 
-static PyValue
+static PyObject *
 bytesio_iternext_impl(bytesio *self)
-/*[clinic end generated code: output=8fd0cab06f21f1f3 input=7fb3a763efe11a21]*/
+/*[clinic end generated code: output=f530bdee3a720d48 input=7fb3a763efe11a21]*/
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
     Py_ssize_t n;
 
-    if (check_closed(self)) {
-        return PyValue_NULL;
-    }
+    CHECK_CLOSED(self);
 
     n = scan_eol_lock_held(self, -1);
 
     if (n == 0)
-        return PyValue_NULL;
+        return NULL;
 
-    return PyValue_FromResult(read_bytes_lock_held(self, n));
+    return read_bytes_lock_held(self, n);
 }
 
 /*[clinic input]
@@ -1065,9 +1085,16 @@ bytesio_dealloc(PyObject *op)
     bytesio *self = bytesio_CAST(op);
     PyTypeObject *tp = Py_TYPE(self);
     _PyObject_GC_UNTRACK(self);
+#ifndef Py_GC  // the sweep can deallocate the exporter before its views
+    if (FT_ATOMIC_LOAD_SSIZE_RELAXED(self->exports) > 0) {
+        PyErr_SetString(PyExc_SystemError,
+                        "deallocated BytesIO object has exported buffers");
+        PyErr_Print();
+    }
+#endif
     Py_CLEAR(self->buf);
     Py_CLEAR(self->dict);
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, self->weakreflist);
     tp->tp_free(self);
     Py_DECREF(tp);
 }
@@ -1090,7 +1117,9 @@ bytesio_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         Py_DECREF(self);
         return PyErr_NoMemory();
     }
+#ifdef Py_GC
     set_shared_buf(self);
+#endif
 
     return (PyObject *)self;
 }
@@ -1120,7 +1149,11 @@ _io_BytesIO___init___impl(bytesio *self, PyObject *initvalue)
     if (initvalue && initvalue != Py_None) {
         if (PyBytes_CheckExact(initvalue)) {
             Py_XSETREF(self->buf, Py_NewRef(initvalue));
+#ifdef Py_GC
             set_shared_buf(self);  // the caller holds initvalue
+#else
+            clear_shared_buf(self);
+#endif
             self->string_size = PyBytes_GET_SIZE(initvalue);
         }
         else {
@@ -1217,6 +1250,7 @@ static struct PyMethodDef bytesio_methods[] = {
 };
 
 static PyMemberDef bytesio_members[] = {
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(bytesio, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(bytesio, dict), Py_READONLY},
     {NULL}
 };
@@ -1240,7 +1274,7 @@ PyType_Spec _Py_bytesio_spec = {
     .name = "_io.BytesIO",
     .basicsize = sizeof(bytesio),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = bytesio_slots,
 };
 

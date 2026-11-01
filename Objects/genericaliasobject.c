@@ -5,7 +5,6 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"
-#include "pycore_tuple.h"          // _PyTuple_Objects()
 #include "pycore_typevarobject.h" // _Py_typing_type_repr
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _PyGenericAlias_Check
@@ -19,6 +18,7 @@ typedef struct {
     PyObject *origin;
     PyObject *args;
     PyObject *parameters;
+    PyObject *weakreflist;
     // Whether we're a starred type, e.g. *tuple[int].
     bool starred;
     vectorcallfunc vectorcall;
@@ -35,7 +35,7 @@ ga_dealloc(PyObject *self)
     gaobject *alias = (gaobject *)self;
 
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(self);
+    FT_CLEAR_WEAKREFS(self, alias->weakreflist);
     Py_XDECREF(alias->origin);
     Py_XDECREF(alias->args);
     Py_XDECREF(alias->parameters);
@@ -168,15 +168,17 @@ tuple_add(PyObject *self, Py_ssize_t len, PyObject *item)
 }
 
 static Py_ssize_t
-tuple_extend(PyObject **dst, Py_ssize_t dstindex, PyObject *src)
+tuple_extend(PyObject **dst, Py_ssize_t dstindex,
+             PyObject **src, Py_ssize_t count)
 {
-    Py_ssize_t count = PyTuple_GET_SIZE(src);
+    assert(count >= 0);
     if (_PyTuple_Resize(dst, PyTuple_GET_SIZE(*dst) + count - 1) != 0) {
         return -1;
     }
     assert(dstindex + count <= PyTuple_GET_SIZE(*dst));
     for (Py_ssize_t i = 0; i < count; ++i) {
-        PyTuple_SET_VALUE(*dst, dstindex + i, PyTuple_GET_VALUE(src, i));
+        PyObject *item = src[i];
+        PyTuple_SET_ITEM(*dst, dstindex + i, Py_NewRef(item));
     }
     return dstindex + count;
 }
@@ -274,7 +276,7 @@ cleanup:
    a non-empty tuple, return a new reference to obj. */
 static PyObject *
 subs_tvars(PyObject *obj, PyObject *params,
-           PyObject *const *argitems, Py_ssize_t nargs)
+           PyObject **argitems, Py_ssize_t nargs)
 {
     PyObject *subparams;
     if (PyObject_GetOptionalAttr(obj, &_Py_ID(__parameters__), &subparams) < 0) {
@@ -296,7 +298,9 @@ subs_tvars(PyObject *obj, PyObject *params,
                 PyObject *param = PyTuple_GET_ITEM(params, iparam);
                 arg = argitems[iparam];
                 if (Py_TYPE(param)->tp_iter && PyTuple_Check(arg)) {  // TypeVarTuple
-                    j = tuple_extend(&subargs, j, arg);
+                    j = tuple_extend(&subargs, j,
+                                    &PyTuple_GET_ITEM(arg, 0),
+                                    PyTuple_GET_SIZE(arg));
                     if (j < 0) {
                         Py_DECREF(subparams);
                         assert(subargs == NULL);
@@ -369,11 +373,7 @@ _unpack_args(PyObject *item)
     }
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject *const *argitems = is_tuple ? _PyTuple_Objects(item) : &item;
-    if (argitems == NULL) {
-        Py_DECREF(newargs);
-        return NULL;
-    }
+    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
     for (Py_ssize_t i = 0; i < nitems; i++) {
         item = argitems[i];
         if (!PyType_Check(item)) {
@@ -442,11 +442,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     }
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject *const *argitems = is_tuple ? _PyTuple_Objects(item) : &item;
-    if (argitems == NULL) {
-        Py_DECREF(item);
-        return NULL;
-    }
+    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
     if (nitems != nparams) {
         Py_DECREF(item);
         return PyErr_Format(PyExc_TypeError,
@@ -564,7 +560,8 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 Py_DECREF(arg);
                 return NULL;
             }
-            jarg = tuple_extend(&newargs, jarg, arg);
+            jarg = tuple_extend(&newargs, jarg,
+                    &PyTuple_GET_ITEM(arg, 0), PyTuple_GET_SIZE(arg));
             Py_DECREF(arg);
             if (jarg < 0) {
                 Py_DECREF(item);
@@ -662,35 +659,21 @@ set_orig_class(PyObject *obj, PyObject *self)
     return obj;
 }
 
-/* set_orig_class() on a call's value: an inline result is returned as it
-   is, since setting __orig_class__ on an int or float raises
-   AttributeError, which set_orig_class() ignores. */
-static PyValue
-set_orig_class_value(PyValue res, PyObject *self)
-{
-    if (PyValue_IsNull(res) || PyValue_IsInline(res)) {
-        return res;
-    }
-    return PyValue_FromResult(set_orig_class(PyValue_ObjectBorrow(res), self));
-}
-
-static PyValue
+static PyObject *
 ga_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     gaobject *alias = (gaobject *)self;
-    PyValue res = PyObject_CallValue(PyValue_FromObject(alias->origin),
-                                     args, kwds);
-    return set_orig_class_value(res, self);
+    PyObject *obj = PyObject_Call(alias->origin, args, kwds);
+    return set_orig_class(obj, self);
 }
 
-static PyValue
-ga_vectorcall(PyValue self, const PyValue *args,
+static PyObject *
+ga_vectorcall(PyObject *self, PyObject *const *args,
               size_t nargsf, PyObject *kwnames)
 {
-    gaobject *alias = (gaobject *)PyValue_ObjectBorrow(self);
-    PyValue res = PyObject_VectorcallValue(PyValue_FromObject(alias->origin),
-                                           args, nargsf, kwnames);
-    return set_orig_class_value(res, (PyObject *)alias);
+    gaobject *alias = (gaobject *) self;
+    PyObject *obj = PyObject_Vectorcall(alias->origin, args, nargsf, kwnames);
+    return set_orig_class(obj, self);
 }
 
 static const char* const attr_exceptions[] = {
@@ -713,7 +696,7 @@ static const char* const attr_blocked[] = {
     NULL,
 };
 
-static PyValue
+static PyObject *
 ga_getattro(PyObject *self, PyObject *name)
 {
     gaobject *alias = (gaobject *)self;
@@ -732,8 +715,7 @@ ga_getattro(PyObject *self, PyObject *name)
         // When we see own attrs, it has a priority over `__origin__`'s attr.
         for (const char * const *p = attr_exceptions; ; p++) {
             if (*p == NULL) {
-                return PyObject_GetAttrValue(PyValue_FromObject(alias->origin),
-                                             name);
+                return PyObject_GetAttr(alias->origin, name);
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
                 goto generic_getattr;
@@ -782,31 +764,27 @@ ga_richcompare(PyObject *a, PyObject *b, int op)
     return PyObject_RichCompare(aa->args, bb->args, Py_EQ);
 }
 
-static PyValue
-ga_mro_entries(PyObject *self, PyValue args_value)
+static PyObject *
+ga_mro_entries(PyObject *self, PyObject *args)
 {
-    PyObject *args = PyValue_Object(args_value);
-    if (args == NULL) {
-        return PyValue_NULL;
-    }
     gaobject *alias = (gaobject *)self;
-    return PyValue_FromResult(PyTuple_Pack(1, alias->origin));
+    return PyTuple_Pack(1, alias->origin);
 }
 
-static PyValue
-ga_instancecheck(PyObject *self, PyValue Py_UNUSED(ignored))
+static PyObject *
+ga_instancecheck(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     PyErr_SetString(PyExc_TypeError,
                     "isinstance() argument 2 cannot be a parameterized generic");
-    return PyValue_NULL;
+    return NULL;
 }
 
-static PyValue
-ga_subclasscheck(PyObject *self, PyValue Py_UNUSED(ignored))
+static PyObject *
+ga_subclasscheck(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     PyErr_SetString(PyExc_TypeError,
                     "issubclass() argument 2 cannot be a parameterized generic");
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyObject *
@@ -866,9 +844,9 @@ error:
 }
 
 static PyMethodDef ga_methods[] = {
-    {"__mro_entries__", _PyCFunction_CAST(ga_mro_entries), METH_O},
-    {"__instancecheck__", _PyCFunction_CAST(ga_instancecheck), METH_O},
-    {"__subclasscheck__", _PyCFunction_CAST(ga_subclasscheck), METH_O},
+    {"__mro_entries__", ga_mro_entries, METH_O},
+    {"__instancecheck__", ga_instancecheck, METH_O},
+    {"__subclasscheck__", ga_subclasscheck, METH_O},
     {"__reduce__", ga_reduce, METH_NOARGS},
     {"__dir__", ga_dir, METH_NOARGS},
     {0}
@@ -895,24 +873,24 @@ ga_parameters_lock_held(PyObject *self)
     return Py_NewRef(alias->parameters);
 }
 
-static PyValue
+static PyObject *
 ga_parameters(PyObject *self, void *unused)
 {
     PyObject *result;
     Py_BEGIN_CRITICAL_SECTION(self);
     result = ga_parameters_lock_held(self);
     Py_END_CRITICAL_SECTION();
-    return PyValue_FromResult(result);
+    return result;
 }
 
-static PyValue
+static PyObject *
 ga_unpacked_tuple_args(PyObject *self, void *unused)
 {
     gaobject *alias = (gaobject *)self;
     if (alias->starred && alias->origin == (PyObject *)&PyTuple_Type) {
-        return PyValue_FromObject(alias->args);
+        return Py_NewRef(alias->args);
     }
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 static PyGetSetDef ga_properties[] = {
@@ -939,6 +917,7 @@ setup_ga(gaobject *alias, PyObject *origin, PyObject *args) {
     alias->origin = Py_NewRef(origin);
     alias->args = args;
     alias->parameters = NULL;
+    alias->weakreflist = NULL;
 
     if (PyVectorcall_Function(origin) != NULL) {
         alias->vectorcall = ga_vectorcall;
@@ -976,7 +955,7 @@ static PyNumberMethods ga_as_number = {
         .nb_or = _Py_union_type_or, // Add __or__ function
 };
 
-static PyValue
+static PyObject *
 ga_iternext(PyObject *op)
 {
     gaiterobject *gi = (gaiterobject*)op;
@@ -987,16 +966,16 @@ ga_iternext(PyObject *op)
     Py_END_CRITICAL_SECTION();
     if (obj == NULL) {
         PyErr_SetNone(PyExc_StopIteration);
-        return PyValue_NULL;
+        return NULL;
     }
     gaobject *alias = (gaobject *)obj;
     PyObject *starred_alias = Py_GenericAlias(alias->origin, alias->args);
     Py_DECREF(obj);
     if (starred_alias == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     ((gaobject *)starred_alias)->starred = true;
-    return PyValue_FromResult(starred_alias);
+    return starred_alias;
 }
 
 static void
@@ -1095,10 +1074,10 @@ PyTypeObject Py_GenericAliasType = {
     .tp_hash = ga_hash,
     .tp_call = ga_call,
     .tp_getattro = ga_getattro,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL |
-                Py_TPFLAGS_MANAGED_WEAKREF,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_VECTORCALL,
     .tp_traverse = ga_traverse,
     .tp_richcompare = ga_richcompare,
+    .tp_weaklistoffset = offsetof(gaobject, weakreflist),
     .tp_methods = ga_methods,
     .tp_members = ga_members,
     .tp_alloc = PyType_GenericAlloc,
@@ -1122,14 +1101,4 @@ Py_GenericAlias(PyObject *origin, PyObject *args)
         return NULL;
     }
     return (PyObject *)alias;
-}
-
-PyValue
-Py_GenericAliasValue(PyObject *origin, PyValue args)
-{
-    PyObject *args_obj = PyValue_Object(args);
-    if (args_obj == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(Py_GenericAlias(origin, args_obj));
 }

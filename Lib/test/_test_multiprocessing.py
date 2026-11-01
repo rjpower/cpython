@@ -3429,6 +3429,10 @@ class _TestPool(BaseTestCase):
         # check that we indeed waited for all jobs
         self.assertGreater(time.monotonic() - t_start, 0.9)
 
+    # Under a gc-debug build a stale word on a pool thread's -Og stack points
+    # at the MapResult, so the conservative stack scan keeps the tasks alive.
+    @unittest.skipIf(support.Py_GC and support.Py_DEBUG,
+                     "a pool thread's -Og stack keeps the results alive")
     def test_release_task_refs(self):
         # Issue #29861: task arguments and results should not be kept
         # alive after we are done with them.
@@ -3917,6 +3921,48 @@ class _TestManagerRestart(BaseTestCase):
             if hasattr(manager, "shutdown"):
                 self.addCleanup(manager.shutdown)
 
+
+class FakeConnection:
+    def send(self, payload):
+        pass
+
+    def recv(self):
+        return '#ERROR', pyqueue.Empty()
+
+class TestManagerExceptions(unittest.TestCase):
+    # Issue 106558: Manager exceptions avoids creating cyclic references.
+    def setUp(self):
+        with warnings_helper.ignore_fork_in_thread_deprecation_warnings():
+            self.mgr = multiprocessing.Manager()
+
+    def tearDown(self):
+        self.mgr.shutdown()
+        self.mgr.join()
+
+    @support.requires_refcounting
+    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
+    def test_queue_get(self):
+        queue = self.mgr.Queue()
+        if gc.isenabled():
+            gc.disable()
+            self.addCleanup(gc.enable)
+        try:
+            queue.get_nowait()
+        except pyqueue.Empty as e:
+            wr = weakref.ref(e)
+        self.assertEqual(wr(), None)
+
+    @support.requires_refcounting
+    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
+    def test_dispatch(self):
+        if gc.isenabled():
+            gc.disable()
+            self.addCleanup(gc.enable)
+        try:
+            multiprocessing.managers.dispatch(FakeConnection(), None, None)
+        except pyqueue.Empty as e:
+            wr = weakref.ref(e)
+        self.assertEqual(wr(), None)
 
 #
 #
@@ -4552,6 +4598,7 @@ class _TestHeap(BaseTestCase):
         multiprocessing.heap.BufferWrapper._heap = self.old_heap
         super().tearDown()
 
+    @support.requires_refcounting
     def test_heap(self):
         iterations = 5000
         maxblocks = 50
@@ -4609,7 +4656,6 @@ class _TestHeap(BaseTestCase):
         random.shuffle(blocks)
         while blocks:
             blocks.pop()
-        support.gc_collect()  # the blocks are freed when collected
 
         self.assertEqual(heap._n_frees, heap._n_mallocs)
         self.assertEqual(len(heap._pending_free_blocks), 0)
@@ -7754,17 +7800,10 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
-        # Closing a queue notifies its feeder before the feeder has finished
-        # closing pipe handles. Give that asynchronous shutdown a bounded wait.
-        deadline = time.monotonic() + support.SHORT_TIMEOUT
-        for thread in threads:
-            if thread.name == "QueueFeederThread":
-                thread.join(max(0.0, deadline - time.monotonic()))
-        thread = None
-        if threads and not any(t.is_alive() for t in threads):
+        if threads and support.Py_GC and not any(t.is_alive() for t in threads):
             # A queue's feeder thread that stopped after the collection
-            # above was still in threading._active then; only the next
-            # collection frees it.
+            # above was still in threading._active then; under Py_GC only
+            # the next collection frees it.
             threads = None
             test.support.gc_collect()
             threads = set(threading._dangling) - set(cls.dangling[1])

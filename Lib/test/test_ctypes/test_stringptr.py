@@ -1,4 +1,6 @@
+import sys
 import unittest
+from test import support
 from ctypes import (CDLL, Structure, POINTER, create_string_buffer,
                     c_char, c_char_p)
 from test.support import import_helper
@@ -9,6 +11,7 @@ lib = CDLL(_ctypes_test.__file__)
 
 
 class StringPtrTestCase(unittest.TestCase):
+    @support.refcount_test
     def test__POINTER_c_char(self):
         class X(Structure):
             _fields_ = [("str", POINTER(c_char))]
@@ -17,7 +20,9 @@ class StringPtrTestCase(unittest.TestCase):
         # NULL pointer access
         self.assertRaises(ValueError, getattr, x.str, "contents")
         b = create_string_buffer(b"Hello, World")
+        orig_refcount = sys.getrefcount(b)
         x.str = b
+        self.assertEqual(sys.getrefcount(b), orig_refcount + 1)
 
         # POINTER(c_char) and Python string is NOT compatible
         # POINTER(c_char) and create_string_buffer() is compatible

@@ -894,16 +894,16 @@ PyTclObject_dealloc(PyObject *_self)
 PyDoc_STRVAR(PyTclObject_string__doc__,
 "the string representation of this object, either as str or bytes");
 
-static PyValue
+static PyObject *
 PyTclObject_string(PyObject *_self, void *Py_UNUSED(closure))
 {
     PyTclObject *self = PyTclObject_CAST(_self);
     if (!self->string) {
         self->string = unicodeFromTclObj(NULL, self->value);
         if (!self->string)
-            return PyValue_NULL;
+            return NULL;
     }
-    return PyValue_FromObject(self->string);
+    return Py_NewRef(self->string);
 }
 
 static PyObject *
@@ -961,11 +961,11 @@ PyTclObject_richcompare(PyObject *self, PyObject *other, int op)
 
 PyDoc_STRVAR(get_typename__doc__, "name of the Tcl type");
 
-static PyValue
+static PyObject*
 get_typename(PyObject *self, void *Py_UNUSED(closure))
 {
     PyTclObject *obj = PyTclObject_CAST(self);
-    return PyValue_FromResult(unicodeFromTclString(obj->value->typePtr->name));
+    return unicodeFromTclString(obj->value->typePtr->name);
 }
 
 
@@ -3449,8 +3449,8 @@ _tkinter._flatten
 [clinic start generated code]*/
 
 static PyObject *
-_tkinter__flatten_impl(PyObject *module, PyObject *item)
-/*[clinic end generated code: output=925c9d4b089b66a3 input=6b9c12260aa1157f]*/
+_tkinter__flatten(PyObject *module, PyObject *item)
+/*[clinic end generated code: output=cad02a3f97f29862 input=6b9c12260aa1157f]*/
 {
     FlattenContext context;
 
@@ -3837,6 +3837,9 @@ PyInit__tkinter(void)
     m = PyModule_Create(&_tkintermodule);
     if (m == NULL)
         return NULL;
+#ifdef Py_GIL_DISABLED
+    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
 
     Tkinter_TclError = PyErr_NewException("_tkinter.TclError", NULL, NULL);
     if (PyModule_AddObjectRef(m, "TclError", Tkinter_TclError)) {

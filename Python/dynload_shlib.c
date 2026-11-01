@@ -45,9 +45,16 @@ const char *_PyImport_DynLoadFiletab[] = {
 #ifdef ALT_SOABI
     "." ALT_SOABI ".so",
 #endif
-    /* No .abi3 or .abi3t suffix: there is no stable ABI, and a stable-ABI
-       extension built for another CPython must fail to import rather than
-       crash. */
+#ifndef Py_GIL_DISABLED
+#ifdef SOABI_PLATFORM
+    ".abi" PYTHON_ABI_STRING "-" SOABI_PLATFORM ".so",
+#endif  /* SOABI_PLATFORM */
+    ".abi" PYTHON_ABI_STRING ".so",
+#endif  /* Py_GIL_DISABLED */
+#ifdef SOABI_PLATFORM
+    ".abi" PYTHON_ABI_STRING "t-" SOABI_PLATFORM ".so",
+#endif  /* SOABI_PLATFORM */
+    ".abi" PYTHON_ABI_STRING "t.so",
     ".so",
 #endif  /* __CYGWIN__ */
     NULL,

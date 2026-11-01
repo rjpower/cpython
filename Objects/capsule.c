@@ -289,10 +289,17 @@ capsule_dealloc(PyObject *op)
 {
     PyCapsule *capsule = _PyCapsule_CAST(op);
     PyObject_GC_UnTrack(op);
+#ifndef Py_GC
+    if (capsule->destructor) {
+        capsule->destructor(op);
+    }
+#else
     (void)capsule;
+#endif
     PyObject_GC_Del(op);
 }
 
+#ifdef Py_GC
 int
 _PyCapsule_HasDestructor(PyObject *op)
 {
@@ -312,6 +319,7 @@ _PyCapsule_Destroy(PyObject *op)
         destructor(op);
     }
 }
+#endif
 
 
 static PyObject *

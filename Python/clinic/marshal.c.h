@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -33,14 +34,15 @@ static PyObject *
 marshal_dump_impl(PyObject *module, PyObject *value, PyObject *file,
                   int version, int allow_code);
 
-static PyValue
-marshal_dump(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+marshal_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -63,32 +65,25 @@ marshal_dump(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *value;
     PyObject *file;
     int version = Py_MARSHAL_VERSION;
     int allow_code = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    value = PyValue_Object(args[0]);
-    if (value == NULL) {
-        goto exit;
-    }
-    file = PyValue_Object(args[1]);
-    if (file == NULL) {
-        goto exit;
-    }
+    value = args[0];
+    file = args[1];
     if (nargs < 3) {
         goto skip_optional_posonly;
     }
     noptargs--;
-    version = PyLong_AsIntValue(args[2]);
+    version = PyLong_AsInt(args[2]);
     if (version == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -96,13 +91,12 @@ skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    allow_code = PyObject_IsTrueValue(args[3]);
+    allow_code = PyObject_IsTrue(args[3]);
     if (allow_code < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = marshal_dump_impl(module, value, file, version, allow_code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = marshal_dump_impl(module, value, file, version, allow_code);
 
 exit:
     return return_value;
@@ -132,14 +126,15 @@ PyDoc_STRVAR(marshal_load__doc__,
 static PyObject *
 marshal_load_impl(PyObject *module, PyObject *file, int allow_code);
 
-static PyValue
-marshal_load(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+marshal_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -162,31 +157,26 @@ marshal_load(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *file;
     int allow_code = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    file = PyValue_Object(args[0]);
-    if (file == NULL) {
-        goto exit;
-    }
+    file = args[0];
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    allow_code = PyObject_IsTrueValue(args[1]);
+    allow_code = PyObject_IsTrue(args[1]);
     if (allow_code < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = marshal_load_impl(module, file, allow_code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = marshal_load_impl(module, file, allow_code);
 
 exit:
     return return_value;
@@ -215,14 +205,15 @@ static PyObject *
 marshal_dumps_impl(PyObject *module, PyObject *value, int version,
                    int allow_code);
 
-static PyValue
-marshal_dumps(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+marshal_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -245,27 +236,23 @@ marshal_dumps(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *value;
     int version = Py_MARSHAL_VERSION;
     int allow_code = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    value = PyValue_Object(args[0]);
-    if (value == NULL) {
-        goto exit;
-    }
+    value = args[0];
     if (nargs < 2) {
         goto skip_optional_posonly;
     }
     noptargs--;
-    version = PyLong_AsIntValue(args[1]);
+    version = PyLong_AsInt(args[1]);
     if (version == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -273,13 +260,12 @@ skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    allow_code = PyObject_IsTrueValue(args[2]);
+    allow_code = PyObject_IsTrue(args[2]);
     if (allow_code < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = marshal_dumps_impl(module, value, version, allow_code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = marshal_dumps_impl(module, value, version, allow_code);
 
 exit:
     return return_value;
@@ -303,14 +289,15 @@ PyDoc_STRVAR(marshal_loads__doc__,
 static PyObject *
 marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code);
 
-static PyValue
-marshal_loads(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+marshal_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -333,36 +320,28 @@ marshal_loads(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer bytes = {NULL, NULL};
     int allow_code = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &bytes, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &bytes, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    allow_code = PyObject_IsTrueValue(args[1]);
+    allow_code = PyObject_IsTrue(args[1]);
     if (allow_code < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = marshal_loads_impl(module, &bytes, allow_code);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = marshal_loads_impl(module, &bytes, allow_code);
 
 exit:
     /* Cleanup for bytes */
@@ -372,4 +351,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=73c1d6687d847a57 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a574570c3717f60e input=a9049054013a1b77]*/

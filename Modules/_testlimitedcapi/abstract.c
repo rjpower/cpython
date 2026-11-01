@@ -2,48 +2,32 @@
 #include "util.h"
 
 
-static PyValue
-object_repr(PyObject *self, PyValue value)
+static PyObject *
+object_repr(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    return PyValue_FromResult(PyObject_Repr(arg));
+    return PyObject_Repr(arg);
 }
 
-static PyValue
-object_ascii(PyObject *self, PyValue value)
+static PyObject *
+object_ascii(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    return PyValue_FromResult(PyObject_ASCII(arg));
+    return PyObject_ASCII(arg);
 }
 
-static PyValue
-object_str(PyObject *self, PyValue value)
+static PyObject *
+object_str(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    return PyValue_FromResult(PyObject_Str(arg));
+    return PyObject_Str(arg);
 }
 
-static PyValue
-object_bytes(PyObject *self, PyValue value)
+static PyObject *
+object_bytes(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    return PyValue_FromResult(PyObject_Bytes(arg));
+    return PyObject_Bytes(arg);
 }
 
 static PyObject *
@@ -148,48 +132,32 @@ object_delattrstring(PyObject *self, PyObject *args)
     RETURN_INT(PyObject_DelAttrString(obj, attr_name));
 }
 
-static PyValue
-number_check(PyObject *self, PyValue arg)
+static PyObject *
+number_check(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyBool_FromLong(PyNumber_Check(obj)));
+    return PyBool_FromLong(PyNumber_Check(obj));
 }
 
-static PyValue
-mapping_check(PyObject *self, PyValue arg)
+static PyObject *
+mapping_check(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PyMapping_Check(obj)));
+    return PyLong_FromLong(PyMapping_Check(obj));
 }
 
-static PyValue
-mapping_size(PyObject *self, PyValue arg)
+static PyObject *
+mapping_size(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_SIZE_VALUE(PyMapping_Size(obj));
+    RETURN_SIZE(PyMapping_Size(obj));
 }
 
-static PyValue
-mapping_length(PyObject *self, PyValue arg)
+static PyObject *
+mapping_length(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_SIZE_VALUE(PyMapping_Length(obj));
+    RETURN_SIZE(PyMapping_Length(obj));
 }
 
 static PyObject *
@@ -331,71 +299,47 @@ mapping_delitemstring(PyObject *self, PyObject *args)
     RETURN_INT(PyMapping_DelItemString(mapping, key));
 }
 
-static PyValue
-mapping_keys(PyObject *self, PyValue arg)
+static PyObject *
+mapping_keys(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyMapping_Keys(obj));
+    return PyMapping_Keys(obj);
 }
 
-static PyValue
-mapping_values(PyObject *self, PyValue arg)
+static PyObject *
+mapping_values(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyMapping_Values(obj));
+    return PyMapping_Values(obj);
 }
 
-static PyValue
-mapping_items(PyObject *self, PyValue arg)
+static PyObject *
+mapping_items(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyMapping_Items(obj));
+    return PyMapping_Items(obj);
 }
 
 
-static PyValue
-sequence_check(PyObject* self, PyValue arg)
+static PyObject *
+sequence_check(PyObject* self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PySequence_Check(obj)));
+    return PyLong_FromLong(PySequence_Check(obj));
 }
 
-static PyValue
-sequence_size(PyObject* self, PyValue arg)
+static PyObject *
+sequence_size(PyObject* self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_SIZE_VALUE(PySequence_Size(obj));
+    RETURN_SIZE(PySequence_Size(obj));
 }
 
-static PyValue
-sequence_length(PyObject* self, PyValue arg)
+static PyObject *
+sequence_length(PyObject* self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    RETURN_SIZE_VALUE(PySequence_Length(obj));
+    RETURN_SIZE(PySequence_Length(obj));
 }
 
 static PyObject *
@@ -557,26 +501,18 @@ sequence_index(PyObject *self, PyObject *args)
     RETURN_SIZE(PySequence_Index(seq, value));
 }
 
-static PyValue
-sequence_list(PyObject *self, PyValue arg)
+static PyObject *
+sequence_list(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PySequence_List(obj));
+    return PySequence_List(obj);
 }
 
-static PyValue
-sequence_tuple(PyObject *self, PyValue arg)
+static PyObject *
+sequence_tuple(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PySequence_Tuple(obj));
+    return PySequence_Tuple(obj);
 }
 
 
@@ -594,10 +530,10 @@ sequence_fast(PyObject *self, PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"object_repr", _PyCFunction_CAST(object_repr), METH_O},
-    {"object_ascii", _PyCFunction_CAST(object_ascii), METH_O},
-    {"object_str", _PyCFunction_CAST(object_str), METH_O},
-    {"object_bytes", _PyCFunction_CAST(object_bytes), METH_O},
+    {"object_repr", object_repr, METH_O},
+    {"object_ascii", object_ascii, METH_O},
+    {"object_str", object_str, METH_O},
+    {"object_bytes", object_bytes, METH_O},
 
     {"object_getattr", object_getattr, METH_VARARGS},
     {"object_getattrstring", object_getattrstring, METH_VARARGS},
@@ -608,10 +544,10 @@ static PyMethodDef test_methods[] = {
     {"object_delattr", object_delattr, METH_VARARGS},
     {"object_delattrstring", object_delattrstring, METH_VARARGS},
 
-    {"number_check", _PyCFunction_CAST(number_check), METH_O},
-    {"mapping_check", _PyCFunction_CAST(mapping_check), METH_O},
-    {"mapping_size", _PyCFunction_CAST(mapping_size), METH_O},
-    {"mapping_length", _PyCFunction_CAST(mapping_length), METH_O},
+    {"number_check", number_check, METH_O},
+    {"mapping_check", mapping_check, METH_O},
+    {"mapping_size", mapping_size, METH_O},
+    {"mapping_length", mapping_length, METH_O},
     {"object_getitem", object_getitem, METH_VARARGS},
     {"mapping_getitemstring", mapping_getitemstring, METH_VARARGS},
     {"mapping_haskey", mapping_haskey, METH_VARARGS},
@@ -623,13 +559,13 @@ static PyMethodDef test_methods[] = {
     {"object_delitem", object_delitem, METH_VARARGS},
     {"mapping_delitem", mapping_delitem, METH_VARARGS},
     {"mapping_delitemstring", mapping_delitemstring, METH_VARARGS},
-    {"mapping_keys", _PyCFunction_CAST(mapping_keys), METH_O},
-    {"mapping_values", _PyCFunction_CAST(mapping_values), METH_O},
-    {"mapping_items", _PyCFunction_CAST(mapping_items), METH_O},
+    {"mapping_keys", mapping_keys, METH_O},
+    {"mapping_values", mapping_values, METH_O},
+    {"mapping_items", mapping_items, METH_O},
 
-    {"sequence_check", _PyCFunction_CAST(sequence_check), METH_O},
-    {"sequence_size", _PyCFunction_CAST(sequence_size), METH_O},
-    {"sequence_length", _PyCFunction_CAST(sequence_length), METH_O},
+    {"sequence_check", sequence_check, METH_O},
+    {"sequence_size", sequence_size, METH_O},
+    {"sequence_length", sequence_length, METH_O},
     {"sequence_concat", sequence_concat, METH_VARARGS},
     {"sequence_repeat", sequence_repeat, METH_VARARGS},
     {"sequence_inplaceconcat", sequence_inplaceconcat, METH_VARARGS},
@@ -642,8 +578,8 @@ static PyMethodDef test_methods[] = {
     {"sequence_count", sequence_count, METH_VARARGS},
     {"sequence_contains", sequence_contains, METH_VARARGS},
     {"sequence_index", sequence_index, METH_VARARGS},
-    {"sequence_list", _PyCFunction_CAST(sequence_list), METH_O},
-    {"sequence_tuple", _PyCFunction_CAST(sequence_tuple), METH_O},
+    {"sequence_list", sequence_list, METH_O},
+    {"sequence_tuple", sequence_tuple, METH_O},
     {"sequence_fast", sequence_fast, METH_VARARGS},
 
     {NULL},

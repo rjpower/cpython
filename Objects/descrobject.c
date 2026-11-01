@@ -78,7 +78,7 @@ wrapperdescr_repr(PyObject *descr)
     return descr_repr((PyDescrObject *)descr, "slot wrapper");
 }
 
-Py_GC_PRECISE static int
+static int
 descr_check(PyDescrObject *descr, PyObject *obj)
 {
     if (!PyObject_TypeCheck(obj, descr->d_type)) {
@@ -93,7 +93,7 @@ descr_check(PyDescrObject *descr, PyObject *obj)
     return 0;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
@@ -108,7 +108,7 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                          "needs either an object or a type",
                          descr_name((PyDescrObject *)descr), "?",
                          PyDescr_TYPE(descr)->tp_name);
-            return PyValue_NULL;
+            return NULL;
         }
     }
     if (!PyType_Check(type)) {
@@ -118,7 +118,7 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(type)->tp_name);
-        return PyValue_NULL;
+        return NULL;
     }
     if (!PyType_IsSubtype((PyTypeObject *)type, PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
@@ -127,109 +127,96 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      ((PyTypeObject *)type)->tp_name);
-        return PyValue_NULL;
+        return NULL;
     }
     PyTypeObject *cls = NULL;
     if (descr->d_method->ml_flags & METH_METHOD) {
         cls = descr->d_common.d_type;
     }
-    return PyValue_FromResult(PyCMethod_New(descr->d_method, type, NULL, cls));
+    return PyCMethod_New(descr->d_method, type, NULL, cls);
 }
 
-static PyValue
+static PyObject *
 method_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
     if (obj == NULL) {
-        return PyValue_FromObject((PyObject *)descr);
+        return Py_NewRef(descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (descr->d_method->ml_flags & METH_METHOD) {
         if (type == NULL || PyType_Check(type)) {
-            return PyValue_FromResult(
-                PyCMethod_New(descr->d_method, obj, NULL, descr->d_common.d_type));
+            return PyCMethod_New(descr->d_method, obj, NULL, descr->d_common.d_type);
         } else {
             PyErr_Format(PyExc_TypeError,
                         "descriptor '%V' needs a type, not '%s', as arg 2",
                         descr_name((PyDescrObject *)descr), "?",
                         Py_TYPE(type)->tp_name);
-            return PyValue_NULL;
+            return NULL;
         }
     } else {
-        return PyValue_FromResult(PyCFunction_NewEx(descr->d_method, obj, NULL));
+        return PyCFunction_NewEx(descr->d_method, obj, NULL);
     }
 }
 
-static PyValue
+static PyObject *
 member_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
     if (obj == NULL) {
-        return PyValue_FromObject((PyObject *)descr);
+        return Py_NewRef(descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (descr->d_member->flags & Py_AUDIT_READ) {
         if (PySys_Audit("object.__getattr__", "Os",
             obj ? obj : Py_None, descr->d_member->name) < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
 
-    return PyMember_GetOneValue((char *)obj, descr->d_member);
+    return PyMember_GetOne((char *)obj, descr->d_member);
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 getset_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (obj == NULL) {
-        return PyValue_FromObject((PyObject *)descr);
+        return Py_NewRef(descr);
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
-    _PyValueSpan_AppendObject(&span, obj);
-    PyValue res = PyValue_NULL;
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        goto done;
+        return NULL;
     }
-    if (descr->d_getset->get != NULL) {
-        res = descr_get_trampoline_call(
+    if (descr->d_getset->get != NULL)
+        return descr_get_trampoline_call(
             descr->d_getset->get, obj, descr->d_getset->closure);
-        _PyValue_CheckSlotResult(res, Py_TYPE(obj), "getter");
-        goto done;
-    }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not readable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-  done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return NULL;
 }
 
-static PyValue
+static PyObject *
 wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
     if (obj == NULL) {
-        return PyValue_FromObject((PyObject *)descr);
+        return Py_NewRef(descr);
     }
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyWrapper_New((PyObject *)descr, obj));
+    return PyWrapper_New((PyObject *)descr, obj);
 }
 
-Py_GC_PRECISE static int
-descr_setcheck(PyDescrObject *descr, PyObject *obj)
+static int
+descr_setcheck(PyDescrObject *descr, PyObject *obj, PyObject *value)
 {
     assert(obj != NULL);
     if (!PyObject_TypeCheck(obj, descr->d_type)) {
@@ -245,115 +232,71 @@ descr_setcheck(PyDescrObject *descr, PyObject *obj)
 }
 
 static int
-member_set(PyObject *self, PyObject *obj, PyValue value)
+member_set(PyObject *self, PyObject *obj, PyObject *value)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
-    if (descr_setcheck((PyDescrObject *)descr, obj) < 0) {
+    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
         return -1;
     }
-    return PyMember_SetOneValue((char *)obj, descr->d_member, value);
+    return PyMember_SetOne((char *)obj, descr->d_member, value);
 }
 
-Py_GC_PRECISE static int
-getset_set(PyObject *self, PyObject *obj, PyValue value)
+static int
+getset_set(PyObject *self, PyObject *obj, PyObject *value)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[3];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
-    _PyValueSpan_AppendObject(&span, obj);
-    _PyValueSpan_Append(&span, value);
-    int res = -1;
-    if (descr_setcheck((PyDescrObject *)descr, obj) < 0) {
-        goto done;
+    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
+        return -1;
     }
     if (descr->d_getset->set != NULL) {
-        res = descr_set_trampoline_call(
-            descr->d_getset->set, obj, value, descr->d_getset->closure);
-        goto done;
+        return descr_set_trampoline_call(
+            descr->d_getset->set, obj, value,
+            descr->d_getset->closure);
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not writable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-  done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return -1;
 }
 
 
 /* Vectorcall functions for each of the PyMethodDescr calling conventions.
  *
- * They are precise (10a-2.md, rule 1).  Each pushes a span that anchors the
- * descriptor, the keyword names where the method reads them after a
- * collecting call, and the receiver in an object slot: an inline receiver
- * (a method of int or float) is boxed into the slot, which anchors the box
- * for the call.  The errors are precise functions called last.
- *
  * First, common helpers
  */
-Py_GC_PRECISE static Py_NO_INLINE int
-method_error(PyObject *func, const char *format, Py_ssize_t nargs)
-{
-    PyObject *funcstr = _PyObject_FunctionStr(func);
-    if (funcstr != NULL) {
-        PyErr_Format(PyExc_TypeError, format, funcstr, nargs);
-        Py_DECREF(funcstr);
-    }
-    return -1;
-}
-
-Py_GC_PRECISE static Py_NO_INLINE int
-method_receiver_error(PyDescrObject *descr, PyTypeObject *type)
-{
-    PyErr_Format(PyExc_TypeError,
-                 "descriptor '%V' for '%.100s' objects "
-                 "doesn't apply to a '%.100s' object",
-                 descr_name(descr), "?", descr->d_type->tp_name,
-                 type->tp_name);
-    return -1;
-}
-
-/* The receiver is args[0].  Its type is checked before anything is boxed,
-   so that the common path makes no collecting call; an inline receiver is
-   boxed last, into *pself, the caller's object slot.  kwargs_given is
-   nonzero for a method that takes no keywords called with some. */
-Py_GC_PRECISE Py_GC_ARGS_ANCHORED static inline int
-method_check_args(PyObject *func, const PyValue *args, Py_ssize_t nargs,
-                  int kwargs_given, PyObject **pself)
+static inline int
+method_check_args(PyObject *func, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     assert(!PyErr_Occurred());
     if (nargs < 1) {
-        return method_error(func, "unbound method %U needs an argument", 0);
-    }
-    PyValue self_v = args[0];
-    PyTypeObject *type = PyValue_Type(self_v);
-    PyTypeObject *expected = PyDescr_TYPE(func);
-    if (type != expected && !PyType_IsSubtype(type, expected)) {
-        return method_receiver_error((PyDescrObject *)func, type);
-    }
-    if (kwargs_given) {
-        return method_error(func, "%U takes no keyword arguments", 0);
-    }
-    if (!PyValue_IsInline(self_v)) {
-        *pself = PyValue_ObjectBorrow(self_v);
-        return 0;
-    }
-    *pself = _PyValue_BoxInline(self_v);
-    if (*pself == NULL) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "unbound method %U needs an argument", funcstr);
+            Py_DECREF(funcstr);
+        }
         return -1;
     }
-    _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_RECEIVER_BOX);
+    PyObject *self = args[0];
+    if (descr_check((PyDescrObject *)func, self) < 0) {
+        return -1;
+    }
+    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "%U takes no keyword arguments", funcstr);
+            Py_DECREF(funcstr);
+        }
+        return -1;
+    }
     return 0;
 }
 
-#define HAS_KWARGS(kwnames) ((kwnames) != NULL && PyTuple_GET_SIZE(kwnames))
-
 typedef void (*funcptr)(void);
 
-Py_GC_PRECISE Py_GC_ARGS_ANCHORED static inline funcptr
+static inline funcptr
 method_enter_call(PyThreadState *tstate, PyObject *func)
 {
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
@@ -363,232 +306,177 @@ method_enter_call(PyThreadState *tstate, PyObject *func)
 }
 
 /* Now the actual vectorcall functions */
-Py_GC_PRECISE static PyValue
+static PyObject *
 method_vectorcall_VARARGS(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[3];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    int kwargs_given = HAS_KWARGS(kwnames);
-    PyObject *result = NULL;
-    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, kwnames)) {
+        return NULL;
     }
-    PyObject *argstuple = _PyTuple_FromValues(args+1, nargs-1);
+    PyObject *argstuple = PyTuple_FromArray(args+1, nargs-1);
     if (argstuple == NULL) {
-        goto done;
+        return NULL;
     }
-    _PyValueSpan_AppendObject(&span, argstuple);
     PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        Py_DECREF(argstuple);
+        return NULL;
     }
-    result = _PyCFunction_TrampolineCall(meth, *selfp, argstuple);
+    PyObject *result = _PyCFunction_TrampolineCall(
+        meth, args[0], argstuple);
+    Py_DECREF(argstuple);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return result;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 method_vectorcall_VARARGS_KEYWORDS(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[5];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    _PyValueSpan_AppendObject(&span, kwnames);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    PyObject *result = NULL;
-    if (method_check_args(func, args, nargs, 0, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, NULL)) {
+        return NULL;
     }
-    PyObject *argstuple = _PyTuple_FromValues(args+1, nargs-1);
+    PyObject *argstuple = PyTuple_FromArray(args+1, nargs-1);
     if (argstuple == NULL) {
-        goto done;
+        return NULL;
     }
-    _PyValueSpan_AppendObject(&span, argstuple);
+    PyObject *result = NULL;
     /* Create a temporary dict for keyword arguments */
     PyObject *kwdict = NULL;
     if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {
         kwdict = _PyStack_AsDict(args + nargs, kwnames);
         if (kwdict == NULL) {
-            goto done;
+            goto exit;
         }
     }
-    _PyValueSpan_AppendObject(&span, kwdict);
     PyCFunctionWithKeywords meth = (PyCFunctionWithKeywords)
                                    method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        goto exit;
     }
     result = _PyCFunctionWithKeywords_TrampolineCall(
-        meth, *selfp, argstuple, kwdict);
+        meth, args[0], argstuple, kwdict);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
-}
-
-Py_GC_PRECISE static PyValue
-method_vectorcall_FASTCALL_KEYWORDS_METHOD(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
-{
-    PyObject *func = PyValue_ObjectBorrow(func_v);
-    PyThreadState *tstate = _PyThreadState_GET();
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[3];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    _PyValueSpan_AppendObject(&span, kwnames);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    PyValue result = PyValue_NULL;
-    if (method_check_args(func, args, nargs, 0, selfp)) {
-        goto done;
-    }
-    PyCMethod meth = (PyCMethod) method_enter_call(tstate, func);
-    if (meth == NULL) {
-        goto done;
-    }
-    result = meth(*selfp, ((PyMethodDescrObject *)func)->d_common.d_type,
-                  args+1, nargs-1, kwnames);
-    _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
+exit:
+    Py_DECREF(argstuple);
+    Py_XDECREF(kwdict);
     return result;
 }
 
-Py_GC_PRECISE static PyValue
-method_vectorcall_FASTCALL(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+static PyObject *
+method_vectorcall_FASTCALL_KEYWORDS_METHOD(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    int kwargs_given = HAS_KWARGS(kwnames);
-    PyValue result = PyValue_NULL;
-    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, NULL)) {
+        return NULL;
+    }
+    PyCMethod meth = (PyCMethod) method_enter_call(tstate, func);
+    if (meth == NULL) {
+        return NULL;
+    }
+    PyObject *result = meth(args[0],
+                            ((PyMethodDescrObject *)func)->d_common.d_type,
+                            args+1, nargs-1, kwnames);
+    _Py_LeaveRecursiveCall();
+    return result;
+}
+
+static PyObject *
+method_vectorcall_FASTCALL(
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_args(func, args, nargs, kwnames)) {
+        return NULL;
     }
     PyCFunctionFast meth = (PyCFunctionFast)
                             method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        return NULL;
     }
-    result = meth(*selfp, args+1, nargs-1);
+    PyObject *result = meth(args[0], args+1, nargs-1);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 method_vectorcall_FASTCALL_KEYWORDS(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[3];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    _PyValueSpan_AppendObject(&span, kwnames);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    PyValue result = PyValue_NULL;
-    if (method_check_args(func, args, nargs, 0, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, NULL)) {
+        return NULL;
     }
     PyCFunctionFastWithKeywords meth = (PyCFunctionFastWithKeywords)
                                         method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        return NULL;
     }
-    result = meth(*selfp, args+1, nargs-1, kwnames);
+    PyObject *result = meth(args[0], args+1, nargs-1, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 method_vectorcall_NOARGS(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    int kwargs_given = HAS_KWARGS(kwnames);
-    PyObject *result = NULL;
-    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, kwnames)) {
+        return NULL;
     }
     if (nargs != 1) {
-        method_error(func, "%U takes no arguments (%zd given)", nargs-1);
-        goto done;
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                "%U takes no arguments (%zd given)", funcstr, nargs-1);
+            Py_DECREF(funcstr);
+        }
+        return NULL;
     }
     PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        return NULL;
     }
-    result = _PyCFunction_TrampolineCall(meth, *selfp, NULL);
+    PyObject *result = _PyCFunction_TrampolineCall(meth, args[0], NULL);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return result;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 method_vectorcall_O(
-    PyValue func_v, const PyValue *args, size_t nargsf, PyObject *kwnames)
+    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *func = PyValue_ObjectBorrow(func_v);
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, func);
-    PyObject **selfp = _PyValueSpan_ObjectSlot(&span);
-    int kwargs_given = HAS_KWARGS(kwnames);
-    PyValue result = PyValue_NULL;
-    if (method_check_args(func, args, nargs, kwargs_given, selfp)) {
-        goto done;
+    if (method_check_args(func, args, nargs, kwnames)) {
+        return NULL;
     }
     if (nargs != 2) {
-        method_error(func, "%U takes exactly one argument (%zd given)",
-                     nargs-1);
-        goto done;
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                "%U takes exactly one argument (%zd given)",
+                funcstr, nargs-1);
+            Py_DECREF(funcstr);
+        }
+        return NULL;
     }
-    PyCFunctionO meth = (PyCFunctionO)method_enter_call(tstate, func);
+    PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
     if (meth == NULL) {
-        goto done;
+        return NULL;
     }
-    result = meth(*selfp, args[1]);
+    PyObject *result = _PyCFunction_TrampolineCall(meth, args[0], args[1]);
     _Py_LeaveRecursiveCallTstate(tstate);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -601,7 +489,7 @@ done:
    This is just an excuse to say that this doesn't need to be optimized:
    we implement this simply by calling __get__ and then calling the result.
 */
-Py_GC_PRECISE static PyValue
+static PyObject *
 classmethoddescr_call(PyObject *_descr, PyObject *args,
                       PyObject *kwds)
 {
@@ -613,31 +501,20 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return PyValue_NULL;
+        return NULL;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    /* The span anchors the descriptor, the argument tuple, which owns the
-       argument array, the keywords and the bound method. */
-    PyValue slots[4];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
-    _PyValueSpan_AppendObject(&span, args);
-    _PyValueSpan_AppendObject(&span, kwds);
-    PyValue bound = classmethod_get((PyObject *)descr, NULL,
-                                    PyTuple_GET_ITEM(args, 0));
-    _PyValueSpan_Append(&span, bound);
-    _PyValue_CheckSlotResult(bound, Py_TYPE(descr), "tp_descr_get");
-    PyValue res = PyValue_NULL;
-    if (!PyValue_IsNull(bound)) {
-        res = _PyObject_VectorcallDictValueTstate(
-            tstate, bound, _PyTuple_ITEMS(args) + 1, argc - 1, kwds);
+    PyObject *self = PyTuple_GET_ITEM(args, 0);
+    PyObject *bound = classmethod_get((PyObject *)descr, NULL, self);
+    if (bound == NULL) {
+        return NULL;
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
+    PyObject *res = PyObject_VectorcallDict(bound, _PyTuple_ITEMS(args)+1,
+                                           argc-1, kwds);
+    Py_DECREF(bound);
     return res;
 }
 
-Py_GC_PRECISE static inline PyValue
+Py_LOCAL_INLINE(PyObject *)
 wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                       PyObject *args, PyObject *kwds)
 {
@@ -652,16 +529,17 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
         PyErr_Format(PyExc_TypeError,
                      "wrapper %s() takes no keyword arguments",
                      descr->d_base->name);
-        return PyValue_NULL;
+        return NULL;
     }
     return (*wrapper)(self, args, descr->d_wrapped);
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
     Py_ssize_t argc;
+    PyObject *self, *result;
 
     /* Make sure that the first argument is acceptable as 'self' */
     assert(PyTuple_Check(args));
@@ -672,33 +550,9 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return PyValue_NULL;
+        return NULL;
     }
-    /* A wrapper's self is an object: an inline receiver (int.__add__(5, 3))
-       is boxed.  The frame's span holds the descriptor, the argument tuple
-       (which owns an object receiver), the keywords, the box and the
-       sliced tuple. */
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[5];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)descr);
-    _PyValueSpan_AppendObject(&span, args);
-    _PyValueSpan_AppendObject(&span, kwds);
-    PyValue result = PyValue_NULL;
-    PyValue self_v = PyTuple_GET_VALUE(args, 0);
-    PyObject *self;
-    if (PyValue_IsInline(self_v)) {
-        self = _PyValue_BoxInline(self_v);
-        if (self == NULL) {
-            goto done;
-        }
-        _PyValueSpan_AppendObject(&span, self);
-        _PyGC_INJECT(tstate, _PyGC_SITE_RECEIVER_BOX);
-    }
-    else {
-        self = PyValue_ObjectBorrow(self_v);
-    }
+    self = PyTuple_GET_ITEM(args, 0);
     if (!_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
                                   (PyObject *)PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
@@ -708,35 +562,33 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(self)->tp_name);
-        goto done;
+        return NULL;
     }
 
-    PyObject *rest = PyTuple_GetSlice(args, 1, argc);
-    if (rest == NULL) {
-        goto done;
+    args = PyTuple_GetSlice(args, 1, argc);
+    if (args == NULL) {
+        return NULL;
     }
-    _PyValueSpan_AppendObject(&span, rest);
-    result = wrapperdescr_raw_call(descr, self, rest, kwds);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
+    result = wrapperdescr_raw_call(descr, self, args, kwds);
+    Py_DECREF(args);
     return result;
 }
 
 
-static PyValue
+static PyObject *
 method_get_doc(PyObject *_descr, void *closure)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)_descr;
-    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(descr->d_method->ml_name, descr->d_method->ml_doc));
+    return _PyType_GetDocFromInternalDoc(descr->d_method->ml_name, descr->d_method->ml_doc);
 }
 
-static PyValue
+static PyObject *
 method_get_text_signature(PyObject *_descr, void *closure)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)_descr;
-    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(descr->d_method->ml_name,
+    return _PyType_GetTextSignatureFromInternalDoc(descr->d_method->ml_name,
                                                    descr->d_method->ml_doc,
-                                                   descr->d_method->ml_flags));
+                                                   descr->d_method->ml_flags);
 }
 
 static PyObject *
@@ -767,7 +619,7 @@ calculate_qualname(PyDescrObject *descr)
     return res;
 }
 
-static PyValue
+static PyObject *
 descr_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyDescrObject *descr = (PyDescrObject *)self;
@@ -781,7 +633,7 @@ descr_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
     }
     qualname = Py_XNewRef(descr->d_qualname);
     Py_END_CRITICAL_SECTION();
-    return PyValue_FromResult(qualname);
+    return qualname;
 }
 
 static PyObject *
@@ -810,14 +662,14 @@ static PyGetSetDef method_getset[] = {
     {0}
 };
 
-static PyValue
+static PyObject *
 member_get_doc(PyObject *_descr, void *closure)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)_descr;
     if (descr->d_member->doc == NULL) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromResult(PyUnicode_FromString(descr->d_member->doc));
+    return PyUnicode_FromString(descr->d_member->doc);
 }
 
 static PyGetSetDef member_getset[] = {
@@ -826,14 +678,14 @@ static PyGetSetDef member_getset[] = {
     {0}
 };
 
-static PyValue
+static PyObject *
 getset_get_doc(PyObject *self, void *closure)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
     if (descr->d_getset->doc == NULL) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromResult(PyUnicode_FromString(descr->d_getset->doc));
+    return PyUnicode_FromString(descr->d_getset->doc);
 }
 
 static PyGetSetDef getset_getset[] = {
@@ -842,19 +694,19 @@ static PyGetSetDef getset_getset[] = {
     {0}
 };
 
-static PyValue
+static PyObject *
 wrapperdescr_get_doc(PyObject *self, void *closure)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
-    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(descr->d_base->name, descr->d_base->doc));
+    return _PyType_GetDocFromInternalDoc(descr->d_base->name, descr->d_base->doc);
 }
 
-static PyValue
+static PyObject *
 wrapperdescr_get_text_signature(PyObject *self, void *closure)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)self;
-    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(descr->d_base->name,
-                                                   descr->d_base->doc, 0));
+    return _PyType_GetTextSignatureFromInternalDoc(descr->d_base->name,
+                                                   descr->d_base->doc, 0);
 }
 
 static PyGetSetDef wrapperdescr_getset[] = {
@@ -1267,8 +1119,8 @@ static PySequenceMethods mappingproxy_as_sequence = {
     0,                                          /* sq_inplace_repeat */
 };
 
-static PyValue
-mappingproxy_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+mappingproxy_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     /* newargs: mapping, key, default=None */
@@ -1279,11 +1131,11 @@ mappingproxy_get(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_UnpackStack(args, nargs, "get", 1, 2,
                             &newargs[1], &newargs[2]))
     {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyObject_VectorcallMethod(&_Py_ID(get), newargs,
+    return PyObject_VectorcallMethod(&_Py_ID(get), newargs,
                                      3 | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                     NULL));
+                                     NULL);
 }
 
 static PyObject *
@@ -1336,7 +1188,7 @@ static PyMethodDef mappingproxy_methods[] = {
      PyDoc_STR("D.items() -> a set-like object providing a view on D's items")},
     {"copy",      mappingproxy_copy,       METH_NOARGS,
      PyDoc_STR("D.copy() -> a shallow copy of D")},
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
      PyDoc_STR("mappingproxy objects are generic over two types, signifying (respectively) the types of their keys and values")},
     {"__reversed__", mappingproxy_reversed, METH_NOARGS,
      PyDoc_STR("D.__reversed__() -> reverse iterator")},
@@ -1556,38 +1408,38 @@ static PyMemberDef wrapper_members[] = {
     {0}
 };
 
-static PyValue
+static PyObject *
 wrapper_objclass(PyObject *wp, void *Py_UNUSED(ignored))
 {
     PyObject *c = (PyObject *)PyDescr_TYPE(((wrapperobject *)wp)->descr);
 
-    return PyValue_FromObject(c);
+    return Py_NewRef(c);
 }
 
-static PyValue
+static PyObject *
 wrapper_name(PyObject *wp, void *Py_UNUSED(ignored))
 {
     const char *s = ((wrapperobject *)wp)->descr->d_base->name;
 
-    return PyValue_FromResult(PyUnicode_FromString(s));
+    return PyUnicode_FromString(s);
 }
 
-static PyValue
+static PyObject *
 wrapper_doc(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return PyValue_FromResult(_PyType_GetDocFromInternalDoc(wp->descr->d_base->name, wp->descr->d_base->doc));
+    return _PyType_GetDocFromInternalDoc(wp->descr->d_base->name, wp->descr->d_base->doc);
 }
 
-static PyValue
+static PyObject *
 wrapper_text_signature(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return PyValue_FromResult(_PyType_GetTextSignatureFromInternalDoc(wp->descr->d_base->name,
-                                                   wp->descr->d_base->doc, 0));
+    return _PyType_GetTextSignatureFromInternalDoc(wp->descr->d_base->name,
+                                                   wp->descr->d_base->doc, 0);
 }
 
-static PyValue
+static PyObject *
 wrapper_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
@@ -1603,7 +1455,7 @@ static PyGetSetDef wrapper_getsets[] = {
     {0}
 };
 
-static PyValue
+static PyObject *
 wrapper_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     wrapperobject *wp = (wrapperobject *)self;
@@ -1742,42 +1594,30 @@ static PyMemberDef property_members[] = {
 PyDoc_STRVAR(getter_doc,
              "Descriptor to obtain a copy of the property with a different getter.");
 
-static PyValue
-property_getter(PyObject *self, PyValue getter_value)
+static PyObject *
+property_getter(PyObject *self, PyObject *getter)
 {
-    PyObject *getter = PyValue_Object(getter_value);
-    if (getter == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(property_copy(self, getter, NULL, NULL));
+    return property_copy(self, getter, NULL, NULL);
 }
 
 
 PyDoc_STRVAR(setter_doc,
              "Descriptor to obtain a copy of the property with a different setter.");
 
-static PyValue
-property_setter(PyObject *self, PyValue setter_value)
+static PyObject *
+property_setter(PyObject *self, PyObject *setter)
 {
-    PyObject *setter = PyValue_Object(setter_value);
-    if (setter == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(property_copy(self, NULL, setter, NULL));
+    return property_copy(self, NULL, setter, NULL);
 }
 
 
 PyDoc_STRVAR(deleter_doc,
              "Descriptor to obtain a copy of the property with a different deleter.");
 
-static PyValue
-property_deleter(PyObject *self, PyValue deleter_value)
+static PyObject *
+property_deleter(PyObject *self, PyObject *deleter)
 {
-    PyObject *deleter = PyValue_Object(deleter_value);
-    if (deleter == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(property_copy(self, NULL, NULL, deleter));
+    return property_copy(self, NULL, NULL, deleter);
 }
 
 
@@ -1802,9 +1642,9 @@ property___set_name___impl(propertyobject *self, PyObject *owner,
 }
 
 static PyMethodDef property_methods[] = {
-    {"getter", _PyCFunction_CAST(property_getter), METH_O, getter_doc},
-    {"setter", _PyCFunction_CAST(property_setter), METH_O, setter_doc},
-    {"deleter", _PyCFunction_CAST(property_deleter), METH_O, deleter_doc},
+    {"getter", property_getter, METH_O, getter_doc},
+    {"setter", property_setter, METH_O, setter_doc},
+    {"deleter", property_deleter, METH_O, deleter_doc},
     PROPERTY___SET_NAME___METHODDEF
     {0}
 };
@@ -1838,18 +1678,18 @@ property_name(propertyobject *prop, PyObject **name)
     return PyObject_GetOptionalAttr(prop->prop_get, &_Py_ID(__name__), name);
 }
 
-static PyValue
+static PyObject *
 property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     if (obj == NULL || obj == Py_None) {
-        return PyValue_FromObject(self);
+        return Py_NewRef(self);
     }
 
     propertyobject *gs = (propertyobject *)self;
     if (gs->prop_get == NULL) {
         PyObject *propname;
         if (property_name(gs, &propname) < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
         PyObject *qualname = PyType_GetQualName(Py_TYPE(obj));
         if (propname != NULL && qualname != NULL) {
@@ -1868,22 +1708,19 @@ property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         }
         Py_XDECREF(propname);
         Py_XDECREF(qualname);
-        return PyValue_NULL;
+        return NULL;
     }
 
-    PyValue arg = PyValue_FromObject(obj);
-    return PyObject_VectorcallValue(PyValue_FromObject(gs->prop_get), &arg,
-                                    1, NULL);
+    return PyObject_CallOneArg(gs->prop_get, obj);
 }
 
 static int
-property_descr_set(PyObject *self, PyObject *obj, PyValue value)
+property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
 {
     propertyobject *gs = (propertyobject *)self;
-    PyObject *func;
-    PyValue res;
+    PyObject *func, *res;
 
-    if (PyValue_IsNull(value)) {
+    if (value == NULL) {
         func = gs->prop_del;
     }
     else {
@@ -1901,7 +1738,7 @@ property_descr_set(PyObject *self, PyObject *obj, PyValue value)
         }
         if (propname != NULL && qualname != NULL) {
             PyErr_Format(PyExc_AttributeError,
-                        PyValue_IsNull(value) ?
+                        value == NULL ?
                         "property %R of %R object has no deleter" :
                         "property %R of %R object has no setter",
                         propname,
@@ -1909,14 +1746,14 @@ property_descr_set(PyObject *self, PyObject *obj, PyValue value)
         }
         else if (qualname != NULL) {
             PyErr_Format(PyExc_AttributeError,
-                            PyValue_IsNull(value) ?
+                            value == NULL ?
                             "property of %R object has no deleter" :
                             "property of %R object has no setter",
                             qualname);
         }
         else {
             PyErr_SetString(PyExc_AttributeError,
-                         PyValue_IsNull(value) ?
+                         value == NULL ?
                          "property has no deleter" :
                          "property has no setter");
         }
@@ -1925,18 +1762,20 @@ property_descr_set(PyObject *self, PyObject *obj, PyValue value)
         return -1;
     }
 
-    PyValue args[] = { PyValue_FromObject(obj), value };
-    if (PyValue_IsNull(value)) {
-        res = PyObject_VectorcallValue(PyValue_FromObject(func), args, 1, NULL);
+    if (value == NULL) {
+        res = PyObject_CallOneArg(func, obj);
     }
     else {
         EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
-        res = PyObject_VectorcallValue(PyValue_FromObject(func), args, 2, NULL);
+        PyObject *args[] = { obj, value };
+        res = PyObject_Vectorcall(func, args, 2, NULL);
     }
 
-    if (PyValue_IsNull(res)) {
+    if (res == NULL) {
         return -1;
     }
+
+    Py_DECREF(res);
     return 0;
 }
 
@@ -2093,61 +1932,57 @@ property_init_impl(propertyobject *self, PyObject *fget, PyObject *fset,
     return 0;
 }
 
-static PyValue
+static PyObject *
 property_get__name__(PyObject *op, void *Py_UNUSED(ignored))
 {
     propertyobject *prop = _propertyobject_CAST(op);
     PyObject *name;
     if (property_name(prop, &name) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (name == NULL) {
         PyErr_SetString(PyExc_AttributeError,
                         "'property' object has no attribute '__name__'");
     }
-    return PyValue_FromResult(name);
+    return name;
 }
 
 static int
-property_set__name__(PyObject *op, PyValue value_v, void *Py_UNUSED(ignored))
+property_set__name__(PyObject *op, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     propertyobject *prop = _propertyobject_CAST(op);
     Py_XSETREF(prop->prop_name, Py_XNewRef(value));
     return 0;
 }
 
-static PyValue
+static PyObject *
 property_get___isabstractmethod__(PyObject *op, void *closure)
 {
     propertyobject *prop = _propertyobject_CAST(op);
     int res = _PyObject_IsAbstract(prop->prop_get);
     if (res == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     else if (res) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
 
     res = _PyObject_IsAbstract(prop->prop_set);
     if (res == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     else if (res) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
 
     res = _PyObject_IsAbstract(prop->prop_del);
     if (res == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     else if (res) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
 static PyGetSetDef property_getsetlist[] = {

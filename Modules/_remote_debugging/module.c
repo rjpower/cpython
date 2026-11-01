@@ -350,6 +350,13 @@ _remote_debugging_RemoteUnwinder___init___impl(RemoteUnwinderObject *self,
         return -1;
     }
 
+#ifdef Py_GIL_DISABLED
+    if (only_active_thread) {
+        PyErr_SetString(PyExc_ValueError,
+                       "only_active_thread is not supported in free-threaded builds");
+        return -1;
+    }
+#endif
 
     self->native = native;
     self->gc = gc;
@@ -432,6 +439,22 @@ _remote_debugging_RemoteUnwinder___init___impl(RemoteUnwinderObject *self,
         return -1;
     }
 
+#ifdef Py_GIL_DISABLED
+    // Initialize TLBC cache
+    self->tlbc_generation = 0;
+    self->tlbc_cache = _Py_hashtable_new_full(
+        _Py_hashtable_hash_ptr,
+        _Py_hashtable_compare_direct,
+        NULL,  // keys are stable pointers, don't destroy
+        tlbc_cache_entry_destroy,
+        NULL
+    );
+    if (self->tlbc_cache == NULL) {
+        PyErr_NoMemory();
+        set_exception_cause(self, PyExc_MemoryError, "Failed to create TLBC cache");
+        return -1;
+    }
+#endif
 
 #if defined(__APPLE__)
     self->thread_id_offset = 0;
@@ -545,6 +568,14 @@ refresh_generation_caches_from_interp_state(
         self->cached_code_object_generation = code_object_generation;
     }
 
+#ifdef Py_GIL_DISABLED
+    uint32_t current_tlbc_generation = GET_MEMBER(uint32_t, interp_state_buffer,
+                                                  self->debug_offsets.interpreter_state.tlbc_generation);
+    if (current_tlbc_generation != self->tlbc_generation) {
+        self->tlbc_generation = current_tlbc_generation;
+        _Py_hashtable_clear(self->tlbc_cache);
+    }
+#endif
 }
 
 static int
@@ -1296,6 +1327,11 @@ RemoteUnwinder_dealloc(PyObject *op)
     }
 #endif
 
+#ifdef Py_GIL_DISABLED
+    if (self->tlbc_cache) {
+        _Py_hashtable_destroy(self->tlbc_cache);
+    }
+#endif
     if (self->handle.pid != 0) {
         _Py_RemoteDebug_ClearCache(&self->handle);
         _Py_RemoteDebug_CleanupProcHandle(&self->handle);
@@ -1760,9 +1796,6 @@ _remote_debugging_BinaryWriter___init___impl(BinaryWriterObject *self,
     }
     if (self->writer) {
         binary_writer_destroy(self->writer);
-        /* Creating the next one allocates, and a collection may run the
-           traverse function. */
-        self->writer = NULL;
     }
 
     self->writer = binary_writer_create(
@@ -1994,22 +2027,22 @@ _remote_debugging_BinaryWriter_get_stats_impl(BinaryWriterObject *self)
     return binary_writer_get_stats(self->writer);
 }
 
-static PyValue
+static PyObject *
 BinaryWriter_get_total_samples(PyObject *op, void *closure)
 {
     BinaryWriterObject *self = BinaryWriter_CAST(op);
     if (!self->writer) {
         /* Use cached value after finalize/close */
-        return PyValue_FromUnsignedLongLong(self->cached_total_samples);
+        return PyLong_FromUnsignedLongLong(self->cached_total_samples);
     }
-    return PyValue_FromUnsignedLongLong(self->writer->total_samples);
+    return PyLong_FromUnsignedLongLong(self->writer->total_samples);
 }
 
-static PyValue
+static PyObject *
 BinaryWriter_get_limit_reached(PyObject *op, void *closure)
 {
     BinaryWriter *writer = BinaryWriter_CAST(op)->writer;
-    return PyValue_FromObject((writer && writer->state == BINARY_WRITER_LIMIT_REACHED) ? Py_True : Py_False);
+    return PyBool_FromLong(writer && writer->state == BINARY_WRITER_LIMIT_REACHED);
 }
 
 static PyGetSetDef BinaryWriter_getset[] = {
@@ -2042,36 +2075,11 @@ BinaryWriter_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
-static int
-visit_string_key(_Py_hashtable_t *ht, const void *key, const void *value,
-                 void *data)
-{
-    struct unwinder_visit *v = (struct unwinder_visit *)data;
-    visitproc visit = v->visit;
-    void *arg = v->arg;
-    Py_VISIT((PyObject *)key);
-    return 0;
-}
-
-/* The writer's string table owns its keys, in memory it allocates. */
-static int
-BinaryWriter_traverse(PyObject *op, visitproc visit, void *arg)
-{
-    BinaryWriterObject *self = BinaryWriter_CAST(op);
-    if (self->writer != NULL && self->writer->string_hash != NULL) {
-        struct unwinder_visit v = {visit, arg};
-        return _Py_hashtable_foreach(self->writer->string_hash,
-                                     visit_string_key, &v);
-    }
-    return 0;
-}
-
 static PyType_Slot BinaryWriter_slots[] = {
     {Py_tp_getset, BinaryWriter_getset},
     {Py_tp_methods, BinaryWriter_methods},
     {Py_tp_init, _remote_debugging_BinaryWriter___init__},
     {Py_tp_dealloc, BinaryWriter_dealloc},
-    {Py_tp_traverse, BinaryWriter_traverse},
     {0, NULL}
 };
 
@@ -2115,9 +2123,6 @@ _remote_debugging_BinaryReader___init___impl(BinaryReaderObject *self,
 {
     if (self->reader) {
         binary_reader_close(self->reader);
-        /* Opening the next one allocates, and a collection may run the
-           traverse function. */
-        self->reader = NULL;
     }
 
     self->reader = binary_reader_open(filename);
@@ -2257,29 +2262,27 @@ _remote_debugging_BinaryReader___exit___impl(BinaryReaderObject *self,
     Py_RETURN_FALSE;
 }
 
-static PyValue
-BinaryReader_get_sample_count(PyObject *op, void *closure)
+static PyObject *
+BinaryReader_get_sample_count(BinaryReaderObject *self, void *closure)
 {
-    BinaryReaderObject *self = BinaryReader_CAST(op);
     if (!self->reader) {
-        return PyValue_FromLongLong(0);
+        return PyLong_FromLong(0);
     }
-    return PyValue_FromUnsignedLongLong(self->reader->sample_count);
+    return PyLong_FromUnsignedLongLong(self->reader->sample_count);
 }
 
-static PyValue
-BinaryReader_get_sample_interval_us(PyObject *op, void *closure)
+static PyObject *
+BinaryReader_get_sample_interval_us(BinaryReaderObject *self, void *closure)
 {
-    BinaryReaderObject *self = BinaryReader_CAST(op);
     if (!self->reader) {
-        return PyValue_FromLongLong(0);
+        return PyLong_FromLong(0);
     }
-    return PyValue_FromUnsignedLongLong(self->reader->sample_interval_us);
+    return PyLong_FromUnsignedLongLong(self->reader->sample_interval_us);
 }
 
 static PyGetSetDef BinaryReader_getset[] = {
-    {"sample_count", BinaryReader_get_sample_count, NULL, "Number of samples in file", NULL},
-    {"sample_interval_us", BinaryReader_get_sample_interval_us, NULL, "Sample interval in microseconds", NULL},
+    {"sample_count", (getter)BinaryReader_get_sample_count, NULL, "Number of samples in file", NULL},
+    {"sample_interval_us", (getter)BinaryReader_get_sample_interval_us, NULL, "Sample interval in microseconds", NULL},
     {NULL}
 };
 
@@ -2305,26 +2308,11 @@ BinaryReader_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
-/* The reader's string table, decoded when the file is opened, is used by
-   every replay. */
-static int
-BinaryReader_traverse(PyObject *op, visitproc visit, void *arg)
-{
-    BinaryReaderObject *self = BinaryReader_CAST(op);
-    if (self->reader != NULL && self->reader->strings != NULL) {
-        for (uint32_t i = 0; i < self->reader->strings_count; i++) {
-            Py_VISIT(self->reader->strings[i]);
-        }
-    }
-    return 0;
-}
-
 static PyType_Slot BinaryReader_slots[] = {
     {Py_tp_getset, BinaryReader_getset},
     {Py_tp_methods, BinaryReader_methods},
     {Py_tp_init, _remote_debugging_BinaryReader___init__},
     {Py_tp_dealloc, BinaryReader_dealloc},
-    {Py_tp_traverse, BinaryReader_traverse},
     {0, NULL}
 };
 

@@ -3,10 +3,10 @@
 /* XXX The functional organization of this file is terrible */
 
 #include "Python.h"
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_call.h"          // _PyObject_MakeTpCall
+#include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_runtime.h"       // _PY_NSMALLPOSINTS
@@ -41,6 +41,13 @@ static PyObject* long_long(PyObject *v);
 static PyObject* long_lshift_int64(PyLongObject *a, int64_t shiftby);
 
 
+static inline void
+_Py_DECREF_INT(PyLongObject *op)
+{
+    assert(PyLong_CheckExact(op));
+    _Py_DECREF_SPECIALIZED((PyObject *)op, _PyLong_ExactDealloc);
+}
+
 static inline int
 is_medium_int(stwodigits x)
 {
@@ -62,6 +69,7 @@ maybe_small_long(PyLongObject *v)
     if (v && _PyLong_IsCompact(v)) {
         stwodigits ival = medium_value(v);
         if (IS_SMALL_INT(ival)) {
+            _Py_DECREF_INT(v);
             return (PyLongObject *)get_small_int((sdigit)ival);
         }
     }
@@ -160,19 +168,24 @@ long_alloc(Py_ssize_t size)
      * assume that there is always at least one digit present. */
     Py_ssize_t ndigits = size ? size : 1;
 
-    /* Number of bytes needed is: offsetof(PyLongObject, ob_digit) +
-    sizeof(digit)*size.  Previous incarnations of this code used
-    sizeof() instead of the offsetof, but this risks being
-    incorrect in the presence of padding between the header
-    and the digits. */
-    result = PyObject_Malloc(offsetof(PyLongObject, long_value.ob_digit) +
-                             ndigits*sizeof(digit));
-    if (!result) {
-        PyErr_NoMemory();
-        return NULL;
+    if (ndigits == 1) {
+        result = (PyLongObject *)_Py_FREELIST_POP(PyLongObject, ints);
     }
-    _PyObject_Init((PyObject*)result, &PyLong_Type);
-    _PyLong_InitTag(result);
+    if (result == NULL) {
+        /* Number of bytes needed is: offsetof(PyLongObject, ob_digit) +
+        sizeof(digit)*size.  Previous incarnations of this code used
+        sizeof() instead of the offsetof, but this risks being
+        incorrect in the presence of padding between the header
+        and the digits. */
+        result = PyObject_Malloc(offsetof(PyLongObject, long_value.ob_digit) +
+                                ndigits*sizeof(digit));
+        if (!result) {
+            PyErr_NoMemory();
+            return NULL;
+        }
+        _PyObject_Init((PyObject*)result, &PyLong_Type);
+        _PyLong_InitTag(result);
+    }
     _PyLong_SetSignAndDigitCount(result, size != 0, size);
 #ifdef Py_DEBUG
     // gh-147988: Fill digits with an invalid pattern to catch usage
@@ -239,13 +252,16 @@ _PyLong_FromMedium(sdigit x)
     assert(!IS_SMALL_INT(x));
     assert(is_medium_int(x));
 
-    PyLongObject *v = PyObject_Malloc(sizeof(PyLongObject));
+    PyLongObject *v = (PyLongObject *)_Py_FREELIST_POP(PyLongObject, ints);
     if (v == NULL) {
-        PyErr_NoMemory();
-        return NULL;
+        v = PyObject_Malloc(sizeof(PyLongObject));
+        if (v == NULL) {
+            PyErr_NoMemory();
+            return NULL;
+        }
+        _PyObject_Init((PyObject*)v, &PyLong_Type);
+        _PyLong_InitTag(v);
     }
-    _PyObject_Init((PyObject*)v, &PyLong_Type);
-    _PyLong_InitTag(v);
     digit abs_x = x < 0 ? -x : x;
     _PyLong_SetSignAndDigitCount(v, x<0?-1:1, 1);
     v->long_value.ob_digit[0] = abs_x;
@@ -314,8 +330,12 @@ _PyLong_Negate(PyLongObject **x_p)
     PyLongObject *x;
 
     x = (PyLongObject *)*x_p;
+#ifdef Py_GC
     // There is no count; the shared fresh ints are the immortal small ones.
     if (!_Py_IsImmortal((PyObject *)x)) {
+#else
+    if (_PyObject_IsUniquelyReferenced((PyObject *)x)) {
+#endif
          _PyLong_FlipSign(x);
         return;
     }
@@ -2256,6 +2276,7 @@ long_to_decimal_string_internal(PyObject *aa,
 #undef WRITE_DIGITS
 #undef WRITE_UNICODE_DIGITS
 
+    _Py_DECREF_INT(scratch);
     if (writer) {
         writer->pos += strlen;
     }
@@ -3596,6 +3617,10 @@ _PyLong_ExactDealloc(PyObject *self)
         _Py_SetImmortal(self);
         return;
     }
+    if (_PyLong_IsCompact((PyLongObject *)self)) {
+        _Py_FREELIST_FREE(ints, self, PyObject_Free);
+        return;
+    }
     PyObject_Free(self);
 }
 
@@ -3610,6 +3635,10 @@ long_dealloc(PyObject *self)
          * See PEP 683, section Accidental De-Immortalizing for details
          */
         _Py_SetImmortal(self);
+        return;
+    }
+    if (PyLong_CheckExact(self) && _PyLong_IsCompact((PyLongObject *)self)) {
+        _Py_FREELIST_FREE(ints, self, PyObject_Free);
         return;
     }
     Py_TYPE(self)->tp_free(self);
@@ -3795,6 +3824,9 @@ long_add(PyLongObject *a, PyLongObject *b)
                    and thus z must be a multiple-digit int.
                    That also means z is not an element of
                    small_ints, so negating it in-place is safe. */
+#ifndef Py_GC  // reference counts are constant under Py_GC
+                assert(Py_REFCNT(z) == 1);
+#endif
                 _PyLong_FlipSign(z);
             }
         }
@@ -3833,6 +3865,9 @@ long_sub(PyLongObject *a, PyLongObject *b)
         else {
             z = x_add(a, b);
             if (z != NULL) {
+#ifndef Py_GC  // reference counts are constant under Py_GC
+                assert(_PyLong_IsZero(z) || Py_REFCNT(z) == 1);
+#endif
                 _PyLong_FlipSign(z);
             }
         }
@@ -4112,11 +4147,15 @@ k_mul(PyLongObject *a, PyLongObject *b)
      */
     i = _PyLong_DigitCount(ret) - shift;  /* # digits after shift */
     (void)v_isub(ret->long_value.ob_digit + shift, i, t2->long_value.ob_digit, _PyLong_DigitCount(t2));
+    _Py_DECREF_INT(t2);
 
     (void)v_isub(ret->long_value.ob_digit + shift, i, t1->long_value.ob_digit, _PyLong_DigitCount(t1));
+    _Py_DECREF_INT(t1);
 
     /* 6. t3 <- (ah+al)(bh+bl), and add into result. */
     if ((t1 = x_add(ah, al)) == NULL) goto fail;
+    _Py_DECREF_INT(ah);
+    _Py_DECREF_INT(al);
     ah = al = NULL;
 
     if (a == b) {
@@ -4126,9 +4165,13 @@ k_mul(PyLongObject *a, PyLongObject *b)
         Py_DECREF(t1);
         goto fail;
     }
+    _Py_DECREF_INT(bh);
+    _Py_DECREF_INT(bl);
     bh = bl = NULL;
 
     t3 = k_mul(t1, t2);
+    _Py_DECREF_INT(t1);
+    _Py_DECREF_INT(t2);
     if (t3 == NULL) goto fail;
     assert(!_PyLong_IsNegative(t3));
 
@@ -4136,6 +4179,7 @@ k_mul(PyLongObject *a, PyLongObject *b)
      * See the (*) comment after this function.
      */
     (void)v_iadd(ret->long_value.ob_digit + shift, i, t3->long_value.ob_digit, _PyLong_DigitCount(t3));
+    _Py_DECREF_INT(t3);
 
     return long_normalize(ret);
 
@@ -4241,11 +4285,13 @@ k_lopsided_mul(PyLongObject *a, PyLongObject *b)
         /* Add into result. */
         (void)v_iadd(ret->long_value.ob_digit + nbdone, _PyLong_DigitCount(ret) - nbdone,
                      product->long_value.ob_digit, _PyLong_DigitCount(product));
+        _Py_DECREF_INT(product);
 
         bsize -= nbtouse;
         nbdone += nbtouse;
     }
 
+    _Py_DECREF_INT(bslice);
     return long_normalize(ret);
 
   fail:
@@ -5380,6 +5426,9 @@ long_lshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
     if (z == NULL)
         return NULL;
     if (_PyLong_IsNegative(a)) {
+#ifndef Py_GC  // reference counts are constant under Py_GC
+        assert(Py_REFCNT(z) == 1);
+#endif
         _PyLong_FlipSign(z);
     }
     for (i = 0; i < wordshift; i++)
@@ -5748,6 +5797,9 @@ _PyLong_GCD(PyObject *aarg, PyObject *barg)
             assert(size_a >= 0);
             _PyLong_SetSignAndDigitCount(c, 1, size_a);
         }
+        else if (_PyObject_IsUniquelyReferenced((PyObject *)a)) {
+            c = (PyLongObject*)Py_NewRef(a);
+        }
         else {
             alloc_a = size_a;
             c = long_alloc(size_a);
@@ -5756,6 +5808,12 @@ _PyLong_GCD(PyObject *aarg, PyObject *barg)
         }
 
         if (d != NULL) {
+            assert(size_a >= 0);
+            _PyLong_SetSignAndDigitCount(d, 1, size_a);
+        }
+        else if (_PyObject_IsUniquelyReferenced((PyObject *)b)
+                 && size_a <= alloc_b) {
+            d = (PyLongObject*)Py_NewRef(b);
             assert(size_a >= 0);
             _PyLong_SetSignAndDigitCount(d, 1, size_a);
         }
@@ -5965,16 +6023,16 @@ int___getnewargs___impl(PyObject *self)
     return Py_BuildValue("(N)", _PyLong_Copy((PyLongObject *)self));
 }
 
-static PyValue
+static PyObject *
 long_get0(PyObject *Py_UNUSED(self), void *Py_UNUSED(context))
 {
-    return PyValue_FromLongLong(0L);
+    return PyLong_FromLong(0L);
 }
 
-static PyValue
+static PyObject *
 long_get1(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
 {
-    return PyValue_FromLongLong(1L);
+    return PyLong_FromLong(1L);
 }
 
 /*[clinic input]
@@ -6406,10 +6464,10 @@ long_long_meth(PyObject *self, PyObject *Py_UNUSED(ignored))
     return long_long(self);
 }
 
-static PyValue
+static PyObject *
 long_long_getter(PyObject *self, void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(long_long(self));
+    return long_long(self);
 }
 
 /*[clinic input]
@@ -6426,8 +6484,8 @@ int_is_integer_impl(PyObject *self)
     Py_RETURN_TRUE;
 }
 
-static PyValue
-long_vectorcall(PyValue type, const PyValue *args,
+static PyObject *
+long_vectorcall(PyObject *type, PyObject * const*args,
                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
@@ -6437,24 +6495,15 @@ long_vectorcall(PyValue type, const PyValue *args,
     }
     switch (nargs) {
         case 0:
-            return PyValue_FromInt32(0);
+            return _PyLong_GetZero();
         case 1:
-            return PyNumber_LongValue(args[0]);
-        case 2: {
-            // int(x, base) takes a str, bytes or bytearray x.
-            PyObject *x = PyValue_Object(args[0]);
-            PyObject *base = PyValue_Object(args[1]);
-            if (x == NULL || base == NULL) {
-                return PyValue_NULL;
-            }
-            return PyValue_FromResult(long_new_impl(
-                _PyType_CAST(PyValue_ObjectBorrow(type)), x, base));
-        }
+            return PyNumber_Long(args[0]);
+        case 2:
+            return long_new_impl(_PyType_CAST(type), args[0], args[1]);
         default:
-            PyErr_Format(PyExc_TypeError,
-                         "int expected at most 2 arguments, got %zd",
-                         nargs);
-            return PyValue_NULL;
+            return PyErr_Format(PyExc_TypeError,
+                                "int expected at most 2 arguments, got %zd",
+                                nargs);
     }
 }
 
@@ -6875,6 +6924,9 @@ PyLongWriter_Discard(PyLongWriter *writer)
     }
 
     PyLongObject *obj = (PyLongObject *)writer;
+#ifndef Py_GC  // reference counts are constant under Py_GC
+    assert(Py_REFCNT(obj) == 1);
+#endif
     Py_DECREF(obj);
 }
 
@@ -6883,6 +6935,9 @@ PyObject*
 PyLongWriter_Finish(PyLongWriter *writer)
 {
     PyLongObject *obj = (PyLongObject *)writer;
+#ifndef Py_GC  // reference counts are constant under Py_GC
+    assert(Py_REFCNT(obj) == 1);
+#endif
 
 #ifdef Py_DEBUG
     // gh-147988: Detect uninitialized digits: long_alloc() fills digits with

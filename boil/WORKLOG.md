@@ -1830,3 +1830,15 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   tests; they remain unexecuted. List/structseq scope independently accepted;
   parallel owner starts implementation. Publish/read back Loom50,36,497characters/
   four diagrams,snapshot5164eb71. No restored runtime acceptance or timing.
+- 2026-11-01 22:58 UTC: Independently accept partial list/structseq and
+  tuple/member/cell/value-iteration source components. Actual interpreter slot
+  consumers now return values directly. Foundation host generator tests38PASS;
+  provisional syntax passes selected components and exposes remaining consumers.
+  Freeze partial dict/set storage checkpoints; no restored build/runtime/timing.
+  Source budgets remain unchanged. [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-01 22:58 UTC: User requests explicit opaque extension API and
+  gradual rebuilt-source migration, with no hard compatibility requirement.
+  Assign HPy/V8 research and independent design review; supersede immediate
+  dictionary API-removal action/approval question. Preserve three automatic
+  refusals and unexecuted script. Publish/read back Loom51,39,132characters/
+  five diagrams. [Extension direction](issues/pyvalue-rc-restoration/extension-api-direction-20261101.md).

@@ -51,6 +51,11 @@ authorized on source `95be1d28` in the isolated universal-value worktree.
   publication paths, then the dependent container and native-interface cuts.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
+- coroutine_design_review implements list/structseq storage and iteration;
+  that partial source component is independently accepted. The agent now designs
+  the opaque extension API and gradual rebuilt-source bridge. The coordinator
+  implements tuple/cell/member/iteration and set storage; partial tuple/member
+  and cell/iteration components are independently accepted as source only.
 - The coordinator maintains the log and monitoring loop, prepares qualification
   and the interpreter performance checkpoint, and integrates reviewed changes.
 
@@ -70,3 +75,11 @@ Compare matched configurations against the interim RC interpreter and upstream,
 report the suite aggregate and individual workloads, and distinguish startup,
 lowering and warm execution. Use results to choose specific implementation
 improvements. Universal values and the selected collector remain requirements.
+
+[Implementation progress and shared API contracts](implementation-progress-20261101.md).
+
+The user explicitly requested an [opaque extension API and gradual migration](extension-api-direction-20261101.md).
+Internal PyValue layout is not the future public extension contract. Rebuilt old
+extensions may use slower owning object bridges and migrate incrementally;
+hard C API/binary compatibility is not required. This design step supersedes
+the immediate dictionary API-removal action and its approval question.

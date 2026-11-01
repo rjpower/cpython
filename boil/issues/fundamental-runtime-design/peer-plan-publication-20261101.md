@@ -443,3 +443,9 @@ candidate runtime or timing has executed.
   foundation/tuple/list work proceeds in parallel under RC. Register-interpreter
   checkpoint follows universal restoration and precedes JIT performance.
   Snapshot SHA256 `5164eb71c486be178eb6bff6a37594ca35c2f093df0dd34e22ce59dd149fa33b`. No new runtime or speed result.
+
+- 2026-11-01 22:58 UTC: Published/read back runtime-work-breakdown revision51,
+  39,132characters and five Mermaid blocks. Partial source components accepted;
+  user requests opaque extension API and gradual rebuilt-source bridge.
+  HPy reuse and V8 lifetime patterns under design/review; not implemented.
+  Snapshot SHA256 `fbbb4540c907ddbdcb035681b48390eddf67fe4c24e4c40629cfee015eb14f3e`. No restored runtime or speed result.

@@ -75,7 +75,7 @@ belong at coherent integration milestones, not at each opcode.
 The [concrete M2 design](m2-design-20261101-v1.md) passed
 [independent review](m2-design-review-20261101-v1.md). Its
 [source grant](m2-source-grant-20261101-v1.json) starts18:35:56 UTC,
-checkpoint19:05:56, hard cap20:05:56. It adds16 shared generic helper forms,
+checkpoint19:05:56, hard cap20:05:56. It adds15 existing shared generic helper forms,
 three appended execution-only warming/entry handlers, site-local CALL heat,
 per-exec periodic-backedge heat and bounded scalar caller continuations.
 Installed methods patch their actual RESUME entry; uncompiled methods retain
@@ -83,6 +83,13 @@ ordinary entry. Before reentry, admission must own the original evaluated inputs
 Pending records retire on return, exception, generator creation and frame reuse.
 Old IDs0–301 and pristine/marshal behavior remain stable. Initial policy bounds
 compilation, memory and retry cost; it is not a performance claim.
+
+Source inspection corrected one proposal inventory error: BUILD_CONST_KEY_MAP
+does not exist in this tree. Constant-key dictionary construction uses BUILD_MAP,
+which is covered; no opcode will be invented to satisfy the mistaken list.
+Intermediate host failures remain preserved. The corrected host-v3 run passes 31
+generator methods; nine actual new-worktree translation units pass syntax-only
+checks. Source and fixtures are still changing, so these are intermediate checks.
 
 Only host generation/tests, bounded syntax checks and standalone byte-emission
 fixtures are currently allowed. No M2 candidate executable or generated machine

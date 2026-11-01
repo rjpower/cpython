@@ -1601,3 +1601,11 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   roster will bind every test method in the frozen module. Root activation and
   cleanup producers derive the prior actual lock set plus the fresh profile.
   Source implementation and independent review continue under the original cap.
+- 2026-11-01 18:51 UTC: M2 has actual generated helper/private-handler and runtime
+  source. Intermediate host-v1 had 19 generator fixture errors; a chained shell
+  command initially masked that status in the author's report, now corrected.
+  Preserved host-v3 passes 31 methods; nine actual new-worktree translation units
+  pass syntax-only checks. A later scope oracle exposed BUILD_CONST_KEY_MAP as
+  absent from this tree: the slice covers15 existing forms, including BUILD_MAP,
+  without inventing an opcode. Review continues on observer changes, cold-call
+  retry and caller-continuation lifetime. No source acceptance or runtime claim.

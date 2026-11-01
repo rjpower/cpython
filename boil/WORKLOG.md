@@ -967,3 +967,34 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   conditionaldesign; independent landingplan review/unboundhelper preparation
   overlap. No merge, freshmainbuild, integration or JIT implementation yet.
   [Landing plan](issues/rc-integration/landing-plan-20261101-v1.md).
+- 2026-11-01 10:18 UTC: Whole global StackRef profile scope amendment independently
+  ACCEPT11cb2201/c6c2b609; rootADOPT10:03:42 JSON5dbe9450. Entire diagnostic
+  profile unvalidated/non-gating for ordinaryRC; all12failedfamilies/43assertions
+  remain unresolved, no exemptions/pass/upstreamcase equivalence. Normalfull,
+  scopedASAN/refleak and remainingpackaging/integrationgates unchanged.
+  [Decision](issues/rc-integration/stackref-gate-decision-20261101-v1.md).
+- 2026-11-01 10:18 UTC: Packagingv2 withheld beforelaunch for missing venvconfig andempty
+  destination inventory witnesses. Additivev3 preservesall48v2artifacts andsame
+  fourliteralCLI calls; independenthelperACCEPT81e03/52bc after11hostcontrols
+  includingsixaddednegatives and7,144-inputpreflight. Native48281 activated
+  10:05:12-11:25:12(hash07d21050), terminal1observed10:05:50. Firstmake returned0
+  butchangedONEClinicheader; later4rowsNOTRUN. Reconfigure changedconfig.log
+  anddeletedpybuilddir.txt; allcompiledproducts/Makefiles/pyconfig unchanged.
+  Cleanup10:05:50idle/cachegone, independentFAILEDoutcome0572dacb/f7d8a8e3.
+  [Failure](issues/rc-integration/packaging-failed-outcome-review-20261101-v3.md).
+- 2026-11-01 10:18 UTC: IndependentcanonicalClinicproposalACCEPT680d4f95/a8c41150:
+  actualdiffremovesunreachablegetrefcountfallback/blanklines/checksumonly.
+  Rootrestoredexact27byte0664debugmarker10:13:22 under7locks/native0, retained
+  newconfig.log0335caeb; committedONEgeneratedheaderc4acfdde9d79 parent8e132,
+  selectedsourceclean. Semanticimage reuse accepted, notfreshcompiledbitidentity
+  ordebug/diagnosticlineidentity. Actualbridge0282c7ad independentACCEPTd4446771/
+  9b93d0ca; all7060regularfiles+4links and4productsets checked. Inheritedbridge
+  utc09:35 isstaletemplate metadata; additiveerratum/currentaudit times bound
+  bynewhelpers, oldbridgeunchanged. No native retrygrantedyet.
+  [Canonical review](issues/rc-integration/clinic-canonical-correction-review-20261101-v1.md).
+- 2026-11-01 10:18 UTC: Heldlandingplan andthinunboundguard/templates independentlyACCEPT
+  39a620/71aee7 and51b503/5b9d81. Fixed42consumers/image/freshmain2builds;
+  exact5userfileexceptions, no blanketproseignore. Additiveactualc4a candidate
+  preparation retains8ehistory andnormalizesprotectedstatuscodes; actualmerge
+  HEAD/nativequalification/bridge remainnull. Loomrev15 readback14,756chars/
+  twoMermaids10:15:57, snapshotfd4a30a35954 recorded. No integration/JITclaim.

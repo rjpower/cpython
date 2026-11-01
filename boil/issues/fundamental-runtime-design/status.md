@@ -35,7 +35,7 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **09:47 UTC**, corrected RC release-full session87194 and O1/debug
+As of **10:17 UTC**, corrected RC release-full session87194 and O1/debug
 session60637 are independently accepted:50,827 tests each, zero failures.
 Fresh ASan/stackref builds and19 borrowed-header syntax checks are accepted
 within their scopes. ASan's3,827/0/77 composite is independently accepted;
@@ -43,11 +43,14 @@ the original host-reader failure is preserved. Full stackref15564 failed
 partially. Unmodified upstream comparison build78795 and the reviewed
 one-assignment compatibility successor64610 both failed in bootstrap before
 the three methods. No further repair is scheduled. A whole-profile scope
-amendment is proposed, independently unapproved; all checker failures remain.
+amendment is independently accepted and adopted: global StackRef support is
+withdrawn for ordinary RC landing; all checker failures remain unresolved.
 CPU extension29576 failed private-ABI wheel admission after compilation/linking.
 Its reviewed five-path packaging correction8e132 and four-image reuse bridge
-are independently accepted, awaiting concrete focused feedback. Regeneration
-did not run. Corrected JIT
+are independently accepted as historical evidence. First packaging feedback
+failed regeneration on one stale Clinic header before its other four rows.
+Canonical successor c4ac and exact missing build-marker restoration are
+reviewed; new semantic bridge/minimal v4 feedback review remains. Corrected JIT
 metadata capture97754 succeeded after the preserved serializer failure. Actual
 words selected one seven-site design; the second direct Fable review is
 [amended after source audit](../jit-first-native-tier/coordinator-disposition-20261101-v2.md).

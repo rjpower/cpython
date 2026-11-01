@@ -186,3 +186,18 @@ Exact readback matches13,744 characters and two Mermaid blocks. Local snapshot
 SHA256 `23faf95fce987663a85ed2a2953e1556a5f92dad26f9d78c3486e590749a965c`.
 No rendered-layout check, passing checker comparison, completed integration,
 RC parity or native JIT execution is claimed.
+
+## Adopted diagnostic scope and canonical Clinic correction, revision15
+
+At10:15:57 UTC, guarded revision15 records both failed upstream builds and
+the independently adopted whole-profile StackRef scope decision, with all
+failures unresolved. It records the first actual packaging batch stopping at
+regeneration, c4acfdde9d79's one-header canonical correction, exact marker
+restoration and the pending semantic bridge/v4 helper review. The independently
+accepted held landing plan still needs actual qualification and merge bindings.
+
+Exact readback matches14,756 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v15.md`
+SHA256 `fd4a30a35954b7bc4352cb4ce6cc686959f9988e29ae5795659d934e53540a08`.
+No rendered-layout check, successful packaging retry, completed integration,
+RC parity or native JIT execution is claimed.

@@ -2,7 +2,7 @@
 
 - State: selected; qualification pending; not integrated
 - Owner: coordinator
-- Source: `8e132becdad485f9d281d63c5ec1c9c60ef3e56f`, `boil/rc-successor`; packaging-only successor of dce654
+- Source: `c4acfdde9d794345cd1f7001bcc7198d7d810f2d`, `boil/rc-successor`; canonical Clinic successor of8e132, clean
 - Worktree: `build/worktrees/rc-successor`
 - Decision: [early GC rejection and RC selection](../gc-parity-deadline/decision-20261101.md)
 - Profile: Linux/GIL, GCC computed interpreter, boxed-slot shapes
@@ -13,6 +13,28 @@ Restore one coherent RC/cyclic-collection model while retaining the register
 compiler/interpreter and eight-byte NaN-boxed frame representation. Do not
 introduce a collector selector or claim that RC has reached performance parity.
 Later core-wide inline heap values and their ABI are deferred.
+
+At10:17 UTC, the [whole-profile scope decision](stackref-gate-decision-20261101-v1.md)
+is adopted after independent review: global `Py_STACKREF_DEBUG` is unsupported
+and unvalidated for this ordinary RC landing. Its failed partial run and all
+twelve failure families remain unresolved; no upstream comparison method ran.
+No checker/runtime/test change or exclusions accompany the scope decision.
+
+Packaging feedback48281 returned1, observed10:05:50. Its first exact
+`make -s regen-cases clinic` returned0 but changed one tracked generated header,
+`Python/clinic/sysmodule.c.h`. The batch stopped before both packaging suites,
+foreign-wheel calls and CPU extension coverage. Cleanup confirms idle and its
+cache removed. Automatic reconfiguration left compiled products, Makefile and
+pyconfig bytes unchanged but changed debug config.log and deleted pybuilddir.txt.
+The prior strict reuse bridge therefore cannot simply be reused. The
+[canonical correction](clinic-canonical-correction-review-20261101-v1.md)
+is independently accepted: its fallback is unreachable, wrappers and method
+bodies unchanged. Root restored the exact27-byte/mode0664 marker at10:13:22
+under all seven locks and committed only the generated header as c4acfdde9d79.
+The new config.log is retained. The new actual
+[semantic bridge](clinic-semantic-bridge-review-20261101-v1.md) is independently
+accepted; minimally rebound v4 helpers are under independent review. No fresh-object bit identity
+or successful regeneration/packaging retry is claimed.
 
 ## Accepted evidence
 
@@ -36,11 +58,11 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | --- | --- | --- |
 | Last targeted ownership/refleak tranche | coordinator | Closed through reviewed additive result reuse; no further bespoke cohort |
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
-| Safety profiles | coordinator; qualification_review_resumed | ASan composite accepted. Stackref partial run failed. Both upstream builds failed before comparison methods; no further repairs. Entire diagnostic-profile scope amendment proposed, independent review pending |
-| Extension and generation closure | restart_audit; qualification_review_resumed | Five-path packaging8e132 and four-image reuse bridge independently accepted. Concrete cheap-first five-row helpers in host preparation/review; generation still pending |
+| Safety profiles | coordinator | ASan composite accepted; whole global StackRef profile withdrawn after independent review, failures retained. No further upstream repairs |
+| Extension and generation closure | qualification_review_resumed; coordinator | v3 regeneration failed; later four rows did not run. Canonical c4ac/marker restore/semantic bridge accepted; v4 host controls/preflight pass, independent helper review precedes retry |
 | First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
 
-At09:47 UTC, all native jobs are terminal. Corrected upstream control64610
+The earlier upstream control64610
 returned1, observed09:43:39, within its fixed09:42:16-10:12:16 window. Its exact
 [source](stackref-corrected-upstream-source-root-review-20261101-v1.md) and
 [helpers](stackref-corrected-upstream-helper-root-review-20261101-v2.md)
@@ -50,8 +72,8 @@ unmodified upstream. Bootstrap again aborted while freezing four modules,
 now on a closed-with-one-borrowed-reference check. No comparison method ran;
 cleanup09:43:28 confirms all four native executable paths idle. Stop this
 upstream repair path. A [whole-profile scope amendment](stackref-gate-amendment-proposal-20261101-v1.md)
-is proposed for independent review; no comparison equivalence, exclusions,
-passing checker result or approved amendment is claimed.
+was independently accepted and adopted through the decision above. No
+comparison equivalence, exclusions or passing checker result is claimed.
 The original upstream build78795 returned1;
 its cleanup receipt reports idle at09:22:59. It aborted in unmodified upstream
 `_bootstrap_python` while freezing four standard modules: Invalid StackRef at

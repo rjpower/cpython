@@ -1223,3 +1223,22 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   controls and realUV prefix pass. Parentimage remains builtatEba; rootwillfreeze
   a prose-onlycheckout successor forliteralbinding. No old67f5samples copied;
   no target/compiler/timing grant. [Pre-score plan](issues/jit-entry-pc-abi/elapsed-plan-20261101-v1.md).
+- 2026-11-01 13:14:13 UTC: ABI fixed pilot activation45e02ec0 admitted one45minute
+  campaign against RC, same five executable helpers and fixed80value protocol.
+  Parentcheckout67f5d5ec bridges images builtatEba; candidate599897 exact. Ninehost
+  controls, realUV prefix and independenthelperac79f6ce/c0aac540 PASS. Agentsquiet.
+- 2026-11-01 13:15:56 UTC: ABI supervisor45640 terminal0 observed13:15:19; cleanup
+  verifiesall16locks/nativeidle/bothsource-product-ELF/18parentfingerprints exact.
+  Result078bcb10,80raw/16cells/8origins/48quietchecks/211artifacts preserved.
+  No replacement samples. Sourcegrant ended13:16:17 complete, frozenearly12:51:20.
+- 2026-11-01 13:29 UTC: ACCEPT PILOT ONLY with recorded Richards tradeoff.
+  Independent81353afd/8e7df566 reproduces primary-12.65%/-10.13%, GM4-2.78%/-1.86%
+  and allvalue-deletion gates. Richards+5.15%/+3.49% is real; cause unproved.
+  Root explicitly accepts this cost only forbroaderqualification. Main unchanged;
+  no production/full29/landing acceptance. [Decision](issues/jit-entry-pc-abi/decision-20261101-v1.json).
+  All29design8bb9655e reviewedeb4a73ac/e24bcdcc:116scored/580values+58origins,
+  GM29and290deletions/round mandatory;GM28concentration diagnostic only. Heldhost
+  helpers11controls+realUV PASS; no full29target grant or expensivepub/fullLibgate.
+- 2026-11-01 13:29:15 UTC: Loomrev22 records currentRC, rejectedoldprefix and
+  pilot-only ABI advancewithRichardscost; twoMermaids retained, historyimmutable.
+  Exactreadback8192characters; snapshotSHA256 7b48692636a921d82df82bb2220e3a02d6d2bf7e15785cc95f67f92672911f42.

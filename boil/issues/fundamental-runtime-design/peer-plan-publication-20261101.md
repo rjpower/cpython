@@ -249,3 +249,11 @@ Exact readback matches14,756 characters and two Mermaid blocks. Local snapshot
 SHA256 `fd4a30a35954b7bc4352cb4ce6cc686959f9988e29ae5795659d934e53540a08`.
 No rendered-layout check, successful packaging retry, completed integration,
 RC parity or native JIT execution is claimed.
+
+## Pilot disposition and broader gate, revision22
+
+Published13:29:15 UTC, exact readback8192 characters/two Mermaid blocks.
+Snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v22.md`,
+SHA256 `7b48692636a921d82df82bb2220e3a02d6d2bf7e15785cc95f67f92672911f42`. It records pilot-only ABI advancement with real Richards cost,
+held all29 measurement and deferred publication/full functional gates. No rendered
+layout check, full-suite result or production acceptance is claimed.

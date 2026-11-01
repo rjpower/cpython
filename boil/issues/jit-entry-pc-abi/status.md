@@ -1,6 +1,6 @@
 # JIT entry PC by value
 
-**Focused native checks accepted; separate fixed timing held, 2026-11-01.**
+**Pilot accepted with Richards tradeoff; all-29 elapsed gate held, 2026-11-01.**
 The [30-minute grant](source-grant-20261101-v1.json), 12:46:17–13:16:17 UTC, authorizes a separate
 ABI hypothesis in `build/worktrees/jit-entry-pc-abi`, based on `67f5d22bb38`.
 The [previous increment remains rejected](../jit-first-native-tier/decision-20261101-v1.json).
@@ -32,12 +32,25 @@ behavior. The [offline comparison](emission-review-20261101-v1.md) confirms
 register-based PC handling on inspected load/store/range/tuple/list paths and
 all fourteen value-passing entry calls. Both native leaf captures remain exact.
 This does not establish whole-CFG behavior, causation or useful elapsed.
-The [fixed timing plan](elapsed-plan-20261101-v1.md) remains held for exact
-image/source binding, independent helper review and a separate root grant.
+The [fixed timing plan](elapsed-plan-20261101-v1.md) completed without replacement
+samples: 80 values, eight unscored origins and 48 quiet checks. Supervisor45640
+exited zero, observed13:15:19; cleanup13:15:56 verified sixteen locks, native
+idle, exact source/product/ELF bindings and eighteen unchanged parent fingerprints.
+The [independent outcome](elapsed-outcome-review-20261101-v1.md) reproduces all
+point and single-value-deletion gates. Spectral norm improves12.65%/10.13%;
+GM4 improves2.78%/1.86%. Richards loses5.15%/3.49%, a real retained tradeoff with
+unproved cause. The [root decision](decision-20261101-v1.json) accepts only
+advancement to broader measurement, not production or integration.
 
-Gates: source review; the existing 54 focused methods in fresh release/debug
-images; actual ordinary-handler PC and unchanged native-leaf evidence; then a
-separately frozen two-round/five-value comparison against RC on spectral_norm,
-coroutines, Richards and unpack_sequence. Preserve the same primary/aggregate
-and single-value-deletion rules. No old values are replaced or averaged in.
-Broad qualification follows only a useful elapsed result. GC work stays closed.
+The [reviewed all-29 design](broad-elapsed-design-20261101-v1.md) uses two rounds,
+five values per arm:116 scored processes/580 values plus58 origins. Both GM29
+and all290 single-value deletions must improve each round; the primary retains
+its point/ten-deletion gates. GM28 workload deletions diagnose concentration;
+they are not a new veto. Every material regression needs explicit disposition.
+Host helpers are held for literal binding and independent review, then a separate
+finite root execution grant. No full29 target execution is yet authorized.
+
+The source grant ended13:16:17 with source frozen early; no extension or source
+edits remain authorized. Publication/leaf-CFI support and broad functional gates
+follow only a useful full-suite result and need separate grants. Main RC and the
+old candidate rejection remain unchanged. GC work stays closed.

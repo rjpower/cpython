@@ -1688,3 +1688,17 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   behavior and preserved failed history; superseded undated status prose is
   removed. Observed-loop SSA review and unchanged-kernel diagnostics remain next.
   No speed, release/full-suite or main-integration claim follows publication.
+- 2026-11-01 20:02 UTC: M3 design955ac8ce passes independent5c0e2610/f1541ca8
+  review against13actual sources/11context refs. Root creates isolated observed-loop
+  worktree at accepted3174 and grants21source paths underd2d3b7eb: start20:01:13,
+  checkpoint20:31:13, cutoff21:31:13UTC/noextension. Author implements actual
+  recorder/sharedSSA/LIR/allocation/recovery in three dependency commits; reviewer
+  follows source in parallel. Host and bounded syntax/encoder fixtures only;
+  no candidate build/runtime/timing/integration. Existing native attempts stay closed.
+  [M3 grant](issues/jit-e2e-system/m3-source-grant-20261101-v1.json).
+- 2026-11-01 20:03 UTC: Loom revision43 exactly read back at23,757characters/
+  two diagrams, snapshot304b8b48, records reviewed active M3 source work and
+  its fixed checkpoint/cutoff. The existing held diagnostic runner matches3174
+  APIs; six unchanged-kernel candidate-only commands/930second budget are prepared,
+  with no scores or execution yet. Seen bits remain lifetime witnesses; per-code
+  compiler time is partial and shared process occupancy must not be summed.

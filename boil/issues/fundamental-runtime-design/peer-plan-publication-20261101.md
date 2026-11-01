@@ -1,6 +1,14 @@
 # Peer review and revised work-plan publication
 
-Latest publication: revision42 at19:58:35 UTC records accepted M2 focused
+Latest publication: revision43 at20:02:36 UTC additionally records the accepted
+M3 design and active source-only implementation: start20:01:13,
+checkpoint20:31:13 and cutoff21:31:13UTC. Exact readback matches23,757characters
+and two Mermaid blocks; snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v43.md`
+has SHA256 `304b8b48f0624cd0762ecebf5c74f383e2f59fa8699b2e6671540d35669f6c65`.
+No candidate build/runtime, timing or integration follows this source grant.
+
+Revision42 at19:58:35 UTC records accepted M2 focused
 natural-method debug behavior, the preserved original failed fixture attempt,
 and the next observed-loop SSA design. All28methods pass with0skips, including
 14natural methods; no speedup or main integration is claimed. Exact readback

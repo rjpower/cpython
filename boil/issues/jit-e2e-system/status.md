@@ -52,8 +52,8 @@ attribute specialization remains available through exact fallback.
 
 ## Parallel next work
 
-- restart_audit: sealed observed-loop SSA proposal and design responses.
-- qualification_review_resumed: corrected M2 outcome and independent SSA design review.
+- restart_audit: observed-loop recorder/SSA/allocator implementation in isolation.
+- qualification_review_resumed: parallel actual-source and checkpoint review.
 - coordinator: source/runtime integration, evidence, issue board, WORKLOG and Loom.
 - coroutine_design_review: prior research complete; later provider-capacity errors
   were reassigned without repeated retries or a model change.
@@ -134,13 +134,21 @@ debug milestone. The emitted27-word/2419-byte method again binds its55 helper
 calls to the exact candidate ELF and passes native entry/continuation assertions.
 This batch is closed; source, native and timing permissions remain closed.
 
-The sealed observed-loop proposal specifies actual paired recording, shared
-typed SSA, register allocation, native scalar operations and precise side exits.
-Independent design review is pending. Source and standalone checks are closed;
-natural workload diagnostics precede elapsed scoring. SSA implementation,
-genuine trace execution, performance qualification and main integration remain
-unfinished. Release/ASan/full-suite qualification, speedup and main integration
-are not established by this focused debug acceptance.
+The [observed-loop proposal](m3-design-20261101-v1.md) and
+[independent review](m3-design-review-20261101-v1.md) now pass design review.
+The [source grant](m3-source-grant-20261101-v1.json) opens one isolated attempt
+from accepted3174 in `build/worktrees/jit-observed-loop`: start20:01:13 UTC,
+checkpoint20:31:13, hard cutoff21:31:13. It requires actual paired recording,
+shared typed SSA/effects/FrameState, scalar LIR, register allocation/spills and
+immutable baseline-plus-loop publication with precise recovery. Three commits
+are dependency steps; partial graphs or encoding are not M3 completion.
+Host/generator and bounded syntax/encoder fixture checks precede fresh native
+validation. No candidate build/runtime, timing or integration is authorized by
+this source grant. Unchanged-kernel workload diagnostics are prepared separately.
+
+SSA implementation, genuine trace execution, performance qualification and main
+integration remain unfinished. Release/ASan/full-suite qualification, speedup
+and main integration are not established by M2 focused debug acceptance.
 
 ## Retained evidence
 

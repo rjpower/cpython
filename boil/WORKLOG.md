@@ -1631,3 +1631,60 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   checkpoint, fixed inventory/backoff policy, explicit leaf-renomination limit
   and remaining native/workload/SSA gates. No source-cap extension or performance
   claim; all expensive execution gates remain held.
+- 2026-11-01 19:16 UTC: Prepared held M2 controller for all 28 stable method IDs;
+  five mocked host controls pass. Independent delta review found no critical
+  change to accepted two-row/1800-second supervision, preservation or cleanup.
+  Source binding, exact final review and native activation remain pending;
+  no compiler or candidate execution occurred during preparation.
+- 2026-11-01 19:32 UTC: M2 source3bcb8919 freezes clean with22paths and28methods.
+  Exact independent05c79bf5/7373c355 review verifies232artifacts,156historical files,
+  old tests/metadata and final33host/nineTU/encoder checks. Failed style syntax
+  is preserved; corrected final-v2 passes. Source dispositiona6d6c7f4 closes
+  the attempt early. Bound controller ready a8a762aa/capsulecb92861f passes five
+  host controls and Git-only composed imports; final readiness review pending.
+  Author moves to read-only genuine recorder/SSA design; no native execution yet.
+  [Source decision](issues/jit-e2e-system/m2-source-disposition-20261101-v1.json).
+- 2026-11-01 19:34 UTC: Independent M2 helper readiness e9ae85c2/84fc5177
+  accepts exact8735inputs/12tools,28methods and inherited supervision. Root
+  activates one fresh debug batch5e05f694 at19:33:18, deadline20:03:18;
+  native supervisor75385 is live. Exclusive preflight finds idle native state
+  and23available locks;1417prior files/30old parents remain intact. Source stays
+  frozen; no timing or integration authority. Independent outcome review waits
+  actual terminal evidence while read-only recorder/SSA design continues.
+- 2026-11-01 19:48 UTC: M2 supervisor75385 exited1 at19:35:55. Fresh build passes,
+  but the old unsupported-list fixture fails after13passes; all14natural methods
+  are NOTRUN underfailfast. Independent6c6886eb/5f56bd5f outcome retains the
+  absent suite-result snapshot and raw returned/verbose counts. Cleanup1534b620
+  confirms nativeidle,23locks,1417prior files/30parents unchanged, owncache removed.
+  One-method correction3174bc0a replaces the now-supported fixture with actual
+  unsupported CALL_FUNCTION_EX plus callback-once ledger; d76e87cd/f91013a9
+  source review verifies core/other27methods/all28IDs unchanged. Old3bcbsource,
+  image and failure stay frozen. New held readyf5b42767/capsule3bdfd0b7 preserves
+  2353files including587failed-attempt products; five host controls pass.
+  M3 read-only recorder/SSA proposal955ac8ce is sealed for later review.
+  [Failed outcome](issues/jit-e2e-system/m2-debug-decision-20261101-v1.json).
+- 2026-11-01 19:53 UTC: Independent correction-controller readiness
+  f45d3368/4c6ec408 accepts28methods, two rows and1800seconds. Root activates
+  fresh batch629f8519 at19:53:10, deadline20:23:10; actual supervisor53412 is
+  running. The separate cache/profile preserve2353prior files and24locks.
+  Old75385 stays closed. Native outcome review and read-only M3 design review
+  continue in parallel; no timing, runtime acceptance or integration claim.
+- 2026-11-01 19:56 UTC: Corrected M2 fresh build and all28focused methods pass,
+  including14natural-admission methods, with0skips. Supervisor53412 exits0 at
+  19:55:47; cleanup176506c3 confirms nativeidle,24locks,2353prior files and30parent
+  fingerprints intact, then removes only m2d2cache. Completionf5294caa is sealed.
+  Independent outcome review is pending. Original failed batch remains closed;
+  this result does not claim optimization, speed or primary-runtime integration.
+- 2026-11-01 19:58 UTC: Accept M2 focused natural-method debug behavior in
+  decision4e65f9d8 after independent1dcd8e15/dd077a46 outcome review. Reviewer
+  verifies9671inputs,9695completion artifacts,587products and exact imagef92c752a;
+  actual28PASS/0skip include14natural methods. Complete2419-byte native witness
+  binds55calls to the ELF and passes entry/continuation/ABI checks. Old failed
+  attempt stays failed. Workload diagnostics and observed-loop SSA review follow;
+  release/ASan, speedup, broad qualification and main integration are unclaimed.
+  [Behavior decision](issues/jit-e2e-system/m2-behavior-decision-20261101-v1.json).
+- 2026-11-01 19:59 UTC: Published and exactly read back Loom revision42,
+  23,259characters/two diagrams, snapshot edc27c71. It records accepted M2 focused
+  behavior and preserved failed history; superseded undated status prose is
+  removed. Observed-loop SSA review and unchanged-kernel diagnostics remain next.
+  No speed, release/full-suite or main-integration claim follows publication.

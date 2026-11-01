@@ -1,5 +1,16 @@
 # Peer review and revised work-plan publication
 
+Latest publication: revision42 at19:58:35 UTC records accepted M2 focused
+natural-method debug behavior, the preserved original failed fixture attempt,
+and the next observed-loop SSA design. All28methods pass with0skips, including
+14natural methods; no speedup or main integration is claimed. Exact readback
+matches23,259characters/two Mermaid blocks and local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v42.md`,
+SHA256 `edc27c71f7f15a6971878b006c6a68d1478d40d1c2b70229e8c1e8a2c83b7303`.
+Revision41 records the same result; revision42 fixes paragraph spacing and
+removes superseded undated implementation-status prose. Prior revisions retain
+history. Mermaid source/readback checked; rendered layout was not inspected.
+
 Published and read back 2026-11-01 at about 02:24 UTC:
 
 - [Claude Fable 5.1 peer review, revision 1](http://127.0.0.1:7878/s/6rydgj13/artifacts/runtime-peer-review).

@@ -1,6 +1,6 @@
 # Cohesive method and tracing JIT
 
-**M1 native behavior accepted; M2 natural-admission source implementation active.**
+**M2 focused natural-method debug behavior accepted: 28 passes, zero skips.**
 
 User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
 an end-to-end method and tracing JIT. The JIT is the selected direction;
@@ -52,9 +52,8 @@ attribute specialization remains available through exact fallback.
 
 ## Parallel next work
 
-- restart_audit: M2 shared attribute/iteration/call helpers and natural admission
-  in the isolated `build/worktrees/jit-natural-method` worktree.
-- qualification_review_resumed: independent M2 source/ownership/metadata review.
+- restart_audit: sealed observed-loop SSA proposal and design responses.
+- qualification_review_resumed: corrected M2 outcome and independent SSA design review.
 - coordinator: source/runtime integration, evidence, issue board, WORKLOG and Loom.
 - coroutine_design_review: prior research complete; later provider-capacity errors
   were reassigned without repeated retries or a model change.
@@ -99,13 +98,49 @@ the original cap, without final source or runtime acceptance.
 
 The [policy clarification](m2-policy-clarification-20261101-v1.json) fixes bootstrap
 resource backoff before state exists, and records the explicit leaf-renomination
-limit after observation ends. Final natural observer, resource, pending-capacity
-and coroutine fixtures, exact-source review and fresh native checks remain.
+limit after observation ends. The final natural observer, resource, pending-capacity
+and coroutine fixtures are now written and source-reviewed below; their runtime
+behavior remains unverified.
 
-Only host generation/tests, bounded syntax checks and standalone byte-emission
-fixtures are currently allowed. No M2 candidate executable or generated machine
-code has run. A fresh focused native validation follows coherent source freeze
-and independent review; natural workload diagnostics precede elapsed scoring.
+M2 source is now frozen and clean at `3bcb891956a9d2796bbe5e92c4f0c9e2f2516899`,
+with 22 changed paths in `build/worktrees/jit-natural-method`. The
+[exact-source review](m2-source-review-20261101-v1.md) and
+[source disposition](m2-source-disposition-20261101-v1.json) accept readiness
+for a separate focused native validation. The source attempt is closed early.
+All 28 semantic/native/natural methods are written; 33 host methods, nine final
+syntax checks and actual encoder emission/failure checks pass. The failed
+style-pass syntax attempt remains preserved alongside corrected final evidence.
+
+The first fresh build passed, but its focused suite stopped after 13 passes at
+an obsolete unsupported-list fixture. M2 now supports list construction, so the
+fixture's premise was false. All 14 natural-admission methods were NOTRUN.
+The [independent outcome](m2-debug-outcome-review-20261101-v1.md) and
+[failed decision](m2-debug-decision-20261101-v1.json) preserve the original
+source, image, raw failure and missing suite-result snapshot. Supervisor75385
+is closed; cleanup verified native idle and removed its owned cache.
+
+The [test-only correction](m2-fixture-source-disposition-20261101-v1.json),
+source `3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a`, uses the actually unsupported
+CALL_FUNCTION_EX form and checks that its callback executes once. Runtime core,
+the other 27 methods and all 28 IDs are unchanged. Independent source and
+controller reviews passed. A separate fresh build/suite batch started at
+19:53:10 UTC with a 20:23:10 deadline and first-failure stop. All 28 methods,
+including all 14 natural-admission methods, passed with zero skips. Root
+supervisor53412 exited0 at19:55:47. Cleanup confirmed native idle,24 available
+locks,2,353 prior files and30 parent fingerprints unchanged, then removed the
+owned cache. The [independent outcome](m2-corrected-debug-outcome-review-20261101-v1.md)
+and [behavior decision](m2-behavior-decision-20261101-v1.json) accept this focused
+debug milestone. The emitted27-word/2419-byte method again binds its55 helper
+calls to the exact candidate ELF and passes native entry/continuation assertions.
+This batch is closed; source, native and timing permissions remain closed.
+
+The sealed observed-loop proposal specifies actual paired recording, shared
+typed SSA, register allocation, native scalar operations and precise side exits.
+Independent design review is pending. Source and standalone checks are closed;
+natural workload diagnostics precede elapsed scoring. SSA implementation,
+genuine trace execution, performance qualification and main integration remain
+unfinished. Release/ASan/full-suite qualification, speedup and main integration
+are not established by this focused debug acceptance.
 
 ## Retained evidence
 

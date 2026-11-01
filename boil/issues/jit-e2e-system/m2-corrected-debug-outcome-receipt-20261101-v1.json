@@ -1,0 +1,55 @@
+{
+  "utc": "2026-11-01T19:57:27.601182+00:00",
+  "accepted": true,
+  "decision": "ACCEPT_CORRECTED_M2_FOCUSED_DEBUG_BEHAVIOR_ONLY",
+  "source_head": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "image_sha256": "f92c752a29d365b044b2603e376baedc4c9e864b7bd2f75d96ceee3c49a1e722",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/review.md",
+    "sha256": "1dcd8e150cbf927b50ccd5716dfa58025056afe6db2574d63f8d0a0d900e8ab6"
+  },
+  "replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/replay.json",
+    "sha256": "a097f22ad2d65b443f2d087050f091cabd226a823591418e90e3873981d9cd26"
+  },
+  "emission": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/emission.json",
+    "sha256": "001ab72f0a311d06674ae64ee45a95118ceb0e410a4c4b150f537a4851d87f0e"
+  },
+  "native_bytes": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/method.bin",
+    "sha256": "1f00b7e2b06a49bd86b591dd8ea905b0efe6ac2820f52e9f0a7b7958617a0853"
+  },
+  "offline_disassembly": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/method.disassembly.txt",
+    "sha256": "8bf8c51a5ede61c22fa70b15b2869aa8d798ef8a324c555caf2982ab5e3f0659"
+  },
+  "reader": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/audit.py",
+    "sha256": "8b80206a309b2bf78a1ed030e8f84c76d2164e3160c418a5edbd864fd418533d"
+  },
+  "emission_reader": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-corrected-outcome-review-20261101-v1/emission.py",
+    "sha256": "023c33d01458826b2ec69471c56f88f80c08c50288cfee8bd02889b7fb5e250b"
+  },
+  "completion": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction/build/jit-method-m2-feedback-v2/feedback-batch-completion.json",
+    "sha256": "f5294caa7498efcdcf9de6a1c6c5bd8f4fc7020ed605f447b8c7056a341a84f5"
+  },
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-fixture-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "176506c3b7bcea6d66e5cc71f77f5e7fd34bc41f77e14552f0df25c89e1cc1c3"
+  },
+  "methods": 28,
+  "natural_methods": 14,
+  "skipped": 0,
+  "completion_artifacts": 9695,
+  "native_products": 587,
+  "prior_files": 2353,
+  "parent_fingerprints": 30,
+  "locks": 24,
+  "actual_driver_workers": 2,
+  "native_entry_and_compiled_continuation_credit": true,
+  "compiler_or_candidate_calls_by_reviewer": 0,
+  "elapsed_or_broad_qualification_or_integration_credit": false
+}

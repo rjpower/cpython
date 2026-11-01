@@ -503,3 +503,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   no test/build outcome or elapsed credit yet. Quiet pilot preparation proceeds
   in parallel, pending candidate products and independent outcome review.
   [Helper review](issues/fundamental-runtime-design/span-native-helper-review-20261101-v1.md).
+- 2026-11-01: First span native batch stopped at 03:47:48 UTC. Debug build
+  passed and verified; the new legacy C-API construction fixture aborted.
+  Pinned upstream docs explicitly declare that frame constructor unusable.
+  Approved a supported-call fixture correction, preserving all failure evidence
+  and admission/lifetime assertions. Release/timing never ran; cleanup is idle.
+  No storage performance or full semantic credit is claimed.
+  [Outcome](issues/fundamental-runtime-design/span-native-outcome-20261101-v1.md).

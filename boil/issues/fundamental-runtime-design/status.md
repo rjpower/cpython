@@ -66,8 +66,16 @@ the four-row batch at **03:45:59.926 UTC**, inclusive ceiling **04:30:59.926**,
 tool session **83685**. Actual GCC compilation is observed; tests and final
 build outcomes remain pending. Each test row selects 26 IDs; release permits
 only the four declared debug-only skips. No elapsed credit is available.
-The GC owner prepares the existing quiet pilot helpers in parallel through
-**04:06 UTC**, checkpoint **03:56**, with candidate products still pending.
+The batch then stopped at **03:47:48 UTC**, tool **83685 returned 1**:
+debug build verified, but the new C-API construction fixture aborted at an
+inherited frame-copy assertion. Root/author confirmed pinned upstream docs
+declare that legacy constructor impossible to use. The
+[first native outcome](span-native-outcome-20261101-v1.md) preserves the failure
+and idle cleanup; release and elapsed rows never ran. A bounded test-helper
+correction through **04:03 UTC** replaces it with a supported native call,
+retaining admission/lifetime assertions. No production assertion is weakened.
+Quiet pilot preparation pauses at its host checkpoint; a new source/review/
+activation and fresh build directories are required before native continuation.
 The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
 route/wrapper decline, indexed ownership, inventory/rollback and retirement
 connections have source checks, not native proof. The author targets a 03:40

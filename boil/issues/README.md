@@ -17,7 +17,7 @@ and switch to the prepared reference-counting successor. See the
 | RC fallback preparation, isolated source | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator; restart_audit after span review | Exact historical core restored on rc-successor; close RC-only policy by 05:07 UTC; no native/promotion |
 | Integrated-storage source review, accepted | [Frozen-source review](fundamental-runtime-design/span-source-review-20261101-v1.md) | restart_audit | Bounded native feedback only; author moves to isolated RC closure |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | coordinator; qualification_review_resumed | Fresh four-row native feedback active, ceiling 04:30:59 UTC; quiet pilot preparation by 04:06 |
+| GC / allocator | [First native outcome](fundamental-runtime-design/span-native-outcome-20261101-v1.md) | coordinator; qualification_review_resumed | Build passed; invalid legacy C-API fixture aborted; bounded supported-call correction by 04:03 UTC |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline

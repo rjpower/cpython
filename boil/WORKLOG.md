@@ -784,3 +784,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Exact readback verified; revision10 corrects revision9's future status label.
   No rendered-layout check or runtime integration claimed.
   [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01 08:09 UTC: Checkpoint audit found that recent worklog additions
+  were inserted after an earlier matching anchor rather than at EOF. The
+  prefix check failed, but root incorrectly continued the checkpoint command.
+  Preserve those committed entries and commits; record this correction only
+  by appending. Future append/checkpoint steps must stop on a failed check.
+  Five protected user files remain unchanged. No runtime evidence is altered.
+- 2026-11-01 08:09 UTC: Corrected release session87194 terminal0; raw full-suite
+  SUCCESS50,827 tests, zero failures,3,430 skips,565 selected modules. Actual
+  independent outcome review remains pending. Release cleanup08:03:54 verified
+  dual executables idle and removed only its owned cache prefix. Root then
+  activated reviewed O1/debug full08:05:26–09:38:56 inclusive, session60637;
+  it remains active. Fresh safety builds and CPU extension/regen closure queue
+  behind it; no whole RC qualification or integration claim.

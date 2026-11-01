@@ -30,7 +30,7 @@ Each milestone must exercise useful control flow and calls,
 with focused correctness and diagnostic measurements first. Full-suite acceptance
 and expensive qualification remain appropriate for coherent adoption candidates.
 The [system design](../../design/jit-e2e-system.md) is published to the existing
-Loom artifact, revision36, with code and lifecycle diagrams.
+Loom artifact, revision37, with code and lifecycle diagrams.
 
 The [integrated architecture](../../design/jit-e2e-system.md) passed
 [independent review](design-review-20261101-v1.md); the
@@ -92,3 +92,14 @@ ownership. Real emitted entry and compiled-continuation witnesses are required;
 compile success alone is insufficient. Implementation and independent review
 run in parallel. Host generation and small standalone encoder checks are allowed;
 candidate execution and broad qualification follow a separately bounded freeze.
+
+The [17:47 checkpoint](m1-checkpoint-decision-20261101-v1.json) has concrete
+deliverables, confirmed by the [independent reviewer](m1-independent-checkpoint-20261101-v1.json):
+actual method descriptors/LIR, x86 branches and helper calls, exec-owned code
+units and the common evaluator Action consumer. Seven distinct translation units
+pass the [bounded syntax checks](m1-syntax-check-grant-20261101-v1.json).
+A standalone fixture emits 501 bytes with six ENDBR destinations and checks
+allocation/overflow cleanup; it does not execute emitted machine code.
+The original syntax-v1 command-label defect and missing include remain recorded;
+syntax-v2 corrects both. Native behavioral fixtures, exact final source review
+and fresh runtime validation remain pending. The source cap stays 18:47:09 UTC.

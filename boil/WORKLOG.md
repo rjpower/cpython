@@ -1522,3 +1522,20 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   whole-method source work. Exact readback 20,924 characters/two Mermaid diagrams;
   snapshot SHA256 d3eeb9c3a40a17047fe4158bcfda3cf7aa2d916a96dd7e1114a1dad9cfcbe934.
   The selected architecture and RC runtime remain unchanged.
+- 2026-11-01 17:47 UTC: M1 concrete checkpoint delivered before its deadline;
+  author f4a1091c and independent reviewer 63c33a75 pin actual method/LIR,
+  emitted branches/helpers, exec ownership and the common Action consumer.
+  Seven distinct C translation units pass syntax-v2. The actual backend fixture
+  emits 501 bytes/six ENDBR destinations and passes bounded negative checks;
+  emitted code has not run. Original syntax-v1 repeated-command and missing-include
+  failures remain preserved. Source completion remains pending under the unchanged
+  18:47 cap. Review corrected semantic code-object lifetime pinning and narrowed
+  unsupported-op disabling to the affected code object; callback invalidation
+  fixtures must exercise a live C/native stack. No candidate build or timing
+  is authorized by this checkpoint. [Decision](issues/jit-e2e-system/m1-checkpoint-decision-20261101-v1.json).
+- 2026-11-01 17:50 UTC: Loom revision37 (published17:47:59) records the whole-method checkpoint,
+  semantic lifetime correction and six pending native methods. Exact readback
+  22,776 characters/two diagrams, snapshot f12c5392. A held fresh-debug controller
+  selects all14 helper/native methods with a finite30-minute window; no execution
+  is authorized yet. Preparation fingerprints all585 successful M0 build products
+  and776 prior-attempt files, alongside earlier parent-image preservation.

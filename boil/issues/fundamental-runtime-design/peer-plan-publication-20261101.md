@@ -329,3 +329,10 @@ diagrams; snapshot SHA256
 d3eeb9c3a40a17047fe4158bcfda3cf7aa2d916a96dd7e1114a1dad9cfcbe934.
 The eight passing debug methods prove shared helper/evaluator behavior; actual
 native entry and compiled continuation are M1's next required evidence.
+
+Revision37 (17:47:59 UTC) records the timely whole-method checkpoint and six
+unexecuted native fixtures alongside the eight validated M0 methods. Exact
+readback 22,776 characters/two Mermaid diagrams; snapshot SHA256
+f12c53928fe1faf00681e4d7e6947cc79a3e94a0536c9c9ec1d43c1509b8a33a.
+It distinguishes actual backend byte emission from runtime execution and records
+the correction to semantic code lifetime and affected-code fallback scope.

@@ -88,8 +88,12 @@ The bounded source grant ends **05:07 UTC** and permits RC-only closure after
 the owner's span review. No compiler, target or promotion is authorized by
 that grant. Historical restoration still contains the old collector choice;
 it is an intermediate preparation commit, not the chosen final product.
+Closure then froze early at **d7df12b1d81722927e71d9734c70eeafdccfee73**:
+owning collector/selector removed, RC selected and extension/cache identity
+isolated. Independent source review and actual native validation remain.
 
-The active [integrated-storage source attempt](../fundamental-runtime-design/status.md)
-keeps its 03:21 checkpoint/04:21 ceiling; the author targets an earlier 03:40
-freeze. Its initial checkpoint passed source review only, not native tests or
-performance. No current candidate has earned parity or integration.
+The [integrated-storage candidate](../fundamental-runtime-design/status.md)
+passed source review and its first debug build. An invalid legacy C-API fixture
+aborted the first native batch. Its supported-call correction passed source
+review, and a fresh debug/release batch is active **03:57:48–04:42:48 UTC**,
+session **60010**. No current candidate has earned parity or integration.

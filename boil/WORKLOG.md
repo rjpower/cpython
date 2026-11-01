@@ -510,3 +510,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   and admission/lifetime assertions. Release/timing never ran; cleanup is idle.
   No storage performance or full semantic credit is claimed.
   [Outcome](issues/fundamental-runtime-design/span-native-outcome-20261101-v1.md).
+- 2026-11-01: Supported-call fixture correction froze at 67190a9 and passed
+  independent source/helper review. Activated fresh debug-v2/release-v2 batch,
+  03:57:48–04:42:48 UTC, session 60010; no v2 outcome yet. Interpreter source
+  40498d1 and RC-only fallback d7df12b also froze early with host checks, and
+  enter independent review. No source freeze earns native/performance credit.
+  [Execution state](issues/fundamental-runtime-design/status.md).

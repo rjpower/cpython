@@ -74,8 +74,14 @@ declare that legacy constructor impossible to use. The
 and idle cleanup; release and elapsed rows never ran. A bounded test-helper
 correction through **04:03 UTC** replaces it with a supported native call,
 retaining admission/lifetime assertions. No production assertion is weakened.
-Quiet pilot preparation pauses at its host checkpoint; a new source/review/
-activation and fresh build directories are required before native continuation.
+The supported-call correction froze early at clean `67190a9d81c` and passed
+[independent correction review](span-constructor-review-20261101-v2.md).
+The [v2 helper review](span-native-helper-review-20261101-v2.md) verifies fresh
+debug-v2/release-v2 paths and the exact one-case rename. Root activated a new
+four-row batch **03:57:48.078–04:42:48.078 UTC**, tool **60010**; compilation
+is live and no v2 native outcome is credited. Original v1 source/products and
+failures remain intact. Quiet helper preparation resumes under a new host-only
+grant through **04:13 UTC**, checkpoint **04:05**, pending v2 release products.
 The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
 route/wrapper decline, indexed ownership, inventory/rollback and retirement
 connections have source checks, not native proof. The author targets a 03:40
@@ -111,13 +117,27 @@ composition and one comparison/branch consumer; preserve original states,
 ordinary entries and all root/observer/error/breaker contracts. Host checks and
 test source are allowed; compiler/target/native/timing remain held. Current
 site evidence does not prove virtual single-use/exception liveness or a win.
+Source then froze early at clean **40498d1e0d3773ac2a1180eb8cac7fd04831028d**,
+with seven generated products reproducing and all 287 preexisting handler IDs
+and bodies unchanged. Host checks passed 78 ordinary methods plus one existing
+expected failure; twelve new native methods remain unexecuted. Capsule
+`build/interpreter-region-source/candidate.json` SHA256
+`543a8e9c9d100835131cbcd84e7b90858f0fdbf41d55702932cac29ca21a4efa`.
+Independent source review runs through **04:12 UTC**, checkpoint **04:05**.
+Host-only four-row native helper preparation also ends **04:12**; no native
+activation or performance acceptance follows from the source freeze.
 
 RC fallback preparation froze early before 03:32 UTC. Root accepted the
 [coherent restoration route](rc-fallback-decision-20261101.md) after inspecting
-actual historical ownership/cyclic-GC/configuration source. No restoration or
-native build has run. The author now independently reviews actual stable-span
-source through **03:55 UTC**, checkpoint **03:42**; require the frozen source
-identity before acceptance. The hard-cutoff fallback remains user-authorized.
+actual historical ownership/cyclic-GC/configuration source. Isolated restoration
+**1440f8c6fd1** then restored the coherent core; RC-only closure froze early at
+clean **d7df12b1d81722927e71d9734c70eeafdccfee73**. The owner selector/live
+collector were removed and the extension/cache namespace isolated. Existing
+26 generator methods and source projection checks passed; current-machine
+buildability, native RC behavior and canonical autoconf remain unproved.
+Root reviews the frozen RC source while its author independently reviews the
+IR candidate. The hard-cutoff fallback remains user-authorized; source
+preparation does not promote the successor or change the maintained runtime.
 
 Retention-oracle v3 helpers passed root host review but remain held, with
 readiness flags false and no activation. VM0 build helpers and

@@ -1,6 +1,6 @@
 # Cohesive method and tracing JIT
 
-**M1 focused native behavior accepted; detailed IR/feedback design reviewed. Natural admission is next.**
+**M1 native behavior accepted; M2 natural-admission source implementation active.**
 
 User feedback36 on Loom revision31 replaced the narrow arithmetic-head tier with
 an end-to-end method and tracing JIT. The JIT is the selected direction;
@@ -52,9 +52,9 @@ attribute specialization remains available through exact fallback.
 
 ## Parallel next work
 
-- restart_audit: user-requested IR/feedback design, actual attribute strategies,
-  typed SSA, opaque-call boundaries and concrete natural-admission/workload plan.
-- qualification_review_resumed: independent design review after sealing M1 outcome.
+- restart_audit: M2 shared attribute/iteration/call helpers and natural admission
+  in the isolated `build/worktrees/jit-natural-method` worktree.
+- qualification_review_resumed: independent M2 source/ownership/metadata review.
 - coordinator: source/runtime integration, evidence, issue board, WORKLOG and Loom.
 - coroutine_design_review: prior research complete; later provider-capacity errors
   were reassigned without repeated retries or a model change.
@@ -71,6 +71,23 @@ Natural admission and a fixed call/loop/object/suspension workload slice precede
 observed-loop SSA, then layered guards, CSE/DCE, representation selection,
 register allocation and guarded inlining. Broad timing and expensive qualification
 belong at coherent integration milestones, not at each opcode.
+
+The [concrete M2 design](m2-design-20261101-v1.md) passed
+[independent review](m2-design-review-20261101-v1.md). Its
+[source grant](m2-source-grant-20261101-v1.json) starts18:35:56 UTC,
+checkpoint19:05:56, hard cap20:05:56. It adds16 shared generic helper forms,
+three appended execution-only warming/entry handlers, site-local CALL heat,
+per-exec periodic-backedge heat and bounded scalar caller continuations.
+Installed methods patch their actual RESUME entry; uncompiled methods retain
+ordinary entry. Before reentry, admission must own the original evaluated inputs.
+Pending records retire on return, exception, generator creation and frame reuse.
+Old IDs0–301 and pristine/marshal behavior remain stable. Initial policy bounds
+compilation, memory and retry cost; it is not a performance claim.
+
+Only host generation/tests, bounded syntax checks and standalone byte-emission
+fixtures are currently allowed. No M2 candidate executable or generated machine
+code has run. A fresh focused native validation follows coherent source freeze
+and independent review; natural workload diagnostics precede elapsed scoring.
 
 ## Retained evidence
 

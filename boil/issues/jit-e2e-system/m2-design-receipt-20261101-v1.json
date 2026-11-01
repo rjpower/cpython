@@ -1,0 +1,51 @@
+{
+  "utc": "2026-11-01T18:33:43.236575+00:00",
+  "decision": "ACCEPT_DESIGN_FOR_SEPARATE_BOUNDED_SOURCE_ATTEMPT",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-review-20261101-v1/review.md",
+    "sha256": "850e22d60b3ad5b1932ae62802c714117008c54b0e14cf3e722917afb14c10bf"
+  },
+  "proposal": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/proposal.md",
+    "sha256": "79a3759eaa3de4a2c81fbf4e606cee589dd0d7ea678d2f0e819ad9f665425ac7"
+  },
+  "author_evidence": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/proposal-evidence.json",
+    "sha256": "6f32fb0b58d33bcc12a83f25b35c54a0f0bf4cf8e8a408c01d31600640b8da53"
+  },
+  "checked_artifacts_and_source_references": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/proposal.md": "79a3759eaa3de4a2c81fbf4e606cee589dd0d7ea678d2f0e819ad9f665425ac7",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/proposal-draft1.md": "e4ac8122cbfd2bb4b433f013ee8d9666fa46406093ec3d23d419208564e8e6b0",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/notes.md": "35669fe94b39756de9111d56423630dac47d40a2b2655f547fe18049a5e7ed86",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-design-20261101-v1/workload-matrix.json": "5d084620f0d130a69b51bc9c94394b47025c5c8947bb4b016a992dae5d1c0c23",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Include/internal/pycore_jit.h": "d13655adf9875ce916a0d82f4cb14c6e6b3b8d53298c20fecfbe20f8610c93dd",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Include/internal/pycore_ir.h": "e34a839a9a90f5537c9e05ac1aa98cf931fb0c77b5003d4e6c3e07cbf65dad8a",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Include/internal/pycore_feedback.h": "3d4933081f1bfb050a925a96cccb13f0b59ebd4dd556217ae3493e4da8770e97",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Include/internal/pycore_interpframe.h": "5e8b0e5136cdd60555e26d0634a42ff0590048f68f62c8bd31681757f530c79b",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Objects/codeobject.c": "15f6fa3af6982effd1b6e68a0faba1407cc4bb32b48f16cc0bb9957bf55dd9b6",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/bytecodes.c": "4ecee876720b66c92c20e5a044f62b39481c4894f59f1a8520209a16b9e1b5b8",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/ceval.c": "d6fbba7d7296bf0b551c0ffe00f56e5a074cf28012a4f541d31c2981bee9cab0",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/ceval_macros.h": "192360cdceedca23a42cab6996db11a65b15ace9648ad993880b21a5f4d0c7e0",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/ir.c": "4b708b96a6dc4493e7ec85bda300f0f34e744fc1fe1df7f0866f6f114fa4d46a",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/specialize.c": "b3ec679dc7615793fb791ae01bf9f7ba6a148b34ab4514edc32b53ef452ac027",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/instrumentation.c": "2c536ce15494942231fe08727c625953c7bea43c4875ed02ead58af1e92cbbde",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/jit_runtime.c": "85d3f2ad11cc98ed7970528cf9b8698e8678d02e9df2f30531aa36ac6f598bb4",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Python/jit_baseline.c": "8e5857fe5c21c10e7cf7533632f252b9745444cbf0e160e148a16442fdc68cfe",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Tools/cases_generator/ir_generator.py": "1c254cb9747bfc0cba53b45306dad6e185b21405727a5225732bf29f46455f1a",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/Tools/cases_generator/jit_helpers_generator.py": "c619c35b389a3a8c11d74a04774f434154367fdb65136f8e7d0f27d991d501ca",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/design/jit-e2e-system.md": "724b2ab88e55394ea6e536887b2aeb6b871ce69e74d802fe02eb620a17912ccc",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-e2e-system/implementation-milestones-20261101-v1.md": "1dd376f89eaff125aae44a2ef5a5ec27e3884aebcd41a4cec6a8dfb22fd6f9e7",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-observed-loop-contract-20261101-v1/notes.md": "0e38b7cd2c183e71ab2ab80b4a49c35f502fbe4903f07ea72da1af25f67b56ad"
+  },
+  "worktrees": {
+    "jit-method-baseline": {
+      "head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+      "status": ""
+    },
+    "jit-natural-method": {
+      "head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+      "status": ""
+    }
+  },
+  "execution_scope": "Host hashing and four read-only Git commands only; no compiler, target, activation, source changes or measurement."
+}

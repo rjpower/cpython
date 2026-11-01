@@ -348,3 +348,9 @@ Exact readback26,342characters; snapshot SHA256
 b7d65513668521103a0a5d6cac8476953861e70eafd5642fd78d34bf9b794768.
 The documents specify future typed SSA and a dictionary-location experiment;
 they do not select a storage rewrite or claim a performance result.
+
+Revision39 (18:37:32 UTC) records independent M2 design acceptance and active
+natural-method implementation, with checkpoint19:05:56/source cap20:05:56UTC.
+Exact readback25,485characters/two diagrams; snapshot SHA256
+004c2d1d4b9ccf5d5600c9c770b6e3e2f3cc595fba43818d032536687b233227.
+M2 candidate execution and timing remain separately held.

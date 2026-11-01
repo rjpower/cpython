@@ -1578,3 +1578,26 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   All30 relative document links checked; no rendered-layout claim. Parallel work
   continues on a concrete natural-admission/attribute-coverage source proposal;
   all native sessions are terminal and no new execution grant is active.
+- 2026-11-01 18:35 UTC: M2 design79a3759e passes independent850e22d6/56ba892b
+  review. Source grant1fbca256 opens a90-minute implementation in new managed
+  worktreejit-natural-method at15987, preserving M1 source/images. Concrete
+  checkpoint19:05:56, hard cap20:05:56. Scope combines16generic attribute/iteration/
+  call forms, three exec-only handlers with stable old IDs, natural heat and
+  RESUME entry publication, bounded scalar caller continuations and cache budgets.
+  Review closed actual backedge-feedback absence, entry/service/retirement,
+  borrowed call-input rooting and generator/error pending-record gaps. Cheap
+  checks only; candidate execution/timing remain held. [Grant](issues/jit-e2e-system/m2-source-grant-20261101-v1.json).
+- 2026-11-01 18:23 UTC: Coordinator recorded the next observed-loop contract
+  against actual M1 APIs: AfterHelper cannot recover consumed inputs or read a
+  freed RETURN frame, so genuine recording needs bounded before/outcome events,
+  call pause/resume and the shared SSA/effect/FrameState pipeline. These notes
+  are informative, add no M2 source scope and authorize no execution.
+- 2026-11-01 18:37 UTC: Loom revision39 records the accepted M2 design and
+  active source attempt. Exact readback25,485characters/two diagrams, SHA256
+  004c2d1d4b9ccf5d5600c9c770b6e3e2f3cc595fba43818d032536687b233227.
+- 2026-11-01 18:41 UTC: Prepared held M2 debug-controller producers, without
+  generating a roster or launching a compiler/candidate. Preservation inventory
+  checks1417 prior-attempt files, including all587 M1 native products; the future
+  roster will bind every test method in the frozen module. Root activation and
+  cleanup producers derive the prior actual lock set plus the fresh profile.
+  Source implementation and independent review continue under the original cap.

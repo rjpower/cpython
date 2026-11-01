@@ -471,3 +471,10 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   ablation unless a specific attribution question requires it; the unchanged
   parent already measures net cost. No native attempt has been added.
   [Protocol](issues/gc-parity-deadline/measurement-protocol.md).
+- 2026-11-01: RC fallback preparation froze early. Root accepted a coherent
+  historical core restoration after inspecting actual decrement/deallocation,
+  stackref ownership and cycle/finalization paths. Register IR and inline frame
+  values survive; later heap/native PyValue and header shapes are deferred.
+  No source restoration/build ran. Reassigned the author to independent review
+  of the current span implementation, through 03:55 UTC.
+  [Fallback](issues/fundamental-runtime-design/rc-fallback-decision-20261101.md).

@@ -67,12 +67,16 @@ cutoff, if valid full-suite parity is absent, stop GC work, record the failed
 decision and begin the prepared RC successor; do not request another extension.
 IR/JIT work continues independently of the collector choice.
 
-`restart_audit` is preparing the RC migration, 03:16–03:46 UTC, checkpoint
-03:31. Initial source history identifies `b5541cbbbcd9` as a coherent RC ancestor
-with compiler-produced register IR and NaN-boxed frame values; this is a
-provisional restoration candidate, not a reviewed migration or source change.
-The plan must state which later container/native value features are deferred
-and remove old tracing optionality rather than retain a collector switch.
+`restart_audit` froze the [RC fallback decision](../fundamental-runtime-design/rc-fallback-decision-20261101.md)
+early, before 03:32 UTC. Root independently inspected actual historical
+Py_DECREF/stackref ownership, cyclic finalization and configure defaults, and
+accepts the coherent restoration route for preparation. Source `b5541cbbbcd9`
+retains register CFG/compaction and NaN-boxed frame values. Later core-wide
+PyValue containers/native ABI and header shapes are deferred. The proposed
+restoration is a new commit descended from the decision HEAD, not an ancestor
+merge; preserve current boil records and user work. Remove owning-tracer
+optionality in the successor. The manifest is available locally, but source
+restoration, current-machine buildability and qualification remain unproved.
 
 The active [integrated-storage source attempt](../fundamental-runtime-design/status.md)
 keeps its 03:21 checkpoint/04:21 ceiling; the author targets an earlier 03:40

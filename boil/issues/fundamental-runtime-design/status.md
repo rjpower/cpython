@@ -83,11 +83,12 @@ ordinary entries and all root/observer/error/breaker contracts. Host checks and
 test source are allowed; compiler/target/native/timing remain held. Current
 site evidence does not prove virtual single-use/exception liveness or a win.
 
-RC fallback preparation runs **03:16–03:46 UTC**, checkpoint **03:31**, owned by
-restart_audit. Identify a coherent reference-counted source restoration,
-retained compiler/inline-frame-value features and deferred container/native
-changes. No source restoration or new collector option is authorized by that
-history review; the hard-cutoff fallback is already authorized by the user.
+RC fallback preparation froze early before 03:32 UTC. Root accepted the
+[coherent restoration route](rc-fallback-decision-20261101.md) after inspecting
+actual historical ownership/cyclic-GC/configuration source. No restoration or
+native build has run. The author now independently reviews actual stable-span
+source through **03:55 UTC**, checkpoint **03:42**; require the frozen source
+identity before acceptance. The hard-cutoff fallback remains user-authorized.
 
 Retention-oracle v3 helpers passed root host review but remain held, with
 readiness flags false and no activation. VM0 build helpers and

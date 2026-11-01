@@ -1,39 +1,55 @@
 # Selected IR block entry
 
-**Source attempt authorized; compiler, native execution and integration held.**
-All three global frame-entry native experiments are rejected. Main runs the
-accepted RC images; source11aefbdd and its measured loss stay frozen.
+**Superseded as a production-tier proposal; source retained as component evidence.**
+Main retains the accepted RC images. All three frame-entry native experiments
+remain rejected; none was integrated. Tracing-GC work is closed.
 
-One bounded proposal removes the frame-entry hooks and routes a selected
-executing IR arithmetic head through a BINARY_OP-family handler, installed by
-existing cold specialization. It retains a known multi-operation body while
-avoiding explicit entry checks in unrelated frame paths. Region length and loop
-compilation remain separate future questions; no benefit is promised.
+The hypothesis is that entering a native arithmetic block through its own
+quickened instruction can retain arithmetic gains without charging unrelated
+frame entries. The [design](design.md), [design review](design-review-20261101-v1.md)
+and [source scope](source-manifest-20261101-v1.md) describe one selected
+BINARY_OP-family head per code object. Native loops remain deferred.
 
-The [design](design.md) and [peer review](design-review-20261101-v1.md) are frozen.
-The accepted contract requires deterministic one-site-per-code ownership/counting,
-original-head PC/SP publication before cold work, exact live-in/materialization
-and NULL-temp requirements, original-ADD fallback once, pristine opcode mapping,
-observer invalidation and owner retirement. Interruptible backedge periodic
-checks and await/yield behavior must remain intact. Existing TryEntry's
-word-one/RESUME contract does not cover an arbitrary interior block.
+The isolated source is frozen clean at `a4b0bf358b4cae18f6abefb7af2ec50a7c3ac612`.
+Its 18 changed paths remove both canonical/all 14 generated frame-entry hooks,
+reuse the execution-header layout and native arithmetic compiler, and implement
+interior-PC, live-in, fallback, ownership and observer contracts. The known block
+starts at word 2, resumes at 12, and commits one integer output while preserving
+the already materialized float.
 
-restart_audit implements in the isolated quickened-block worktree;
+The [early checkpoint](source-checkpoint-review-20261101-v1.md) and
+[exact source review](source-review-20261101-v1.md) passed. Existing opcode IDs,
+formats and dispatch indices remain stable except for filling unused slot 127.
+Review caught and closed a marshal-validation bypass and feedback kind/argument
+gaps. All six generators/seven products and 26 host generator tests pass. The
+12 JIT method IDs and 54-case focused roster are unchanged.
+
+The [45-minute source grant](source-grant-20261101-v1.json) closed complete ahead
+of its cap; the [disposition](source-disposition-20261101-v1.json) binds the frozen
+source and independent receipt. No source edits or integration are authorized.
+
+Next gates, in order:
+
+1. Separately admit fresh release/debug builds and the existing 54-case cohort.
+2. Review actual selected-head entry, fallback, ABI, output mapping and RX owner.
+3. Run one fixed all-29 comparison with unchanged scored commands and rules.
+4. Admit publication and broad qualification only after useful aggregate elapsed.
+
+The build controller and unscored timing witness are prepared and held. The
+witness uses the interior single-output contract and must observe natural
+activation before introspection. No runtime or performance result exists for
+this candidate. There is no repeated four-workload pilot, arbitrary text/RSS
+veto, collector selector or reopening of rejected frame filters.
+
+Owners: restart_audit implemented and prepares emission evidence;
 coroutine_design_review reviews independently; qualification_review_resumed
-prepares held fresh feedback. The [source grant](source-grant-20261101-v1.json)
-authorizes 45 minutes with a ten-minute compatibility/entry checkpoint. The later gate order is focused behavior and actual emitted-path checks,
-then one fixed all29 comparison; publication/fullLib only after useful elapsed.
-Do not reopen old filters or tracing GC, add runtime selectors, infer dynamic
-counts from source, or introduce text/RSS-only performance vetoes.
+prepares held feedback; the coordinator admits gates and records decisions.
 
-Peer review closed one deterministic lowest eligible head per code, site-keyed
-ownership/counting, relative region bounds, original-head PC/SP publication and
-integer-only output mapping. Loop compilation is deferred. Exact file/metadata
-and handler-ID/cache closure must precede the separate bounded source grant.
-The old frame filter and its obsolete fixture interface must be removed when
-replacing the entry path. The unscored witness needs the new block contract;
-scored commands, workload exposure and numerical rules remain unchanged.
-
-Source scope accepted in [independent review](source-cut-review-20261101-v1.md).
-Start 2026-11-01T15:26:30.877552+00:00; checkpoint 2026-11-01T15:36:30.877552+00:00;
-deadline 2026-11-01T16:11:30.877552+00:00. No automatic extension.
+At user feedback 36, the coordinator redirected work to a cohesive
+[method and tracing JIT system](../jit-e2e-system/status.md). The interrupted
+activation did not take effect: activation/start records are absent and both
+build directories contain only their locks. The empty owned cache was removed.
+No target ran and no performance rejection is claimed. The source acceptance,
+reviews and prepared helpers remain historical component evidence. All further
+build/timing gates above are held; [scope disposition](scope-disposition-20261101-v1.json)
+owns the change. No competing runtime tier or optional switch was integrated.

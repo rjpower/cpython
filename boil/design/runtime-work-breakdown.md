@@ -1,5 +1,12 @@
 # Runtime work after the Fable peer review
 
+**Current direction:** RC is integrated and tracing-GC work is closed. User
+feedback36 supersedes the narrow arithmetic-entry tier with the
+[cohesive method and tracing JIT design](jit-e2e-system.md) and its
+[active issue](../issues/jit-e2e-system/status.md). Method compilation, tracing,
+optimization and runtime transitions are designed together. The original plan
+and execution snapshots below are historical; they do not authorize new work.
+
 2026-11-01. Coordinator disposition and concrete work plan. The
 [Fable review](../issues/fundamental-runtime-design/claude-fable-5.1-review-20261101.md)
 is preserved verbatim, SHA256

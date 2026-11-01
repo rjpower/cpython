@@ -29,6 +29,7 @@ The first JIT increment is an isolated experiment; these images contain no new J
 | Runtime structure and contracts | [Runtime architecture](design/runtime-architecture.md) |
 | Proposed integrated runtime and experiments | [IR, VM and allocator/collector reassessment](design/integrated-runtime-candidate.md) |
 | Current hypotheses and parallel assignments | [Runtime work after peer review](design/runtime-work-breakdown.md) |
+| Whole-method compilation, tracing and optimization roadmap | [Cohesive JIT system](design/jit-e2e-system.md) |
 | Performance findings and recommendation | [GC and interpreter performance](design/gc-and-interpreter-performance.md) |
 | Measured results | [Performance report](issues/gc-cleanup-scanning/performance.md) |
 | Development workflow | [Process](PROCESS.md) |

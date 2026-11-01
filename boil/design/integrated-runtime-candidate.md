@@ -1,5 +1,11 @@
 # Reassessing the IR, interpreter and allocator/collector
 
+**Historical reassessment.** RC integration and the
+[method/tracing JIT design](jit-e2e-system.md) supersede the collector and source
+recommendations below. Tracing-GC work is closed. Use the current
+[runtime architecture](runtime-architecture.md) for implemented contracts; this
+retained research is evidence of the earlier design review, not an active plan.
+
 2026-11-01. Candidate under independent research review. This reopens the
 architectural recommendation in [the earlier transport candidate](vm-design-candidate.md).
 That document remains an exact historical review/publication snapshot. Its

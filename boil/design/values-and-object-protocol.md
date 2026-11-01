@@ -1,5 +1,11 @@
 # Values and object protocol
 
+**Historical value/heap design.** The accepted RC runtime uses NaN-boxed
+`_PyStackRef` frame values and boxed heap fields. Core-wide inline heap values
+and the `PyValue` interfaces described below are not its current ABI. See the
+[runtime architecture](runtime-architecture.md) and
+[method/tracing JIT design](jit-e2e-system.md) for current and proposed contracts.
+
 `Include/pyvalue.h` defines the tagged value representation. Exact int32 and
 non-NaN doubles can be inline; object-valued cases retain object identity.
 Representations must be canonical at producers and boundaries. Raw pointer

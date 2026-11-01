@@ -1,0 +1,20 @@
+{
+  "activation_call_interrupted": true,
+  "activation_record_absent": true,
+  "batch_start_record_absent": true,
+  "decision": "SUPERSEDE_NARROW_TIER_WITH_COHESIVE_METHOD_AND_TRACING_JIT_DESIGN",
+  "fresh_build_directories_lock_only": true,
+  "native_timing_integration_authorized": false,
+  "next_issue": "boil/issues/jit-e2e-system/status.md",
+  "owned_empty_cache_removed": true,
+  "runtime_or_performance_rejection_claim": false,
+  "source_acceptance_preserved": true,
+  "source_head": "a4b0bf358b4cae18f6abefb7af2ec50a7c3ac612",
+  "user_feedback": {
+    "artifact": "runtime-work-breakdown",
+    "delivery_key": "review:f126292f23ba968759bb189a2ab3ccf6",
+    "review_id": 36,
+    "revision": 31
+  },
+  "utc": "2026-11-01T16:00:12.830880+00:00"
+}

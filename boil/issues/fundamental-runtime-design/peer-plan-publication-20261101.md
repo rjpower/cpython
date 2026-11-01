@@ -294,3 +294,15 @@ lifecycle summary, RC retained and bounded quickened-block work underway.
 Detailed update was rejected by automatic approval review for sensitive payload;
 the accepted summary omits repository identifiers and raw benchmark details.
 Exact readback1,838characters, SHA256ef1ab590162abddc93f01a1d9b0e0dae23f9db24ef7296526faf45b04f940ff0.
+
+User reaffirmed detailed localLoom authorization. Rev30 accepted detailedstatus;
+rev31 reconciles earlier no-source prose with active45-minute attempt.
+Exactreadback12,850characters/twoMermaids, snapshotSHA256
+a96795c0fb42b50292866cc2b2fed2e0985b8316df184a8e5e15869bc41f85a6.
+
+Revision32 (16:10:10 UTC) answers review36 with the independently reviewed
+method/tracing architecture and layered implementation plan. Exact readback
+18,421characters/twoMermaids, SHA256
+c9f8abafba2a71cb13bb98b8f77896ad9a04fd7cf5f85797c78373d9ae8d1861.
+The previous narrow-tier activation did not take effect. New content distinguishes
+accepted RC runtime from proposed JIT contracts and preserves earlier evidence.

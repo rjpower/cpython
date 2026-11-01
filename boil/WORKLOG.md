@@ -1384,3 +1384,50 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Safer high-level architecture/lifecycle summary accepted asrev29, exact
   readback1,838characters/twoMermaids, SHAef1ab590162abddc93f01a1d9b0e0dae23f9db24ef7296526faf45b04f940ff0.
   Exact evidence remains local. Earlier revisions retained.
+- 2026-11-01 15:35 UTC: Independent quickenedblock earlycheckpoint ACCEPT
+  3b56629d/ff6a7414 before15:36:30 deadline. All269oldopcode/37IRdefines,290formats,
+  both302tables stableexceptunused127; uopBYTEEXACT; all289oldgeneratedhandler
+  bodies matchqualifiedRC;2/14globalhooks gone. Reviewcaughtmarshal bypass of
+  public127check; sharedValidate scanclosesit. SIXderivedescape flags restoreRC.
+  Fullinterior source/fixtures review remains pending, same16:11:30 ceiling;
+  no compiler/native authority. [Review](issues/jit-quickened-block/source-checkpoint-review-20261101-v1.md).
+- 2026-11-01 15:34:47 UTC: User explicitly reaffirmed detailedLoom authorization
+  aslocalOSSservice. Detailedrev30 accepted; rev31 reconciles earlier no-source
+  text with activefinitegrant. Exact readback12,850characters/twoMermaids,
+  snapshot SHAa96795c0fb42b50292866cc2b2fed2e0985b8316df184a8e5e15869bc41f85a6.
+  Earlierrejection/historyretained; noapprovalrequestneeded.
+- 2026-11-01T15:51:12.468552+00:00: Quickened-block source frozen clean at a4b0bf358b4 and independently
+  accepted (6e1aeea3/5a78a2b0). Eighteen paths, 386 insertions/354 deletions;
+  capsule74f452a9. All six generators/seven products and 26 host tests pass;
+  reviewer independently replayed 26 tests. Execution-header layout and native
+  compiler/allocator/spill code are unchanged. Source attempt closed complete
+  ahead of its cap. Marshal and feedback fixes plus cold structural rejection
+  cache reviewed; no runtime or performance credit. [Disposition](issues/jit-quickened-block/source-disposition-20261101-v1.json).
+  Held witness v1 used a mock opcode name inconsistent with the real API;
+  root caught this before targets. V2 capsule847811e9 derives names/shape from
+  source, passes15 host controls/58 mock routes, and preserves v1 unchanged.
+- 2026-11-01T16:00:12.830880+00:00: User feedback36 redirects the narrow arithmetic-head proposal to
+  a cohesive method and tracing JIT with layered optimization. The interrupted
+  activation produced no activation/start record; both fresh build directories
+  remain lock-only. Removed the empty task-owned jqb1 cache. No compiler/target
+  or performance result is credited. Source a4b0 remains accepted component
+  evidence, not an adopted tier. Parallel read-only method/tracing/review work
+  now informs one architecture; experiments test its mechanisms, not JIT
+  existence. [Scope](issues/jit-quickened-block/scope-disposition-20261101-v1.json)
+  and [new issue](issues/jit-e2e-system/status.md).
+- 2026-11-01T16:12:50.853866+00:00: Cohesive method/tracing architecture accepted after parallel
+  research and independent review. Methodedbfe8bb, tracing719dc99e, integrated
+  design724b2ab8; reviewf220f0a9/receipt42e579a3. One native-method baseline and
+  shared method/trace SSA, LIR/backend, Action trampoline, ownership and recovery.
+  Review added opaque-callback recorder boundaries and pre-effect fallible
+  materialization rules. Source cut for actual loops/calls/errors is next;
+  no implementation/native grant. [Design](design/jit-e2e-system.md).
+  Updated current architecture to RC/boxed heap/NaN-boxed frame facts and marked
+  earlier runtime plan historical. Mechanism hypotheses replace per-family
+  full-suite votes on JIT existence; late qualification remains required.
+  Tracing reviewer next turn failed twice on provider capacity; independent
+  first-slice review transferred to qualification_review_resumed.
+- 2026-11-01 16:10:10 UTC: Loomrev32 replaces the narrow tier proposal with
+  reviewed method/tracing architecture, optimization layers and two diagrams.
+  Exact readback18,421characters; SHA256c9f8abafba2a71cb13bb98b8f77896ad9a04fd7cf5f85797c78373d9ae8d1861.
+  Prior revisions/evidence retained. Review36 addressed in the new content.

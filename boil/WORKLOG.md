@@ -1431,3 +1431,20 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   reviewed method/tracing architecture, optimization layers and two diagrams.
   Exact readback18,421characters; SHA256c9f8abafba2a71cb13bb98b8f77896ad9a04fd7cf5f85797c78373d9ae8d1861.
   Prior revisions/evidence retained. Review36 addressed in the new content.
+- 2026-11-01 16:23:54 UTC: Previous goal turn made progress: reviewed E2E architecture and
+  source scope replace the arithmetic-tier plan. First-slice proposal7c598fd9
+  accepted by9648acc1/0eef91f9; validation1b5440bc has four program families.
+  M0 source grant opens for60 minutes in isolated jit-method-baseline from
+  aa0c166e, with20-minute generated-helper/transfer checkpoint. Real shared
+  semantics and evaluator consumer come first; M1/native/timing remain held.
+  [Grant](issues/jit-e2e-system/m0-source-grant-20261101-v1.json).
+- 2026-11-01 16:27:34 UTC: Loom revision33 records the active M0 source scope
+  and held backend/native gates. Exact readback19,148characters/twoMermaids,
+  SHA2562f461ae267d508d6efdf41f29d4b002f5d840086a75d27d4a9f65e195b261e6c.
+- 2026-11-01 16:33 UTC: First M0 generator output exists; independent review
+  is examining actual helper bodies. Source audit distinguishes prepared frame
+  entry from already-started pushes, return after output flush, and logical
+  raising PC from frame IP. Bounded stacked thread-local test request exercises
+  the existing evaluator; its counts prove helper behavior, not native JIT.
+  Predecoded operands remain in the shared ABI. Cold specialization retry
+  behavior is being corrected before source acceptance; no target/compiler ran.

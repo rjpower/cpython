@@ -1,6 +1,6 @@
 # Cohesive method and tracing JIT
 
-**Integrated architecture accepted; first concrete source cut in design/review.**
+**M0 source implementation authorized; M1 backend, builds and timing held.**
 User feedback36 on Loom revision31 replaces the narrow arithmetic-head tier
 proposal with an end-to-end method and tracing JIT, with layered optimizations.
 The JIT is the selected strategic direction. Experiments test implementation
@@ -41,3 +41,13 @@ First-slice source design is now assigned to restart_audit, with independent
 review by qualification_review_resumed. The tracing reviewer encountered provider
 capacity on its next turn twice; review was reassigned without changing models
 or blocking the work. No source/compiler/native grant is active.
+
+The [first source cut](first-slice-design-20261101-v1.md) passed
+[independent review](first-slice-design-review-20261101-v1.md). Its
+[validation contract](first-slice-validation-20261101-v1.md) and
+[lifetime clarification](first-slice-lifetime-note-20261101-v1.md) are fixed.
+[M0 source grant](m0-source-grant-20261101-v1.json): 2026-11-01T16:23:54.586838+00:00
+to 2026-11-01T17:23:54.586838+00:00, checkpoint 2026-11-01T16:43:54.586838+00:00.
+The outcome is callable generated semantics and a real evaluator Action
+consumer, not runtime or performance acceptance. The next source phase adds the
+shared LIR/backend and complete loop/call/error native path.

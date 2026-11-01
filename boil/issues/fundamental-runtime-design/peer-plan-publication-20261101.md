@@ -306,3 +306,9 @@ method/tracing architecture and layered implementation plan. Exact readback
 c9f8abafba2a71cb13bb98b8f77896ad9a04fd7cf5f85797c78373d9ae8d1861.
 The previous narrow-tier activation did not take effect. New content distinguishes
 accepted RC runtime from proposed JIT contracts and preserves earlier evidence.
+
+Revision33 (16:27:34 UTC) records bounded M0 implementation, current deadline
+and held M1/native gates. Exact readback19,148characters/twoMermaids; SHA256
+2f461ae267d508d6efdf41f29d4b002f5d840086a75d27d4a9f65e195b261e6c.
+The test-only ordinary-call request is semantic-helper evidence, not a native
+JIT execution claim. Existing reviewed system architecture is unchanged.

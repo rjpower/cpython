@@ -257,3 +257,13 @@ Snapshot `build/fundamental-runtime-review-20261101/runtime-execution-focus-arti
 SHA256 `7b48692636a921d82df82bb2220e3a02d6d2bf7e15785cc95f67f92672911f42`. It records pilot-only ABI advancement with real Richards cost,
 held all29 measurement and deferred publication/full functional gates. No rendered
 layout check, full-suite result or production acceptance is claimed.
+
+## Full-suite rejection, revisions23–24
+
+Revision23 (13:31:22 UTC) corrects the native emitter filename to jit_prefix.c.
+Revision24 (13:54:00 UTC) records GM29 losses2.26%/1.94%, both native candidate
+rejections, the zero-score variant-wrapper failure and deferred late qualification.
+Exact readback 10106 characters/two Mermaid blocks. Snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v24.md`,
+SHA256 `6cdc2bae014f081a56a8fc9893dec00d631fa0f349dbe39756be81fa338df090`. Prior revisions remain immutable. No rendered-layout check
+or production acceptance is claimed.

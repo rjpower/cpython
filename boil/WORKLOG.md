@@ -1242,3 +1242,41 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
 - 2026-11-01 13:29:15 UTC: Loomrev22 records currentRC, rejectedoldprefix and
   pilot-only ABI advancewithRichardscost; twoMermaids retained, historyimmutable.
   Exactreadback8192characters; snapshotSHA256 7b48692636a921d82df82bb2220e3a02d6d2bf7e15785cc95f67f92672911f42.
+- 2026-11-01 13:31:22 UTC: Loom revision23 corrects the native emitter filename
+  to jit_prefix.c. Runtime and diagrams otherwise unchanged; exact readback.
+- 2026-11-01 13:33:45 UTC: All29 activation dd4e5780 follows helper review
+  fddd08f1/b080803e. Root launch fails before admission: two root review refs
+  were relative to the campaign cwd. Outer-attempt exists; zero targets.
+  Independent exact correction5abf58ac/1866c0da permits one administrative
+  successor with the same start/deadline. All three original activation/outer
+  records and driver log retained; receipt3e5818a4. No helper/source change.
+- 2026-11-01 13:38:50 UTC: Full29 session12967 terminal1 observed13:37:57.
+  Origin wrapper rejects deepcopy's extra variant argument: 28 probes complete,
+  the29th fails before driver.load/setup/run; zero scored processes or values.
+  Incomplete/nonaccepting, not JIT elapsed loss. Original gate1/post-cleanupfalse
+  retained. Additive root cleanup verifies16locks/nativeidle/bindings/18parents.
+  Independent ce8618b7/29780383 and e911f796/ee923692 confirm the failure. Author
+  and reviewer missed the all29 variant contract; no performance verdict follows.
+- 2026-11-01 13:47:43 UTC: Separately reviewed variant-safe v2 activation88f82e98
+  admits one finite45minute corrected campaign. Design review precedes the small
+  parser/setup/report change and one cold paired variant check. Fourteen host
+  controls exercise58actual Context-to-wrapper routes and29real-driver API
+  comparisons; independent afb9ea75/06cf3872 verifies exact bindings and cleanUV.
+  Root review refs now absolute. Prior failed evidence stays exact; zero old
+  timing values exist to replace. Same source599897, RC imageEba/checkout01d97,
+  registry, scored commands, controller and numerical gates. Agents held quiet.
+- 2026-11-01 13:50:50 UTC: Corrected full29 session46516 terminal0 observed13:50:35.
+  Complete116scored/580values/58origins/348quietchecks; result90ba9b9f. Root cleanup
+  verifies16locks/nativeidle/bothsource-product-ELF/18parents unchanged.
+- 2026-11-01 13:55 UTC: REJECT599897 on fixed GM29 loss2.26%/1.94%, despite spectral
+  gains12.73%/13.86%. Every290aggregate value deletion remains slower eachround;
+  GM28 is diagnostic only.18rows lose>2% at leastonce,13repeat; no noise/causal
+  excuse. Independent raw audit5bafe471/d76d54b6 verifies1158artifacts and actual
+  origins/bindings/cleanup. Material review284cd025/6b1c4a94 agrees. No publication,
+  broad functional qualification, landing or replacement samples. Main RC stays
+  accepted. [Full-suite decision](issues/jit-entry-pc-abi/broad-decision-20261101-v2.json).
+  Next assignment read-only: cheap admission for already-ineligible JIT entries;
+  one concrete design and peer review, no source/compiler/target grant.
+- 2026-11-01 13:54:00 UTC: Loom revision24 records both candidate rejections,
+  failed origin-wrapper attempt, complete broader outcome and deferred late gates.
+  Exact readback 10106 characters/two Mermaids; SHA256 6cdc2bae014f081a56a8fc9893dec00d631fa0f349dbe39756be81fa338df090.

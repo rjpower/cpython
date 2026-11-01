@@ -1,6 +1,6 @@
 # JIT entry PC by value
 
-**Pilot accepted with Richards tradeoff; all-29 elapsed gate held, 2026-11-01.**
+**Rejected after the fixed all-29 gate, 2026-11-01.**
 The [30-minute grant](source-grant-20261101-v1.json), 12:46:17–13:16:17 UTC, authorizes a separate
 ABI hypothesis in `build/worktrees/jit-entry-pc-abi`, based on `67f5d22bb38`.
 The [previous increment remains rejected](../jit-first-native-tier/decision-20261101-v1.json).
@@ -47,10 +47,40 @@ five values per arm:116 scored processes/580 values plus58 origins. Both GM29
 and all290 single-value deletions must improve each round; the primary retains
 its point/ten-deletion gates. GM28 workload deletions diagnose concentration;
 they are not a new veto. Every material regression needs explicit disposition.
-Host helpers are held for literal binding and independent review, then a separate
-finite root execution grant. No full29 target execution is yet authorized.
+These were the pre-score requirements. The completed outcome below closes this
+gate; no additional target execution is authorized.
 
 The source grant ended13:16:17 with source frozen early; no extension or source
 edits remain authorized. Publication/leaf-CFI support and broad functional gates
 follow only a useful full-suite result and need separate grants. Main RC and the
 old candidate rejection remain unchanged. GC work stays closed.
+
+## Full-suite outcome
+
+The [corrected all-29 campaign](broad-outcome-review-20261101-v2.md) completed:
+116 scored processes, 580 values, 58 origins and 348 quiet checks. Supervisor
+46516 exited zero, observed 13:50:35 UTC. Root cleanup at 13:50:50 verified
+sixteen locks, native idleness, both source/product/ELF bindings and eighteen
+unchanged parent fingerprints. Independent review reproduces all 1,158 artifacts.
+
+**Reject progression.** GM29 regresses 2.26% and 1.94%; every aggregate
+single-value deletion remains slower. Spectral improves 12.73% and 13.86%,
+but 18 workloads lose over 2% in at least one round and 13 repeat the loss.
+The [material disposition](broad-disposition-review-20261101-v2.md) and
+[complete row evidence](broad-material-losses-20261101-v2.md) retain each loss.
+GM28 concentration is diagnostic only; the predeclared GM29 rule rejects.
+The [full-suite decision](broad-decision-20261101-v2.json) supersedes permission
+to advance from the pilot, without changing its saved scores or narrower result.
+
+The first full-suite run was [incomplete](broad-incomplete-review-20261101-v1.md):
+28 origin probes completed and the 29th failed because the inherited wrapper
+could not parse the deepcopy variant. No scored process or value existed.
+The prior root relative-path launch failure and all partial evidence remain.
+A separately reviewed successor forwards setup(variant) and verifies the
+reported variant; 14 host controls cover all 58 routes and 29 real-driver API
+comparisons. Scored commands, sources, images and acceptance rules stayed exact.
+
+No publication, broad functional qualification, landing or replacement samples
+follow this candidate. Source and images remain frozen. Main RC stays accepted.
+The next assignment is read-only diagnosis/design of cheap JIT entry admission
+for already rejected code; it grants no source, compiler or target execution.

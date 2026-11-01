@@ -1,6 +1,6 @@
 # Adopt the nursery as the runtime architecture
 
-- State: cost incomplete; corrected diagnostic held for integrated design review
+- State: dispatch deferred for architecture reassessment; cost incomplete and unscored
 - Owner: restart_audit implements; independent reviewers check source/helpers; coordinator integrates
 - Updated: 2026-11-01
 - Base: integrated `d98291018c9665ae3db6952da0b0a40a4e04992b`
@@ -13,6 +13,13 @@
 - Prior decision: mandatory nursery and real minors; reopened by integrated design review
 
 ## Architecture review hold
+
+The [revised runtime plan](../../design/runtime-work-breakdown.md) defers this
+dispatch's remaining native timing/qualification. Its 04:18:11 UTC boundary is
+not extended. This is an architecture-priority decision, not a fabricated
+elapsed rejection or acceptance. Pending adoption/cadence receives no landing
+credit; the existing private opt-in is explicit retirement debt before the next
+collector adoption, not a permanent supported policy choice.
 
 The [fundamental review](../fundamental-runtime-design/status.md) reopens the
 particular nursery/storage commitment. The target must remain one maintained

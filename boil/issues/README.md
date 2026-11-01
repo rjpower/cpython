@@ -7,13 +7,17 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
-| Integrated architecture / IR | [Fundamental runtime review](fundamental-runtime-design/status.md) | coroutine_design_review; coordinator | Freeze one effect-complete region hypothesis with actual consumer evidence |
-| GC / transitional inventory proof | [Object-map inventory](gc-nursery-old-work/status.md) | restart_audit | Design the missing causal failed-prefix cleanup witness; no implementation grant |
-| Integrated architecture / allocator and GC | [Fundamental runtime review](fundamental-runtime-design/status.md) | qualification_review_resumed | Design one integrated stable-storage cohort with allocation/death and slack accounting |
+| Shared attribution baseline | [Revised work plan](../design/runtime-work-breakdown.md) | qualification_review_resumed; coordinator | Prepare one unchanged-runtime computed debug/stats image and eighteen counter processes; native held |
+| Compiler / IR | [Operand facts](fundamental-runtime-design/status.md) | coroutine_design_review | Design static locality propagation for ADD cleanup with complete readers and source control |
+| Values / native | [Native interfaces](value-native-interfaces/status.md) | restart_audit | Design regex code-list extraction and its identity/error/root control; current site attribution still needed |
+| Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
+| GC, queued | [Actual death eligibility](fundamental-runtime-design/fable-gc-audit-20261101.md) | qualification_review_resumed | Observe completed-coroutine eligibility before a death/storage shortcut or remembered-set change |
 
-Native execution is held during this review. Retention-oracle helpers are
-reviewed but unactivated; VM0 helpers and structural-GC feedback preparation are
-suspended at their recorded checkpoints. Their source and evidence are retained.
+The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
+the GC-heavy ranking. Counter-retention tooling is integrated; native baseline
+preparation remains held for exact review and activation. Old cadence, VM0 and
+structural-GC helper drafts are preserved and unactivated. Their expired grants
+are not resumed by the new assignments.
 
 Source work, light analysis and reviews can overlap with separate ownership;
 quiet measurements, shared full-suite/perf-map windows and integration serialize.

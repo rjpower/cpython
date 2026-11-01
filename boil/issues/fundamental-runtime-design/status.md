@@ -1,11 +1,11 @@
 # Fundamental runtime design review
 
-- State: concrete designs frozen; Claude Fable 5.1 peer review running
+- State: revised work plan reviewed; reporting integrated; baseline preparation and IR/native designs active
 - Updated: 2026-11-01
-- Owner: coordinator; coroutine_design_review (IR), restart_audit (VM),
-  qualification_review_resumed (allocator/GC)
+- Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (native),
+  qualification_review_resumed (shared baseline and GC)
 - Source: maintained head `4615e52c9bb`; isolated candidates retain their own identities
-- Budget: read-only research checkpoint 01:40 UTC, reports by 02:00 UTC
+- Prior research budget (closed): checkpoint 01:40 UTC, reports by 02:00 UTC
 
 ## Question
 
@@ -33,13 +33,32 @@ Any resumed task receives an explicit remaining scope and clock.
 
 ## Next decision
 
+Claude's direct medium-effort review completed, terminal zero. The
+[verbatim review](claude-fable-5.1-review-20261101.md) and separate IR/VM, GC and
+native audits informed the [revised work breakdown](../../design/runtime-work-breakdown.md).
+Independent [plan review](work-breakdown-review-20261101.md) accepts that
+conditional structure; it grants no native execution or performance adoption.
+Counter-retention reporting is integrated at `129131574a8`, with sixteen related
+host tests passing. Its independent [review](counter-retention-review-20261101.md)
+records exact bytes, meaningful controls and limits.
+
+Current grants are the held shared stats preparation (02:12–02:37), static
+operand-locality design (02:27–02:47) and regex extraction design (02:27–02:47).
+The first census has six registered workloads/eighteen warmup-low-high processes;
+it supplies existing entry/pair/box counters, not per-state death eligibility or
+release timings. The old architecture scope and frozen proposals below remain
+historical evidence, not an implementation queue that must be completed.
+
+## Prior design sequence
+
 The user identified that the ranked hypotheses remained GC-heavy despite the
 substantial IR/interpreter assessment. A direct local Claude Fable 5.1 review
-now evaluates the architecture and work breakdown at medium effort. The
+evaluated the architecture and work breakdown at medium effort. The
 initial high-effort plan-mode invocation was stopped on the user's correction;
 the replacement uses normal print mode and local pointers, with no Python
 launcher. [Request and live handle](claude-fable-5.1-request-20261101.md).
-No new implementation or census starts before the recommendations are reconciled.
+The recommendations were reconciled in the revised plan; new runtime changes
+and native exposure still require their exact reviewed scope.
 
 The [integrated candidate](../../design/integrated-runtime-candidate.md) passed
 [independent review](review-20261101-v1.md) for bounded design selection only.

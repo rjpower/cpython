@@ -382,3 +382,19 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Fresh unchanged-runtime debug/stats baseline preparation is held for review;
   no current-source stats image was reusable. No runtime speedup is claimed.
   [Tooling review](issues/fundamental-runtime-design/counter-retention-review-20261101.md).
+- 2026-11-01: Reconciled the external review against three source/evidence
+  audits. Accepted a balanced compiler/IR, backend, native-interface and GC
+  work plan; rejected unsupported boxing attribution, type-only coroutine
+  eligibility, unsafe root omission and mandatory tail adoption despite a loss.
+  Independent plan review accepted the exact revision. Deferred old cadence
+  timing/qualification without extending its deadline or crediting incomplete
+  samples. Shared stats preparation and concrete operand-locality/regex designs
+  now have separate owners and finite scopes.
+  [Revised plan](design/runtime-work-breakdown.md),
+  [verbatim peer review](issues/fundamental-runtime-design/claude-fable-5.1-review-20261101.md).
+- 2026-11-01: Published the unedited peer review and independently accepted
+  revised work breakdown as separate Loom revision-1 artifacts. Exact readback
+  matched both bodies and retained their Mermaid diagrams and provenance.
+  The plan owns compiler facts, backend controls, native conversions and GC
+  eligibility separately; shared baseline helpers remain unactivated.
+  [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).

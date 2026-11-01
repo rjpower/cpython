@@ -6,6 +6,14 @@ assessment. New implementation and native work remain held for reconciliation.
 
 ## Corrected live invocation
 
+Completed: direct tool session 78126 returned zero at about 02:00 UTC,
+with 20,049 response bytes and empty stderr. The response SHA256 is
+`d9c2a4d3fa93e829014c5ee9ed11715fac3b527187f98b886b5b9e1b5a1c4eec`;
+its verbatim repository copy is `claude-fable-5.1-review-20261101.md`.
+The direct local transcript's assistant events independently identify
+`claude-fable-5-1`; its actual medium-effort CLI argument is in the tool record.
+The following launch description is preserved as history, not a live handle.
+
 The user corrected the initial permission mode and requested medium effort,
 direct CLI execution and local file pointers. The original plan-mode/high-effort
 attempt was explicitly terminated; its tool session 14436 returned terminal

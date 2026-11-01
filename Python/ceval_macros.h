@@ -766,15 +766,16 @@ _PyStackRef_Truth(_PyStackRef ref)
 /* Only frame-start and completed-return transitions consult the local M0
  * request. Ordinary dispatch has no test request lookup or branch. */
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
-#  define JIT_MAYBE_RESUME() do { \
-    if (jit_request != NULL) { goto jit_step; } \
+#  define JIT_MAYBE_RESUME(FROM_RETURN) do { \
+    jit_from_return = (FROM_RETURN); goto jit_resume; \
 } while (0)
 #else
-#  define JIT_MAYBE_RESUME() ((void)0)
+#  define JIT_MAYBE_RESUME(FROM_RETURN) ((void)0)
 #endif
 
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
 #  define JIT_LEAVE_FRAME(FRAME) do { \
+    if (jit_context.unit != NULL) { _PyJit_ReleaseActivation(&jit_context); } \
     if (jit_request != NULL && jit_request->claimed_frame == (FRAME)) { \
         jit_request->claimed_frame = NULL; jit_request = NULL; \
     } \

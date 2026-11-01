@@ -3719,6 +3719,29 @@
             DISPATCH();
         }
 
+        static _PyJitAction jit_helper_NOT_TAKEN(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
+            PyThreadState *tstate = ctx->tstate;
+            _PyInterpreterFrame *frame = ctx->frame;
+            _PyIRWord *next_instr = ctx->next_instr;
+            _PyStackRef *slots = _PyFrame_Slots(frame);
+            (void)tstate; (void)slots;
+            int opcode = NOT_TAKEN; (void)opcode;
+            assert(next_instr == op->instruction);
+            const _PyJitAction jit_action = _PyJIT_CONTINUE;
+            const _PyJitPhase jit_phase = _PyJIT_AFTER;
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = NOT_TAKEN;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(NOT_TAKEN);
+            DISPATCH();
+        }
+
         static _PyJitAction jit_helper_POP_JUMP_IF_FALSE(_PyJitContext *ctx, const _PyJitDecodedOp *op) {
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
@@ -4502,7 +4525,7 @@ static const _PyJitHelperInfo jit_helpers[302] = {
     [23] = {"MATCH_MAPPING", NULL, "Action adapter not yet implemented"},
     [24] = {"MATCH_SEQUENCE", NULL, "Action adapter not yet implemented"},
     [25] = {"NOP", jit_helper_NOP, NULL},
-    [26] = {"NOT_TAKEN", NULL, "Action adapter not yet implemented"},
+    [26] = {"NOT_TAKEN", jit_helper_NOT_TAKEN, NULL},
     [27] = {"POP_EXCEPT", NULL, "Action adapter not yet implemented"},
     [28] = {"POP_ITER", NULL, "Action adapter not yet implemented"},
     [29] = {"POP_TOP", jit_helper_POP_TOP, NULL},

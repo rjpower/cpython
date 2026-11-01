@@ -488,6 +488,8 @@ PYTHON_OBJS=	\
 		Python/intrinsics.o \
 		Python/ir.o \
 		Python/jit_runtime.o \
+		Python/jit_baseline.o \
+		Python/jit_backend_x86.o \
 		Python/jit_publish.o \
 		Python/legacy_tracing.o \
 		Python/lock.o \
@@ -2207,7 +2209,8 @@ Python/ceval.o: \
 		$(srcdir)/Include/internal/pycore_ir.h \
 		$(srcdir)/Include/internal/pycore_ir_metadata.h
 
-Python/jit_runtime.o: $(srcdir)/Include/internal/pycore_jit.h
+Python/jit_runtime.o Python/jit_baseline.o Python/jit_backend_x86.o: $(srcdir)/Include/internal/pycore_jit.h
+Python/jit_backend_x86.o: $(srcdir)/Python/jit_x86.h
 
 Python/flowgraph.o: \
 		$(srcdir)/Include/internal/pycore_opcode_metadata.h

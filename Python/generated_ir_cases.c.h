@@ -16344,7 +16344,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             IR_STORE_RETURN(res);
-            JIT_MAYBE_RESUME();
+            JIT_MAYBE_RESUME(1);
             DISPATCH();
         }
 
@@ -19011,7 +19011,7 @@ JUMP_TO_LABEL(error);
                 #if _Py_TAIL_CALL_INTERP
                 int opcode;
                 #endif
-                JIT_MAYBE_RESUME();
+                JIT_MAYBE_RESUME(0);
                 DISPATCH();
             }}
 

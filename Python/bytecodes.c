@@ -5952,7 +5952,7 @@ dummy_func(
 #if _Py_TAIL_CALL_INTERP
             int opcode;
 #endif
-            JIT_MAYBE_RESUME();
+            JIT_MAYBE_RESUME(0);
             DISPATCH();
         }
 

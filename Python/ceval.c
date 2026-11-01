@@ -1271,9 +1271,12 @@ jit_helpers_have_monitoring(PyCodeObject *code)
     return 0;
 }
 
-static int
-jit_helpers_allow_observers(PyThreadState *tstate, _PyInterpreterFrame *frame)
+#endif
+
+int
+_PyJit_ObserversAllow(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
+#if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
     if (IS_PEP523_HOOKED(tstate) || tstate->tracing || tstate->c_tracefunc ||
         tstate->c_profilefunc || jit_helpers_have_monitoring(_PyFrame_GetCode(frame))) {
         return 0;
@@ -1290,8 +1293,10 @@ jit_helpers_allow_observers(PyThreadState *tstate, _PyInterpreterFrame *frame)
 #endif
     return !(PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED() ||
              PyDTrace_LINE_ENABLED());
-}
+#else
+    return 0;
 #endif
+}
 
 #include "generated_jit_helpers.c.h"
 
@@ -1317,8 +1322,9 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _PyEntryFrame entry;
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
     _PyJitTestRequest *jit_request = NULL;
-    _PyJitContext jit_context;
+    _PyJitContext jit_context = {0};
     _PyJitAction jit_result;
+    int jit_from_return = 0;
 #endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
@@ -1396,6 +1402,28 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 #else
     goto start_frame;
 #if !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
+    jit_resume:
+    {
+        /* PREPARED transfer pins are released only after start_frame has
+         * completed recursion/events. RETURN arrives in an already-live caller. */
+        if (jit_context.unit != NULL && _PyJit_ReleaseActivation(&jit_context) < 0) {
+            goto error;
+        }
+        if (jit_request != NULL) {
+            goto jit_step;
+        }
+        int entered = _PyJit_PrepareActivation(tstate, frame, next_instr,
+                                               jit_from_return, &jit_context);
+        if (entered < 0) {
+            goto error;
+        }
+        if (entered) {
+            jit_result = jit_context.unit->entry(&jit_context);
+            goto jit_consume_action;
+        }
+        DISPATCH();
+    }
+
     jit_step:
     {
         /* M0 executes real generated helpers, not native machine code. An
@@ -1403,7 +1431,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (jit_request == NULL || frame != jit_request->claimed_frame) {
             DISPATCH();
         }
-        if (jit_request->remaining-- <= 0 || !jit_helpers_allow_observers(tstate, frame)) {
+        if (jit_request->remaining-- <= 0 || !_PyJit_ObserversAllow(tstate, frame)) {
             jit_request->claimed_frame = NULL;
             jit_request = NULL;
             DISPATCH();
@@ -1443,41 +1471,56 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
     jit_consume_action:
     {
-        _PyJitContext ctx = jit_context;
-        frame = ctx.frame;
-        next_instr = ctx.next_instr;
+        /* This is the sole owning context. A local struct copy would leave
+         * stale owned pins in jit_context after a terminal Action. */
+        frame = jit_context.frame;
+        next_instr = jit_context.next_instr;
         slots = _PyFrame_Slots(frame);
         switch (jit_result) {
             case _PyJIT_CONTINUE:
             case _PyJIT_BRANCH:
-            case _PyJIT_RETURN:
+                assert(jit_context.unit == NULL);  /* M0 only: native stays native */
                 goto jit_step;
+            case _PyJIT_RETURN:
+                assert(jit_context.phase == _PyJIT_RETURN_COMPLETED);
+                jit_from_return = 1;
+                goto jit_resume;  /* release terminal pin, then fresh caller lookup */
             case _PyJIT_ENTER_FRAME:
-                if (ctx.phase == _PyJIT_ENTER_PREPARED) {
+                if (jit_context.phase == _PyJIT_ENTER_PREPARED) {
                     tstate->current_frame = frame;
                     CALL_STAT_INC(inlined_py_calls);
-                    goto start_frame;
+                    goto start_frame;  /* releases old pin after start completes */
                 }
-                assert(ctx.phase == _PyJIT_ENTER_STARTED);
-                goto jit_step;
+                assert(jit_context.phase == _PyJIT_ENTER_STARTED);
+                jit_from_return = 0;
+                goto jit_resume;
             case _PyJIT_RAISE:
                 if (jit_request != NULL) {
                     jit_request->claimed_frame = NULL;
                     jit_request = NULL;
                 }
-                next_instr = ctx.raising_instr + 1;
-                if (ctx.phase == _PyJIT_UNWIND_PENDING) {
+                next_instr = jit_context.raising_instr + 1;
+                _PyJit_ReleaseActivation(&jit_context);
+                if (jit_context.phase == _PyJIT_UNWIND_PENDING) {
                     goto exception_unwind;
                 }
-                assert(ctx.phase == _PyJIT_ERROR_LOG_PENDING);
+                assert(jit_context.phase == _PyJIT_ERROR_LOG_PENDING);
                 goto error;
             case _PyJIT_DEOPT:
-                assert(ctx.phase == _PyJIT_DEOPT_BEFORE || ctx.phase == _PyJIT_DEOPT_AFTER);
+                assert(jit_context.phase == _PyJIT_DEOPT_BEFORE || jit_context.phase == _PyJIT_DEOPT_AFTER);
                 if (jit_request != NULL) {
                     jit_request->claimed_frame = NULL;
                     jit_request = NULL;
                 }
-                DISPATCH();
+                if (_PyJit_ReleaseActivation(&jit_context) < 0) {
+                    if (jit_context.phase == _PyJIT_DEOPT_BEFORE) {
+                        /* error attributes next_instr - 1; normal fallback
+                         * must retain the pending instruction unchanged. */
+                        next_instr++;
+                    }
+                    goto error;
+                }
+                DISPATCH();  /* exact pending/committed next_instr, no replay */
             default:
                 Py_UNREACHABLE();
         }

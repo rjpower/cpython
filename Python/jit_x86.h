@@ -16,6 +16,7 @@
 #define Py_JIT_X86_H
 
 #include <stdint.h>
+#include <limits.h>
 #include <string.h>
 
 typedef enum {
@@ -52,12 +53,21 @@ typedef struct {
 static inline int
 jit_grow(void **array, int *capacity, int need, size_t item)
 {
+    if (need < 0 || need > 16 * 1024 * 1024 || *capacity < 0 ||
+        item == 0 || (size_t)need > SIZE_MAX / item) {
+        return -1;
+    }
     if (need <= *capacity) {
         return 0;
     }
     int capacity2 = *capacity ? *capacity : 64;
     while (capacity2 < need) {
-        capacity2 *= 2;
+        if (capacity2 > 8 * 1024 * 1024) {
+            capacity2 = need;
+        }
+        else {
+            capacity2 *= 2;
+        }
     }
     void *array2 = PyMem_Realloc(*array, (size_t)capacity2 * item);
     if (array2 == NULL) {
@@ -65,7 +75,7 @@ jit_grow(void **array, int *capacity, int need, size_t item)
     }
     *array = array2;
     *capacity = capacity2;
-    return 0;
+    return PyErr_Occurred() ? -1 : 0;
 }
 
 static inline void
@@ -79,7 +89,11 @@ jit_free(jit_buf *b)
 static inline void
 jit_byte(jit_buf *b, int byte)
 {
-    if (jit_grow((void **)&b->code, &b->capacity, b->size + 1, 1) < 0) {
+    if (b->failed) {
+        return;
+    }
+    if (b->size < 0 || b->size == INT_MAX ||
+        jit_grow((void **)&b->code, &b->capacity, b->size + 1, 1) < 0) {
         b->failed = 1;
         return;
     }
@@ -104,7 +118,11 @@ jit_u64(jit_buf *b, uint64_t v)
 static inline void
 jit_align(jit_buf *b, int alignment)
 {
-    while (b->size % alignment) {
+    if (alignment <= 0 || alignment > 16 * 1024 * 1024) {
+        b->failed = 1;
+        return;
+    }
+    while (!b->failed && b->size % alignment) {
         jit_byte(b, 0xCC);
     }
 }
@@ -114,11 +132,12 @@ jit_align(jit_buf *b, int alignment)
 static inline int
 jit_new_label(jit_buf *b)
 {
-    if (jit_grow((void **)&b->labels, &b->labels_capacity, b->nlabels + 1,
+    if (b->failed || b->nlabels < 0 || b->nlabels == INT_MAX ||
+        jit_grow((void **)&b->labels, &b->labels_capacity, b->nlabels + 1,
                  sizeof(int)) < 0)
     {
         b->failed = 1;
-        return 0;
+        return -1;
     }
     b->labels[b->nlabels] = -1;
     return b->nlabels++;
@@ -127,6 +146,10 @@ jit_new_label(jit_buf *b)
 static inline void
 jit_bind(jit_buf *b, int label)
 {
+    if (label < 0 || label >= b->nlabels) {
+        b->failed = 1;
+        return;
+    }
     if (!b->failed) {
         b->labels[label] = b->size;
     }
@@ -137,7 +160,9 @@ jit_bind(jit_buf *b, int label)
 static inline void
 jit_rel32(jit_buf *b, int label)
 {
-    if (jit_grow((void **)&b->fixups, &b->fixups_capacity, b->nfixups + 1,
+    if (b->failed || label < 0 || label >= b->nlabels ||
+        b->nfixups < 0 || b->nfixups == INT_MAX ||
+        jit_grow((void **)&b->fixups, &b->fixups_capacity, b->nfixups + 1,
                  sizeof(jit_fixup)) < 0)
     {
         b->failed = 1;
@@ -156,11 +181,18 @@ jit_resolve(jit_buf *b)
     }
     for (int i = 0; i < b->nfixups; i++) {
         jit_fixup f = b->fixups[i];
-        int target = b->labels[f.label];
-        if (target < 0) {
+        if (f.label < 0 || f.label >= b->nlabels || f.at < 0 || f.at > b->size - 4) {
             return -1;
         }
-        int32_t disp = target - (f.at + 4);
+        int target = b->labels[f.label];
+        if (target < 0 || target > b->size) {
+            return -1;
+        }
+        int64_t wide = (int64_t)target - ((int64_t)f.at + 4);
+        if (wide < INT32_MIN || wide > INT32_MAX) {
+            return -1;
+        }
+        int32_t disp = (int32_t)wide;
         memcpy(b->code + f.at, &disp, sizeof(disp));
     }
     return 0;
@@ -335,6 +367,33 @@ static inline void jit_or_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_
 static inline void jit_and_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 4, dst, imm); }
 static inline void jit_sub_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 5, dst, imm); }
 static inline void jit_cmp_imm(jit_buf *b, jit_reg dst, int32_t imm) { jit_arith_imm(b, 7, dst, imm); }
+
+/* Scalar C enum results are32-bit; upper RAX bits are not an ABI promise. */
+static inline void
+jit_cmp_imm32(jit_buf *b, jit_reg dst, int32_t imm)
+{
+    jit_rex(b, 0, 0, 0, dst);
+    jit_byte(b, 0x81);
+    jit_byte(b, 0xC0 | (7 << 3) | (dst & 7));
+    jit_u32(b, (uint32_t)imm);
+}
+
+static inline void
+jit_call_reg(jit_buf *b, jit_reg target)
+{
+    jit_rex(b, 0, 0, 0, target);
+    jit_byte(b, 0xFF);
+    jit_byte(b, 0xC0 | (2 << 3) | (target & 7));
+}
+
+static inline void
+jit_pop(jit_buf *b, jit_reg reg)
+{
+    jit_rex(b, 0, 0, 0, reg);
+    jit_byte(b, 0x58 + (reg & 7));
+}
+
+static inline void jit_ret(jit_buf *b) { jit_byte(b, 0xC3); }
 
 /* cmp word [base + disp], imm16 */
 static inline void

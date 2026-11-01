@@ -156,6 +156,7 @@ typedef struct _PyCodeExec {
     uint32_t nwords;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
+    struct _PyJitState *jit;  // optional baseline state, never a Python object
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,

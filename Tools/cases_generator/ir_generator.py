@@ -1648,7 +1648,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
         if name == "RETURN_VALUE" and not helper:
-            out.emit("JIT_MAYBE_RESUME();\n")
+            out.emit("JIT_MAYBE_RESUME(1);\n")
         out.emit("DISPATCH();\n")
     out.start_line()
     out.emit("}")

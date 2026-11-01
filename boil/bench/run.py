@@ -36,12 +36,16 @@ boxes
     ``-X pystats`` at ``loops`` and ``3 * loops`` after a warm-up, and the
     value is the difference of the int, float and array boxes, divided as
     for instr.  The entry also keeps the boxes by class, the boxes by
-    instruction and counted handler entries. One pair: the
-    counts are deterministic.  Py_STATS writes each process's stats to a new
+    instruction, handler entries/pairs and native boxing sites. The complete
+    parsed counters from the warm-up and low/high processes are retained;
+    normalized differences include startup/setup and are not hot-only counts.
+    Py_STATS writes each process's stats to a new
     randomly named file in /tmp/py_stats, shared with other users of the
     machine, so the runner takes the one file that appears during its
     child's run and fails if there is not exactly one; it never clears the
-    directory.  Boxing call sites: boil/tools/measure/box_audit.py -v.
+    directory. Use ``--pystats-records FILE`` to retain original dump text
+    before parsing, including dumps rejected by later schema checks.
+    Boxing call sites: boil/tools/measure/box_audit.py -v.
 rss
     Peak resident set size in KiB of a process calling ``run(loops)`` once,
     from GNU ``/usr/bin/time -f %M`` (not getrusage of children, which
@@ -263,6 +267,8 @@ class Context:
     scratch: Path
     perf_records: Path | None = None
     perf_sequence: int = 0
+    pystats_records: Path | None = None
+    pystats_dumps: int = 0
 
     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1,
                 options: tuple[str, ...] = ()) -> list[str]:
@@ -403,8 +409,18 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
         raise MeasurementError(f"{len(new)} new files in {PYSTATS_DIR} during {bench.name}; "
                                "another process is writing stats, so none is attributable")
     path = new.pop()
+    raw = path.read_bytes()
+    text = raw.decode("utf-8")
+    if ctx.pystats_records is not None:
+        record = {"dump": ctx.pystats_dumps, "benchmark": bench.name, "loops": loops,
+                  "command": ctx.command(bench, "run", loops, options=("-X", "pystats")),
+                  "source_path": str(path), "text": text,
+                  "sha256": hashlib.sha256(raw).hexdigest()}
+        with ctx.pystats_records.open("a") as stream:
+            stream.write(json.dumps(record) + "\n")
+        ctx.pystats_dumps += 1
     counts = {}
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         key, sep, value = line.strip().rpartition(":")
         if sep and value.strip().isdigit():
             if key.strip() in counts:
@@ -442,7 +458,7 @@ def check_pystats(ctx: Context) -> None:
 
 def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     lo, hi = loops, HIGH * loops
-    pystats_counts(ctx, bench, lo)  # warm-up: fills the pyc cache
+    warmup = pystats_counts(ctx, bench, lo)  # fills the pyc cache
     a, b = pystats_counts(ctx, bench, lo), pystats_counts(ctx, bench, hi)
     metadata = handler_entry_metadata(a)
     if metadata != handler_entry_metadata(b):
@@ -456,16 +472,26 @@ def measure_boxes(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
     def per(key: str) -> float:
         return (b.get(key, 0) - a.get(key, 0)) / scale
 
+    keys = a.keys() | b.keys()
     by_class = {k[len("Object boxes ("):-1]: per(k) for k in b if k.startswith("Object boxes (")}
     by_op = {k[len("opcode["):-len("].boxes")]: per(k) for k in b
              if k.startswith("opcode[") and k.endswith("].boxes") and per(k)}
-    counted_handler_entries = sum(per(k) for k in a.keys() | b.keys()
+    counted_handler_entries = sum(per(k) for k in keys
                                   if k.endswith("].execution_count"))
     unit = "boxes per iteration" if bench.inner > 1 else "boxes per loop"
     entry = {"group": bench.group, "unit": unit, "value": sum(per(k) for k in BOX_TOTALS),
              "int_boxes": per(BOX_TOTALS[0]), "float_boxes": per(BOX_TOTALS[1]),
              "array_boxes": per(BOX_TOTALS[2]), "by_class": by_class,
              "by_instruction": dict(sorted(by_op.items(), key=lambda kv: -kv[1])),
+             "handler_entries": {k: per(k) for k in sorted(keys)
+                                 if k.startswith("opcode[")
+                                 and k.endswith("].execution_count")},
+             "handler_pairs": {k: per(k) for k in sorted(keys)
+                               if k.startswith("opcode[") and "].pair_count[" in k
+                               and k.endswith("]")},
+             "box_sites": {k: per(k) for k in sorted(keys)
+                           if k.startswith("Object box site[") and k.endswith("]")},
+             "raw_counters": {"warmup": warmup, "low": a, "high": b},
              "counted_handler_entries": counted_handler_entries,
              **metadata, "allocations": per("Object allocations"),
              "dict_mode": {k[len("Object materialize dict ("):-1]: per(k) for k in b
@@ -555,6 +581,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rss-runs", type=int, default=3)
     ap.add_argument("--perf-records", type=Path,
                     help="exclusive new JSONL file retaining every raw perf invocation, including failures")
+    ap.add_argument("--pystats-records", type=Path,
+                    help="exclusive new JSONL file retaining original pystats dumps before parsing")
     ap.add_argument("--max-load", type=float,
                     help="fail if the 1-minute load average reaches this before any measurement")
     ap.add_argument("--update", action="store_true",
@@ -575,6 +603,16 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("--perf-records and --output must be different files")
         with args.perf_records.open("x"):
             pass
+    if args.pystats_records is not None:
+        if "boxes" not in metrics:
+            ap.error("--pystats-records requires the boxes metric")
+        args.pystats_records = args.pystats_records.resolve()
+        if args.output is not None and args.pystats_records == args.output.resolve():
+            ap.error("--pystats-records and --output must be different files")
+        if args.pystats_records == args.perf_records:
+            ap.error("--pystats-records and --perf-records must be different files")
+        with args.pystats_records.open("x"):
+            pass
     label = args.label or python.parent.name
     started = datetime.datetime.now().astimezone()
     loads: list[float] = []
@@ -586,7 +624,8 @@ def main(argv: list[str] | None = None) -> int:
             raise MeasurementError(f"1-minute load average {load:.2f} reached --max-load "
                                    f"{args.max_load}; no measurement report written")
     with tempfile.TemporaryDirectory(prefix="boil-bench-") as tmp:
-        ctx = Context(python, Path(tmp) / "pycache", Path(tmp), args.perf_records)
+        ctx = Context(python, Path(tmp) / "pycache", Path(tmp), args.perf_records,
+                      pystats_records=args.pystats_records)
         results: dict[str, dict] = {}
         try:
             build = build_info(python, label)
@@ -624,6 +663,12 @@ def main(argv: list[str] | None = None) -> int:
             "path": str(args.perf_records),
             "sha256": hashlib.sha256(args.perf_records.read_bytes()).hexdigest(),
             "invocations": ctx.perf_sequence,
+        }
+    if args.pystats_records is not None:
+        run_info["pystats_records"] = {
+            "path": str(args.pystats_records),
+            "sha256": hashlib.sha256(args.pystats_records.read_bytes()).hexdigest(),
+            "dumps": ctx.pystats_dumps,
         }
     report = {"schema": "boil-bench/1", "build": build, "machine": machine(),
               "results": {}, "runs": {}}

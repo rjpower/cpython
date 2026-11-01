@@ -372,3 +372,13 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   pointers in normal print mode. Its live tool handle is 78126; response and
   stderr remain in the recorded evidence directory. New native work stays held.
   [Peer request](issues/fundamental-runtime-design/claude-fable-5.1-request-20261101.md).
+- 2026-11-01: Direct medium-effort Claude Fable 5.1 review completed with
+  terminal zero. Preserved its response verbatim and assigned separate IR/VM,
+  GC and native fact audits rather than adopting unsupported causal claims.
+  Implemented complete parsed stats retention, handler/pair/native-PC
+  differences and an original-dump journal in the host benchmark driver.
+  Independent review accepted the exact change; all sixteen related host
+  counter-record tests passed, with no target, compiler or permission probe.
+  Fresh unchanged-runtime debug/stats baseline preparation is held for review;
+  no current-source stats image was reusable. No runtime speedup is claimed.
+  [Tooling review](issues/fundamental-runtime-design/counter-retention-review-20261101.md).

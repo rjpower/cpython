@@ -29,12 +29,28 @@ completed matched comparison and its limits.
 | `instr` | User instructions from `perf stat`, differenced between `loops` and `3 * loops`; median of four pairs after warm-up. Micro values are per inner iteration, less the skeleton. |
 | `time` | Median of five timed calls after one warm-up, normally ns per loop; collector rows report seconds per fixed allocated GB. |
 | `rss` | Peak process RSS in KiB from GNU time; median of three processes. |
-| `boxes` | Pystats-only differenced boxing counts; includes class/instruction breakdown and counted handler entries. |
+| `boxes` | Pystats-only differenced boxing counts; includes class/instruction, handler-entry/pair and native boxing-site breakdowns, plus complete parsed warm-up/low/high counters. |
 
 `counted_handler_entries` measures generated target entries, not every logical
 operation: predicted-label jumps and tail calls have different entry behavior.
 Compare only matching counter coverage and dispatch policies. Micro diagnostics
 are separate from the kernel aggregate.
+
+The `boxes` entry retains original counter names in `handler_entries`,
+`handler_pairs` and `box_sites`. These are differences between separate low/high
+processes normalized by the loop difference, including the micro inner count.
+They include startup/setup variation, can be negative, and are not exact hot-
+interval counts. Handler pairs can include same-word adaptive redispatch; they
+do not by themselves prove adjacent-word fusion opportunities or per-PC hotness.
+Box counts include cached-object reuse and do not establish fresh allocations
+or CPU cost. `raw_counters` preserves all parsed counters for warm-up, low and
+high, including handler identity/coverage metadata. Use `--pystats-records FILE`
+to retain each original UTF-8 dump, SHA-256, source path, command and loop count
+in an exclusive new JSONL file before parsing. That journal survives later
+parse/schema failure and scratch cleanup; successful run metadata binds its
+path, hash and dump count. A failed child or ambiguous dump selection leaves
+its original files in place and does not produce an attributable journal row.
+Neither representation supplies missing upstream counter coverage.
 
 Children use fresh writable bytecode caches, remove inherited `PYTHON*` settings
 and set hash seed 0. Workload counts are fixed, not calibrated. Missing metric

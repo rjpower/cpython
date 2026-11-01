@@ -3557,10 +3557,12 @@ class TestMagicNumber(unittest.TestCase):
     def test_magic_number_endianness(self):
         magic_number_bytes = _imp.pyc_magic_number_token.to_bytes(4, 'little')
         self.assertEqual(magic_number_bytes[2:], b'\r\n')
-        # Starting with Python 3.11, Python 3.n starts with magic number 2900+50n.
+        # Register IR uses a private namespace, separate from upstream and
+        # tracing-collector bytecode caches.
         magic_number = int.from_bytes(magic_number_bytes[:2], 'little')
-        start = 2900 + sys.version_info.minor * 50
-        self.assertIn(magic_number, range(start, start + 50))
+        self.assertEqual(magic_number, 64401)
+        self.assertEqual(sys.implementation.cache_tag,
+                         f'cpython-rc1-{sys.version_info.major}{sys.version_info.minor}')
 
 
 if __name__ == '__main__':

@@ -30,6 +30,7 @@
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"
+#include "pycore_jit_ir.h"
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
 #include "pycore_opcode_metadata.h" // _PyOpcode_OpName
@@ -3626,7 +3627,14 @@ jit_method_cold_call(PyObject *module, PyObject *args)
     return _PyJit_TestColdCall(function, arguments, callback, site, fail);
 }
 
+static PyObject *
+jit_method_record_index(PyObject *module, PyObject *unused)
+{
+    return _PyJit_TestRecordIndex();
+}
+
 static PyMethodDef module_functions[] = {
+    {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},
     {"jit_method_info", jit_method_info, METH_O, NULL},

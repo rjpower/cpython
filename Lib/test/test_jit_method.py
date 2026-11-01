@@ -811,5 +811,304 @@ class TestNaturalMethods(unittest.TestCase):
         # particular frame address was reused during finalizer execution.
 
 
+@unittest.skipUnless(
+    sys.platform == "linux" and platform.machine() == "x86_64" and
+    not sysconfig.get_config_var("Py_GIL_DISABLED") and
+    not sysconfig.get_config_var("Py_STATS") and
+    not sysconfig.get_config_var("_Py_TAIL_CALL_INTERP"),
+    "observed loops require Linux x86-64 GIL/default evaluator",
+)
+class TestObservedLoops(unittest.TestCase):
+    def info(self, function):
+        return _testinternalcapi.jit_method_info(function)
+
+    def optimized(self, function):
+        info = self.info(function)
+        self.assertTrue(info["active"], info)
+        trace = info["trace"]
+        self.assertTrue(trace["optimized"], info)
+        self.assertTrue(trace["entry_seen"], info)
+        self.assertTrue(trace["scalar_seen"], info)
+        self.assertTrue(trace["backedge_seen"], info)
+        self.assertGreater(trace["events"], 0)
+        self.assertGreater(trace["nodes"], 0)
+        self.assertLessEqual(trace["scratch"], 64)
+        self.assertEqual(len(trace["path"]), trace["events"])
+        self.assertEqual(len(info["offsets"]), info["words"])
+        self.assertGreater(len(info["code"]), 0)
+        return info
+
+    def test_natural_recording_and_native_scalar_loop(self):
+        def work(n, seed):
+            i = 0
+            total = seed
+            while i < n:
+                total = total + i * 3 + (i + 7)
+                i = i + 1
+            return total
+
+        for n, seed in ((2400, 3), (31, -7), (1200, 19)):
+            self.assertEqual(work(n, seed), seed + 2 * n * (n - 1) + 7 * n)
+        info = self.optimized(work)
+        self.assertGreater(info["trace"]["boxed_imports"], 0)
+        self.assertTrue(_testinternalcapi.jit_method_record_index())
+        print("JIT_OBSERVED_LOOP_WITNESS", info)
+
+    def test_python_and_c_call_continuations(self):
+        ledger = []
+
+        def callback(i):
+            ledger.append(i)
+            return i + 2
+
+        def work(n, cb):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + cb(i)
+                total = total + abs(i - 3)
+                i = i + 1
+            return total
+
+        self.assertEqual(work(2400, callback), sum(i + 2 + abs(i - 3) for i in range(2400)))
+        self.assertEqual(ledger, list(range(2400)))
+        info = self.optimized(work)
+        self.assertGreater(info["trace"]["python_calls"], 0)
+        self.assertTrue(info["trace"]["return_seen"], info)
+        self.assertTrue(info["return_resume_seen"])
+        self.assertTrue(info["c_call_seen"])
+
+    def test_overflow_branch_type_and_zero_iteration_exits(self):
+        def work(n, seed, cut):
+            i = 0
+            total = seed
+            while i < n:
+                if i < cut:
+                    total = total + 3
+                else:
+                    total = total - 2
+                i = i + 1
+            return total
+
+        self.assertEqual(work(2400, 1, 3000), 7201)
+        self.optimized(work)
+        for n, seed, cut in ((0, 7, 0), (30, 2**31 - 2, 7), (33, 1.5, 12), (49, -2**31, 3)):
+            self.assertEqual(work(n, seed, cut), seed + 3 * min(n, cut) - 2 * max(0, n - cut))
+
+        # Returning before the nominated loop, or running a different loop,
+        # must settle temporary recorder hooks without a new selection policy.
+        def alternate(n, first):
+            i = 0
+            while i < first:
+                i = i + 1
+            j = 0
+            while j < n:
+                j = j + 1
+            return j
+
+        for _ in range(80):
+            self.assertEqual(alternate(0, 0), 0)
+        terminal_info = self.info(alternate)
+        self.assertFalse(terminal_info.get("trace", {}).get("recording", False))
+        fresh = types.FunctionType(alternate.__code__.replace(), globals())
+        self.assertEqual(fresh(3000, 0), 3000)
+        alternate_info = self.info(fresh)
+        self.assertFalse(alternate_info.get("trace", {}).get("optimized", False))
+        self.assertFalse(alternate_info.get("trace", {}).get("recording", False))
+
+    def test_boxed_identity_and_owner_release_reentry(self):
+        imported = int("1000000")
+        ledger = []
+
+        def observe(value):
+            ledger.append(value is imported)
+            return 1
+
+        def work(n, original, cb):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + cb(original)
+                i = i + 1
+            return total
+
+        self.assertEqual(work(2400, imported, observe), 2400)
+        self.assertEqual(ledger, [True] * 2400)
+        self.optimized(work)
+        released = []
+
+        class Owner:
+            def __add__(self, other):
+                return 11
+
+            def __del__(self):
+                released.append(sys._getframe(1).f_locals.get("value"))
+
+        def replace(n, factory):
+            value = factory()
+            i = 0
+            while i < n:
+                value = value + 1
+                i = i + 1
+            return value
+
+        self.assertEqual(replace(2400, lambda: 1000), 3400)
+        self.optimized(replace)
+        # Owner declines the exact-int import and executes this same Unit's
+        # native baseline helper. It does not enter scalar TraceCommit.
+        self.assertEqual(replace(1, Owner), 11)
+        self.assertEqual(released, [11])
+        self.assertTrue(self.info(replace)["active"])
+
+    def test_nested_recording_and_exception_retirement(self):
+        ledger = []
+
+        def inner(n):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + i
+                i = i + 1
+            return total
+
+        def cb(i):
+            if i == 1100:
+                raise ValueError("recorded callback")
+            ledger.append(i)
+            return inner(2)
+
+        def outer(n, callback):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + callback(i)
+                i = i + 1
+            return total
+
+        with self.assertRaisesRegex(ValueError, "recorded callback"):
+            outer(2400, cb)
+        self.assertEqual(ledger, list(range(1100)))
+        self.assertEqual(outer(2400, lambda i: 2), 4800)
+        self.assertEqual(inner(2400), 2400 * 2399 // 2)
+        self.optimized(inner)
+
+    def test_common_none_return_loop(self):
+        ledger = []
+
+        def work(n, out):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + i
+                i = i + 1
+            out.append(total)
+
+        self.assertIsNone(work(2400, ledger))
+        self.assertEqual(ledger, [2400 * 2399 // 2])
+        self.optimized(work)
+
+    def test_raise_forms_and_invalid_exception(self):
+        def reraiser():
+            raise
+
+        def cause():
+            raise RuntimeError("outer") from ValueError("inner")
+
+        def invalid():
+            raise 17
+
+        def raised():
+            raise ValueError("single")
+
+        for function, exception, message in ((reraiser, ValueError, "first"),
+                                              (cause, RuntimeError, "outer"),
+                                              (invalid, TypeError, "exceptions must derive"),
+                                              (raised, ValueError, "single")):
+            self.assertTrue(_testinternalcapi.jit_method_compile(function))
+            for _ in range(80):
+                if function is reraiser:
+                    try:
+                        raise ValueError("first")
+                    except ValueError as original:
+                        with self.assertRaisesRegex(ValueError, "first") as caught:
+                            function()
+                        self.assertIs(caught.exception, original)
+                else:
+                    with self.assertRaisesRegex(exception, message) as caught:
+                        function()
+            if function is cause:
+                self.assertIsInstance(caught.exception.__cause__, ValueError)
+            self.assertTrue(self.info(function)["entry_seen"])
+
+    def test_raise_constructor_finalizer_and_observers(self):
+        ledger = []
+
+        class Error(Exception):
+            def __init__(self):
+                ledger.append("construct")
+
+        def raised():
+            raise Error
+
+        self.assertTrue(_testinternalcapi.jit_method_compile(raised))
+        for _ in range(80):
+            with self.assertRaises(Error):
+                raised()
+        self.assertEqual(ledger, ["construct"] * 80)
+
+        class Operand:
+            def __del__(self):
+                ledger.append("release")
+
+        def invalid():
+            raise Operand()
+
+        self.assertTrue(_testinternalcapi.jit_method_compile(invalid))
+        with self.assertRaises(TypeError):
+            invalid()
+        self.assertEqual(ledger[-1], "release")
+
+        def profile(frame, event, arg):
+            return profile
+
+        sys.setprofile(profile)
+        try:
+            with self.assertRaises(Error):
+                raised()
+        finally:
+            sys.setprofile(None)
+        self.assertEqual(ledger[-1], "construct")
+
+        observations = []
+
+        class Number:
+            arm = False
+
+            def __abs__(self):
+                observations.append(1)
+                if self.arm:
+                    self.arm = False
+                    sys.setprofile(profile)
+                return 1
+
+        def loop(n, value):
+            i = 0
+            total = 0
+            while i < n:
+                total = total + abs(value)
+                i = i + 1
+            return total
+
+        value = Number()
+        self.assertEqual(loop(2400, value), 2400)
+        self.optimized(loop)
+        value.arm = True
+        try:
+            self.assertEqual(loop(31, value), 31)
+        finally:
+            sys.setprofile(None)
+        self.assertEqual(len(observations), 2431)
+
+
 if __name__ == "__main__":
     unittest.main()

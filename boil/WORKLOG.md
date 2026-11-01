@@ -797,3 +797,71 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   activated reviewed O1/debug full08:05:26–09:38:56 inclusive, session60637;
   it remains active. Fresh safety builds and CPU extension/regen closure queue
   behind it; no whole RC qualification or integration claim.
+- 2026-11-01 08:22 UTC: Corrected release87194 and O1/debug60637 both
+  returned0:50,827 tests each, zero failures;3,430/3,377 standard skips.
+  Full565-module selection retained; independent actual-outcome review pending.
+  Fresh ASan/stackref-debug build batch42390 terminal0 observed08:19; this is
+  build/probe evidence, not safety-suite qualification. No native job remains
+  from those batches. [Current gates](issues/rc-integration/status.md).
+- 2026-11-01 08:22 UTC: Independently accepted CPU extension/regen helpers;
+  root rechecked7,217 inputs and exclusive idle locks, activated08:21:41
+  through09:08:41 inclusive, then launched session29576. The frozen manifest's
+  stale5610-second prose is explicitly superseded by its actual2820-second
+  field, authority and root grant; no deadline expansion. Parallel host-only
+  JIT G0 word-capture preparation, actual-full/build outcome review and minimal
+  existing unbuilt-module syntax binding; no JIT implementation granted.
+  [Helper review](issues/rc-integration/reviews/cext-regen-helper-review-20261101-v1.md).
+- 2026-11-01 08:29 UTC: Both ordinary full suites independently ACCEPT:
+  565 returned modules each,463 passes/94 skips/eight resource-denied;
+  all73 passed nested origins and seven protected modules verified. Fresh
+  ASan/stackref builds independently ACCEPT for build/probe scope only;
+  584 products per image, actual ASan mapping and stackref evaluator calls.
+  [Full outcomes](issues/rc-integration/full-suite-outcomes-review-20261101-v2.md),
+  [Build outcomes](issues/rc-integration/profile-build-outcomes-review-20261101-v1.md).
+- 2026-11-01 08:29 UTC: CPU extension29576 terminal1:16 methods,15 failed,
+  one existing Linux MSVC-only skip. All15 native compile/link steps succeeded;
+  setuptools then rejected the private RC ABI wheel tag against its upstream
+  supported tags. No extension runtime/refleak pass; regen not run. Actual
+  exact-executable cleanup08:25:29 idle and owned cache removed. Preserve all
+  failures; parallel design reviews a coherent packaging fix, no retry yet.
+  Loom revision12 readback verified11,369 characters/two Mermaid blocks;
+  its08:24 snapshot predates this failure and remains immutable.
+  [Current state](issues/rc-integration/status.md).
+- 2026-11-01 08:45 UTC: Existing19 borrowed-header syntax checks ran once
+  08:33:26-08:33:28, session27823 terminal0; all9,984 inputs exact and scratch
+  removed. Independent scoped outcome ACCEPT; no link/import/runtime claim.
+  [Outcome](issues/rc-integration/source-syntax-outcome-review-20261101-v1.md).
+- 2026-11-01 08:45 UTC: Reviewed ASan16 launched under08:35:00-09:18:30
+  inclusive grant; session31887 terminal1. Standard target SUCCESS3,827 tests,
+  zero failures,77 skips,26 modules from16 requests. Our helper/review missed
+  standard multiprocessing package expansion. Additive source-derived reader
+  retains every other predicate/raw result; independent acceptance pending,
+  original batch stays failed, no target rerun. Exact-executable cleanup idle.
+  [Correction](issues/rc-integration/asan-selection-output-correction-20261101-v1.md).
+- 2026-11-01 08:45 UTC: G0 capture6928 terminal1: code feedback metadata
+  legitimately returnsNone, but serializer called.hex() before warmup. No
+  before/after word capture or64-call credit; original raw/maps/failure retained.
+  Narrow helper correction authorized, not JIT implementation. Full stackref
+  session15564 is active08:41:11-10:14:41; real multiprocessing and embedded
+  shutdown failures report live references and block landing. Source audit
+  replaces landing preparation; no source edits or exclusions authorized.
+- 2026-11-01 08:45 UTC: Packaging first design rejected as incomplete: pip
+  installer bypasses sys_tags. Reviewed v2 covers actual default installer
+  route and declares unsupported explicit cross-target overrides. Root grants
+ 30minutes host-only tool/provenance/28policy-row implementation underbuild;
+  selected wheel/source edits wait for idle native state and source review.
+  [Design review](issues/rc-integration/private-abi-packaging-design-review-20261101-v2.md).
+- 2026-11-01 08:49 UTC: Independent ASan composite ACCEPT:3,827 tests,
+  zero failures/77 skips, exact26 expanded modules/27 ordinary processes,
+  14PASSED/12SKIPPED; all protected modules pass. Original batch failed host
+  validation and remains failed with no fabricated completion or target rerun.
+  [Adjudication](issues/rc-integration/asan-selection-adjudication-review-20261101-v1.md).
+- 2026-11-01 08:49 UTC: Stop remaining full stackref work after563/565 results:
+  449PASS/94SKIP/12FAILED/eight resource-denied. Root08:47:32 pidfdSIGTERM to
+  the exact own timeout preserves partial evidence; returned124 follows this
+  intentional stop, not5,400-second expiry. Supervisor15564 terminal1; cleanup
+  idle08:47:32 and owned cache removed. Source audit separates shutdown open
+  references, TLS/GIL-free async reads and remote raw-pointer assumptions;
+  shared upstream paths motivate a finite causal control before any gate
+  amendment. No source fix/exclusion/qualification pass or native retry granted.
+  [Blocking state](issues/rc-integration/status.md).

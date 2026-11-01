@@ -35,15 +35,20 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **08:02 UTC**, corrected RC release-full session87194 is active,
-08:02:02–09:05:32 inclusive, after exact source/product/helper acceptance.
-The first full failed12 assertions and an origin-observer gap; a reviewed
-three-Python-file correction dce654 and narrow helper corrections address
-those concrete findings. Both native product sets remain exact, with six
-enumerated release caches. Debug-full helpers and fresh ASan/stackref builds
-are queued for separate review/activation. CPU extension/regen closure is in
-preparation. Fable's first-JIT review completed: amend; actual word capture is
-next before any source attempt. [RC execution](../rc-integration/status.md),
+As of **08:45 UTC**, corrected RC release-full session87194 and O1/debug
+session60637 are independently accepted:50,827 tests each, zero failures.
+Fresh ASan/stackref builds and19 borrowed-header syntax checks are accepted
+within their scopes. ASan's target harness succeeded3,827/0/77, while its
+host validator failed to account for standard multiprocessing package expansion;
+an additive reader is in independent review. The active full stackref15564
+has actual multiprocessing and embedding shutdown failures, blocking landing.
+CPU extension29576 failed private-ABI wheel admission after compilation/linking;
+its reviewed packaging correction is entering host implementation. Regeneration
+did not run. First JIT word capture6928 failed on normally absent feedback
+metadata before warmup; a narrow capture correction precedes any source attempt.
+All earlier failures remain preserved. Main remains
+the tracing runtime until RC qualification and integration finish.
+[RC execution](../rc-integration/status.md),
 [JIT disposition](../jit-first-native-tier/coordinator-disposition-20261101.md).
 
 The final page-map pilot has

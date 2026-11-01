@@ -1,0 +1,11 @@
+# RC borrowed-header syntax plan review
+
+2026-11-01. **ACCEPT the literal held syntax-only plan for root execution.** Exact plan SHA256: `c78771259eef8af39e56f843b70a4642236c005ce1c5bc63e8536988d6ea682c`; source dce654018d5ae16ffe5e772976d9ccc2c9d1e01a. This is preparation acceptance, not a compiler result.
+
+The command uses unchanged `boil/tools/check_unbuilt.sh --src W W/build/debug`, under a 600-second timeout with 30-second kill grace and four nonblocking nested locks: both machine slots, existing full-suite serialization and the debug build lock. It invokes no target or linker. Actual script expansion gives 19 GCC `-fsyntax-only -std=c11 -Wall` checks: two decimal variants, SSL/hashopenssl, nine SQLite files, bz2, four zstd files and UUID. Nonzero compiler status or warning/error output fails the aggregate row. The UUID stub is the existing declared syntax-only interface, not a claim to linked UUID support.
+
+The source, debug pyconfig, borrowed header roots and selected tools are explicitly bound. Independent read-only snapshot replay exactly reproduced all 9,984 file records, including 7,061 tracked paths and file modes/symlink identities, without running a compiler or metadata query. Borrowed mpdecimal/OpenSSL/SQLite/bz2/zstd headers do not establish ABI/link/import/runtime compatibility. `_tkinter`, `_dbm`, `_gdbm` and readline remain explicitly unsupported by this check.
+
+The initial concrete readiness issue was the absent owned TMPDIR scratch directory. The unchanged script does not immediately exit if `mktemp -d` fails, so that absence was a real prelaunch concern. Root created only the owned directory at 08:31; the same frozen plan and full read-only snapshot then passed, including its existence check. The first failed review probe is retained. Root must retain the existing scratch cleanup, actual timeout/result/log and pre/post input/source snapshots, and verify the 19 actual check results; missing or failed syntax invocations receive no credit.
+
+No new executor, mock suite, source/helper change, target, compiler or activation was introduced by this review. Evidence is under `build/rc-source-closure-review-20261101-v1/`. Root retains the grant and serialization decision; this receipt grants no broader source or native qualification.

@@ -141,3 +141,17 @@ Exact readback matches10,307 characters and two Mermaid blocks. Local snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v11.md`
 SHA256 `4af95042b6c4f2a8a1648eaf591076121a927723944d46cf617ca518a336b349`.
 It makes no passing full-suite, rendered-layout, integration or speedup claim.
+
+## Completed ordinary suites and remaining safety gates, revision12
+
+At08:24:36 UTC, guarded revision12 records terminal0 corrected release/debug
+full suites,50,827 tests each and zero failures, with actual-outcome reviews
+still pending. It records successful fresh safety builds as build/probe
+evidence only, the active reviewed CPU extension/regen batch and the remaining
+ASan16, stackref full and source-closure obligations. The JIT metadata probe is
+in preparation; no implementation, native entry or elapsed gain is claimed.
+
+Exact readback matches11,369 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v12.md`
+SHA256 `1a11d4e3aea73137056ebe04ce6af9aa72e6766973f65b8478f7e1cf3a973dc6`.
+No rendered-layout check, completed RC qualification or integration is claimed.

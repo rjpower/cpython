@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: IR/spans rejected; backend focused feedback accepted, elapsed preparation; page-map source active; hard GC cutoff set
+- State: IR/spans/Clang rejected; GCC selected; page-map focused native running; hard GC cutoff set
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -29,7 +29,7 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-As of **05:49 UTC**, no native job is active. GC parity remains unproven;
+As of **06:14 UTC**, page-map focused native session25200 is active. GC parity remains unproven;
 the hard cutoff is **15:14:44 UTC**, without extension. Maintained runtime is
 unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
 
@@ -54,8 +54,10 @@ unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
   accepts105 selected invocations:102 passes and three computed-tail-only skips;
   both tail builds execute the precise-handler case. Five actual stale children
   completed3,000 iterations, zero fallback/unpinned; all products/locks idle.
-  Fixed G/C/T elapsed helpers are being prepared through06:04, checkpoint05:55.
-  No compiler/backend speedup or selection is established.
+  Fixed elapsed then completed120 values and twelve origins. Independent
+  [root review](../h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md)
+  rejects Clang computed/tail on primary losses. GCC computed is fixed for the
+  remaining GC timebox; no extra samples or Clang upstream build.
 - **Pre-score profile rule:** the independently reviewed
   [addendum](../gc-parity-deadline/compiler-profile-addendum-20261101.json)
   preserves the original budget bytes, deadline and all29 decision. Select T
@@ -68,8 +70,12 @@ unchanged. Rejected sources, failed attempts and raw evidence remain preserved.
   and [conditional root review](../gc-nursery-old-work/reviews/maintained-object-map-port-design-20261101-root.md)
   authorize one new managed worktree from417, through06:16/checkpoint06:00.
   Preserve the classifier and collector policy; exclude47 nursery/cadence/ledger
-  and rejected spans. Require a real nonempty failed death-prefix, independent
-  mark/SHALLOW cleanup and fault-free recovery. No source/native acceptance yet.
+  and rejected spans. Exactdc2ec2 source now independently
+  [accepted](../gc-nursery-old-work/reviews/maintained-object-map-source-review-20261101-v1.md)
+  and exact helpers accepted. Root launched four-row focused native feedback
+  at06:13:43, deadline06:58:43 including cleanup. Actual nonempty failed
+  death-prefix, mark/SHALLOW cleanup and recovery remain mandatory; no native
+  or performance acceptance yet. Held elapsed preparation overlaps the build.
 - **RC fallback — focused behavior and canonical generation accepted:** d7df
   passed39 methods in both fresh images, zero skips.
   [Native outcome](rc-native-outcome-review-20261101-v1.md).

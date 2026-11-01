@@ -126,13 +126,18 @@ geometric means +16.21%/+13.74%. That supplies the first measured decision befor
 05:14; it supplies no GC parity credit and will not be composed into a candidate.
 The unchanged-runtime compiler/backend control completed all14 native rows,
 independently accepted:105 selected invocations,102 passes/3 declared skips,
-and five stale children/3,000 iterations. Its fixed G/C/T elapsed helpers are
-being prepared through06:04. No elapsed backend selection is established.
+and five stale children/3,000 iterations. Its fixed G/C/T elapsed campaign then
+completed120 values. Independent review rejects both Clang packages on primary
+losses. [GCC computed is selected](compiler-selection-20261101.json), fixed for
+the remaining timebox; no Clang upstream build or further backend samples.
 
-One new page/start-map inventory source attempt is authorized through06:16,
-checkpoint06:00, from maintained417 in its own worktree. The selective port
-excludes rejected spans and47 nursery/cadence/ledger changes and must close an
-actual nonempty failed-prefix rollback witness. It has no native acceptance.
+The new page/start-map port froze atdc2ec2 from maintained417, excluding rejected
+spans and47 nursery/cadence/ledger changes. Independent exact source review
+accepts focused native preparation, including its corrected real failed-prefix
+witness. Native helpers are being prepared through06:22, checkpoint06:14;
+actual mark/SHALLOW cleanup and recovery remain mandatory. Exact helpers passed
+review early; root activated native session25200 at06:13:43, deadline06:58:43
+inclusive. Four fresh build/test rows stop at first failure. No performance credit.
 
 The isolated RC-only closured7df12b passed all39 focused methods in both images,
 zero skips, with independent actual-outcome acceptance and idle cleanup. It is
@@ -140,4 +145,5 @@ a working fallback candidate, not a selected collector or fully qualified core.
 Canonical Autoconf reproduction then matched every source byte; ownership/modes
 were restored and independently verified, as were1,268 old product/evidence files.
 That obligation is closed without a new source commit or native rerun.
-No native job is active. No candidate has earned parity or integration.
+Page-map focused native session25200 is active. No candidate has earned parity
+or integration. Held elapsed and remaining RC qualification planning overlap.

@@ -1,9 +1,9 @@
 # Reduce old-object work during minor collection
 
-- State: source reviewed; feedback preparation held for integrated design review
-- Owner: restart_audit proposes; qualification_review_resumed reviews; coordinator selects
+- State: maintained-baseline source/helper accepted; focused native batch running
+- Owner: qualification_review_resumed implements; coroutine_design_review reviews; coordinator selects
 - Updated: 2026-11-01
-- Budget: source prototype 01:00–01:30 UTC, checkpoint 01:10; no native grant
+- Budget: native batch06:13:43–06:58:43 UTC inclusive, four rows, stop first failure
 - Depends on: [minimal nursery](../gc-nursery-minimum/status.md) and
   [coverage/reclamation result](../gc-nursery-coverage/status.md)
 
@@ -32,7 +32,22 @@ example is only 1.15% of total sampled coroutine CPU. No speedup is forecast.
 
 ## Now / next
 
-The isolated prototype froze at `c43c8374dbd56ca7862be49a31820ded6ac5a9d9`.
+The current selective port is `dc2ec2c059152933e8804f5f997e81370883460f`,
+in `build/worktrees/gc-object-map-maintained`, from maintained417. It excludes
+old nursery/cadence/ledger changes and rejected spans, preserving the production
+classifier. Exact independent [source acceptance](reviews/maintained-object-map-source-review-20261101-v1.md)
+permits focused native preparation. Five added methods contain seven actual
+child templates. The failed-prefix witness now counts outside allocator
+visitation and independently verifies nonempty death prefix, actual remaining
+marks/SHALLOW, unconditional cold cleanup, outer rollback and recovery. Those
+observations must still pass natively. GCC computed is the fixed profile.
+Exact [helpers accepted](reviews/maintained-object-map-helper-review-20261101-v1.md);
+root activated and launched session25200 at06:13:43. Debug build/test precedes
+release build/test;16 methods per image, one declared debug-only release skip.
+No retries, timing or broad qualification are authorized by this native batch.
+Held elapsed preparation proceeds in parallel, without target calls.
+
+The earlier isolated prototype froze at `c43c8374dbd56ca7862be49a31820ded6ac5a9d9`.
 Independent [source review](reviews/object-map-source-20261101-v1.md) accepted
 bounded native feedback preparation. A causal failed-inventory-prefix cleanup
 witness is still missing; its proposed source correction has not been granted

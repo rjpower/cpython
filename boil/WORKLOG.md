@@ -645,3 +645,21 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   organization diagrams. Latest exact readback/local snapshot match13,159
   characters. Parity unproven; no collector/backend adoption.
   [Publication](issues/fundamental-runtime-design/peer-plan-publication-20261101.md).
+- 2026-11-01 06:11 UTC: Independently recomputed the completed backend pilot's
+  120 values, twelve raw origins, 36 commands and265 artifact bindings. Reject
+  Clang computed/tail on primary losses; fix GCC computed for the remaining GC
+  timebox under the pre-score rule. No extra samples or Clang upstream build.
+  Initial audit label mismatch is preserved; no measured artifact changed.
+  [Decision](issues/h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md).
+- 2026-11-01 06:12 UTC: Exact maintained page-map sourcedc2ec2 passed independent
+  source review, including corrected nonrecursive failure-prefix observation.
+  Native helpers proceed through06:22/checkpoint06:14, reusing focused runners.
+  Real failure cleanup/recovery and elapsed usefulness remain unproved. RC
+  remaining-qualification planning runs in parallel; cutoff remains15:14:44.
+  [Source review](issues/gc-nursery-old-work/reviews/maintained-object-map-source-review-20261101-v1.md).
+- 2026-11-01 06:14 UTC: Exact object-map helpers passed independent review.
+  Root checked budget, fixed GCC selection and exclusive slots, then launched
+  four-row focused native session25200 at06:13:43, deadline06:58:43 inclusive.
+  First failure stops the batch. Held elapsed preparation overlaps compilation;
+  independent reviewer prepares actual-outcome review without target calls.
+  [Helper review](issues/gc-nursery-old-work/reviews/maintained-object-map-helper-review-20261101-v1.md).

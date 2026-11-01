@@ -15,10 +15,11 @@ comparison-region implementation was [rejected on measured elapsed](../issues/fu
 despite verified local work removal. Integrated storage was also
 [rejected on elapsed](../issues/fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md)
 after focused correctness passed. The compiler/backend control passed native
-feedback and is preparing its fixed elapsed pilot. A separate maintained-source
-page-map inventory port is active; RC has passed focused debug/release and
-canonical generation checks. The pre-score compiler-profile amendment requires
-fresh matched upstream if Clang is selected. The hard
+feedback, then its fixed elapsed pilot rejected Clang computed/tail. GCC computed
+is fixed for the remaining GC timebox under the pre-score selector. A separate
+maintained-source page-map inventory port passed exact source review and is
+preparing focused native feedback. RC has passed focused debug/release and
+canonical generation checks; remaining qualification is being planned. The hard
 15:14:44 UTC GC cutoff governs the remaining work. No rejected prototype is
 adopted merely because it implements this plan.
 

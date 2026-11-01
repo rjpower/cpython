@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "selected_utc": "2026-11-01T06:11:00+00:00",
+  "decision": "REJECT_C_AND_T_RETAIN_G",
+  "selected_profile": "G",
+  "compiler_backend": "GCC computed",
+  "fixed_for_remaining_gc_timebox": true,
+  "budget_sha256": "1bd70fa55b2a0fa26e9b6f27cf8d7cb720090e2286c78ebc6806e9678f9a3f0f",
+  "addendum_sha256": "0cc411e2a5dd45aba37f03a050d3a05d5abbd481d74a53a516880b975fbb0854",
+  "pilot_plan_sha256": "7020d466c26c57b3b741f175edf289c4f4486707f3cc5c9f06902d1f0393912a",
+  "independent_receipt": {
+    "path": "build/vm0-elapsed-root-review-20261101-v1/receipt.json",
+    "sha256": "ab4b2a347786790819e39b0b50a6c8e0bf99fb70d8b72360e6c1b2c5e44c77fe"
+  },
+  "review": "boil/issues/h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md",
+  "reference": "Original qualified upstream321925c92c9, matched GCC O3 computed, GIL enabled, JIT/tier2/PGO/LTO/debug/stats disabled",
+  "deadline_utc": "2026-11-01T15:14:44+00:00",
+  "all29_parity_credit": false,
+  "integration_authority": false
+}

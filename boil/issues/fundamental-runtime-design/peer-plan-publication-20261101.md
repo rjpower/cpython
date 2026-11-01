@@ -86,3 +86,15 @@ Local snapshot
 `build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v6.md`
 SHA256 `8589543c82f600f7d2c554110cb23757b1ea34d50a42cf714a5045ddb4dd7aba`.
 Source/readback checked; no rendered-layout verification is claimed.
+
+## Fixed GCC selection and accepted page-map source, revision 7
+
+At06:12:21 UTC, guarded revision7 records independent rejection of both Clang
+packages, GCC computed fixed for the remaining GC timebox, accepted exact
+page-map source and focused native preparation. RC remaining qualification
+planning proceeds in parallel. Original cutoff and all29 parity rule remain.
+
+Exact readback matches14,442 characters and two Mermaid blocks. Local snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v7.md`
+SHA256 `30b4238493fce45071ce27f3c6a7ae3d6c7284e912092e48055fbf14c9658e20`.
+No rendered-layout verification or runtime adoption is claimed.

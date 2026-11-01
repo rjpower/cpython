@@ -187,6 +187,15 @@ SHA256 `23faf95fce987663a85ed2a2953e1556a5f92dad26f9d78c3486e590749a965c`.
 No rendered-layout check, passing checker comparison, completed integration,
 RC parity or native JIT execution is claimed.
 
+Revision16, published10:45:25 UTC, records qualified candidate c4ac and actual
+local merge fb5dbc, the eight CRLF-only checkout corrections, and pending fresh
+main builds/42 integration methods per image. Exact readback matches16,693
+characters and two Mermaid blocks. Snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v16.md`
+SHA256 `6f3a2ad086ca58fa332c51234a785ba815eedc43b778c473d11540bacb759f4a`.
+Publication preceded final independent source-bridge acceptance; the linked
+RC issue records that acceptance. No rendered-layout verification is claimed.
+
 ## Adopted diagnostic scope and canonical Clinic correction, revision15
 
 At10:15:57 UTC, guarded revision15 records both failed upstream builds and

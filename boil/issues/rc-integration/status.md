@@ -1,6 +1,6 @@
 # Qualify and integrate the selected RC runtime
 
-- State: candidate qualified for ordinary supported scope; main integration pending
+- State: candidate qualified and merged locally; fresh main integration builds pending
 - Owner: coordinator
 - Source: `c4acfdde9d794345cd1f7001bcc7198d7d810f2d`, `boil/rc-successor`; canonical Clinic successor of8e132, clean
 - Worktree: `build/worktrees/rc-successor`
@@ -8,6 +8,19 @@
 - Profile: Linux/GIL, GCC computed interpreter, boxed-slot shapes
 
 ## Contract
+
+At10:44 UTC, main merge `fb5dbc0627a1` contains the qualified c4ac runtime.
+Its complete6,113-entry committed projection and working bytes now match the
+candidate. Eight declared DOS-text files needed LF-to-CRLF checkout correction;
+Git blobs and executable modes are unchanged. Protected user files, main prose
+and historical build products remain exact. The independent
+[source-bridge review](source-merge-review-20261101-v1.md) accepts fresh main
+validation. Two fresh main builds and42 integration methods per image remain. No main
+native pass or JIT implementation is claimed.
+
+The evidence below records qualification and earlier failures. Statements about
+pending gates or the old tracing checkout describe those historical stages;
+this paragraph and the active-work table govern current work.
 
 Restore one coherent RC/cyclic-collection model while retaining the register
 compiler/interpreter and eight-byte NaN-boxed frame representation. Do not
@@ -74,7 +87,7 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
 | Safety profiles | coordinator | ASan composite accepted; whole global StackRef profile withdrawn after independent review, failures retained. No further upstream repairs |
 | Extension and generation closure | coordinator | Closed through independently accepted actual v4 outcome; no further cohort |
-| Main integration | coordinator; coroutine_design_review; qualification_review_resumed | Commit own prose, preserve exact protected files, merge qualified c4ac locally, review actual source bridge, then fresh main release/debug builds and42 smokes each |
+| Main integration | coordinator; coroutine_design_review; restart_audit; qualification_review_resumed | Source merged; independently review exact actual bridge, freeze prose checkpoint/helper inputs, then fresh main release/debug builds and42 smokes each |
 | First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
 
 The earlier upstream control64610

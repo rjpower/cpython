@@ -1025,3 +1025,20 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Rootproceeds toreviewedlocalmerge afterownprosecheckpoint andprotectedsnapshot;
   actualmergedbridge/freshmain2builds+42smokes/image remain. No remotepush.
   [Outcome](issues/rc-integration/packaging-outcome-review-20261101-v4.md).
+- 2026-11-01 10:47 UTC: Local merge fb5dbc (parents4106/c4ac) restored qualified
+  reference-counting runtime. Committed6113-entry projection passed; initial
+  working-byte check failed on eight declared DOS-text files. Narrow reviewed
+  correction copied qualified CRLF bytes, preserving main modes/blobs; index
+  refresh attempts/failed intermediate audit retained. Final root4945ead2 and
+  independent60a04365/af09f863 accept exact runtime/working bytes, allindexentries,
+  protected5/prose/WORKLOG and historicalbuilds. No native invocation/mainpass.
+  [Source review](issues/rc-integration/source-merge-review-20261101-v1.md).
+- 2026-11-01 10:47 UTC: Single held landingclosure f06a7d10 independently ACCEPT
+  df901e23/c3846129 after sixhostcontrols. Final main/source/tool bindings and
+  independentfinalreview precede root3600-second activation: freshreleasebuild,
+  42methods, freshdebugbuild,42methods. No broad rerun/collectorselector/JITgrant.
+  Loomrev16 exactreadback16,693chars/twoMermaids snapshot6f3a2ad086ca records
+  candidatequalification/localmerge and pendingfreshmainvalidation.
+- 2026-11-01 10:46 UTC: Timestamp clarification: the preceding two entries use
+  the planned10:47 checkpoint label; their actual append completed10:46:02 UTC.
+  Underlying source/audit/publication receipts retain exact actual times.

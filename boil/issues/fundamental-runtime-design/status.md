@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: GC rejected early; RC selected, qualification and first JIT design active
+- State: GC rejected early; RC candidate qualified and merged; fresh integration builds pending
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -9,8 +9,8 @@
 
 **GC work closed early at 07:09 UTC.** The
 [collector decision](../gc-parity-deadline/decision-20261101.md) selects RC
-pending [qualification](../rc-integration/status.md). No tracing-GC grants
-remain. The primary checkout still has the tracing runtime; no collector switch
+after [qualification](../rc-integration/status.md). No tracing-GC grants
+remain. The primary checkout now has RC source; fresh integration images remain. No collector switch
 or performance parity is claimed. The earlier contract below is historical.
 
 The user's original hard GC cutoff was **2026-11-01 15:14:44 UTC**. The
@@ -34,6 +34,18 @@ separate evidence. The review must rank a coherent replacement direction and
 falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
+
+At10:44 UTC, candidate c4ac is independently qualified for the declared ordinary
+Linux/GIL/GCC scope. Packaging v4 passed all five rows, including regeneration,
+both packaging suites, foreign-wheel rejection and CPU extension/refcount checks.
+Local merge fb5dbc contains the exact candidate runtime tree. Eight working-file
+line-ending differences were corrected to qualified bytes without changing Git
+blobs or executable modes. The actual source/protected-file/historical-build
+bridge is independently accepted for fresh validation. Two fresh main builds and42 integration
+methods per image follow; JIT implementation remains ungranted.
+
+The snapshots below retain earlier states and are superseded by this paragraph
+and the current [RC issue](../rc-integration/status.md).
 
 As of **10:17 UTC**, corrected RC release-full session87194 and O1/debug
 session60637 are independently accepted:50,827 tests each, zero failures.

@@ -4,8 +4,8 @@ Each issue's `status.md` owns its state. Experiments have a hypothesis, concrete
 budget and integrate/reject decision; see the [template](_template/status.md).
 
 **GC work closed early at 07:09 UTC on 2026-11-01.** All measured candidates
-were rejected; select the reference-counting successor and qualify it before
-integration. No full29 GC or RC parity claim. See the
+were rejected. The reference-counting successor is qualified and merged locally;
+fresh main builds and integration checks remain. No full29 GC or RC parity claim. See the
 [decision](gc-parity-deadline/decision-20261101.md) and
 [active RC integration issue](rc-integration/status.md).
 
@@ -15,7 +15,7 @@ integration. No full29 GC or RC parity claim. See the
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC qualification | [Selected runtime](rc-integration/status.md) | coordinator; restart_audit; qualification_review_resumed | Ordinary full/scoped ASan accepted. Global checker profile withdrawn, failures retained. Packaging first regeneration failed on one generated header/metadata drift; correction review precedes retry and integration |
+| RC integration | [Selected runtime](rc-integration/status.md) | coordinator; restart_audit; qualification_review_resumed; coroutine_design_review | Candidate qualification accepted, source merged locally. Verify actual source/protected-file bridge, then fresh release/debug builds and42 integration methods per image |
 | First native JIT design | [Source-audited peer disposition](jit-first-native-tier/coordinator-disposition-20261101-v2.md) | coordinator | Actual14 words/64 calls accepted; one seven-site transactional candidate selected. Second Fable review amended after source audit; no implementation yet |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |

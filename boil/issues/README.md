@@ -15,9 +15,9 @@ and switch to the prepared reference-counting successor. See the
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Current site captured and accepted; region source prototype 03:22–04:07 UTC |
 | RC fallback preparation, isolated source | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator; restart_audit after span review | Exact historical core restored on rc-successor; close RC-only policy by 05:07 UTC; no native/promotion |
-| Independent source review | [Integrated storage](fundamental-runtime-design/stable-storage-mechanism-plan.md) | restart_audit | Review frozen span ownership and focused tests by 03:55 UTC; checkpoint 03:42 |
+| Integrated-storage source review, accepted | [Frozen-source review](fundamental-runtime-design/span-source-review-20261101-v1.md) | restart_audit | Bounded native feedback only; author moves to isolated RC closure |
 | Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Source froze early7f982b3; review active; four-row native helper preparation by 03:52 UTC |
+| GC / allocator | [Integrated storage](fundamental-runtime-design/status.md) | qualification_review_resumed | Source 7f982b3 accepted for feedback; four-row native helper preparation by 03:52 UTC |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline

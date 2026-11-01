@@ -490,3 +490,9 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   tests remain unexecuted. Independent source review and minimal fresh
   debug/O3 feedback preparation continue, helper ceiling03:52 UTC.
   [State](issues/fundamental-runtime-design/status.md).
+- 2026-11-01: Independent source review accepted the exact frozen stable-span
+  candidate for bounded fresh-image correctness feedback. Root verified the
+  clean commit, capsule artifacts and review receipt; no native evidence or
+  performance acceptance follows. RC-only fallback closure proceeds in its
+  separate worktree while the GC owner prepares four focused feedback rows.
+  [Review](issues/fundamental-runtime-design/span-source-review-20261101-v1.md).

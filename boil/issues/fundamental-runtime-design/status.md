@@ -53,8 +53,11 @@ The small source capsule sealed at 03:39:07, SHA256
 `d5f1ce8ffddc598fb5d22622f2936a0c44b1a69a5bef874e60a6a310953aac2b`.
 It binds thirteen changed files, twenty focused test methods and three child
 templates. Host root checks and 21 ordinary regression methods passed, with
-one existing expected failure. Independent frozen-source review is active;
-native helper preparation ends **03:52 UTC**, checkpoint **03:45**. Four
+one existing expected failure. Independent frozen-source
+[review accepted bounded fresh-image correctness feedback](span-source-review-20261101-v1.md)
+at 03:40 UTC; no remaining concrete source blocker. Root rehashed the source
+capsule, all bound artifacts and the independent review/receipt against the
+clean actual commit. Native helper preparation ends **03:52 UTC**, checkpoint **03:45**. Four
 proposed rows build/test fresh GCC O1/debug and O3 products, including six
 existing root/lifecycle controls. No compiler, target or timing has run.
 The author delivered the 03:21 ownership checkpoint early at 03:19; scoped

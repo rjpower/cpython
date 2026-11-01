@@ -1,6 +1,6 @@
 # Fundamental runtime design review
 
-- State: GC rejected early; RC candidate qualified and merged; fresh integration builds pending
+- State: GC rejected early; RC integrated and accepted; bounded first JIT source attempt active
 - Updated: 2026-11-01
 - Owner: coordinator; coroutine_design_review (IR/VM), restart_audit (independent review),
   qualification_review_resumed (integrated storage)
@@ -10,7 +10,7 @@
 **GC work closed early at 07:09 UTC.** The
 [collector decision](../gc-parity-deadline/decision-20261101.md) selects RC
 after [qualification](../rc-integration/status.md). No tracing-GC grants
-remain. The primary checkout now has RC source; fresh integration images remain. No collector switch
+remain. The primary checkout and accepted fresh images now use RC. No collector switch
 or performance parity is claimed. The earlier contract below is historical.
 
 The user's original hard GC cutoff was **2026-11-01 15:14:44 UTC**. The
@@ -34,6 +34,14 @@ separate evidence. The review must rank a coherent replacement direction and
 falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
+
+At 11:03 UTC, fresh main RC integration is independently accepted: release and
+O1/debug each passed 42 methods with zero skips; source, own-image origins,
+products, protected files and cleanup are verified. No RC parity is claimed.
+The first bounded JIT source attempt runs 11:03:54–12:33:54 in an isolated
+worktree, with parallel scalar-plan/lifetime and entry/observer/test owners.
+Critical source review precedes finite native feedback; C contract precedes
+native replacement and fixed elapsed precedes broad qualification.
 
 At10:44 UTC, candidate c4ac is independently qualified for the declared ordinary
 Linux/GIL/GCC scope. Packaging v4 passed all five rows, including regeneration,

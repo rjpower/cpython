@@ -1,0 +1,53 @@
+{
+  "admission_lifetime_checkpoint_utc": "2026-11-01T11:33:54.295926+00:00",
+  "branch": "boil/jit-prefix-stage1",
+  "collector_work_authorized": false,
+  "compiler_execution_authorized": false,
+  "decision": "AUTHORIZE_ONE_BOUNDED_JIT_SOURCE_ATTEMPT",
+  "emitter_checkpoint_utc": "2026-11-01T12:03:54.295926+00:00",
+  "fixed_elapsed": {
+    "extra_samples_after_loss": false,
+    "leave_one_value_sensitivity": true,
+    "primary": "spectral_norm",
+    "primary_and_aggregate_must_improve_each_round": true,
+    "rounds": 2,
+    "shorter_region_rescue": false,
+    "values_per_workload_per_arm": 5,
+    "workloads": [
+      "spectral_norm",
+      "coroutines",
+      "richards",
+      "unpack_sequence"
+    ]
+  },
+  "host_generator_execution_authorized": true,
+  "interfaces": "Allocation-free bounded Probe; entry guards; NoteEligible/Promote only after complete eligibility; guards repeat after cold work",
+  "main_runtime_edits_authorized": false,
+  "native_execution_authorized": false,
+  "owners": {
+    "entry_observers_tests_generated": "coroutine_design_review",
+    "scalar_plan_leaf_lifetime": "restart_audit"
+  },
+  "permanent_C_native_option": false,
+  "references": {
+    "boil/issues/jit-first-native-tier/coordinator-disposition-20261101-v2.md": "fbf0aed7401fe085c0a99387497d5765aa61823ea2ace76c5b3af89468c01e87",
+    "boil/issues/jit-first-native-tier/word-selected-candidate-20261101-v2.md": "9658f8c32be15b05756ffb94349a19c6cdca5f22806a4dae7c19c0a54bd203d1",
+    "boil/issues/rc-integration/integration-decision-20261101-v1.json": "2df68fdeea9d1c4aff2e8e19d803acccba2f7ab79189a55be8f836c47e53d25d",
+    "build/jit-c-stage-handoff-20261101.md": "b95901538cdb728f21be76dde4fafbc351f973e9dc34c6342008329c62249160"
+  },
+  "reviewer": "qualification_review_resumed",
+  "shared_worktree_commits_authorized": false,
+  "source_base": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "source_deadline_utc": "2026-11-01T12:33:54.295926+00:00",
+  "source_minutes": 90,
+  "stages": [
+    "C scalar contract source checkpoint",
+    "review and finite focused behavior feedback",
+    "replace scalar runner with native encoder",
+    "review and finite focused behavior feedback",
+    "fixed elapsed comparison then accept/reject"
+  ],
+  "start_utc": "2026-11-01T11:03:54.295926+00:00",
+  "utc": "2026-11-01T11:03:54.295926+00:00",
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1"
+}

@@ -7,11 +7,21 @@ roughly 2× on simple arithmetic is guidance, not a numerical gate.
 
 **Current decision (2026-11-01):** stop tracing-GC optimization and adopt the
 [reference-counting successor](issues/rc-integration/status.md). Candidate
-qualification passed and its source is merged locally. Fresh main release/debug
-builds and integration checks remain pending. Register IR,
-eight-byte NaN-boxed frame values and boxed-slot shapes are retained. Later
+qualification, local integration and fresh release/debug checks are accepted.
+Register IR, eight-byte NaN-boxed frame values and boxed-slot shapes are retained. Later
 core-wide inline heap values and their ABI are deferred. No collector switch
 will be added. [Decision and evidence](issues/gc-parity-deadline/decision-20261101.md).
+
+Current images, built from `eba351fee7d`:
+
+```sh
+./build/rc-integrated-release-20261101/python your_script.py
+./build/rc-integrated-debug-20261101/python your_script.py
+```
+
+These Linux/GIL/GCC builds retain the private `boilrc1` ABI and the documented
+optional-module limits. Global `Py_STACKREF_DEBUG` is unsupported and unvalidated.
+The first JIT increment is an isolated experiment; these images contain no new JIT.
 
 | Need | Start here |
 | --- | --- |

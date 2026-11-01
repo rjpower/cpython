@@ -1,6 +1,6 @@
 # Qualify and integrate the selected RC runtime
 
-- State: candidate qualified and merged locally; fresh main integration builds pending
+- State: integrated and accepted for the declared ordinary supported scope
 - Owner: coordinator
 - Source: `c4acfdde9d794345cd1f7001bcc7198d7d810f2d`, `boil/rc-successor`; canonical Clinic successor of8e132, clean
 - Worktree: `build/worktrees/rc-successor`
@@ -8,6 +8,18 @@
 - Profile: Linux/GIL, GCC computed interpreter, boxed-slot shapes
 
 ## Contract
+
+**Accepted at 11:03 UTC:** [independent actual main outcome](main-outcome-review-20261101-v1.md)
+and [coordinator decision](integration-decision-20261101-v1.json) close this
+integration. Fresh main release/debug images were built at `eba351fee7d` in
+`build/rc-integrated-release-20261101` and `build/rc-integrated-debug-20261101`.
+Each passed 42 distinct methods across eight modules with zero skips. All four
+rows and verifications passed; supervisor 9886 returned 0, observed at 10:58:57.
+Cleanup confirmed idle executables and removed the owned empty cache. Both
+builds retain ten unavailable optional modules and disabled `_sqlite3`, matching
+historical scope; no broader availability or RC performance parity is claimed.
+The new images remain identified by their actual build commit after subsequent
+documentation-only commits. JIT source work now proceeds in a separate worktree.
 
 At10:44 UTC, main merge `fb5dbc0627a1` contains the qualified c4ac runtime.
 Its complete6,113-entry committed projection and working bytes now match the
@@ -87,8 +99,8 @@ Existing `Py_DEBUG` images do not imply `Py_STACKREF_DEBUG` qualification.
 | Ordinary full suites | qualification_review_resumed | Independently accepted both corrected full suites; no further ordinary full rerun without affected source changes |
 | Safety profiles | coordinator | ASan composite accepted; whole global StackRef profile withdrawn after independent review, failures retained. No further upstream repairs |
 | Extension and generation closure | coordinator | Closed through independently accepted actual v4 outcome; no further cohort |
-| Main integration | coordinator; coroutine_design_review; restart_audit; qualification_review_resumed | Source merged; independently review exact actual bridge, freeze prose checkpoint/helper inputs, then fresh main release/debug builds and42 smokes each |
-| First native JIT design | coordinator | Corrected metadata capture accepted; actual seven-site candidate and second direct Fable review have a source-audited disposition. No implementation grant |
+| Main integration | coordinator | Closed by accepted fresh builds and 42-method smokes per image; retain declared limitations |
+| First native JIT increment | coordinator; restart_audit; coroutine_design_review; qualification_review_resumed | Isolated bounded source attempt: C scalar contract first, then native replacement, focused feedback and fixed elapsed decision |
 
 The earlier upstream control64610
 returned1, observed09:43:39, within its fixed09:42:16-10:12:16 window. Its exact

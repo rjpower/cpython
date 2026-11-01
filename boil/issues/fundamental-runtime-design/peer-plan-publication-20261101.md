@@ -196,6 +196,15 @@ SHA256 `6f3a2ad086ca58fa332c51234a785ba815eedc43b778c473d11540bacb759f4a`.
 Publication preceded final independent source-bridge acceptance; the linked
 RC issue records that acceptance. No rendered-layout verification is claimed.
 
+Revision17, published11:05:38 UTC, records accepted main RC integration,
+fresh42-method smokes per image, retained optional-module/global-checker limits,
+and the bounded parallel JIT source attempt. Earlier qualification snapshots
+are consolidated into accepted scopes and preserved failure provenance.
+Exact readback matches12,793 characters and two Mermaid blocks. Snapshot
+`build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v17.md`
+SHA256 `1bbe69c0b4e753b17f89f77af0f4a78484874298477bb003bbd2a737f04debbf`.
+No rendered-layout check, JIT execution or performance improvement is claimed.
+
 ## Adopted diagnostic scope and canonical Clinic correction, revision15
 
 At10:15:57 UTC, guarded revision15 records both failed upstream builds and

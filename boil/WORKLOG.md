@@ -1042,3 +1042,21 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
 - 2026-11-01 10:46 UTC: Timestamp clarification: the preceding two entries use
   the planned10:47 checkpoint label; their actual append completed10:46:02 UTC.
   Underlying source/audit/publication receipts retain exact actual times.
+- 2026-11-01 11:06:18 UTC: Fresh main RC integration independently ACCEPT9e5b402f/d230178b;
+  root decision2df68fde adopts sourceeba351. Activation972db901 at10:55:15,
+  native9886 terminal0observed10:58:57; release/debug builds and42methods each
+  allpassed/zero skips. Reviewer checked7,283completionartifacts/7,241inputs,
+  584products/image and18startuporigins/image. Tenmissing optionalmodules and
+  disabledsqlite3 matchhistoricalscope; globalStackRefunsupported/unresolved.
+  Cleanup10:59:18 allnativeidle/all9locksavailable/ownedemptycache removed.
+  No RCparity/JITperformance claim. Newimagepaths inREADME; historicalbuilds
+  preserved. [Outcome](issues/rc-integration/main-outcome-review-20261101-v1.md).
+- 2026-11-01 11:06:18 UTC: JIT sourcegrante5d4a380 authorizes isolatedboil/jit-prefix-stage1,
+  baseeba351,11:03:54–12:33:54 with30/60minute checkpoints. ParallelAplan/Cleaf/
+  execlifetime andBentry/observer/tests/generated owners; independentearlyreview.
+  Reviewedtwo-phaseProbe/fullguards/NoteEligible promotion preserves64eligible
+  entries; guardsrepeat aftercoldwork. Ccontract thennative replacement, no
+  permanentC/nativeoption; rootnativefeedback grantstillrequired. Fixedelapsed
+  unchanged; noextrasamples/shorterregionrescue. Loomrev17 exact12,793chars/
+  twoMermaids snapshot1bbe69c0 recordsadoption/limits/newsourceattempt.
+  [Source grant](issues/jit-first-native-tier/source-grant-20261101-v1.json).

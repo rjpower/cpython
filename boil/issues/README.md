@@ -5,7 +5,7 @@ budget and integrate/reject decision; see the [template](_template/status.md).
 
 **GC work closed early at 07:09 UTC on 2026-11-01.** All measured candidates
 were rejected. The reference-counting successor is qualified and merged locally;
-fresh main builds and integration checks remain. No full29 GC or RC parity claim. See the
+fresh main builds and integration checks are accepted. No full29 GC or RC parity claim. See the
 [decision](gc-parity-deadline/decision-20261101.md) and
 [active RC integration issue](rc-integration/status.md).
 
@@ -15,8 +15,8 @@ fresh main builds and integration checks remain. No full29 GC or RC parity claim
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
 | Compiler / IR | [Rejected region result](fundamental-runtime-design/region-elapsed-outcome-review-20261101-v1.md) | coordinator | Closed on measured loss; no new local IR source attempt |
-| RC integration | [Selected runtime](rc-integration/status.md) | coordinator; restart_audit; qualification_review_resumed; coroutine_design_review | Candidate qualification accepted, source merged locally. Verify actual source/protected-file bridge, then fresh release/debug builds and42 integration methods per image |
-| First native JIT design | [Source-audited peer disposition](jit-first-native-tier/coordinator-disposition-20261101-v2.md) | coordinator | Actual14 words/64 calls accepted; one seven-site transactional candidate selected. Second Fable review amended after source audit; no implementation yet |
+| RC integration | [Accepted runtime](rc-integration/status.md) | coordinator | Closed: fresh release/debug builds and 42 methods each accepted, zero skips; historical limits retained |
+| First native JIT increment | [Bounded source grant](jit-first-native-tier/source-grant-20261101-v1.json) | coordinator; restart_audit; coroutine_design_review; qualification_review_resumed | Parallel scalar-plan/lifetime and entry/observer/test implementation; C contract before native replacement, review before execution and fixed elapsed before broad qualification |
 | GC / inventory | [Rejected fixed pilot](gc-nursery-old-work/status.md) | coordinator | Closed; no further tracing-GC grants |
 | Early elapsed / RSS | [Rejected storage result](fundamental-runtime-design/span-elapsed-outcome-review-20261101-v6.md) | coordinator | Closed on 51% coroutine loss; no additional samples or expensive qualification |
 | Interpreter / backend | [Measured decision](h1-tail-dispatch/reviews/elapsed-outcome-20261101-v1-root.md) | coordinator | Closed: reject Clang computed/tail; GCC computed fixed for GC timebox |

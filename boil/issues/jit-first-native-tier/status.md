@@ -1,5 +1,24 @@
 # First native tier
 
+**Source attempt active, 11:03:54–12:33:54 UTC.** Main RC integration is
+[accepted](../rc-integration/main-outcome-review-20261101-v1.md). The
+[source grant](source-grant-20261101-v1.json) binds isolated worktree
+`build/worktrees/jit-prefix-stage1`, branch `boil/jit-prefix-stage1`, base
+`eba351fee7d`. Restart owns the scalar decoder/C leaf/exec lifetime/shared
+header/build entries; coroutine owns entry/observers/tests/generated products.
+Qualification reviewer checks critical boundaries independently. Root alone
+grants native feedback after source freeze and review; none is granted yet.
+
+The reviewed interface separates allocation-free bounded probing, full frame/
+input/observer eligibility, and 64-entry counting/promotion. Guards repeat after
+cold work; construction is non-reentrant. First establish the C scalar contract,
+then replace its runner with native encoding. Keep no permanent C/native option.
+The original fixed two-round/five-value/four-workload decision is unchanged.
+Thirty/sixty-minute checkpoints require admission/lifetime and emitter closure;
+an incomplete patch stops at the source ceiling. No shorter-region rescue or
+extra samples follow elapsed loss. Earlier design snapshots below retain their
+historical no-grant state; this paragraph and the JSON govern current authority.
+
 2026-11-01: actual IR words accepted against selected RC source
 `dce654018d5ae16ffe5e772976d9ccc2c9d1e01a`; no JIT implementation yet.
 

@@ -29,127 +29,59 @@ falsifiable increments rather than accumulate permanent runtime options.
 
 ## Execution state
 
-No native job is running. Shared baseline tool session **20126** returned zero;
-all ten rows completed and verified at 02:44:35.528 UTC, before the activated
-03:26:08.977 ceiling. Final cleanup verified no live target PIDs. Independent
-[outcome review](shared-baseline-outcome-review-20261101-v1.md) accepts the
-capture, not runtime qualification or performance. Exact activation, per-row
-launch/result/cleanup and terminal evidence remain under
-`build/worktrees/vm-compiler-backend/build/shared-attribution-gcc-stats-v1`.
-The unused window is not authority for another invocation or retry.
+As of **04:17 UTC**, no native batch is active. Stable-span v3 session
+**35054 returned 1** at 04:14:56 before selected cases. Hard GC cutoff remains 15:14:44.
+No prototype has earned performance acceptance or integration.
 
-Integrated-storage source work runs **02:51–04:21 UTC**, mandatory ownership/
-route/lookup checkpoint **03:21**, further progress **03:51**. Worktree:
-`build/worktrees/gc-integrated-spans`, branch `boil/gc-integrated-spans`, actual
-base `5ece3dc211a`. The exact [plan](stable-storage-mechanism-plan.md) and
-[independent review](stable-storage-mechanism-review-20261101.md) govern the
-attempt. Preserve ordinary deallocators/lifecycle records and collection policy;
-close all ownership/wrapper/debug/quarantine/rollback paths. Host audits and
-test source are allowed; compiler, target, native tests and timing are held.
-At the ceiling, freeze a review candidate or explicit partial patch.
-Source froze early at **03:38:25 UTC**, clean commit
-`7f982b3ecb6ae8e7f1a5c0433daa9acde870b7e4` on `boil/gc-integrated-spans`.
-The small source capsule sealed at 03:39:07, SHA256
-`d5f1ce8ffddc598fb5d22622f2936a0c44b1a69a5bef874e60a6a310953aac2b`.
-It binds thirteen changed files, twenty focused test methods and three child
-templates. Host root checks and 21 ordinary regression methods passed, with
-one existing expected failure. Independent frozen-source
-[review accepted bounded fresh-image correctness feedback](span-source-review-20261101-v1.md)
-at 03:40 UTC; no remaining concrete source blocker. Root rehashed the source
-capsule, all bound artifacts and the independent review/receipt against the
-clean actual commit. Native helper preparation ends **03:52 UTC**, checkpoint **03:45**. Four
-proposed rows build/test fresh GCC O1/debug and O3 products, including six
-existing root/lifecycle controls. The
-[helper review](span-native-helper-review-20261101-v1.md) passed, including root's
-actual launcher import smoke with process creation forbidden. Root activated
-the four-row batch at **03:45:59.926 UTC**, inclusive ceiling **04:30:59.926**,
-tool session **83685**. Actual GCC compilation is observed; tests and final
-build outcomes remain pending. Each test row selects 26 IDs; release permits
-only the four declared debug-only skips. No elapsed credit is available.
-The batch then stopped at **03:47:48 UTC**, tool **83685 returned 1**:
-debug build verified, but the new C-API construction fixture aborted at an
-inherited frame-copy assertion. Root/author confirmed pinned upstream docs
-declare that legacy constructor impossible to use. The
-[first native outcome](span-native-outcome-20261101-v1.md) preserves the failure
-and idle cleanup; release and elapsed rows never ran. A bounded test-helper
-correction through **04:03 UTC** replaces it with a supported native call,
-retaining admission/lifetime assertions. No production assertion is weakened.
-The supported-call correction froze early at clean `67190a9d81c` and passed
-[independent correction review](span-constructor-review-20261101-v2.md).
-The [v2 helper review](span-native-helper-review-20261101-v2.md) verifies fresh
-debug-v2/release-v2 paths and the exact one-case rename. Root activated a new
-four-row batch **03:57:48.078–04:42:48.078 UTC**, tool **60010**; compilation
-is live and no v2 native outcome is credited. Original v1 source/products and
-failures remain intact. Quiet helper preparation resumes under a new host-only
-grant through **04:13 UTC**, checkpoint **04:05**, pending v2 release products.
-The author delivered the 03:21 ownership checkpoint early at 03:19; scoped
-route/wrapper decline, indexed ownership, inventory/rollback and retirement
-connections have source checks, not native proof. The author targets a 03:40
-freeze if focused test-source closure is ready; 04:21 remains the ceiling.
+- **Integrated storage:** frozen source `34deae3b29260aea286b0c4017b963e092a2db62`
+  in `build/worktrees/gc-integrated-spans`. Initial source and the supported-call
+  and forced-manual-collection witness corrections passed independent review.
+  The [v3 helper review](span-native-helper-review-20261101-v3.md) binds fresh
+  debug-v3/release-v3 products, the unchanged 26-case selection and four exact
+  release skips. Four rows build/test debug then release, stopping on first
+  failure. V1 aborted in an unusable legacy C-API fixture; v2 built successfully
+  but exposed a disabled-GC witness mistake. Both failures remain preserved:
+  [v1 outcome](span-native-outcome-20261101-v1.md),
+  [v2 outcome](span-native-outcome-20261101-v2.md). V3 failed to import the test
+  extension because the new manual-collection entry is internal to the core:
+  [v3 outcome](span-native-outcome-20261101-v3.md). Narrow correction
+  `7d10d5bfd33cb7302df8008065c4dd637e453478` moves the witness body behind an
+  existing-style exported core test hook. Independent source review and
+  fresh v4 helper preparation follow; no selected case ran in v3.
+- **Early elapsed/RSS:** host-only preparation through **04:40**, checkpoint
+  **04:25**, pending successful v3 products and outcome acceptance. Use the
+  fixed three-arm/four-workload/two-round protocol; occupancy vectors are
+  unavailable. No benchmark launch or additional executor is authorized yet.
+- **Interpreter regions:** frozen clean source `40498d1e0d3773ac2a1180eb8cac7fd04831028d`
+  passed [independent source review](region-source-review-20261101-v1.md).
+  Seven generated products reproduce; 78 ordinary host methods and one existing
+  expected failure; twelve new native methods remain unexecuted. V1 helper
+  review passed, but root's preflight mistakenly rejected an empty build
+  directory and then invoked the supervisor without activation. The supervisor
+  correctly refused; no compiler, gate or target ran. Preserve that failed
+  preactivation evidence. Minimal host-only v2 rebinding runs through **04:25**,
+  checkpoint **04:18**; no source change or native launch is granted by it.
+- **RC successor:** coherent restoration `1440f8c6fd1`, RC-only closure
+  `d7df12b1d81722927e71d9734c70eeafdccfee73`, isolated in
+  `build/worktrees/rc-successor`. [Independent source review](rc-source-review-20261101-v1.md)
+  accepts first native feedback: exact ownership projection and artifacts match,
+  both generated products reproduce, 26 generator methods pass. Source review
+  is not native qualification. Host-only feedback preparation runs through
+  **04:40**, checkpoint **04:25**; historical verifier APIs only, fixed RC policy,
+  fresh products. Canonical autoconf and broader qualification remain pending.
 
-Interpreter site-capture preparation/review passed, then root activated v1 at
-03:08:36.674 UTC with a 03:18:36.674 ceiling. Tool session **73805** returned
-**1 before any gate or target launch**: the frozen supervisor's transitive
-`feedback_inputs` import selected a same-named baseline `build_once` from the
-composed host path. Its variant assertion rejected `launch`. The readiness
-review missed that actual import-resolution path. No target or workload call
-occurred, and no observation credit follows. Root acquired the actual image
-lock at 03:10:40 and verified no live target PID. V1 activation/start/failure
-and root disposition remain untouched in
-`build/region-site-attribution-20261101-v1`; its unused window grants no retry.
+The shared stats baseline completed and passed
+[independent outcome review](shared-baseline-outcome-review-20261101-v1.md).
+The current Fibonacci site capture completed at 03:17:49 and passed
+[outcome review](region-site-outcome-review-20261101-v2.md): words4/5,
+971,140 integer-compare/false-branch pairs over four loops, 27 actual collections,
+zero fallback/unpinned rows. This nominates the family; it proves neither
+compiler admission nor elapsed benefit. Original failed capture v1 is retained.
 
-The repair froze early and passed
-[independent review](region-site-import-repair-review-20261101-v2.md), including
-actual launcher imports with cold and stale dependency caches and target
-creation forbidden. Root activated v2 at 03:17:38.671 UTC. Tool session
-**95945 returned zero**, completion 03:17:49.357, with all 44 artifacts and
-idle cleanup verified. Root's independent
-[outcome review](region-site-outcome-review-20261101-v2.md) accepts the current
-site: Fibonacci words4/5, integer comparison → forward boolean branch,
-temporary1, 971,140 pairs over four counted loops. Actual collections27,
-fallback0/unpinned0. V1 remains failed and untouched; no retry credit is invented.
-
-Interpreter-region SOURCE work runs **03:22–04:07 UTC**, checkpoints **03:37**
-and **03:52**, freeze earlier when ready. Worktree
-`build/worktrees/interpreter-regions`, branch `boil/interpreter-regions`, verified
-clean base `5c24163405d`. Implement the reviewed reusable RegionPlan/generator
-composition and one comparison/branch consumer; preserve original states,
-ordinary entries and all root/observer/error/breaker contracts. Host checks and
-test source are allowed; compiler/target/native/timing remain held. Current
-site evidence does not prove virtual single-use/exception liveness or a win.
-Source then froze early at clean **40498d1e0d3773ac2a1180eb8cac7fd04831028d**,
-with seven generated products reproducing and all 287 preexisting handler IDs
-and bodies unchanged. Host checks passed 78 ordinary methods plus one existing
-expected failure; twelve new native methods remain unexecuted. Capsule
-`build/interpreter-region-source/candidate.json` SHA256
-`543a8e9c9d100835131cbcd84e7b90858f0fdbf41d55702932cac29ca21a4efa`.
-Independent source review runs through **04:12 UTC**, checkpoint **04:05**.
-Host-only four-row native helper preparation also ends **04:12**; no native
-activation or performance acceptance follows from the source freeze.
-
-RC fallback preparation froze early before 03:32 UTC. Root accepted the
-[coherent restoration route](rc-fallback-decision-20261101.md) after inspecting
-actual historical ownership/cyclic-GC/configuration source. Isolated restoration
-**1440f8c6fd1** then restored the coherent core; RC-only closure froze early at
-clean **d7df12b1d81722927e71d9734c70eeafdccfee73**. The owner selector/live
-collector were removed and the extension/cache namespace isolated. Existing
-26 generator methods and source projection checks passed; current-machine
-buildability, native RC behavior and canonical autoconf remain unproved.
-Root reviews the frozen RC source while its author independently reviews the
-IR candidate. The hard-cutoff fallback remains user-authorized; source
-preparation does not promote the successor or change the maintained runtime.
-
-Retention-oracle v3 helpers passed root host review but remain held, with
-readiness flags false and no activation. VM0 build helpers and
-the structural-GC failed-prefix witness preparation are suspended at their saved
-checkpoints. The object-map source prototype has passed bounded source review;
-it has no native or performance acceptance.
-
-The old nursery-adoption dispatch's 04:18:11 UTC integration boundary is
-unchanged; that dispatch is deferred. The separately scoped shared baseline
-has its own activation-relative 45-minute inclusive window. Research does not
-grant a new build, timing campaign, source correction or extension to an expired task.
-Any resumed task receives an explicit remaining scope and clock.
+Old retention-oracle, VM0, structural-GC and nursery-adoption helpers remain
+held/deferred. Their expired grants authorize no new invocation. Regex
+implementation remains paused. Native gates and quiet measurements serialize;
+independent source/review work may overlap. Retain one adopted runtime policy.
 
 ## Next decision
 

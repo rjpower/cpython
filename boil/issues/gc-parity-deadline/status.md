@@ -90,10 +90,15 @@ that grant. Historical restoration still contains the old collector choice;
 it is an intermediate preparation commit, not the chosen final product.
 Closure then froze early at **d7df12b1d81722927e71d9734c70eeafdccfee73**:
 owning collector/selector removed, RC selected and extension/cache identity
-isolated. Independent source review and actual native validation remain.
+isolated. Independent source review has accepted first native feedback;
+actual native validation remains.
 
 The [integrated-storage candidate](../fundamental-runtime-design/status.md)
-passed source review and its first debug build. An invalid legacy C-API fixture
-aborted the first native batch. Its supported-call correction passed source
-review, and a fresh debug/release batch is active **03:57:48–04:42:48 UTC**,
-session **60010**. No current candidate has earned parity or integration.
+passed source review and two usable fresh debug builds. Its v1 legacy-constructor,
+v2 disabled-GC witness and v3 test-extension link failures remain failed. V3
+stopped at **04:14:56 UTC**, session **35054 returned 1**, before any selected
+case. The narrow core test-hook correction is frozen for independent review;
+no native batch is currently active. The isolated RC-only closure
+`d7df12b` has now passed independent source review for native feedback; its
+helpers are being prepared without promoting it. No current candidate has
+earned parity or integration.

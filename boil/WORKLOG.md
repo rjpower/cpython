@@ -516,3 +516,24 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   40498d1 and RC-only fallback d7df12b also froze early with host checks, and
   enter independent review. No source freeze earns native/performance credit.
   [Execution state](issues/fundamental-runtime-design/status.md).
+- 2026-11-01: Span v2 stopped at 03:59:31 UTC after a successful fresh debug
+  build: the new callback witness used public collection with automatic GC
+  disabled. Corrected both affected witnesses to forced manual collection,
+  preserving positive assertions and production policy; independent source
+  and helper reviews accepted fresh v3 feedback. Activated 04:13:14–04:58:14,
+  session 35054. V1/v2 remain failed; no elapsed credit.
+  [V2 outcome](issues/fundamental-runtime-design/span-native-outcome-20261101-v2.md).
+- 2026-11-01: IR source 40498d1 and RC-only closure d7df12b passed independent
+  source review for first native feedback. Root's IR preflight rejected an
+  empty host-test directory, then incorrectly invoked the unactivated
+  supervisor; it correctly refused and no target ran. Preserve v1, prepare
+  minimal v2 bindings. RC native and elapsed helpers proceed host-only in
+  parallel while the single GC native batch runs.
+  [Execution state](issues/fundamental-runtime-design/status.md).
+- 2026-11-01: Span v3 stopped at 04:14:56 UTC before selected cases: the shared
+  test extension could not link the internal manual collector symbol. Both
+  reviews missed that boundary. Root froze a three-file correction moving the
+  witness behind an exported cold core test hook; production policy/tests are
+  unchanged. Existing host root checks pass; independent review follows.
+  No native batch remains active, and no unused activation time grants retry.
+  [V3 outcome](issues/fundamental-runtime-design/span-native-outcome-20261101-v3.md).

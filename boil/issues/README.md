@@ -13,11 +13,11 @@ and switch to the prepared reference-counting successor. See the
 | Track | Active experiment | Owner | Next decision |
 | --- | --- | --- | --- |
 | Shared attribution baseline, complete | [Accepted outcome](fundamental-runtime-design/shared-baseline-outcome-review-20261101-v1.md) | coordinator | Use retained current handler evidence and explicit counter limits; no speed claim |
-| Compiler / IR | [Interpreter architecture](fundamental-runtime-design/status.md) | coroutine_design_review | Current site captured and accepted; region source prototype 03:22–04:07 UTC |
-| RC fallback preparation, source frozen | [Twelve-hour decision](gc-parity-deadline/status.md) | coordinator | RC-only closure d7df12b awaits independent review and native validation |
-| Integrated-storage source review, accepted | [Frozen-source review](fundamental-runtime-design/span-source-review-20261101-v1.md) | restart_audit | Bounded native feedback only; author moves to isolated RC closure |
-| Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coroutine_design_review; coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
-| GC / allocator | [Execution state](fundamental-runtime-design/status.md) | coordinator; qualification_review_resumed | Corrected fresh batch active, ceiling 04:42:48 UTC; quiet helper preparation by 04:13 |
+| Compiler / IR | [Accepted region source](fundamental-runtime-design/region-source-review-20261101-v1.md) | restart_audit | Minimal v2 host helper rebinding by 04:25; no target ran in failed preactivation |
+| RC fallback preparation | [Accepted RC-only source](fundamental-runtime-design/rc-source-review-20261101-v1.md) | coroutine_design_review | Host-only native helper preparation by 04:40; no promotion |
+| GC / allocator | [V3 native outcome](fundamental-runtime-design/span-native-outcome-20261101-v3.md) | coordinator; restart_audit | V3 stopped before cases on test-extension link; narrow core-hook correction awaits review |
+| Early elapsed / RSS | [Fixed protocol](gc-parity-deadline/measurement-protocol.md) | qualification_review_resumed | Host-only pilot preparation by 04:40; candidate products and outcome pending |
+| Interpreter / backend, queued | [Existing backend controls](h1-tail-dispatch/status.md) | coordinator | Reuse matched compiler/backend plan; no presumed tail adoption |
 
 The [peer-reviewed work breakdown](../design/runtime-work-breakdown.md) replaces
 the GC-heavy ranking. Counter-retention tooling is integrated; the baseline

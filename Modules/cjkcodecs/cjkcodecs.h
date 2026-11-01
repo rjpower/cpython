@@ -350,34 +350,30 @@ _getcodec(PyObject *self, const MultibyteCodec *codec)
     return res;
 }
 
-static PyValue
-getcodec(PyObject *self, PyValue arg)
+static PyObject *
+getcodec(PyObject *self, PyObject *encoding)
 {
-    PyObject *encoding = PyValue_Object(arg);
-    if (encoding == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyUnicode_Check(encoding)) {
         PyErr_SetString(PyExc_TypeError,
                         "encoding name must be a string.");
-        return PyValue_NULL;
+        return NULL;
     }
     const char *enc = PyUnicode_AsUTF8(encoding);
     if (enc == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     cjkcodecs_module_state *st = get_module_state(self);
     for (int i = 0; i < st->num_codecs; i++) {
         const MultibyteCodec *codec = &st->codec_list[i];
         if (strcmp(codec->encoding, enc) == 0) {
-            return PyValue_FromResult(_getcodec(self, codec));
+            return _getcodec(self, codec);
         }
     }
 
     PyErr_SetString(PyExc_LookupError,
                     "no such codec is supported.");
-    return PyValue_NULL;
+    return NULL;
 }
 
 static int add_mappings(cjkcodecs_module_state *);
@@ -502,7 +498,7 @@ _cjk_free(void *mod)
 }
 
 static struct PyMethodDef _cjk_methods[] = {
-    {"getcodec", _PyCFunction_CAST(getcodec), METH_O, ""},
+    {"getcodec", getcodec, METH_O, ""},
     {NULL, NULL},
 };
 

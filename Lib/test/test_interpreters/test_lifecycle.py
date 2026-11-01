@@ -14,7 +14,6 @@ import_helper.import_module('_interpreters')
 from .utils import TestBase
 
 
-@support.requires_subinterpreters
 class StartupTests(TestBase):
 
     # We want to ensure the initial state of subinterpreters
@@ -166,7 +165,6 @@ class StartupTests(TestBase):
 
 class FinalizationTests(TestBase):
 
-    @support.requires_subinterpreters
     @support.requires_subprocess()
     def test_gh_109793(self):
         # Make sure finalization finishes and the correct error code

@@ -17,46 +17,38 @@ PyDoc_STRVAR(_locale_setlocale__doc__,
 static PyObject *
 _locale_setlocale_impl(PyObject *module, int category, const char *locale);
 
-static PyValue
-_locale_setlocale(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_setlocale(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int category;
     const char *locale = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("setlocale", nargs, 1, 2)) {
         goto exit;
     }
-    category = PyLong_AsIntValue(args[0]);
+    category = PyLong_AsInt(args[0]);
     if (category == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            locale = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            locale = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (locale == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("setlocale", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        locale = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        locale = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (locale == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("setlocale", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _locale_setlocale_impl(module, category, locale);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _locale_setlocale_impl(module, category, locale);
 
 exit:
     return return_value;
@@ -94,41 +86,27 @@ PyDoc_STRVAR(_locale_strcoll__doc__,
 static PyObject *
 _locale_strcoll_impl(PyObject *module, PyObject *os1, PyObject *os2);
 
-static PyValue
-_locale_strcoll(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_strcoll(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *os1;
     PyObject *os2;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("strcoll", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strcoll", "argument 1", "str", _arg);
-            goto exit;
-        }
-        os1 = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strcoll", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strcoll", "argument 2", "str", _arg);
-            goto exit;
-        }
-        os2 = _arg;
+    os1 = args[0];
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("strcoll", "argument 2", "str", args[1]);
+        goto exit;
     }
-    _return_value = _locale_strcoll_impl(module, os1, os2);
-    return_value = PyValue_FromResult(_return_value);
+    os2 = args[1];
+    return_value = _locale_strcoll_impl(module, os1, os2);
 
 exit:
     return return_value;
@@ -145,31 +123,23 @@ PyDoc_STRVAR(_locale_strxfrm__doc__,
 "Return a string that can be used as a key for locale-aware comparisons.");
 
 #define _LOCALE_STRXFRM_METHODDEF    \
-    {"strxfrm", _PyCFunction_CAST(_locale_strxfrm), METH_O, _locale_strxfrm__doc__},
+    {"strxfrm", (PyCFunction)_locale_strxfrm, METH_O, _locale_strxfrm__doc__},
 
 static PyObject *
 _locale_strxfrm_impl(PyObject *module, PyObject *str);
 
-static PyValue
-_locale_strxfrm(PyObject *module, PyValue arg)
+static PyObject *
+_locale_strxfrm(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strxfrm", "argument", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("strxfrm", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _locale_strxfrm_impl(module, str);
-    return_value = PyValue_FromResult(_return_value);
+    str = arg;
+    return_value = _locale_strxfrm_impl(module, str);
 
 exit:
     return return_value;
@@ -207,24 +177,22 @@ PyDoc_STRVAR(_locale_nl_langinfo__doc__,
 "Return the value for the locale information associated with key.");
 
 #define _LOCALE_NL_LANGINFO_METHODDEF    \
-    {"nl_langinfo", _PyCFunction_CAST(_locale_nl_langinfo), METH_O, _locale_nl_langinfo__doc__},
+    {"nl_langinfo", (PyCFunction)_locale_nl_langinfo, METH_O, _locale_nl_langinfo__doc__},
 
 static PyObject *
 _locale_nl_langinfo_impl(PyObject *module, int item);
 
-static PyValue
-_locale_nl_langinfo(PyObject *module, PyValue arg)
+static PyObject *
+_locale_nl_langinfo(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int item;
-    PyObject *_return_value;
 
-    item = PyLong_AsIntValue(arg);
+    item = PyLong_AsInt(arg);
     if (item == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _locale_nl_langinfo_impl(module, item);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _locale_nl_langinfo_impl(module, item);
 
 exit:
     return return_value;
@@ -243,34 +211,26 @@ PyDoc_STRVAR(_locale_gettext__doc__,
 "Return translation of msg.");
 
 #define _LOCALE_GETTEXT_METHODDEF    \
-    {"gettext", _PyCFunction_CAST(_locale_gettext), METH_O, _locale_gettext__doc__},
+    {"gettext", (PyCFunction)_locale_gettext, METH_O, _locale_gettext__doc__},
 
 static PyObject *
 _locale_gettext_impl(PyObject *module, const char *in);
 
-static PyValue
-_locale_gettext(PyObject *module, PyValue arg)
+static PyObject *
+_locale_gettext(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *in;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("gettext", "argument", "str", _arg);
-            goto exit;
-        }
-        in = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (in == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("gettext", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _locale_gettext_impl(module, in);
-    return_value = PyValue_FromResult(_return_value);
+    in = _PyUnicode_AsUTF8NoNUL(arg);
+    if (in == NULL) {
+        goto exit;
+    }
+    return_value = _locale_gettext_impl(module, in);
 
 exit:
     return return_value;
@@ -294,52 +254,38 @@ PyDoc_STRVAR(_locale_dgettext__doc__,
 static PyObject *
 _locale_dgettext_impl(PyObject *module, const char *domain, const char *in);
 
-static PyValue
-_locale_dgettext(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_dgettext(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *domain;
     const char *in;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dgettext", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            domain = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            domain = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (domain == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("dgettext", "argument 1", "str or None", _arg);
+    if (args[0] == Py_None) {
+        domain = NULL;
+    }
+    else if (PyUnicode_Check(args[0])) {
+        domain = _PyUnicode_AsUTF8NoNUL(args[0]);
+        if (domain == NULL) {
             goto exit;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("dgettext", "argument 2", "str", _arg);
-            goto exit;
-        }
-        in = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (in == NULL) {
-            goto exit;
-        }
+    else {
+        _PyArg_BadArgument("dgettext", "argument 1", "str or None", args[0]);
+        goto exit;
     }
-    _return_value = _locale_dgettext_impl(module, domain, in);
-    return_value = PyValue_FromResult(_return_value);
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("dgettext", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    in = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (in == NULL) {
+        goto exit;
+    }
+    return_value = _locale_dgettext_impl(module, domain, in);
 
 exit:
     return return_value;
@@ -362,57 +308,43 @@ static PyObject *
 _locale_dcgettext_impl(PyObject *module, const char *domain,
                        const char *msgid, int category);
 
-static PyValue
-_locale_dcgettext(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_dcgettext(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *domain;
     const char *msgid;
     int category;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("dcgettext", nargs, 3, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            domain = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            domain = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (domain == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("dcgettext", "argument 1", "str or None", _arg);
+    if (args[0] == Py_None) {
+        domain = NULL;
+    }
+    else if (PyUnicode_Check(args[0])) {
+        domain = _PyUnicode_AsUTF8NoNUL(args[0]);
+        if (domain == NULL) {
             goto exit;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("dcgettext", "argument 2", "str", _arg);
-            goto exit;
-        }
-        msgid = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (msgid == NULL) {
-            goto exit;
-        }
+    else {
+        _PyArg_BadArgument("dcgettext", "argument 1", "str or None", args[0]);
+        goto exit;
     }
-    category = PyLong_AsIntValue(args[2]);
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("dcgettext", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    msgid = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (msgid == NULL) {
+        goto exit;
+    }
+    category = PyLong_AsInt(args[2]);
     if (category == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _locale_dcgettext_impl(module, domain, msgid, category);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _locale_dcgettext_impl(module, domain, msgid, category);
 
 exit:
     return return_value;
@@ -429,39 +361,31 @@ PyDoc_STRVAR(_locale_textdomain__doc__,
 "Set the C library\'s textdmain to domain, returning the new domain.");
 
 #define _LOCALE_TEXTDOMAIN_METHODDEF    \
-    {"textdomain", _PyCFunction_CAST(_locale_textdomain), METH_O, _locale_textdomain__doc__},
+    {"textdomain", (PyCFunction)_locale_textdomain, METH_O, _locale_textdomain__doc__},
 
 static PyObject *
 _locale_textdomain_impl(PyObject *module, const char *domain);
 
-static PyValue
-_locale_textdomain(PyObject *module, PyValue arg)
+static PyObject *
+_locale_textdomain(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *domain;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            domain = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            domain = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (domain == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("textdomain", "argument", "str or None", _arg);
+    if (arg == Py_None) {
+        domain = NULL;
+    }
+    else if (PyUnicode_Check(arg)) {
+        domain = _PyUnicode_AsUTF8NoNUL(arg);
+        if (domain == NULL) {
             goto exit;
         }
     }
-    _return_value = _locale_textdomain_impl(module, domain);
-    return_value = PyValue_FromResult(_return_value);
+    else {
+        _PyArg_BadArgument("textdomain", "argument", "str or None", arg);
+        goto exit;
+    }
+    return_value = _locale_textdomain_impl(module, domain);
 
 exit:
     return return_value;
@@ -484,37 +408,26 @@ static PyObject *
 _locale_bindtextdomain_impl(PyObject *module, const char *domain,
                             PyObject *dirname_obj);
 
-static PyValue
-_locale_bindtextdomain(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_bindtextdomain(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *domain;
     PyObject *dirname_obj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("bindtextdomain", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("bindtextdomain", "argument 1", "str", _arg);
-            goto exit;
-        }
-        domain = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (domain == NULL) {
-            goto exit;
-        }
-    }
-    dirname_obj = PyValue_Object(args[1]);
-    if (dirname_obj == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("bindtextdomain", "argument 1", "str", args[0]);
         goto exit;
     }
-    _return_value = _locale_bindtextdomain_impl(module, domain, dirname_obj);
-    return_value = PyValue_FromResult(_return_value);
+    domain = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (domain == NULL) {
+        goto exit;
+    }
+    dirname_obj = args[1];
+    return_value = _locale_bindtextdomain_impl(module, domain, dirname_obj);
 
 exit:
     return return_value;
@@ -537,52 +450,38 @@ static PyObject *
 _locale_bind_textdomain_codeset_impl(PyObject *module, const char *domain,
                                      const char *codeset);
 
-static PyValue
-_locale_bind_textdomain_codeset(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_locale_bind_textdomain_codeset(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *domain;
     const char *codeset;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("bind_textdomain_codeset", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("bind_textdomain_codeset", "argument 1", "str", _arg);
-            goto exit;
-        }
-        domain = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (domain == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("bind_textdomain_codeset", "argument 1", "str", args[0]);
+        goto exit;
+    }
+    domain = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (domain == NULL) {
+        goto exit;
+    }
+    if (args[1] == Py_None) {
+        codeset = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        codeset = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (codeset == NULL) {
             goto exit;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            codeset = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            codeset = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (codeset == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("bind_textdomain_codeset", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    else {
+        _PyArg_BadArgument("bind_textdomain_codeset", "argument 2", "str or None", args[1]);
+        goto exit;
     }
-    _return_value = _locale_bind_textdomain_codeset_impl(module, domain, codeset);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _locale_bind_textdomain_codeset_impl(module, domain, codeset);
 
 exit:
     return return_value;
@@ -647,4 +546,4 @@ _locale_getencoding(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef _LOCALE_BIND_TEXTDOMAIN_CODESET_METHODDEF
     #define _LOCALE_BIND_TEXTDOMAIN_CODESET_METHODDEF
 #endif /* !defined(_LOCALE_BIND_TEXTDOMAIN_CODESET_METHODDEF) */
-/*[clinic end generated code: output=f299f9c1b04482a1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b995b35bd3085d5b input=a9049054013a1b77]*/

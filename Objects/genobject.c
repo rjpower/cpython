@@ -6,8 +6,8 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_EvalFrame()
 #include "pycore_frame.h"         // _PyInterpreterFrame
+#include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_gc.h"            // _PyGC_CLEAR_FINALIZED()
-#include "pycore_gc_walk.h"       // Py_GC_PRECISE
 #include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_lock.h"          // _Py_yield()
@@ -37,8 +37,25 @@ static PyObject* async_gen_athrow_new(PyAsyncGenObject *, PyObject *);
 #define _PyAsyncGenObject_CAST(op) \
     _Py_CAST(PyAsyncGenObject*, (op))
 
+#ifdef Py_GIL_DISABLED
+static bool
+gen_try_set_frame_state(PyGenObject *gen, int8_t *expected, int8_t state)
+{
+    if (*expected == FRAME_SUSPENDED_YIELD_FROM_LOCKED) {
+        // Wait for the in-progress gi_yieldfrom read to complete
+        _Py_yield();
+        *expected = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
+        return false;
+    }
+    return _Py_atomic_compare_exchange_int8(&gen->gi_frame_state, expected, state);
+}
+
+# define _Py_GEN_TRY_SET_FRAME_STATE(gen, expected, state) \
+    gen_try_set_frame_state((gen), &(expected), (state))
+#else
 # define _Py_GEN_TRY_SET_FRAME_STATE(gen, expected, state) \
     ((gen)->gi_frame_state = (state), true)
+#endif
 
 
 static const char *NON_INIT_CORO_MSG = "can't send non-None value to a "
@@ -79,7 +96,7 @@ gen_traverse(PyObject *self, visitproc visit, void *arg)
     else {
         // We still need to visit the code object when the frame is cleared to
         // ensure that it's kept alive if the reference is deferred.
-        _Py_VISIT_VALUE(gen->gi_iframe.f_executable);
+        _Py_VISIT_STACKREF(gen->gi_iframe.f_executable);
     }
     /* cr_origin holds only tuples, strings and ints, which cannot form a
        cycle, but the tracing mark must reach them. */
@@ -149,25 +166,17 @@ gen_finalize(PyObject *self)
     PyErr_SetRaisedException(exc);
 }
 
-/* Precise: the span holds gen, whose exception state is cleared after its
-   frame's (the parameter rule). */
-Py_GC_PRECISE static void
+static void
 gen_clear_frame(PyGenObject *gen)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, frame->previous);
+    _PyThreadState_UpdateLastProfiledFrame(_PyThreadState_GET(), frame, frame->previous);
     frame->previous = NULL;
     Py_BEGIN_CRITICAL_SECTION(gen);
     _PyFrame_ClearExceptCode(frame);
     Py_END_CRITICAL_SECTION();
     _PyErr_ClearExcState(&gen->gi_exc_state);
-    _PyThreadState_PopValueRoot(tstate, &span);
 }
 
 int
@@ -205,8 +214,14 @@ gen_dealloc(PyObject *self)
 
     _PyObject_GC_UNTRACK(gen);
 
-    FT_CLEAR_WEAKREFS(self);
+    FT_CLEAR_WEAKREFS(self, gen->gi_weakreflist);
 
+    _PyObject_GC_TRACK(self);
+
+    if (PyObject_CallFinalizerFromDealloc(self))
+        return;                     /* resurrected.  :( */
+
+    _PyObject_GC_UNTRACK(self);
     if (PyAsyncGen_CheckExact(gen)) {
         /* We have to handle this case for asynchronous generators
            right here, because this code has to be between UNTRACK
@@ -221,14 +236,14 @@ gen_dealloc(PyObject *self)
         gen_clear_frame(gen);
     }
     assert(gen->gi_exc_state.exc_value == NULL);
-    gen->gi_iframe.f_executable = PyValue_NULL;
+    PyStackRef_CLEAR(gen->gi_iframe.f_executable);
     Py_CLEAR(gen->gi_name);
     Py_CLEAR(gen->gi_qualname);
 
     PyObject_GC_Del(gen);
 }
 
-Py_GC_PRECISE static void
+static void
 gen_raise_already_executing_error(PyGenObject *gen)
 {
     const char *msg = "generator already executing";
@@ -248,30 +263,26 @@ gen_raise_already_executing_error(PyGenObject *gen)
 // is called.
 /* The receiver of the SEND whose YIELD_VALUE suspended frame: two slots
    below that of the yielded value, which the value sent in takes */
-static inline PyValue
+static inline _PyStackRef
 _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
-    PyValue ref = frame->base[frame->return_slot - 2];
-    assert(!PyValue_IsNull(ref));
+    _PyStackRef ref = frame->base[frame->return_slot - 2];
+    assert(!PyStackRef_IsNull(ref));
     return ref;
 }
 
-/* The span: the generator.  arg is read only before the frame runs. */
-Py_GC_PRECISE static PySendResult
-gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
+static PySendResult
+gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
 
     PyThreadState *tstate = _PyThreadState_GET();
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    int from_iternext = arg == NULL;
 
     /* arg goes to the slot of the yield that suspended the frame, or of
-       the value that RETURN_GENERATOR returned.  Testing for None first
-       keeps GCC from reading the static None as an int or float where a
-       caller passes Py_None (-Warray-bounds). */
-    _PyFrame_SetReturnValue(frame, arg == NULL || arg == Py_None
-                                   ? _PyValue_None : PyValue_FromObject(arg));
+       the value that RETURN_GENERATOR returned */
+    PyObject *arg_obj = arg ? arg : Py_None;
+    _PyFrame_SetReturnValue(frame, PyStackRef_FromPyObjectNew(arg_obj));
 
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;
@@ -279,21 +290,19 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
     /* A yield returns to the trampoline's second INTERPRETER_EXIT, one word
        past the entry frame's instr_ptr (Python/ceval.c). */
 
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
     if (exc) {
         assert(_PyErr_Occurred(tstate));
         _PyErr_ChainStackItem();
     }
 
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
-    PyValue result = _PyEval_EvalFrame(tstate, frame, exc);
+    PyObject *result = _PyEval_EvalFrame(tstate, frame, exc);
     assert(tstate->exc_info == prev_exc_info);
+#ifndef Py_GIL_DISABLED
     assert(gen->gi_exc_state.previous_item == NULL);
     assert(frame->previous == NULL);
     assert(gen->gi_frame_state != FRAME_EXECUTING);
+#endif
 
     // The generator_return_kind field is used to distinguish between a
     // yield and a return from within _PyEval_EvalFrame(). Earlier versions
@@ -302,10 +311,10 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
     int return_kind = ((_PyThreadStateImpl *)tstate)->generator_return_kind;
 
     if (return_kind == GENERATOR_YIELD) {
-        assert(!PyValue_IsNull(result));
-        assert(!_PyErr_Occurred(tstate));
+        assert(result != NULL && !_PyErr_Occurred(tstate));
+#ifndef Py_GIL_DISABLED
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
-        _PyThreadState_PopValueRoot(tstate, &span);
+#endif
         *presult = result;
         return PYGEN_NEXT;
     }
@@ -316,33 +325,29 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyValue *presult, int exc)
 
     /* If the generator just returned (as opposed to yielding), signal
      * that the generator is exhausted. */
-    if (PyValue_IsNull(result)) {
+    if (result) {
+        assert(result == Py_None || !PyAsyncGen_CheckExact(gen));
+        if (result == Py_None && !PyAsyncGen_CheckExact(gen) && !arg) {
+            /* Return NULL if called by gen_iternext() */
+            Py_CLEAR(result);
+        }
+    }
+    else {
         assert(!PyErr_ExceptionMatches(PyExc_StopIteration));
         assert(!PyAsyncGen_CheckExact(gen) ||
             !PyErr_ExceptionMatches(PyExc_StopAsyncIteration));
-        _PyThreadState_PopValueRoot(tstate, &span);
-        *presult = PyValue_NULL;
-        return PYGEN_ERROR;
     }
-    int is_none = PyValue_Is(result, _PyValue_None);
-    assert(is_none || !PyAsyncGen_CheckExact(gen));
-    int is_async = PyAsyncGen_CheckExact(gen);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    if (is_none && !is_async && from_iternext) {
-        /* Return NULL if called by gen_iternext() */
-        *presult = PyValue_NULL;
-        return PYGEN_ERROR;
-    }
+
     *presult = result;
-    return PYGEN_RETURN;
+    return result ? PYGEN_RETURN : PYGEN_ERROR;
 }
 
 // Set the generator 'gen' to the executing state and send 'arg' into it.
 // See gen_send_ex2() for details.
-Py_GC_PRECISE static PySendResult
-gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
+static PySendResult
+gen_send_ex(PyGenObject *gen, PyObject *arg, PyObject **presult)
 {
-    *presult = PyValue_NULL;
+    *presult = NULL;
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     do {
         if (frame_state == FRAME_CREATED && arg && arg != Py_None) {
@@ -374,7 +379,7 @@ gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
             else if (arg) {
                 /* `gen` is an exhausted generator:
                 only return value if called from send(). */
-                *presult = _PyValue_None;
+                *presult = Py_None;
                 return PYGEN_RETURN;
             }
             return PYGEN_ERROR;
@@ -387,32 +392,14 @@ gen_send_ex(PyGenObject *gen, PyObject *arg, PyValue *presult)
     return gen_send_ex2(gen, arg, presult, 0);
 }
 
-/* Precise, as gen_send() is: the send's result is a span's slot.  The
-   C tasks step their coroutines through this frame, which the release
-   build makes of gen_send_ex() and gen_send_ex2() inlined, and opaque it
-   kept a finished task alive through a stale word (test_futures2's
-   test_task_exc_handler_correct_context).  The protocol speaks objects:
-   a yielded or returned inline value is boxed here, and a failed box is
-   an error. */
-Py_GC_PRECISE static PySendResult
+static PySendResult
 PyGen_am_send(PyObject *self, PyObject *arg, PyObject **result)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyGenObject *gen = _PyGen_CAST(self);
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_Append(&span, PyValue_NULL);
-    PySendResult status = gen_send_ex(gen, arg, &slots[0]);
-    *result = PyValue_Object(slots[0]);
-    if (*result == NULL && !PyValue_IsNull(slots[0])) {
-        status = PYGEN_ERROR;
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return status;
+    return gen_send_ex(gen, arg, result);
 }
 
-Py_GC_PRECISE static PyObject *
+static PyObject *
 gen_set_stop_iteration(PyGenObject *gen, PyObject *result)
 {
     if (PyAsyncGen_CheckExact(gen)) {
@@ -433,44 +420,15 @@ PyDoc_STRVAR(send_doc,
 "send(value) -> send 'value' into generator,\n\
 return next yielded value or raise StopIteration.");
 
-/* The span: the generator, then the slot of the send's result */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 gen_send(PyObject *op, PyObject *arg)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *result;
     PyGenObject *gen = _PyGen_CAST(op);
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
-    _PyValueSpan_Append(&span, PyValue_NULL);
-    PySendResult status = gen_send_ex(gen, arg, &slots[1]);
-    PyObject *result = PyValue_Object(slots[1]);
-    if (result == NULL && !PyValue_IsNull(slots[1])) {
-        status = PYGEN_ERROR;
+    if (gen_send_ex(gen, arg, &result) == PYGEN_RETURN) {
+        return gen_set_stop_iteration(gen, result);
     }
-    if (status == PYGEN_RETURN) {
-        result = gen_set_stop_iteration(gen, result);
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
-}
-
-/* gen_send() as a METH_O method.  The span: the generator and the
-   argument's box. */
-Py_GC_PRECISE static PyValue
-gen_send_method(PyObject *op, PyValue arg)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, op);
-    PyObject *arg_o = PyValue_Object(arg);
-    _PyValueSpan_AppendObject(&span, arg_o);
-    PyObject *result = arg_o == NULL ? NULL : gen_send(op, arg_o);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
 }
 
 PyDoc_STRVAR(close_doc,
@@ -481,41 +439,31 @@ PyDoc_STRVAR(close_doc,
  *   close a subiterator being delegated to by yield-from.
  */
 
-/* Precise: the span holds yf, which the message reads after the lookup
-   (the parameter rule), and the close method's object out-parameter. */
-Py_GC_PRECISE static int
+static int
 gen_close_iter(PyObject *yf)
 {
     PyObject *retval = NULL;
-    int res = 0;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, yf);
 
     if (PyGen_CheckExact(yf) || PyCoro_CheckExact(yf)) {
         retval = gen_close((PyObject *)yf, NULL);
         if (retval == NULL)
-            res = -1;
+            return -1;
     }
     else {
-        PyObject **methp = _PyValueSpan_ObjectSlot(&span);
-        if (PyObject_GetOptionalAttr(yf, &_Py_ID(close), methp) < 0) {
+        PyObject *meth;
+        if (PyObject_GetOptionalAttr(yf, &_Py_ID(close), &meth) < 0) {
             PyErr_FormatUnraisable("Exception ignored while "
                                    "closing generator %R", yf);
         }
-        PyObject *meth = *methp;
         if (meth) {
             retval = _PyObject_CallNoArgs(meth);
             Py_DECREF(meth);
             if (retval == NULL)
-                res = -1;
+                return -1;
         }
     }
     Py_XDECREF(retval);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return 0;
 }
 
 static inline bool
@@ -528,63 +476,7 @@ is_resume(_PyInstr *instr)
     );
 }
 
-/* The outermost exception handler only converts StopIteration.  Closing at
-   this resume point needs no Python execution when unwind tools are absent. */
-static bool
-gen_close_clears_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    if (!is_resume(frame->instr_ptr)) {
-        return false;
-    }
-    bool no_unwind_tools = _PyEval_NoToolsForUnwind(tstate, frame);
-    int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame),
-                                 _PyFrame_InstrOffset(frame, frame->instr_ptr));
-    if (!(oparg & RESUME_OPARG_DEPTH1_MASK) || !no_unwind_tools) {
-        return false;
-    }
-    assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);
-    return true;
-}
-
-int
-_PyGen_CanClearUnreachable(PyThreadState *tstate, PyObject *op)
-{
-    if (!PyGen_CheckExact(op)) {
-        return 0;
-    }
-    PyGenObject *gen = _PyGen_CAST(op);
-    _PyInterpreterFrame *frame = &gen->gi_iframe;
-    return gen->gi_frame_state == FRAME_SUSPENDED
-        && frame->owner == FRAME_OWNED_BY_GENERATOR
-        && frame->frame_obj == NULL
-        && gen_close_clears_frame(tstate, frame);
-}
-
-/* The collector revalidates the entire cohort before this nonfailing commit.
-   Without an escaped frame, gen_clear_frame only clears fields and roots. */
-Py_GC_PRECISE void
-_PyGen_ClearUnreachable(PyObject *op)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, op);
-    assert(tstate->interp->gc.sweeping);
-    assert(op->ob_flags & _Py_GC_DEAD_FLAG);
-    assert(!(op->ob_flags & _Py_GC_FINALIZED_FLAG));
-    assert(_PyGen_CanClearUnreachable(tstate, op));
-    PyGenObject *gen = _PyGen_CAST(op);
-    _PyGC_SET_FINALIZED(op);
-    FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
-    gen_clear_frame(gen);
-    _PyThreadState_PopValueRoot(tstate, &span);
-}
-
-/* Precise: once the generator runs, the span holds it, which the close
-   reads after the delegate's close (the parameter rule), and the slot of
-   the send's result, as in gen_send(). */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 gen_close(PyObject *self, PyObject *args)
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -612,41 +504,38 @@ gen_close(PyObject *self, PyObject *args)
         assert(FRAME_STATE_SUSPENDED(frame_state));
     } while (!_Py_GEN_TRY_SET_FRAME_STATE(gen, frame_state, FRAME_EXECUTING));
 
-    PyObject *res = NULL;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
-    _PyValueSpan_Append(&span, PyValue_NULL);
     int err = 0;
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
-        PyObject *yf = PyValue_ObjectBorrow(_PyGen_YieldFromRef(frame));
+        PyObject *yf = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(frame));
         err = gen_close_iter(yf);
         Py_DECREF(yf);
     }
 
-    if (gen_close_clears_frame(tstate, frame)) {
-        FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
-        gen_clear_frame(gen);
-        res = Py_None;
-        goto done;
+    if (is_resume(frame->instr_ptr)) {
+        bool no_unwind_tools = _PyEval_NoToolsForUnwind(_PyThreadState_GET(), frame);
+        /* We can safely ignore the outermost try block
+         * as it is automatically generated to handle
+         * StopIteration. */
+        int oparg = _PyCode_InstrOparg(_PyFrame_GetCode(frame),
+                                       _PyFrame_InstrOffset(frame, frame->instr_ptr));
+        if (oparg & RESUME_OPARG_DEPTH1_MASK && no_unwind_tools) {
+            // RESUME after YIELD_VALUE and exception depth is 1
+            assert((oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_FUNC_START);
+            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_CLEARED);
+            gen_clear_frame(gen);
+            Py_RETURN_NONE;
+        }
     }
     if (err == 0) {
         PyErr_SetNone(PyExc_GeneratorExit);
     }
 
-    PySendResult status = gen_send_ex2(gen, Py_None, &slots[1], 1);
-    PyObject *retval = PyValue_Object(slots[1]);
-    if (retval == NULL && !PyValue_IsNull(slots[1])) {
-        status = PYGEN_ERROR;
-    }
-    if (status == PYGEN_RETURN) {
+    PyObject *retval;
+    if (gen_send_ex2(gen, Py_None, &retval, 1) == PYGEN_RETURN) {
         // the generator returned a value while closing, return the value here
         assert(!PyErr_Occurred());
-        res = retval;
-        goto done;
+        return retval;
     }
     else if (retval) {
         const char *msg = "generator ignored GeneratorExit";
@@ -657,17 +546,15 @@ gen_close(PyObject *self, PyObject *args)
         }
         Py_DECREF(retval);
         PyErr_SetString(PyExc_RuntimeError, msg);
-        goto done;
+        return NULL;
     }
     assert(PyErr_Occurred());
 
     if (PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
         PyErr_Clear();          /* ignore this error */
-        res = Py_None;
+        Py_RETURN_NONE;
     }
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return NULL;
 }
 
 // Set an exception for a gen.throw() call.
@@ -730,28 +617,15 @@ failed_throw:
     return -1;
 }
 
-/* The span: the generator, then the slot of the send's result, as in
-   gen_send() */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 gen_throw_current_exception(PyGenObject *gen)
 {
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
 
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
-    _PyValueSpan_Append(&span, PyValue_NULL);
-    PySendResult status = gen_send_ex2(gen, Py_None, &slots[1], 1);
-    PyObject *result = PyValue_Object(slots[1]);
-    if (result == NULL && !PyValue_IsNull(slots[1])) {
-        status = PYGEN_ERROR;
+    PyObject *result;
+    if (gen_send_ex2(gen, Py_None, &result, 1) == PYGEN_RETURN) {
+        return gen_set_stop_iteration(gen, result);
     }
-    if (status == PYGEN_RETURN) {
-        result = gen_set_stop_iteration(gen, result);
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -764,27 +638,15 @@ StopIteration.\n\
 the (type, val, tb) signature is deprecated, \n\
 and may be removed in a future version of Python.");
 
-/* Precise: the span holds the generator and the exception's parts, which
-   the delegation and the raise read after collecting calls (the parameter
-   rule), the delegate and the throw method's object out-parameter. */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 _gen_throw(PyGenObject *gen, int close_on_genexit,
            PyObject *typ, PyObject *val, PyObject *tb)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *res = NULL;
-    PyValue slots[6];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
-    _PyValueSpan_AppendObject(&span, typ);
-    _PyValueSpan_AppendObject(&span, val);
-    _PyValueSpan_AppendObject(&span, tb);
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     do {
         if (frame_state == FRAME_EXECUTING) {
             gen_raise_already_executing_error(gen);
-            goto done;
+            return NULL;
         }
 
         if (FRAME_STATE_FINISHED(frame_state)) {
@@ -793,10 +655,10 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
                 PyErr_SetString(
                     PyExc_RuntimeError,
                     "cannot reuse already awaited coroutine");
-                goto done;
+                return NULL;
             }
             _PyGen_SetException(typ, val, tb);
-            goto done;
+            return NULL;
         }
 
         assert((frame_state == FRAME_CREATED) ||
@@ -805,8 +667,7 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
 
     if (frame_state == FRAME_SUSPENDED_YIELD_FROM) {
         _PyInterpreterFrame *frame = &gen->gi_iframe;
-        PyObject *yf = PyValue_ObjectBorrow(_PyGen_YieldFromRef(frame));
-        _PyValueSpan_AppendObject(&span, yf);
+        PyObject *yf = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(frame));
         PyObject *ret;
         int err;
         if (PyErr_GivenExceptionMatches(typ, PyExc_GeneratorExit) &&
@@ -819,11 +680,12 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
             err = gen_close_iter(yf);
             Py_DECREF(yf);
             if (err < 0) {
-                res = gen_throw_current_exception(gen);
-                goto done;
+                return gen_throw_current_exception(gen);
             }
             goto throw_here;
         }
+        PyThreadState *tstate = _PyThreadState_GET();
+        assert(tstate != NULL);
         if (PyGen_CheckExact(yf) || PyCoro_CheckExact(yf)) {
             /* `yf` is a generator or a coroutine. */
 
@@ -843,13 +705,12 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
         }
         else {
             /* `yf` is an iterator or a coroutine-like object. */
-            PyObject **methp = _PyValueSpan_ObjectSlot(&span);
-            if (PyObject_GetOptionalAttr(yf, &_Py_ID(throw), methp) < 0) {
+            PyObject *meth;
+            if (PyObject_GetOptionalAttr(yf, &_Py_ID(throw), &meth) < 0) {
                 Py_DECREF(yf);
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, frame_state);
-                goto done;
+                return NULL;
             }
-            PyObject *meth = *methp;
             if (meth == NULL) {
                 Py_DECREF(yf);
                 goto throw_here;
@@ -866,104 +727,66 @@ _gen_throw(PyGenObject *gen, int close_on_genexit,
         }
         Py_DECREF(yf);
         if (!ret) {
-            res = gen_throw_current_exception(gen);
-            goto done;
+            return gen_throw_current_exception(gen);
         }
         FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, frame_state);
-        res = ret;
-        goto done;
+        return ret;
     }
 
 throw_here:
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_EXECUTING);
     if (_PyGen_SetException(typ, val, tb) < 0) {
         FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, frame_state);
-        goto done;
+        return NULL;
     }
-    res = gen_throw_current_exception(gen);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return res;
+    return gen_throw_current_exception(gen);
 }
 
 
-/* The span: the generator, the type, the value and the traceback */
-Py_GC_PRECISE static PyValue
-gen_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+gen_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyGenObject *gen = _PyGen_CAST(op);
     PyObject *typ;
     PyObject *tb = NULL;
     PyObject *val = NULL;
-    PyObject *result = NULL;
-    PyValue slots[4];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
 
     if (!_PyArg_CheckPositional("throw", nargs, 1, 3)) {
-        goto done;
+        return NULL;
     }
     if (nargs > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of throw() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            goto done;
+            return NULL;
         }
     }
-    typ = PyValue_Object(args[0]);
-    if (typ == NULL) {
-        goto done;
-    }
-    _PyValueSpan_AppendObject(&span, typ);
-    if (nargs >= 2) {
-        val = PyValue_Object(args[1]);
-        if (val == NULL) {
-            goto done;
-        }
-        _PyValueSpan_AppendObject(&span, val);
-    }
+    typ = args[0];
     if (nargs == 3) {
-        tb = PyValue_Object(args[2]);
-        if (tb == NULL) {
-            goto done;
-        }
+        val = args[1];
+        tb = args[2];
     }
-    result = _gen_throw(gen, 1, typ, val, tb);
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    else if (nargs == 2) {
+        val = args[1];
+    }
+    return _gen_throw(gen, 1, typ, val, tb);
 }
 
 
-/* The span: the slot of the send's result */
-Py_GC_PRECISE static PyValue
+static PyObject *
 gen_iternext(PyObject *self)
 {
     assert(PyGen_CheckExact(self) || PyCoro_CheckExact(self));
     PyGenObject *gen = _PyGen_CAST(self);
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_Append(&span, PyValue_NULL);
 
-    PyValue result = PyValue_NULL;
-    if (gen_send_ex(gen, NULL, &slots[0]) == PYGEN_RETURN) {
-        // StopIteration holds the returned value as an object.
-        if (!PyValue_Is(slots[0], _PyValue_None)) {
-            PyObject *value = PyValue_Object(slots[0]);
-            if (value != NULL) {
-                _PyGen_SetStopIterationValue(value);
-            }
+    PyObject *result;
+    if (gen_send_ex(gen, NULL, &result) == PYGEN_RETURN) {
+        if (result != Py_None) {
+            _PyGen_SetStopIterationValue(result);
         }
+        Py_CLEAR(result);
     }
-    else {
-        result = slots[0];
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
@@ -973,7 +796,7 @@ gen_iternext(PyObject *self)
  *
  * Returns 0 if StopIteration is set and -1 if any other exception is set.
  */
-Py_GC_PRECISE int
+int
 _PyGen_SetStopIterationValue(PyObject *value)
 {
     assert(!PyErr_Occurred());
@@ -982,21 +805,9 @@ _PyGen_SetStopIterationValue(PyObject *value)
     // PyErr_SetObject(exc_type, value) has a fast path when 'value'
     // is a tuple, where the value of the StopIteration exception would be
     // set to 'value[0]' instead of 'value'.
-    // Precise, as the send path that inlines it: value is anchored in the
-    // frame's span across the exception's creation.
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    PyObject *exc;
-    if (value == NULL) {
-        exc = PyObject_CallNoArgs(PyExc_StopIteration);
-    }
-    else {
-        _PyValueSpan_AppendObject(&span, value);
-        exc = PyObject_CallOneArg(PyExc_StopIteration, value);
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
+    PyObject *exc = value == NULL
+        ? PyObject_CallNoArgs(PyExc_StopIteration)
+        : PyObject_CallOneArg(PyExc_StopIteration, value);
     if (exc == NULL) {
         return -1;
     }
@@ -1039,21 +850,17 @@ gen_repr(PyObject *self)
                                 gen->gi_qualname, gen);
 }
 
-static PyValue
+static PyObject *
 gen_get_name(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *op = _PyGen_CAST(self);
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->gi_name);
-    return PyValue_FromObject(name);
+    return Py_NewRef(name);
 }
 
 static int
-gen_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.gi_name or to set it to anything
      * other than a string object. */
@@ -1065,26 +872,22 @@ gen_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
     Py_BEGIN_CRITICAL_SECTION(self);
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_name.
-    op->gi_name = Py_NewRef(value);
+    _PyObject_XSetRefDelayed(&op->gi_name, Py_NewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 gen_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *op = _PyGen_CAST(self);
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->gi_qualname);
-    return PyValue_FromObject(qualname);
+    return Py_NewRef(qualname);
 }
 
 static int
-gen_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyGenObject *op = _PyGen_CAST(self);
     /* Not legal to del gen.__qualname__ or to set it to anything
      * other than a string object. */
@@ -1096,40 +899,55 @@ gen_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
     Py_BEGIN_CRITICAL_SECTION(self);
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_qualname.
-    op->gi_qualname = Py_NewRef(value);
+    _PyObject_XSetRefDelayed(&op->gi_qualname, Py_NewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
+#ifdef Py_GIL_DISABLED
+    int8_t frame_state = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
+    do {
+        if (frame_state != FRAME_SUSPENDED_YIELD_FROM &&
+            frame_state != FRAME_SUSPENDED_YIELD_FROM_LOCKED)
+        {
+            Py_RETURN_NONE;
+        }
+    } while (!_Py_GEN_TRY_SET_FRAME_STATE(gen, frame_state, FRAME_SUSPENDED_YIELD_FROM_LOCKED));
+
+    PyObject *result = PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
+    _Py_atomic_store_int8_release(&gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
+    return result;
+#else
     int8_t frame_state = gen->gi_frame_state;
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return _PyGen_YieldFromRef(&gen->gi_iframe);
+    return PyStackRef_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
+#endif
 }
 
 
-static PyValue
+static PyObject *
 gen_getrunning(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
-    return PyValue_FromResult(frame_state == FRAME_EXECUTING ? Py_True : Py_False);
+    return frame_state == FRAME_EXECUTING ? Py_True : Py_False;
 }
 
-static PyValue
+static PyObject *
 gen_getsuspended(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
-    return PyValue_FromResult(FRAME_STATE_SUSPENDED(frame_state) ? Py_True : Py_False);
+    return FRAME_STATE_SUSPENDED(frame_state) ? Py_True : Py_False;
 }
 
-static PyValue
+static PyObject *
 gen_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -1146,28 +964,20 @@ gen_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return PyValue_FromResult(state_strings[frame_state]);
+    return state_strings[frame_state];
 }
 
-Py_GC_PRECISE static PyObject *
+static PyObject *
 _gen_getframe(PyGenObject *gen, const char *const name)
 {
-    // The span holds the generator, whose frame is read after the audit
-    // hook runs.
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)gen);
-    PyObject *frame = NULL;
     if (PySys_Audit("object.__getattr__", "Os", gen, name) < 0) {
-        goto done;
+        return NULL;
     }
     int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     if (FRAME_STATE_FINISHED(frame_state)) {
-        frame = Py_None;
-        goto done;
+        Py_RETURN_NONE;
     }
+    PyObject *frame = NULL;
     Py_BEGIN_CRITICAL_SECTION(gen);
     frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
     if (FRAME_STATE_FINISHED(frame_state)) {
@@ -1177,16 +987,14 @@ _gen_getframe(PyGenObject *gen, const char *const name)
         frame = _Py_XNewRef((PyObject *)_PyFrame_GetFrameObject(&gen->gi_iframe));
     }
     Py_END_CRITICAL_SECTION();
-  done:
-    _PyThreadState_PopValueRoot(tstate, &span);
     return frame;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 gen_getframe(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    return PyValue_FromResult(_gen_getframe(gen, "gi_frame"));
+    return _gen_getframe(gen, "gi_frame");
 }
 
 static PyObject *
@@ -1198,11 +1006,11 @@ _gen_getcode(PyGenObject *gen, const char *const name)
     return Py_NewRef(_PyGen_GetCode(gen));
 }
 
-static PyValue
+static PyObject *
 gen_getcode(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-    return PyValue_FromResult(_gen_getcode(gen, "gi_code"));
+    return _gen_getcode(gen, "gi_code");
 }
 
 static PyGetSetDef gen_getsetlist[] = {
@@ -1240,11 +1048,11 @@ PyDoc_STRVAR(sizeof__doc__,
 "gen.__sizeof__() -> size of gen in memory, in bytes");
 
 static PyMethodDef gen_methods[] = {
-    {"send", _PyCFunction_CAST(gen_send_method), METH_O, send_doc},
+    {"send", gen_send, METH_O, send_doc},
     {"throw", _PyCFunction_CAST(gen_throw), METH_FASTCALL, throw_doc},
     {"close", gen_close, METH_NOARGS, close_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
      PyDoc_STR("generators are generic over the types of their yield, send, and return values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1278,13 +1086,12 @@ PyTypeObject PyGen_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
     0,                                          /* tp_doc */
     gen_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    offsetof(PyGenObject, gi_weakreflist),      /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
     gen_iternext,                               /* tp_iternext */
     gen_methods,                                /* tp_methods */
@@ -1321,11 +1128,10 @@ make_gen(PyTypeObject *type, PyFunctionObject *func)
         return NULL;
     }
     gen->gi_frame_state = FRAME_CLEARED;
+    gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
-    /* Coroutine origin construction can collect after this object is tracked. */
-    gen->gi_origin_or_finalizer = NULL;
-    gen->gi_iframe.f_executable = _PyValue_None;
+    gen->gi_iframe.f_executable = PyStackRef_None;
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
     assert(name != NULL);
     gen->gi_name = Py_NewRef(name);
@@ -1405,9 +1211,9 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     assert(PyObject_GC_IsTracked((PyObject *)f));
     Py_DECREF(f);
+    gen->gi_weakreflist = NULL;
     gen->gi_exc_state.exc_value = NULL;
     gen->gi_exc_state.previous_item = NULL;
-    gen->gi_origin_or_finalizer = NULL;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else
@@ -1525,19 +1331,19 @@ coro_await(PyObject *coro)
     return (PyObject *)cw;
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 cr_getframe(PyObject *coro, void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(_gen_getframe(_PyGen_CAST(coro), "cr_frame"));
+    return _gen_getframe(_PyGen_CAST(coro), "cr_frame");
 }
 
-static PyValue
+static PyObject *
 cr_getcode(PyObject *coro, void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(_gen_getcode(_PyGen_CAST(coro), "cr_code"));
+    return _gen_getcode(_PyGen_CAST(coro), "cr_code");
 }
 
-static PyValue
+static PyObject *
 cr_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -1554,7 +1360,7 @@ cr_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return PyValue_FromResult(state_strings[frame_state]);
+    return state_strings[frame_state];
 }
 
 static PyGetSetDef coro_getsetlist[] = {
@@ -1596,11 +1402,11 @@ PyDoc_STRVAR(coro_close_doc,
 "close() -> raise GeneratorExit inside coroutine.");
 
 static PyMethodDef coro_methods[] = {
-    {"send", _PyCFunction_CAST(gen_send_method), METH_O, coro_send_doc},
+    {"send", gen_send, METH_O, coro_send_doc},
     {"throw",_PyCFunction_CAST(gen_throw), METH_FASTCALL, coro_throw_doc},
     {"close", gen_close, METH_NOARGS, coro_close_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
      PyDoc_STR("coroutines are generic over the types of their yield, send, and return values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1633,13 +1439,12 @@ PyTypeObject PyCoro_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
     0,                                          /* tp_doc */
     gen_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    offsetof(PyCoroObject, cr_weakreflist),     /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     coro_methods,                               /* tp_methods */
@@ -1674,54 +1479,25 @@ coro_wrapper_dealloc(PyObject *self)
     PyObject_GC_Del(cw);
 }
 
-/* The coroutine wrappers pass their coroutine on: each anchors it, which
-   cw_coroutine, an immutable strong edge, does only while the wrapper is
-   anchored (10a-2.md, rule 1). */
-Py_GC_PRECISE static PyValue
+static PyObject *
 coro_wrapper_iternext(PyObject *self)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    PyObject *coro = (PyObject *)cw->cw_coroutine;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, coro);
-    PyValue result = gen_iternext(coro);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+    return gen_iternext((PyObject *)cw->cw_coroutine);
 }
 
-Py_GC_PRECISE static PyValue
-coro_wrapper_send(PyObject *self, PyValue arg_value)
+static PyObject *
+coro_wrapper_send(PyObject *self, PyObject *arg)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    PyObject *coro = (PyObject *)cw->cw_coroutine;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, coro);
-    PyObject *arg = PyValue_Object(arg_value);
-    _PyValueSpan_AppendObject(&span, arg);
-    PyObject *result = arg == NULL ? NULL : gen_send(coro, arg);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return gen_send((PyObject *)cw->cw_coroutine, arg);
 }
 
-Py_GC_PRECISE static PyValue
-coro_wrapper_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+coro_wrapper_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
     PyCoroWrapper *cw = _PyCoroWrapper_CAST(self);
-    PyObject *coro = (PyObject *)cw->cw_coroutine;
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, coro);
-    PyValue result = gen_throw(coro, args, nargs);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+    return gen_throw((PyObject*)cw->cw_coroutine, args, nargs);
 }
 
 static PyObject *
@@ -1740,7 +1516,7 @@ coro_wrapper_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 static PyMethodDef coro_wrapper_methods[] = {
-    {"send", _PyCFunction_CAST(coro_wrapper_send), METH_O, coro_send_doc},
+    {"send", coro_wrapper_send, METH_O, coro_send_doc},
     {"throw", _PyCFunction_CAST(coro_wrapper_throw), METH_FASTCALL,
      coro_throw_doc},
     {"close", coro_wrapper_close, METH_NOARGS, coro_close_doc},
@@ -1856,8 +1632,19 @@ typedef enum {
     AWAITABLE_STATE_CLOSED, /* closed */
 } AwaitableState;
 
+#ifdef Py_GIL_DISABLED
+static bool
+async_gen_try_set_state(int8_t *state, int8_t *expected, int8_t new_state)
+{
+    return _Py_atomic_compare_exchange_int8(state, expected, new_state);
+}
+
+# define _Py_ASYNC_GEN_TRY_SET_STATE(state, expected, new_state) \
+    async_gen_try_set_state(&(state), &(expected), (new_state))
+#else
 # define _Py_ASYNC_GEN_TRY_SET_STATE(state, expected, new_state) \
     ((state) = (new_state), true)
+#endif
 
 // Try to transition the async generator to the running state.
 // Returns false if it is already running.
@@ -1870,11 +1657,17 @@ typedef enum {
 static bool
 async_gen_try_claim_running(PyAsyncGenObject *agen)
 {
+#ifdef Py_GIL_DISABLED
+    int8_t expected = 0;
+    return _Py_atomic_compare_exchange_int8(&agen->ag_running_async,
+                                            &expected, 1);
+#else
     if (agen->ag_running_async) {
         return false;
     }
     agen->ag_running_async = 1;
     return true;
+#endif
 }
 
 
@@ -1938,18 +1731,24 @@ async_gen_repr(PyObject *self)
 }
 
 
-Py_GC_PRECISE static int
+static int
 async_gen_init_hooks(PyAsyncGenObject *o)
 {
     PyThreadState *tstate;
     PyObject *finalizer;
     PyObject *firstiter;
 
+#ifdef Py_GIL_DISABLED
+    if (_Py_atomic_exchange_int8(&o->ag_hooks_inited, 1)) {
+        return 0;
+    }
+#else
     if (o->ag_hooks_inited) {
         return 0;
     }
 
     o->ag_hooks_inited = 1;
+#endif
 
     tstate = _PyThreadState_GET();
 
@@ -1975,106 +1774,69 @@ async_gen_init_hooks(PyAsyncGenObject *o)
 }
 
 
-/* The span: the generator, which the hooks' call may outlive */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_anext(PyObject *self)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *ag = _PyAsyncGenObject_CAST(self);
-    PyObject *result = NULL;
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)ag);
-    if (!async_gen_init_hooks(ag)) {
-        result = async_gen_asend_new(ag, NULL);
+    if (async_gen_init_hooks(ag)) {
+        return NULL;
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+    return async_gen_asend_new(ag, NULL);
 }
 
 
-/* The span: the generator and the argument's box, which the release
-   builds make in this frame (as gen_send_method()'s). */
-Py_GC_PRECISE static PyValue
-async_gen_asend(PyObject *op, PyValue arg_value)
+static PyObject *
+async_gen_asend(PyObject *op, PyObject *arg)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
-    PyObject *result = NULL;
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)o);
-    PyObject *arg = PyValue_Object(arg_value);
-    _PyValueSpan_AppendObject(&span, arg);
-    if (arg != NULL && !async_gen_init_hooks(o)) {
-        result = async_gen_asend_new(o, arg);
+    if (async_gen_init_hooks(o)) {
+        return NULL;
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return async_gen_asend_new(o, arg);
 }
 
 
-/* The span: the generator */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_aclose(PyObject *op, PyObject *arg)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
-    PyObject *result = NULL;
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)o);
-    if (!async_gen_init_hooks(o)) {
-        result = async_gen_athrow_new(o, NULL);
+    if (async_gen_init_hooks(o)) {
+        return NULL;
     }
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+    return async_gen_athrow_new(o, NULL);
 }
 
-/* The span: the generator and the argument tuple */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_athrow(PyObject *op, PyObject *args)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenObject *o = (PyAsyncGenObject*)op;
-    PyObject *result = NULL;
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, (PyObject *)o);
-    _PyValueSpan_AppendObject(&span, args);
     if (PyTuple_GET_SIZE(args) > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of athrow() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            goto done;
+            return NULL;
         }
     }
-    if (!async_gen_init_hooks(o)) {
-        result = async_gen_athrow_new(o, args);
+    if (async_gen_init_hooks(o)) {
+        return NULL;
     }
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return result;
+    return async_gen_athrow_new(o, args);
 }
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 ag_getframe(PyObject *ag, void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(_gen_getframe((PyGenObject *)ag, "ag_frame"));
+    return _gen_getframe((PyGenObject *)ag, "ag_frame");
 }
 
-static PyValue
+static PyObject *
 ag_getcode(PyObject *gen, void *Py_UNUSED(ignored))
 {
-    return PyValue_FromResult(_gen_getcode((PyGenObject*)gen, "ag_code"));
+    return _gen_getcode((PyGenObject*)gen, "ag_code");
 }
 
-static PyValue
+static PyObject *
 ag_getstate(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
@@ -2091,7 +1853,7 @@ ag_getstate(PyObject *self, void *Py_UNUSED(ignored))
 
     assert(frame_state >= 0 &&
            (size_t)frame_state < Py_ARRAY_LENGTH(state_strings));
-    return PyValue_FromResult(state_strings[frame_state]);
+    return state_strings[frame_state];
 }
 
 static PyGetSetDef async_gen_getsetlist[] = {
@@ -2130,11 +1892,11 @@ the (type, val, tb) signature is deprecated, \n\
 and may be removed in a future version of Python.");
 
 static PyMethodDef async_gen_methods[] = {
-    {"asend", _PyCFunction_CAST(async_gen_asend), METH_O, async_asend_doc},
+    {"asend", async_gen_asend, METH_O, async_asend_doc},
     {"athrow", async_gen_athrow, METH_VARARGS, async_athrow_doc},
     {"aclose", async_gen_aclose, METH_NOARGS, async_aclose_doc},
     {"__sizeof__", gen_sizeof, METH_NOARGS, sizeof__doc__},
-    {"__class_getitem__",    _PyCFunction_CAST(Py_GenericAliasValue),
+    {"__class_getitem__",    Py_GenericAlias,
     METH_O|METH_CLASS,       PyDoc_STR("async generators are generic over the types of their yield and send values")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -2169,13 +1931,12 @@ PyTypeObject PyAsyncGen_Type = {
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_MANAGED_WEAKREF,             /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,    /* tp_flags */
     0,                                          /* tp_doc */
     async_gen_traverse,                         /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    offsetof(PyAsyncGenObject, ag_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     async_gen_methods,                          /* tp_methods */
@@ -2219,18 +1980,12 @@ PyAsyncGen_New(PyFrameObject *f, PyObject *name, PyObject *qualname)
     return (PyObject*)ag;
 }
 
-// Report an async yield as PYGEN_RETURN with the yielded value.  The
-// error path's span holds the generator, which it marks closed.
-Py_GC_PRECISE static PySendResult
+// Report an async yield as PYGEN_RETURN with the yielded value.
+static PySendResult
 async_gen_unwrap_send(PyAsyncGenObject *gen, PyObject *result,
                       PyObject **presult)
 {
     if (result == NULL) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        PyValue slots[1];
-        _PyValueRoot span;
-        _PyThreadState_PushValueSpan(tstate, &span, slots);
-        _PyValueSpan_AppendObject(&span, (PyObject *)gen);
         if (!PyErr_Occurred()) {
             PyErr_SetNone(PyExc_StopAsyncIteration);
         }
@@ -2240,7 +1995,6 @@ async_gen_unwrap_send(PyAsyncGenObject *gen, PyObject *result,
         ) {
             FT_ATOMIC_STORE_INT8_RELAXED(gen->ag_closed, 1);
         }
-        _PyThreadState_PopValueRoot(tstate, &span);
 
         *presult = NULL;
         return PYGEN_ERROR;
@@ -2257,24 +2011,15 @@ async_gen_unwrap_send(PyAsyncGenObject *gen, PyObject *result,
     return PYGEN_NEXT;
 }
 
-/* The span: the object slot of the unwrapped value */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_unwrap_value(PyAsyncGenObject *gen, PyObject *result)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    PyObject **valuep = _PyValueSpan_ObjectSlot(&span);
-    PyObject *value = NULL;
-    if (async_gen_unwrap_send(gen, result, valuep) == PYGEN_RETURN) {
-        _PyGen_SetStopIterationValue(*valuep);
-        Py_DECREF(*valuep);
+    PyObject *value;
+    if (async_gen_unwrap_send(gen, result, &value) == PYGEN_RETURN) {
+        _PyGen_SetStopIterationValue(value);
+        Py_DECREF(value);
+        return NULL;
     }
-    else {
-        value = *valuep;
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return value;
 }
 
@@ -2301,7 +2046,7 @@ async_gen_asend_dealloc(PyObject *self)
 
     _PyGC_CLEAR_FINALIZED(self);
 
-    PyObject_GC_Del(self);
+    _Py_FREELIST_FREE(async_gen_asends, self, PyObject_GC_Del);
 }
 
 static int
@@ -2314,15 +2059,10 @@ async_gen_asend_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 
-/* The span: the awaitable, then the generator's result.  Precise, as
-   PyGen_am_send() is: release builds inline gen_send() here. */
-Py_GC_PRECISE PySendResult
+PySendResult
 _PyAsyncGenASend_Send(PyObject *self, PyObject *arg, PyObject **presult)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenASend *o = _PyAsyncGenASend_CAST(self);
-    PyValue slots[2];
-    _PyValueRoot span;
 
     *presult = NULL;
     int8_t state = FT_ATOMIC_LOAD_INT8_RELAXED(o->ags_state);
@@ -2358,10 +2098,7 @@ _PyAsyncGenASend_Send(PyObject *self, PyObject *arg, PyObject **presult)
     PyObject *result;
     PySendResult res;
 do_send:
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
     result = gen_send((PyObject*)o->ags_gen, arg);
-    _PyValueSpan_AppendObject(&span, result);
     res = async_gen_unwrap_send(o->ags_gen, result, presult);
 
     if (res != PYGEN_NEXT) {
@@ -2369,63 +2106,33 @@ do_send:
         FT_ATOMIC_STORE_INT8_RELEASE(o->ags_gen->ag_running_async, 0);
     }
 
-    _PyThreadState_PopValueRoot(tstate, &span);
     return res;
 }
 
-/* The span: the object slot of the send's result */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_asend_send(PyObject *self, PyObject *arg)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    PyObject **resultp = _PyValueSpan_ObjectSlot(&span);
-    PyObject *result = NULL;
-    if (_PyAsyncGenASend_Send(self, arg, resultp) == PYGEN_RETURN) {
-        _PyGen_SetStopIterationValue(*resultp);
-        Py_DECREF(*resultp);
+    PyObject *result;
+    if (_PyAsyncGenASend_Send(self, arg, &result) == PYGEN_RETURN) {
+        _PyGen_SetStopIterationValue(result);
+        Py_DECREF(result);
+        return NULL;
     }
-    else {
-        result = *resultp;
-    }
-    _PyThreadState_PopValueRoot(tstate, &span);
     return result;
 }
 
-/* async_gen_asend_send() as a METH_O method. */
-Py_GC_PRECISE static PyValue
-async_gen_asend_send_method(PyObject *self, PyValue arg)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
-    PyObject *arg_o = PyValue_Object(arg);
-    _PyValueSpan_AppendObject(&span, arg_o);
-    PyObject *result = arg_o == NULL ? NULL : async_gen_asend_send(self, arg_o);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
-}
 
-
-Py_GC_PRECISE static PyValue
+static PyObject *
 async_gen_asend_iternext(PyObject *ags)
 {
-    return PyValue_FromResult(async_gen_asend_send(ags, NULL));
+    return async_gen_asend_send(ags, NULL);
 }
 
 
-/* The span: the awaitable */
-Py_GC_PRECISE static PyValue
-async_gen_asend_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+async_gen_asend_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenASend *o = _PyAsyncGenASend_CAST(self);
-    PyValue slots[1];
-    _PyValueRoot span;
 
     int8_t state = FT_ATOMIC_LOAD_INT8_RELAXED(o->ags_state);
     do {
@@ -2433,7 +2140,7 @@ async_gen_asend_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "cannot reuse already awaited __anext__()/asend()");
-            return PyValue_NULL;
+            return NULL;
         }
         if (state == AWAITABLE_STATE_ITER) {
             goto do_throw;
@@ -2450,14 +2157,12 @@ async_gen_asend_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
         PyErr_SetString(
             PyExc_RuntimeError,
             "anext(): asynchronous generator is already running");
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyObject *result;
 do_throw:
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
-    result = PyValue_Object(gen_throw((PyObject*)o->ags_gen, args, nargs));
+    result = gen_throw((PyObject*)o->ags_gen, args, nargs);
     result = async_gen_unwrap_value(o->ags_gen, result);
 
     if (result == NULL) {
@@ -2465,12 +2170,11 @@ do_throw:
         FT_ATOMIC_STORE_INT8_RELEASE(o->ags_gen->ag_running_async, 0);
     }
 
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_asend_close(PyObject *self, PyObject *args)
 {
     PyAsyncGenASend *o = _PyAsyncGenASend_CAST(self);
@@ -2478,13 +2182,7 @@ async_gen_asend_close(PyObject *self, PyObject *args)
         Py_RETURN_NONE;
     }
 
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_Append(&span, PyValue_FromObject(PyExc_GeneratorExit));
-    PyObject *result = PyValue_Object(async_gen_asend_throw(self, slots, 1));
-    _PyThreadState_PopValueRoot(tstate, &span);
+    PyObject *result = async_gen_asend_throw(self, &PyExc_GeneratorExit, 1);
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
             PyErr_ExceptionMatches(PyExc_StopAsyncIteration) ||
@@ -2512,7 +2210,7 @@ async_gen_asend_finalize(PyObject *self)
 }
 
 static PyMethodDef async_gen_asend_methods[] = {
-    {"send", _PyCFunction_CAST(async_gen_asend_send_method), METH_O, send_doc},
+    {"send", async_gen_asend_send, METH_O, send_doc},
     {"throw", _PyCFunction_CAST(async_gen_asend_throw), METH_FASTCALL, throw_doc},
     {"close", async_gen_asend_close, METH_NOARGS, close_doc},
     {NULL, NULL}        /* Sentinel */
@@ -2569,13 +2267,15 @@ PyTypeObject _PyAsyncGenASend_Type = {
 };
 
 
-/* Its callers anchor the generator and the value to send */
-Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
+static PyObject *
 async_gen_asend_new(PyAsyncGenObject *gen, PyObject *sendval)
 {
-    PyAsyncGenASend *ags = PyObject_GC_New(PyAsyncGenASend, &_PyAsyncGenASend_Type);
+    PyAsyncGenASend *ags = _Py_FREELIST_POP(PyAsyncGenASend, async_gen_asends);
     if (ags == NULL) {
-        return NULL;
+        ags = PyObject_GC_New(PyAsyncGenASend, &_PyAsyncGenASend_Type);
+        if (ags == NULL) {
+            return NULL;
+        }
     }
 
     ags->ags_gen = (PyAsyncGenObject*)Py_NewRef(gen);
@@ -2596,7 +2296,7 @@ async_gen_wrapped_val_dealloc(PyObject *self)
     _PyAsyncGenWrappedValue *agw = _PyAsyncGenWrappedValue_CAST(self);
     _PyObject_GC_UNTRACK(self);
     Py_CLEAR(agw->agw_val);
-    PyObject_GC_Del(self);
+    _Py_FREELIST_FREE(async_gens, self, PyObject_GC_Del);
 }
 
 
@@ -2657,10 +2357,13 @@ _PyAsyncGenValueWrapperNew(PyThreadState *tstate, PyObject *val)
 {
     assert(val);
 
-    _PyAsyncGenWrappedValue *o = PyObject_GC_New(_PyAsyncGenWrappedValue,
-                        &_PyAsyncGenWrappedValue_Type);
+    _PyAsyncGenWrappedValue *o = _Py_FREELIST_POP(_PyAsyncGenWrappedValue, async_gens);
     if (o == NULL) {
-        return NULL;
+        o = PyObject_GC_New(_PyAsyncGenWrappedValue,
+                            &_PyAsyncGenWrappedValue_Type);
+        if (o == NULL) {
+            return NULL;
+        }
     }
     assert(_PyAsyncGenWrappedValue_CheckExact(o));
     o->agw_val = Py_NewRef(val);
@@ -2704,26 +2407,19 @@ async_gen_athrow_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 
-/* The span: the awaitable.  Precise, as PyGen_am_send() is: release
-   builds inline gen_send() here. */
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_athrow_send(PyObject *self, PyObject *arg)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenAThrow *o = _PyAsyncGenAThrow_CAST(self);
     PyGenObject *gen = _PyGen_CAST(o->agt_gen);
-    PyObject *retval = NULL;
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
+    PyObject *retval;
 
     int8_t state = FT_ATOMIC_LOAD_INT8_RELAXED(o->agt_state);
     if (state == AWAITABLE_STATE_CLOSED) {
         PyErr_SetString(
             PyExc_RuntimeError,
             "cannot reuse already awaited aclose()/athrow()");
-        goto done;
+        return NULL;
     }
 
     if (FRAME_STATE_FINISHED(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state))) {
@@ -2732,7 +2428,7 @@ async_gen_athrow_send(PyObject *self, PyObject *arg)
         (void)_Py_ASYNC_GEN_TRY_SET_STATE(o->agt_state, state,
                                           AWAITABLE_STATE_CLOSED);
         PyErr_SetNone(PyExc_StopIteration);
-        goto done;
+        return NULL;
     }
 
     do {
@@ -2740,7 +2436,7 @@ async_gen_athrow_send(PyObject *self, PyObject *arg)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "cannot reuse already awaited aclose()/athrow()");
-            goto done;
+            return NULL;
         }
         if (state == AWAITABLE_STATE_ITER) {
             goto do_send;
@@ -2748,7 +2444,7 @@ async_gen_athrow_send(PyObject *self, PyObject *arg)
         assert(state == AWAITABLE_STATE_INIT);
         if (arg != Py_None) {
             PyErr_SetString(PyExc_RuntimeError, NON_INIT_CORO_MSG);
-            goto done;
+            return NULL;
         }
     } while (!_Py_ASYNC_GEN_TRY_SET_STATE(o->agt_state, state,
                                           AWAITABLE_STATE_ITER));
@@ -2768,14 +2464,14 @@ async_gen_athrow_send(PyObject *self, PyObject *arg)
                 PyExc_RuntimeError,
                 "athrow(): asynchronous generator is already running");
         }
-        goto done;
+        return NULL;
     }
 
     if (FT_ATOMIC_LOAD_INT8_RELAXED(o->agt_gen->ag_closed)) {
         FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
         FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
         PyErr_SetNone(PyExc_StopAsyncIteration);
-        goto done;
+        return NULL;
     }
 
     if (o->agt_typ == NULL) {
@@ -2801,7 +2497,7 @@ async_gen_athrow_send(PyObject *self, PyObject *arg)
     if (retval == NULL) {
         goto check_error;
     }
-    goto done;
+    return retval;
 
 do_send:
     retval = gen_send((PyObject *)gen, arg);
@@ -2811,7 +2507,7 @@ do_send:
             FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
         }
-        goto done;
+        return retval;
     } else {
         /* aclose() mode */
         if (retval) {
@@ -2820,7 +2516,7 @@ do_send:
                 goto yield_close;
             }
             else {
-                goto done;
+                return retval;
             }
         }
         else {
@@ -2833,8 +2529,7 @@ yield_close:
     FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
     PyErr_SetString(
         PyExc_RuntimeError, ASYNC_GEN_IGNORED_EXIT_MSG);
-    retval = NULL;
-    goto done;
+    return NULL;
 
 check_error:
     FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
@@ -2852,37 +2547,14 @@ check_error:
             PyErr_SetNone(PyExc_StopIteration);
         }
     }
-    retval = NULL;
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return retval;
-}
-
-/* async_gen_athrow_send() as a METH_O method. */
-Py_GC_PRECISE static PyValue
-async_gen_athrow_send_method(PyObject *self, PyValue arg)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[2];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
-    PyObject *arg_o = PyValue_Object(arg);
-    _PyValueSpan_AppendObject(&span, arg_o);
-    PyObject *result = arg_o == NULL ? NULL : async_gen_athrow_send(self, arg_o);
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(result);
+    return NULL;
 }
 
 
-/* The span: the awaitable, then aclose()'s result */
-Py_GC_PRECISE static PyValue
-async_gen_athrow_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+async_gen_athrow_throw(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyAsyncGenAThrow *o = _PyAsyncGenAThrow_CAST(self);
-    PyValue slots[2];
-    _PyValueRoot span;
 
     int8_t state = FT_ATOMIC_LOAD_INT8_RELAXED(o->agt_state);
     do {
@@ -2890,7 +2562,7 @@ async_gen_athrow_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
             PyErr_SetString(
                 PyExc_RuntimeError,
                 "cannot reuse already awaited aclose()/athrow()");
-            return PyValue_NULL;
+            return NULL;
         }
         if (state == AWAITABLE_STATE_ITER) {
             goto do_throw;
@@ -2914,21 +2586,19 @@ async_gen_athrow_throw(PyObject *self, const PyValue *args, Py_ssize_t nargs)
                 PyExc_RuntimeError,
                 "athrow(): asynchronous generator is already running");
         }
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyObject *retval;
 do_throw:
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_AppendObject(&span, self);
-    retval = PyValue_Object(gen_throw((PyObject*)o->agt_gen, args, nargs));
+    retval = gen_throw((PyObject*)o->agt_gen, args, nargs);
     if (o->agt_typ) {
         retval = async_gen_unwrap_value(o->agt_gen, retval);
         if (retval == NULL) {
             FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
         }
-        goto done;
+        return retval;
     }
     else {
         /* aclose() mode */
@@ -2937,14 +2607,12 @@ do_throw:
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
             Py_DECREF(retval);
             PyErr_SetString(PyExc_RuntimeError, ASYNC_GEN_IGNORED_EXIT_MSG);
-            retval = NULL;
-            goto done;
+            return NULL;
         }
         if (retval == NULL) {
             FT_ATOMIC_STORE_INT8_RELAXED(o->agt_state, AWAITABLE_STATE_CLOSED);
             FT_ATOMIC_STORE_INT8_RELEASE(o->agt_gen->ag_running_async, 0);
         }
-        _PyValueSpan_AppendObject(&span, retval);
         if (PyErr_ExceptionMatches(PyExc_StopAsyncIteration) ||
             PyErr_ExceptionMatches(PyExc_GeneratorExit))
         {
@@ -2956,34 +2624,27 @@ do_throw:
             PyErr_Clear();
             PyErr_SetNone(PyExc_StopIteration);
         }
+        return retval;
     }
-done:
-    _PyThreadState_PopValueRoot(tstate, &span);
-    return PyValue_FromResult(retval);
 }
 
 
-Py_GC_PRECISE static PyValue
+static PyObject *
 async_gen_athrow_iternext(PyObject *agt)
 {
-    return PyValue_FromResult(async_gen_athrow_send(agt, Py_None));
+    return async_gen_athrow_send(agt, Py_None);
 }
 
 
-Py_GC_PRECISE static PyObject *
+static PyObject *
 async_gen_athrow_close(PyObject *self, PyObject *args)
 {
     PyAsyncGenAThrow *agt = _PyAsyncGenAThrow_CAST(self);
     if (FT_ATOMIC_LOAD_INT8_RELAXED(agt->agt_state) == AWAITABLE_STATE_CLOSED) {
         Py_RETURN_NONE;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValue slots[1];
-    _PyValueRoot span;
-    _PyThreadState_PushValueSpan(tstate, &span, slots);
-    _PyValueSpan_Append(&span, PyValue_FromObject(PyExc_GeneratorExit));
-    PyObject *result = PyValue_Object(async_gen_athrow_throw(self, slots, 1));
-    _PyThreadState_PopValueRoot(tstate, &span);
+    PyObject *result = async_gen_athrow_throw((PyObject*)agt,
+                                              &PyExc_GeneratorExit, 1);
     if (result == NULL) {
         if (PyErr_ExceptionMatches(PyExc_StopIteration) ||
             PyErr_ExceptionMatches(PyExc_StopAsyncIteration) ||
@@ -3012,7 +2673,7 @@ async_gen_athrow_finalize(PyObject *op)
 }
 
 static PyMethodDef async_gen_athrow_methods[] = {
-    {"send", _PyCFunction_CAST(async_gen_athrow_send_method), METH_O, send_doc},
+    {"send", async_gen_athrow_send, METH_O, send_doc},
     {"throw", _PyCFunction_CAST(async_gen_athrow_throw),
     METH_FASTCALL, throw_doc},
     {"close", async_gen_athrow_close, METH_NOARGS, close_doc},
@@ -3072,13 +2733,13 @@ PyTypeObject _PyAsyncGenAThrow_Type = {
 };
 
 
-/* Its callers anchor the generator and the argument tuple.  The tuple's
-   items are read after the allocation, from the tuple. */
-Py_GC_PRECISE Py_GC_ARGS_ANCHORED static PyObject *
+static PyObject *
 async_gen_athrow_new(PyAsyncGenObject *gen, PyObject *args)
 {
-    Py_ssize_t nargs = args ? PyTuple_GET_SIZE(args) : 0;
-    if (args && !_PyArg_CheckPositional("athrow", nargs, 1, 3)) {
+    PyObject *typ = NULL;
+    PyObject *tb = NULL;
+    PyObject *val = NULL;
+    if (args && !PyArg_UnpackTuple(args, "athrow", 1, 3, &typ, &val, &tb)) {
         return NULL;
     }
 
@@ -3088,9 +2749,9 @@ async_gen_athrow_new(PyAsyncGenObject *gen, PyObject *args)
         return NULL;
     }
     o->agt_gen = (PyAsyncGenObject*)Py_NewRef(gen);
-    o->agt_typ = nargs > 0 ? Py_NewRef(PyTuple_GET_ITEM(args, 0)) : NULL;
-    o->agt_val = nargs > 1 ? Py_NewRef(PyTuple_GET_ITEM(args, 1)) : NULL;
-    o->agt_tb = nargs > 2 ? Py_NewRef(PyTuple_GET_ITEM(args, 2)) : NULL;
+    o->agt_typ = Py_XNewRef(typ);
+    o->agt_tb = Py_XNewRef(tb);
+    o->agt_val = Py_XNewRef(val);
 
     o->agt_state = AWAITABLE_STATE_INIT;
     _PyObject_GC_TRACK((PyObject*)o);

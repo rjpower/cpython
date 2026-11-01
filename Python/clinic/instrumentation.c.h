@@ -15,27 +15,22 @@ PyDoc_STRVAR(monitoring_use_tool_id__doc__,
 static PyObject *
 monitoring_use_tool_id_impl(PyObject *module, int tool_id, PyObject *name);
 
-static PyValue
-monitoring_use_tool_id(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+monitoring_use_tool_id(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     PyObject *name;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("use_tool_id", nargs, 2, 2)) {
         goto exit;
     }
-    tool_id = PyLong_AsIntValue(args[0]);
+    tool_id = PyLong_AsInt(args[0]);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    name = PyValue_Object(args[1]);
-    if (name == NULL) {
-        goto exit;
-    }
-    _return_value = monitoring_use_tool_id_impl(module, tool_id, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = args[1];
+    return_value = monitoring_use_tool_id_impl(module, tool_id, name);
 
 exit:
     return return_value;
@@ -47,24 +42,22 @@ PyDoc_STRVAR(monitoring_clear_tool_id__doc__,
 "\n");
 
 #define MONITORING_CLEAR_TOOL_ID_METHODDEF    \
-    {"clear_tool_id", _PyCFunction_CAST(monitoring_clear_tool_id), METH_O, monitoring_clear_tool_id__doc__},
+    {"clear_tool_id", (PyCFunction)monitoring_clear_tool_id, METH_O, monitoring_clear_tool_id__doc__},
 
 static PyObject *
 monitoring_clear_tool_id_impl(PyObject *module, int tool_id);
 
-static PyValue
-monitoring_clear_tool_id(PyObject *module, PyValue arg)
+static PyObject *
+monitoring_clear_tool_id(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
-    PyObject *_return_value;
 
-    tool_id = PyLong_AsIntValue(arg);
+    tool_id = PyLong_AsInt(arg);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = monitoring_clear_tool_id_impl(module, tool_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = monitoring_clear_tool_id_impl(module, tool_id);
 
 exit:
     return return_value;
@@ -76,24 +69,22 @@ PyDoc_STRVAR(monitoring_free_tool_id__doc__,
 "\n");
 
 #define MONITORING_FREE_TOOL_ID_METHODDEF    \
-    {"free_tool_id", _PyCFunction_CAST(monitoring_free_tool_id), METH_O, monitoring_free_tool_id__doc__},
+    {"free_tool_id", (PyCFunction)monitoring_free_tool_id, METH_O, monitoring_free_tool_id__doc__},
 
 static PyObject *
 monitoring_free_tool_id_impl(PyObject *module, int tool_id);
 
-static PyValue
-monitoring_free_tool_id(PyObject *module, PyValue arg)
+static PyObject *
+monitoring_free_tool_id(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
-    PyObject *_return_value;
 
-    tool_id = PyLong_AsIntValue(arg);
+    tool_id = PyLong_AsInt(arg);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = monitoring_free_tool_id_impl(module, tool_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = monitoring_free_tool_id_impl(module, tool_id);
 
 exit:
     return return_value;
@@ -105,24 +96,22 @@ PyDoc_STRVAR(monitoring_get_tool__doc__,
 "\n");
 
 #define MONITORING_GET_TOOL_METHODDEF    \
-    {"get_tool", _PyCFunction_CAST(monitoring_get_tool), METH_O, monitoring_get_tool__doc__},
+    {"get_tool", (PyCFunction)monitoring_get_tool, METH_O, monitoring_get_tool__doc__},
 
 static PyObject *
 monitoring_get_tool_impl(PyObject *module, int tool_id);
 
-static PyValue
-monitoring_get_tool(PyObject *module, PyValue arg)
+static PyObject *
+monitoring_get_tool(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
-    PyObject *_return_value;
 
-    tool_id = PyLong_AsIntValue(arg);
+    tool_id = PyLong_AsInt(arg);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = monitoring_get_tool_impl(module, tool_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = monitoring_get_tool_impl(module, tool_id);
 
 exit:
     return return_value;
@@ -140,32 +129,27 @@ static PyObject *
 monitoring_register_callback_impl(PyObject *module, int tool_id, int event,
                                   PyObject *func);
 
-static PyValue
-monitoring_register_callback(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+monitoring_register_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     int event;
     PyObject *func;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("register_callback", nargs, 3, 3)) {
         goto exit;
     }
-    tool_id = PyLong_AsIntValue(args[0]);
+    tool_id = PyLong_AsInt(args[0]);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    event = PyLong_AsIntValue(args[1]);
+    event = PyLong_AsInt(args[1]);
     if (event == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    func = PyValue_Object(args[2]);
-    if (func == NULL) {
-        goto exit;
-    }
-    _return_value = monitoring_register_callback_impl(module, tool_id, event, func);
-    return_value = PyValue_FromResult(_return_value);
+    func = args[2];
+    return_value = monitoring_register_callback_impl(module, tool_id, event, func);
 
 exit:
     return return_value;
@@ -177,19 +161,19 @@ PyDoc_STRVAR(monitoring_get_events__doc__,
 "\n");
 
 #define MONITORING_GET_EVENTS_METHODDEF    \
-    {"get_events", _PyCFunction_CAST(monitoring_get_events), METH_O, monitoring_get_events__doc__},
+    {"get_events", (PyCFunction)monitoring_get_events, METH_O, monitoring_get_events__doc__},
 
 static int
 monitoring_get_events_impl(PyObject *module, int tool_id);
 
-static PyValue
-monitoring_get_events(PyObject *module, PyValue arg)
+static PyObject *
+monitoring_get_events(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     int _return_value;
 
-    tool_id = PyLong_AsIntValue(arg);
+    tool_id = PyLong_AsInt(arg);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -197,7 +181,7 @@ monitoring_get_events(PyObject *module, PyValue arg)
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromLongLong((long long)_return_value);
+    return_value = PyLong_FromLong((long)_return_value);
 
 exit:
     return return_value;
@@ -214,27 +198,25 @@ PyDoc_STRVAR(monitoring_set_events__doc__,
 static PyObject *
 monitoring_set_events_impl(PyObject *module, int tool_id, int event_set);
 
-static PyValue
-monitoring_set_events(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+monitoring_set_events(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     int event_set;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_events", nargs, 2, 2)) {
         goto exit;
     }
-    tool_id = PyLong_AsIntValue(args[0]);
+    tool_id = PyLong_AsInt(args[0]);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    event_set = PyLong_AsIntValue(args[1]);
+    event_set = PyLong_AsInt(args[1]);
     if (event_set == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = monitoring_set_events_impl(module, tool_id, event_set);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = monitoring_set_events_impl(module, tool_id, event_set);
 
 exit:
     return return_value;
@@ -252,10 +234,10 @@ static int
 monitoring_get_local_events_impl(PyObject *module, int tool_id,
                                  PyObject *code);
 
-static PyValue
-monitoring_get_local_events(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+monitoring_get_local_events(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     PyObject *code;
     int _return_value;
@@ -263,19 +245,16 @@ monitoring_get_local_events(PyObject *module, const PyValue *args, Py_ssize_t na
     if (!_PyArg_CheckPositional("get_local_events", nargs, 2, 2)) {
         goto exit;
     }
-    tool_id = PyLong_AsIntValue(args[0]);
+    tool_id = PyLong_AsInt(args[0]);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    code = PyValue_Object(args[1]);
-    if (code == NULL) {
-        goto exit;
-    }
+    code = args[1];
     _return_value = monitoring_get_local_events_impl(module, tool_id, code);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromLongLong((long long)_return_value);
+    return_value = PyLong_FromLong((long)_return_value);
 
 exit:
     return return_value;
@@ -293,32 +272,27 @@ static PyObject *
 monitoring_set_local_events_impl(PyObject *module, int tool_id,
                                  PyObject *code, int event_set);
 
-static PyValue
-monitoring_set_local_events(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+monitoring_set_local_events(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int tool_id;
     PyObject *code;
     int event_set;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("set_local_events", nargs, 3, 3)) {
         goto exit;
     }
-    tool_id = PyLong_AsIntValue(args[0]);
+    tool_id = PyLong_AsInt(args[0]);
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    code = PyValue_Object(args[1]);
-    if (code == NULL) {
-        goto exit;
-    }
-    event_set = PyLong_AsIntValue(args[2]);
+    code = args[1];
+    event_set = PyLong_AsInt(args[2]);
     if (event_set == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = monitoring_set_local_events_impl(module, tool_id, code, event_set);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = monitoring_set_local_events_impl(module, tool_id, code, event_set);
 
 exit:
     return return_value;
@@ -357,4 +331,4 @@ monitoring__all_events(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return monitoring__all_events_impl(module);
 }
-/*[clinic end generated code: output=0dd6529dc5bad665 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8f81876c6aba9be8 input=a9049054013a1b77]*/

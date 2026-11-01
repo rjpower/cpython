@@ -1417,22 +1417,10 @@ dnl platforms don't need the CPU architecture in the SOABI tag. These platforms
 dnl will have multiple sysconfig modules (one for each CPU architecture), but
 dnl use a single "fat" binary at runtime. SOABI_PLATFORM is the component of
 dnl the PLATFORM_TRIPLET that will be used in binary module extensions.
-dnl
-dnl This interpreter's ABI is not upstream's: values are PyValue, not
-dnl PyObject * (boil/design/06-architecture-v2.md, section 19.4).  An ABI flag
-dnl would change the wheel tag, which packaging rejects, so the platform part
-dnl of SOABI carries the mark instead: x86_64-linux-gnu becomes
-dnl x86_64-boil2-linux-gnu.  An extension built by upstream CPython then has a
-dnl suffix this interpreter does not load, while the wheel ABI tag (cp316),
-dnl PLATFORM_TRIPLET, MULTIARCH and sysconfig.get_platform() are unchanged.
-dnl The number is the value ABI's generation: boil2 since the shape's
-dnl class_version, which grew PyTypeObject (boil/design/12-object-slots-on-values.md,
-dnl section 2.1), so that an extension built for an earlier one is not loaded.
 AS_CASE([$ac_sys_system],
   [iOS|tvOS|visionOS|watchOS], [SOABI_PLATFORM=`echo "$PLATFORM_TRIPLET" | cut -d '-' -f2`],
   [SOABI_PLATFORM=$PLATFORM_TRIPLET]
 )
-SOABI_PLATFORM=`echo "$SOABI_PLATFORM" | sed 's/-/-boil2-/'`
 
 if test x$SOABI_PLATFORM != x; then
     AC_DEFINE_UNQUOTED([SOABI_PLATFORM], ["${SOABI_PLATFORM}"], [Platform tag, used in binary module extension filenames.])
@@ -1991,8 +1979,23 @@ AC_SUBST([ABI_THREAD])
 ABIFLAGS=""
 ABI_THREAD=""
 
-# There is no free-threaded build (note 06, decision 4), so ABI_THREAD is
-# always empty; it stays for the install paths and sysconfig that name it.
+# Check for --disable-gil
+# --disable-gil
+AC_MSG_CHECKING([for --disable-gil])
+AC_ARG_ENABLE([gil],
+  [AS_HELP_STRING([--disable-gil], [enable support for running without the GIL (default is no)])],
+  [AS_VAR_IF([enable_gil], [yes], [disable_gil=no], [disable_gil=yes])], [disable_gil=no]
+)
+AC_MSG_RESULT([$disable_gil])
+
+if test "$disable_gil" = "yes"
+then
+  AC_DEFINE([Py_GIL_DISABLED], [1],
+            [Define if you want to disable the GIL])
+  # Add "t" for "threaded"
+  ABIFLAGS="${ABIFLAGS}t"
+  ABI_THREAD="t"
+fi
 
 # Check for --with-pydebug
 AC_MSG_CHECKING([for --with-pydebug])
@@ -2010,12 +2013,27 @@ else AC_MSG_RESULT([no]); Py_DEBUG='false'
 fi],
 [AC_MSG_RESULT([no])])
 
-# The tracing collector owns memory (note 06, step 5).  It scans C stacks
-# conservatively, and zero-initialized locals leave fewer stale pointers in
-# live frames, which keep garbage alive.
-AX_CHECK_COMPILE_FLAG([-ftrivial-auto-var-init=zero], [
-  CFLAGS_NODIST="$CFLAGS_NODIST -ftrivial-auto-var-init=zero"
-], [], [-Werror])
+# Check for --with-trace-refs
+# --with-trace-refs
+AC_MSG_CHECKING([for --with-trace-refs])
+AC_ARG_WITH([trace-refs],
+  [AS_HELP_STRING([--with-trace-refs], [enable tracing references for debugging purpose (default is no)])],
+  [], [with_trace_refs=no]
+)
+AC_MSG_RESULT([$with_trace_refs])
+
+if test "$with_trace_refs" = "yes"
+then
+  AC_DEFINE([Py_TRACE_REFS], [1],
+            [Define if you want to enable tracing references for debugging purpose])
+fi
+
+if test "$disable_gil" = "yes" -a "$with_trace_refs" = "yes";
+then
+  AC_MSG_ERROR([--disable-gil cannot be used with --with-trace-refs])
+fi
+
+# Reference counting and cycle collection own all object memory.
 
 # Check for --enable-pystats
 AC_MSG_CHECKING([for --enable-pystats])
@@ -5494,8 +5512,8 @@ if test "$with_mimalloc" != no; then
   with_mimalloc=yes
   AC_DEFINE([WITH_MIMALLOC], [1], [Define if you want to compile in mimalloc memory allocator.])
   AC_SUBST([MIMALLOC_HEADERS], ['$(MIMALLOC_HEADERS)'])
-else
-  AC_MSG_ERROR([the tracing collector requires the mimalloc memory allocator (--with-mimalloc).])
+elif test "$disable_gil" = "yes"; then
+  AC_MSG_ERROR([--disable-gil requires mimalloc memory allocator (--with-mimalloc).])
 fi
 
 AC_MSG_RESULT([$with_mimalloc])
@@ -6988,6 +7006,7 @@ AC_C_BIGENDIAN
 #
 # * The Python implementation (always 'cpython-' for us)
 # * The major and minor version numbers
+# * --disable-gil (adds a 't')
 # * --with-pydebug (adds a 'd')
 #
 # Thus for example, Python 3.2 built with wide unicode, pydebug, and pymalloc,
@@ -7000,15 +7019,15 @@ AC_SUBST([SOABI])
 AC_MSG_CHECKING([ABIFLAGS])
 AC_MSG_RESULT([$ABIFLAGS])
 AC_MSG_CHECKING([SOABI])
-SOABI='cpython-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+SOABI='boilrc1-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 AC_MSG_RESULT([$SOABI])
 
-# Release and debug (Py_DEBUG) builds
+# Release build, debug build (Py_DEBUG), and trace refs build (Py_TRACE_REFS)
 # are ABI compatible
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
   AC_SUBST([ALT_SOABI])
-  ALT_SOABI='cpython-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+  ALT_SOABI='boilrc1-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
   AC_DEFINE_UNQUOTED([ALT_SOABI], ["${ALT_SOABI}"],
             [Alternative SOABI used in debug build to load C extensions built in release mode])
 fi
@@ -7935,6 +7954,24 @@ fi
 AC_DEFINE([Py_IR_INTERP], [1],
   [Defined because code objects run as the register IR.])
 
+# Check for --with-shapes
+AC_MSG_CHECKING([for --with-shapes])
+AC_ARG_WITH(
+  [shapes],
+  [AS_HELP_STRING(
+    [--with-shapes],
+    [guard instance attribute access on per-type shapes (default is no)]
+  )],
+  [],
+  [with_shapes=no])
+AC_MSG_RESULT([$with_shapes])
+AS_VAR_IF([with_shapes], [yes], [
+  AS_VAR_IF([disable_gil], [yes],
+    [AC_MSG_ERROR([--with-shapes is not supported with --disable-gil])])
+  AC_DEFINE([Py_SHAPES], [1],
+    [Define to guard instance attribute access on per-type shapes.])
+])
+
 # Check for --with-remote-debug
 AC_MSG_CHECKING([for --with-remote-debug])
 AC_ARG_WITH(
@@ -8050,7 +8087,7 @@ AC_MSG_CHECKING([if we need to manually block large inlining in ceval.c])
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 int main(void) {
 // See gh-148284: Clang 22 seems to have interactions with inlining
-// and the PyValue buffer which cause 40 kB of stack usage on x86-64
+// and the stackref buffer which cause 40 kB of stack usage on x86-64
 // in buggy versions of _PyEval_EvalFrameDefault() in computed goto
 // interpreter. The normal usage seen is normally 1-2 kB.
 #if defined(__clang__) && (__clang_major__ == 22)
@@ -8470,11 +8507,15 @@ AC_ARG_WITH([build-details-suffix],
     AS_VAR_IF(
       [with_build_details_suffix], [yes], [
         colocated_install=yes
+        threading_suffix=""
+        if [[ "$ABI_THREAD" = "t" ]]; then
+          threading_suffix=-free-threading
+        fi
         debug_suffix=""
         if [[ "$Py_DEBUG" = "true" ]]; then
           debug_suffix=-debug
         fi
-        BUILD_DETAILS=build-details.$MULTIARCH$debug_suffix.json
+        BUILD_DETAILS=build-details.$MULTIARCH$threading_suffix$debug_suffix.json
       ], [
         BUILD_DETAILS=build-details.$with_build_details_suffix.json
       ]

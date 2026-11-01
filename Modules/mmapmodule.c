@@ -129,6 +129,7 @@ typedef struct {
     int flags;
 #endif
 
+    PyObject *weakreflist;
     access_mode access;
     _Bool trackfd;
 } mmap_object;
@@ -185,7 +186,7 @@ mmap_object_dealloc(PyObject *op)
     Py_END_ALLOW_THREADS
 #endif /* UNIX */
 
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, m_obj->weakreflist);
 
     tp->tp_free(m_obj);
     Py_DECREF(tp);
@@ -1206,7 +1207,7 @@ mmap_mmap_move_impl(mmap_object *self, Py_ssize_t dest, Py_ssize_t src,
     }
 }
 
-static PyValue
+static PyObject *
 mmap_closed_get(PyObject *op, void *Py_UNUSED(closure))
 {
     mmap_object *self = mmap_object_CAST(op);
@@ -1218,7 +1219,7 @@ mmap_closed_get(PyObject *op, void *Py_UNUSED(closure))
     result = PyBool_FromLong(self->data == NULL ? 1 : 0);
 #endif
     Py_END_CRITICAL_SECTION();
-    return PyValue_FromResult(result);
+    return result;
 }
 
 /*[clinic input]
@@ -1414,6 +1415,11 @@ mmap_mmap_madvise_impl(mmap_object *self, int option, Py_ssize_t start,
     Py_RETURN_NONE;
 }
 #endif // HAVE_MADVISE
+
+static struct PyMemberDef mmap_object_members[] = {
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(mmap_object, weakreflist), Py_READONLY},
+    {NULL},
+};
 
 static struct PyMethodDef mmap_object_methods[] = {
     MMAP_MMAP_CLOSE_METHODDEF
@@ -1770,6 +1776,7 @@ static PyType_Slot mmap_object_slots[] = {
     {Py_tp_repr, mmap__repr__method},
     {Py_tp_doc, (void *)mmap_doc},
     {Py_tp_methods, mmap_object_methods},
+    {Py_tp_members, mmap_object_members},
     {Py_tp_getset, mmap_object_getset},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, _PyObject_VisitType},
@@ -1794,8 +1801,7 @@ static PyType_Spec mmap_object_spec = {
     .name = "mmap.mmap",
     .basicsize = sizeof(mmap_object),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
-              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
-              Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE),
     .slots = mmap_object_slots,
 };
 
@@ -1920,6 +1926,7 @@ new_mmap_object(PyTypeObject *type, PyObject *args, PyObject *kwdict)
     m_obj->data = NULL;
     m_obj->size = map_size;
     m_obj->pos = 0;
+    m_obj->weakreflist = NULL;
     m_obj->exports = 0;
     m_obj->offset = offset;
     m_obj->trackfd = trackfd;
@@ -2143,6 +2150,7 @@ new_mmap_object(PyTypeObject *type, PyObject *args, PyObject *kwdict)
     /* set the initial position */
     m_obj->pos = (size_t) 0;
 
+    m_obj->weakreflist = NULL;
     m_obj->exports = 0;
     /* set the tag name */
     if (!Py_IsNone(tagname)) {

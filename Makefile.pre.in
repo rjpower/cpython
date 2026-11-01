@@ -452,6 +452,7 @@ PYTHON_OBJS=	\
 		Python/ast_preprocess.o \
 		Python/ast_unparse.o \
 		Python/bltinmodule.o \
+		Python/brc.o \
 		Python/ceval.o \
 		Python/codecs.o \
 		Python/codegen.o \
@@ -465,10 +466,10 @@ PYTHON_OBJS=	\
 		Python/frame.o \
 		Python/frozenmain.o \
 		Python/future.o \
-		Python/gc_live.o \
+		Python/gc.o \
+		Python/gc_free_threading.o \
+		Python/gc_gil.o \
 		Python/gc_trace.o \
-		Python/gc_walk.o \
-		Python/gc_capture.o \
 		Python/getargs.o \
 		Python/getcompiler.o \
 		Python/getcopyright.o \
@@ -479,6 +480,7 @@ PYTHON_OBJS=	\
 		Python/hashtable.o \
 		Python/import.o \
 		Python/importdl.o \
+		Python/index_pool.o \
 		Python/initconfig.o \
 		Python/interpconfig.o \
 		Python/instrumentation.o \
@@ -513,7 +515,7 @@ PYTHON_OBJS=	\
 		Python/specialize.o \
 		Python/slots.o \
 		Python/slots_generated.o \
-		Python/pyvalue.o \
+		Python/stackrefs.o \
 		Python/structmember.o \
 		Python/symtable.o \
 		Python/sysmodule.o \
@@ -521,6 +523,7 @@ PYTHON_OBJS=	\
 		Python/traceback.o \
 		Python/tracemalloc.o \
 		Python/typecache.o \
+		Python/uniqueid.o \
 		Python/getopt.o \
 		Python/pystrcmp.o \
 		Python/pystrtod.o \
@@ -579,8 +582,6 @@ OBJECT_OBJS=	\
 		Objects/rangeobject.o \
 		Objects/sentinelobject.o \
 		Objects/setobject.o \
-		Objects/shapeobject.o \
-		Objects/lookupplan.o \
 		Objects/sliceobject.o \
 		Objects/structseq.o \
 		Objects/templateobject.o \
@@ -619,7 +620,7 @@ LINK_PYTHON_OBJS=@LINK_PYTHON_OBJS@
 # On some systems, object files that reference DTrace probes need to be modified
 # in-place by dtrace(1).
 DTRACE_DEPS = \
-	Python/ceval.o Python/import.o Python/sysmodule.o
+	Python/ceval.o Python/gc.o Python/import.o Python/sysmodule.o
 
 ##########################################################################
 # pyexpat's expat library
@@ -794,7 +795,7 @@ list-targets:
 	@grep -E '^[A-Za-z][-A-Za-z0-9]+:' Makefile | awk -F : '{print $$1}'
 
 .PHONY: build_all
-build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) Python/gc_inline.stamp platform sharedmods \
+build_all:	check-clean-src check-app-store-compliance $(BUILDPYTHON) platform sharedmods \
 		gdbhooks Programs/_testembed scripts checksharedmods rundsymutil $(BUILD_DETAILS)
 
 .PHONY: build_wasm
@@ -981,38 +982,8 @@ clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c
 # Objects linked into the interpreter only, not into libpython.
 PLATFORM_MAIN_OBJS=	@PLATFORM_MAIN_OBJS@
 
-# root_check's C mode (Include/internal/pycore_gc_walk.h) over every core
-# source file that marks a function Py_GC_PRECISE: the interpreter does not
-# link while a marked function fails the check.
-GC_PRECISE_CHECK=Tools/cases_generator/root_check_c.py
-Python/gc_precise.stamp: $(LIBRARY_OBJS) $(srcdir)/$(GC_PRECISE_CHECK)
-	@files=`cd $(srcdir) && { grep -l -r -w --include='*.c' Py_GC_PRECISE Objects Python Modules Parser; \
-		grep -l -r -w --include='*.h' Py_GC_PRECISE Objects Python Modules Parser Include; } || true`; \
-	if test -n "$$files"; then \
-		(cd $(srcdir) && $(PYTHON_FOR_REGEN) $(GC_PRECISE_CHECK) $$files) || exit 1; \
-	fi
-	@touch $@
-
-# The inline audit (Tools/build/gc_inline_audit.py) over the linked
-# interpreter image: nothing the C mode has not checked is inlined into a
-# precise function.  Without readelf (no ELF), there is no precise section
-# to audit.
-GC_INLINE_AUDIT=$(srcdir)/Tools/build/gc_inline_audit.py
-Python/gc_inline.stamp: $(BUILDPYTHON) $(GC_INLINE_AUDIT) $(srcdir)/$(GC_PRECISE_CHECK)
-	@$(MAKE) check-gc-inline
-	@touch $@
-
-.PHONY: check-gc-inline
-check-gc-inline: $(BUILDPYTHON)
-	@if test "$(PY_ENABLE_SHARED)" = 1; then image=$(INSTSONAME); else image=$(BUILDPYTHON); fi; \
-	if command -v readelf >/dev/null 2>&1; then \
-		$(PYTHON_FOR_REGEN) $(GC_INLINE_AUDIT) $$image; \
-	else \
-		echo "check-gc-inline: no readelf, not audited"; \
-	fi
-
 # Build the interpreter
-$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS) Python/gc_precise.stamp
+$(BUILDPYTHON):	Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_DEPS)
 	$(LINKCC) $(PY_CORE_EXE_LDFLAGS) $(LINKFORSHARED) -o $@ Programs/python.o $(PLATFORM_MAIN_OBJS) $(LINK_PYTHON_OBJS) $(LIBS) $(MODLIBS) $(SYSLIBS)
 
 platform: $(PYTHON_FOR_BUILD_DEPS) pybuilddir.txt
@@ -1230,7 +1201,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/fileobject.h \
 		$(srcdir)/Include/fileutils.h \
 		$(srcdir)/Include/floatobject.h \
-		$(srcdir)/Include/pyvalue.h \
 		$(srcdir)/Include/frameobject.h \
 		$(srcdir)/Include/genericaliasobject.h \
 		$(srcdir)/Include/import.h \
@@ -1364,6 +1334,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_backoff.h \
 		$(srcdir)/Include/internal/pycore_bitutils.h \
 		$(srcdir)/Include/internal/pycore_blocks_output_buffer.h \
+		$(srcdir)/Include/internal/pycore_brc.h \
 		$(srcdir)/Include/internal/pycore_bytes_methods.h \
 		$(srcdir)/Include/internal/pycore_bytesobject.h \
 		$(srcdir)/Include/internal/pycore_call.h \
@@ -1393,10 +1364,11 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_flowgraph.h \
 		$(srcdir)/Include/internal/pycore_format.h \
 		$(srcdir)/Include/internal/pycore_frame.h \
+		$(srcdir)/Include/internal/pycore_freelist.h \
+		$(srcdir)/Include/internal/pycore_freelist_state.h \
 		$(srcdir)/Include/internal/pycore_function.h \
 		$(srcdir)/Include/internal/pycore_gc.h \
 		$(srcdir)/Include/internal/pycore_gc_trace.h \
-		$(srcdir)/Include/internal/pycore_gc_walk.h \
 		$(srcdir)/Include/internal/pycore_genobject.h \
 		$(srcdir)/Include/internal/pycore_getopt.h \
 		$(srcdir)/Include/internal/pycore_gil.h \
@@ -1408,6 +1380,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_hashtable.h \
 		$(srcdir)/Include/internal/pycore_import.h \
 		$(srcdir)/Include/internal/pycore_importdl.h \
+		$(srcdir)/Include/internal/pycore_index_pool.h \
 		$(srcdir)/Include/internal/pycore_initconfig.h \
 		$(srcdir)/Include/internal/pycore_instruments.h \
 		$(srcdir)/Include/internal/pycore_instruction_sequence.h \
@@ -1465,15 +1438,13 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_runtime_structs.h \
 		$(srcdir)/Include/internal/pycore_semaphore.h \
 		$(srcdir)/Include/internal/pycore_setobject.h \
-		$(srcdir)/Include/internal/pycore_shape.h \
-		$(srcdir)/Include/internal/pycore_lookup.h \
 		$(srcdir)/Include/internal/pycore_signal.h \
 		$(srcdir)/Include/internal/pycore_sliceobject.h \
 		$(srcdir)/Include/internal/pycore_slots.h \
 		$(srcdir)/Include/internal/pycore_slots_generated.h \
 		$(srcdir)/Include/internal/pycore_stats.h \
 		$(srcdir)/Include/internal/pycore_strhex.h \
-		$(srcdir)/Include/internal/pycore_value.h \
+		$(srcdir)/Include/internal/pycore_stackref.h \
 		$(srcdir)/Include/internal/pycore_structs.h \
 		$(srcdir)/Include/internal/pycore_structseq.h \
 		$(srcdir)/Include/internal/pycore_symtable.h \
@@ -1494,6 +1465,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_unicodeobject.h \
 		$(srcdir)/Include/internal/pycore_unicodeobject_generated.h \
 		$(srcdir)/Include/internal/pycore_unionobject.h \
+		$(srcdir)/Include/internal/pycore_uniqueid.h \
 		$(srcdir)/Include/internal/pycore_uop_ids.h \
 		$(srcdir)/Include/internal/pycore_wasm_trampoline.h \
 		$(srcdir)/Include/internal/pycore_warnings.h \
@@ -2219,7 +2191,6 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/in
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
 Python/ceval.o: \
-		$(srcdir)/Python/ceval.h \
 		$(srcdir)/Python/ceval_macros.h \
 		$(srcdir)/Python/condvar.h \
 		$(srcdir)/Python/generated_ir_cases.c.h \
@@ -2243,6 +2214,7 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	mv $@.tmp $@
 
 Python/ceval.o: $(srcdir)/Include/pydtrace.h
+Python/gc.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h
 
 Python/pydtrace.o: $(srcdir)/Include/pydtrace.d $(DTRACE_DEPS)
@@ -3153,9 +3125,6 @@ config.status:	$(srcdir)/configure
 
 .PRECIOUS: config.status $(BUILDPYTHON) Makefile Makefile.pre
 
-Python/gc_capture.o: $(srcdir)/Python/gc_capture.S
-	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
-
 Python/asm_trampoline_x86_64.o: $(srcdir)/Python/asm_trampoline_x86_64.S
 	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $<
 
@@ -3259,7 +3228,6 @@ docclean:
 .PHONY: clean-retain-profile
 clean-retain-profile: pycremoval
 	find . -name '*.[oa]' -exec rm -f {} ';'
-	rm -f Python/gc_precise.stamp Python/gc_inline.stamp
 	find . -name '*.s[ol]' -exec rm -f {} ';'
 	find . -name '*.so.[0-9]*.[0-9]*' -exec rm -f {} ';'
 	find . -name '*.lto' -exec rm -f {} ';'

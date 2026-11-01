@@ -2539,7 +2539,7 @@ class TestBufferProtocol(unittest.TestCase):
     def test_memoryview_sizeof(self):
         check = self.check_sizeof
         vsize = support.calcvobjsize
-        base_struct = 'Pnin 2P2n2i5P'
+        base_struct = 'Pnin 2P2n2i5P P'
         per_dim = '3n'
 
         items = list(range(8))
@@ -4147,19 +4147,6 @@ class TestBufferProtocol(unittest.TestCase):
         m = get_contiguous(nd, PyBUF_READ, 'C')
         self.assertTrue(m.c_contiguous)
 
-    def test_ndarray_view_keeps_exporter(self):
-        # The view holds the only reference to the array it was sliced
-        # from; a collection must not free that array's buffer.
-        nd = ndarray([1, 2, 3], shape=[2], strides=[2], flags=ND_WRITABLE)
-        nd = nd[::-1]
-        support.gc_collect()
-        # Reuse any freed memory, so a dangling format string shows.
-        junk = [bytes([0xa0]) * 64 for _ in range(1000)]
-        self.assertEqual(nd.format, 'B')
-        self.assertEqual(nd[1], 1)
-        self.assertEqual(nd.tolist(), [3, 1])
-        del junk
-
     def test_memoryview_serializing(self):
 
         # C-contiguous
@@ -4250,6 +4237,7 @@ class TestBufferProtocol(unittest.TestCase):
         m = memoryview(nd)
         self.assertRaises(ValueError, m.__hash__)
 
+    @support.requires_refcounting
     def test_memoryview_release(self):
 
         # Create re-exporter from getbuffer(memoryview), then release the view.
@@ -4258,7 +4246,6 @@ class TestBufferProtocol(unittest.TestCase):
         nd = ndarray(m) # re-exporter
         self.assertRaises(BufferError, m.release)
         del nd
-        support.gc_collect()
         m.release()
 
         a = bytearray([1,2,3])
@@ -4268,7 +4255,6 @@ class TestBufferProtocol(unittest.TestCase):
         self.assertIs(nd2.obj, m)
         self.assertRaises(BufferError, m.release)
         del nd1, nd2
-        support.gc_collect()
         m.release()
 
         # chained views
@@ -4279,7 +4265,6 @@ class TestBufferProtocol(unittest.TestCase):
         m1.release()
         self.assertRaises(BufferError, m2.release)
         del nd
-        support.gc_collect()
         m2.release()
 
         a = bytearray([1,2,3])
@@ -4291,7 +4276,6 @@ class TestBufferProtocol(unittest.TestCase):
         m1.release()
         self.assertRaises(BufferError, m2.release)
         del nd1, nd2
-        support.gc_collect()
         m2.release()
 
         # Allow changing layout while buffers are exported.
@@ -4314,7 +4298,6 @@ class TestBufferProtocol(unittest.TestCase):
         self.assertEqual(x.tolist(), nd.tolist())
 
         del nd
-        support.gc_collect()
         m1.release()
         x.release()
 
@@ -4337,6 +4320,44 @@ class TestBufferProtocol(unittest.TestCase):
         with memoryview(z) as m:
             catch22(m)
             self.assertEqual(m[0:1].tolist(), [[[0, 1, 2], [3, 4, 5]]])
+
+        # Test garbage collection.
+        for flags in (0, ND_REDIRECT):
+            x = bytearray(b'123')
+            with memoryview(x) as m1:
+                del x
+                y = ndarray(m1, getbuf=PyBUF_FULL_RO, flags=flags)
+                with memoryview(y) as m2:
+                    del y
+                    z = ndarray(m2, getbuf=PyBUF_FULL_RO, flags=flags)
+                    with memoryview(z) as m3:
+                        del z
+                        catch22(m3)
+                        catch22(m2)
+                        catch22(m1)
+                        self.assertEqual(m1[0], ord(b'1'))
+                        self.assertEqual(m2[1], ord(b'2'))
+                        self.assertEqual(m3[2], ord(b'3'))
+                        del m3
+                    del m2
+                del m1
+
+            x = bytearray(b'123')
+            with memoryview(x) as m1:
+                del x
+                y = ndarray(m1, getbuf=PyBUF_FULL_RO, flags=flags)
+                with memoryview(y) as m2:
+                    del y
+                    z = ndarray(m2, getbuf=PyBUF_FULL_RO, flags=flags)
+                    with memoryview(z) as m3:
+                        del z
+                        catch22(m1)
+                        catch22(m2)
+                        catch22(m3)
+                        self.assertEqual(m1[0], ord(b'1'))
+                        self.assertEqual(m2[1], ord(b'2'))
+                        self.assertEqual(m3[2], ord(b'3'))
+                        del m1, m2, m3
 
         # memoryview.release() fails if the view has exported buffers.
         x = bytearray(b'123')

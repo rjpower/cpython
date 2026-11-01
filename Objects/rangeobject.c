@@ -3,6 +3,7 @@
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
+#include "pycore_freelist.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_range.h"
@@ -39,24 +40,24 @@ typedef struct {
     PyObject *length;
 } rangeobject;
 
-/* Helper function for validating step, which is PyValue_NULL if it was not
-   given.  Always returns a new reference or NULL on error.
+/* Helper function for validating step.  Always returns a new reference or
+   NULL on error.
 */
 static PyObject *
-validate_step(PyValue step)
+validate_step(PyObject *step)
 {
     /* No step specified, use a step of 1. */
-    if (PyValue_IsNull(step))
+    if (!step)
         return PyLong_FromLong(1);
 
-    PyObject *result = PyValue_Object(PyNumber_IndexValue(step));
-    if (result && _PyLong_IsZero((PyLongObject *)result)) {
+    step = PyNumber_Index(step);
+    if (step && _PyLong_IsZero((PyLongObject *)step)) {
         PyErr_SetString(PyExc_ValueError,
                         "range() arg 3 must not be zero");
-        Py_CLEAR(result);
+        Py_CLEAR(step);
     }
 
-    return result;
+    return step;
 }
 
 static PyObject *
@@ -71,10 +72,13 @@ make_range_object(PyTypeObject *type, PyObject *start,
     if (length == NULL) {
         return NULL;
     }
-    rangeobject *obj = PyObject_New(rangeobject, type);
+    rangeobject *obj = _Py_FREELIST_POP(rangeobject, ranges);
     if (obj == NULL) {
-        Py_DECREF(length);
-        return NULL;
+        obj = PyObject_New(rangeobject, type);
+        if (obj == NULL) {
+            Py_DECREF(length);
+            return NULL;
+        }
     }
     obj->start = start;
     obj->stop = stop;
@@ -88,36 +92,28 @@ make_range_object(PyTypeObject *type, PyObject *start,
    range(0, -5)
    range(0, 5, -1)
 */
-/* The int object that is v.__index__(): a range holds int objects, so an
-   inline int is boxed. */
 static PyObject *
-index_object(PyValue v)
-{
-    return PyValue_Object(PyNumber_IndexValue(v));
-}
-
-static PyObject *
-range_from_array(PyTypeObject *type, const PyValue *args, Py_ssize_t num_args)
+range_from_array(PyTypeObject *type, PyObject *const *args, Py_ssize_t num_args)
 {
     rangeobject *obj;
     PyObject *start = NULL, *stop = NULL, *step = NULL;
-    PyValue step_arg = PyValue_NULL;
 
     switch (num_args) {
         case 3:
-            step_arg = args[2];
+            step = args[2];
             _Py_FALLTHROUGH;
         case 2:
-            start = index_object(args[0]);
+            /* Convert borrowed refs to owned refs */
+            start = PyNumber_Index(args[0]);
             if (!start) {
                 return NULL;
             }
-            stop = index_object(args[1]);
+            stop = PyNumber_Index(args[1]);
             if (!stop) {
                 Py_DECREF(start);
                 return NULL;
             }
-            step = validate_step(step_arg);  /* Caution, this can clear exceptions */
+            step = validate_step(step);  /* Caution, this can clear exceptions */
             if (!step) {
                 Py_DECREF(start);
                 Py_DECREF(stop);
@@ -125,7 +121,7 @@ range_from_array(PyTypeObject *type, const PyValue *args, Py_ssize_t num_args)
             }
             break;
         case 1:
-            stop = index_object(args[0]);
+            stop = PyNumber_Index(args[0]);
             if (!stop) {
                 return NULL;
             }
@@ -164,16 +160,15 @@ range_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 }
 
 
-static PyValue
-range_vectorcall(PyValue rangetype, const PyValue *args,
+static PyObject *
+range_vectorcall(PyObject *rangetype, PyObject *const *args,
                  size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_NoKwnames("range", kwnames)) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(range_from_array(
-        (PyTypeObject *)PyValue_ObjectBorrow(rangetype), args, nargs));
+    return range_from_array((PyTypeObject *)rangetype, args, nargs);
 }
 
 PyDoc_STRVAR(range_doc,
@@ -194,7 +189,7 @@ range_dealloc(PyObject *op)
     Py_DECREF(r->stop);
     Py_DECREF(r->step);
     Py_DECREF(r->length);
-    PyObject_Free(r);
+    _Py_FREELIST_FREE(ranges, r, PyObject_Free);
 }
 
 static unsigned long
@@ -252,9 +247,13 @@ compute_range_length(PyObject *start, PyObject *stop, PyObject *step)
     on PyObjects (which are assumed to be PyLong objects).
     ---------------------------------------------------------------*/
     int cmp_result;
-    PyValue lo, hi;
+    PyObject *lo, *hi;
+    PyObject *diff = NULL;
+    PyObject *tmp1 = NULL, *tmp2 = NULL, *result;
+                /* holds sub-expression evaluations */
 
     PyObject *zero = _PyLong_GetZero();  // borrowed reference
+    PyObject *one = _PyLong_GetOne();  // borrowed reference
 
     assert(PyLong_Check(start));
     assert(PyLong_Check(stop));
@@ -271,44 +270,56 @@ compute_range_length(PyObject *start, PyObject *stop, PyObject *step)
     }
     assert(len == -2);
 
-    // The intermediate values stay values; only the length is boxed, since
-    // a range holds int objects.
-    PyValue vstep = PyValue_FromObject(step);
-    cmp_result = PyObject_RichCompareBoolValue(vstep, PyValue_FromObject(zero),
-                                               Py_GT);
+    cmp_result = PyObject_RichCompareBool(step, zero, Py_GT);
     if (cmp_result == -1)
         return NULL;
 
     if (cmp_result == 1) {
-        lo = PyValue_FromObject(start);
-        hi = PyValue_FromObject(stop);
+        lo = start;
+        hi = stop;
+        Py_INCREF(step);
     } else {
-        lo = PyValue_FromObject(stop);
-        hi = PyValue_FromObject(start);
-        vstep = PyNumber_NegativeValue(vstep);
-        if (PyValue_IsNull(vstep))
+        lo = stop;
+        hi = start;
+        step = PyNumber_Negative(step);
+        if (!step)
             return NULL;
     }
 
     /* if (lo >= hi), return length of 0. */
-    cmp_result = PyObject_RichCompareBoolValue(lo, hi, Py_GE);
+    cmp_result = PyObject_RichCompareBool(lo, hi, Py_GE);
     if (cmp_result != 0) {
+        Py_DECREF(step);
         if (cmp_result < 0)
             return NULL;
-        return Py_NewRef(zero);
+        result = zero;
+        return Py_NewRef(result);
     }
 
-    PyValue one = PyValue_FromInt32(1);
-    PyValue v = PyNumber_SubtractValue(hi, lo);
-    if (PyValue_IsNull(v))
-        return NULL;
-    v = PyNumber_SubtractValue(v, one);
-    if (PyValue_IsNull(v))
-        return NULL;
-    v = PyNumber_FloorDivideValue(v, vstep);
-    if (PyValue_IsNull(v))
-        return NULL;
-    return PyValue_Object(PyNumber_AddValue(v, one));
+    if ((tmp1 = PyNumber_Subtract(hi, lo)) == NULL)
+        goto Fail;
+
+    if ((diff = PyNumber_Subtract(tmp1, one)) == NULL)
+        goto Fail;
+
+    if ((tmp2 = PyNumber_FloorDivide(diff, step)) == NULL)
+        goto Fail;
+
+    if ((result = PyNumber_Add(tmp2, one)) == NULL)
+        goto Fail;
+
+    Py_DECREF(tmp2);
+    Py_DECREF(diff);
+    Py_DECREF(step);
+    Py_DECREF(tmp1);
+    return result;
+
+  Fail:
+    Py_DECREF(step);
+    Py_XDECREF(tmp2);
+    Py_XDECREF(diff);
+    Py_XDECREF(tmp1);
+    return NULL;
 }
 
 static Py_ssize_t
@@ -318,28 +329,33 @@ range_length(PyObject *op)
     return PyLong_AsSsize_t(r->length);
 }
 
-/* r->start + i * r->step, or PyValue_NULL with an exception set. */
-static PyValue
-compute_item(rangeobject *r, PyValue i)
+static PyObject *
+compute_item(rangeobject *r, PyObject *i)
 {
-    PyValue start = PyValue_FromObject(r->start);
+    PyObject *incr, *result;
+    /* PyLong equivalent to:
+     *    return r->start + (i * r->step)
+     */
     if (r->step == _PyLong_GetOne()) {
-        return PyNumber_AddValue(start, i);
+        result = PyNumber_Add(r->start, i);
     }
-    PyValue incr = PyNumber_MultiplyValue(i, PyValue_FromObject(r->step));
-    if (PyValue_IsNull(incr)) {
-        return PyValue_NULL;
+    else {
+        incr = PyNumber_Multiply(i, r->step);
+        if (!incr) {
+            return NULL;
+        }
+        result = PyNumber_Add(r->start, incr);
+        Py_DECREF(incr);
     }
-    return PyNumber_AddValue(start, incr);
+    return result;
 }
 
-static PyValue
-compute_range_item(rangeobject *r, PyValue arg)
+static PyObject *
+compute_range_item(rangeobject *r, PyObject *arg)
 {
-    PyValue zero = PyValue_FromInt32(0);
-    PyValue length = PyValue_FromObject(r->length);
+    PyObject *zero = _PyLong_GetZero();  // borrowed reference
     int cmp_result;
-    PyValue i;
+    PyObject *i, *result;
 
     /* PyLong equivalent to:
      *   if (arg < 0) {
@@ -348,17 +364,17 @@ compute_range_item(rangeobject *r, PyValue arg)
      *     i = arg
      *   }
      */
-    cmp_result = PyObject_RichCompareBoolValue(arg, zero, Py_LT);
+    cmp_result = PyObject_RichCompareBool(arg, zero, Py_LT);
     if (cmp_result == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (cmp_result == 1) {
-        i = PyNumber_AddValue(length, arg);
-        if (PyValue_IsNull(i)) {
-            return PyValue_NULL;
+        i = PyNumber_Add(r->length, arg);
+        if (!i) {
+          return NULL;
         }
     } else {
-        i = arg;
+        i = Py_NewRef(arg);
     }
 
     /* PyLong equivalent to:
@@ -366,31 +382,37 @@ compute_range_item(rangeobject *r, PyValue arg)
      *     <report index out of bounds>
      *   }
      */
-    cmp_result = PyObject_RichCompareBoolValue(i, zero, Py_LT);
+    cmp_result = PyObject_RichCompareBool(i, zero, Py_LT);
     if (cmp_result == 0) {
-        cmp_result = PyObject_RichCompareBoolValue(i, length, Py_GE);
+        cmp_result = PyObject_RichCompareBool(i, r->length, Py_GE);
     }
     if (cmp_result == -1) {
-       return PyValue_NULL;
+       Py_DECREF(i);
+       return NULL;
     }
     if (cmp_result == 1) {
+        Py_DECREF(i);
         PyErr_SetString(PyExc_IndexError,
                         "range object index out of range");
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return compute_item(r, i);
+    result = compute_item(r, i);
+    Py_DECREF(i);
+    return result;
 }
 
 static PyObject *
 range_item(PyObject *op, Py_ssize_t i)
 {
     rangeobject *r = (rangeobject*)op;
-    PyValue arg = PyValue_FromLongLong(i);
-    if (PyValue_IsNull(arg)) {
+    PyObject *res, *arg = PyLong_FromSsize_t(i);
+    if (!arg) {
         return NULL;
     }
-    return PyValue_Object(compute_range_item(r, arg));
+    res = compute_range_item(r, arg);
+    Py_DECREF(arg);
+    return res;
 }
 
 static PyObject *
@@ -410,12 +432,11 @@ compute_slice(rangeobject *r, PyObject *_slice)
     if (substep == NULL) goto fail;
     Py_CLEAR(step);
 
-    // A range holds int objects: the new bounds are boxed.
-    substart = PyValue_Object(compute_item(r, PyValue_FromObject(start)));
+    substart = compute_item(r, start);
     if (substart == NULL) goto fail;
     Py_CLEAR(start);
 
-    substop = PyValue_Object(compute_item(r, PyValue_FromObject(stop)));
+    substop = compute_item(r, stop);
     if (substop == NULL) goto fail;
     Py_CLEAR(stop);
 
@@ -433,72 +454,50 @@ fail:
     return NULL;
 }
 
-/* Assumes ob is an exact int or a bool. */
+/* Assumes (PyLong_CheckExact(ob) || PyBool_Check(ob)) */
 static int
-range_contains_long(rangeobject *r, PyValue ob)
+range_contains_long(rangeobject *r, PyObject *ob)
 {
-    PyValue zero = PyValue_FromInt32(0);
-    PyValue start = PyValue_FromObject(r->start);
-    PyValue stop = PyValue_FromObject(r->stop);
-    PyValue step = PyValue_FromObject(r->step);
+    PyObject *zero = _PyLong_GetZero();  // borrowed reference
     int cmp1, cmp2, cmp3;
+    PyObject *tmp1 = NULL;
+    PyObject *tmp2 = NULL;
+    int result = -1;
 
     /* Check if the value can possibly be in the range. */
 
-    cmp1 = PyObject_RichCompareBoolValue(step, zero, Py_GT);
+    cmp1 = PyObject_RichCompareBool(r->step, zero, Py_GT);
     if (cmp1 == -1)
-        return -1;
+        goto end;
     if (cmp1 == 1) { /* positive steps: start <= ob < stop */
-        cmp2 = PyObject_RichCompareBoolValue(start, ob, Py_LE);
-        cmp3 = PyObject_RichCompareBoolValue(ob, stop, Py_LT);
+        cmp2 = PyObject_RichCompareBool(r->start, ob, Py_LE);
+        cmp3 = PyObject_RichCompareBool(ob, r->stop, Py_LT);
     }
     else { /* negative steps: stop < ob <= start */
-        cmp2 = PyObject_RichCompareBoolValue(ob, start, Py_LE);
-        cmp3 = PyObject_RichCompareBoolValue(stop, ob, Py_LT);
+        cmp2 = PyObject_RichCompareBool(ob, r->start, Py_LE);
+        cmp3 = PyObject_RichCompareBool(r->stop, ob, Py_LT);
     }
 
     if (cmp2 == -1 || cmp3 == -1) /* TypeError */
-        return -1;
+        goto end;
     if (cmp2 == 0 || cmp3 == 0) { /* ob outside of range */
-        return 0;
+        result = 0;
+        goto end;
     }
 
     /* Check that the stride does not invalidate ob's membership. */
-    PyValue tmp = PyNumber_SubtractValue(ob, start);
-    if (PyValue_IsNull(tmp))
-        return -1;
-    tmp = PyNumber_RemainderValue(tmp, step);
-    if (PyValue_IsNull(tmp))
-        return -1;
+    tmp1 = PyNumber_Subtract(ob, r->start);
+    if (tmp1 == NULL)
+        goto end;
+    tmp2 = PyNumber_Remainder(tmp1, r->step);
+    if (tmp2 == NULL)
+        goto end;
     /* result = ((int(ob) - start) % step) == 0 */
-    return PyObject_RichCompareBoolValue(tmp, zero, Py_EQ);
-}
-
-static int
-value_is_int_or_bool(PyValue v)
-{
-    PyTypeObject *tp = PyValue_Type(v);
-    return tp == &PyLong_Type || tp == &PyBool_Type;
-}
-
-int
-_PyRange_ContainsInt32(PyObject *self, int32_t v)
-{
-    rangeobject *r = (rangeobject*)self;
-    if (!_PyLong_IsCompact((PyLongObject *)r->start)
-        || !_PyLong_IsCompact((PyLongObject *)r->stop)
-        || !_PyLong_IsCompact((PyLongObject *)r->step))
-    {
-        return -1;
-    }
-    // Compact values are less than 2**30 in magnitude: nothing overflows.
-    int64_t start = _PyLong_CompactValue((PyLongObject *)r->start);
-    int64_t stop = _PyLong_CompactValue((PyLongObject *)r->stop);
-    int64_t step = _PyLong_CompactValue((PyLongObject *)r->step);
-    if (step > 0 ? !(start <= v && v < stop) : !(stop < v && v <= start)) {
-        return 0;
-    }
-    return (v - start) % step == 0;
+    result = PyObject_RichCompareBool(tmp2, zero, Py_EQ);
+  end:
+    Py_XDECREF(tmp1);
+    Py_XDECREF(tmp2);
+    return result;
 }
 
 static int
@@ -506,7 +505,7 @@ range_contains(PyObject *self, PyObject *ob)
 {
     rangeobject *r = (rangeobject*)self;
     if (PyLong_CheckExact(ob) || PyBool_Check(ob))
-        return range_contains_long(r, PyValue_FromObject(ob));
+        return range_contains_long(r, ob);
 
     return (int)_PySequence_IterSearch((PyObject*)r, ob,
                                        PY_ITERSEARCH_CONTAINS);
@@ -628,65 +627,61 @@ range_hash(PyObject *op)
     return result;
 }
 
-static PyValue
-range_count(PyObject *self, PyValue ob_value)
+static PyObject *
+range_count(PyObject *self, PyObject *ob)
 {
     rangeobject *r = (rangeobject*)self;
-    if (value_is_int_or_bool(ob_value)) {
-        int result = range_contains_long(r, ob_value);
+    if (PyLong_CheckExact(ob) || PyBool_Check(ob)) {
+        int result = range_contains_long(r, ob);
         if (result == -1)
-            return PyValue_NULL;
-        return PyValue_FromLongLong(result);
+            return NULL;
+        return PyLong_FromLong(result);
     } else {
-        // _PySequence_IterSearch has no value form: an inline float is boxed.
-        PyObject *ob = PyValue_Object(ob_value);
-        if (ob == NULL) {
-            return PyValue_NULL;
-        }
         Py_ssize_t count;
         count = _PySequence_IterSearch((PyObject*)r, ob, PY_ITERSEARCH_COUNT);
         if (count == -1)
-            return PyValue_NULL;
-        return PyValue_FromLongLong(count);
+            return NULL;
+        return PyLong_FromSsize_t(count);
     }
 }
 
-static PyValue
-range_index(PyObject *self, PyValue ob)
+static PyObject *
+range_index(PyObject *self, PyObject *ob)
 {
     rangeobject *r = (rangeobject*)self;
     int contains;
 
-    if (!value_is_int_or_bool(ob)) {
-        // _PySequence_IterSearch has no value form: an inline float is boxed.
-        PyObject *obj = PyValue_Object(ob);
-        if (obj == NULL) {
-            return PyValue_NULL;
-        }
+    if (!PyLong_CheckExact(ob) && !PyBool_Check(ob)) {
         Py_ssize_t index;
-        index = _PySequence_IterSearch((PyObject*)r, obj, PY_ITERSEARCH_INDEX);
+        index = _PySequence_IterSearch((PyObject*)r, ob, PY_ITERSEARCH_INDEX);
         if (index == -1)
-            return PyValue_NULL;
-        return PyValue_FromLongLong(index);
+            return NULL;
+        return PyLong_FromSsize_t(index);
     }
 
     contains = range_contains_long(r, ob);
     if (contains == -1)
-        return PyValue_NULL;
+        return NULL;
 
     if (contains) {
-        PyValue idx = PyNumber_SubtractValue(ob, PyValue_FromObject(r->start));
-        if (PyValue_IsNull(idx) || r->step == _PyLong_GetOne()) {
+        PyObject *idx = PyNumber_Subtract(ob, r->start);
+        if (idx == NULL) {
+            return NULL;
+        }
+
+        if (r->step == _PyLong_GetOne()) {
             return idx;
         }
 
         /* idx = (ob - r.start) // r.step */
-        return PyNumber_FloorDivideValue(idx, PyValue_FromObject(r->step));
+        PyObject *sidx = PyNumber_FloorDivide(idx, r->step);
+        Py_DECREF(idx);
+        return sidx;
     }
 
     /* object is not in the range */
     PyErr_SetString(PyExc_ValueError, "range.index(x): x not in range");
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PySequenceMethods range_as_sequence = {
@@ -735,10 +730,13 @@ range_subscript(PyObject *op, PyObject *item)
 {
     rangeobject *self = (rangeobject*)op;
     if (_PyIndex_Check(item)) {
-        PyValue i = PyNumber_IndexValue(PyValue_FromObject(item));
-        if (PyValue_IsNull(i))
+        PyObject *i, *result;
+        i = PyNumber_Index(item);
+        if (!i)
             return NULL;
-        return PyValue_Object(compute_range_item(self, i));
+        result = compute_range_item(self, i);
+        Py_DECREF(i);
+        return result;
     }
     if (PySlice_Check(item)) {
         return compute_slice(self, item);
@@ -783,8 +781,8 @@ PyDoc_STRVAR(index_doc,
 static PyMethodDef range_methods[] = {
     {"__reversed__",    range_reverse,              METH_NOARGS, reverse_doc},
     {"__reduce__",      range_reduce,               METH_NOARGS},
-    {"count",           _PyCFunction_CAST(range_count),                METH_O,      count_doc},
-    {"index",           _PyCFunction_CAST(range_index),                METH_O,      index_doc},
+    {"count",           range_count,                METH_O,      count_doc},
+    {"index",           range_index,                METH_O,      index_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -857,17 +855,17 @@ PyTypeObject PyRange_Type = {
    in the normal case, but possible for any numeric value.
 */
 
-static PyValue
+static PyObject *
 rangeiter_next(PyObject *op)
 {
-    PyValue ret = PyValue_NULL;
+    PyObject *ret = NULL;
     Py_BEGIN_CRITICAL_SECTION(op);
     _PyRangeIterObject *r = (_PyRangeIterObject*)op;
     if (r->len > 0) {
         long result = r->start;
         r->start = result + r->step;
         r->len--;
-        ret = PyValue_FromLongLong(result);
+        ret = PyLong_FromLong(result);
     }
     Py_END_CRITICAL_SECTION();
     return ret;
@@ -957,7 +955,7 @@ range_iterator___setstate___impl(_PyRangeIterObject *r, PyObject *state)
 static void
 rangeiter_dealloc(PyObject *self)
 {
-    PyObject_Free(self);
+    _Py_FREELIST_FREE(range_iters, (_PyRangeIterObject *)self, PyObject_Free);
 }
 
 static PyMethodDef rangeiter_methods[] = {
@@ -1034,9 +1032,12 @@ get_len_of_range(long lo, long hi, long step)
 static PyObject *
 fast_range_iter(long start, long stop, long step, long len)
 {
-    _PyRangeIterObject *it = PyObject_New(_PyRangeIterObject, &PyRangeIter_Type);
+    _PyRangeIterObject *it = _Py_FREELIST_POP(_PyRangeIterObject, range_iters);
     if (it == NULL) {
-        return NULL;
+        it = PyObject_New(_PyRangeIterObject, &PyRangeIter_Type);
+        if (it == NULL) {
+            return NULL;
+        }
     }
     assert(Py_IS_TYPE(it, &PyRangeIter_Type));
     it->start = start;
@@ -1175,26 +1176,27 @@ longrangeiter_dealloc(PyObject *op)
 longrange_iterator.__next__ as longrangeiter_next
 [clinic start generated code]*/
 
-static PyValue
+static PyObject *
 longrangeiter_next_impl(longrangeiterobject *self)
-/*[clinic end generated code: output=8a1276251a5304d2 input=2c4ac537c23a92d3]*/
+/*[clinic end generated code: output=49bf9a9b89c07ba5 input=2c4ac537c23a92d3]*/
 {
     longrangeiterobject *r = self;
     if (PyObject_RichCompareBool(r->len, _PyLong_GetZero(), Py_GT) != 1)
-        return PyValue_NULL;
+        return NULL;
 
     PyObject *new_start = PyNumber_Add(r->start, r->step);
     if (new_start == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     PyObject *new_len = PyNumber_Subtract(r->len, _PyLong_GetOne());
     if (new_len == NULL) {
-        return PyValue_NULL;
+        Py_DECREF(new_start);
+        return NULL;
     }
     PyObject *result = r->start;
     r->start = new_start;
-    r->len = new_len;
-    return PyValue_FromObject(result);
+    Py_SETREF(r->len, new_len);
+    return result;
 }
 
 static int

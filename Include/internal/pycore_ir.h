@@ -107,14 +107,13 @@ enum {
 };
 
 /* _PyIRFormat.flags */
-#define _PyIR_VALID         1   // format metadata exists
+#define _PyIR_VALID         1   // the handler exists
 #define _PyIR_WINDOW        2   // window style
 #define _PyIR_JUMPS         4   // the oparg is the absolute target in words
 #define _PyIR_FORWARD       8   // the oparg is a forward distance in words
+#define _PyIR_NO_FOLD       16  // an output may alias a borrowed input
 #define _PyIR_TRANSPARENT   32  // runs another handler on the same fields
 #define _PyIR_STORE_DST     64  // dst may name a local: a folded STORE_FAST
-#define _PyIR_RUNS_CODE     128 // a member may run Python code, which may
-                                // rebind a local through frame.f_locals
 
 #define _PyIR_NO_DST        INT8_MIN
 
@@ -130,13 +129,12 @@ typedef struct _PyIRFormat {
     int8_t dst;             // slot of dst less the depth before, or for
                             // window style less base; or _PyIR_NO_DST
     uint8_t borrow_mask;    // bit k: input k may name a borrowed local
+    uint16_t shadow;        // the instruction that the handler stands for
     uint16_t nofb;          // the NOFB form of a generic handler that keeps
                             // its oparg in its entry, or 0
 } _PyIRFormat;
 
 #include "pycore_ir_metadata.h"
-
-static_assert(IR_NUM_HANDLERS <= UINT16_MAX + 1u, "16-bit handler domain");
 
 /* The executing copy of a code object: PyCodeObject._co_exec.  The words of
  * the code object (co_words, which co_code returns as bytes) never change;
@@ -209,6 +207,11 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
+/* The handler that the executing copy of co starts with at index i: the
+ * generic handler, or its boxing form under PYTHON_TAGGED_VALUES=0.
+ * Deoptimisation and de-instrumentation restore it. */
+PyAPI_FUNC(int) _PyCode_GenericHandler(PyCodeObject *co, int i);
+
 /* The oparg of word, whose format keeps it in a field or has none. */
 PyAPI_FUNC(int) _PyIR_FieldOparg(_PyIRWord word);
 
@@ -257,38 +260,18 @@ PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
  * of the word at index i of co, on that word. */
 PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode);
 
-/* Check the original scalar before indexing metadata or narrowing it. */
-static inline int
-_PyIR_HasProperty(int handler, uint16_t property)
-{
-    return handler >= 0 && handler < IR_NUM_HANDLERS
-           && (_PyIR_HandlerFlags[handler] & property) != 0;
-}
-
-/* Dynamic assembly uses this boundary; IR_WORD is for trusted constants.
- * Failure allocates nothing and leaves the destination unchanged. */
-static inline int
-_PyIR_MakeWord(int handler, uint32_t a, uint32_t b, uint32_t c, uint32_t d,
-               _PyIRWord *word)
-{
-    if (!_PyIR_HasProperty(handler, _PyIR_H_PRISTINE)) {
-        return 0;
-    }
-    *word = IR_WORD(handler, a, b, c, d);
-    return 1;
-}
-
-/* Runtime installers establish the handler's required state before rewriting
- * an executing word. Fields never change; a rejected scalar changes nothing. */
-static inline int
+/* Rewrite the handler of the word at instr of an executing copy, for
+ * specialisation and instrumentation.  The fields never change, but other
+ * threads may be dispatching on the word. */
+static inline void
 _PyIR_SetHandler(_PyIRWord *instr, int handler)
 {
-    if (!_PyIR_HasProperty(handler, _PyIR_H_DISPATCH)) {
-        return 0;
-    }
     _PyIRWord word = (*instr & ~(_PyIRWord)0xFFFF) | (uint16_t)handler;
+#ifdef Py_GIL_DISABLED
+    _Py_atomic_store_uint64_relaxed(instr, word);
+#else
     *instr = word;
-    return 1;
+#endif
 }
 
 static inline const _PyIRFormat *

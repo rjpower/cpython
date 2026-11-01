@@ -1334,18 +1334,18 @@ PyDoc_STRVAR(Decompressor_needs_input_doc,
 PyDoc_STRVAR(Decompressor_unused_data_doc,
 "Data found after the end of the compressed stream.");
 
-static PyValue
+static PyObject *
 Decompressor_unused_data_get(PyObject *op, void *Py_UNUSED(closure))
 {
     Decompressor *self = Decompressor_CAST(op);
     if (!FT_ATOMIC_LOAD_CHAR_RELAXED(self->eof)) {
-        return PyValue_FromResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
+        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
     }
     PyMutex_Lock(&self->mutex);
     assert(self->unused_data != NULL);
     PyObject *result = Py_NewRef(self->unused_data);
     PyMutex_Unlock(&self->mutex);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyGetSetDef Decompressor_getset[] = {
@@ -1425,22 +1425,18 @@ PyDoc_STRVAR(_lzma__encode_filter_properties__doc__,
 "The result does not include the filter ID itself, only the options.");
 
 #define _LZMA__ENCODE_FILTER_PROPERTIES_METHODDEF    \
-    {"_encode_filter_properties", _PyCFunction_CAST(_lzma__encode_filter_properties), METH_O, _lzma__encode_filter_properties__doc__},
+    {"_encode_filter_properties", _lzma__encode_filter_properties, METH_O, _lzma__encode_filter_properties__doc__},
 
 static PyObject *
 _lzma__encode_filter_properties_impl(PyObject *module, lzma_filter filter);
 
-static PyValue
-_lzma__encode_filter_properties(PyObject *module, PyValue arg_v)
+static PyObject *
+_lzma__encode_filter_properties(PyObject *module, PyObject *arg)
 {
     PyObject *return_value = NULL;
     lzma_filter filter = {LZMA_VLI_UNKNOWN, NULL};
     _lzma_state *state = get_lzma_state(module);
     assert(state != NULL);
-    PyObject *arg = PyValue_Object(arg_v);
-    if (arg == NULL) {
-        goto exit;
-    }
     if (!lzma_filter_converter(state, arg, &filter)) {
         goto exit;
     }
@@ -1452,7 +1448,7 @@ exit:
        PyMem_Free(filter.options);
     }
 
-    return PyValue_FromResult(return_value);
+    return return_value;
 }
 
 static PyObject *

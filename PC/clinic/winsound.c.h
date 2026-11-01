@@ -2,11 +2,6 @@
 preserve
 [clinic start generated code]*/
 
-#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-#  include "pycore_runtime.h"     // _Py_ID()
-#endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-
 PyDoc_STRVAR(winsound_PlaySound__doc__,
 "PlaySound($module, /, sound, flags)\n"
 "--\n"
@@ -19,61 +14,23 @@ PyDoc_STRVAR(winsound_PlaySound__doc__,
 "    Flag values, ored together.  See module documentation.");
 
 #define WINSOUND_PLAYSOUND_METHODDEF    \
-    {"PlaySound", _PyCFunction_CAST(winsound_PlaySound), METH_FASTCALL|METH_KEYWORDS, winsound_PlaySound__doc__},
+    {"PlaySound", (PyCFunction)(void(*)(void))winsound_PlaySound, METH_VARARGS|METH_KEYWORDS, winsound_PlaySound__doc__},
 
 static PyObject *
 winsound_PlaySound_impl(PyObject *module, PyObject *sound, int flags);
 
-static PyValue
-winsound_PlaySound(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+winsound_PlaySound(PyObject *module, PyObject *args, PyObject *kwargs)
 {
-    PyValue return_value = PyValue_NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 2
-    static struct {
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(sound), &_Py_ID(flags), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"sound", "flags", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "PlaySound",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *return_value = NULL;
+    static char *_keywords[] = {"sound", "flags", NULL};
     PyObject *sound;
     int flags;
-    PyObject *_return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oi:PlaySound", _keywords,
+        &sound, &flags))
         goto exit;
-    }
-    sound = PyValue_Object(args[0]);
-    if (sound == NULL) {
-        goto exit;
-    }
-    flags = PyLong_AsIntValue(args[1]);
-    if (flags == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    _return_value = winsound_PlaySound_impl(module, sound, flags);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = winsound_PlaySound_impl(module, sound, flags);
 
 exit:
     return return_value;
@@ -92,61 +49,23 @@ PyDoc_STRVAR(winsound_Beep__doc__,
 "    How long the sound should play, in milliseconds.");
 
 #define WINSOUND_BEEP_METHODDEF    \
-    {"Beep", _PyCFunction_CAST(winsound_Beep), METH_FASTCALL|METH_KEYWORDS, winsound_Beep__doc__},
+    {"Beep", (PyCFunction)(void(*)(void))winsound_Beep, METH_VARARGS|METH_KEYWORDS, winsound_Beep__doc__},
 
 static PyObject *
 winsound_Beep_impl(PyObject *module, int frequency, int duration);
 
-static PyValue
-winsound_Beep(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+winsound_Beep(PyObject *module, PyObject *args, PyObject *kwargs)
 {
-    PyValue return_value = PyValue_NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 2
-    static struct {
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(frequency), &_Py_ID(duration), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"frequency", "duration", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "Beep",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *return_value = NULL;
+    static char *_keywords[] = {"frequency", "duration", NULL};
     int frequency;
     int duration;
-    PyObject *_return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii:Beep", _keywords,
+        &frequency, &duration))
         goto exit;
-    }
-    frequency = PyLong_AsIntValue(args[0]);
-    if (frequency == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    duration = PyLong_AsIntValue(args[1]);
-    if (duration == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    _return_value = winsound_Beep_impl(module, frequency, duration);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = winsound_Beep_impl(module, frequency, duration);
 
 exit:
     return return_value;
@@ -161,63 +80,24 @@ PyDoc_STRVAR(winsound_MessageBeep__doc__,
 "x defaults to MB_OK.");
 
 #define WINSOUND_MESSAGEBEEP_METHODDEF    \
-    {"MessageBeep", _PyCFunction_CAST(winsound_MessageBeep), METH_FASTCALL|METH_KEYWORDS, winsound_MessageBeep__doc__},
+    {"MessageBeep", (PyCFunction)(void(*)(void))winsound_MessageBeep, METH_VARARGS|METH_KEYWORDS, winsound_MessageBeep__doc__},
 
 static PyObject *
 winsound_MessageBeep_impl(PyObject *module, int type);
 
-static PyValue
-winsound_MessageBeep(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+winsound_MessageBeep(PyObject *module, PyObject *args, PyObject *kwargs)
 {
-    PyValue return_value = PyValue_NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 1
-    static struct {
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(type), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"type", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "MessageBeep",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyValue argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    PyObject *return_value = NULL;
+    static char *_keywords[] = {"type", NULL};
     int type = MB_OK;
-    PyObject *_return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|i:MessageBeep", _keywords,
+        &type))
         goto exit;
-    }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    type = PyLong_AsIntValue(args[0]);
-    if (type == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    _return_value = winsound_MessageBeep_impl(module, type);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = winsound_MessageBeep_impl(module, type);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=cf121cbcec007f4d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=18a3771b34cdf97d input=a9049054013a1b77]*/

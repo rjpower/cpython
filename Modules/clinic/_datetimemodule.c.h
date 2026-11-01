@@ -3,10 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(delta_new__doc__,
@@ -32,6 +32,7 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 7
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -54,8 +55,8 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[7];
-    const PyValue *fastargs;
+    PyObject *argsbuf[7];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *days = NULL;
@@ -66,7 +67,7 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *hours = NULL;
     PyObject *weeks = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 7, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -74,64 +75,43 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        days = PyValue_Object(fastargs[0]);
-        if (days == NULL) {
-            goto exit;
-        }
+    if (fastargs[0]) {
+        days = fastargs[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        seconds = PyValue_Object(fastargs[1]);
-        if (seconds == NULL) {
-            goto exit;
-        }
+    if (fastargs[1]) {
+        seconds = fastargs[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        microseconds = PyValue_Object(fastargs[2]);
-        if (microseconds == NULL) {
-            goto exit;
-        }
+    if (fastargs[2]) {
+        microseconds = fastargs[2];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        milliseconds = PyValue_Object(fastargs[3]);
-        if (milliseconds == NULL) {
-            goto exit;
-        }
+    if (fastargs[3]) {
+        milliseconds = fastargs[3];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        minutes = PyValue_Object(fastargs[4]);
-        if (minutes == NULL) {
-            goto exit;
-        }
+    if (fastargs[4]) {
+        minutes = fastargs[4];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[5])) {
-        hours = PyValue_Object(fastargs[5]);
-        if (hours == NULL) {
-            goto exit;
-        }
+    if (fastargs[5]) {
+        hours = fastargs[5];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    weeks = PyValue_Object(fastargs[6]);
-    if (weeks == NULL) {
-        goto exit;
-    }
+    weeks = fastargs[6];
 skip_optional_pos:
     return_value = delta_new_impl(type, days, seconds, microseconds, milliseconds, minutes, hours, weeks);
 
@@ -156,6 +136,7 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -178,27 +159,27 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
-    const PyValue *fastargs;
+    PyObject *argsbuf[3];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     int year;
     int month;
     int day;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    year = PyLong_AsIntValue(fastargs[0]);
+    year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    month = PyLong_AsIntValue(fastargs[1]);
+    month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsIntValue(fastargs[2]);
+    day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -238,26 +219,18 @@ PyDoc_STRVAR(datetime_date_fromtimestamp__doc__,
 "interpreted as local time.");
 
 #define DATETIME_DATE_FROMTIMESTAMP_METHODDEF    \
-    {"fromtimestamp", _PyCFunction_CAST(datetime_date_fromtimestamp), METH_O|METH_CLASS, datetime_date_fromtimestamp__doc__},
+    {"fromtimestamp", (PyCFunction)datetime_date_fromtimestamp, METH_O|METH_CLASS, datetime_date_fromtimestamp__doc__},
 
 static PyObject *
 datetime_date_fromtimestamp_impl(PyTypeObject *type, PyObject *timestamp);
 
-static PyValue
-datetime_date_fromtimestamp(PyObject *type, PyValue arg)
+static PyObject *
+datetime_date_fromtimestamp(PyObject *type, PyObject *timestamp)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *timestamp;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    timestamp = PyValue_Object(arg);
-    if (timestamp == NULL) {
-        goto exit;
-    }
-    _return_value = datetime_date_fromtimestamp_impl((PyTypeObject *)type, timestamp);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_date_fromtimestamp_impl((PyTypeObject *)type, timestamp);
 
-exit:
     return return_value;
 }
 
@@ -271,24 +244,22 @@ PyDoc_STRVAR(datetime_date_fromordinal__doc__,
 "non-zero in the result.");
 
 #define DATETIME_DATE_FROMORDINAL_METHODDEF    \
-    {"fromordinal", _PyCFunction_CAST(datetime_date_fromordinal), METH_O|METH_CLASS, datetime_date_fromordinal__doc__},
+    {"fromordinal", (PyCFunction)datetime_date_fromordinal, METH_O|METH_CLASS, datetime_date_fromordinal__doc__},
 
 static PyObject *
 datetime_date_fromordinal_impl(PyTypeObject *type, int ordinal);
 
-static PyValue
-datetime_date_fromordinal(PyObject *type, PyValue arg)
+static PyObject *
+datetime_date_fromordinal(PyObject *type, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int ordinal;
-    PyObject *_return_value;
 
-    ordinal = PyLong_AsIntValue(arg);
+    ordinal = PyLong_AsInt(arg);
     if (ordinal == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = datetime_date_fromordinal_impl((PyTypeObject *)type, ordinal);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_date_fromordinal_impl((PyTypeObject *)type, ordinal);
 
 exit:
     return return_value;
@@ -301,31 +272,23 @@ PyDoc_STRVAR(datetime_date_fromisoformat__doc__,
 "Construct a date from a string in ISO 8601 format.");
 
 #define DATETIME_DATE_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", _PyCFunction_CAST(datetime_date_fromisoformat), METH_O|METH_CLASS, datetime_date_fromisoformat__doc__},
+    {"fromisoformat", (PyCFunction)datetime_date_fromisoformat, METH_O|METH_CLASS, datetime_date_fromisoformat__doc__},
 
 static PyObject *
 datetime_date_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyValue
-datetime_date_fromisoformat(PyObject *type, PyValue arg)
+static PyObject *
+datetime_date_fromisoformat(PyObject *type, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("fromisoformat", "argument", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = datetime_date_fromisoformat_impl((PyTypeObject *)type, string);
-    return_value = PyValue_FromResult(_return_value);
+    string = arg;
+    return_value = datetime_date_fromisoformat_impl((PyTypeObject *)type, string);
 
 exit:
     return return_value;
@@ -346,14 +309,15 @@ static PyObject *
 datetime_date_fromisocalendar_impl(PyTypeObject *type, int year, int week,
                                    int day);
 
-static PyValue
-datetime_date_fromisocalendar(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_date_fromisocalendar(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -376,31 +340,29 @@ datetime_date_fromisocalendar(PyObject *type, const PyValue *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     int year;
     int week;
     int day;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    year = PyLong_AsIntValue(args[0]);
+    year = PyLong_AsInt(args[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    week = PyLong_AsIntValue(args[1]);
+    week = PyLong_AsInt(args[1]);
     if (week == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsIntValue(args[2]);
+    day = PyLong_AsInt(args[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = datetime_date_fromisocalendar_impl((PyTypeObject *)type, year, week, day);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_date_fromisocalendar_impl((PyTypeObject *)type, year, week, day);
 
 exit:
     return return_value;
@@ -422,41 +384,27 @@ static PyObject *
 datetime_date_strptime_impl(PyTypeObject *type, PyObject *string,
                             PyObject *format);
 
-static PyValue
-datetime_date_strptime(PyObject *type, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+datetime_date_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
     PyObject *format;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 1", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 2", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    string = args[0];
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+        goto exit;
     }
-    _return_value = datetime_date_strptime_impl((PyTypeObject *)type, string, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = args[1];
+    return_value = datetime_date_strptime_impl((PyTypeObject *)type, string, format);
 
 exit:
     return return_value;
@@ -479,14 +427,15 @@ PyDoc_STRVAR(datetime_date_strftime__doc__,
 static PyObject *
 datetime_date_strftime_impl(PyObject *self, PyObject *format);
 
-static PyValue
-datetime_date_strftime(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_date_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -509,28 +458,20 @@ datetime_date_strftime(PyObject *self, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *format;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strftime", "argument 'format'", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strftime", "argument 'format'", "str", args[0]);
+        goto exit;
     }
-    _return_value = datetime_date_strftime_impl(self, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = args[0];
+    return_value = datetime_date_strftime_impl(self, format);
 
 exit:
     return return_value;
@@ -543,31 +484,23 @@ PyDoc_STRVAR(datetime_date___format____doc__,
 "Formats self with strftime.");
 
 #define DATETIME_DATE___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(datetime_date___format__), METH_O, datetime_date___format____doc__},
+    {"__format__", (PyCFunction)datetime_date___format__, METH_O, datetime_date___format____doc__},
 
 static PyObject *
 datetime_date___format___impl(PyObject *self, PyObject *format);
 
-static PyValue
-datetime_date___format__(PyObject *self, PyValue arg)
+static PyObject *
+datetime_date___format__(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *format;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("__format__", "argument", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("__format__", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = datetime_date___format___impl(self, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = arg;
+    return_value = datetime_date___format___impl(self, format);
 
 exit:
     return return_value;
@@ -585,6 +518,7 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -607,27 +541,27 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
-    const PyValue *fastargs;
+    PyObject *argsbuf[3];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     int year;
     int week;
     int weekday;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    year = PyLong_AsIntValue(fastargs[0]);
+    year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    week = PyLong_AsIntValue(fastargs[1]);
+    week = PyLong_AsInt(fastargs[1]);
     if (week == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    weekday = PyLong_AsIntValue(fastargs[2]);
+    weekday = PyLong_AsInt(fastargs[2]);
     if (weekday == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -650,14 +584,15 @@ static PyObject *
 datetime_date_replace_impl(PyDateTime_Date *self, int year, int month,
                            int day);
 
-static PyValue
-datetime_date_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_date_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -680,12 +615,11 @@ datetime_date_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int year = GET_YEAR(self);
     int month = GET_MONTH(self);
     int day = GET_DAY(self);
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -695,8 +629,8 @@ datetime_date_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        year = PyLong_AsIntValue(args[0]);
+    if (args[0]) {
+        year = PyLong_AsInt(args[0]);
         if (year == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -704,8 +638,8 @@ datetime_date_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[1])) {
-        month = PyLong_AsIntValue(args[1]);
+    if (args[1]) {
+        month = PyLong_AsInt(args[1]);
         if (month == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -713,13 +647,12 @@ datetime_date_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    day = PyLong_AsIntValue(args[2]);
+    day = PyLong_AsInt(args[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = datetime_date_replace_impl((PyDateTime_Date *)self, year, month, day);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_date_replace_impl((PyDateTime_Date *)self, year, month, day);
 
 exit:
     return return_value;
@@ -742,6 +675,7 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -764,43 +698,31 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
-    const PyValue *fastargs;
+    PyObject *argsbuf[2];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *offset;
     PyObject *name = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(fastargs[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyObject_TypeCheck(_arg, DELTA_TYPE(NO_STATE))) {
-            _PyArg_BadArgument("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, _arg);
-            goto exit;
-        }
-        offset = _arg;
+    if (!PyObject_TypeCheck(fastargs[0], DELTA_TYPE(NO_STATE))) {
+        _PyArg_BadArgument("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, fastargs[0]);
+        goto exit;
     }
+    offset = fastargs[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    {
-        PyObject *_arg = PyValue_Object(fastargs[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("timezone", "argument 'name'", "str", _arg);
-            goto exit;
-        }
-        name = _arg;
+    if (!PyUnicode_Check(fastargs[1])) {
+        _PyArg_BadArgument("timezone", "argument 'name'", "str", fastargs[1]);
+        goto exit;
     }
+    name = fastargs[1];
 skip_optional_pos:
     return_value = timezone_new_impl(type, offset, name);
 
@@ -829,6 +751,7 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 6
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -851,8 +774,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[6];
-    const PyValue *fastargs;
+    PyObject *argsbuf[6];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     int hour = 0;
@@ -862,7 +785,7 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -870,8 +793,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[0])) {
-        hour = PyLong_AsIntValue(fastargs[0]);
+    if (fastargs[0]) {
+        hour = PyLong_AsInt(fastargs[0]);
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -879,8 +802,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[1])) {
-        minute = PyLong_AsIntValue(fastargs[1]);
+    if (fastargs[1]) {
+        minute = PyLong_AsInt(fastargs[1]);
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -888,8 +811,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[2])) {
-        second = PyLong_AsIntValue(fastargs[2]);
+    if (fastargs[2]) {
+        second = PyLong_AsInt(fastargs[2]);
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -897,8 +820,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        microsecond = PyLong_AsIntValue(fastargs[3]);
+    if (fastargs[3]) {
+        microsecond = PyLong_AsInt(fastargs[3]);
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -906,11 +829,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        tzinfo = PyValue_Object(fastargs[4]);
-        if (tzinfo == NULL) {
-            goto exit;
-        }
+    if (fastargs[4]) {
+        tzinfo = fastargs[4];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -919,7 +839,7 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    fold = PyLong_AsIntValue(fastargs[5]);
+    fold = PyLong_AsInt(fastargs[5]);
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -946,41 +866,27 @@ static PyObject *
 datetime_time_strptime_impl(PyTypeObject *type, PyObject *string,
                             PyObject *format);
 
-static PyValue
-datetime_time_strptime(PyObject *type, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+datetime_time_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
     PyObject *format;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 1", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 2", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    string = args[0];
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+        goto exit;
     }
-    _return_value = datetime_time_strptime_impl((PyTypeObject *)type, string, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = args[1];
+    return_value = datetime_time_strptime_impl((PyTypeObject *)type, string, format);
 
 exit:
     return return_value;
@@ -1005,14 +911,15 @@ PyDoc_STRVAR(datetime_time_isoformat__doc__,
 static PyObject *
 datetime_time_isoformat_impl(PyDateTime_Time *self, const char *timespec);
 
-static PyValue
-datetime_time_isoformat(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_time_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1035,10 +942,9 @@ datetime_time_isoformat(PyObject *self, const PyValue *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     const char *timespec = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1048,23 +954,16 @@ datetime_time_isoformat(PyObject *self, const PyValue *args, Py_ssize_t nargs, P
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", _arg);
-            goto exit;
-        }
-        timespec = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (timespec == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", args[0]);
+        goto exit;
+    }
+    timespec = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (timespec == NULL) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = datetime_time_isoformat_impl((PyDateTime_Time *)self, timespec);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_time_isoformat_impl((PyDateTime_Time *)self, timespec);
 
 exit:
     return return_value;
@@ -1088,14 +987,15 @@ PyDoc_STRVAR(datetime_time_strftime__doc__,
 static PyObject *
 datetime_time_strftime_impl(PyDateTime_Time *self, PyObject *format);
 
-static PyValue
-datetime_time_strftime(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_time_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1118,28 +1018,20 @@ datetime_time_strftime(PyObject *self, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *format;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strftime", "argument 'format'", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strftime", "argument 'format'", "str", args[0]);
+        goto exit;
     }
-    _return_value = datetime_time_strftime_impl((PyDateTime_Time *)self, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = args[0];
+    return_value = datetime_time_strftime_impl((PyDateTime_Time *)self, format);
 
 exit:
     return return_value;
@@ -1152,31 +1044,23 @@ PyDoc_STRVAR(datetime_time___format____doc__,
 "Formats self with strftime.");
 
 #define DATETIME_TIME___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(datetime_time___format__), METH_O, datetime_time___format____doc__},
+    {"__format__", (PyCFunction)datetime_time___format__, METH_O, datetime_time___format____doc__},
 
 static PyObject *
 datetime_time___format___impl(PyObject *self, PyObject *format);
 
-static PyValue
-datetime_time___format__(PyObject *self, PyValue arg)
+static PyObject *
+datetime_time___format__(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *format;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("__format__", "argument", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("__format__", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = datetime_time___format___impl(self, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = arg;
+    return_value = datetime_time___format___impl(self, format);
 
 exit:
     return return_value;
@@ -1197,14 +1081,15 @@ datetime_time_replace_impl(PyDateTime_Time *self, int hour, int minute,
                            int second, int microsecond, PyObject *tzinfo,
                            int fold);
 
-static PyValue
-datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_time_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1227,7 +1112,7 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[6];
+    PyObject *argsbuf[6];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int hour = TIME_GET_HOUR(self);
     int minute = TIME_GET_MINUTE(self);
@@ -1235,7 +1120,6 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
     int microsecond = TIME_GET_MICROSECOND(self);
     PyObject *tzinfo = HASTZINFO(self) ? ((PyDateTime_Time *)self)->tzinfo : Py_None;
     int fold = TIME_GET_FOLD(self);
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1245,8 +1129,8 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        hour = PyLong_AsIntValue(args[0]);
+    if (args[0]) {
+        hour = PyLong_AsInt(args[0]);
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1254,8 +1138,8 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[1])) {
-        minute = PyLong_AsIntValue(args[1]);
+    if (args[1]) {
+        minute = PyLong_AsInt(args[1]);
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1263,8 +1147,8 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        second = PyLong_AsIntValue(args[2]);
+    if (args[2]) {
+        second = PyLong_AsInt(args[2]);
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1272,8 +1156,8 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        microsecond = PyLong_AsIntValue(args[3]);
+    if (args[3]) {
+        microsecond = PyLong_AsInt(args[3]);
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1281,11 +1165,8 @@ datetime_time_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[4])) {
-        tzinfo = PyValue_Object(args[4]);
-        if (tzinfo == NULL) {
-            goto exit;
-        }
+    if (args[4]) {
+        tzinfo = args[4];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1294,13 +1175,12 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    fold = PyLong_AsIntValue(args[5]);
+    fold = PyLong_AsInt(args[5]);
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = datetime_time_replace_impl((PyDateTime_Time *)self, hour, minute, second, microsecond, tzinfo, fold);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_time_replace_impl((PyDateTime_Time *)self, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
@@ -1313,31 +1193,23 @@ PyDoc_STRVAR(datetime_time_fromisoformat__doc__,
 "Construct a time from a string in ISO 8601 format.");
 
 #define DATETIME_TIME_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", _PyCFunction_CAST(datetime_time_fromisoformat), METH_O|METH_CLASS, datetime_time_fromisoformat__doc__},
+    {"fromisoformat", (PyCFunction)datetime_time_fromisoformat, METH_O|METH_CLASS, datetime_time_fromisoformat__doc__},
 
 static PyObject *
 datetime_time_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyValue
-datetime_time_fromisoformat(PyObject *type, PyValue arg)
+static PyObject *
+datetime_time_fromisoformat(PyObject *type, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("fromisoformat", "argument", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = datetime_time_fromisoformat_impl((PyTypeObject *)type, string);
-    return_value = PyValue_FromResult(_return_value);
+    string = arg;
+    return_value = datetime_time_fromisoformat_impl((PyTypeObject *)type, string);
 
 exit:
     return return_value;
@@ -1349,24 +1221,22 @@ PyDoc_STRVAR(datetime_time___reduce_ex____doc__,
 "\n");
 
 #define DATETIME_TIME___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", _PyCFunction_CAST(datetime_time___reduce_ex__), METH_O, datetime_time___reduce_ex____doc__},
+    {"__reduce_ex__", (PyCFunction)datetime_time___reduce_ex__, METH_O, datetime_time___reduce_ex____doc__},
 
 static PyObject *
 datetime_time___reduce_ex___impl(PyDateTime_Time *self, int proto);
 
-static PyValue
-datetime_time___reduce_ex__(PyObject *self, PyValue arg)
+static PyObject *
+datetime_time___reduce_ex__(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int proto;
-    PyObject *_return_value;
 
-    proto = PyLong_AsIntValue(arg);
+    proto = PyLong_AsInt(arg);
     if (proto == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = datetime_time___reduce_ex___impl((PyDateTime_Time *)self, proto);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_time___reduce_ex___impl((PyDateTime_Time *)self, proto);
 
 exit:
     return return_value;
@@ -1412,6 +1282,7 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 9
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1434,8 +1305,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[9];
-    const PyValue *fastargs;
+    PyObject *argsbuf[9];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 3;
     int year;
@@ -1448,28 +1319,28 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    year = PyLong_AsIntValue(fastargs[0]);
+    year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    month = PyLong_AsIntValue(fastargs[1]);
+    month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsIntValue(fastargs[2]);
+    day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(fastargs[3])) {
-        hour = PyLong_AsIntValue(fastargs[3]);
+    if (fastargs[3]) {
+        hour = PyLong_AsInt(fastargs[3]);
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1477,8 +1348,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[4])) {
-        minute = PyLong_AsIntValue(fastargs[4]);
+    if (fastargs[4]) {
+        minute = PyLong_AsInt(fastargs[4]);
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1486,8 +1357,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[5])) {
-        second = PyLong_AsIntValue(fastargs[5]);
+    if (fastargs[5]) {
+        second = PyLong_AsInt(fastargs[5]);
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1495,8 +1366,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[6])) {
-        microsecond = PyLong_AsIntValue(fastargs[6]);
+    if (fastargs[6]) {
+        microsecond = PyLong_AsInt(fastargs[6]);
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1504,11 +1375,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(fastargs[7])) {
-        tzinfo = PyValue_Object(fastargs[7]);
-        if (tzinfo == NULL) {
-            goto exit;
-        }
+    if (fastargs[7]) {
+        tzinfo = fastargs[7];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1517,7 +1385,7 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    fold = PyLong_AsIntValue(fastargs[8]);
+    fold = PyLong_AsInt(fastargs[8]);
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1545,14 +1413,15 @@ PyDoc_STRVAR(datetime_datetime_now__doc__,
 static PyObject *
 datetime_datetime_now_impl(PyTypeObject *type, PyObject *tz);
 
-static PyValue
-datetime_datetime_now(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_now(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1575,10 +1444,9 @@ datetime_datetime_now(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *tz = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1588,13 +1456,9 @@ datetime_datetime_now(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyO
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tz = PyValue_Object(args[0]);
-    if (tz == NULL) {
-        goto exit;
-    }
+    tz = args[0];
 skip_optional_pos:
-    _return_value = datetime_datetime_now_impl((PyTypeObject *)type, tz);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_now_impl((PyTypeObject *)type, tz);
 
 exit:
     return return_value;
@@ -1634,14 +1498,15 @@ static PyObject *
 datetime_datetime_fromtimestamp_impl(PyTypeObject *type, PyObject *timestamp,
                                      PyObject *tzinfo);
 
-static PyValue
-datetime_datetime_fromtimestamp(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_fromtimestamp(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1664,31 +1529,23 @@ datetime_datetime_fromtimestamp(PyObject *type, const PyValue *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *timestamp;
     PyObject *tzinfo = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    timestamp = PyValue_Object(args[0]);
-    if (timestamp == NULL) {
-        goto exit;
-    }
+    timestamp = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tzinfo = PyValue_Object(args[1]);
-    if (tzinfo == NULL) {
-        goto exit;
-    }
+    tzinfo = args[1];
 skip_optional_pos:
-    _return_value = datetime_datetime_fromtimestamp_impl((PyTypeObject *)type, timestamp, tzinfo);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_fromtimestamp_impl((PyTypeObject *)type, timestamp, tzinfo);
 
 exit:
     return return_value;
@@ -1701,27 +1558,19 @@ PyDoc_STRVAR(datetime_datetime_utcfromtimestamp__doc__,
 "Create a naive UTC datetime from a POSIX timestamp.");
 
 #define DATETIME_DATETIME_UTCFROMTIMESTAMP_METHODDEF    \
-    {"utcfromtimestamp", _PyCFunction_CAST(datetime_datetime_utcfromtimestamp), METH_O|METH_CLASS, datetime_datetime_utcfromtimestamp__doc__},
+    {"utcfromtimestamp", (PyCFunction)datetime_datetime_utcfromtimestamp, METH_O|METH_CLASS, datetime_datetime_utcfromtimestamp__doc__},
 
 static PyObject *
 datetime_datetime_utcfromtimestamp_impl(PyTypeObject *type,
                                         PyObject *timestamp);
 
-static PyValue
-datetime_datetime_utcfromtimestamp(PyObject *type, PyValue arg)
+static PyObject *
+datetime_datetime_utcfromtimestamp(PyObject *type, PyObject *timestamp)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *timestamp;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
-    timestamp = PyValue_Object(arg);
-    if (timestamp == NULL) {
-        goto exit;
-    }
-    _return_value = datetime_datetime_utcfromtimestamp_impl((PyTypeObject *)type, timestamp);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_utcfromtimestamp_impl((PyTypeObject *)type, timestamp);
 
-exit:
     return return_value;
 }
 
@@ -1741,41 +1590,27 @@ static PyObject *
 datetime_datetime_strptime_impl(PyTypeObject *type, PyObject *string,
                                 PyObject *format);
 
-static PyValue
-datetime_datetime_strptime(PyObject *type, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+datetime_datetime_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
     PyObject *format;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 1", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("strptime", "argument 2", "str", _arg);
-            goto exit;
-        }
-        format = _arg;
+    string = args[0];
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+        goto exit;
     }
-    _return_value = datetime_datetime_strptime_impl((PyTypeObject *)type, string, format);
-    return_value = PyValue_FromResult(_return_value);
+    format = args[1];
+    return_value = datetime_datetime_strptime_impl((PyTypeObject *)type, string, format);
 
 exit:
     return return_value;
@@ -1794,14 +1629,15 @@ static PyObject *
 datetime_datetime_combine_impl(PyTypeObject *type, PyObject *date,
                                PyObject *time, PyObject *tzinfo);
 
-static PyValue
-datetime_datetime_combine(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_combine(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1824,50 +1660,33 @@ datetime_datetime_combine(PyObject *type, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *date;
     PyObject *time;
     PyObject *tzinfo = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyObject_TypeCheck(_arg, DATE_TYPE(NO_STATE))) {
-            _PyArg_BadArgument("combine", "argument 'date'", (DATE_TYPE(NO_STATE))->tp_name, _arg);
-            goto exit;
-        }
-        date = _arg;
+    if (!PyObject_TypeCheck(args[0], DATE_TYPE(NO_STATE))) {
+        _PyArg_BadArgument("combine", "argument 'date'", (DATE_TYPE(NO_STATE))->tp_name, args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyObject_TypeCheck(_arg, TIME_TYPE(NO_STATE))) {
-            _PyArg_BadArgument("combine", "argument 'time'", (TIME_TYPE(NO_STATE))->tp_name, _arg);
-            goto exit;
-        }
-        time = _arg;
+    date = args[0];
+    if (!PyObject_TypeCheck(args[1], TIME_TYPE(NO_STATE))) {
+        _PyArg_BadArgument("combine", "argument 'time'", (TIME_TYPE(NO_STATE))->tp_name, args[1]);
+        goto exit;
     }
+    time = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tzinfo = PyValue_Object(args[2]);
-    if (tzinfo == NULL) {
-        goto exit;
-    }
+    tzinfo = args[2];
 skip_optional_pos:
-    _return_value = datetime_datetime_combine_impl((PyTypeObject *)type, date, time, tzinfo);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_combine_impl((PyTypeObject *)type, date, time, tzinfo);
 
 exit:
     return return_value;
@@ -1880,31 +1699,23 @@ PyDoc_STRVAR(datetime_datetime_fromisoformat__doc__,
 "Construct a date from a string in ISO 8601 format.");
 
 #define DATETIME_DATETIME_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", _PyCFunction_CAST(datetime_datetime_fromisoformat), METH_O|METH_CLASS, datetime_datetime_fromisoformat__doc__},
+    {"fromisoformat", (PyCFunction)datetime_datetime_fromisoformat, METH_O|METH_CLASS, datetime_datetime_fromisoformat__doc__},
 
 static PyObject *
 datetime_datetime_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyValue
-datetime_datetime_fromisoformat(PyObject *type, PyValue arg)
+static PyObject *
+datetime_datetime_fromisoformat(PyObject *type, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *string;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("fromisoformat", "argument", "str", _arg);
-            goto exit;
-        }
-        string = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = datetime_datetime_fromisoformat_impl((PyTypeObject *)type, string);
-    return_value = PyValue_FromResult(_return_value);
+    string = arg;
+    return_value = datetime_datetime_fromisoformat_impl((PyTypeObject *)type, string);
 
 exit:
     return return_value;
@@ -1936,14 +1747,15 @@ static PyObject *
 datetime_datetime_isoformat_impl(PyDateTime_DateTime *self, int sep,
                                  const char *timespec);
 
-static PyValue
-datetime_datetime_isoformat(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1966,11 +1778,10 @@ datetime_datetime_isoformat(PyObject *self, const PyValue *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int sep = 'T';
     const char *timespec = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1980,46 +1791,33 @@ datetime_datetime_isoformat(PyObject *self, const PyValue *args, Py_ssize_t narg
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        {
-            PyObject *_arg = PyValue_Object(args[0]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyUnicode_Check(_arg)) {
-                _PyArg_BadArgument("isoformat", "argument 'sep'", "a unicode character", _arg);
-                goto exit;
-            }
-            if (PyUnicode_GET_LENGTH(_arg) != 1) {
-                PyErr_Format(PyExc_TypeError,
-                    "isoformat(): argument 'sep' must be a unicode character, "
-                    "not a string of length %zd",
-                    PyUnicode_GET_LENGTH(_arg));
-                goto exit;
-            }
-            sep = PyUnicode_READ_CHAR(_arg, 0);
+    if (args[0]) {
+        if (!PyUnicode_Check(args[0])) {
+            _PyArg_BadArgument("isoformat", "argument 'sep'", "a unicode character", args[0]);
+            goto exit;
         }
+        if (PyUnicode_GET_LENGTH(args[0]) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "isoformat(): argument 'sep' must be a unicode character, "
+                "not a string of length %zd",
+                PyUnicode_GET_LENGTH(args[0]));
+            goto exit;
+        }
+        sep = PyUnicode_READ_CHAR(args[0], 0);
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", _arg);
-            goto exit;
-        }
-        timespec = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (timespec == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", args[1]);
+        goto exit;
+    }
+    timespec = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (timespec == NULL) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = datetime_datetime_isoformat_impl((PyDateTime_DateTime *)self, sep, timespec);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_isoformat_impl((PyDateTime_DateTime *)self, sep, timespec);
 
 exit:
     return return_value;
@@ -2042,14 +1840,15 @@ datetime_datetime_replace_impl(PyDateTime_DateTime *self, int year,
                                int second, int microsecond, PyObject *tzinfo,
                                int fold);
 
-static PyValue
-datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 9
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2072,7 +1871,7 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[9];
+    PyObject *argsbuf[9];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int year = GET_YEAR(self);
     int month = GET_MONTH(self);
@@ -2083,7 +1882,6 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
     int microsecond = DATE_GET_MICROSECOND(self);
     PyObject *tzinfo = HASTZINFO(self) ? ((PyDateTime_DateTime *)self)->tzinfo : Py_None;
     int fold = DATE_GET_FOLD(self);
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -2093,8 +1891,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        year = PyLong_AsIntValue(args[0]);
+    if (args[0]) {
+        year = PyLong_AsInt(args[0]);
         if (year == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2102,8 +1900,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[1])) {
-        month = PyLong_AsIntValue(args[1]);
+    if (args[1]) {
+        month = PyLong_AsInt(args[1]);
         if (month == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2111,8 +1909,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        day = PyLong_AsIntValue(args[2]);
+    if (args[2]) {
+        day = PyLong_AsInt(args[2]);
         if (day == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2120,8 +1918,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        hour = PyLong_AsIntValue(args[3]);
+    if (args[3]) {
+        hour = PyLong_AsInt(args[3]);
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2129,8 +1927,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[4])) {
-        minute = PyLong_AsIntValue(args[4]);
+    if (args[4]) {
+        minute = PyLong_AsInt(args[4]);
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2138,8 +1936,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[5])) {
-        second = PyLong_AsIntValue(args[5]);
+    if (args[5]) {
+        second = PyLong_AsInt(args[5]);
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2147,8 +1945,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[6])) {
-        microsecond = PyLong_AsIntValue(args[6]);
+    if (args[6]) {
+        microsecond = PyLong_AsInt(args[6]);
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2156,11 +1954,8 @@ datetime_datetime_replace(PyObject *self, const PyValue *args, Py_ssize_t nargs,
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[7])) {
-        tzinfo = PyValue_Object(args[7]);
-        if (tzinfo == NULL) {
-            goto exit;
-        }
+    if (args[7]) {
+        tzinfo = args[7];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -2169,13 +1964,12 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    fold = PyLong_AsIntValue(args[8]);
+    fold = PyLong_AsInt(args[8]);
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = datetime_datetime_replace_impl((PyDateTime_DateTime *)self, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_replace_impl((PyDateTime_DateTime *)self, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
@@ -2194,14 +1988,15 @@ static PyObject *
 datetime_datetime_astimezone_impl(PyDateTime_DateTime *self,
                                   PyObject *tzinfo);
 
-static PyValue
-datetime_datetime_astimezone(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+datetime_datetime_astimezone(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2224,10 +2019,9 @@ datetime_datetime_astimezone(PyObject *self, const PyValue *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *tzinfo = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -2237,13 +2031,9 @@ datetime_datetime_astimezone(PyObject *self, const PyValue *args, Py_ssize_t nar
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tzinfo = PyValue_Object(args[0]);
-    if (tzinfo == NULL) {
-        goto exit;
-    }
+    tzinfo = args[0];
 skip_optional_pos:
-    _return_value = datetime_datetime_astimezone_impl((PyDateTime_DateTime *)self, tzinfo);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime_astimezone_impl((PyDateTime_DateTime *)self, tzinfo);
 
 exit:
     return return_value;
@@ -2255,24 +2045,22 @@ PyDoc_STRVAR(datetime_datetime___reduce_ex____doc__,
 "\n");
 
 #define DATETIME_DATETIME___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", _PyCFunction_CAST(datetime_datetime___reduce_ex__), METH_O, datetime_datetime___reduce_ex____doc__},
+    {"__reduce_ex__", (PyCFunction)datetime_datetime___reduce_ex__, METH_O, datetime_datetime___reduce_ex____doc__},
 
 static PyObject *
 datetime_datetime___reduce_ex___impl(PyDateTime_DateTime *self, int proto);
 
-static PyValue
-datetime_datetime___reduce_ex__(PyObject *self, PyValue arg)
+static PyObject *
+datetime_datetime___reduce_ex__(PyObject *self, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int proto;
-    PyObject *_return_value;
 
-    proto = PyLong_AsIntValue(arg);
+    proto = PyLong_AsInt(arg);
     if (proto == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = datetime_datetime___reduce_ex___impl((PyDateTime_DateTime *)self, proto);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = datetime_datetime___reduce_ex___impl((PyDateTime_DateTime *)self, proto);
 
 exit:
     return return_value;
@@ -2294,4 +2082,4 @@ datetime_datetime___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return datetime_datetime___reduce___impl((PyDateTime_DateTime *)self);
 }
-/*[clinic end generated code: output=e4f2eeffe1fa9f3c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7bdfdfbd568c63ed input=a9049054013a1b77]*/

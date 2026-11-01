@@ -1,5 +1,6 @@
 import unittest
 
+from test import support
 from test.support import import_helper
 
 # Skip this test if the _testcapi, _testlimitedcapi or _testinternalcapi
@@ -161,9 +162,20 @@ class TestSetCAPI(BaseSetTests, unittest.TestCase):
                     add(instance, [])
         with self.assertRaises(SystemError):
             add(object(), 1)
+        # PySet_Add() fills a new frozenset only while it is uniquely
+        # referenced, which Py_GC cannot tell.
+        if not support.Py_GC:
+            self.assertImmutable(add, 1)
         # CRASHES: add(NULL, object())
         # CRASHES: add(instance, NULL)
         # CRASHES: add(NULL, NULL)
+
+    @support.requires_refcounting
+    def test_add_frozenset(self):
+       add = _testlimitedcapi.set_add
+       frozen_set = frozenset()
+       # test adding an element to a non-uniquely referenced frozenset throws an exception
+       self.assertRaises(SystemError, add, frozen_set, 1)
 
     def test_discard(self):
         discard = _testlimitedcapi.set_discard
@@ -244,8 +256,8 @@ class TestInternalCAPI(BaseSetTests, unittest.TestCase):
         # CRASHES: update(instance, NULL)
         # CRASHES: update(NULL, NULL)
 
-    def test_set_next_value(self):
-        set_next = _testinternalcapi.set_next_value
+    def test_set_next_entry(self):
+        set_next = _testinternalcapi.set_next_entry
         for cls in (set, set_subclass, frozenset, frozenset_subclass):
             with self.subTest(cls=cls):
                 instance = cls('abc')

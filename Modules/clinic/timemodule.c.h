@@ -63,29 +63,21 @@ PyDoc_STRVAR(time_clock_gettime__doc__,
 "Return the time of the specified clock clk_id as a float.");
 
 #define TIME_CLOCK_GETTIME_METHODDEF    \
-    {"clock_gettime", _PyCFunction_CAST(time_clock_gettime), METH_O, time_clock_gettime__doc__},
+    {"clock_gettime", (PyCFunction)time_clock_gettime, METH_O, time_clock_gettime__doc__},
 
 static PyObject *
 time_clock_gettime_impl(PyObject *module, clockid_t clk_id);
 
-static PyValue
-time_clock_gettime(PyObject *module, PyValue arg)
+static PyObject *
+time_clock_gettime(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     clockid_t clk_id;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!time_clockid_converter(_arg, &clk_id)) {
-            goto exit;
-        }
+    if (!time_clockid_converter(arg, &clk_id)) {
+        goto exit;
     }
-    _return_value = time_clock_gettime_impl(module, clk_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_clock_gettime_impl(module, clk_id);
 
 exit:
     return return_value;
@@ -102,29 +94,21 @@ PyDoc_STRVAR(time_clock_gettime_ns__doc__,
 "Return the time of the specified clock clk_id as nanoseconds (int).");
 
 #define TIME_CLOCK_GETTIME_NS_METHODDEF    \
-    {"clock_gettime_ns", _PyCFunction_CAST(time_clock_gettime_ns), METH_O, time_clock_gettime_ns__doc__},
+    {"clock_gettime_ns", (PyCFunction)time_clock_gettime_ns, METH_O, time_clock_gettime_ns__doc__},
 
 static PyObject *
 time_clock_gettime_ns_impl(PyObject *module, clockid_t clk_id);
 
-static PyValue
-time_clock_gettime_ns(PyObject *module, PyValue arg)
+static PyObject *
+time_clock_gettime_ns(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     clockid_t clk_id;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!time_clockid_converter(_arg, &clk_id)) {
-            goto exit;
-        }
+    if (!time_clockid_converter(arg, &clk_id)) {
+        goto exit;
     }
-    _return_value = time_clock_gettime_ns_impl(module, clk_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_clock_gettime_ns_impl(module, clk_id);
 
 exit:
     return return_value;
@@ -146,27 +130,22 @@ PyDoc_STRVAR(time_clock_settime__doc__,
 static PyObject *
 time_clock_settime_impl(PyObject *module, int clk_id, PyObject *obj);
 
-static PyValue
-time_clock_settime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_clock_settime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int clk_id;
     PyObject *obj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("clock_settime", nargs, 2, 2)) {
         goto exit;
     }
-    clk_id = PyLong_AsIntValue(args[0]);
+    clk_id = PyLong_AsInt(args[0]);
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    obj = PyValue_Object(args[1]);
-    if (obj == NULL) {
-        goto exit;
-    }
-    _return_value = time_clock_settime_impl(module, clk_id, obj);
-    return_value = PyValue_FromResult(_return_value);
+    obj = args[1];
+    return_value = time_clock_settime_impl(module, clk_id, obj);
 
 exit:
     return return_value;
@@ -188,27 +167,22 @@ PyDoc_STRVAR(time_clock_settime_ns__doc__,
 static PyObject *
 time_clock_settime_ns_impl(PyObject *module, int clk_id, PyObject *obj);
 
-static PyValue
-time_clock_settime_ns(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_clock_settime_ns(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int clk_id;
     PyObject *obj;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("clock_settime_ns", nargs, 2, 2)) {
         goto exit;
     }
-    clk_id = PyLong_AsIntValue(args[0]);
+    clk_id = PyLong_AsInt(args[0]);
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    obj = PyValue_Object(args[1]);
-    if (obj == NULL) {
-        goto exit;
-    }
-    _return_value = time_clock_settime_ns_impl(module, clk_id, obj);
-    return_value = PyValue_FromResult(_return_value);
+    obj = args[1];
+    return_value = time_clock_settime_ns_impl(module, clk_id, obj);
 
 exit:
     return return_value;
@@ -225,19 +199,19 @@ PyDoc_STRVAR(time_clock_getres__doc__,
 "Return the resolution (precision) of the specified clock clk_id.");
 
 #define TIME_CLOCK_GETRES_METHODDEF    \
-    {"clock_getres", _PyCFunction_CAST(time_clock_getres), METH_O, time_clock_getres__doc__},
+    {"clock_getres", (PyCFunction)time_clock_getres, METH_O, time_clock_getres__doc__},
 
 static double
 time_clock_getres_impl(PyObject *module, int clk_id);
 
-static PyValue
-time_clock_getres(PyObject *module, PyValue arg)
+static PyObject *
+time_clock_getres(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int clk_id;
     double _return_value;
 
-    clk_id = PyLong_AsIntValue(arg);
+    clk_id = PyLong_AsInt(arg);
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -245,7 +219,7 @@ time_clock_getres(PyObject *module, PyValue arg)
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromDouble(_return_value);
+    return_value = PyFloat_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -262,46 +236,38 @@ PyDoc_STRVAR(time_pthread_getcpuclockid__doc__,
 "Return the clk_id of a thread\'s CPU time clock.");
 
 #define TIME_PTHREAD_GETCPUCLOCKID_METHODDEF    \
-    {"pthread_getcpuclockid", _PyCFunction_CAST(time_pthread_getcpuclockid), METH_O, time_pthread_getcpuclockid__doc__},
+    {"pthread_getcpuclockid", (PyCFunction)time_pthread_getcpuclockid, METH_O, time_pthread_getcpuclockid__doc__},
 
 static PyObject *
 time_pthread_getcpuclockid_impl(PyObject *module, unsigned long thread_id);
 
-static PyValue
-time_pthread_getcpuclockid(PyObject *module, PyValue arg)
+static PyObject *
+time_pthread_getcpuclockid(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     unsigned long thread_id;
-    PyObject *_return_value;
 
+    if (!PyIndex_Check(arg)) {
+        _PyArg_BadArgument("pthread_getcpuclockid", "argument", "int", arg);
+        goto exit;
+    }
     {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &thread_id, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        if (!PyIndex_Check(_arg)) {
-            _PyArg_BadArgument("pthread_getcpuclockid", "argument", "int", _arg);
-            goto exit;
-        }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &thread_id, sizeof(unsigned long),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned long)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
-    _return_value = time_pthread_getcpuclockid_impl(module, thread_id);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_pthread_getcpuclockid_impl(module, thread_id);
 
 exit:
     return return_value;
@@ -318,28 +284,7 @@ PyDoc_STRVAR(time_sleep__doc__,
 "The argument may be a floating-point number for subsecond precision.");
 
 #define TIME_SLEEP_METHODDEF    \
-    {"sleep", _PyCFunction_CAST(time_sleep), METH_O, time_sleep__doc__},
-
-static PyObject *
-time_sleep_impl(PyObject *module, PyObject *timeout_obj);
-
-static PyValue
-time_sleep(PyObject *module, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *timeout_obj;
-    PyObject *_return_value;
-
-    timeout_obj = PyValue_Object(arg);
-    if (timeout_obj == NULL) {
-        goto exit;
-    }
-    _return_value = time_sleep_impl(module, timeout_obj);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"sleep", (PyCFunction)time_sleep, METH_O, time_sleep__doc__},
 
 PyDoc_STRVAR(time_gmtime__doc__,
 "gmtime($module, seconds=None, /)\n"
@@ -359,12 +304,11 @@ PyDoc_STRVAR(time_gmtime__doc__,
 static PyObject *
 time_gmtime_impl(PyObject *module, PyObject *ot);
 
-static PyValue
-time_gmtime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_gmtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *ot = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("gmtime", nargs, 0, 1)) {
         goto exit;
@@ -372,13 +316,9 @@ time_gmtime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = PyValue_Object(args[0]);
-    if (ot == NULL) {
-        goto exit;
-    }
+    ot = args[0];
 skip_optional:
-    _return_value = time_gmtime_impl(module, ot);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_gmtime_impl(module, ot);
 
 exit:
     return return_value;
@@ -398,12 +338,11 @@ PyDoc_STRVAR(time_localtime__doc__,
 static PyObject *
 time_localtime_impl(PyObject *module, PyObject *ot);
 
-static PyValue
-time_localtime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_localtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *ot = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("localtime", nargs, 0, 1)) {
         goto exit;
@@ -411,13 +350,9 @@ time_localtime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = PyValue_Object(args[0]);
-    if (ot == NULL) {
-        goto exit;
-    }
+    ot = args[0];
 skip_optional:
-    _return_value = time_localtime_impl(module, ot);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_localtime_impl(module, ot);
 
 exit:
     return return_value;
@@ -438,12 +373,11 @@ PyDoc_STRVAR(time_asctime__doc__,
 static PyObject *
 time_asctime_impl(PyObject *module, PyObject *tup);
 
-static PyValue
-time_asctime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_asctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *tup = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("asctime", nargs, 0, 1)) {
         goto exit;
@@ -451,13 +385,9 @@ time_asctime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    tup = PyValue_Object(args[0]);
-    if (tup == NULL) {
-        goto exit;
-    }
+    tup = args[0];
 skip_optional:
-    _return_value = time_asctime_impl(module, tup);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_asctime_impl(module, tup);
 
 exit:
     return return_value;
@@ -478,12 +408,11 @@ PyDoc_STRVAR(time_ctime__doc__,
 static PyObject *
 time_ctime_impl(PyObject *module, PyObject *ot);
 
-static PyValue
-time_ctime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+time_ctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *ot = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ctime", nargs, 0, 1)) {
         goto exit;
@@ -491,13 +420,9 @@ time_ctime(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = PyValue_Object(args[0]);
-    if (ot == NULL) {
-        goto exit;
-    }
+    ot = args[0];
 skip_optional:
-    _return_value = time_ctime_impl(module, ot);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = time_ctime_impl(module, ot);
 
 exit:
     return return_value;
@@ -516,28 +441,7 @@ PyDoc_STRVAR(time_mktime__doc__,
 "the timezone or altzone attributes on the time module.");
 
 #define TIME_MKTIME_METHODDEF    \
-    {"mktime", _PyCFunction_CAST(time_mktime), METH_O, time_mktime__doc__},
-
-static PyObject *
-time_mktime_impl(PyObject *module, PyObject *tm_tuple);
-
-static PyValue
-time_mktime(PyObject *module, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *tm_tuple;
-    PyObject *_return_value;
-
-    tm_tuple = PyValue_Object(arg);
-    if (tm_tuple == NULL) {
-        goto exit;
-    }
-    _return_value = time_mktime_impl(module, tm_tuple);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"mktime", (PyCFunction)time_mktime, METH_O, time_mktime__doc__},
 
 #endif /* defined(HAVE_MKTIME) */
 
@@ -779,34 +683,26 @@ PyDoc_STRVAR(time_get_clock_info__doc__,
 "Get information of the specified clock.");
 
 #define TIME_GET_CLOCK_INFO_METHODDEF    \
-    {"get_clock_info", _PyCFunction_CAST(time_get_clock_info), METH_O, time_get_clock_info__doc__},
+    {"get_clock_info", (PyCFunction)time_get_clock_info, METH_O, time_get_clock_info__doc__},
 
 static PyObject *
 time_get_clock_info_impl(PyObject *module, const char *name);
 
-static PyValue
-time_get_clock_info(PyObject *module, PyValue arg)
+static PyObject *
+time_get_clock_info(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("get_clock_info", "argument", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("get_clock_info", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = time_get_clock_info_impl(module, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = _PyUnicode_AsUTF8NoNUL(arg);
+    if (name == NULL) {
+        goto exit;
+    }
+    return_value = time_get_clock_info_impl(module, name);
 
 exit:
     return return_value;
@@ -851,4 +747,4 @@ exit:
 #ifndef TIME_THREAD_TIME_NS_METHODDEF
     #define TIME_THREAD_TIME_NS_METHODDEF
 #endif /* !defined(TIME_THREAD_TIME_NS_METHODDEF) */
-/*[clinic end generated code: output=e5199404394d96e3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d89be8cc2b2a7b05 input=a9049054013a1b77]*/

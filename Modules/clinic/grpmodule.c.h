@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -21,14 +22,15 @@ PyDoc_STRVAR(grp_getgrgid__doc__,
 static PyObject *
 grp_getgrgid_impl(PyObject *module, gid_t gid);
 
-static PyValue
-grp_getgrgid(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+grp_getgrgid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -51,26 +53,18 @@ grp_getgrgid(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     gid_t gid;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_Gid_Converter(_arg, &gid)) {
-            goto exit;
-        }
+    if (!_Py_Gid_Converter(args[0], &gid)) {
+        goto exit;
     }
-    _return_value = grp_getgrgid_impl(module, gid);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = grp_getgrgid_impl(module, gid);
 
 exit:
     return return_value;
@@ -90,14 +84,15 @@ PyDoc_STRVAR(grp_getgrnam__doc__,
 static PyObject *
 grp_getgrnam_impl(PyObject *module, PyObject *name);
 
-static PyValue
-grp_getgrnam(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+grp_getgrnam(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -120,28 +115,20 @@ grp_getgrnam(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *name;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("getgrnam", "argument 'name'", "str", _arg);
-            goto exit;
-        }
-        name = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("getgrnam", "argument 'name'", "str", args[0]);
+        goto exit;
     }
-    _return_value = grp_getgrnam_impl(module, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = args[0];
+    return_value = grp_getgrnam_impl(module, name);
 
 exit:
     return return_value;
@@ -167,4 +154,4 @@ grp_getgrall(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return grp_getgrall_impl(module);
 }
-/*[clinic end generated code: output=28f1a1a917ac1d66 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9052db62d986262c input=a9049054013a1b77]*/

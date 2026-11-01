@@ -53,40 +53,32 @@ long_from_hash(Py_hash_t hash)
 }
 
 
-static PyValue
-hash_pointer(PyObject *Py_UNUSED(module), PyValue arg_value)
+static PyObject *
+hash_pointer(PyObject *Py_UNUSED(module), PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     void *ptr = PyLong_AsVoidPtr(arg);
     if (ptr == NULL && PyErr_Occurred()) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     Py_hash_t hash = Py_HashPointer(ptr);
-    return PyValue_FromResult(long_from_hash(hash));
+    return long_from_hash(hash);
 }
 
 
-static PyValue
-object_generichash(PyObject *Py_UNUSED(module), PyValue arg_value)
+static PyObject *
+object_generichash(PyObject *Py_UNUSED(module), PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     Py_hash_t hash = PyObject_GenericHash(arg);
-    return PyValue_FromResult(long_from_hash(hash));
+    return long_from_hash(hash);
 }
 
 
 static PyMethodDef test_methods[] = {
     {"hash_getfuncdef", hash_getfuncdef, METH_NOARGS},
-    {"hash_pointer", _PyCFunction_CAST(hash_pointer), METH_O},
-    {"object_generichash", _PyCFunction_CAST(object_generichash), METH_O},
+    {"hash_pointer", hash_pointer, METH_O},
+    {"object_generichash", object_generichash, METH_O},
     {NULL},
 };
 

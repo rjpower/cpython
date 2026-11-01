@@ -10,23 +10,19 @@ capsule_destructor(PyObject *op)
     free((char *)PyCapsule_GetName(op));
 }
 
-static PyValue
-capsule_new(PyObject *self, PyValue value)
+static PyObject *
+capsule_new(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     const char *name;
     Py_ssize_t size;
     if (!PyArg_Parse(arg, "z#", &name, &size)) {
-        return PyValue_NULL;
+        return NULL;
     }
     char *name_copy = NULL;
     if (name != NULL) {
         name_copy = strdup(name);
         if (name_copy == NULL) {
-            return PyValue_FromResult(PyErr_NoMemory());
+            return PyErr_NoMemory();
         }
     }
     static const char dummy = 0;
@@ -35,7 +31,7 @@ capsule_new(PyObject *self, PyValue value)
     if (capsule == NULL) {
         free(name_copy);
     }
-    return PyValue_FromResult(capsule);
+    return capsule;
 }
 
 static PyObject *
@@ -58,7 +54,7 @@ pycapsule_import(PyObject *self, PyObject *args)
 }
 
 static PyMethodDef test_methods[] = {
-    {"capsule_new", _PyCFunction_CAST(capsule_new), METH_O},
+    {"capsule_new", capsule_new, METH_O},
     {"PyCapsule_Import", pycapsule_import, METH_VARARGS},
     {NULL},
 };

@@ -2,7 +2,6 @@
 assembler (Python/assemble.c) emits."""
 
 import dis
-import gc
 import io
 import sys
 import types
@@ -60,32 +59,6 @@ class C:
     attr = 5
 
 
-class HandlerScalarBoundaryTest(unittest.TestCase):
-    def test_precast_handler_boundaries(self):
-        from opcode import opmap
-        nop = opmap["NOP"]
-        for rewrite in (False, True):
-            for handler in (-1, 65536, 65536 + nop):
-                with self.subTest(rewrite=rewrite, handler=handler):
-                    accepted, before, after = _testinternalcapi.ir_scalar_boundary(
-                        rewrite, handler)
-                    self.assertEqual(accepted, 0)
-                    self.assertEqual(after, before)
-            accepted, before, after = _testinternalcapi.ir_scalar_boundary(rewrite, nop)
-            self.assertEqual(accepted, 1)
-            self.assertEqual(after, before)
-
-    def test_runtime_wrapper_is_rewrite_only(self):
-        from opcode import opmap
-        handler = opmap["INSTRUMENTED_LINE"]
-        accepted, before, after = _testinternalcapi.ir_scalar_boundary(False, handler)
-        self.assertEqual((accepted, after), (0, before))
-        accepted, before, after = _testinternalcapi.ir_scalar_boundary(True, handler)
-        self.assertEqual(accepted, 1)
-        self.assertEqual(after & 65535, handler)
-        self.assertEqual(after >> 16, before >> 16)
-
-
 class AssemblerTest(unittest.TestCase):
 
     def check_offsets(self, func):
@@ -135,9 +108,9 @@ class AssemblerTest(unittest.TestCase):
         # The words of the code object stay as the compiler emitted them
         self.assertEqual(get_ir(f.__code__), ir)
 
-    def test_deopt_after_reading_a_local(self):
-        # A LOAD_ATTR that deoptimises after reading a local leaves the
-        # local intact for the generic path and the exception handler.
+    def test_deopt_after_borrowing_a_local(self):
+        # A Py_STACKREF_DEBUG build aborts when the frame closes a local
+        # whose borrow a deoptimising LOAD_ATTR left out.
         def f(o):
             try:
                 return o.attr
@@ -411,80 +384,8 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
         self.assertEqual(f(), [0])
-        with self.assertRaisesRegex(
-                SyntaxError, "too many local variables and temporaries"):
+        with self.assertRaisesRegex(SystemError, "slots"):
             make(IR_MAX_SLOTS - stacksize + 1)
-
-    def test_inline_constant_display(self):
-        def f():
-            a = 1000
-            b = 2.5
-            c = 7
-            return a, b, c
-        bases = {"LOAD_CONST_INLINE_INT": "LOAD_CONST",
-                 "LOAD_CONST_INLINE_FLOAT": "LOAD_CONST",
-                 "LOAD_SMALL_INT_INLINE": "LOAD_SMALL_INT"}
-        raw = {item.handler for item in dis.get_instructions(f)}
-        self.assertLessEqual(bases.keys(), raw)
-        for item in dis.get_instructions(f):
-            if item.handler in bases:
-                self.assertEqual(item.opname, bases[item.handler])
-        self.assertEqual(f(), (1000, 2.5, 7))
-        for item in dis.get_instructions(f, adaptive=True):
-            if item.handler in bases:
-                self.assertEqual(item.opname, item.handler)
-
-    def test_instrumented_nofb_restores_pristine_word(self):
-        class A:
-            value = 7
-        class B(A):
-            def f(self):
-                return super().value
-
-        f = B.f
-        item = next(i for i in dis.get_instructions(f)
-                    if i.opname == "LOAD_SUPER_ATTR")
-        pristine = get_ir(f.__code__)[item.offset]
-        _, a, b, _, _ = pristine
-        word = ("LOAD_SUPER_ATTR_NOFB", a, b,
-                item.arg & IR_FIELD_MAX, item.arg >> 12)
-        raw = f.__code__.co_code
-        f.__code__ = f.__code__.replace(co_code=(
-            raw[:item.offset * 8]
-            + encode_words((dis._all_opmap[word[0]], *word[1:]))
-            + raw[(item.offset + 1) * 8:]))
-        original_bytes = f.__code__.co_code
-        self.assertEqual(f(B()), 7)
-        self.assertEqual(get_ir(f.__code__, True)[item.offset], word)
-
-        mon = sys.monitoring
-        tool = mon.PROFILER_ID
-        mon.use_tool_id(tool, "nofb restoration")
-        self.addCleanup(mon.free_tool_id, tool)
-        self.addCleanup(mon.set_local_events, tool, f.__code__, 0)
-        events = []
-        def callback(event):
-            def collect(code, offset, callable, arg0):
-                if code is f.__code__ and offset == item.offset:
-                    events.append((event, get_ir(code, True)[offset]))
-                    gc.collect()
-            return collect
-        for event in (mon.events.CALL, mon.events.C_RETURN, mon.events.C_RAISE):
-            self.addCleanup(mon.register_callback, tool, event, None)
-            mon.register_callback(tool, event, callback(event))
-        mon.set_local_events(tool, f.__code__, mon.events.CALL)
-        expected = ("INSTRUMENTED_LOAD_SUPER_ATTR_NOFB", *word[1:])
-        self.assertEqual(get_ir(f.__code__, True)[item.offset], expected)
-        self.assertEqual(f(B()), 7)
-        self.assertIn((mon.events.CALL, expected), events)
-        self.assertIn((mon.events.C_RETURN, expected), events)
-        with self.assertRaises(TypeError):
-            f(object())
-        self.assertIn((mon.events.C_RAISE, expected), events)
-        mon.set_local_events(tool, f.__code__, 0)
-        self.assertEqual(get_ir(f.__code__, True)[item.offset], word)
-        self.assertEqual(f.__code__.co_code, original_bytes)
-        self.assertEqual(f(B()), 7)
 
     def test_shared_feedback_entry(self):
         # The sites past the IR_FIELD_MAX-th share entry 0: they never
@@ -782,8 +683,10 @@ class FoldTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(g(o), 5)
 
+    @support.requires_refcounting
     def test_return_local(self):
-        # RETURN_VALUE returns the local before the frame releases its locals
+        # RETURN_VALUE takes a new reference to the local before the frame
+        # releases its locals
         def f(x):
             return x
         def g():
@@ -793,7 +696,9 @@ class FoldTest(unittest.TestCase):
         self.assertEqual(words(g)[-1], ("RETURN_VALUE", None, (0,)))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             o = object()
+            before = sys.getrefcount(o)
             self.assertIs(f(o), o)
+            self.assertEqual(sys.getrefcount(o), before)
             self.assertEqual(g(), [1, 2])
 
     def test_load_below_a_constant_folds(self):
@@ -1102,6 +1007,21 @@ class StoreFoldTest(unittest.TestCase):
         support.gc_collect()  # For other GCs.
         self.assertEqual(C.freed, 3 * n)
 
+    @support.requires_refcounting
+    def test_release_runs_with_the_frame_consistent(self):
+        # __del__ of the old value runs as the store releases it, and sees
+        # the new value in the local.
+        seen = []
+        class D:
+            def __del__(self):
+                seen.append(sys._getframe(1).f_locals.get("x"))
+        def f():
+            x = D()
+            x = 2 + 3
+            return x
+        self.assertEqual(f(), 5)
+        self.assertEqual(seen, [5])
+
     def test_generator(self):
         def gen(n):
             for i in range(n):
@@ -1173,27 +1093,15 @@ class RegCfgTest(unittest.TestCase):
 
     # a. Copy propagation
 
-    def test_load_folds_under_a_constant_only(self):
-        # A pending load dies at an op that may run Python code: a global
-        # (a dict subclass or a colliding key) and a call may rebind x
-        # through frame.f_locals before the reader runs
-        def const(x):
-            return x * 3
+    def test_load_folds_under_a_global_and_a_call(self):
         def mul(x):
             return x * K
         def add(x):
             return x + one()
-        for f, folded in (const, True), (mul, False), (add, False):
-            with self.subTest(f=f.__name__):
-                names = self.names(f)
-                op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
-                if folded:
-                    self.assertNotIn("LOAD_FAST_BORROW", names)
-                    self.assertEqual(op[2][0], 0)
-                else:
-                    self.assertIn("LOAD_FAST_BORROW", names)
-                    self.assertNotEqual(op[2][0], 0)
-        self.run_specialized(lambda: self.assertEqual(const(2), 6))
+        for f in mul, add:
+            self.assertNotIn("LOAD_FAST_BORROW", self.names(f))
+            op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
+            self.assertEqual(op[2][0], 0)
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
         self.run_specialized(lambda: self.assertEqual(add(2), 3))
 

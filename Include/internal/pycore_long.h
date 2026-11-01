@@ -10,7 +10,6 @@ extern "C" {
 
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_runtime.h"       // _Py_SINGLETON()
-#include "pycore_unicodeobject.h" // _PyUnicodeWriter
 
 /*
  * Default int base conversion size limitation: Denial of Service prevention.

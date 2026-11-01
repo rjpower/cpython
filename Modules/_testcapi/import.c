@@ -1,17 +1,13 @@
 #include "parts.h"
 #include "util.h"
 
-static PyValue
-pyimport_lazyimportwithoutframe(PyObject *self, PyValue name_value)
+static PyObject *
+pyimport_lazyimportwithoutframe(PyObject *self, PyObject *name)
 {
-    PyObject *name = PyValue_Object(name_value);
-    if (name == NULL) {
-        return PyValue_NULL;
-    }
     PyObject *lazy_import = PyImport_ImportModuleAttrString("builtins",
                                                             "__lazy_import__");
     if (lazy_import == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     // Simulate being called with no running Python frame (e.g. from a freshly
@@ -23,7 +19,7 @@ pyimport_lazyimportwithoutframe(PyObject *self, PyValue name_value)
     tstate->current_frame = saved;
 
     Py_DECREF(lazy_import);
-    return PyValue_FromResult(res);
+    return res;
 }
 
 // Test PyImport_ImportModuleAttr()
@@ -120,7 +116,7 @@ static PyMethodDef test_methods[] = {
     {"PyImport_GetLazyImportsMode", pyimport_getlazyimportsmode, METH_NOARGS},
     {"PyImport_SetLazyImportsFilter", pyimport_setlazyimportsfilter, METH_VARARGS},
     {"PyImport_GetLazyImportsFilter", pyimport_getlazyimportsfilter, METH_NOARGS},
-    {"lazy_import_without_frame", _PyCFunction_CAST(pyimport_lazyimportwithoutframe), METH_O},
+    {"lazy_import_without_frame", pyimport_lazyimportwithoutframe, METH_O},
     {NULL},
 };
 

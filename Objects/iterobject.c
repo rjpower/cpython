@@ -54,7 +54,7 @@ iter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyValue
+static PyObject *
 iter_iternext(PyObject *iterator)
 {
     seqiterobject *it;
@@ -65,14 +65,16 @@ iter_iternext(PyObject *iterator)
     it = (seqiterobject *)iterator;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0)
-        return PyValue_NULL;
+        return NULL;
     seq = it->it_seq;
+#ifndef Py_GIL_DISABLED
     if (seq == NULL)
-        return PyValue_NULL;
+        return NULL;
+#endif
     if (index == PY_SSIZE_T_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "iter index too large");
-        return PyValue_NULL;
+        return NULL;
     }
 
     result = PySequence_GetItem(seq, index);
@@ -84,7 +86,7 @@ iter_iternext(PyObject *iterator)
         if (FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) >= 0) {
             FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
         }
-        return PyValue_FromResult(result);
+        return result;
     }
     if (PyErr_ExceptionMatches(PyExc_IndexError) ||
         PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -92,10 +94,12 @@ iter_iternext(PyObject *iterator)
         /* Mark the iterator exhausted before anything that can run
          * arbitrary code. */
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, -1);
+#ifndef Py_GIL_DISABLED
         Py_CLEAR(it->it_seq);
+#endif
         PyErr_Clear();
     }
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyObject *
@@ -142,19 +146,19 @@ iter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 
-static PyValue
-iter_setstate(PyObject *op, PyValue state_value)
+static PyObject *
+iter_setstate(PyObject *op, PyObject *state)
 {
     seqiterobject *it = (seqiterobject*)op;
-    Py_ssize_t index = PyLong_AsSsize_tValue(state_value);
+    Py_ssize_t index = PyLong_AsSsize_t(state);
     if (index == -1 && PyErr_Occurred())
-        return PyValue_NULL;
+        return NULL;
     if (index < 0)
         index = 0;
     if (it->it_seq && FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) >= 0) {
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
     }
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -162,7 +166,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyMethodDef seqiter_methods[] = {
     {"__length_hint__", iter_len, METH_NOARGS, length_hint_doc},
     {"__reduce__", iter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", _PyCFunction_CAST(iter_setstate), METH_O, setstate_doc},
+    {"__setstate__", iter_setstate, METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -262,25 +266,25 @@ calliter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyValue
+static PyObject *
 calliter_iternext(PyObject *op)
 {
     calliterobject *it = (calliterobject*)op;
     PyObject *result;
 
     if (it->it_callable == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     result = _PyObject_CallNoArgs(it->it_callable);
     /* The call can exhaust the iterator re-entrantly. */
     if (result != NULL && it->it_callable != NULL) {
         if (it->it_sentinel == NULL) {
-            return PyValue_FromResult(result); /* Common case, fast path */
+            return result; /* Common case, fast path */
         }
         int ok = PyObject_RichCompareBool(it->it_sentinel, result, Py_EQ);
         if (ok == 0) {
-            return PyValue_FromResult(result); /* Common case, fast path */
+            return result; /* Common case, fast path */
         }
 
         if (ok > 0) {
@@ -297,7 +301,7 @@ calliter_iternext(PyObject *op)
                                "callable raised StopIteration");
     }
     Py_XDECREF(result);
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyObject *
@@ -328,13 +332,9 @@ calliter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     }
 }
 
-static PyValue
-calliter_setstate(PyObject *op, PyValue state_value)
+static PyObject *
+calliter_setstate(PyObject *op, PyObject *state)
 {
-    PyObject *state = PyValue_Object(state_value);
-    if (state == NULL) {
-        return PyValue_NULL;
-    }
     calliterobject *it = (calliterobject*)op;
     PyObject *sentinel, *stop_exc;
 
@@ -347,7 +347,7 @@ calliter_setstate(PyObject *op, PyValue state_value)
         goto error;
     }
     if (_PyEval_CheckExceptTypeValid(_PyThreadState_GET(), stop_exc) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (it->it_callable != NULL) {
         Py_XSETREF(it->it_sentinel,
@@ -355,16 +355,16 @@ calliter_setstate(PyObject *op, PyValue state_value)
                    Py_NewRef(PyTuple_GET_ITEM(sentinel, 0)) : NULL);
         Py_SETREF(it->it_stop_exc, Py_NewRef(stop_exc));
     }
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 
 error:
     PyErr_SetString(PyExc_TypeError, "invalid state for callable_iterator");
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyMethodDef calliter_methods[] = {
     {"__reduce__", calliter_reduce, METH_NOARGS, reduce_doc},
-    {"__setstate__", _PyCFunction_CAST(calliter_setstate), METH_O, setstate_doc},
+    {"__setstate__", calliter_setstate, METH_O, setstate_doc},
     {NULL,              NULL}           /* sentinel */
 };
 

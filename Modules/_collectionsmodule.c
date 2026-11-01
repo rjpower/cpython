@@ -142,6 +142,7 @@ struct dequeobject {
     Py_ssize_t maxlen;          /* maxlen is -1 for unbounded deques */
     Py_ssize_t numfreeblocks;
     block *freeblocks[MAXFREEBLOCKS];
+    PyObject *weakreflist;
 };
 
 #define dequeobject_CAST(op)    ((dequeobject *)(op))
@@ -226,6 +227,7 @@ deque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     deque->state = 0;
     deque->maxlen = -1;
     deque->numfreeblocks = 0;
+    deque->weakreflist = NULL;
 
     return (PyObject *)deque;
 }
@@ -452,11 +454,12 @@ finalize_iterator(PyObject *it)
 static PyObject*
 consume_iterator(PyObject *it)
 {
-    iternextfunc iternext;
+    PyObject *(*iternext)(PyObject *);
+    PyObject *item;
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while (!PyValue_IsNull(iternext(it))) {
-        /* Discard the item. */
+    while ((item = iternext(it)) != NULL) {
+        Py_DECREF(item);
     }
     return finalize_iterator(it);
 }
@@ -477,8 +480,7 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
 /*[clinic end generated code: output=8b5ffa57ce82d980 input=85861954127c81da]*/
 {
     PyObject *it, *item;
-    PyValue value;
-    iternextfunc iternext;
+    PyObject *(*iternext)(PyObject *);
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -487,7 +489,7 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
         PyObject *s = PySequence_List(iterable);
         if (s == NULL)
             return NULL;
-        result = deque_extend_impl(deque, s);
+        result = deque_extend((PyObject*)deque, s);
         Py_DECREF(s);
         return result;
     }
@@ -508,12 +510,8 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
     }
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while (!PyValue_IsNull(value = iternext(it))) {
-        // A deque holds objects: an inline item is boxed here.
-        item = PyValue_Object(value);
-        if (item == NULL
-            || deque_append_lock_held(deque, item, maxlen) == -1)
-        {
+    while ((item = iternext(it)) != NULL) {
+        if (deque_append_lock_held(deque, item, maxlen) == -1) {
             Py_DECREF(it);
             return NULL;
         }
@@ -537,8 +535,7 @@ deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
 /*[clinic end generated code: output=ba44191aa8e35a26 input=640dabd086115689]*/
 {
     PyObject *it, *item;
-    PyValue value;
-    iternextfunc iternext;
+    PyObject *(*iternext)(PyObject *);
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -568,12 +565,8 @@ deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
     }
 
     iternext = *Py_TYPE(it)->tp_iternext;
-    while (!PyValue_IsNull(value = iternext(it))) {
-        // A deque holds objects: an inline item is boxed here.
-        item = PyValue_Object(value);
-        if (item == NULL
-            || deque_appendleft_lock_held(deque, item, maxlen) == -1)
-        {
+    while ((item = iternext(it)) != NULL) {
+        if (deque_appendleft_lock_held(deque, item, maxlen) == -1) {
             Py_DECREF(it);
             return NULL;
         }
@@ -588,7 +581,7 @@ deque_inplace_concat(PyObject *self, PyObject *other)
     PyObject *result;
 
     // deque_extend is thread-safe
-    result = deque_extend_impl(deque, other);
+    result = deque_extend((PyObject*)deque, other);
     if (result == NULL)
         return result;
     Py_INCREF(deque);
@@ -1154,15 +1147,15 @@ deque_reverse_impl(dequeobject *deque)
 _collections.deque.count as deque_count
 
     deque: dequeobject
-    value as v: value
+    value as v: object
     /
 
 Return number of occurrences of value.
 [clinic start generated code]*/
 
 static PyObject *
-deque_count_impl(dequeobject *deque, PyValue v)
-/*[clinic end generated code: output=46b7ed2f035ba162 input=80fb48a9eb9ecaaf]*/
+deque_count_impl(dequeobject *deque, PyObject *v)
+/*[clinic end generated code: output=2ca26c49b6ab0400 input=4ef67ef2b34dc1fc]*/
 {
     block *b = deque->leftblock;
     Py_ssize_t index = deque->leftindex;
@@ -1174,8 +1167,9 @@ deque_count_impl(dequeobject *deque, PyValue v)
 
     while (--n >= 0) {
         CHECK_NOT_END(b);
-        item = b->data[index];
-        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), v, Py_EQ);
+        item = Py_NewRef(b->data[index]);
+        cmp = PyObject_RichCompareBool(item, v, Py_EQ);
+        Py_DECREF(item);
         if (cmp < 0)
             return NULL;
         count += cmp;
@@ -1250,7 +1244,7 @@ deque_len(PyObject *self)
 _collections.deque.index as deque_index
 
     deque: dequeobject
-    value as v: value
+    value as v: object
     start: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='0') = NULL
     stop: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='PY_SSIZE_T_MAX') = NULL
     /
@@ -1261,9 +1255,9 @@ Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
 static PyObject *
-deque_index_impl(dequeobject *deque, PyValue v, Py_ssize_t start,
+deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
                  Py_ssize_t stop)
-/*[clinic end generated code: output=39915a6a089c182d input=16ea03f5e8ef3c2c]*/
+/*[clinic end generated code: output=df45132753175ef9 input=1c3b19632cf3484f]*/
 {
     Py_ssize_t i, n;
     PyObject *item;
@@ -1303,8 +1297,9 @@ deque_index_impl(dequeobject *deque, PyValue v, Py_ssize_t start,
     n = stop - i;
     while (--n >= 0) {
         CHECK_NOT_END(b);
-        item = b->data[index];
-        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), v, Py_EQ);
+        item = Py_NewRef(b->data[index]);
+        cmp = PyObject_RichCompareBool(item, v, Py_EQ);
+        Py_DECREF(item);
         if (cmp > 0)
             return PyLong_FromSsize_t(stop - n - 1);
         if (cmp < 0)
@@ -1450,15 +1445,15 @@ deque_del_item(dequeobject *deque, Py_ssize_t i)
 _collections.deque.remove as deque_remove
 
     deque: dequeobject
-    value: value
+    value: object
     /
 
 Remove first occurrence of value.
 [clinic start generated code]*/
 
 static PyObject *
-deque_remove_impl(dequeobject *deque, PyValue value)
-/*[clinic end generated code: output=b30f6a69968e7699 input=ab2b23550cf7e4d1]*/
+deque_remove_impl(dequeobject *deque, PyObject *value)
+/*[clinic end generated code: output=54cff28b8ef78c5b input=60eb3f8aa4de532a]*/
 {
     PyObject *item;
     block *b = deque->leftblock;
@@ -1467,8 +1462,9 @@ deque_remove_impl(dequeobject *deque, PyValue value)
     int cmp, rv;
 
     for (i = 0 ; i < n; i++) {
-        item = b->data[index];
-        cmp = PyObject_RichCompareBoolValue(PyValue_FromObject(item), value, Py_EQ);
+        item = Py_NewRef(b->data[index]);
+        cmp = PyObject_RichCompareBool(item, value, Py_EQ);
+        Py_DECREF(item);
         if (cmp < 0) {
             return NULL;
         }
@@ -1548,7 +1544,7 @@ deque_dealloc(PyObject *self)
     Py_ssize_t i;
 
     PyObject_GC_UnTrack(deque);
-    FT_CLEAR_WEAKREFS(self);
+    FT_CLEAR_WEAKREFS(self, deque->weakreflist);
     if (deque->leftblock != NULL) {
         (void)deque_clear(self);
         assert(deque->leftblock != NULL);
@@ -1797,13 +1793,13 @@ deque___sizeof___impl(dequeobject *deque)
     return PyLong_FromSize_t(res);
 }
 
-static PyValue
+static PyObject *
 deque_get_maxlen(PyObject *self, void *Py_UNUSED(closure))
 {
     dequeobject *deque = dequeobject_CAST(self);
     if (deque->maxlen < 0)
-        return PyValue_FromObject(Py_None);
-    return PyValue_FromLongLong(deque->maxlen);
+        Py_RETURN_NONE;
+    return PyLong_FromSsize_t(deque->maxlen);
 }
 
 static PyObject *deque_reviter(dequeobject *deque);
@@ -1852,9 +1848,14 @@ static PyMethodDef deque_methods[] = {
     DEQUE_REVERSE_METHODDEF
     DEQUE_ROTATE_METHODDEF
     DEQUE___SIZEOF___METHODDEF
-    {"__class_getitem__",       _PyCFunction_CAST(Py_GenericAliasValue),
+    {"__class_getitem__",       Py_GenericAlias,
     METH_O|METH_CLASS,          PyDoc_STR("deques are generic over the type of their contents")},
     {NULL,              NULL}   /* sentinel */
+};
+
+static PyMemberDef deque_members[] = {
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(dequeobject, weakreflist), Py_READONLY},
+    {NULL},
 };
 
 static PyType_Slot deque_slots[] = {
@@ -1873,6 +1874,7 @@ static PyType_Slot deque_slots[] = {
     {Py_tp_new, deque_new},
     {Py_tp_free, PyObject_GC_Del},
     {Py_tp_methods, deque_methods},
+    {Py_tp_members, deque_members},
 
     // Sequence protocol
     {Py_sq_length, deque_len},
@@ -1891,7 +1893,7 @@ static PyType_Spec deque_spec = {
     .basicsize = sizeof(dequeobject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
               Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_SEQUENCE |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = deque_slots,
 };
 
@@ -1984,7 +1986,7 @@ dequeiter_next_lock_held(dequeiterobject *it, dequeobject *deque)
     return Py_NewRef(item);
 }
 
-static PyValue
+static PyObject *
 dequeiter_next(PyObject *op)
 {
     PyObject *result;
@@ -1996,7 +1998,7 @@ dequeiter_next(PyObject *op)
     result = dequeiter_next_lock_held(it, deque);
     Py_END_CRITICAL_SECTION2();
 
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyObject *
@@ -2015,7 +2017,10 @@ dequeiter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        if (PyValue_IsNull(dequeiter_next((PyObject *)it))) {
+        PyObject *item = dequeiter_next((PyObject *)it);
+        if (item) {
+            Py_DECREF(item);
+        } else {
             /*
              * It's safe to read directly from it without acquiring the
              * per-object lock; the iterator isn't visible to any other threads
@@ -2132,7 +2137,7 @@ dequereviter_next_lock_held(dequeiterobject *it, dequeobject *deque)
     return Py_NewRef(item);
 }
 
-static PyValue
+static PyObject *
 dequereviter_next(PyObject *self)
 {
     PyObject *item;
@@ -2143,7 +2148,7 @@ dequereviter_next(PyObject *self)
     Py_BEGIN_CRITICAL_SECTION2(it, deque);
     item = dequereviter_next_lock_held(it, deque);
     Py_END_CRITICAL_SECTION2();
-    return PyValue_FromResult(item);
+    return item;
 }
 
 static PyObject *
@@ -2162,7 +2167,10 @@ dequereviter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     /* consume items from the queue */
     for(i=0; i<index; i++) {
-        if (PyValue_IsNull(dequereviter_next((PyObject *)it))) {
+        PyObject *item = dequereviter_next((PyObject *)it);
+        if (item) {
+            Py_DECREF(item);
+        } else {
             /*
              * It's safe to read directly from it without acquiring the
              * per-object lock; the iterator isn't visible to any other threads
@@ -2216,13 +2224,9 @@ PyDoc_STRVAR(defdict_missing_doc,
   return value\n\
 ");
 
-static PyValue
-defdict_missing(PyObject *op, PyValue arg)
+static PyObject *
+defdict_missing(PyObject *op, PyObject *key)
 {
-    PyObject *key = PyValue_Object(arg);
-    if (key == NULL) {
-        return PyValue_NULL;
-    }
     defdictobject *dd = defdictobject_CAST(op);
     PyObject *factory = dd->default_factory;
     PyObject *value;
@@ -2230,19 +2234,19 @@ defdict_missing(PyObject *op, PyValue arg)
         /* XXX Call dict.__missing__(key) */
         PyObject *tup;
         tup = PyTuple_Pack(1, key);
-        if (!tup) return PyValue_NULL;
+        if (!tup) return NULL;
         PyErr_SetObject(PyExc_KeyError, tup);
         Py_DECREF(tup);
-        return PyValue_NULL;
+        return NULL;
     }
     value = _PyObject_CallNoArgs(factory);
     if (value == NULL)
-        return PyValue_FromResult(value);
+        return value;
     PyObject *result = NULL;
     (void)PyDict_SetDefaultRef(op, key, value, &result);
     // 'result' is NULL, or a strong reference to 'value' or 'op[key]'
     Py_DECREF(value);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static inline PyObject*
@@ -2328,7 +2332,7 @@ of the dictionary's keys and values");
 
 
 static PyMethodDef defdict_methods[] = {
-    {"__missing__", _PyCFunction_CAST(defdict_missing), METH_O,
+    {"__missing__", defdict_missing, METH_O,
      defdict_missing_doc},
     {"copy", defdict_copy, METH_NOARGS,
      defdict_copy_doc},
@@ -2336,7 +2340,7 @@ static PyMethodDef defdict_methods[] = {
      defdict_copy_doc},
     {"__reduce__", defdict_reduce, METH_NOARGS,
      reduce_doc},
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
      defdict_class_getitem_doc},
     {NULL}
 };
@@ -2536,14 +2540,15 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                                   PyObject *iterable)
 /*[clinic end generated code: output=7e0c1789636b3d8f input=e79fad04534a0b45]*/
 {
-    PyObject *it;
-    PyValue oldval, newval;
+    PyObject *it, *oldval;
+    PyObject *newval = NULL;
+    PyObject *key = NULL;
     PyObject *bound_get = NULL;
     PyObject *mapping_get;
     PyObject *dict_get;
     PyObject *mapping_setitem;
     PyObject *dict_setitem;
-    PyValue one = PyValue_FromInt32(1);
+    PyObject *one = _PyLong_GetOne();  // borrowed reference
 
     it = PyObject_GetIter(iterable);
     if (it == NULL)
@@ -2574,9 +2579,7 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
             */
             Py_hash_t hash;
 
-            // The key and the count are stored as objects
-            // (_PyDict_SetItem_KnownHash()): an inline one is boxed.
-            PyObject *key = PyIter_Next(it);
+            key = PyIter_Next(it);
             if (key == NULL)
                 break;
 
@@ -2585,26 +2588,26 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                 goto done;
             }
 
-            if (_Py_dict_lookup((PyDictObject *)mapping, PyValue_FromObject(key),
-                                hash, &oldval) == DKIX_ERROR) {
-                goto done;
-            }
-            if (PyValue_IsNull(oldval)) {
-                if (_PyDict_SetItem_KnownHash(mapping, key, _PyLong_GetOne(),
-                                              hash) < 0)
+            oldval = _PyDict_GetItem_KnownHash(mapping, key, hash);
+            if (oldval == NULL) {
+                if (PyErr_Occurred())
+                    goto done;
+                if (_PyDict_SetItem_KnownHash(mapping, key, one, hash) < 0)
                     goto done;
             } else {
-                /* oldval is held by this frame across PyNumber_AddValue(),
-                   which can execute arbitrary user code and mutate (or even
-                   clear) the underlying dict. */
-                newval = PyNumber_AddValue(oldval, one);
-                if (PyValue_IsNull(newval))
+                /* oldval is a borrowed reference.  Keep it alive across
+                   PyNumber_Add(), which can execute arbitrary user code and
+                   mutate (or even clear) the underlying dict. */
+                Py_INCREF(oldval);
+                newval = PyNumber_Add(oldval, one);
+                Py_DECREF(oldval);
+                if (newval == NULL)
                     goto done;
-                PyObject *newval_o = PyValue_Object(newval);
-                if (newval_o == NULL ||
-                    _PyDict_SetItem_KnownHash(mapping, key, newval_o, hash) < 0)
+                if (_PyDict_SetItem_KnownHash(mapping, key, newval, hash) < 0)
                     goto done;
+                Py_CLEAR(newval);
             }
+            Py_DECREF(key);
         }
     }
     else {
@@ -2612,26 +2615,26 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
         if (bound_get == NULL)
             goto done;
 
-        PyValue zero = PyValue_FromInt32(0);
-        PyValue itv = PyValue_FromObject(it);
+        PyObject *zero = _PyLong_GetZero();  // borrowed reference
         while (1) {
-            PyValue key;
-            if (PyIter_NextValue(itv, &key) <= 0)
+            key = PyIter_Next(it);
+            if (key == NULL)
                 break;
-            PyValue args[2] = {key, zero};
-            oldval = PyObject_VectorcallValue(PyValue_FromObject(bound_get),
-                                              args, 2, NULL);
-            if (PyValue_IsNull(oldval))
+            oldval = PyObject_CallFunctionObjArgs(bound_get, key, zero, NULL);
+            if (oldval == NULL)
                 break;
-            if (PyValue_Is(oldval, zero)) {
-                newval = one;
+            if (oldval == zero) {
+                newval = Py_NewRef(one);
             } else {
-                newval = PyNumber_AddValue(oldval, one);
+                newval = PyNumber_Add(oldval, one);
             }
-            if (PyValue_IsNull(newval))
+            Py_DECREF(oldval);
+            if (newval == NULL)
                 break;
-            if (PyObject_SetItemValue(PyValue_FromObject(mapping), key, newval) < 0)
+            if (PyObject_SetItem(mapping, key, newval) < 0)
                 break;
+            Py_CLEAR(newval);
+            Py_DECREF(key);
         }
     }
 
@@ -2639,6 +2642,8 @@ done:
     Py_XDECREF(mapping_get);
     Py_XDECREF(mapping_setitem);
     Py_DECREF(it);
+    Py_XDECREF(key);
+    Py_XDECREF(newval);
     Py_XDECREF(bound_get);
     if (PyErr_Occurred())
         return NULL;
@@ -2678,38 +2683,40 @@ tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyObject *doc)
     return (PyObject *)self;
 }
 
-/* The tuple's item as a value: an inline item is not boxed. */
-static PyValue
+static PyObject *
 tuplegetter_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     Py_ssize_t index = tuplegetterobject_CAST(self)->index;
+    PyObject *result;
+
     if (obj == NULL) {
-        return PyValue_FromObject(self);
+        return Py_NewRef(self);
     }
     if (!PyTuple_Check(obj)) {
         if (obj == Py_None) {
-            return PyValue_FromObject(self);
+            return Py_NewRef(self);
         }
         PyErr_Format(PyExc_TypeError,
                      "descriptor for index '%zd' for tuple subclasses "
                      "doesn't apply to '%s' object",
                      index,
                      Py_TYPE(obj)->tp_name);
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (!valid_index(index, PyTuple_GET_SIZE(obj))) {
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyTuple_GET_VALUE(obj, index);
+    result = PyTuple_GET_ITEM(obj, index);
+    return Py_NewRef(result);
 }
 
 static int
-tuplegetter_descr_set(PyObject *self, PyObject *obj, PyValue value)
+tuplegetter_descr_set(PyObject *self, PyObject *obj, PyObject *value)
 {
-    if (PyValue_IsNull(value)) {
+    if (value == NULL) {
         PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
     } else {
         PyErr_SetString(PyExc_AttributeError, "can't set attribute");

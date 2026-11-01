@@ -102,20 +102,18 @@ PyDoc_STRVAR(_dbm_dbm_keys__doc__,
 static PyObject *
 _dbm_dbm_keys_impl(dbmobject *self, PyTypeObject *cls);
 
-static PyValue
-_dbm_dbm_keys(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_dbm_dbm_keys(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "keys() takes no arguments");
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _dbm_dbm_keys_impl((dbmobject *)self, cls);
+    return_value = _dbm_dbm_keys_impl((dbmobject *)self, cls);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -149,14 +147,13 @@ static PyObject *
 _dbm_dbm_get_impl(dbmobject *self, PyTypeObject *cls, const char *key,
                   Py_ssize_t key_length, PyObject *default_value);
 
-static PyValue
-_dbm_dbm_get(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_dbm_dbm_get(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *key;
     Py_ssize_t key_length;
     PyObject *default_value = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("get", kwnames)) {
         goto exit;
@@ -166,9 +163,8 @@ _dbm_dbm_get(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t 
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _dbm_dbm_get_impl((dbmobject *)self, cls, key, key_length, default_value);
+    return_value = _dbm_dbm_get_impl((dbmobject *)self, cls, key, key_length, default_value);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -190,14 +186,13 @@ static PyObject *
 _dbm_dbm_setdefault_impl(dbmobject *self, PyTypeObject *cls, const char *key,
                          Py_ssize_t key_length, PyObject *default_value);
 
-static PyValue
-_dbm_dbm_setdefault(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_dbm_dbm_setdefault(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *key;
     Py_ssize_t key_length;
     PyObject *default_value = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("setdefault", kwnames)) {
         goto exit;
@@ -207,9 +202,8 @@ _dbm_dbm_setdefault(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_s
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _dbm_dbm_setdefault_impl((dbmobject *)self, cls, key, key_length, default_value);
+    return_value = _dbm_dbm_setdefault_impl((dbmobject *)self, cls, key, key_length, default_value);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -227,20 +221,18 @@ PyDoc_STRVAR(_dbm_dbm_clear__doc__,
 static PyObject *
 _dbm_dbm_clear_impl(dbmobject *self, PyTypeObject *cls);
 
-static PyValue
-_dbm_dbm_clear(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_dbm_dbm_clear(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
-    PyObject *_return_value;
+    PyObject *return_value = NULL;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "clear() takes no arguments");
         goto exit;
     }
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _dbm_dbm_clear_impl((dbmobject *)self, cls);
+    return_value = _dbm_dbm_clear_impl((dbmobject *)self, cls);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
 exit:
     return return_value;
@@ -256,23 +248,21 @@ PyDoc_STRVAR(_dbm_dbm___exit____doc__,
     {"__exit__", _PyCFunction_CAST(_dbm_dbm___exit__), METH_FASTCALL, _dbm_dbm___exit____doc__},
 
 static PyObject *
-_dbm_dbm___exit___impl(dbmobject *self, const PyValue *exc_info,
+_dbm_dbm___exit___impl(dbmobject *self, PyObject * const *exc_info,
                        Py_ssize_t exc_info_length);
 
-static PyValue
-_dbm_dbm___exit__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_dbm_dbm___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
-    const PyValue *exc_info;
+    PyObject *return_value = NULL;
+    PyObject * const *exc_info;
     Py_ssize_t exc_info_length;
-    PyObject *_return_value;
 
     exc_info = args;
     exc_info_length = nargs;
     Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _dbm_dbm___exit___impl((dbmobject *)self, exc_info, exc_info_length);
+    return_value = _dbm_dbm___exit___impl((dbmobject *)self, exc_info, exc_info_length);
     Py_END_CRITICAL_SECTION();
-    return_value = PyValue_FromResult(_return_value);
 
     return return_value;
 }
@@ -298,51 +288,40 @@ static PyObject *
 dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
              int mode);
 
-static PyValue
-dbmopen(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+dbmopen(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *filename;
     const char *flags = "r";
     int mode = 438;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("open", nargs, 1, 3)) {
         goto exit;
     }
-    filename = PyValue_Object(args[0]);
-    if (filename == NULL) {
-        goto exit;
-    }
+    filename = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("open", "argument 2", "str", _arg);
-            goto exit;
-        }
-        flags = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (flags == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("open", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    flags = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (flags == NULL) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    mode = PyLong_AsIntValue(args[2]);
+    mode = PyLong_AsInt(args[2]);
     if (mode == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = dbmopen_impl(module, filename, flags, mode);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = dbmopen_impl(module, filename, flags, mode);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=bbc280128169e5c9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4fa1cc840de2abd3 input=a9049054013a1b77]*/

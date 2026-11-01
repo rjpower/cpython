@@ -143,7 +143,6 @@ class IsShareableTests(unittest.TestCase):
 
 class ModuleTests(TestBase):
 
-    @support.requires_subinterpreters
     def test_import_in_interpreter(self):
         _run_output(
             _interpreters.create(),
@@ -161,7 +160,6 @@ class ListAllTests(TestBase):
         ids = [id for id, *_ in _interpreters.list_all()]
         self.assertEqual(ids, [main])
 
-    @support.requires_subinterpreters
     def test_after_creating(self):
         main, *_ = _interpreters.get_main()
         first = _interpreters.create()
@@ -169,7 +167,6 @@ class ListAllTests(TestBase):
         ids = [id for id, *_ in _interpreters.list_all()]
         self.assertEqual(ids, [main, first, second])
 
-    @support.requires_subinterpreters
     def test_after_destroying(self):
         main, *_ = _interpreters.get_main()
         first = _interpreters.create()
@@ -187,7 +184,6 @@ class GetCurrentTests(TestBase):
         self.assertEqual(cur, main)
         self.assertIsInstance(cur, int)
 
-    @support.requires_subinterpreters
     def test_subinterpreter(self):
         main, *_ = _interpreters.get_main()
         interp = _interpreters.create()
@@ -211,7 +207,6 @@ class GetMainTests(TestBase):
         self.assertEqual(main, expected)
         self.assertIsInstance(main, int)
 
-    @support.requires_subinterpreters
     def test_from_subinterpreter(self):
         [expected] = [id for id, *_ in _interpreters.list_all()]
         interp = _interpreters.create()
@@ -231,7 +226,6 @@ class IsRunningTests(TestBase):
         main, *_ = _interpreters.get_main()
         self.assertTrue(_interpreters.is_running(main))
 
-    @support.requires_subinterpreters
     @unittest.skip('Fails on FreeBSD')
     def test_subinterpreter(self):
         interp = _interpreters.create()
@@ -241,7 +235,6 @@ class IsRunningTests(TestBase):
             self.assertTrue(_interpreters.is_running(interp))
         self.assertFalse(_interpreters.is_running(interp))
 
-    @support.requires_subinterpreters
     def test_from_subinterpreter(self):
         interp = _interpreters.create()
         out = _run_output(interp, dedent(f"""
@@ -253,7 +246,6 @@ class IsRunningTests(TestBase):
             """))
         self.assertEqual(out.strip(), 'True')
 
-    @support.requires_subinterpreters
     def test_already_destroyed(self):
         interp = _interpreters.create()
         _interpreters.destroy(interp)
@@ -271,7 +263,6 @@ class IsRunningTests(TestBase):
 
 class CreateTests(TestBase):
 
-    @support.requires_subinterpreters
     def test_in_main(self):
         id = _interpreters.create()
         self.assertIsInstance(id, int)
@@ -279,7 +270,6 @@ class CreateTests(TestBase):
         after = [id for id, *_ in _interpreters.list_all()]
         self.assertIn(id, after)
 
-    @support.requires_subinterpreters
     @unittest.skip('enable this test when working on pystate.c')
     def test_unique_id(self):
         seen = set()
@@ -290,7 +280,6 @@ class CreateTests(TestBase):
 
         self.assertEqual(len(seen), 100)
 
-    @support.requires_subinterpreters
     @support.skip_if_sanitizer('gh-129824: race on tp_flags', thread=True)
     def test_in_thread(self):
         lock = threading.Lock()
@@ -308,7 +297,6 @@ class CreateTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertIn(id, after)
 
-    @support.requires_subinterpreters
     def test_in_subinterpreter(self):
         main, = [id for id, *_ in _interpreters.list_all()]
         id1 = _interpreters.create()
@@ -323,7 +311,6 @@ class CreateTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertEqual(after, {main, id1, id2})
 
-    @support.requires_subinterpreters
     def test_in_threaded_subinterpreter(self):
         main, = [id for id, *_ in _interpreters.list_all()]
         id1 = _interpreters.create()
@@ -344,7 +331,6 @@ class CreateTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertEqual(after, {main, id1, id2})
 
-    @support.requires_subinterpreters
     def test_after_destroy_all(self):
         before = set(id for id, *_ in _interpreters.list_all())
         # Create 3 subinterpreters.
@@ -360,7 +346,6 @@ class CreateTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertEqual(after, before | {id})
 
-    @support.requires_subinterpreters
     def test_after_destroy_some(self):
         before = set(id for id, *_ in _interpreters.list_all())
         # Create 3 subinterpreters.
@@ -378,7 +363,6 @@ class CreateTests(TestBase):
 
 class DestroyTests(TestBase):
 
-    @support.requires_subinterpreters
     def test_one(self):
         id1 = _interpreters.create()
         id2 = _interpreters.create()
@@ -393,7 +377,6 @@ class DestroyTests(TestBase):
         self.assertIn(id1, after)
         self.assertIn(id3, after)
 
-    @support.requires_subinterpreters
     def test_all(self):
         initial = set(id for id, *_ in _interpreters.list_all())
         ids = set()
@@ -420,7 +403,6 @@ class DestroyTests(TestBase):
         t.start()
         t.join()
 
-    @support.requires_subinterpreters
     def test_already_destroyed(self):
         id = _interpreters.create()
         _interpreters.destroy(id)
@@ -435,7 +417,6 @@ class DestroyTests(TestBase):
         with self.assertRaises(ValueError):
             _interpreters.destroy(-1)
 
-    @support.requires_subinterpreters
     def test_from_current(self):
         main, = [id for id, *_ in _interpreters.list_all()]
         id = _interpreters.create()
@@ -451,7 +432,6 @@ class DestroyTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertEqual(after, {main, id})
 
-    @support.requires_subinterpreters
     def test_from_sibling(self):
         main, = [id for id, *_ in _interpreters.list_all()]
         id1 = _interpreters.create()
@@ -465,7 +445,6 @@ class DestroyTests(TestBase):
         after = set(id for id, *_ in _interpreters.list_all())
         self.assertEqual(after, {main, id1})
 
-    @support.requires_subinterpreters
     def test_from_other_thread(self):
         id = _interpreters.create()
         def f():
@@ -475,7 +454,6 @@ class DestroyTests(TestBase):
         t.start()
         t.join()
 
-    @support.requires_subinterpreters
     def test_still_running(self):
         main, = [id for id, *_ in _interpreters.list_all()]
         interp = _interpreters.create()
@@ -489,7 +467,6 @@ class DestroyTests(TestBase):
             self.assertTrue(_interpreters.is_running(interp))
 
 
-@support.requires_subinterpreters
 class CommonTests(TestBase):
     def setUp(self):
         super().setUp()
@@ -536,7 +513,6 @@ class CommonTests(TestBase):
             _interpreters.run_func(self.id, lambda: None, shared=bad_shared)
 
 
-@support.requires_subinterpreters
 class RunStringTests(TestBase):
 
     def setUp(self):
@@ -874,7 +850,6 @@ class RunStringTests(TestBase):
         self.assertEqual(retcode, 0)
 
 
-@support.requires_subinterpreters
 class RunFailedTests(TestBase):
 
     def setUp(self):
@@ -1033,7 +1008,6 @@ class RunFailedTests(TestBase):
             """)
 
 
-@support.requires_subinterpreters
 class RunFuncTests(TestBase):
 
     def setUp(self):

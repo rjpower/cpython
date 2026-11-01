@@ -9,7 +9,7 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
-#include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_stats.h"
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -131,6 +131,7 @@ _PyFunction_FromConstructor(PyFrameConstructor *constr)
     op->func_closure = Py_XNewRef(constr->fc_closure);
     op->func_doc = Py_NewRef(Py_None);
     op->func_dict = NULL;
+    op->func_weakreflist = NULL;
     op->func_module = module;
     op->func_annotations = NULL;
     op->func_annotate = NULL;
@@ -208,6 +209,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     op->func_closure = NULL;
     op->func_doc = doc;
     op->func_dict = NULL;
+    op->func_weakreflist = NULL;
     op->func_module = module;
     op->func_annotations = NULL;
     op->func_annotate = NULL;
@@ -297,12 +299,14 @@ functions is running.
 
 */
 
+#ifndef Py_GIL_DISABLED
 static inline struct _func_version_cache_item *
 get_cache_item(PyInterpreterState *interp, uint32_t version)
 {
     return interp->func_state.func_version_cache +
            (version % FUNC_VERSION_CACHE_SIZE);
 }
+#endif
 
 void
 _PyFunction_SetVersion(PyFunctionObject *func, uint32_t version)
@@ -312,10 +316,12 @@ _PyFunction_SetVersion(PyFunctionObject *func, uint32_t version)
     // This should only be called from MAKE_FUNCTION. No code is specialized
     // based on the version, so we do not need to stop the world to set it.
     func->func_version = version;
+#ifndef Py_GIL_DISABLED
     PyInterpreterState *interp = _PyInterpreterState_GET();
     struct _func_version_cache_item *slot = get_cache_item(interp, version);
     slot->func = func;
     slot->code = func->func_code;
+#endif
 }
 
 static void
@@ -325,18 +331,21 @@ func_clear_version(PyInterpreterState *interp, PyFunctionObject *func)
         // Version was never set or has already been cleared.
         return;
     }
+#ifndef Py_GIL_DISABLED
     struct _func_version_cache_item *slot =
         get_cache_item(interp, func->func_version);
     if (slot->func == func) {
         slot->func = NULL;
         // Leave slot->code alone, there may be use for it.
     }
+#endif
     func->func_version = FUNC_VERSION_CLEARED;
 }
 
 void
 _PyFunction_ClearCodeByVersion(uint32_t version)
 {
+#ifndef Py_GIL_DISABLED
     PyInterpreterState *interp = _PyInterpreterState_GET();
     struct _func_version_cache_item *slot = get_cache_item(interp, version);
     if (slot->code) {
@@ -347,6 +356,7 @@ _PyFunction_ClearCodeByVersion(uint32_t version)
             slot->func = NULL;
         }
     }
+#endif
 }
 
 uint32_t
@@ -523,8 +533,18 @@ func_set_annotations_and_annotate(PyFunctionObject *op, PyObject *annotations,
                                   PyObject *annotate)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(op);
+    // Care is needed, finalizers can run when references are dropped.  Store
+    // both new values before dropping references to the old.
+    PyObject *old_annotations = op->func_annotations;
+    PyObject *old_annotate = op->func_annotate;
     FT_ATOMIC_STORE_PTR_RELEASE(op->func_annotations, annotations);
     FT_ATOMIC_STORE_PTR_RELEASE(op->func_annotate, annotate);
+    if (old_annotations != NULL && !_Py_IsImmortal(old_annotations)) {
+        _PyObject_XDecRefDelayed(old_annotations);
+    }
+    if (old_annotate != NULL && !_Py_IsImmortal(old_annotate)) {
+        _PyObject_XDecRefDelayed(old_annotate);
+    }
 }
 
 static PyObject *
@@ -547,7 +567,7 @@ func_get_annotation_dict(PyFunctionObject *op)
             Py_DECREF(ann_dict);
             return NULL;
         }
-        op->func_annotations = ann_dict;
+        _PyObject_XSetRefDelayed(&op->func_annotations, ann_dict);
         return ann_dict;
     }
     if (PyTuple_CheckExact(op->func_annotations)) {
@@ -569,7 +589,7 @@ func_get_annotation_dict(PyFunctionObject *op)
                 return NULL;
             }
         }
-        op->func_annotations = ann_dict;
+        _PyObject_XSetRefDelayed(&op->func_annotations, ann_dict);
     }
     assert(PyDict_Check(op->func_annotations));
     return op->func_annotations;
@@ -631,24 +651,20 @@ class function "PyFunctionObject *" "&PyFunction_Type"
 
 #include "clinic/funcobject.c.h"
 
-static PyValue
+static PyObject *
 func_get_code(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os", op, "__code__") < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromObject(op->func_code);
+    return Py_NewRef(op->func_code);
 }
 
 static int
-func_set_code(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_code(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyFunctionObject *op = _PyFunction_CAST(self);
 
     /* Not legal to del f.func_code or to set it to anything
@@ -700,21 +716,17 @@ func_set_code(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_name(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->func_name);
-    return PyValue_FromObject(name);
+    return Py_NewRef(name);
 }
 
 static int
-func_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     /* Not legal to del f.func_name or to set it to anything
      * other than a string object. */
@@ -724,26 +736,22 @@ func_set_name(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
         return -1;
     }
     Py_BEGIN_CRITICAL_SECTION(op);
-    op->func_name = Py_NewRef(value);
+    _PyObject_XSetRefDelayed(&op->func_name, Py_NewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_qualname(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(op->func_qualname);
-    return PyValue_FromObject(qualname);
+    return Py_NewRef(qualname);
 }
 
 static int
-func_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     /* Not legal to del f.__qualname__ or to set it to anything
      * other than a string object. */
@@ -754,12 +762,12 @@ func_set_qualname(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
     }
     handle_func_event(PyFunction_EVENT_MODIFY_QUALNAME, (PyFunctionObject *) op, value);
     Py_BEGIN_CRITICAL_SECTION(op);
-    op->func_qualname = Py_NewRef(value);
+    _PyObject_XSetRefDelayed(&op->func_qualname, Py_NewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_doc(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -767,25 +775,21 @@ func_get_doc(PyObject *self, void *Py_UNUSED(ignored))
     if (doc == NULL) {
         doc = Py_None;
     }
-    return PyValue_FromObject(doc);
+    return Py_NewRef(doc);
 }
 
 static int
-func_set_doc(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_doc(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     /* Legal to del f.__doc__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
-    op->func_doc = Py_XNewRef(value);
+    _PyObject_XSetRefDelayed(&op->func_doc, Py_XNewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_module(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -793,44 +797,36 @@ func_get_module(PyObject *self, void *Py_UNUSED(ignored))
     if (module == NULL) {
         module = Py_None;
     }
-    return PyValue_FromObject(module);
+    return Py_NewRef(module);
 }
 
 static int
-func_set_module(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_module(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     /* Legal to del f.__module__ or to set it to any object. */
     PyFunctionObject *op = _PyFunction_CAST(self);
     Py_BEGIN_CRITICAL_SECTION(op);
-    op->func_module = Py_XNewRef(value);
+    _PyObject_XSetRefDelayed(&op->func_module, Py_XNewRef(value));
     Py_END_CRITICAL_SECTION();
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_defaults(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os", op, "__defaults__") < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (op->func_defaults == NULL) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromObject(op->func_defaults);
+    return Py_NewRef(op->func_defaults);
 }
 
 static int
-func_set_defaults(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_defaults(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     /* Legal to del f.func_defaults.
      * Can only set func_defaults to NULL or a tuple. */
     PyFunctionObject *op = _PyFunction_CAST(self);
@@ -862,27 +858,23 @@ func_set_defaults(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
     return 0;
 }
 
-static PyValue
+static PyObject *
 func_get_kwdefaults(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (PySys_Audit("object.__getattr__", "Os",
                     op, "__kwdefaults__") < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (op->func_kwdefaults == NULL) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    return PyValue_FromObject(op->func_kwdefaults);
+    return Py_NewRef(op->func_kwdefaults);
 }
 
 static int
-func_set_kwdefaults(PyObject *self, PyValue value_v, void *Py_UNUSED(ignored))
+func_set_kwdefaults(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     PyFunctionObject *op = _PyFunction_CAST(self);
     if (value == Py_None)
         value = NULL;
@@ -943,7 +935,7 @@ function___annotate___set_impl(PyFunctionObject *self, PyObject *value)
 /*[clinic end generated code: output=05b7dfc07ada66cd input=eb6225e358d97448]*/
 {
     if (Py_IsNone(value)) {
-        self->func_annotate = Py_NewRef(value);
+        _PyObject_XSetRefDelayed(&self->func_annotate, Py_NewRef(value));
         return 0;
     }
     else if (PyCallable_Check(value)) {
@@ -1213,8 +1205,13 @@ static void
 func_dealloc(PyObject *self)
 {
     PyFunctionObject *op = _PyFunction_CAST(self);
+    _PyObject_ResurrectStart(self);
+    handle_func_event(PyFunction_EVENT_DESTROY, op, NULL);
+    if (_PyObject_ResurrectEnd(self)) {
+        return;
+    }
     _PyObject_GC_UNTRACK(op);
-    FT_CLEAR_WEAKREFS(self);
+    FT_CLEAR_WEAKREFS(self, op->func_weakreflist);
     (void)func_clear((PyObject*)op);
     // These aren't cleared by func_clear().
     _Py_DECREF_CODE((PyCodeObject *)op->func_code);
@@ -1223,11 +1220,6 @@ func_dealloc(PyObject *self)
     PyObject_GC_Del(op);
 }
 
-void
-_PyFunction_NotifyDestroy(PyObject *func)
-{
-    handle_func_event(PyFunction_EVENT_DESTROY, _PyFunction_CAST(func), NULL);
-}
 
 static PyObject*
 func_repr(PyObject *self)
@@ -1259,13 +1251,13 @@ func_traverse(PyObject *self, visitproc visit, void *arg)
 }
 
 /* Bind a function to an object */
-static PyValue
+static PyObject *
 func_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
     if (obj == Py_None || obj == NULL) {
-        return PyValue_FromObject(func);
+        return Py_NewRef(func);
     }
-    return PyValue_FromResult(PyMethod_New(func, obj));
+    return PyMethod_New(func, obj);
 }
 
 PyTypeObject PyFunction_Type = {
@@ -1290,12 +1282,12 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
     Py_TPFLAGS_HAVE_VECTORCALL |
-    Py_TPFLAGS_METHOD_DESCRIPTOR | Py_TPFLAGS_MANAGED_WEAKREF, /* tp_flags */
+    Py_TPFLAGS_METHOD_DESCRIPTOR,               /* tp_flags */
     func_new__doc__,                            /* tp_doc */
     func_traverse,                              /* tp_traverse */
     func_clear,                                 /* tp_clear */
     0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
+    offsetof(PyFunctionObject, func_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     0,                                          /* tp_methods */
@@ -1403,50 +1395,46 @@ functools_wraps(PyObject *wrapper, PyObject *wrapped)
 }
 
 // Used for wrapping __annotations__ and __annotate__ on classmethod
-// and staticmethod objects.  The attribute is kept in the descriptor's
-// dict as a value, so an inline int or float is never boxed.
-static PyValue
+// and staticmethod objects.
+static PyObject *
 descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *name)
 {
-    PyValue dict_value = PyObject_GenericGetDict(obj, NULL);
-    if (PyValue_IsNull(dict_value)) {
-        return PyValue_NULL;
+    PyObject *dict = PyObject_GenericGetDict(obj, NULL);
+    if (dict == NULL) {
+        return NULL;
     }
-    PyObject *dict = PyValue_ObjectBorrow(dict_value);
-    PyValue res;
-    int found = PyDict_GetItemRefValue(dict, name, &res);
-    if (found < 0) {
+    PyObject *res;
+    if (PyDict_GetItemRef(dict, name, &res) < 0) {
         Py_DECREF(dict);
-        return PyValue_NULL;
+        return NULL;
     }
-    if (found) {
+    if (res != NULL) {
         Py_DECREF(dict);
         return res;
     }
-    res = PyObject_GetAttrValue(PyValue_FromObject(wrapped), name);
-    if (PyValue_IsNull(res)) {
+    res = PyObject_GetAttr(wrapped, name);
+    if (res == NULL) {
         Py_DECREF(dict);
-        return PyValue_NULL;
+        return NULL;
     }
-    if (_PyDict_SetItemValue((PyDictObject *)dict, PyValue_FromObject(name),
-                             res) < 0) {
+    if (PyDict_SetItem(dict, name, res) < 0) {
         Py_DECREF(dict);
-        return PyValue_NULL;
+        Py_DECREF(res);
+        return NULL;
     }
     Py_DECREF(dict);
     return res;
 }
 
 static int
-descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyValue value,
+descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value,
                                  char *type_name)
 {
-    PyValue dict_value = PyObject_GenericGetDict(oobj, NULL);
-    if (PyValue_IsNull(dict_value)) {
+    PyObject *dict = PyObject_GenericGetDict(oobj, NULL);
+    if (dict == NULL) {
         return -1;
     }
-    PyObject *dict = PyValue_ObjectBorrow(dict_value);
-    if (PyValue_IsNull(value)) {
+    if (value == NULL) {
         if (PyDict_DelItem(dict, name) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError)) {
                 PyErr_Clear();
@@ -1465,8 +1453,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyValue value,
         return 0;
     }
     else {
-        int result = _PyDict_SetItemValue((PyDictObject *)dict,
-                                          PyValue_FromObject(name), value);
+        int result = PyDict_SetItem(dict, name, value);
         Py_DECREF(dict);
         return result;
     }
@@ -1532,13 +1519,13 @@ cm_clear(PyObject *self)
 }
 
 
-static PyValue
+static PyObject *
 cm_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     classmethod *cm = (classmethod *)self;
     if (type == NULL)
         type = (PyObject *)(Py_TYPE(obj));
-    return PyValue_FromResult(PyMethod_New(cm->cm_callable, type));
+    return PyMethod_New(cm->cm_callable, type);
 }
 
 static int
@@ -1598,21 +1585,21 @@ static PyMemberDef cm_memberlist[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyValue
+static PyObject *
 cm_get___isabstractmethod__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
     int res = _PyObject_IsAbstract(cm->cm_callable);
     if (res == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     else if (res) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
-static PyValue
+static PyObject *
 cm_get___annotations__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
@@ -1620,12 +1607,12 @@ cm_get___annotations__(PyObject *self, void *closure)
 }
 
 static int
-cm_set___annotations__(PyObject *self, PyValue value, void *closure)
+cm_set___annotations__(PyObject *self, PyObject *value, void *closure)
 {
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "classmethod");
 }
 
-static PyValue
+static PyObject *
 cm_get___annotate__(PyObject *self, void *closure)
 {
     classmethod *cm = _PyClassMethod_CAST(self);
@@ -1633,7 +1620,7 @@ cm_get___annotate__(PyObject *self, void *closure)
 }
 
 static int
-cm_set___annotate__(PyObject *self, PyValue value, void *closure)
+cm_set___annotate__(PyObject *self, PyObject *value, void *closure)
 {
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "classmethod");
 }
@@ -1648,7 +1635,7 @@ static PyGetSetDef cm_getsetlist[] = {
 };
 
 static PyMethodDef cm_methodlist[] = {
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS, NULL},
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS, NULL},
     {NULL} /* Sentinel */
 };
 
@@ -1796,11 +1783,11 @@ sm_clear(PyObject *self)
     return 0;
 }
 
-static PyValue
+static PyObject *
 sm_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
     staticmethod *sm = (staticmethod *)self;
-    return PyValue_FromObject(sm->sm_callable);
+    return Py_NewRef(sm->sm_callable);
 }
 
 static int
@@ -1854,12 +1841,11 @@ sm_init(PyObject *self, PyObject *args, PyObject *kwds)
     return sm_set_callable(sm, callable);
 }
 
-static PyValue
+static PyObject*
 sm_call(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     staticmethod *sm = (staticmethod *)callable;
-    return PyObject_CallValue(PyValue_FromObject(sm->sm_callable), args,
-                              kwargs);
+    return PyObject_Call(sm->sm_callable, args, kwargs);
 }
 
 static PyMemberDef sm_memberlist[] = {
@@ -1868,21 +1854,21 @@ static PyMemberDef sm_memberlist[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyValue
+static PyObject *
 sm_get___isabstractmethod__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
     int res = _PyObject_IsAbstract(sm->sm_callable);
     if (res == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
     else if (res) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
-static PyValue
+static PyObject *
 sm_get___annotations__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
@@ -1890,12 +1876,12 @@ sm_get___annotations__(PyObject *self, void *closure)
 }
 
 static int
-sm_set___annotations__(PyObject *self, PyValue value, void *closure)
+sm_set___annotations__(PyObject *self, PyObject *value, void *closure)
 {
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotations__), value, "staticmethod");
 }
 
-static PyValue
+static PyObject *
 sm_get___annotate__(PyObject *self, void *closure)
 {
     staticmethod *sm = _PyStaticMethod_CAST(self);
@@ -1903,7 +1889,7 @@ sm_get___annotate__(PyObject *self, void *closure)
 }
 
 static int
-sm_set___annotate__(PyObject *self, PyValue value, void *closure)
+sm_set___annotate__(PyObject *self, PyObject *value, void *closure)
 {
     return descriptor_set_wrapped_attribute(self, &_Py_ID(__annotate__), value, "staticmethod");
 }
@@ -1917,7 +1903,7 @@ static PyGetSetDef sm_getsetlist[] = {
 };
 
 static PyMethodDef sm_methodlist[] = {
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS, NULL},
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS, NULL},
     {NULL} /* Sentinel */
 };
 

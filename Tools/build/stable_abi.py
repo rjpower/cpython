@@ -696,12 +696,8 @@ def main():
 
     if args.all:
         run_all_generators = True
-        # Python.h rejects Py_LIMITED_API in this CPython, which has no
-        # stable ABI, so --all does not run the header and library check.
-
-    if args.unixy_check:
-        parser.error('--unixy-check compiles Python.h with Py_LIMITED_API, '
-                     'which this CPython rejects: it has no stable ABI.')
+        if UNIXY:
+            args.unixy_check = True
 
     try:
         file = args.file.open('rb')

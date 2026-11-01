@@ -170,6 +170,13 @@ struct _ts {
      */
     unsigned long native_thread_id;
 
+    /* List of objects that still need to be cleaned up, singly linked
+     * via their gc headers' gc_next pointers. The list is populated by
+     * _PyTrash_thread_deposit_object and cleaned up by
+     * _PyTrash_thread_destroy_chain.
+     */
+    PyObject *delete_later;
+
     /* Tagged pointer to top-most critical section, or zero if there is no
      * active critical section. Critical sections are only used in
      * `--disable-gil` builds (i.e., when Py_GIL_DISABLED is defined to 1). In the
@@ -317,9 +324,7 @@ PyAPI_FUNC(void) PyThreadState_DeleteCurrent(void);
 
 /* Frame evaluation API */
 
-/* A frame evaluation function returns the frame's result as a value, or
-   PyValue_NULL with an exception set. */
-typedef PyValue (*_PyFrameEvalFunction)(PyThreadState *tstate, struct _PyInterpreterFrame *, int);
+typedef PyObject* (*_PyFrameEvalFunction)(PyThreadState *tstate, struct _PyInterpreterFrame *, int);
 
 PyAPI_FUNC(_PyFrameEvalFunction) _PyInterpreterState_GetEvalFrameFunc(
     PyInterpreterState *interp);

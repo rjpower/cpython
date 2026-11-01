@@ -234,11 +234,9 @@ annotations = {
     "no_save_ip",
     "inline_ok",
     "window",
+    "no_fold",
     "returns",
-    "stores_early",
     "ir_only",
-    "pristine",
-    "static_exec",
 }
 
 __all__ = []

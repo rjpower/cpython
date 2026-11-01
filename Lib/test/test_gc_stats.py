@@ -1,4 +1,3 @@
-from test import support
 import gc
 import os
 import textwrap
@@ -6,6 +5,7 @@ import time
 import unittest
 
 from test.support import (
+    Py_GC,
     Py_GIL_DISABLED,
     import_helper,
     requires_gil_enabled,
@@ -27,8 +27,8 @@ GC_STATS_FIELDS = (
 
 
 # The generations whose stats a collection advances.  The tracing collector
-# has one generation and records every collection as the oldest.
-COLLECTED_GENERATIONS = (2,)
+# of --with-gc has one generation and records every collection as the oldest.
+COLLECTED_GENERATIONS = (2,) if Py_GC else (0, 1, 2)
 
 
 def get_interpreter_identifiers(gc_stats) -> tuple[int,...]:
@@ -98,7 +98,6 @@ class TestLocalGCStats(unittest.TestCase):
             os.getpid(), all_interpreters=False)
         check_gc_stats_fields(self, stats)
 
-    @support.requires_subinterpreters
     def test_all_interpreters_filter_for_local_process(self):
         interpreters = import_helper.import_module("concurrent.interpreters")
         source = """
@@ -332,7 +331,6 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
-    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_main_interpreter_if_subinterpreter_exists(self):
         script = textwrap.dedent(self._script.format(True))
@@ -340,7 +338,6 @@ class TestGCStats(unittest.TestCase):
 
         self._check_interpreter_gc_stats(before_stats, after_stats)
 
-    @support.requires_subinterpreters
     @requires_gil_enabled()
     def test_gc_stats_for_all_interpreters(self):
         script = textwrap.dedent(self._script.format(True))

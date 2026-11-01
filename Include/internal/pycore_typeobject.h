@@ -10,16 +10,11 @@ extern "C" {
 
 #include "pycore_interp_structs.h" // managed_static_type_state
 #include "pycore_moduleobject.h"  // PyModuleObject
-#include "pycore_structs.h"       // PyValue
+#include "pycore_structs.h"       // _PyStackRef
 
 
 /* state */
 
-/* An instance's dealloc may make a call that the tracing collector makes
-   before the sweep instead (live_has_destroy_hook() in Python/gc_trace.c).
-   type_ready() sets it, so that the heap walk tests one bit for most dead
-   objects.  Bit 16 is reserved for Stackless, which this build does not support. */
-#define _Py_TPFLAGS_DESTROY_HOOK (1UL << 16)
 
 #define _Py_TYPE_VERSION_INT 1
 #define _Py_TYPE_VERSION_FLOAT 2
@@ -99,9 +94,6 @@ _PyType_GetModuleState(PyTypeObject *type)
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
 // Visit what a static type refers to; for the tracing verifier.
 extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
-/* The collector makes this call of the dealloc's before the
-   sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
-extern void _PyType_NotifyDestroy(PyTypeObject *type);
 
 PyAPI_FUNC(PyObject *) _PyType_LookupSubclasses(PyTypeObject *);
 PyAPI_FUNC(PyObject *) _PyType_InitSubclasses(PyTypeObject *);
@@ -121,23 +113,25 @@ _PyType_IsReady(PyTypeObject *type)
     return _PyType_GetDict(type) != NULL;
 }
 
-extern PyValue _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
-                                      int *suppress_missing_attribute);
-extern PyValue _Py_type_getattro(PyObject *type, PyObject *name);
+extern PyObject* _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
+                                        int *suppress_missing_attribute);
+extern PyObject* _Py_type_getattro(PyObject *type, PyObject *name);
+extern _PyStackRef _Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
+                                              int *suppress_missing_attribute);
 
 extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
 
-extern PyValue _Py_slot_tp_getattro(PyObject *self, PyObject *name);
-extern PyValue _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
+extern PyObject* _Py_slot_tp_getattro(PyObject *self, PyObject *name);
+extern PyObject* _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
 
 extern int _PyType_HasSlotTpIternext(PyTypeObject *type);
 
 extern PyTypeObject _PyBufferWrapper_Type;
 
-PyAPI_FUNC(PyValue) _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj,
-                                    PyObject *name, int *meth_found);
+PyAPI_FUNC(PyObject*) _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj,
+                                 PyObject *name, int *meth_found);
 
-extern PyValue _PySuper_LookupDescr(PyTypeObject *su_type,
+extern PyObject *_PySuper_LookupDescr(PyTypeObject *su_type,
                                      PyTypeObject *su_obj_type,
                                      PyObject *name);
 

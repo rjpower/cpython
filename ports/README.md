@@ -1,18 +1,7 @@
 # Ports
 
 Pinned PyPI packages, rebuilt from source against this interpreter and
-smoke-tested after every interpreter change.
-
-Ports frozen at value-v1 until the API settles, 2026-10-27 (note 10): no
-step is gated on them until the ports phase after step 10b. On
-cpython-3.16-value-v1, six, attrs, pycparser, markupsafe, cython, pyyaml
-and cffi pass; numpy fails at the API surface, since its C is not converted
-to the value calling conventions. The cython and cffi patches are the record
-of the C API's surface at value-v1. The interpreter is at value-v2 since
-step 6d (the shape's class_version, note 12 section 2.1); the frozen record
-was not rebuilt.
-
-Run from the repository root:
+smoke-tested after every interpreter change. Run from the repository root:
 
 ```sh
 uv run --no-project --python python3 python -m ports build [ref ...] [--force]
@@ -32,7 +21,7 @@ uv run --no-project --python python3 python -m ports bench [ref ...]
   `build/ports/bench.tsv`.
 
 With no refs, a verb covers every port under `python/`. `cpython:<variant>`
-(`default`; flags in `cpython/recipe.json`) builds this checkout
+(`default`, `ft`; flags in `cpython/recipe.json`) builds this checkout
 in `build/ports/cpython-<variant>/`. Logs go to stderr; stdout is one JSON
 summary.
 
@@ -83,8 +72,8 @@ in the port's `README.md`.
 
 ## Porting to the tracing collector
 
-Nothing is reference counted: a collection traces from roots and sweeps
-what it did not reach. Look for these in a
+Under `--with-gc` reference counts no longer free anything; a collection
+traces from roots and sweeps what it did not reach. Look for these in a
 port's C code:
 
 - A `PyObject*` in `malloc`ed or `PyMem` memory, or in a `Py_buffer`'s
@@ -108,77 +97,11 @@ port's C code:
   as `ndarray`'s reads its descriptor to clear object items. Reference
   counting frees the referrer first; the sweep has no order. Set
   `Py_TPFLAGS_DEALLOC_READS_REFERENTS`, and the sweep deallocates the
-  type's dead instances before other objects, and among flagged objects
-  a referrer before what its `tp_traverse` visits (an expat subparser
-  before its parent parser). Only a cycle of flagged objects is broken
-  at an arbitrary reference.
+  type's dead instances before other objects. Two flagged objects are
+  still deallocated in no particular order, so a dealloc that reads
+  another flagged object (an expat subparser reads its parent's parser)
+  must do that work in `tp_finalize` instead.
 - Anything that reads `ob_refcnt` or `Py_REFCNT()` to decide behaviour.
-- An object in memory from `malloc()` or `PyMem_Malloc()`, made with
-  `PyObject_Init()` or `PyObject_InitVar()`. The collector traces and frees
-  only objects in its object heaps, so it never traces such an object, and
-  the objects only it refers to are swept while it uses them; cffi's owning
-  cdata were made this way. Allocate objects with `PyObject_Malloc()`,
-  `PyObject_New()` or the type's `tp_alloc`. Debug builds stop with a fatal
-  error in `PyObject_Init()` when the object is outside the object heaps.
-
-## Porting to PyValue and the one-word header
-
-Containers hold `PyValue`, and the object header is one word (note 06,
-section 18). Under abi_id cpython-3.16-value-v0, look for these in a port's
-C code:
-
-- `op->ob_type`. The header word also holds flags; use `Py_TYPE()` and
-  `Py_SET_TYPE()`.
-- `&PyTuple_GET_ITEM(t, 0)`, `&PyList_GET_ITEM(l, 0)`, `ob_item` or
-  `PySequence_Fast_ITEMS()` used as a `PyObject **` array. The items are
-  `PyValue`, and an inline int or float has no object until it is boxed.
-  Read each item with an accessor, or build a `PyObject *` array.
-- A weak-reference list field such as `PyCFunctionObject.m_weakreflist`,
-  which the core types no longer have. Weak references live in a table
-  keyed by address: set `Py_TPFLAGS_MANAGED_WEAKREF`, which no longer
-  requires GC support, and drop the field.
-
-The C ports fail on exactly these: cffi on 6 `ob_type` reads and 3 item
-arrays; pyyaml and numpy on Cython's utility code, which has 3
-`m_weakreflist` uses and the item-array idiom.
-
-## Porting to the PyValue C API
-
-Under abi_id cpython-3.16-value-v1 calls pass values (note 08, section 4):
-
-- A `METH_O` function is `PyValue f(PyObject *self, PyValue arg)`, and a
-  `METH_FASTCALL` (with or without `METH_KEYWORDS`) function takes
-  `const PyValue *args` and returns `PyValue`, `PyValue_NULL` with an
-  exception set. Cast it with `_PyCFunction_CAST()` in the method table.
-  `self` stays a `PyObject *`. `METH_NOARGS` and `METH_VARARGS` keep the
-  object form. Read an argument with `PyValue_Object()` (which boxes an
-  inline int or float and may fail) or a value API such as
-  `PyLong_AsLongValue()`; return an object with `PyValue_FromResult()`.
-  The compiler does not catch an unconverted function on x86-64: it
-  receives an inline value as a pointer and returns a value it never
-  built.
-- A vectorcall function (`tp_vectorcall`, `vectorcallfunc`) takes
-  `PyValue callable, const PyValue *args` and returns `PyValue`. Call one
-  with `PyObject_VectorcallValue()`; `PyObject_Vectorcall()` is the
-  compatibility form and boxes.
-- `tp_iternext` (`iternextfunc`, `Py_tp_iternext`) is
-  `PyValue f(PyObject *self)`: the next item, or `PyValue_NULL` when the
-  iterator is exhausted (with no exception or `StopIteration` set) or on
-  error. Return an item made as an object with `PyValue_FromResult()`.
-  Take items with `PyIter_NextValue()`; `PyIter_Next()` is the
-  compatibility form and boxes. A `Py_tp_iternext` slot entry passes
-  through `void *`, so the compiler does not catch an unconverted function.
-- `__class_getitem__` entries use `Py_GenericAliasValue`.
-- An object stays alive until its last release call (`Py_DECREF`,
-  `Py_XDECREF`, `Py_CLEAR`, `Py_SETREF`, `Py_XSETREF`): reference-correct
-  code is collector-correct. Hold a reference to an object for as long as
-  you read memory it owns (`PySequence_Fast_ITEMS()`, a buffer, an item
-  array) and release it afterwards, as reference counting required.
-- There is no limited C API and no stable ABI. `Python.h` stops with an
-  error if `Py_LIMITED_API` or `Py_TARGET_ABI3T` is defined, and `.abi3.so`
-  is not an extension suffix, so an abi3 wheel built for another CPython
-  fails to import instead of crashing. Build without `Py_LIMITED_API`
-  (setuptools `py_limited_api`, cffi's and Cython's limited-API options).
 
 ## Adding a port
 
@@ -188,13 +111,12 @@ Under abi_id cpython-3.16-value-v1 calls pass values (note 08, section 4):
 3. Run `build` and `check` for the port. Patch only what the interpreter
    breaks.
 
-`check` runs each test script a second time under the tracing verifier
-(`-X gcverify=auto`), which after every collection, and after a final one
-while the script's globals are alive, marks the heap again and fails if an
-object the collection left is unreachable. A missing traverse or root makes
-the collector free an object in use, which shows up as a crash or a wrong
-result, most reliably on a debug build. Objects are only exercised while
-alive, so keep an instance of each type the port defines at module level;
-`python/numpy/tests/held.py` does this for NumPy.
+On an interpreter that counts references, `check` runs each test script a
+second time under the tracing verifier (`-X gcverify=auto`) and fails if any
+collection, or a final one while the script's globals are alive, finds a
+hole: an object that a reference keeps alive but that the collector could
+not reach. Objects are only verified while alive, so keep an instance of
+each type the port defines at module level; `python/numpy/tests/held.py`
+does this for NumPy.
 
 `uvx pytest ports/_support/tests` tests the driver.

@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, reset_code)
+                          cpython_only, reset_code, Py_GC, Py_SHAPES)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -17,15 +17,14 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
-# Instances in shape mode get the shape handlers.
-LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE"
-STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE"
+# PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
+# ints, which builds without inline values do not have.
+int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
 
-
-def enter_dictionary_mode(obj):
-    """Store more attributes than any type has slots for."""
-    for i in range(_testinternalcapi.SHAPE_MAX_SLOTS + 1):
-        setattr(obj, f"_{i}", None)
+# Instances with inline values and no __dict__ get the shape handlers
+# under --with-shapes.
+LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
+STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
 
 
 def have_dict_key_versions():
@@ -893,6 +892,36 @@ class TestRacesDoNotCrash(TestBase):
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
+    def test_load_attr_method_lazy_dict(self):
+        def get_items():
+            class C(Exception):
+                m = lambda self: None
+
+            items = []
+            for _ in range(self.ITEMS):
+                item = C()
+                items.append(item)
+            return items
+
+        def read(items):
+            for item in items:
+                try:
+                    item.m()
+                except AttributeError:
+                    pass
+
+        def write(items):
+            for item in items:
+                try:
+                    del item.m
+                except AttributeError:
+                    pass
+                type(item).m = lambda self: None
+
+        opname = "LOAD_ATTR_METHOD_LAZY_DICT"
+        self.assert_races_do_not_crash(opname, get_items, read, write)
+
+    @requires_specialization
     def test_load_attr_method_no_dict(self):
         def get_items():
             class C:
@@ -920,11 +949,11 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_SHAPE"
+        opname = "LOAD_ATTR_METHOD_NO_DICT"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
-    def test_load_attr_method_shape(self):
+    def test_load_attr_method_with_values(self):
         def get_items():
             class C:
                 m = lambda self: None
@@ -950,7 +979,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_SHAPE"
+        opname = "LOAD_ATTR_METHOD_WITH_VALUES"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1045,7 +1074,9 @@ class TestRacesDoNotCrash(TestBase):
             for _ in range(self.ITEMS):
                 item = C()
                 item.a = None
-                enter_dictionary_mode(item)
+                # Resize into a combined unicode dict:
+                for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
+                    setattr(item, f"_{i}", None)
                 items.append(item)
             return items
 
@@ -1085,7 +1116,7 @@ class TestRacesDoNotCrash(TestBase):
         )
 
     @requires_specialization
-    def test_store_attr_shape(self):
+    def test_store_attr_instance_value(self):
         def get_items():
             class C:
                 pass
@@ -1093,7 +1124,6 @@ class TestRacesDoNotCrash(TestBase):
             items = []
             for _ in range(self.ITEMS):
                 item = C()
-                item.a = 0
                 items.append(item)
             return items
 
@@ -1105,7 +1135,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_SHAPE"
+        opname = "STORE_ATTR_INSTANCE_VALUE"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1117,7 +1147,9 @@ class TestRacesDoNotCrash(TestBase):
             items = []
             for _ in range(self.ITEMS):
                 item = C()
-                enter_dictionary_mode(item)
+                # Resize into a combined unicode dict:
+                for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
+                    setattr(item, f"_{i}", None)
                 items.append(item)
             return items
 
@@ -1142,7 +1174,7 @@ class TestRacesDoNotCrash(TestBase):
             for _ in range(self.ITEMS):
                 item = C()
                 item.a = None
-                # Dictionary mode with few attributes
+                # A split dict that shares the inline values:
                 vars(item)
                 items.append(item)
             return items
@@ -1221,8 +1253,10 @@ class TestInstanceDict(unittest.TestCase):
         c.a = 1
         C().b = 2
         c.c = 3
-        # Slots are positions in c's own shape, whatever other instances add.
-        self.assertEqual(_testinternalcapi.object_slots(c)[:3], (1, 3, None))
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c),
+            (1, '<NULL>', 3)
+        )
 
     def test_dict_materialization(self):
         c = C()
@@ -1231,15 +1265,17 @@ class TestInstanceDict(unittest.TestCase):
         c.__dict__
         self.assertEqual(c.__dict__, {"a":1, "b": 2})
 
-    def test_dictionary_mode_is_terminal(self):
+    def test_dict_dematerialization(self):
         c = C()
         c.a = 1
         c.b = 2
-        d = c.__dict__
+        c.__dict__
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
-        self.assertIsNone(_testinternalcapi.get_object_shape(c))
-        self.assertEqual(_testinternalcapi.object_slots(c), (d,))
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c),
+            (1, 2, '<NULL>')
+        )
 
     def test_dict_dematerialization_multiple_refs(self):
         c = C()
@@ -1258,13 +1294,23 @@ class TestInstanceDict(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c2.a
-        self.assertEqual(vars(c), {"a": 1, "b": 2})
-        self.assertEqual(vars(c2), {"a": 1, "b": 2})
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c),
+            (1, 2, '<NULL>')
+        )
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c2),
+            (1, 2, '<NULL>')
+        )
         c3 = copy.deepcopy(c)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c3.a
-        self.assertEqual(vars(c3), {"a": 1, "b": 2})
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c),
+            (1, 2, '<NULL>')
+        )
+        #NOTE -- c3.__dict__ does not de-materialize
 
     def test_dict_dematerialization_pickle(self):
         c = C()
@@ -1274,8 +1320,14 @@ class TestInstanceDict(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
             c2.a
-        self.assertEqual(vars(c), {"a": 1, "b": 2})
-        self.assertEqual(vars(c2), {"a": 1, "b": 2})
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c),
+            (1, 2, '<NULL>')
+        )
+        self.assertEqual(
+            _testinternalcapi.get_object_dict_values(c2),
+            (1, 2, '<NULL>')
+        )
 
     def test_dict_dematerialization_subclass(self):
         class D(dict): pass
@@ -1285,8 +1337,10 @@ class TestInstanceDict(unittest.TestCase):
         c.__dict__ = D(c.__dict__)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             c.a
-        self.assertIsNone(_testinternalcapi.get_object_shape(c))
-        self.assertIs(type(c.__dict__), D)
+        self.assertIs(
+            _testinternalcapi.get_object_dict_values(c),
+            None
+        )
         self.assertEqual(
             c.__dict__,
             {'a':1, 'b':2}
@@ -1314,12 +1368,13 @@ class TestInstanceDict(unittest.TestCase):
 
         class NoInlineAorB:
             pass
+        for i in range(ord('c'), ord('z')):
+            setattr(NoInlineAorB(), chr(i), i)
 
         c = NoInlineAorB()
         c.a = 0
         c.b = 1
-        vars(c)
-        self.assertIsNone(_testinternalcapi.get_object_shape(c))
+        self.assertFalse(_testinternalcapi.has_inline_values(c))
 
         def f(o, n):
             for i in range(n):
@@ -1348,8 +1403,9 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 3)
 
         binary_op_add_int()
-        self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
-        self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
+        if int_producers:
+            self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
+            self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_non_compact():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1422,10 +1478,11 @@ class TestSpecializer(TestBase):
 
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
-        for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
-                       "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
-            self.assert_specialized(binary_op_add_extend, opname)
-        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        if int_producers:
+            for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
+                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+                self.assert_specialized(binary_op_add_extend, opname)
+            self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
 
         def binary_op_add_extend_sequences():
@@ -1513,9 +1570,10 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a, 10)
 
         binary_op_bitwise_extend()
-        for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
-            self.assert_specialized(binary_op_bitwise_extend, opname)
-        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        if int_producers:
+            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+                self.assert_specialized(binary_op_bitwise_extend, opname)
+            self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
 
         def binary_op_int_division_and_shifts():
@@ -1527,10 +1585,11 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a >> b, -2)
 
         binary_op_int_division_and_shifts()
-        for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
-                       "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
-            self.assert_specialized(binary_op_int_division_and_shifts, opname)
-        self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
+        if int_producers:
+            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
+                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+                self.assert_specialized(binary_op_int_division_and_shifts, opname)
+            self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
     @cpython_only
     @requires_specialization
@@ -1738,7 +1797,8 @@ class TestSpecializer(TestBase):
             pass
 
         c = C()
-        enter_dictionary_mode(c)
+        for i in range(_testinternalcapi.SHARED_KEYS_MAX_SIZE - 1):
+            setattr(c, f"_{i}", None)
 
         @reset_code
         def set_value(n):
@@ -1764,7 +1824,7 @@ class TestSpecializer(TestBase):
 
         c = C()
         d = vars(c)
-        self.assertIsNone(_testinternalcapi.get_object_shape(c))
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
 
         @reset_code
         def get_value(n):
@@ -1778,13 +1838,13 @@ class TestSpecializer(TestBase):
 
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD
         get_value(n)
-        self.assert_specialized(get_value, "LOAD_ATTR_WITH_HINT")
+        self.assert_specialized(get_value, "LOAD_ATTR_INSTANCE_VALUE")
         self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
         self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
         self.assert_no_opcode(set_value, "STORE_ATTR")
-        self.assertIsNone(_testinternalcapi.get_object_shape(c))
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
         self.assertIs(vars(c), d)
         self.assertEqual(d, {"x": n - 1})
         d["x"] = "y"
@@ -2161,8 +2221,9 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, r)
 
         for_iter_range()
-        self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
-        self.assert_no_opcode(for_iter_range, "FOR_ITER")
+        if int_producers:
+            self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
+            self.assert_no_opcode(for_iter_range, "FOR_ITER")
 
         def for_iter_generator():
             for i in (i for i in range(10)):
@@ -2239,11 +2300,12 @@ class TestSpecializer(TestBase):
             l.append(holder.item)
 
         holder = Holder()
-        holder.item = object()
+        holder.item = item = object()
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             list_append([], holder)
         self.assert_specialized(list_append, "CALL_LIST_APPEND")
 
+        refcount = sys.getrefcount(item) if not Py_GC else None
         # An empty list has no spare capacity, so append() must resize it.
         lst = []
         with self.assertRaises(MemoryError):
@@ -2253,6 +2315,8 @@ class TestSpecializer(TestBase):
             finally:
                 _testcapi.remove_mem_hooks()
         self.assertEqual(lst, [])
+        if not Py_GC:
+            self.assertEqual(sys.getrefcount(item), refcount)
 
     @cpython_only
     @requires_specialization
@@ -2507,8 +2571,8 @@ class TestFeedback(TestBase):
             return o.x
 
         handler = dis._specialized_opmap[LOAD_ATTR_INSTANCE]
-        # The shape is a row field of its own, not aux.
-        aux = 0
+        # A row's aux field holds the shape of the object, if it has one.
+        aux = _testinternalcapi.get_object_shape(objects[0]) if Py_SHAPES else 0
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f(objects[0])
         self.assert_specialized(f, LOAD_ATTR_INSTANCE)

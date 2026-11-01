@@ -425,22 +425,22 @@ static PyMethodDef stdprinter_methods[] = {
     {NULL,              NULL}  /*sentinel */
 };
 
-static PyValue
+static PyObject *
 get_closed(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
-static PyValue
+static PyObject *
 get_mode(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyValue_FromResult(PyUnicode_FromString("w"));
+    return PyUnicode_FromString("w");
 }
 
-static PyValue
+static PyObject *
 get_encoding(PyObject *self, void *Py_UNUSED(closure))
 {
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 static PyGetSetDef stdprinter_getsetlist[] = {

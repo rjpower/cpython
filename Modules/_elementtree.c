@@ -255,6 +255,8 @@ typedef struct {
 
     ElementObjectExtra* extra;
 
+    PyObject *weakreflist; /* For tp_weaklistoffset */
+
 } ElementObject;
 
 
@@ -335,6 +337,7 @@ create_new_element(elementtreestate *st, PyObject *tag, PyObject *attrib)
     self->tag = Py_NewRef(tag);
     self->text = Py_NewRef(Py_None);
     self->tail = Py_NewRef(Py_None);
+    self->weakreflist = NULL;
 
     PyObject_GC_Track(self);
 
@@ -357,6 +360,7 @@ element_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         e->text = Py_NewRef(Py_None);
         e->tail = Py_NewRef(Py_None);
         e->extra = NULL;
+        e->weakreflist = NULL;
     }
     return (PyObject *)e;
 }
@@ -705,7 +709,7 @@ element_dealloc(PyObject *op)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(self);
 
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, self->weakreflist);
 
     /* element_gc_clear clears all references and deallocates extra
     */
@@ -941,6 +945,34 @@ deepcopy(elementtreestate *st, PyObject *object, PyObject *memo)
     /* Fast paths */
     if (object == Py_None || PyUnicode_CheckExact(object)) {
         return Py_NewRef(object);
+    }
+
+    if (_PyObject_IsUniquelyReferenced(object)) {
+        if (PyDict_CheckExact(object)) {
+            PyObject *key, *value;
+            Py_ssize_t pos = 0;
+            int simple = 1;
+            while (PyDict_Next(object, &pos, &key, &value)) {
+                if (!PyUnicode_CheckExact(key) || !PyUnicode_CheckExact(value)) {
+                    simple = 0;
+                    break;
+                }
+            }
+            if (simple) {
+                return PyDict_Copy(object);
+            }
+            /* Fall through to general case */
+        }
+        else if (Element_CheckExact(st, object)) {
+            // The __deepcopy__() call may call arbitrary code even if the
+            // object to copy is a built-in XML element (one of its children
+            // any of its parents in its own __deepcopy__() implementation).
+            Py_INCREF(object);
+            PyObject *res = _elementtree_Element___deepcopy___impl(
+                (ElementObject *)object, memo);
+            Py_DECREF(object);
+            return res;
+        }
     }
 
     /* General case */
@@ -2103,39 +2135,39 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
     }
 }
 
-static PyValue
+static PyObject*
 element_tag_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
     PyObject *res = self->tag;
-    return PyValue_FromObject(res);
+    return Py_NewRef(res);
 }
 
-static PyValue
+static PyObject*
 element_text_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
-    return PyValue_FromResult(element_get_text(self));
+    return element_get_text(self);
 }
 
-static PyValue
+static PyObject*
 element_tail_getter(PyObject *op, void *closure)
 {
     ElementObject *self = _Element_CAST(op);
-    return PyValue_FromResult(element_get_tail(self));
+    return element_get_tail(self);
 }
 
-static PyValue
+static PyObject*
 element_attrib_getter(PyObject *op, void *closure)
 {
     PyObject *res;
     ElementObject *self = _Element_CAST(op);
     if (!self->extra) {
         if (create_extra(self, NULL) < 0)
-            return PyValue_NULL;
+            return NULL;
     }
     res = element_get_attrib(self);
-    return PyValue_FromResult(Py_XNewRef(res));
+    return Py_XNewRef(res);
 }
 
 /* macro for setter validation */
@@ -2148,12 +2180,8 @@ element_attrib_getter(PyObject *op, void *closure)
     }
 
 static int
-element_tag_setter(PyObject *op, PyValue value_v, void *closure)
+element_tag_setter(PyObject *op, PyObject *value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     Py_SETREF(self->tag, Py_NewRef(value));
@@ -2161,12 +2189,8 @@ element_tag_setter(PyObject *op, PyValue value_v, void *closure)
 }
 
 static int
-element_text_setter(PyObject *op, PyValue value_v, void *closure)
+element_text_setter(PyObject *op, PyObject *value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->text, Py_NewRef(value));
@@ -2174,12 +2198,8 @@ element_text_setter(PyObject *op, PyValue value_v, void *closure)
 }
 
 static int
-element_tail_setter(PyObject *op, PyValue value_v, void *closure)
+element_tail_setter(PyObject *op, PyObject *value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
     _set_joined_ptr(&self->tail, Py_NewRef(value));
@@ -2187,12 +2207,8 @@ element_tail_setter(PyObject *op, PyValue value_v, void *closure)
 }
 
 static int
-element_attrib_setter(PyObject *op, PyValue value_v, void *closure)
+element_attrib_setter(PyObject *op, PyObject *value, void *closure)
 {
-    PyObject *value = PyValue_Object(value_v);
-    if (value == NULL && !PyValue_IsNull(value_v)) {
-        return -1;
-    }
     _VALIDATE_ATTR_VALUE(value);
     if (!PyAnyDict_Check(value)) {
         PyErr_Format(PyExc_TypeError,
@@ -2293,7 +2309,7 @@ parent_stack_push_new(ElementIterObject *it, ElementObject *parent)
     return 0;
 }
 
-static PyValue
+static PyObject *
 elementiter_next(PyObject *op)
 {
     ElementIterObject *it = _ElementIter_CAST(op);
@@ -2320,7 +2336,7 @@ elementiter_next(PyObject *op)
         if (!it->parent_stack_used) {
             if (!it->root_element) {
                 PyErr_SetNone(PyExc_StopIteration);
-                return PyValue_NULL;
+                return NULL;
             }
 
             elem = it->root_element;  /* steals a reference */
@@ -2361,7 +2377,7 @@ elementiter_next(PyObject *op)
         if (parent_stack_push_new(it, elem) < 0) {
             Py_DECREF(elem);
             PyErr_NoMemory();
-            return PyValue_NULL;
+            return NULL;
         }
         if (it->gettext) {
             if (elem->tag != Py_None && !PyUnicode_Check(elem->tag)) {
@@ -2373,21 +2389,21 @@ elementiter_next(PyObject *op)
         }
 
         if (it->sought_tag == Py_None)
-            return PyValue_FromObject(elem);
+            return (PyObject *)elem;
 
         rc = PyObject_RichCompareBool(elem->tag, it->sought_tag, Py_EQ);
         if (rc > 0)
-            return PyValue_FromObject(elem);
+            return (PyObject *)elem;
 
         Py_DECREF(elem);
         if (rc < 0)
-            return PyValue_NULL;
+            return NULL;
         continue;
 
 gettext:
         Py_DECREF(elem);
         if (!text) {
-            return PyValue_NULL;
+            return NULL;
         }
         if (text == Py_None) {
             Py_DECREF(text);
@@ -2395,14 +2411,14 @@ gettext:
         else {
             rc = PyObject_IsTrue(text);
             if (rc > 0)
-                return PyValue_FromObject(text);
+                return text;
             Py_DECREF(text);
             if (rc < 0)
-                return PyValue_NULL;
+                return NULL;
         }
     }
 
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyType_Slot elementiter_slots[] = {
@@ -4360,12 +4376,12 @@ static PyMemberDef xmlparser_members[] = {
     {NULL}
 };
 
-static PyValue
+static PyObject*
 xmlparser_version_getter(PyObject *op, void *closure)
 {
-    return PyValue_FromResult(PyUnicode_FromFormat(
+    return PyUnicode_FromFormat(
         "Expat %d.%d.%d", XML_MAJOR_VERSION,
-        XML_MINOR_VERSION, XML_MICRO_VERSION));
+        XML_MINOR_VERSION, XML_MICRO_VERSION);
 }
 
 static PyGetSetDef xmlparser_getsetlist[] = {
@@ -4409,6 +4425,11 @@ static PyMethodDef element_methods[] = {
     _ELEMENTTREE_ELEMENT___SETSTATE___METHODDEF
 
     {NULL, NULL}
+};
+
+static struct PyMemberDef element_members[] = {
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(ElementObject, weakreflist), Py_READONLY},
+    {NULL},
 };
 
 static PyGetSetDef element_getsetlist[] = {
@@ -4458,6 +4479,7 @@ static PyType_Slot element_slots[] = {
     {Py_tp_traverse, element_gc_traverse},
     {Py_tp_clear, element_gc_clear},
     {Py_tp_methods, element_methods},
+    {Py_tp_members, element_members},
     {Py_tp_getset, element_getsetlist},
     {Py_tp_init, element_init},
     {Py_tp_alloc, PyType_GenericAlloc},
@@ -4476,7 +4498,7 @@ static PyType_Spec element_spec = {
     .name = "xml.etree.ElementTree.Element",
     .basicsize = sizeof(ElementObject),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = element_slots,
 };
 

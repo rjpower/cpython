@@ -39,16 +39,11 @@
 const char *_PyImport_DynLoadFiletab[] = {
 #ifdef __CYGWIN__
     "." SOABI ".dll",
-    ".dll",
 #else  /* !__CYGWIN__ */
     "." SOABI ".so",
 #ifdef ALT_SOABI
     "." ALT_SOABI ".so",
 #endif
-    /* No .abi3 or .abi3t suffix: there is no stable ABI, and a stable-ABI
-       extension built for another CPython must fail to import rather than
-       crash. */
-    ".so",
 #endif  /* __CYGWIN__ */
     NULL,
 };

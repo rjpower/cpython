@@ -3,6 +3,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_freelist.h"      // _Py_FREELIST_POP()
 #include "pycore_genobject.h"
 #include "pycore_llist.h"         // struct llist_node
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
@@ -12,7 +13,6 @@
 #include "pycore_pylifecycle.h"   // _Py_IsInterpreterFinalizing()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_init.h"  // _Py_ID()
-#include "pycore_stats.h"         // EVAL_CALL_STAT_INC_IF_FUNCTION()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 
 #include <stddef.h>               // offsetof()
@@ -67,6 +67,10 @@ typedef struct TaskObj {
     PyObject *task_name;
     PyObject *task_context;
     struct llist_node task_node;
+#ifdef Py_GIL_DISABLED
+    // thread id of the thread where this task was created
+    uintptr_t task_tid;
+#endif
 } TaskObj;
 
 typedef struct {
@@ -1699,7 +1703,7 @@ static PyMethodDef FutureType_methods[] = {
     _ASYNCIO_FUTURE_DONE_METHODDEF
     _ASYNCIO_FUTURE_GET_LOOP_METHODDEF
     _ASYNCIO_FUTURE__MAKE_CANCELLED_ERROR_METHODDEF
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
     PyDoc_STR("Futures are generic over the type of their results")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -1784,8 +1788,10 @@ FutureIter_dealloc(PyObject *it)
     PyObject_GC_UnTrack(it);
     tp->tp_clear(it);
 
-    PyObject_GC_Del(it);
-    Py_DECREF(tp);
+    if (!_Py_FREELIST_PUSH(futureiters, it, Py_futureiters_MAXFREELIST)) {
+        PyObject_GC_Del(it);
+        Py_DECREF(tp);
+    }
 }
 
 static PySendResult
@@ -1844,7 +1850,7 @@ FutureIter_am_send(PyObject *op,
 }
 
 
-static PyValue
+static PyObject *
 FutureIter_iternext(PyObject *it)
 {
     PyObject *result;
@@ -1852,18 +1858,18 @@ FutureIter_iternext(PyObject *it)
         case PYGEN_RETURN:
             (void)_PyGen_SetStopIterationValue(result);
             Py_DECREF(result);
-            return PyValue_NULL;
+            return NULL;
         case PYGEN_NEXT:
-            return PyValue_FromObject(result);
+            return result;
         case PYGEN_ERROR:
-            return PyValue_NULL;
+            return NULL;
         default:
             Py_UNREACHABLE();
     }
 }
 
-static PyValue
-FutureIter_send(PyObject *self, PyValue unused)
+static PyObject *
+FutureIter_send(PyObject *self, PyObject *unused)
 {
     /* Future.__iter__ doesn't care about values that are pushed to the
      * generator, it just returns self.result().
@@ -1871,38 +1877,30 @@ FutureIter_send(PyObject *self, PyValue unused)
     return FutureIter_iternext(self);
 }
 
-static PyValue
-FutureIter_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+FutureIter_throw(PyObject *op, PyObject *const *args, Py_ssize_t nargs)
 {
     futureiterobject *self = (futureiterobject*)op;
     PyObject *type, *val = NULL, *tb = NULL;
     if (!_PyArg_CheckPositional("throw", nargs, 1, 3)) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (nargs > 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                             "the (type, exc, tb) signature of throw() is deprecated, "
                             "use the single-arg signature instead.",
                             1) < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
 
-    type = PyValue_Object(args[0]);
-    if (type == NULL) {
-        return PyValue_NULL;
-    }
-    if (nargs >= 2) {
-        val = PyValue_Object(args[1]);
-        if (val == NULL) {
-            return PyValue_NULL;
-        }
-    }
+    type = args[0];
     if (nargs == 3) {
-        tb = PyValue_Object(args[2]);
-        if (tb == NULL) {
-            return PyValue_NULL;
-        }
+        val = args[1];
+        tb = args[2];
+    }
+    else if (nargs == 2) {
+        val = args[1];
     }
 
     if (val == Py_None) {
@@ -1912,7 +1910,7 @@ FutureIter_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
         tb = NULL;
     } else if (tb != NULL && !PyTraceBack_Check(tb)) {
         PyErr_SetString(PyExc_TypeError, "throw() third argument must be a traceback");
-        return PyValue_NULL;
+        return NULL;
     }
 
     Py_INCREF(type);
@@ -1947,13 +1945,13 @@ FutureIter_throw(PyObject *op, const PyValue *args, Py_ssize_t nargs)
 
     PyErr_Restore(type, val, tb);
 
-    return PyValue_NULL;
+    return NULL;
 
   fail:
     Py_DECREF(type);
     Py_XDECREF(val);
     Py_XDECREF(tb);
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyObject *
@@ -1984,7 +1982,7 @@ FutureIter_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static PyMethodDef FutureIter_methods[] = {
-    {"send",  _PyCFunction_CAST(FutureIter_send), METH_O, NULL},
+    {"send",  FutureIter_send, METH_O, NULL},
     {"throw", _PyCFunction_CAST(FutureIter_throw), METH_FASTCALL, NULL},
     {"close", FutureIter_close, METH_NOARGS, NULL},
     {NULL, NULL}        /* Sentinel */
@@ -2020,9 +2018,12 @@ future_new_iter(PyObject *fut)
     asyncio_state *state = get_asyncio_state_by_def((PyObject *)fut);
     ENSURE_FUTURE_ALIVE(state, fut)
 
-    it = PyObject_GC_New(futureiterobject, state->FutureIterType);
+    it = _Py_FREELIST_POP(futureiterobject, futureiters);
     if (it == NULL) {
-        return NULL;
+        it = PyObject_GC_New(futureiterobject, state->FutureIterType);
+        if (it == NULL) {
+            return NULL;
+        }
     }
 
     it->future = (FutureObj*)Py_NewRef(fut);
@@ -2040,7 +2041,7 @@ class _asyncio.Task "TaskObj *" "&Task_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=719dcef0fcc03b37]*/
 
 static int task_call_step_soon(asyncio_state *state, TaskObj *, PyObject *);
-static PyValue task_wakeup(PyObject *op, PyValue arg_v);
+static PyObject *task_wakeup(PyObject *op, PyObject *arg);
 static PyObject *task_step(asyncio_state *, TaskObj *, PyObject *);
 static int task_eager_start(_PyThreadStateImpl *ts, asyncio_state *state, TaskObj *task);
 
@@ -2067,7 +2068,8 @@ TaskStepMethWrapper_dealloc(PyObject *op)
 }
 
 static PyObject *
-TaskStepMethWrapper_call_object(PyObject *op, PyObject *args, PyObject *kwds)
+TaskStepMethWrapper_call(PyObject *op,
+                         PyObject *args, PyObject *kwds)
 {
     TaskStepMethWrapper *o = (TaskStepMethWrapper*)op;
     if (kwds != NULL && PyDict_GET_SIZE(kwds) != 0) {
@@ -2086,13 +2088,6 @@ TaskStepMethWrapper_call_object(PyObject *op, PyObject *args, PyObject *kwds)
     return res;
 }
 
-static PyValue
-TaskStepMethWrapper_call(PyObject *op,
-                         PyObject *args, PyObject *kwds)
-{
-    return PyValue_FromResult(TaskStepMethWrapper_call_object(op, args, kwds));
-}
-
 static int
 TaskStepMethWrapper_traverse(PyObject *op,
                              visitproc visit, void *arg)
@@ -2104,14 +2099,14 @@ TaskStepMethWrapper_traverse(PyObject *op,
     return 0;
 }
 
-static PyValue
+static PyObject *
 TaskStepMethWrapper_get___self__(PyObject *op, void *Py_UNUSED(closure))
 {
     TaskStepMethWrapper *o = (TaskStepMethWrapper*)op;
     if (o->sw_task) {
-        return PyValue_FromObject(o->sw_task);
+        return Py_NewRef(o->sw_task);
     }
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 static PyGetSetDef TaskStepMethWrapper_getsetlist[] = {
@@ -2158,7 +2153,7 @@ TaskStepMethWrapper_new(TaskObj *task, PyObject *arg)
 
 static  PyMethodDef TaskWakeupDef = {
     "task_wakeup",
-    _PyCFunction_CAST(task_wakeup),
+    task_wakeup,
     METH_O,
     NULL
 };
@@ -2191,7 +2186,23 @@ unregister_task_safe(TaskObj *task)
 static void
 unregister_task(TaskObj *task)
 {
+#ifdef Py_GIL_DISABLED
+    // check if we are in the same thread
+    // if so, we can avoid locking
+    if (task->task_tid == _Py_ThreadId()) {
+        unregister_task_safe(task);
+    }
+    else {
+        // we are in a different thread
+        // stop the world then check and remove the task
+        PyThreadState *tstate = _PyThreadState_GET();
+        _PyEval_StopTheWorld(tstate->interp);
+        unregister_task_safe(task);
+        _PyEval_StartTheWorld(tstate->interp);
+    }
+#else
     unregister_task_safe(task);
+#endif
 }
 
 static int
@@ -2312,6 +2323,9 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
     }
 
     Py_CLEAR(self->task_fut_waiter);
+#ifdef Py_GIL_DISABLED
+    self->task_tid = _Py_ThreadId();
+#endif
     self->task_must_cancel = 0;
     self->task_log_destroy_pending = 1;
     self->task_num_cancels_requested = 0;
@@ -2321,7 +2335,11 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
         // optimization: defer task name formatting
         // store the task counter as PyLong in the name
         // for deferred formatting in get_name
+#ifdef Py_GIL_DISABLED
+        unsigned long long counter = _Py_atomic_add_uint64(&state->task_name_counter, 1) + 1;
+#else
         unsigned long long counter = ++state->task_name_counter;
+#endif
         name = PyLong_FromUnsignedLongLong(counter);
     } else if (!PyUnicode_CheckExact(name)) {
         name = PyObject_Str(name);
@@ -2333,6 +2351,11 @@ _asyncio_Task___init___impl(TaskObj *self, PyObject *coro, PyObject *loop,
         return -1;
     }
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
+#ifdef Py_GIL_DISABLED
+    // This is required so that _Py_TryIncref(self)
+    // works correctly in non-owning threads.
+    _PyObject_SetMaybeWeakref((PyObject *)self);
+#endif
     if (eager_start) {
         // gh-154695: loop may be None here, future_init() resolved it into task_loop.
         PyObject *res = PyObject_CallMethodNoArgs(self->task_loop,
@@ -2884,7 +2907,7 @@ static PyMethodDef TaskType_methods[] = {
     _ASYNCIO_TASK_SET_NAME_METHODDEF
     _ASYNCIO_TASK_GET_CORO_METHODDEF
     _ASYNCIO_TASK_GET_CONTEXT_METHODDEF
-    {"__class_getitem__", _PyCFunction_CAST(Py_GenericAliasValue), METH_O|METH_CLASS,
+    {"__class_getitem__", Py_GenericAlias, METH_O|METH_CLASS,
     PyDoc_STR("Tasks are generic over the return type of their wrapped coroutines")},
     {NULL, NULL}        /* Sentinel */
 };
@@ -3538,19 +3561,15 @@ task_wakeup_lock_held(TaskObj *task, PyObject *o)
     return result;
 }
 
-static PyValue
-task_wakeup(PyObject *op, PyValue arg_v)
+static PyObject *
+task_wakeup(PyObject *op, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_v);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     TaskObj *task = (TaskObj*)op;
     PyObject *res;
     Py_BEGIN_CRITICAL_SECTION(task);
     res = task_wakeup_lock_held(task, arg);
     Py_END_CRITICAL_SECTION();
-    return PyValue_FromResult(res);
+    return res;
 }
 
 
@@ -3592,8 +3611,8 @@ This function is thread-specific.
 [clinic start generated code]*/
 
 static PyObject *
-_asyncio__set_running_loop_impl(PyObject *module, PyObject *loop)
-/*[clinic end generated code: output=d34270166e2641bd input=4c9720233d606604]*/
+_asyncio__set_running_loop(PyObject *module, PyObject *loop)
+/*[clinic end generated code: output=ae56bf7a28ca189a input=4c9720233d606604]*/
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
     if (loop == Py_None) {
@@ -3967,6 +3986,9 @@ add_tasks_llist(struct llist_node *head, PyListObject *tasks)
 static inline int
 add_tasks_interp(PyInterpreterState *interp, PyListObject *tasks)
 {
+#ifdef Py_GIL_DISABLED
+    assert(interp->stoptheworld.world_stopped);
+#endif
     // Start traversing from interpreter's linked list
     struct llist_node *head = &interp->asyncio_tasks_head;
 

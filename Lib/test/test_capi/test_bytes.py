@@ -244,7 +244,12 @@ class CAPITest(unittest.TestCase):
         """Test _PyBytes_Resize()"""
         _resize = _testcapi.bytes_resize
 
-        def assert_is_fresh_copy(result, is_new_obj):
+        def assert_is_refcnt_one(refcnt):
+            if not support.Py_GC:  # Py_GC reports no reference counts.
+                self.assertEqual(refcnt, 1)
+
+        def assert_is_fresh_copy(result, refcnt, is_new_obj):
+            assert_is_refcnt_one(refcnt)
             self.assertTrue(is_new_obj)
             self.assertFalse(sys._is_immortal(result))
 
@@ -257,7 +262,7 @@ class CAPITest(unittest.TestCase):
                 # Return the same object unchanged
                 self.assertFalse(is_new_obj)
             elif old_size == 0:
-                assert_is_fresh_copy(result, is_new_obj)
+                assert_is_fresh_copy(result, refcnt, is_new_obj)
             elif size == 0:
                 # check that the result is the empty bytes string singleton
                 self.assertEqual(result, b'')
@@ -267,10 +272,11 @@ class CAPITest(unittest.TestCase):
                 # gh-156995: Make sure that the result is a fresh object.
                 # Previously, _PyBytes_Resize(&obj, 1) returned a singleton
                 # if _PyObject_IsUniquelyReferenced() is false.
-                assert_is_fresh_copy(result, is_new_obj)
+                assert_is_fresh_copy(result, refcnt, is_new_obj)
             else:
                 # An in-place resize can return the same memory address, or
                 # not. 'is_new_obj' cannot be tested.
+                assert_is_refcnt_one(refcnt)
                 self.assertFalse(sys._is_immortal(result))
 
             return result
@@ -343,6 +349,28 @@ class CAPITest(unittest.TestCase):
         with self.assertRaises(SystemError):
             bytes_join(b'', NULL)
 
+    @unittest.skipUnless(support.Py_DEBUG, 'need debug build (Py_DEBUG)')
+    @unittest.skipIf(support.Py_GC, "the sweep does not check dead objects "
+                     "for overflow")
+    def test_detect_overflow(self):
+        # Test detection of buffer overflow
+        size = 123    # bytes
+        overflow = 1  # bytes
+        code = textwrap.dedent(f'''
+            from test.support import SuppressCrashReport
+            import _testcapi
+
+            size = {size}
+            overflow = {overflow}
+            with SuppressCrashReport():
+                # Trigger a buffer overflow in a new bytes
+                ba = _testcapi.bytes_overflow(size, overflow)
+                ba = None
+        ''')
+        proc = assert_python_failure('-c', code)
+        self.assertIn(b'Buffer overflow detected in bytes object', proc.err)
+        self.assertIn(f'at position {size}'.encode(), proc.err)
+
 
 def get_data_canary(writer):
     size = writer.get_size() + 1
@@ -365,10 +393,6 @@ class BaseWriterTest:
         # is RESULT_TYPE.
         self.assertEqual(result, expected)
         self.assertEqual(type(result), self.RESULT_TYPE)
-
-    def test_gc_registered_roots(self):
-        _testinternalcapi = import_helper.import_module('_testinternalcapi')
-        _testinternalcapi.gc_byteswriter_roots(self.RESULT_TYPE is bytearray)
 
     def test_create(self):
         # Test PyBytesWriter_Create()

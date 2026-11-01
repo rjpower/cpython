@@ -41,28 +41,28 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return PyBool_FromLong(ok);
 }
 
-static PyValue
-bool_vectorcall(PyValue type, const PyValue *args,
+static PyObject *
+bool_vectorcall(PyObject *type, PyObject * const*args,
                 size_t nargsf, PyObject *kwnames)
 {
     long ok = 0;
     if (!_PyArg_NoKwnames("bool", kwnames)) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("bool", nargs, 0, 1)) {
-        return PyValue_NULL;
+        return NULL;
     }
 
-    assert(PyType_Check(PyValue_ObjectBorrow(type)));
+    assert(PyType_Check(type));
     if (nargs) {
-        ok = PyObject_IsTrueValue(args[0]);
+        ok = PyObject_IsTrue(args[0]);
         if (ok < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
-    return PyValue_FromObject(ok ? Py_True : Py_False);
+    return PyBool_FromLong(ok);
 }
 
 /* Arithmetic operations redefined to return bool if both args are bool. */

@@ -16,32 +16,36 @@ PyDoc_STRVAR(_testcapi_float_pack__doc__,
 static PyObject *
 _testcapi_float_pack_impl(PyObject *module, int size, double d, int le);
 
-static PyValue
-_testcapi_float_pack(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_testcapi_float_pack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int size;
     double d;
     int le;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("float_pack", nargs, 3, 3)) {
         goto exit;
     }
-    size = PyLong_AsIntValue(args[0]);
+    size = PyLong_AsInt(args[0]);
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    d = PyFloat_AsDoubleValue(args[1]);
-    if (d == -1.0 && PyErr_Occurred()) {
-        goto exit;
+    if (PyFloat_CheckExact(args[1])) {
+        d = PyFloat_AS_DOUBLE(args[1]);
     }
-    le = PyLong_AsIntValue(args[2]);
+    else
+    {
+        d = PyFloat_AsDouble(args[1]);
+        if (d == -1.0 && PyErr_Occurred()) {
+            goto exit;
+        }
+    }
+    le = PyLong_AsInt(args[2]);
     if (le == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _testcapi_float_pack_impl(module, size, d, le);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testcapi_float_pack_impl(module, size, d, le);
 
 exit:
     return return_value;
@@ -60,23 +64,21 @@ static PyObject *
 _testcapi_float_unpack_impl(PyObject *module, const char *data,
                             Py_ssize_t data_length, int le);
 
-static PyValue
-_testcapi_float_unpack(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_testcapi_float_unpack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *data;
     Py_ssize_t data_length;
     int le;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "y#i:float_unpack",
         &data, &data_length, &le)) {
         goto exit;
     }
-    _return_value = _testcapi_float_unpack_impl(module, data, data_length, le);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testcapi_float_unpack_impl(module, data, data_length, le);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5e9a1c28b3e2cd6a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=397689b93b97e397 input=a9049054013a1b77]*/

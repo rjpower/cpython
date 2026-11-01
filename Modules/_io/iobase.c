@@ -34,6 +34,7 @@ typedef struct {
     PyObject_HEAD
 
     PyObject *dict;
+    PyObject *weakreflist;
 } iobase;
 
 #define iobase_CAST(op) ((iobase *)(op))
@@ -366,9 +367,6 @@ _PyIOBase_finalize(PyObject *self)
 {
     int is_zombie;
 
-    /* Only the deallocs call this, from the collector's sweep, which ran
-       the finalizer from its queue before. */
-    return PyObject_CallFinalizerFromDealloc(self);
     /* If _PyIOBase_finalize() is called from a destructor, we need to
        resurrect the object as calling close() can invoke arbitrary code. */
     is_zombie = (Py_REFCNT(self) == 0);
@@ -418,7 +416,7 @@ iobase_dealloc(PyObject *op)
     }
     PyTypeObject *tp = Py_TYPE(self);
     _PyObject_GC_UNTRACK(self);
-    FT_CLEAR_WEAKREFS(op);
+    FT_CLEAR_WEAKREFS(op, self->weakreflist);
     Py_CLEAR(self->dict);
     tp->tp_free(self);
     Py_DECREF(tp);
@@ -728,21 +726,21 @@ iobase_iter(PyObject *self)
     return Py_NewRef(self);
 }
 
-static PyValue
+static PyObject *
 iobase_iternext(PyObject *self)
 {
     PyObject *line = PyObject_CallMethodNoArgs(self, &_Py_ID(readline));
 
     if (line == NULL)
-        return PyValue_NULL;
+        return NULL;
 
     if (PyObject_Size(line) <= 0) {
         /* Error or empty */
         Py_DECREF(line);
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromObject(line);
+    return line;
 }
 
 /*[clinic input]
@@ -832,8 +830,8 @@ lines provided to have a line separator at the end.
 [clinic start generated code]*/
 
 static PyObject *
-_io__IOBase_writelines_impl(PyObject *self, PyObject *lines)
-/*[clinic end generated code: output=8d914adbb8b3d62c input=cac3fc8864183359]*/
+_io__IOBase_writelines(PyObject *self, PyObject *lines)
+/*[clinic end generated code: output=976eb0a9b60a6628 input=cac3fc8864183359]*/
 {
     PyObject *iter, *res;
 
@@ -910,6 +908,7 @@ static PyGetSetDef iobase_getset[] = {
 };
 
 static struct PyMemberDef iobase_members[] = {
+    {"__weaklistoffset__", Py_T_PYSSIZET, offsetof(iobase, weakreflist), Py_READONLY},
     {"__dictoffset__", Py_T_PYSSIZET, offsetof(iobase, dict), Py_READONLY},
     {NULL},
 };
@@ -933,7 +932,7 @@ PyType_Spec _Py_iobase_spec = {
     .name = "_io._IOBase",
     .basicsize = sizeof(iobase),
     .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC |
-              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_MANAGED_WEAKREF),
+              Py_TPFLAGS_IMMUTABLETYPE),
     .slots = iobase_slots,
 };
 
@@ -1068,8 +1067,8 @@ _io._RawIOBase.readinto
 [clinic start generated code]*/
 
 static PyObject *
-_io__RawIOBase_readinto_impl(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=f50061a7c597f436 input=99d4bea2acd659c8]*/
+_io__RawIOBase_readinto(PyObject *self, PyObject *buffer)
+/*[clinic end generated code: output=081b8cdfaf3a40ff input=99d4bea2acd659c8]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
     return NULL;
@@ -1082,8 +1081,8 @@ _io._RawIOBase.write
 [clinic start generated code]*/
 
 static PyObject *
-_io__RawIOBase_write_impl(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=a308e91cb21783a8 input=e6a1534adb876fe2]*/
+_io__RawIOBase_write(PyObject *self, PyObject *buffer)
+/*[clinic end generated code: output=7add3f2c8715c3a8 input=e6a1534adb876fe2]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
     return NULL;

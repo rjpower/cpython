@@ -41,7 +41,7 @@ Program Execution
 
 - [The Bytecode Interpreter](interpreter.md)
 
-- [Values (PyValue)](values.md)
+- [Stack references (_PyStackRef)](stackrefs.md)
 
 - [Garbage Collector Design](garbage_collector.md)
 

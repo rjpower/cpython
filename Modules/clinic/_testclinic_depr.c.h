@@ -2,12 +2,15 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
+#endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_FromValues()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
 PyDoc_STRVAR(depr_star_new__doc__,
@@ -43,6 +46,7 @@ depr_star_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -65,8 +69,8 @@ depr_star_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *a = Py_None;
@@ -80,7 +84,7 @@ depr_star_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto exit;
         }
     }
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -88,10 +92,7 @@ depr_star_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
 skip_optional_pos:
     return_value = depr_star_new_impl(type, a);
 
@@ -125,14 +126,15 @@ depr_star_new_clone_impl(PyObject *type, PyObject *a);
 #  endif
 #endif
 
-static PyValue
-depr_star_new_clone(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_new_clone(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -155,10 +157,9 @@ depr_star_new_clone(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
-    PyObject *_return_value;
 
     if (nargs == 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -177,13 +178,9 @@ depr_star_new_clone(PyObject *type, const PyValue *args, Py_ssize_t nargs, PyObj
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
 skip_optional_pos:
-    _return_value = depr_star_new_clone_impl(type, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_star_new_clone_impl(type, a);
 
 exit:
     return return_value;
@@ -222,6 +219,7 @@ depr_star_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -244,8 +242,8 @@ depr_star_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *a = Py_None;
@@ -259,7 +257,7 @@ depr_star_init(PyObject *self, PyObject *args, PyObject *kwargs)
             goto exit;
         }
     }
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -267,10 +265,7 @@ depr_star_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
 skip_optional_pos:
     return_value = depr_star_init_impl(self, a);
 
@@ -304,14 +299,15 @@ depr_star_init_clone_impl(PyObject *self, PyObject *a);
 #  endif
 #endif
 
-static PyValue
-depr_star_init_clone(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_init_clone(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -334,10 +330,9 @@ depr_star_init_clone(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
-    PyObject *_return_value;
 
     if (nargs == 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -356,13 +351,9 @@ depr_star_init_clone(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyOb
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
 skip_optional_pos:
-    _return_value = depr_star_init_clone_impl(self, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_star_init_clone_impl(self, a);
 
 exit:
     return return_value;
@@ -391,6 +382,7 @@ depr_star_init_noinline(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -471,6 +463,7 @@ depr_kwd_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -493,18 +486,18 @@ depr_kwd_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *a = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (kwargs && PyDict_GET_SIZE(kwargs) && nargs < 1 && !PyValue_IsNull(fastargs[0])) {
+    if (kwargs && PyDict_GET_SIZE(kwargs) && nargs < 1 && fastargs[0]) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword argument 'a' to _testclinic.DeprKwdNew() is "
                 "deprecated. Parameter 'a' will become positional-only in Python "
@@ -516,10 +509,7 @@ depr_kwd_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
 skip_optional_pos:
     return_value = depr_kwd_new_impl(type, a);
 
@@ -559,6 +549,7 @@ depr_kwd_init(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -581,18 +572,18 @@ depr_kwd_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
-    const PyValue *fastargs;
+    PyObject *argsbuf[1];
+    PyObject * const *fastargs;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *a = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_ITEMS(args), nargs, kwargs, NULL, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (kwargs && PyDict_GET_SIZE(kwargs) && nargs < 1 && !PyValue_IsNull(fastargs[0])) {
+    if (kwargs && PyDict_GET_SIZE(kwargs) && nargs < 1 && fastargs[0]) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword argument 'a' to _testclinic.DeprKwdInit() is "
                 "deprecated. Parameter 'a' will become positional-only in Python "
@@ -604,10 +595,7 @@ depr_kwd_init(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    a = PyValue_Object(fastargs[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = fastargs[0];
 skip_optional_pos:
     return_value = depr_kwd_init_impl(self, a);
 
@@ -638,6 +626,7 @@ depr_kwd_init_noinline(PyObject *self, PyObject *args, PyObject *kwargs)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -715,14 +704,15 @@ depr_star_pos0_len1_impl(PyObject *module, PyObject *a);
 #  endif
 #endif
 
-static PyValue
-depr_star_pos0_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos0_len1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -745,9 +735,8 @@ depr_star_pos0_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *a;
-    PyObject *_return_value;
 
     if (nargs == 1) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -763,12 +752,8 @@ depr_star_pos0_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos0_len1_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    return_value = depr_star_pos0_len1_impl(module, a);
 
 exit:
     return return_value;
@@ -800,14 +785,15 @@ depr_star_pos0_len2_impl(PyObject *module, PyObject *a, PyObject *b);
 #  endif
 #endif
 
-static PyValue
-depr_star_pos0_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos0_len2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -830,10 +816,9 @@ depr_star_pos0_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     if (nargs > 0 && nargs <= 2) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -849,16 +834,9 @@ depr_star_pos0_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos0_len2_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = depr_star_pos0_len2_impl(module, a, b);
 
 exit:
     return return_value;
@@ -891,14 +869,15 @@ depr_star_pos0_len3_with_kwd_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_pos0_len3_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos0_len3_with_kwd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -921,12 +900,11 @@ depr_star_pos0_len3_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     PyObject *a;
     PyObject *b;
     PyObject *c;
     PyObject *d;
-    PyObject *_return_value;
 
     if (nargs > 0 && nargs <= 3) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -942,24 +920,11 @@ depr_star_pos0_len3_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos0_len3_with_kwd_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    return_value = depr_star_pos0_len3_with_kwd_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -991,14 +956,15 @@ depr_star_pos1_len1_opt_impl(PyObject *module, PyObject *a, PyObject *b);
 #  endif
 #endif
 
-static PyValue
-depr_star_pos1_len1_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos1_len1_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1021,11 +987,10 @@ depr_star_pos1_len1_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
-    PyObject *_return_value;
 
     if (nargs == 2) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1041,20 +1006,13 @@ depr_star_pos1_len1_opt(PyObject *module, const PyValue *args, Py_ssize_t nargs,
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional_pos:
-    _return_value = depr_star_pos1_len1_opt_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_star_pos1_len1_opt_impl(module, a, b);
 
 exit:
     return return_value;
@@ -1086,14 +1044,15 @@ depr_star_pos1_len1_impl(PyObject *module, PyObject *a, PyObject *b);
 #  endif
 #endif
 
-static PyValue
-depr_star_pos1_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos1_len1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1116,10 +1075,9 @@ depr_star_pos1_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     if (nargs == 2) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1135,16 +1093,9 @@ depr_star_pos1_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos1_len1_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = depr_star_pos1_len1_impl(module, a, b);
 
 exit:
     return return_value;
@@ -1177,14 +1128,15 @@ depr_star_pos1_len2_with_kwd_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_pos1_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos1_len2_with_kwd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1207,12 +1159,11 @@ depr_star_pos1_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     PyObject *a;
     PyObject *b;
     PyObject *c;
     PyObject *d;
-    PyObject *_return_value;
 
     if (nargs > 1 && nargs <= 3) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1228,24 +1179,11 @@ depr_star_pos1_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos1_len2_with_kwd_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    return_value = depr_star_pos1_len2_with_kwd_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -1278,14 +1216,15 @@ depr_star_pos2_len1_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_pos2_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos2_len1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1308,11 +1247,10 @@ depr_star_pos2_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     PyObject *a;
     PyObject *b;
     PyObject *c;
-    PyObject *_return_value;
 
     if (nargs == 3) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1328,20 +1266,10 @@ depr_star_pos2_len1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos2_len1_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    return_value = depr_star_pos2_len1_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1374,14 +1302,15 @@ depr_star_pos2_len2_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_pos2_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos2_len2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1404,12 +1333,11 @@ depr_star_pos2_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     PyObject *a;
     PyObject *b;
     PyObject *c;
     PyObject *d;
-    PyObject *_return_value;
 
     if (nargs > 2 && nargs <= 4) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1425,24 +1353,11 @@ depr_star_pos2_len2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos2_len2_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    return_value = depr_star_pos2_len2_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -1475,14 +1390,15 @@ depr_star_pos2_len2_with_kwd_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_pos2_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_pos2_len2_with_kwd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1505,13 +1421,12 @@ depr_star_pos2_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     PyObject *a;
     PyObject *b;
     PyObject *c;
     PyObject *d;
     PyObject *e;
-    PyObject *_return_value;
 
     if (nargs > 2 && nargs <= 4) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1527,28 +1442,12 @@ depr_star_pos2_len2_with_kwd(PyObject *module, const PyValue *args, Py_ssize_t n
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_pos2_len2_with_kwd_impl(module, a, b, c, d, e);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    e = args[4];
+    return_value = depr_star_pos2_len2_with_kwd_impl(module, a, b, c, d, e);
 
 exit:
     return return_value;
@@ -1581,14 +1480,15 @@ depr_star_noinline_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_star_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_noinline(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1616,7 +1516,6 @@ depr_star_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyObject *c = Py_None;
     const char *d = "";
     Py_ssize_t d_length;
-    PyObject *_return_value;
 
     if (nargs > 1 && nargs <= 3) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1631,8 +1530,7 @@ depr_star_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         &a, &b, &c, &d, &d_length)) {
         goto exit;
     }
-    _return_value = depr_star_noinline_impl(module, a, b, c, d, d_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_star_noinline_impl(module, a, b, c, d, d_length);
 
 exit:
     return return_value;
@@ -1668,14 +1566,15 @@ depr_star_multi_impl(PyObject *module, PyObject *a, PyObject *b, PyObject *c,
 #  endif
 #endif
 
-static PyValue
-depr_star_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_star_multi(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1698,7 +1597,7 @@ depr_star_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[8];
+    PyObject *argsbuf[8];
     PyObject *a;
     PyObject *b;
     PyObject *c;
@@ -1707,7 +1606,6 @@ depr_star_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyObject *f;
     PyObject *g;
     PyObject *h;
-    PyObject *_return_value;
 
     if (nargs > 1 && nargs <= 7) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -1725,40 +1623,15 @@ depr_star_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
     if (!args) {
         goto exit;
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
-    f = PyValue_Object(args[5]);
-    if (f == NULL) {
-        goto exit;
-    }
-    g = PyValue_Object(args[6]);
-    if (g == NULL) {
-        goto exit;
-    }
-    h = PyValue_Object(args[7]);
-    if (h == NULL) {
-        goto exit;
-    }
-    _return_value = depr_star_multi_impl(module, a, b, c, d, e, f, g, h);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    e = args[4];
+    f = args[5];
+    g = args[6];
+    h = args[7];
+    return_value = depr_star_multi_impl(module, a, b, c, d, e, f, g, h);
 
 exit:
     return return_value;
@@ -1789,14 +1662,15 @@ depr_kwd_required_1_impl(PyObject *module, PyObject *a, PyObject *b);
 #  endif
 #endif
 
-static PyValue
-depr_kwd_required_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_required_1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1819,10 +1693,9 @@ depr_kwd_required_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     PyObject *a;
     PyObject *b;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1838,16 +1711,9 @@ depr_kwd_required_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    _return_value = depr_kwd_required_1_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    return_value = depr_kwd_required_1_impl(module, a, b);
 
 exit:
     return return_value;
@@ -1880,14 +1746,15 @@ depr_kwd_required_2_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_required_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_required_2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1910,11 +1777,10 @@ depr_kwd_required_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     PyObject *a;
     PyObject *b;
     PyObject *c;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -1930,20 +1796,10 @@ depr_kwd_required_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    _return_value = depr_kwd_required_2_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    return_value = depr_kwd_required_2_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -1974,14 +1830,15 @@ depr_kwd_optional_1_impl(PyObject *module, PyObject *a, PyObject *b);
 #  endif
 #endif
 
-static PyValue
-depr_kwd_optional_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_optional_1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2004,18 +1861,17 @@ depr_kwd_optional_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (kwnames && PyTuple_GET_SIZE(kwnames) && nargs < 2 && !PyValue_IsNull(args[1])) {
+    if (kwnames && PyTuple_GET_SIZE(kwnames) && nargs < 2 && args[1]) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword argument 'b' to depr_kwd_optional_1() is "
                 "deprecated. Parameter 'b' will become positional-only in Python "
@@ -2024,20 +1880,13 @@ depr_kwd_optional_1(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
 skip_optional_pos:
-    _return_value = depr_kwd_optional_1_impl(module, a, b);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_kwd_optional_1_impl(module, a, b);
 
 exit:
     return return_value;
@@ -2070,14 +1919,15 @@ depr_kwd_optional_2_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_optional_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_optional_2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2100,19 +1950,18 @@ depr_kwd_optional_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *a;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 2 && !PyValue_IsNull(args[1])) || (nargs < 3 && !PyValue_IsNull(args[2])))) {
+    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 2 && args[1]) || (nargs < 3 && args[2]))) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword arguments 'b' and 'c' to depr_kwd_optional_2() "
                 "is deprecated. Parameters 'b' and 'c' will become "
@@ -2121,29 +1970,19 @@ depr_kwd_optional_2(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        b = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_pos:
-    _return_value = depr_kwd_optional_2_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_kwd_optional_2_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2176,14 +2015,15 @@ depr_kwd_optional_3_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_optional_3(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_optional_3(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2206,19 +2046,18 @@ depr_kwd_optional_3(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 1 && !PyValue_IsNull(args[0])) || (nargs < 2 && !PyValue_IsNull(args[1])) || (nargs < 3 && !PyValue_IsNull(args[2])))) {
+    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 1 && args[0]) || (nargs < 2 && args[1]) || (nargs < 3 && args[2]))) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword arguments 'a', 'b' and 'c' to "
                 "depr_kwd_optional_3() is deprecated. Parameters 'a', 'b' and 'c'"
@@ -2230,31 +2069,21 @@ depr_kwd_optional_3(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
+    if (args[0]) {
+        a = args[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[1])) {
-        b = PyValue_Object(args[1]);
-        if (b == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        b = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_pos:
-    _return_value = depr_kwd_optional_3_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_kwd_optional_3_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2287,14 +2116,15 @@ depr_kwd_required_optional_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_required_optional(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_required_optional(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2317,19 +2147,18 @@ depr_kwd_required_optional(PyObject *module, const PyValue *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *a;
     PyObject *b;
     PyObject *c = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 2) || (nargs < 3 && !PyValue_IsNull(args[2])))) {
+    if (kwnames && PyTuple_GET_SIZE(kwnames) && ((nargs < 2) || (nargs < 3 && args[2]))) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
                 "Passing keyword arguments 'b' and 'c' to "
                 "depr_kwd_required_optional() is deprecated. Parameters 'b' and "
@@ -2338,24 +2167,14 @@ depr_kwd_required_optional(PyObject *module, const PyValue *args, Py_ssize_t nar
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    a = args[0];
+    b = args[1];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_pos:
-    _return_value = depr_kwd_required_optional_impl(module, a, b, c);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_kwd_required_optional_impl(module, a, b, c);
 
 exit:
     return return_value;
@@ -2388,14 +2207,15 @@ depr_kwd_noinline_impl(PyObject *module, PyObject *a, PyObject *b,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_noinline(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2423,7 +2243,6 @@ depr_kwd_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyObject *c = Py_None;
     const char *d = "";
     Py_ssize_t d_length;
-    PyObject *_return_value;
 
     if (!_PyArg_ParseStackAndKeywords(args, nargs, kwnames, &_parser,
         &a, &b, &c, &d, &d_length)) {
@@ -2441,8 +2260,7 @@ depr_kwd_noinline(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObj
             goto exit;
         }
     }
-    _return_value = depr_kwd_noinline_impl(module, a, b, c, d, d_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_kwd_noinline_impl(module, a, b, c, d, d_length);
 
 exit:
     return return_value;
@@ -2478,14 +2296,15 @@ depr_kwd_multi_impl(PyObject *module, PyObject *a, PyObject *b, PyObject *c,
 #  endif
 #endif
 
-static PyValue
-depr_kwd_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_kwd_multi(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 7
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2508,7 +2327,7 @@ depr_kwd_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[8];
+    PyObject *argsbuf[8];
     PyObject *a;
     PyObject *b;
     PyObject *c;
@@ -2517,7 +2336,6 @@ depr_kwd_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyObject *f;
     PyObject *g;
     PyObject *h;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 8, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -2535,40 +2353,15 @@ depr_kwd_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
-    f = PyValue_Object(args[5]);
-    if (f == NULL) {
-        goto exit;
-    }
-    g = PyValue_Object(args[6]);
-    if (g == NULL) {
-        goto exit;
-    }
-    h = PyValue_Object(args[7]);
-    if (h == NULL) {
-        goto exit;
-    }
-    _return_value = depr_kwd_multi_impl(module, a, b, c, d, e, f, g, h);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    e = args[4];
+    f = args[5];
+    g = args[6];
+    h = args[7];
+    return_value = depr_kwd_multi_impl(module, a, b, c, d, e, f, g, h);
 
 exit:
     return return_value;
@@ -2596,14 +2389,15 @@ depr_alias_impl(PyObject *module, PyObject *a);
 #  endif
 #endif
 
-static PyValue
-depr_alias(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_alias(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2626,10 +2420,9 @@ depr_alias(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -2639,11 +2432,8 @@ depr_alias(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[0])) {
-        a = PyValue_Object(args[0]);
-        if (a == NULL) {
-            goto exit;
-        }
+    if (args[0]) {
+        a = args[0];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -2652,7 +2442,7 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[0])) {
+    if (args[0]) {
         PyErr_Format(PyExc_TypeError,
                 "argument for depr_alias() given by "
                 "name ('b') and %s", 0 < nargs ? "position (1)" : "name ('a')");
@@ -2664,13 +2454,9 @@ skip_optional_pos:
     {
         goto exit;
     }
-    a = PyValue_Object(args[1]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[1];
 skip_optional_kwonly:
-    _return_value = depr_alias_impl(module, a);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_alias_impl(module, a);
 
 exit:
     return return_value;
@@ -2699,14 +2485,15 @@ depr_param_impl(PyObject *module, PyObject *a, PyObject *b, PyObject *c,
 #  endif
 #endif
 
-static PyValue
-depr_param(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_param(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2729,13 +2516,12 @@ depr_param(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     PyObject *a = Py_None;
     PyObject *b = Py_None;
     PyObject *c = Py_None;
     PyObject *d = Py_None;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -2746,10 +2532,7 @@ depr_param(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
         goto skip_optional_posonly;
     }
     noptargs--;
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
+    a = args[0];
     if (nargs < 2) {
         goto skip_optional_posonly;
     }
@@ -2760,10 +2543,7 @@ depr_param(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     {
         goto exit;
     }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
+    b = args[1];
     if (nargs < 3) {
         goto skip_optional_posonly;
     }
@@ -2774,10 +2554,7 @@ depr_param(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     {
         goto exit;
     }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
+    c = args[2];
 skip_optional_posonly:
     if (!noptargs) {
         goto skip_optional_kwonly;
@@ -2788,13 +2565,9 @@ skip_optional_posonly:
     {
         goto exit;
     }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
+    d = args[3];
 skip_optional_kwonly:
-    _return_value = depr_param_impl(module, a, b, c, d);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = depr_param_impl(module, a, b, c, d);
 
 exit:
     return return_value;
@@ -2833,14 +2606,15 @@ depr_multi_impl(PyObject *module, PyObject *a, PyObject *b, PyObject *c,
 #  endif
 #endif
 
-static PyValue
-depr_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+depr_multi(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -2863,7 +2637,7 @@ depr_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[7];
+    PyObject *argsbuf[7];
     PyObject *a;
     PyObject *b;
     PyObject *c;
@@ -2871,7 +2645,6 @@ depr_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyObject *e;
     PyObject *f;
     PyObject *g;
-    PyObject *_return_value;
 
     if (nargs > 4 && nargs <= 6) {
         if (PyErr_WarnEx(PyExc_DeprecationWarning,
@@ -2897,38 +2670,16 @@ depr_multi(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
             goto exit;
         }
     }
-    a = PyValue_Object(args[0]);
-    if (a == NULL) {
-        goto exit;
-    }
-    b = PyValue_Object(args[1]);
-    if (b == NULL) {
-        goto exit;
-    }
-    c = PyValue_Object(args[2]);
-    if (c == NULL) {
-        goto exit;
-    }
-    d = PyValue_Object(args[3]);
-    if (d == NULL) {
-        goto exit;
-    }
-    e = PyValue_Object(args[4]);
-    if (e == NULL) {
-        goto exit;
-    }
-    f = PyValue_Object(args[5]);
-    if (f == NULL) {
-        goto exit;
-    }
-    g = PyValue_Object(args[6]);
-    if (g == NULL) {
-        goto exit;
-    }
-    _return_value = depr_multi_impl(module, a, b, c, d, e, f, g);
-    return_value = PyValue_FromResult(_return_value);
+    a = args[0];
+    b = args[1];
+    c = args[2];
+    d = args[3];
+    e = args[4];
+    f = args[5];
+    g = args[6];
+    return_value = depr_multi_impl(module, a, b, c, d, e, f, g);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0343d641c6fd9963 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=abe0af8d8c637c36 input=a9049054013a1b77]*/

@@ -18,7 +18,10 @@ static inline mi_heap_t *
 _PyObject_GetAllocationHeap(_PyThreadStateImpl *tstate, PyTypeObject *tp)
 {
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
-    if (_PyType_IS_GC(tp)) {
+    if (_PyType_HasFeature(tp, Py_TPFLAGS_PREHEADER)) {
+        return &m->heaps[_Py_MIMALLOC_HEAP_GC_PRE];
+    }
+    else if (_PyType_IS_GC(tp)) {
         return &m->heaps[_Py_MIMALLOC_HEAP_GC];
     }
     else {
@@ -34,14 +37,16 @@ _PyObject_GetAllocationHeap(_PyThreadStateImpl *tstate, PyTypeObject *tp)
 // _mimalloc_thread_state. Without mimalloc, this simply calls
 // PyObject_Malloc().  In the default build a thread state may not have bound
 // its heaps yet; the allocation then takes the default path.
-Py_GC_PRECISE static inline void *
+static inline void *
 _PyObject_MallocWithType(PyTypeObject *tp, size_t size)
 {
 #ifdef WITH_MIMALLOC
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+#  ifndef Py_GIL_DISABLED
     if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
         return PyObject_Malloc(size);
     }
+#  endif
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
     m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
 #endif
@@ -57,9 +62,11 @@ _PyObject_ReallocWithType(PyTypeObject *tp, void *ptr, size_t size)
 {
 #ifdef WITH_MIMALLOC
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+#  ifndef Py_GIL_DISABLED
     if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
         return PyObject_Realloc(ptr, size);
     }
+#  endif
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
     m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
 #endif

@@ -23,16 +23,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -52,31 +52,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -92,41 +117,47 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _BINARY_OP_ADD_FLOAT
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 double a, b;
-                if (!_PyValue_FloatOperandValues(left, right, &a, &b)) {
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a + b);
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromDouble(a + b);
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -142,24 +173,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -167,34 +201,38 @@
             // _BINARY_OP_ADD_INT
             {
                 right = value;
-                int32_t a = _PyValue_CompactInt(left);
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t a = PyStackRef_CompactIntValue(left);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 int32_t sum;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_add_overflow(a, b, &sum)) {
-                    res = _PyValue_BoxInt64((int64_t)a + b);
+                    res = _PyStackRef_BoxInt64((int64_t)a + b);
                 }
                 else {
-                    res = PyValue_FromInt32(sum);
+                    res = PyStackRef_FromInt32(sum);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -210,22 +248,24 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -233,12 +273,16 @@
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -247,31 +291,35 @@
             {
                 right = value;
                 left = nos;
-                PyObject *left_o = PyValue_ObjectBorrow(left);
-                PyObject *right_o = PyValue_ObjectBorrow(right);
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(right_o));
                 STAT_INC(BINARY_OP, hit);
                 PyObject *res_o = PyUnicode_Concat(left_o, right_o);
                 if (res_o == NULL) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = r;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = l;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -286,16 +334,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_AND);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -315,31 +363,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -355,24 +428,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -381,25 +457,29 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(_PyValue_CompactInt(left) & _PyValue_CompactInt(right));
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) & PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -416,49 +496,81 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _BINARY_OP_EXTEND
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
                 left = IR_SLOT(IR_FIELD_B(this_instr));
                 PyObject *descr = (PyObject *)fb->descr;
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP_EXTEND);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP_EXTEND);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
                 _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
                 assert(d != NULL);
                 int match = (d->guard != NULL)
-                ? d->guard(left, right)
-            : (PyValue_Type(left) == d->lhs_type && PyValue_Type(right) == d->rhs_type);
+                ? d->guard(left_o, right_o)
+            : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
                 if (!match) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                PyObject *res_o = d->action(left, right);
+                PyObject *res_o = d->action(left_o, right_o);
                 if (res_o == NULL) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-                res = PyValue_FromObject(res_o);
+                assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -473,16 +585,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -502,31 +614,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -542,24 +679,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -567,41 +707,47 @@
             // _BINARY_OP_FLOOR_DIVIDE_INT
             {
                 right = value;
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = _PyValue_CompactInt(left);
+                int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
                 if (b == -1) {
-                    res = a == INT32_MIN ? _PyValue_BoxInt64(-(int64_t)a) : PyValue_FromInt32(-a);
+                    res = a == INT32_MIN ? _PyStackRef_BoxInt64(-(int64_t)a) : PyStackRef_FromInt32(-a);
                 }
                 else {
                     int32_t quotient = a / b;
                     if (a % b != 0 && (a ^ b) < 0) {
                         quotient--;
                     }
-                    res = PyValue_FromInt32(quotient);
+                    res = PyStackRef_FromInt32(quotient);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -616,16 +762,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -645,31 +791,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -685,20 +856,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
-            PyValue res;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -706,12 +879,16 @@
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -720,30 +897,33 @@
             {
                 right = value;
                 left = nos;
-                PyObject *left_o = PyValue_ObjectBorrow(left);
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
                 assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(PyValue_ObjectBorrow(right)));
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(right)));
                 assert(IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-                PyValue *target_local = &IR_SLOT(IR_FIELD_A(this_instr));
+                _PyStackRef *target_local = &IR_SLOT(IR_FIELD_A(this_instr));
                 assert(PyUnicode_CheckExact(left_o));
-                if (PyValue_ObjectBorrow(*target_local) != left_o) {
+                if (PyStackRef_AsPyObjectBorrow(*target_local) != left_o) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                PyObject *temp = PyValue_ObjectBorrow(*target_local);
-                PyObject *right_o = PyValue_ObjectBorrow(right);
+                assert(Py_REFCNT(left_o) >= 2 || !PyStackRef_IsHeapSafe(left));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(left, _PyUnicode_ExactDealloc);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyObject *temp = PyStackRef_AsPyObjectSteal(*target_local);
+                PyObject *right_o = _PyStackRef_AsPyObjectStealPointer(right);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyUnicode_Append(&temp, right_o);
-                *target_local = PyValue_NULL;
+                _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
+                *target_local = PyStackRef_NULL;
                 if (temp == NULL) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(temp);
+                res = PyStackRef_FromPyObjectSteal(temp);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -758,16 +938,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_AND);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -787,31 +967,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -826,16 +1031,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_FLOOR_DIVIDE);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -855,31 +1060,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -894,16 +1124,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_LSHIFT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -923,31 +1153,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -962,16 +1217,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_MATRIX_MULTIPLY);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -991,31 +1246,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1030,16 +1310,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_MULTIPLY);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1059,31 +1339,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1098,16 +1403,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_OR);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1127,31 +1432,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1166,16 +1496,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_POWER);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1195,31 +1525,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1234,16 +1589,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_REMAINDER);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1263,31 +1618,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1302,16 +1682,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_RSHIFT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1331,31 +1711,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1370,16 +1775,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_SUBTRACT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1399,31 +1804,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1438,16 +1868,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_TRUE_DIVIDE);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1467,31 +1897,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1506,16 +1961,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_XOR);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1535,31 +1990,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1574,16 +2054,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_LSHIFT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1603,31 +2083,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1643,24 +2148,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -1668,43 +2176,49 @@
             // _BINARY_OP_LSHIFT_INT
             {
                 right = value;
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = _PyValue_CompactInt(left);
+                int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
                 if (b < 32) {
                     int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
                     res = (int32_t)shifted == shifted
-                    ? PyValue_FromInt32((int32_t)shifted)
-                : _PyValue_BoxInt64(shifted);
+                    ? PyStackRef_FromInt32((int32_t)shifted)
+                : _PyStackRef_BoxInt64(shifted);
                 }
                 else if (a == 0) {
-                    res = PyValue_FromInt32(0);
+                    res = PyStackRef_FromInt32(0);
                 }
                 else {
-                    res = _PyValue_LshiftInt32(a, b);
+                    res = _PyStackRef_LshiftInt32(a, b);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1719,16 +2233,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MATRIX_MULTIPLY);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1748,31 +2262,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1787,16 +2326,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1816,31 +2355,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1856,41 +2420,47 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _BINARY_OP_MULTIPLY_FLOAT
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 double a, b;
-                if (!_PyValue_FloatOperandValues(left, right, &a, &b)) {
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a * b);
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromDouble(a * b);
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1906,24 +2476,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -1931,34 +2504,38 @@
             // _BINARY_OP_MULTIPLY_INT
             {
                 right = value;
-                int32_t a = _PyValue_CompactInt(left);
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t a = PyStackRef_CompactIntValue(left);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 int32_t product;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_mul_overflow(a, b, &product)) {
-                    res = _PyValue_BoxInt64((int64_t)a * b);
+                    res = _PyStackRef_BoxInt64((int64_t)a * b);
                 }
                 else {
-                    res = PyValue_FromInt32(product);
+                    res = PyStackRef_FromInt32(product);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -1973,16 +2550,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_OR);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2002,31 +2579,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2042,24 +2644,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2068,25 +2673,29 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(_PyValue_CompactInt(left) | _PyValue_CompactInt(right));
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) | PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2101,16 +2710,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_POWER);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2130,31 +2739,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2169,16 +2803,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_REMAINDER);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2198,31 +2832,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2238,24 +2897,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2263,12 +2925,14 @@
             // _BINARY_OP_REMAINDER_INT
             {
                 right = value;
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 if (b == 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = _PyValue_CompactInt(left);
+                int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
                 int32_t remainder = 0;
                 if (b != -1) {
@@ -2277,25 +2941,29 @@
                         remainder += b;
                     }
                 }
-                res = PyValue_FromInt32(remainder);
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromInt32(remainder);
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2310,16 +2978,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_RSHIFT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2339,31 +3007,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2379,24 +3072,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2404,32 +3100,38 @@
             // _BINARY_OP_RSHIFT_INT
             {
                 right = value;
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 if (b < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = _PyValue_CompactInt(left);
+                int32_t a = PyStackRef_CompactIntValue(left);
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2444,16 +3146,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBSCR);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2473,31 +3175,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2513,26 +3240,29 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
-            PyValue nos;
-            PyValue dict_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue ds;
-            PyValue ss;
-            PyValue value;
+            _PyStackRef nos;
+            _PyStackRef dict_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef ds;
+            _PyStackRef ss;
+            _PyStackRef value;
             // _GUARD_NOS_DICT_SUBSCRIPT
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2541,28 +3271,46 @@
             {
                 sub_st = IR_SLOT(IR_FIELD_C(this_instr));
                 dict_st = nos;
-                PyObject *dict = PyValue_ObjectBorrow(dict_st);
+                if (Py_UNLIKELY(PyStackRef_IsInline(sub_st))) {
+                    sub_st = PyStackRef_Box(sub_st);
+                    if (PyStackRef_IsInline(sub_st)) {
+                        IR_DROP_BORROW(dict_st, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP_SUBSCR_DICT);
+                    IR_KEEP_BOX(sub_st, IR_FIELD_C(this_instr));
+                }
+                else {
+                    sub_st = IR_BORROW_KNOWN(sub_st, IR_FIELD_C(this_instr));
+                }
+                PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+                PyObject *dict = PyStackRef_AsPyObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_subscript == _PyDict_Subscript);
                 STAT_INC(BINARY_OP, hit);
-                res = _PyDict_SubscriptValue(dict, sub_st);
-                if (PyValue_IsNull(res)) {
+                PyObject *res_o = _PyDict_Subscript(dict, sub);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(dict_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 ds = dict_st;
                 ss = sub_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = ss;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = ds;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2578,10 +3326,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
-            PyValue container;
-            PyValue getitem;
-            PyValue sub;
-            PyValue new_frame;
+            _PyStackRef container;
+            _PyStackRef getitem;
+            _PyStackRef sub;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -2592,47 +3340,62 @@
             // _BINARY_OP_SUBSCR_CHECK_FUNC
             {
                 container = IR_SLOT(IR_FIELD_B(this_instr));
-                PyTypeObject *tp = PyValue_Type(container);
+                if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+                    container = PyStackRef_Box(container);
+                    if (PyStackRef_IsInline(container)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP_SUBSCR_GETITEM);
+                    IR_KEEP_BOX(container, IR_FIELD_B(this_instr));
+                }
+                else {
+                    container = IR_BORROW_KNOWN(container, IR_FIELD_B(this_instr));
+                }
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(container));
                 if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
                 PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
                 if (getitem_o == NULL) {
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 assert(PyFunction_Check(getitem_o));
                 uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
                 if (((PyFunctionObject *)getitem_o)->func_version != cached_version) {
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    IR_DROP_BORROW(container, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                getitem = PyValue_FromObject(getitem_o);
+                getitem = PyStackRef_FromPyObjectNew(getitem_o);
             }
             // _BINARY_OP_SUBSCR_INIT_CALL
             {
-                sub = IR_SLOT(IR_FIELD_C(this_instr));
+                sub = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
                 pushed_frame->base[0] = container;
                 pushed_frame->base[1] = sub;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
-                new_frame = _PyValue_Wrap(pushed_frame);
+                new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -2657,17 +3420,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue ls;
-            PyValue ss;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef list_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef ls;
+            _PyStackRef ss;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2675,12 +3439,16 @@
             // _GUARD_NOS_LIST
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2689,34 +3457,50 @@
             {
                 sub_st = value;
                 list_st = nos;
-                PyObject *list = PyValue_ObjectBorrow(list_st);
+                PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
                     index += PyList_GET_SIZE(list);
                 }
-                if (index < 0 || index >= PyList_GET_SIZE(list)) {
+                #ifdef Py_GIL_DISABLED
+                PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                res = PyList_GET_VALUE(list, index);
-                assert(!PyValue_IsNull(res));
+                res = PyStackRef_FromPyObjectSteal(res_o);
+                #else
+                if (index < 0 || index >= PyList_GET_SIZE(list)) {
+                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
+                    UPDATE_MISS_STATS(BINARY_OP);
+                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
+                }
+                PyObject *res_o = PyList_GET_ITEM(list, index);
+                assert(res_o != NULL);
+                res = PyStackRef_FromPyObjectNew(res_o);
+                #endif
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
                 ss = sub_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = ss;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
             // _POP_TOP
             {
                 value = ls;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2732,23 +3516,25 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
-            PyValue tos;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue ls;
-            PyValue ss;
-            PyValue value;
+            _PyStackRef tos;
+            _PyStackRef nos;
+            _PyStackRef list_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef ls;
+            _PyStackRef ss;
+            _PyStackRef value;
             // _GUARD_TOS_SLICE
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PySlice_Check(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2756,12 +3542,16 @@
             // _GUARD_NOS_LIST
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2770,31 +3560,35 @@
             {
                 sub_st = tos;
                 list_st = nos;
-                PyObject *sub = PyValue_ObjectBorrow(sub_st);
-                PyObject *list = PyValue_ObjectBorrow(list_st);
+                PyObject *sub = PyStackRef_AsPyObjectBorrow(sub_st);
+                PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
                 assert(PySlice_Check(sub));
                 assert(PyList_CheckExact(list));
                 PyObject *res_o = _PyList_SliceSubscript(list, sub);
                 STAT_INC(BINARY_OP, hit);
                 if (res_o == NULL) {
+                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 ls = list_st;
                 ss = sub_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = ss;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = ls;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2810,17 +3604,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue str_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue s;
-            PyValue i;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef str_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef s;
+            _PyStackRef i;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2828,16 +3623,22 @@
             // _GUARD_NOS_COMPACT_ASCII
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (!PyUnicode_IS_COMPACT_ASCII(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2846,14 +3647,18 @@
             {
                 sub_st = value;
                 str_st = nos;
-                PyObject *str = PyValue_ObjectBorrow(str_st);
+                PyObject *str = PyStackRef_AsPyObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2863,20 +3668,22 @@
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
                 s = str_st;
                 i = sub_st;
-                res = PyValue_FromObject(res_o);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                res = PyStackRef_FromPyObjectBorrow(res_o);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = i;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = s;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2892,17 +3699,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue tuple_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue ts;
-            PyValue ss;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef tuple_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef ts;
+            _PyStackRef ss;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2910,12 +3718,16 @@
             // _GUARD_NOS_TUPLE
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyTuple_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2924,42 +3736,49 @@
             {
                 sub_st = value;
                 tuple_st = nos;
-                PyObject *tuple = PyValue_ObjectBorrow(tuple_st);
+                PyObject *tuple = PyStackRef_AsPyObjectBorrow(tuple_st);
                 assert(PyTuple_CheckExact(tuple));
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
+                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (index >= PyTuple_GET_SIZE(tuple)) {
+                    IR_DROP_BORROW(tuple_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _BINARY_OP_SUBSCR_TUPLE_INT
             {
-                PyObject *tuple = PyValue_ObjectBorrow(tuple_st);
+                PyObject *tuple = PyStackRef_AsPyObjectBorrow(tuple_st);
                 assert(PyTuple_CheckExact(tuple));
                 STAT_INC(BINARY_OP, hit);
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-                res = PyTuple_GET_VALUE(tuple, index);
-                assert(!PyValue_IsNull(res));
+                PyObject *res_o = PyTuple_GET_ITEM(tuple, index);
+                assert(res_o != NULL);
+                res = PyStackRef_FromPyObjectNew(res_o);
                 ts = tuple_st;
                 ss = sub_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = ss;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
             // _POP_TOP
             {
                 value = ts;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -2975,17 +3794,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue str_st;
-            PyValue sub_st;
-            PyValue res;
-            PyValue s;
-            PyValue i;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef str_st;
+            _PyStackRef sub_st;
+            _PyStackRef res;
+            _PyStackRef s;
+            _PyStackRef i;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2993,12 +3813,16 @@
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3007,19 +3831,25 @@
             {
                 sub_st = value;
                 str_st = nos;
-                PyObject *str = PyValue_ObjectBorrow(str_st);
+                PyObject *str = PyStackRef_AsPyObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (index < 0) {
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
                 if (Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c) {
+                    IR_DROP_BORROW(str_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3027,20 +3857,22 @@
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
                 s = str_st;
                 i = sub_st;
-                res = PyValue_FromObject(res_o);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                res = PyStackRef_FromPyObjectBorrow(res_o);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = i;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = s;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3055,16 +3887,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -3084,31 +3916,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3124,41 +3981,47 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _BINARY_OP_SUBTRACT_FLOAT
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 double a, b;
-                if (!_PyValue_FloatOperandValues(left, right, &a, &b)) {
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a - b);
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromDouble(a - b);
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3174,24 +4037,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3199,34 +4065,38 @@
             // _BINARY_OP_SUBTRACT_INT
             {
                 right = value;
-                int32_t a = _PyValue_CompactInt(left);
-                int32_t b = _PyValue_CompactInt(right);
+                int32_t a = PyStackRef_CompactIntValue(left);
+                int32_t b = PyStackRef_CompactIntValue(right);
                 int32_t difference;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_sub_overflow(a, b, &difference)) {
-                    res = _PyValue_BoxInt64((int64_t)a - b);
+                    res = _PyStackRef_BoxInt64((int64_t)a - b);
                 }
                 else {
-                    res = PyValue_FromInt32(difference);
+                    res = PyStackRef_FromInt32(difference);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3242,45 +4112,53 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _BINARY_OP_TRUEDIV_FLOAT
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 double a, b;
-                if (!_PyValue_FloatOperandValues(left, right, &a, &b)) {
+                if (!PyStackRef_FloatOperandValues(left, right, &a, &b)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 if (b == 0.0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a / b);
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromDouble(a / b);
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_NUMBER
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value) || PyStackRef_IsCompactInt(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3295,16 +4173,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_TRUE_DIVIDE);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -3324,31 +4202,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3363,16 +4266,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_XOR);
+            INSTRUCTION_STATS(BINARY_OP);
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
-            PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef lhs;
+            _PyStackRef rhs;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -3392,31 +4295,56 @@
             }
             // _BINARY_OP
             {
-                assert(NB_ADD <= oparg && oparg <= NB_OPARG_LAST);
-                if (oparg == NB_SUBSCR) {
-                    res = PyObject_GetItemValue(lhs, rhs);
+                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
+                    lhs = PyStackRef_Box(lhs);
+                    if (PyStackRef_IsInline(lhs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(lhs, IR_FIELD_B(this_instr));
                 }
                 else {
-                    res = _PyNumber_BinaryOpValue(lhs, rhs, oparg);
+                    lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
+                    rhs = PyStackRef_Box(rhs);
+                    if (PyStackRef_IsInline(rhs)) {
+                        IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(BINARY_OP);
+                    IR_KEEP_BOX(rhs, IR_FIELD_C(this_instr));
+                }
+                else {
+                    rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
+                }
+                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                assert(_PyEval_BinaryOps[oparg]);
+                PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3432,24 +4360,27 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3458,25 +4389,29 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(_PyValue_CompactInt(left) ^ _PyValue_CompactInt(right));
-                if (PyValue_IsNull(res)) {
+                res = PyStackRef_FromInt32(PyStackRef_CompactIntValue(left) ^ PyStackRef_CompactIntValue(right));
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3492,10 +4427,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_SLICE);
-            PyValue container;
-            PyValue start;
-            PyValue stop;
-            PyValue res;
+            _PyStackRef container;
+            _PyStackRef start;
+            _PyStackRef stop;
+            _PyStackRef res;
             // _SPECIALIZE_BINARY_SLICE
             {
                 #if ENABLE_SPECIALIZATION
@@ -3504,21 +4439,21 @@
             }
             // _BINARY_SLICE
             {
-                stop = IR_SLOT(IR_FIELD_D(this_instr));
-                start = IR_SLOT(IR_FIELD_C(this_instr));
-                container = IR_SLOT(IR_FIELD_B(this_instr));
+                stop = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
+                start = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                container = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
+                IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
+                PyStackRef_CLOSE(stop);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                PyStackRef_CLOSE(start);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(container);
                 if (res_o == NULL) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -3536,77 +4471,53 @@
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue value;
-            PyValue str;
-            PyValue *format;
-            PyValue interpolation;
+            _PyStackRef value;
+            _PyStackRef str;
+            _PyStackRef *format;
+            _PyStackRef interpolation;
             format = &window[2];
             str = window[1];
             value = window[0];
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(BUILD_INTERPOLATION, _PY_BOX_CONTAINER_STORE);
+                BOX_STAT_INC(BUILD_INTERPOLATION);
+                window[0] = value;
             }
-            else {
-                value_object = PyValue_ObjectBorrow(value);
-            }
-            PyObject *str_object;
-            _PyValueRoot str_root;
-            if (Py_UNLIKELY(PyValue_IsInline(str))) {
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                str_object = _PyValue_BoxInline(str);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                if (str_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                str = PyStackRef_Box(str);
+                if (PyStackRef_IsInline(str)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(BUILD_INTERPOLATION, _PY_BOX_CONTAINER_STORE);
+                BOX_STAT_INC(BUILD_INTERPOLATION);
+                window[1] = str;
             }
-            else {
-                str_object = PyValue_ObjectBorrow(str);
-            }
-            PyObject *value_o = value_object;
-            PyObject *str_o = str_object;
+            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+            PyObject *str_o = PyStackRef_AsPyObjectBorrow(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
             if (oparg & 1) {
-                format_o = PyValue_ObjectBorrow(format[0]);
+                format_o = PyStackRef_AsPyObjectBorrow(format[0]);
             }
             else {
                 format_o = &_Py_STR(empty);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PushValueRoot(tstate, &value_root);
-                value_root.object = value_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(str))) {
-                _PyThreadState_PushValueRoot(tstate, &str_root);
-                str_root.object = str_object;
-            }
             PyObject *interpolation_o = _PyInterpolation_Build(value_o, str_o, conversion, format_o);
-            if (Py_UNLIKELY(PyValue_IsInline(str))) {
-                _PyThreadState_PopValueRoot(tstate, &str_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                _PyThreadState_PopValueRoot(tstate, &value_root);
-            }
+            _PyStackRef format_ref = (oparg & 1) ? format[0] : PyStackRef_NULL;
+            IR_CLEAR_SLOTS(&window[2], (oparg & 1));
+            PyStackRef_XCLOSE(format_ref);
+            window[1] = PyStackRef_NULL;
+            _PyStackRef_CLOSE_POINTER(str);
+            window[0] = PyStackRef_NULL;
+            _PyStackRef_CLOSE_POINTER(value);
             if (interpolation_o == NULL) {
-                IR_CLEAR_SLOTS(&window[0], 2 + (oparg & 1));
                 JUMP_TO_LABEL(error);
             }
-            interpolation = PyValue_FromObject(interpolation_o);
-            IR_CLEAR_SLOTS(&window[1], 1 + (oparg & 1));
+            interpolation = PyStackRef_FromPyObjectSteal(interpolation_o);
             window[0] = interpolation;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -3625,16 +4536,16 @@
             INSTRUCTION_STATS(BUILD_LIST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *values;
-            PyValue list;
+            _PyStackRef *values;
+            _PyStackRef list;
             values = &window[0];
-            PyObject *list_o = _PyList_FromValues(values, oparg);
+            PyObject *list_o = _PyList_FromStackRefStealOnSuccess(values, oparg);
             if (list_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            list = PyValue_FromObject(list_o);
+            list = PyStackRef_FromPyObjectStealMortal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = list;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -3654,17 +4565,17 @@
             INSTRUCTION_STATS(BUILD_MAP);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *values;
-            PyValue map;
+            _PyStackRef *values;
+            _PyStackRef map;
             values = &window[0];
-            PyObject *map_o = _Py_BuildMap_Values(values, oparg);
+            PyObject *map_o = _Py_BuildMap_StackRefSteal(values, oparg);
             if (map_o == NULL) {
                 IR_CLEAR_SLOTS(&window[0], oparg*2);
                 JUMP_TO_LABEL(error);
             }
-            map = PyValue_FromObject(map_o);
+            map = PyStackRef_FromPyObjectStealMortal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             window[0] = map;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -3684,31 +4595,41 @@
             INSTRUCTION_STATS(BUILD_SET);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *values;
-            PyValue set;
+            _PyStackRef *values;
+            _PyStackRef set;
             values = &window[0];
             PyObject *set_o = PySet_New(NULL);
             if (set_o == NULL) {
+                _PyStackRef tmp;
+                for (int _i = oparg; --_i >= 0;) {
+                    tmp = values[_i];
+                    values[_i] = PyStackRef_NULL;
+                    PyStackRef_CLOSE(tmp);
+                }
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 JUMP_TO_LABEL(error);
             }
-            _PyValueRoot set_ref;
-            _PyThreadState_PushValueRoot(tstate, &set_ref);
-            set_ref.value = PyValue_FromObject(set_o);
             int err = 0;
-            for (Py_ssize_t i = 0; i < oparg && err == 0; i++) {
-                err = _PySet_AddValue(
-                                      (PySetObject *)PyValue_ObjectBorrow(set_ref.value),
-                                      values[i]);
+            for (Py_ssize_t i = 0; i < oparg; i++) {
+                _PyStackRef value = values[i];
+                values[i] = PyStackRef_NULL;
+                if (err == 0) {
+                    value = PyStackRef_Box(value);
+                    err = PyStackRef_IsInline(value) ? -1 :
+                    _PySet_AddTakeRef((PySetObject *)set_o, PyStackRef_AsPyObjectSteal(value));
+                }
+                else {
+                    PyStackRef_CLOSE(value);
+                }
             }
-            PyValue made = _PyThreadState_PopValueRoot(tstate, &set_ref);
             if (err) {
                 IR_CLEAR_SLOTS(&window[0], oparg);
+                Py_DECREF(set_o);
                 JUMP_TO_LABEL(error);
             }
-            set = made;
+            set = PyStackRef_FromPyObjectStealMortal(set_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = set;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -3728,19 +4649,29 @@
             INSTRUCTION_STATS(BUILD_SLICE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *args;
-            PyValue slice;
+            _PyStackRef *args;
+            _PyStackRef slice;
             args = &window[0];
-            PyObject *slice_o = _PySlice_FromValues(
-                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
-            if (slice_o == NULL) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
+            if (_PyStackRef_BoxArray(args, oparg) < 0) {
                 JUMP_TO_LABEL(error);
             }
-            slice = PyValue_FromObject(slice_o);
-            IR_CLEAR_SLOTS(&window[1], -1 + oparg);
+            PyObject *start_o = PyStackRef_AsPyObjectBorrow(args[0]);
+            PyObject *stop_o = PyStackRef_AsPyObjectBorrow(args[1]);
+            PyObject *step_o = oparg == 3 ? PyStackRef_AsPyObjectBorrow(args[2]) : NULL;
+            PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
+            _PyStackRef tmp;
+            for (int _i = oparg; --_i >= 0;) {
+                tmp = args[_i];
+                args[_i] = PyStackRef_NULL;
+                PyStackRef_CLOSE(tmp);
+            }
+            IR_CLEAR_SLOTS(&window[0], oparg);
+            if (slice_o == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            slice = PyStackRef_FromPyObjectStealMortal(slice_o);
             window[0] = slice;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -3759,17 +4690,17 @@
             INSTRUCTION_STATS(BUILD_STRING);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *pieces;
-            PyValue str;
+            _PyStackRef *pieces;
+            _PyStackRef str;
             pieces = &window[0];
-            PyObject *str_o = _Py_BuildString_Values(pieces, oparg);
+            PyObject *str_o = _Py_BuildString_StackRefSteal(pieces, oparg);
             if (str_o == NULL) {
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 JUMP_TO_LABEL(error);
             }
-            str = PyValue_FromObject(str_o);
+            str = PyStackRef_FromPyObjectSteal(str_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = str;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -3787,67 +4718,45 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TEMPLATE);
-            PyValue strings;
-            PyValue interpolations;
-            PyValue template;
+            _PyStackRef strings;
+            _PyStackRef interpolations;
+            _PyStackRef template;
             interpolations = IR_SLOT(IR_FIELD_C(this_instr));
             strings = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *strings_object;
-            _PyValueRoot strings_root;
-            if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                strings_object = _PyValue_BoxInline(strings);
-                if (strings_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(strings))) {
+                strings = PyStackRef_Box(strings);
+                if (PyStackRef_IsInline(strings)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(BUILD_TEMPLATE, _PY_BOX_CONTAINER_STORE);
+                BOX_STAT_INC(BUILD_TEMPLATE);
+                IR_KEEP_BOX(strings, IR_FIELD_B(this_instr));
             }
             else {
-                strings_object = PyValue_ObjectBorrow(strings);
+                strings = IR_BORROW_KNOWN(strings, IR_FIELD_B(this_instr));
             }
-            PyObject *interpolations_object;
-            _PyValueRoot interpolations_root;
-            if (Py_UNLIKELY(PyValue_IsInline(interpolations))) {
-                if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                    _PyThreadState_PushValueRoot(tstate, &strings_root);
-                    strings_root.object = strings_object;
-                }
-                interpolations_object = _PyValue_BoxInline(interpolations);
-                if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                    _PyThreadState_PopValueRoot(tstate, &strings_root);
-                }
-                if (interpolations_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(interpolations))) {
+                interpolations = PyStackRef_Box(interpolations);
+                if (PyStackRef_IsInline(interpolations)) {
+                    IR_DROP_BORROW(strings, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(BUILD_TEMPLATE, _PY_BOX_CONTAINER_STORE);
+                BOX_STAT_INC(BUILD_TEMPLATE);
+                IR_KEEP_BOX(interpolations, IR_FIELD_C(this_instr));
             }
             else {
-                interpolations_object = PyValue_ObjectBorrow(interpolations);
+                interpolations = IR_BORROW_KNOWN(interpolations, IR_FIELD_C(this_instr));
             }
-            PyObject *strings_o = strings_object;
-            PyObject *interpolations_o = interpolations_object;
-            if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                _PyThreadState_PushValueRoot(tstate, &strings_root);
-                strings_root.object = strings_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(interpolations))) {
-                _PyThreadState_PushValueRoot(tstate, &interpolations_root);
-                interpolations_root.object = interpolations_object;
-            }
+            PyObject *strings_o = PyStackRef_AsPyObjectBorrow(strings);
+            PyObject *interpolations_o = PyStackRef_AsPyObjectBorrow(interpolations);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
-            if (Py_UNLIKELY(PyValue_IsInline(interpolations))) {
-                _PyThreadState_PopValueRoot(tstate, &interpolations_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                _PyThreadState_PopValueRoot(tstate, &strings_root);
-            }
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(interpolations);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(strings);
             if (template_o == NULL) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            template = PyValue_FromObject(template_o);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            template = PyStackRef_FromPyObjectSteal(template_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), template);
             DISPATCH();
         }
@@ -3865,16 +4774,16 @@
             INSTRUCTION_STATS(BUILD_TUPLE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue *values;
-            PyValue tup;
+            _PyStackRef *values;
+            _PyStackRef tup;
             values = &window[0];
-            PyObject *tup_o = _PyTuple_FromValues(values, oparg);
+            PyObject *tup_o = _PyTuple_FromStackRefStealOnSuccess(values, oparg);
             if (tup_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            tup = PyValue_FromObject(tup_o);
+            tup = PyStackRef_FromPyObjectStealMortal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = tup;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -3912,13 +4821,13 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = CALL;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
             // _SPECIALIZE_CALL
             {
                 self_or_null = window[1];
@@ -3927,7 +4836,7 @@
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
-                    _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                    _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL);
@@ -3936,46 +4845,33 @@
             }
             // _MAYBE_EXPAND_METHOD
             {
-                PyObject *callable_object;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                if (PyValue_Type(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                    PyObject *callable_o = callable_object;
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyValue_FromObject(self);
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    callable = PyValue_FromObject(method);
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _DO_CALL
             {
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
-                        window[0] = callable;
-                        window[1] = self_or_null;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL, _PY_BOX_CALL);
-                }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *callable_o = callable_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -3987,17 +4883,10 @@
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
                     window[0] = callable;
                     window[1] = self_or_null;
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, total_args, NULL, frame
                     );
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
@@ -4007,38 +4896,30 @@
                 }
                 window[0] = callable;
                 window[1] = self_or_null;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                PyValue res_v = _Py_VectorCallInstrumentation_Values(
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
-                    PyValue_NULL,
+                    PyStackRef_NULL,
                     opcode == INSTRUMENTED_CALL,
                     frame,
                     this_instr,
                     tstate);
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                 window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -4057,15 +4938,15 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue init;
-            PyValue self;
-            PyValue *args;
-            PyValue init_frame;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef init;
+            _PyStackRef self;
+            _PyStackRef *args;
+            _PyStackRef init_frame;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -4079,13 +4960,13 @@
                 self_or_null = window[1];
                 callable = window[0];
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
-                if (!PyValue_IsNull(self_or_null)) {
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                if (!PyStackRef_IsNull(self_or_null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4112,8 +4993,8 @@
             }
             // _ALLOCATE_OBJECT
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
-                assert(PyValue_IsNull(self_or_null));
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                assert(PyStackRef_IsNull(self_or_null));
                 assert(PyType_Check(callable_o));
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 assert(tp->tp_new == PyBaseObject_Type.tp_new);
@@ -4128,25 +5009,27 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 STAT_INC(CALL, hit);
-                callable = PyValue_FromObject(init_func);
-                window[0] = callable;
                 PyObject *self_o = PyType_GenericAlloc(tp, 0);
                 if (self_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                self_or_null = PyValue_FromObject(self_o);
+                self_or_null = PyStackRef_FromPyObjectSteal(self_o);
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectNew(init_func);
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyStackRef_CLOSE(temp);
             }
             // _CREATE_INIT_FRAME
             {
                 args = &window[2];
                 self = self_or_null;
                 init = callable;
-                window[1] = self;
                 _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                     tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
-                shim->base[0] = self;
+                shim->base[0] = _PyStackRef_DUP_POINTER(self);
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, init, NULL, args-1, oparg+1, NULL, shim);
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
@@ -4157,13 +5040,13 @@
                 }
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                 tstate->py_recursion_remaining--;
-                init_frame = _PyValue_Wrap(temp);
+                init_frame = PyStackRef_Wrap(temp);
             }
             // _PUSH_FRAME
             {
                 new_frame = init_frame;
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -4191,13 +5074,13 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue null;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef null;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -4210,17 +5093,17 @@
             {
                 null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (Py_TYPE(PyValue_ObjectBorrow(callable)) != &PyMethod_Type) {
+                if (Py_TYPE(PyStackRef_AsPyObjectBorrow(callable)) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4229,24 +5112,21 @@
             // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
             {
                 self_or_null = null;
-                assert(PyValue_IsNull(self_or_null));
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                assert(PyStackRef_IsNull(self_or_null));
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 STAT_INC(CALL, hit);
-                self_or_null = PyValue_FromObject(((PyMethodObject *)callable_o)->im_self);
-                callable = PyValue_FromObject(((PyMethodObject *)callable_o)->im_func);
+                self_or_null = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyStackRef_CLOSE(temp);
             }
             // flush
-            window[0] = callable;
-            window[1] = self_or_null;
             // _CHECK_FUNCTION_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4261,11 +5141,11 @@
             }
             // _CHECK_FUNCTION_EXACT_ARGS
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + (!PyValue_IsNull(self_or_null))) {
+                if (code->co_argcount != oparg + (!PyStackRef_IsNull(self_or_null))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4273,7 +5153,7 @@
             }
             // _CHECK_STACK_SPACE
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
@@ -4293,9 +5173,9 @@
             // _INIT_CALL_PY_EXACT_ARGS
             {
                 args = &window[2];
-                int has_self = !PyValue_IsNull(self_or_null);
+                int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
-                PyValue *window_base = args - 2;
+                _PyStackRef *window_base = args - 2;
                 _PyInterpreterFrame *pushed_frame;
                 if (frame->owner == FRAME_OWNED_BY_THREAD) {
                     pushed_frame = _PyFrame_PushOverlapping(
@@ -4303,17 +5183,17 @@
                 }
                 else {
                     pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                    PyValue *first_non_self_local = pushed_frame->base + has_self;
+                    _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
                     pushed_frame->base[0] = self_or_null;
                     for (int i = 0; i < oparg; i++) {
                         first_non_self_local[i] = args[i];
                     }
                     for (int i = 1; i < 2 + oparg; i++) {
-                        window_base[i] = PyValue_NULL;
+                        window_base[i] = PyStackRef_NULL;
                     }
                 }
-                window_base[0] = PyValue_NULL;
-                new_frame = _PyValue_Wrap(pushed_frame);
+                window_base[0] = PyStackRef_NULL;
+                new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -4322,7 +5202,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -4350,13 +5230,13 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue null;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef null;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -4370,12 +5250,12 @@
                 null = window[1];
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4392,7 +5272,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4401,16 +5281,18 @@
             // _EXPAND_METHOD
             {
                 self_or_null = null;
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
-                assert(PyValue_IsNull(self_or_null));
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                assert(PyStackRef_IsNull(self_or_null));
                 assert(Py_TYPE(callable_o) == &PyMethod_Type);
-                self_or_null = PyValue_FromObject(((PyMethodObject *)callable_o)->im_self);
-                callable = PyValue_FromObject(((PyMethodObject *)callable_o)->im_func);
-                assert(PyValue_Type(callable) == &PyFunction_Type);
+                self_or_null = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
+                assert(PyStackRef_FunctionCheck(callable));
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyStackRef_CLOSE(temp);
             }
             // flush
-            window[0] = callable;
-            window[1] = self_or_null;
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
@@ -4422,43 +5304,24 @@
             // _PY_FRAME_GENERAL
             {
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_BOUND_METHOD_GENERAL, _PY_BOX_CALL);
-                }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *callable_o = callable_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     args--;
                     total_args++;
                 }
                 assert(Py_TYPE(callable_o) == &PyFunction_Type);
                 int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                 PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, callable, locals,
                     args, total_args, NULL, frame
                 );
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                new_frame = _PyValue_Wrap(temp);
+                new_frame = PyStackRef_Wrap(temp);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -4467,7 +5330,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -4494,21 +5357,21 @@
             INSTRUCTION_STATS(CALL_BUILTIN_CLASS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef value;
             // _GUARD_CALLABLE_BUILTIN_CLASS
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyType_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4526,41 +5389,42 @@
                 args = &window[2];
                 self_or_null = window[1];
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
-                PyValue res_v = _Py_CallBuiltinClass_Values(
+                PyObject *res_o = _Py_CallBuiltinClass_StackRef(
                     callable,
                     arguments,
                     total_args);
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = res_v;
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectSteal(res_o);
+                window[0] = callable;
+                PyStackRef_CLOSE(temp);
             }
             // _POP_TOP_OPARG
             {
                 args = &window[2];
-                window[0] = callable;
-                _PyValue_ClearArray(args, oparg);
+                _PyStackRef_CloseStack(args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                PyStackRef_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -4578,21 +5442,21 @@
             INSTRUCTION_STATS(CALL_BUILTIN_FAST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef value;
             // _GUARD_CALLABLE_BUILTIN_FAST
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4610,42 +5474,43 @@
                 args = &window[2];
                 self_or_null = window[1];
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
-                PyValue res_v = _Py_BuiltinCallFast_Values(
+                PyObject *res_o = _Py_BuiltinCallFast_StackRef(
                     callable,
                     arguments,
                     total_args
                 );
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = res_v;
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectSteal(res_o);
+                window[0] = callable;
+                PyStackRef_CLOSE(temp);
             }
             // _POP_TOP_OPARG
             {
                 args = &window[2];
-                window[0] = callable;
-                _PyValue_ClearArray(args, oparg);
+                _PyStackRef_CloseStack(args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                PyStackRef_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -4663,21 +5528,21 @@
             INSTRUCTION_STATS(CALL_BUILTIN_FAST_WITH_KEYWORDS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef value;
             // _GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4695,38 +5560,39 @@
                 args = &window[2];
                 self_or_null = window[1];
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
                 STAT_INC(CALL, hit);
-                PyValue res_v = _Py_BuiltinCallFastWithKeywords_Values(callable, arguments, total_args);
-                if (PyValue_IsNull(res_v)) {
+                PyObject *res_o = _Py_BuiltinCallFastWithKeywords_StackRef(callable, arguments, total_args);
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = res_v;
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectSteal(res_o);
+                window[0] = callable;
+                PyStackRef_CLOSE(temp);
             }
             // _POP_TOP_OPARG
             {
                 args = &window[2];
-                window[0] = callable;
-                _PyValue_ClearArray(args, oparg);
+                _PyStackRef_CloseStack(args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                PyStackRef_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -4744,25 +5610,25 @@
             INSTRUCTION_STATS(CALL_BUILTIN_O);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue res;
-            PyValue c;
-            PyValue s;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
+            _PyStackRef c;
+            _PyStackRef s;
+            _PyStackRef value;
             // _GUARD_CALLABLE_BUILTIN_O
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyCFunction_CheckExact(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -4775,7 +5641,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     total_args++;
                 }
                 if (total_args != 1) {
@@ -4795,43 +5661,47 @@
             // _CALL_BUILTIN_O
             {
                 args = &window[2];
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
-                if (!PyValue_IsNull(self_or_null)) {
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                if (!PyStackRef_IsNull(self_or_null)) {
                     args--;
                 }
                 STAT_INC(CALL, hit);
-                PyCFunctionO cfunc =
-                _PyCFunctionO_CAST(PyCFunction_GET_FUNCTION(callable_o));
-                PyValue res_v = cfunc(PyCFunction_GET_SELF(callable_o), args[0]);
+                PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
+                if (_PyStackRef_BoxArray(args, 1) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                _PyStackRef arg = args[0];
+                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, PyCFunction_GET_SELF(callable_o), PyStackRef_AsPyObjectBorrow(arg));
                 _Py_LeaveRecursiveCallTstate(tstate);
-                assert(PyValue_IsNull(res_v) ^ (_PyErr_Occurred(tstate) == NULL));
-                if (PyValue_IsNull(res_v)) {
+                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 c = callable;
                 s = args[0];
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = s;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[2], oparg);
+                window[0] = res;
+                window[1] = c;
+                PyStackRef_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = c;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
-                window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -4847,23 +5717,24 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue func_st;
-            PyValue callargs;
-            PyValue null;
-            PyValue callargs_st;
-            PyValue kwargs_st;
-            PyValue result;
+            _PyStackRef func_st;
+            _PyStackRef func;
+            _PyStackRef callargs;
+            _PyStackRef null;
+            _PyStackRef callargs_st;
+            _PyStackRef kwargs_st;
+            _PyStackRef result;
             // _CHECK_IS_NOT_PY_CALLABLE_EX
             {
                 func_st = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
-                PyObject *func = PyValue_ObjectBorrow(func_st);
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
                 if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -4873,43 +5744,29 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                PyObject *callargs_object;
-                _PyValueRoot callargs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    callargs_object = _PyValue_BoxInline(callargs);
-                    if (callargs_object == NULL) {
+                func = func_st;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    callargs = PyStackRef_Box(callargs);
+                    if (PyStackRef_IsInline(callargs)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_EX_NON_PY_GENERAL, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_EX_NON_PY_GENERAL);
+                    window[2] = callargs;
                 }
-                else {
-                    callargs_object = PyValue_ObjectBorrow(callargs);
-                }
-                PyObject *callargs_o = callargs_object;
+                PyObject *callargs_o = PyStackRef_AsPyObjectBorrow(callargs);
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
-                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
+                    int err = _Py_Check_ArgsIterable(tstate, PyStackRef_AsPyObjectBorrow(func), callargs_o);
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    callargs = PyValue_FromObject(tuple_o);
+                    _PyStackRef temp = callargs;
+                    callargs = PyStackRef_FromPyObjectSteal(tuple_o);
+                    window[2] = callargs;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _CALL_FUNCTION_EX_NON_PY_GENERAL
@@ -4917,84 +5774,44 @@
                 kwargs_st = window[3];
                 callargs_st = callargs;
                 null = window[1];
-                PyObject *callargs_st_object;
-                _PyValueRoot callargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    callargs_st_object = _PyValue_BoxInline(callargs_st);
-                    if (callargs_st_object == NULL) {
+                func_st = func;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                    kwargs_st = PyStackRef_Box(kwargs_st);
+                    if (PyStackRef_IsInline(kwargs_st)) {
                         window[2] = callargs_st;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_EX_NON_PY_GENERAL, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_EX_NON_PY_GENERAL);
+                    window[3] = kwargs_st;
                 }
-                else {
-                    callargs_st_object = PyValue_ObjectBorrow(callargs_st);
-                }
-                PyObject *kwargs_st_object;
-                _PyValueRoot kwargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    kwargs_st_object = _PyValue_BoxInline(kwargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (kwargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_EX_NON_PY_GENERAL, _PY_BOX_CALL);
-                }
-                else {
-                    kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
-                }
-                PyObject *callargs = callargs_st_object;
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
+                PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
                 (void)null;
                 assert(PyTuple_CheckExact(callargs));
-                PyObject *kwargs = kwargs_st_object;
+                PyObject *kwargs = PyStackRef_AsPyObjectBorrow(kwargs_st);
                 assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                 window[2] = callargs_st;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                    callargs_st_root.object = callargs_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                    kwargs_st_root.object = kwargs_st_object;
-                }
-                PyValue result_v = _PyObject_CallValue(tstate, func_st, callargs,
-                    kwargs);
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                }
-                if (PyValue_IsNull(result_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
+                PyObject *result_o = PyObject_Call(func, callargs, kwargs);
+                window[3] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(kwargs_st);
+                window[2] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(callargs_st);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(func_st);
+                if (result_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                result = result_v;
+                result = PyStackRef_FromPyObjectSteal(result_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 window[0] = result;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[3] = PyValue_NULL;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -5010,14 +5827,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_PY);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callargs;
-            PyValue func_st;
-            PyValue callargs_st;
-            PyValue kwargs_st;
-            PyValue ex_frame;
-            PyValue new_frame;
+            _PyStackRef func;
+            _PyStackRef callargs;
+            _PyStackRef func_st;
+            _PyStackRef callargs_st;
+            _PyStackRef kwargs_st;
+            _PyStackRef ex_frame;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -5029,54 +5847,43 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                PyObject *callargs_object;
-                _PyValueRoot callargs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    callargs_object = _PyValue_BoxInline(callargs);
-                    if (callargs_object == NULL) {
+                func = window[0];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    func = PyStackRef_Box(func);
+                    if (PyStackRef_IsInline(func)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_EX_PY, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_EX_PY);
+                    window[0] = func;
                 }
-                else {
-                    callargs_object = PyValue_ObjectBorrow(callargs);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    callargs = PyStackRef_Box(callargs);
+                    if (PyStackRef_IsInline(callargs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_EX_PY);
+                    window[2] = callargs;
                 }
-                PyObject *callargs_o = callargs_object;
+                PyObject *callargs_o = PyStackRef_AsPyObjectBorrow(callargs);
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
-                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
+                    int err = _Py_Check_ArgsIterable(tstate, PyStackRef_AsPyObjectBorrow(func), callargs_o);
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    callargs = PyValue_FromObject(tuple_o);
+                    _PyStackRef temp = callargs;
+                    callargs = PyStackRef_FromPyObjectSteal(tuple_o);
+                    window[2] = callargs;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _CHECK_IS_PY_CALLABLE_EX
             {
-                func_st = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
-                PyObject *func = PyValue_ObjectBorrow(func_st);
+                func_st = func;
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
                 if (Py_TYPE(func) != &PyFunction_Type) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
@@ -5092,74 +5899,36 @@
             {
                 kwargs_st = window[3];
                 callargs_st = callargs;
-                PyObject *callargs_st_object;
-                _PyValueRoot callargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    callargs_st_object = _PyValue_BoxInline(callargs_st);
-                    if (callargs_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                    kwargs_st = PyStackRef_Box(kwargs_st);
+                    if (PyStackRef_IsInline(kwargs_st)) {
                         window[2] = callargs_st;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_EX_PY, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_EX_PY);
+                    window[3] = kwargs_st;
                 }
-                else {
-                    callargs_st_object = PyValue_ObjectBorrow(callargs_st);
-                }
-                PyObject *kwargs_st_object;
-                _PyValueRoot kwargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    kwargs_st_object = _PyValue_BoxInline(kwargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (kwargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_EX_PY, _PY_BOX_CALL);
-                }
-                else {
-                    kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
-                }
-                PyObject *func = PyValue_ObjectBorrow(func_st);
-                PyObject *callargs = callargs_st_object;
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
+                PyObject *callargs = _PyStackRef_AsPyObjectStealPointer(callargs_st);
                 assert(PyTuple_CheckExact(callargs));
                 assert(Py_TYPE(func) == &PyFunction_Type);
                 assert(((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall);
-                PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : kwargs_st_object;
+                PyObject *kwargs = PyStackRef_IsNull(kwargs_st) ? NULL : _PyStackRef_AsPyObjectStealPointer(kwargs_st);
                 assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                 Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
                 int code_flags = ((PyCodeObject *)PyFunction_GET_CODE(func))->co_flags;
                 PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(func));
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                    callargs_st_root.object = callargs_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                    kwargs_st_root.object = kwargs_st_object;
-                }
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
+                window[3] = PyStackRef_NULL;
                 _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit_Ex(
                     tstate, func_st, locals,
                     nargs, callargs, kwargs, frame);
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                }
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
-                window[3] = PyValue_NULL;
+                window[0] = PyStackRef_NULL;
                 if (new_frame == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                ex_frame = _PyValue_Wrap(new_frame);
+                ex_frame = PyStackRef_Wrap(new_frame);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -5169,7 +5938,7 @@
             {
                 new_frame = ex_frame;
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -5196,16 +5965,16 @@
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = CALL_FUNCTION_EX;
-            PyValue func;
-            PyValue callargs;
-            PyValue func_st;
-            PyValue null;
-            PyValue callargs_st;
-            PyValue kwargs_st;
-            PyValue result;
+            _PyStackRef func;
+            _PyStackRef callargs;
+            _PyStackRef func_st;
+            _PyStackRef null;
+            _PyStackRef callargs_st;
+            _PyStackRef kwargs_st;
+            _PyStackRef result;
             // _SPECIALIZE_CALL_FUNCTION_EX
             {
                 func = window[0];
@@ -5223,43 +5992,36 @@
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                PyObject *callargs_object;
-                _PyValueRoot callargs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    callargs_object = _PyValue_BoxInline(callargs);
-                    if (callargs_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    func = PyStackRef_Box(func);
+                    if (PyStackRef_IsInline(func)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_FUNCTION_EX, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_FUNCTION_EX);
+                    window[0] = func;
                 }
-                else {
-                    callargs_object = PyValue_ObjectBorrow(callargs);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    callargs = PyStackRef_Box(callargs);
+                    if (PyStackRef_IsInline(callargs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_FUNCTION_EX);
+                    window[2] = callargs;
                 }
-                PyObject *callargs_o = callargs_object;
+                PyObject *callargs_o = PyStackRef_AsPyObjectBorrow(callargs);
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
-                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
+                    int err = _Py_Check_ArgsIterable(tstate, PyStackRef_AsPyObjectBorrow(func), callargs_o);
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    callargs = PyValue_FromObject(tuple_o);
+                    _PyStackRef temp = callargs;
+                    callargs = PyStackRef_FromPyObjectSteal(tuple_o);
+                    window[2] = callargs;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _DO_CALL_FUNCTION_EX
@@ -5268,262 +6030,69 @@
                 callargs_st = callargs;
                 null = window[1];
                 func_st = func;
-                PyObject *func_st_object;
-                _PyValueRoot func_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                    func_st_object = _PyValue_BoxInline(func_st);
-                    if (func_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                    kwargs_st = PyStackRef_Box(kwargs_st);
+                    if (PyStackRef_IsInline(kwargs_st)) {
                         window[2] = callargs_st;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    func_st_object = PyValue_ObjectBorrow(func_st);
-                }
-                PyObject *callargs_st_object;
-                _PyValueRoot callargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    callargs_st_object = _PyValue_BoxInline(callargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (callargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    callargs_st_object = PyValue_ObjectBorrow(callargs_st);
-                }
-                PyObject *kwargs_st_object;
-                _PyValueRoot kwargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    kwargs_st_object = _PyValue_BoxInline(kwargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (kwargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
+                    BOX_STAT_INC(CALL_FUNCTION_EX);
+                    window[3] = kwargs_st;
                 }
                 (void)null;
-                if (PyValue_Type(func_st) == &PyFunction_Type) {
-                    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
-                }
-                PyValue result_v;
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
+                EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
+                PyObject *result_o;
                 assert(!_PyErr_Occurred(tstate));
                 if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
-                    PyObject *func = func_st_object;
-                    PyObject *callargs = callargs_st_object;
-                    PyObject *kwargs = kwargs_st_object;
+                    PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
+                    PyObject *kwargs = PyStackRef_AsPyObjectBorrow(kwargs_st);
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                     assert(PyTuple_CheckExact(callargs));
-                    window[2] = callargs_st;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    PyObject *arg0 = PyTuple_GET_SIZE(callargs) > 0 ?
+                    PyObject *arg = PyTuple_GET_SIZE(callargs) > 0 ?
                     PyTuple_GET_ITEM(callargs, 0) : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (arg0 == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    _PyValueRoot arg0_root;
-                    _PyThreadState_PushValueRoot(tstate, &arg0_root);
-                    arg0_root.object = arg0;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
+                    window[2] = callargs_st;
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, func, arg0_root.object);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                        frame, this_instr, func, arg);
                     if (err) {
-                        _PyThreadState_PopValueRoot(tstate, &arg0_root);
                         JUMP_TO_LABEL(error);
                     }
-                    _PyValueRoot result_root;
-                    _PyThreadState_PushValueRoot(tstate, &result_root);
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    result_root.value = _PyObject_CallValue(tstate, func_st,
-                        callargs, kwargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                    result_o = PyObject_Call(func, callargs, kwargs);
                     if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                        if (PyValue_IsNull(result_root.value)) {
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                                func_st_root.object = func_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                                callargs_st_root.object = callargs_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                                kwargs_st_root.object = kwargs_st_object;
-                            }
+                        if (result_o == NULL) {
                             _Py_call_instrumentation_exc2(
                                 tstate, PY_MONITORING_EVENT_C_RAISE,
-                                frame, this_instr, func, arg0_root.object);
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                            }
+                                frame, this_instr, func, arg);
                         }
                         else {
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                                func_st_root.object = func_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                                callargs_st_root.object = callargs_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                                kwargs_st_root.object = kwargs_st_object;
-                            }
                             int err = _Py_call_instrumentation_2args(
                                 tstate, PY_MONITORING_EVENT_C_RETURN,
-                                frame, this_instr, func, arg0_root.object);
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                            }
+                                frame, this_instr, func, arg);
                             if (err < 0) {
-                                result_root.value = PyValue_NULL;
+                                Py_CLEAR(result_o);
                             }
                         }
                     }
-                    result_v = result_root.value;
-                    _PyThreadState_PopValueRoot(tstate, &result_root);
-                    _PyThreadState_PopValueRoot(tstate, &arg0_root);
                 }
                 else {
-                    if (PyValue_Type(func_st) == &PyFunction_Type &&
+                    if (Py_TYPE(func) == &PyFunction_Type &&
                         !IS_PEP523_HOOKED(tstate) &&
-                        ((PyFunctionObject *)PyValue_ObjectBorrow(func_st))->vectorcall == _PyFunction_Vectorcall) {
-                        PyObject *func = func_st_object;
-                        PyObject *callargs = callargs_st_object;
+                        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                        PyObject *callargs = _PyStackRef_AsPyObjectStealPointer(callargs_st);
                         assert(PyTuple_CheckExact(callargs));
-                        PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : kwargs_st_object;
+                        PyObject *kwargs = PyStackRef_IsNull(kwargs_st) ? NULL : _PyStackRef_AsPyObjectStealPointer(kwargs_st);
                         assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                         Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
                         int code_flags = ((PyCodeObject *)PyFunction_GET_CODE(func))->co_flags;
                         PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(func));
-                        if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                            func_st_root.object = func_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                            callargs_st_root.object = callargs_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                            kwargs_st_root.object = kwargs_st_object;
-                        }
+                        window[2] = PyStackRef_NULL;
+                        window[3] = PyStackRef_NULL;
                         _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit_Ex(
                             tstate, func_st, locals,
                             nargs, callargs, kwargs, frame);
-                        if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                        }
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
-                        window[3] = PyValue_NULL;
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
                         if (new_frame == NULL) {
                             JUMP_TO_LABEL(error);
                         }
@@ -5531,57 +6100,33 @@
                         frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                         DISPATCH_INLINED(new_frame);
                     }
-                    PyObject *callargs = callargs_st_object;
+                    PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
                     assert(PyTuple_CheckExact(callargs));
-                    PyObject *kwargs = kwargs_st_object;
+                    PyObject *kwargs = PyStackRef_AsPyObjectBorrow(kwargs_st);
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                     window[2] = callargs_st;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    result_v = _PyObject_CallValue(tstate, func_st, callargs, kwargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                    result_o = PyObject_Call(func, callargs, kwargs);
                 }
-                if (PyValue_IsNull(result_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
+                window[3] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(kwargs_st);
+                window[2] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(callargs_st);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(func_st);
+                if (result_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                result = result_v;
+                result = PyStackRef_FromPyObjectSteal(result_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 window[0] = result;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[3] = PyValue_NULL;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -5599,25 +6144,39 @@
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _CALL_INTRINSIC_1
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_INTRINSIC_1);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
                 assert(oparg <= MAX_INTRINSIC_1);
-                res = _PyIntrinsics_CallUnaryValue(tstate, oparg, value);
-                if (PyValue_IsNull(res)) {
+                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, PyStackRef_AsPyObjectBorrow(value));
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -5635,84 +6194,66 @@
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue value2_st;
-            PyValue value1_st;
-            PyValue res;
-            PyValue vs1;
-            PyValue vs2;
-            PyValue value;
+            _PyStackRef value2_st;
+            _PyStackRef value1_st;
+            _PyStackRef res;
+            _PyStackRef vs1;
+            _PyStackRef vs2;
+            _PyStackRef value;
             // _CALL_INTRINSIC_2
             {
                 value1_st = IR_SLOT(IR_FIELD_C(this_instr));
                 value2_st = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *value2_st_object;
-                _PyValueRoot value2_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                    value2_st_object = _PyValue_BoxInline(value2_st);
-                    if (value2_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(value2_st))) {
+                    value2_st = PyStackRef_Box(value2_st);
+                    if (PyStackRef_IsInline(value2_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_INTRINSIC_2, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_INTRINSIC_2);
+                    IR_KEEP_BOX(value2_st, IR_FIELD_B(this_instr));
                 }
                 else {
-                    value2_st_object = PyValue_ObjectBorrow(value2_st);
+                    value2_st = IR_BORROW_KNOWN(value2_st, IR_FIELD_B(this_instr));
                 }
-                PyObject *value1_st_object;
-                _PyValueRoot value1_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(value1_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &value2_st_root);
-                        value2_st_root.object = value2_st_object;
-                    }
-                    value1_st_object = _PyValue_BoxInline(value1_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &value2_st_root);
-                    }
-                    if (value1_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(value1_st))) {
+                    value1_st = PyStackRef_Box(value1_st);
+                    if (PyStackRef_IsInline(value1_st)) {
+                        IR_DROP_BORROW(value2_st, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_INTRINSIC_2, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_INTRINSIC_2);
+                    IR_KEEP_BOX(value1_st, IR_FIELD_C(this_instr));
                 }
                 else {
-                    value1_st_object = PyValue_ObjectBorrow(value1_st);
+                    value1_st = IR_BORROW_KNOWN(value1_st, IR_FIELD_C(this_instr));
                 }
                 assert(oparg <= MAX_INTRINSIC_2);
-                PyObject *value1 = value1_st_object;
-                PyObject *value2 = value2_st_object;
-                if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &value2_st_root);
-                    value2_st_root.object = value2_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value1_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &value1_st_root);
-                    value1_st_root.object = value1_st_object;
-                }
+                PyObject *value1 = PyStackRef_AsPyObjectBorrow(value1_st);
+                PyObject *value2 = PyStackRef_AsPyObjectBorrow(value2_st);
                 PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-                if (Py_UNLIKELY(PyValue_IsInline(value1_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &value1_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &value2_st_root);
-                }
                 if (res_o == NULL) {
+                    IR_DROP_BORROW(value2_st, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value1_st, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 vs1 = value1_st;
                 vs2 = value2_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = vs2;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = vs1;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -5728,17 +6269,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_ISINSTANCE);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null;
-            PyValue callable;
-            PyValue instance;
-            PyValue cls;
-            PyValue res;
+            _PyStackRef null;
+            _PyStackRef callable;
+            _PyStackRef instance;
+            _PyStackRef cls;
+            _PyStackRef res;
             // _GUARD_THIRD_NULL
             {
                 null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5747,12 +6288,12 @@
             // _GUARD_CALLABLE_ISINSTANCE
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
                 if (callable_o != interp->callable_cache.isinstance) {
                     UPDATE_MISS_STATS(CALL);
@@ -5766,23 +6307,27 @@
                 instance = window[2];
                 STAT_INC(CALL, hit);
                 int retval;
-                if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
-                    retval = _PyEval_IsInstanceValue(instance, cls);
+                if (PyStackRef_IsInline(instance) || PyStackRef_IsInline(cls)) {
+                    retval = _PyEval_IsInstanceStackRef(instance, cls);
                 }
                 else {
-                    retval = PyObject_IsInstance(PyValue_ObjectBorrow(instance),
-                        PyValue_ObjectBorrow(cls));
+                    retval = PyObject_IsInstance(PyStackRef_AsPyObjectBorrow(instance),
+                        PyStackRef_AsPyObjectBorrow(cls));
                 }
                 if (retval < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 (void)null;
-                res = retval ? _PyValue_True : _PyValue_False;
-                assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
+                window[3] = PyStackRef_NULL;
+                PyStackRef_CLOSE(cls);
+                window[2] = PyStackRef_NULL;
+                PyStackRef_CLOSE(instance);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(callable);
+                res = retval ? PyStackRef_True : PyStackRef_False;
+                assert((!PyStackRef_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[3] = PyValue_NULL;
             window[0] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -5803,14 +6348,14 @@
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = CALL_KW;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue kwnames;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef res;
             // _SPECIALIZE_CALL_KW
             {
                 self_or_null = window[1];
@@ -5819,7 +6364,7 @@
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
-                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
@@ -5828,69 +6373,45 @@
             }
             // _MAYBE_EXPAND_METHOD_KW
             {
-                PyObject *callable_object;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_KW, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_KW);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                if (PyValue_Type(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                    PyObject *callable_o = callable_object;
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyValue_FromObject(self);
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    callable = PyValue_FromObject(method);
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _DO_CALL_KW
             {
                 kwnames = window[2 + oparg];
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyStackRef_Box(kwnames);
+                    if (PyStackRef_IsInline(kwnames)) {
                         window[0] = callable;
                         window[1] = self_or_null;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_KW, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_KW);
+                    window[2 + oparg] = kwnames;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *kwnames_object;
-                _PyValueRoot kwnames_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    kwnames_object = _PyValue_BoxInline(kwnames);
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (kwnames_object == NULL) {
-                        window[0] = callable;
-                        window[1] = self_or_null;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_KW, _PY_BOX_CALL);
-                }
-                else {
-                    kwnames_object = PyValue_ObjectBorrow(kwnames);
-                }
-                PyObject *callable_o = callable_object;
-                PyObject *kwnames_o = kwnames_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -5903,25 +6424,12 @@
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
                     window[0] = callable;
                     window[1] = self_or_null;
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                        kwnames_root.object = kwnames_object;
-                    }
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, positional_args, kwnames_o, frame
                     );
-                    if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                    _PyStackRef_CLOSE_POINTER(kwnames);
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -5931,15 +6439,7 @@
                 }
                 window[0] = callable;
                 window[1] = self_or_null;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                    kwnames_root.object = kwnames_object;
-                }
-                PyValue res_v = _Py_VectorCallInstrumentation_Values(
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
@@ -5948,17 +6448,11 @@
                     frame,
                     this_instr,
                     tstate);
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;
@@ -5980,14 +6474,14 @@
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue null;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue kwnames;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef null;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -6001,12 +6495,12 @@
                 null = window[1];
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -6023,7 +6517,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6032,86 +6526,53 @@
             // _EXPAND_METHOD_KW
             {
                 self_or_null = null;
-                assert(PyValue_IsNull(self_or_null));
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                assert(PyStackRef_IsNull(self_or_null));
+                _PyStackRef callable_s = callable;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 assert(Py_TYPE(callable_o) == &PyMethod_Type);
-                self_or_null = PyValue_FromObject(((PyMethodObject *)callable_o)->im_self);
-                callable = PyValue_FromObject(((PyMethodObject *)callable_o)->im_func);
-                assert(PyValue_Type(callable) == &PyFunction_Type);
+                self_or_null = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
+                callable = PyStackRef_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
+                assert(PyStackRef_FunctionCheck(callable));
+                window[0] = callable;
+                window[1] = self_or_null;
+                PyStackRef_CLOSE(callable_s);
             }
             // flush
-            window[0] = callable;
-            window[1] = self_or_null;
             // _PY_FRAME_KW
             {
                 kwnames = window[2 + oparg];
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyStackRef_Box(kwnames);
+                    if (PyStackRef_IsInline(kwnames)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_KW_BOUND_METHOD, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_KW_BOUND_METHOD);
+                    window[2 + oparg] = kwnames;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *kwnames_object;
-                _PyValueRoot kwnames_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    kwnames_object = _PyValue_BoxInline(kwnames);
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (kwnames_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_KW_BOUND_METHOD, _PY_BOX_CALL);
-                }
-                else {
-                    kwnames_object = PyValue_ObjectBorrow(kwnames);
-                }
-                PyObject *callable_o = callable_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                PyObject *kwnames_o = kwnames_object;
+                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
                 int positional_args = total_args - (int)PyTuple_GET_SIZE(kwnames_o);
                 assert(Py_TYPE(callable_o) == &PyFunction_Type);
                 int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                 PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                    kwnames_root.object = kwnames_object;
-                }
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, callable, locals,
                     arguments, positional_args, kwnames_o, frame
                 );
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                window[2 + oparg] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(kwnames);
+                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                new_frame = _PyValue_Wrap(temp);
+                new_frame = PyStackRef_Wrap(temp);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -6120,7 +6581,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -6147,23 +6608,23 @@
             INSTRUCTION_STATS(CALL_KW_NON_PY);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = CALL_KW_NON_PY;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue kwnames;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef res;
             // _CHECK_IS_NOT_PY_CALLABLE_KW
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -6182,32 +6643,31 @@
                 self_or_null = window[1];
                 assert(opcode != INSTRUMENTED_CALL);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                PyValue res_v = _Py_VectorCall_Values(
+                PyObject *res_o = _Py_VectorCall_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
                     kwnames);
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
+                IR_CLEAR_SLOTS(&window[1], 2 + oparg);
                 window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6226,13 +6686,13 @@
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue kwnames;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -6245,12 +6705,12 @@
             {
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
@@ -6276,46 +6736,37 @@
                 kwnames = window[2 + oparg];
                 args = &window[2];
                 self_or_null = window[1];
-                PyObject *kwnames_object;
-                _PyValueRoot kwnames_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    kwnames_object = _PyValue_BoxInline(kwnames);
-                    if (kwnames_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyStackRef_Box(kwnames);
+                    if (PyStackRef_IsInline(kwnames)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_KW_PY, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_KW_PY);
+                    window[2 + oparg] = kwnames;
                 }
-                else {
-                    kwnames_object = PyValue_ObjectBorrow(kwnames);
-                }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                PyObject *kwnames_o = kwnames_object;
+                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
                 int positional_args = total_args - (int)PyTuple_GET_SIZE(kwnames_o);
                 assert(Py_TYPE(callable_o) == &PyFunction_Type);
                 int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                 PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                    kwnames_root.object = kwnames_object;
-                }
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, callable, locals,
                     arguments, positional_args, kwnames_o, frame
                 );
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                }
-                IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                window[2 + oparg] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(kwnames);
+                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                 if (temp == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                new_frame = _PyValue_Wrap(temp);
+                new_frame = PyStackRef_Wrap(temp);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -6324,7 +6775,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -6349,19 +6800,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_LEN);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null;
-            PyValue callable;
-            PyValue arg;
-            PyValue res;
-            PyValue a;
-            PyValue c;
-            PyValue value;
+            _PyStackRef null;
+            _PyStackRef callable;
+            _PyStackRef arg;
+            _PyStackRef res;
+            _PyStackRef a;
+            _PyStackRef c;
+            _PyStackRef value;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6370,12 +6821,12 @@
             // _GUARD_CALLABLE_LEN
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
                 if (callable_o != interp->callable_cache.len) {
                     UPDATE_MISS_STATS(CALL);
@@ -6386,42 +6837,24 @@
             // _CALL_LEN
             {
                 arg = window[2];
-                PyObject *arg_object;
-                _PyValueRoot arg_root;
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    arg_object = _PyValue_BoxInline(arg);
-                    if (arg_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    arg = PyStackRef_Box(arg);
+                    if (PyStackRef_IsInline(arg)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_LEN, _PY_BOX_CALL);
-                }
-                else {
-                    arg_object = PyValue_ObjectBorrow(arg);
+                    BOX_STAT_INC(CALL_LEN);
+                    window[2] = arg;
                 }
                 STAT_INC(CALL, hit);
-                PyObject *arg_o = arg_object;
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PushValueRoot(tstate, &arg_root);
-                    arg_root.object = arg_object;
-                }
+                PyObject *arg_o = PyStackRef_AsPyObjectBorrow(arg);
                 Py_ssize_t len_i = PyObject_Length(arg_o);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PopValueRoot(tstate, &arg_root);
-                }
                 if (len_i < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PushValueRoot(tstate, &arg_root);
-                    arg_root.object = arg_object;
-                }
-                res = len_i <= INT32_MAX
-                ? PyValue_FromInt32((int32_t)len_i)
-            : _PyValue_BoxInt64(len_i);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PopValueRoot(tstate, &arg_root);
-                }
-                if (PyValue_IsNull(res)) {
+                res = len_i <= INT32_MAX && tstate->interp->opt_config.tagged_values_enabled
+                ? PyStackRef_FromInt32((int32_t)len_i)
+            : _PyStackRef_BoxInt64(len_i);
+                if (PyStackRef_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
@@ -6430,16 +6863,17 @@
             // _POP_TOP
             {
                 value = c;
-                (void)value;
+                window[2] = PyStackRef_NULL;
+                window[0] = res;
+                window[1] = a;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = a;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[0] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6457,25 +6891,25 @@
             INSTRUCTION_STATS(CALL_LIST_APPEND);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue nos;
-            PyValue self;
-            PyValue arg;
-            PyValue none;
-            PyValue c;
-            PyValue s;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef nos;
+            _PyStackRef self;
+            _PyStackRef arg;
+            _PyStackRef none;
+            _PyStackRef c;
+            _PyStackRef s;
+            _PyStackRef value;
             // _GUARD_CALLABLE_LIST_APPEND
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
                 if (callable_o != interp->callable_cache.list_append) {
                     UPDATE_MISS_STATS(CALL);
@@ -6486,7 +6920,7 @@
             // _GUARD_NOS_NOT_NULL
             {
                 nos = window[1];
-                if (PyValue_IsNull(nos)) {
+                if (PyStackRef_IsNull(nos)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6494,12 +6928,12 @@
             }
             // _GUARD_NOS_LIST
             {
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[1]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[1]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6510,39 +6944,56 @@
             {
                 arg = window[2];
                 self = nos;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    arg = PyStackRef_Box(arg);
+                    if (PyStackRef_IsInline(arg)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_LIST_APPEND);
+                    window[2] = arg;
+                }
                 assert(oparg == 1);
-                PyObject *self_o = PyValue_ObjectBorrow(self);
+                PyObject *self_o = PyStackRef_AsPyObjectBorrow(self);
                 if (!LOCK_OBJECT(self_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 STAT_INC(CALL, hit);
-                int err = _PyList_AppendValue((PyListObject *)self_o, arg);
+                int err = _PyList_AppendTakeRef((PyListObject *)self_o, _PyStackRef_AsPyObjectStealPointer(arg));
                 UNLOCK_OBJECT(self_o);
                 if (err) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
+                    _PyStackRef tmp = self;
+                    self = PyStackRef_NULL;
+                    window[1] = self;
+                    _PyStackRef_CLOSE_POINTER(tmp);
+                    tmp = callable;
+                    callable = PyStackRef_NULL;
+                    window[0] = callable;
+                    _PyStackRef_CLOSE_POINTER(tmp);
+                    window[0] = PyStackRef_NULL;
+                    window[1] = PyStackRef_NULL;
+                    window[2] = PyStackRef_NULL;
                     JUMP_TO_LABEL(error);
                 }
                 c = callable;
                 s = self;
-                none = _PyValue_None;
+                none = PyStackRef_None;
             }
             // _POP_TOP
             {
                 value = s;
-                (void)value;
+                window[2] = PyStackRef_NULL;
+                window[0] = none;
+                window[1] = c;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = c;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[0] = none;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6560,23 +7011,23 @@
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef value;
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST
             {
                 args = &window[2];
                 self_or_null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -6590,7 +7041,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     total_args++;
                 }
                 if (total_args == 0) {
@@ -6598,8 +7049,8 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
-                if (PyValue_Type(self) != method->d_common.d_type) {
+                _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+                if (PyStackRef_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6607,47 +7058,53 @@
             }
             // _CALL_METHOD_DESCRIPTOR_FAST
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                assert(!PyValue_IsNull(arguments[0]));
+                if (_PyStackRef_BoxArray(arguments, 1) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
+                assert(self != NULL);
                 STAT_INC(CALL, hit);
                 PyCFunctionFast cfunc = _PyCFunctionFast_CAST(method->d_method->ml_meth);
-                PyValue res_v = _PyCallMethodDescriptorFast_Values(
+                PyObject *res_o = _PyCallMethodDescriptorFast_StackRef(
                     callable,
                     cfunc,
+                    self,
                     arguments,
                     total_args
                 );
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = res_v;
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectSteal(res_o);
+                window[0] = callable;
+                PyStackRef_CLOSE(temp);
             }
             // _POP_TOP_OPARG
             {
-                window[0] = callable;
-                _PyValue_ClearArray(args, oparg);
+                _PyStackRef_CloseStack(args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                PyStackRef_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6665,23 +7122,23 @@
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef value;
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
                 args = &window[2];
                 self_or_null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -6695,8 +7152,8 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -6705,7 +7162,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if (PyValue_Type(arguments[0]) != method->d_common.d_type) {
+                if (PyStackRef_TYPE(arguments[0]) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6713,47 +7170,53 @@
             }
             // _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                assert(!PyValue_IsNull(arguments[0]));
+                if (_PyStackRef_BoxArray(arguments, 1) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
+                PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
+                assert(self != NULL);
                 STAT_INC(CALL, hit);
                 PyCFunctionFastWithKeywords cfunc = _PyCFunctionFastWithKeywords_CAST(method->d_method->ml_meth);
-                PyValue res_v = _PyCallMethodDescriptorFastWithKeywords_Values(
+                PyObject *res_o = _PyCallMethodDescriptorFastWithKeywords_StackRef(
                     callable,
                     cfunc,
+                    self,
                     arguments,
                     total_args
                 );
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                callable = res_v;
+                _PyStackRef temp = callable;
+                callable = PyStackRef_FromPyObjectSteal(res_o);
+                window[0] = callable;
+                PyStackRef_CLOSE(temp);
             }
             // _POP_TOP_OPARG
             {
-                window[0] = callable;
-                _PyValue_ClearArray(args, oparg);
+                _PyStackRef_CloseStack(args, oparg);
             }
             // _POP_TOP
             {
                 value = self_or_null;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                PyStackRef_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6771,26 +7234,26 @@
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue res;
-            PyValue c;
-            PyValue s;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
+            _PyStackRef c;
+            _PyStackRef s;
+            _PyStackRef value;
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS
             {
                 args = &window[2];
                 self_or_null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -6804,7 +7267,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     total_args++;
                 }
                 if (total_args != 1) {
@@ -6812,8 +7275,8 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
-                if (PyValue_Type(self) != method->d_common.d_type) {
+                _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+                if (PyStackRef_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6829,22 +7292,20 @@
             }
             // _CALL_METHOD_DESCRIPTOR_NOARGS
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                assert(oparg == 1 || !PyValue_IsNull(self_or_null));
-                if (!PyValue_IsNull(self_or_null)) {
+                assert(oparg == 1 || !PyStackRef_IsNull(self_or_null));
+                if (!PyStackRef_IsNull(self_or_null)) {
                     args--;
                 }
-                PyValue self_value = args[0];
-                _PyValueRoot self_root;
-                PyObject *self = _PyValue_ObjectRooted(tstate, self_value, &self_root, _PY_BOX_CALL);
-                if (self == NULL) {
+                if (_PyStackRef_BoxArray(args, 1) < 0) {
                     JUMP_TO_LABEL(error);
                 }
+                _PyStackRef self_stackref = args[0];
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_stackref);
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
                 PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
-                _PyValue_UnrootObject(tstate, self_value, &self_root);
                 _Py_LeaveRecursiveCallTstate(tstate);
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {
@@ -6852,28 +7313,29 @@
                 }
                 c = callable;
                 s = args[0];
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = s;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[2], oparg);
+                window[0] = res;
+                window[1] = c;
+                PyStackRef_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = c;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
-                window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -6891,27 +7353,27 @@
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue res;
-            PyValue c;
-            PyValue s;
-            PyValue a;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
+            _PyStackRef c;
+            _PyStackRef s;
+            _PyStackRef a;
+            _PyStackRef value;
             // _GUARD_CALLABLE_METHOD_DESCRIPTOR_O
             {
                 args = &window[2];
                 self_or_null = window[1];
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
                 if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
                     UPDATE_MISS_STATS(CALL);
@@ -6925,7 +7387,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     total_args++;
                 }
                 if (total_args != 2) {
@@ -6933,8 +7395,8 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue self = PyValue_IsNull(self_or_null) ? args[0] : self_or_null;
-                if (PyValue_Type(self) != method->d_common.d_type) {
+                _PyStackRef self = PyStackRef_IsNull(self_or_null) ? args[0] : self_or_null;
+                if (PyStackRef_TYPE(self) != method->d_common.d_type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6950,57 +7412,58 @@
             }
             // _CALL_METHOD_DESCRIPTOR_O
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                 }
                 STAT_INC(CALL, hit);
-                PyCFunctionO cfunc = _PyCFunctionO_CAST(method->d_method->ml_meth);
-                PyValue self_value = arguments[0];
-                _PyValueRoot self_root;
-                PyObject *self = _PyValue_ObjectRooted(tstate, self_value, &self_root, _PY_BOX_CALL);
-                if (self == NULL) {
+                PyCFunction cfunc = method->d_method->ml_meth;
+                if (_PyStackRef_BoxArray(arguments, 2) < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                PyValue res_v = cfunc(self, arguments[1]);
-                _PyValue_UnrootObject(tstate, self_value, &self_root);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(arguments[0]);
+                PyObject *arg = PyStackRef_AsPyObjectBorrow(arguments[1]);
+                PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
                 _Py_LeaveRecursiveCallTstate(tstate);
-                assert(PyValue_IsNull(res_v) ^ (_PyErr_Occurred(tstate) == NULL));
-                if (PyValue_IsNull(res_v)) {
+                assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 c = callable;
                 s = arguments[0];
                 a = arguments[1];
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = a;
-                (void)value;
+                IR_CLEAR_SLOTS(&window[3], -1 + oparg);
+                window[0] = res;
+                window[1] = c;
+                window[2] = s;
+                PyStackRef_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = s;
-                (void)value;
+                window[2] = PyStackRef_NULL;
+                PyStackRef_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = c;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
-                window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -7018,22 +7481,22 @@
             INSTRUCTION_STATS(CALL_NON_PY_GENERAL);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = CALL_NON_PY_GENERAL;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef res;
             // _CHECK_IS_NOT_PY_CALLABLE
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7051,32 +7514,31 @@
                 self_or_null = window[1];
                 assert(opcode != INSTRUMENTED_CALL);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
-                PyValue res_v = _Py_VectorCall_Values(
+                PyObject *res_o = _Py_VectorCall_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
-                    PyValue_NULL);
-                if (PyValue_IsNull(res_v)) {
+                    PyStackRef_NULL);
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                 window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -7095,12 +7557,12 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -7113,12 +7575,12 @@
             {
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7134,11 +7596,11 @@
             // _CHECK_FUNCTION_EXACT_ARGS
             {
                 self_or_null = window[1];
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 assert(PyFunction_Check(callable_o));
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + (!PyValue_IsNull(self_or_null))) {
+                if (code->co_argcount != oparg + (!PyStackRef_IsNull(self_or_null))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7146,7 +7608,7 @@
             }
             // _CHECK_STACK_SPACE
             {
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
@@ -7166,9 +7628,9 @@
             // _INIT_CALL_PY_EXACT_ARGS
             {
                 args = &window[2];
-                int has_self = !PyValue_IsNull(self_or_null);
+                int has_self = !PyStackRef_IsNull(self_or_null);
                 STAT_INC(CALL, hit);
-                PyValue *window_base = args - 2;
+                _PyStackRef *window_base = args - 2;
                 _PyInterpreterFrame *pushed_frame;
                 if (frame->owner == FRAME_OWNED_BY_THREAD) {
                     pushed_frame = _PyFrame_PushOverlapping(
@@ -7176,17 +7638,17 @@
                 }
                 else {
                     pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
-                    PyValue *first_non_self_local = pushed_frame->base + has_self;
+                    _PyStackRef *first_non_self_local = pushed_frame->base + has_self;
                     pushed_frame->base[0] = self_or_null;
                     for (int i = 0; i < oparg; i++) {
                         first_non_self_local[i] = args[i];
                     }
                     for (int i = 1; i < 2 + oparg; i++) {
-                        window_base[i] = PyValue_NULL;
+                        window_base[i] = PyStackRef_NULL;
                     }
                 }
-                window_base[0] = PyValue_NULL;
-                new_frame = _PyValue_Wrap(pushed_frame);
+                window_base[0] = PyStackRef_NULL;
+                new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -7195,7 +7657,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -7223,12 +7685,12 @@
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue new_frame;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -7241,12 +7703,12 @@
             {
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7271,9 +7733,9 @@
             {
                 args = &window[2];
                 self_or_null = window[1];
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                if (!PyValue_IsNull(self_or_null)) {
+                if (!PyStackRef_IsNull(self_or_null)) {
                     args--;
                     total_args++;
                 }
@@ -7288,7 +7750,7 @@
                 if (temp == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                new_frame = _PyValue_Wrap(temp);
+                new_frame = PyStackRef_Wrap(temp);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -7297,7 +7759,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -7324,18 +7786,18 @@
             INSTRUCTION_STATS(CALL_STR_1);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null;
-            PyValue callable;
-            PyValue arg;
-            PyValue res;
-            PyValue a;
-            PyValue value;
+            _PyStackRef null;
+            _PyStackRef callable;
+            _PyStackRef arg;
+            _PyStackRef res;
+            _PyStackRef a;
+            _PyStackRef value;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7344,12 +7806,12 @@
             // _GUARD_CALLABLE_STR_1
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyUnicode_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7359,32 +7821,39 @@
             // _CALL_STR_1
             {
                 arg = window[2];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    arg = PyStackRef_Box(arg);
+                    if (PyStackRef_IsInline(arg)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CALL_STR_1);
+                    window[2] = arg;
+                }
+                PyObject *arg_o = PyStackRef_AsPyObjectBorrow(arg);
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                PyValue res_v = PyObject_StrValue(arg);
-                if (PyValue_IsNull(res_v)) {
+                PyObject *res_o = PyObject_Str(arg_o);
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = a;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
+                window[0] = res;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
-                window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -7402,18 +7871,18 @@
             INSTRUCTION_STATS(CALL_TUPLE_1);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null;
-            PyValue callable;
-            PyValue arg;
-            PyValue res;
-            PyValue a;
-            PyValue value;
+            _PyStackRef null;
+            _PyStackRef callable;
+            _PyStackRef arg;
+            _PyStackRef res;
+            _PyStackRef a;
+            _PyStackRef value;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7422,12 +7891,12 @@
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyTuple_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7437,52 +7906,39 @@
             // _CALL_TUPLE_1
             {
                 arg = window[2];
-                PyObject *arg_object;
-                _PyValueRoot arg_root;
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    arg_object = _PyValue_BoxInline(arg);
-                    if (arg_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    arg = PyStackRef_Box(arg);
+                    if (PyStackRef_IsInline(arg)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(CALL_TUPLE_1, _PY_BOX_CALL);
+                    BOX_STAT_INC(CALL_TUPLE_1);
+                    window[2] = arg;
                 }
-                else {
-                    arg_object = PyValue_ObjectBorrow(arg);
-                }
-                PyObject *arg_o = arg_object;
+                PyObject *arg_o = PyStackRef_AsPyObjectBorrow(arg);
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PushValueRoot(tstate, &arg_root);
-                    arg_root.object = arg_object;
-                }
                 PyObject *res_o = PySequence_Tuple(arg_o);
-                if (Py_UNLIKELY(PyValue_IsInline(arg))) {
-                    _PyThreadState_PopValueRoot(tstate, &arg_root);
-                }
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
-                res = PyValue_FromObject(res_o);
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = a;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
+                window[0] = res;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
-                window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -7500,18 +7956,18 @@
             INSTRUCTION_STATS(CALL_TYPE_1);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null;
-            PyValue callable;
-            PyValue arg;
-            PyValue res;
-            PyValue a;
-            PyValue value;
+            _PyStackRef null;
+            _PyStackRef callable;
+            _PyStackRef arg;
+            _PyStackRef res;
+            _PyStackRef a;
+            _PyStackRef value;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
-                if (!PyValue_IsNull(null)) {
+                if (!PyStackRef_IsNull(null)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7520,12 +7976,12 @@
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_ObjectBorrow(callable);
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 if (callable_o != (PyObject *)&PyType_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7537,17 +7993,17 @@
                 arg = window[2];
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                res = PyValue_FromObject(PyValue_Type(arg));
+                res = PyStackRef_FromPyObjectNew(PyStackRef_TYPE(arg));
                 a = arg;
             }
             // _POP_TOP
             {
                 value = a;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
+                window[0] = res;
+                PyStackRef_XCLOSE(value);
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[0] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -7564,116 +8020,66 @@
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EG_MATCH);
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue exc_value_st;
-            PyValue match_type_st;
-            PyValue rest;
-            PyValue match;
+            _PyStackRef exc_value_st;
+            _PyStackRef match_type_st;
+            _PyStackRef rest;
+            _PyStackRef match;
             match_type_st = IR_SLOT(IR_FIELD_C(this_instr));
             exc_value_st = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *exc_value_st_object;
-            _PyValueRoot exc_value_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                exc_value_st_object = _PyValue_BoxInline(exc_value_st);
-                if (exc_value_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(exc_value_st))) {
+                exc_value_st = PyStackRef_Box(exc_value_st);
+                if (PyStackRef_IsInline(exc_value_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(CHECK_EG_MATCH, _PY_BOX_OTHER);
+                BOX_STAT_INC(CHECK_EG_MATCH);
+                IR_KEEP_BOX(exc_value_st, IR_FIELD_B(this_instr));
             }
             else {
-                exc_value_st_object = PyValue_ObjectBorrow(exc_value_st);
+                exc_value_st = IR_BORROW_KNOWN(exc_value_st, IR_FIELD_B(this_instr));
             }
-            PyObject *match_type_st_object;
-            _PyValueRoot match_type_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                    exc_value_st_root.object = exc_value_st_object;
-                }
-                match_type_st_object = _PyValue_BoxInline(match_type_st);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-                }
-                if (match_type_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(match_type_st))) {
+                match_type_st = PyStackRef_Box(match_type_st);
+                if (PyStackRef_IsInline(match_type_st)) {
+                    IR_DROP_BORROW(exc_value_st, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(CHECK_EG_MATCH, _PY_BOX_OTHER);
+                BOX_STAT_INC(CHECK_EG_MATCH);
+                IR_KEEP_BOX(match_type_st, IR_FIELD_C(this_instr));
             }
             else {
-                match_type_st_object = PyValue_ObjectBorrow(match_type_st);
+                match_type_st = IR_BORROW_KNOWN(match_type_st, IR_FIELD_C(this_instr));
             }
-            PyObject *exc_value = exc_value_st_object;
-            PyObject *match_type = match_type_st_object;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                exc_value_st_root.object = exc_value_st_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                _PyThreadState_PushValueRoot(tstate, &match_type_st_root);
-                match_type_st_root.object = match_type_st_object;
-            }
+            PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
+            PyObject *match_type = PyStackRef_AsPyObjectBorrow(match_type_st);
             int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                _PyThreadState_PopValueRoot(tstate, &match_type_st_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-            }
             if (err < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyStackRef_CLOSE_POINTER(match_type_st);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(exc_value_st);
                 JUMP_TO_LABEL(error);
             }
             PyObject *match_o = NULL;
             PyObject *rest_o = NULL;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                exc_value_st_root.object = exc_value_st_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                _PyThreadState_PushValueRoot(tstate, &match_type_st_root);
-                match_type_st_root.object = match_type_st_object;
-            }
             int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
                 &match_o, &rest_o);
-            if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                _PyThreadState_PopValueRoot(tstate, &match_type_st_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-            }
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(match_type_st);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(exc_value_st);
             if (res < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
             assert((match_o == NULL) == (rest_o == NULL));
             if (match_o == NULL) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (!Py_IsNone(match_o)) {
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                    exc_value_st_root.object = exc_value_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &match_type_st_root);
-                    match_type_st_root.object = match_type_st_object;
-                }
                 PyErr_SetHandledException(match_o);
-                if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &match_type_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-                }
             }
-            rest = PyValue_FromObject(rest_o);
-            match = PyValue_FromObject(match_o);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            rest = PyStackRef_FromPyObjectSteal(rest_o);
+            match = PyStackRef_FromPyObjectSteal(match_o);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), rest);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), match);
             DISPATCH();
         }
@@ -7689,80 +8095,42 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            PyValue left;
-            PyValue right;
-            PyValue b;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
             right = IR_SLOT(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *right_object;
-            _PyValueRoot right_root;
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                right_object = _PyValue_BoxInline(right);
-                if (right_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                right = PyStackRef_Box(right);
+                if (PyStackRef_IsInline(right)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(CHECK_EXC_MATCH, _PY_BOX_OTHER);
+                BOX_STAT_INC(CHECK_EXC_MATCH);
+                IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
             }
             else {
-                right_object = PyValue_ObjectBorrow(right);
+                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
             }
-            PyObject *left_object;
-            _PyValueRoot left_root;
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PushValueRoot(tstate, &right_root);
-                    right_root.object = right_object;
-                }
-                left_object = _PyValue_BoxInline(left);
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    _PyThreadState_PopValueRoot(tstate, &right_root);
-                }
-                if (left_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                left = PyStackRef_Box(left);
+                if (PyStackRef_IsInline(left)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(CHECK_EXC_MATCH, _PY_BOX_OTHER);
+                BOX_STAT_INC(CHECK_EXC_MATCH);
+                IR_SLOT(IR_FIELD_B(this_instr)) = left;
             }
-            else {
-                left_object = PyValue_ObjectBorrow(left);
-            }
-            PyObject *left_o = left_object;
-            PyObject *right_o = right_object;
+            PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+            PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
             assert(PyExceptionInstance_Check(left_o));
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                _PyThreadState_PushValueRoot(tstate, &right_root);
-                right_root.object = right_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                _PyThreadState_PushValueRoot(tstate, &left_root);
-                left_root.object = left_object;
-            }
             int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                _PyThreadState_PopValueRoot(tstate, &left_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                _PyThreadState_PopValueRoot(tstate, &right_root);
-            }
             if (err < 0) {
+                IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                _PyThreadState_PushValueRoot(tstate, &right_root);
-                right_root.object = right_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                _PyThreadState_PushValueRoot(tstate, &left_root);
-                left_root.object = left_object;
-            }
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                _PyThreadState_PopValueRoot(tstate, &left_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                _PyThreadState_PopValueRoot(tstate, &right_root);
-            }
-            b = res ? _PyValue_True : _PyValue_False;
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(right);
+            b = res ? PyStackRef_True : PyStackRef_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -7778,72 +8146,64 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue sub_iter;
-            PyValue null_in;
-            PyValue last_sent_val;
-            PyValue exc_value_st;
-            PyValue none;
-            PyValue null_out;
-            PyValue value;
+            _PyStackRef sub_iter;
+            _PyStackRef null_in;
+            _PyStackRef last_sent_val;
+            _PyStackRef exc_value_st;
+            _PyStackRef none;
+            _PyStackRef null_out;
+            _PyStackRef value;
             exc_value_st = window[3];
             last_sent_val = window[2];
             null_in = window[1];
             sub_iter = window[0];
-            PyObject *exc_value_st_object;
-            _PyValueRoot exc_value_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                exc_value_st_object = _PyValue_BoxInline(exc_value_st);
-                if (exc_value_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                exc_value_st = PyStackRef_Box(exc_value_st);
+                if (PyStackRef_IsInline(exc_value_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(CLEANUP_THROW, _PY_BOX_OTHER);
+                BOX_STAT_INC(CLEANUP_THROW);
+                window[3] = exc_value_st;
             }
-            else {
-                exc_value_st_object = PyValue_ObjectBorrow(exc_value_st);
-            }
-            (void)sub_iter;
-            (void)last_sent_val;
-            PyObject *exc_value = exc_value_st_object;
+            PyObject *exc_value = PyStackRef_AsPyObjectBorrow(exc_value_st);
             #if !_Py_TAIL_CALL_INTERP
             assert(throwflag);
             #endif
             assert(exc_value && PyExceptionInstance_Check(exc_value));
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                exc_value_st_root.object = exc_value_st_object;
-            }
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-            }
             if (matches) {
-                value = PyValue_FromObject(((PyStopIterationObject *)exc_value)->value);
+                value = PyStackRef_FromPyObjectNew(((PyStopIterationObject *)exc_value)->value);
+                _PyStackRef tmp = sub_iter;
+                sub_iter = value;
+                window[0] = sub_iter;
+                PyStackRef_CLOSE(tmp);
+                tmp = exc_value_st;
+                exc_value_st = PyStackRef_NULL;
+                window[3] = exc_value_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = last_sent_val;
+                last_sent_val = PyStackRef_NULL;
+                window[2] = last_sent_val;
+                PyStackRef_CLOSE(tmp);
+                tmp = null_in;
+                null_in = PyStackRef_NULL;
+                window[1] = null_in;
+                PyStackRef_XCLOSE(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
+                window[3] = PyStackRef_NULL;
                 null_out = null_in;
-                none = _PyValue_None;
+                none = PyStackRef_None;
             }
             else {
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                    exc_value_st_root.object = exc_value_st_object;
-                }
                 _PyErr_SetRaisedException(tstate, Py_NewRef(exc_value));
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_value_st_root);
-                    exc_value_st_root.object = exc_value_st_object;
-                }
                 monitor_reraise(tstate, frame, this_instr);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_value_st_root);
-                }
                 JUMP_TO_LABEL(exception_unwind);
             }
-            window[3] = PyValue_NULL;
             window[0] = none;
             window[1] = null_out;
             window[2] = value;
@@ -7865,9 +8225,9 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue res;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
             // _SPECIALIZE_COMPARE_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -7885,28 +8245,52 @@
             }
             // _COMPARE_OP
             {
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(COMPARE_OP);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(COMPARE_OP);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
-                PyValue cmp = PyObject_RichCompareValue(left, right, oparg >> 5);
-                if (PyValue_IsNull(cmp)) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyStackRef_CLOSE_POINTER(right);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(left);
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 if (oparg & 16) {
-                    int res_bool = PyObject_IsTrueValue(cmp);
+                    int res_bool = PyObject_IsTrue(res_o);
+                    Py_DECREF(res_o);
                     if (res_bool < 0) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                        IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                         JUMP_TO_LABEL(error);
                     }
-                    res = res_bool ? _PyValue_True : _PyValue_False;
+                    res = res_bool ? PyStackRef_True : PyStackRef_False;
                 }
                 else {
-                    res = cmp;
+                    res = PyStackRef_FromPyObjectSteal(res_o);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -7925,16 +8309,17 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_FLOAT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_FloatCheckExact(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_FloatCheckExact(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -7942,8 +8327,10 @@
             }
             // _GUARD_NOS_FLOAT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_FloatCheckExact(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_FloatCheckExact(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -7953,25 +8340,27 @@
             {
                 right = value;
                 STAT_INC(COMPARE_OP, hit);
-                double dleft = _PyValue_NumberAsDouble(left);
-                double dright = _PyValue_NumberAsDouble(right);
+                double dleft = PyStackRef_FloatValue(left);
+                double dright = PyStackRef_FloatValue(right);
                 int sign_ish = COMPARISON_BIT(dleft, dright);
                 l = left;
                 r = right;
-                res = (sign_ish & oparg) ? _PyValue_True : _PyValue_False;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                res = (sign_ish & oparg) ? PyStackRef_True : PyStackRef_False;
             }
-            // _POP_TOP
+            // _POP_TOP_FLOAT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_FLOAT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_FloatCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -7990,16 +8379,17 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8007,8 +8397,10 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(left)) {
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(left)) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8018,25 +8410,27 @@
             {
                 right = value;
                 STAT_INC(COMPARE_OP, hit);
-                int32_t ileft = _PyValue_CompactInt(left);
-                int32_t iright = _PyValue_CompactInt(right);
+                int32_t ileft = PyStackRef_CompactIntValue(left);
+                int32_t iright = PyStackRef_CompactIntValue(right);
                 int sign_ish = COMPARISON_BIT(ileft, iright);
                 l = left;
                 r = right;
-                res =  (sign_ish & oparg) ? _PyValue_True : _PyValue_False;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                res =  (sign_ish & oparg) ? PyStackRef_True : PyStackRef_False;
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = r;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = l;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -8051,13 +8445,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(COMPARE_OP_NOFB);
+            INSTRUCTION_STATS(COMPARE_OP);
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue res;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
             // _SPECIALIZE_COMPARE_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -8075,28 +8469,52 @@
             }
             // _COMPARE_OP
             {
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(COMPARE_OP);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(COMPARE_OP);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
-                PyValue cmp = PyObject_RichCompareValue(left, right, oparg >> 5);
-                if (PyValue_IsNull(cmp)) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyStackRef_CLOSE_POINTER(right);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(left);
+                if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 if (oparg & 16) {
-                    int res_bool = PyObject_IsTrueValue(cmp);
+                    int res_bool = PyObject_IsTrue(res_o);
+                    Py_DECREF(res_o);
                     if (res_bool < 0) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                        IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                         JUMP_TO_LABEL(error);
                     }
-                    res = res_bool ? _PyValue_True : _PyValue_False;
+                    res = res_bool ? PyStackRef_True : PyStackRef_False;
                 }
                 else {
-                    res = cmp;
+                    res = PyStackRef_FromPyObjectSteal(res_o);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -8115,23 +8533,25 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            PyValue l;
-            PyValue r;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef res;
+            _PyStackRef l;
+            _PyStackRef r;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8140,13 +8560,17 @@
             // _GUARD_NOS_UNICODE
             {
                 nos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_B(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyUnicode_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8156,30 +8580,32 @@
             {
                 right = value;
                 left = nos;
-                PyObject *left_o = PyValue_ObjectBorrow(left);
-                PyObject *right_o = PyValue_ObjectBorrow(right);
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 STAT_INC(COMPARE_OP, hit);
                 int eq = _PyUnicode_Equal(left_o, right_o);
                 assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 assert(eq == 0 || eq == 1);
                 assert((oparg & 0xf) == COMPARISON_NOT_EQUALS || (oparg & 0xf) == COMPARISON_EQUALS);
                 assert(COMPARISON_NOT_EQUALS + 1 == COMPARISON_EQUALS);
-                res = ((COMPARISON_NOT_EQUALS + eq) & oparg) ? _PyValue_True : _PyValue_False;
+                res = ((COMPARISON_NOT_EQUALS + eq) & oparg) ? PyStackRef_True : PyStackRef_False;
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = r;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = l;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -8199,12 +8625,12 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_CONTAINS_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -8222,26 +8648,55 @@
             }
             // _CONTAINS_OP
             {
-                int res = PySequence_ContainsValue(right, left);
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                b = (res ^ oparg) ? _PyValue_True : _PyValue_False;
+                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -8260,23 +8715,25 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue tos;
-            PyValue left;
-            PyValue right;
-            PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef tos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _GUARD_TOS_ANY_DICT
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnyDict_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -8286,29 +8743,46 @@
             {
                 right = tos;
                 left = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *right_o = PyValue_ObjectBorrow(right);
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP_DICT);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res = _PyDict_ContainsValue(right_o, left);
+                int res = PyDict_Contains(right_o, left_o);
                 if (res < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                b = (res ^ oparg) ? _PyValue_True : _PyValue_False;
+                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -8323,16 +8797,16 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(CONTAINS_OP_NOFB);
+            INSTRUCTION_STATS(CONTAINS_OP);
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _SPECIALIZE_CONTAINS_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -8350,26 +8824,55 @@
             }
             // _CONTAINS_OP
             {
-                int res = PySequence_ContainsValue(right, left);
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
+                    right = PyStackRef_Box(right);
+                    if (PyStackRef_IsInline(right)) {
+                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP);
+                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                }
+                else {
+                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                b = (res ^ oparg) ? _PyValue_True : _PyValue_False;
+                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -8388,23 +8891,25 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue tos;
-            PyValue left;
-            PyValue right;
-            PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef tos;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _GUARD_TOS_ANY_SET
             {
                 tos = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_C(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyAnySet_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_C(this_instr));
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
                     JUMP_TO_PREDICTED(CONTAINS_OP);
@@ -8414,29 +8919,46 @@
             {
                 right = tos;
                 left = IR_SLOT(IR_FIELD_B(this_instr));
-                PyObject *right_o = PyValue_ObjectBorrow(right);
+                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
+                    left = PyStackRef_Box(left);
+                    if (PyStackRef_IsInline(left)) {
+                        IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(CONTAINS_OP_SET);
+                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                }
+                else {
+                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
+                }
+                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
+                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res = _PySet_ContainsValue((PySetObject *)right_o, left);
+                int res = _PySet_Contains((PySetObject *)right_o, left_o);
                 if (res < 0) {
+                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                b = (res ^ oparg) ? _PyValue_True : _PyValue_False;
+                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -8454,18 +8976,30 @@
             INSTRUCTION_STATS(CONVERT_VALUE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue result;
+            _PyStackRef value;
+            _PyStackRef result;
             value = IR_SLOT(IR_FIELD_B(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(CONVERT_VALUE);
+                IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+            }
+            else {
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+            }
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
-            result = conv_fn(value);
-            if (PyValue_IsNull(result)) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyObject *result_o = conv_fn(PyStackRef_AsPyObjectBorrow(value));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(value);
+            if (result_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            result = PyStackRef_FromPyObjectSteal(result_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), result);
             DISPATCH();
         }
@@ -8483,12 +9017,12 @@
             INSTRUCTION_STATS(COPY);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue bottom;
-            PyValue top;
+            _PyStackRef bottom;
+            _PyStackRef top;
             bottom = window[0];
-            top = bottom;
+            top = PyStackRef_DUP(bottom);
             window[1 + (oparg-1)] = top;
             DISPATCH();
         }
@@ -8507,13 +9041,14 @@
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             PyCodeObject *co = _PyFrame_GetCode(frame);
-            assert(PyValue_Type(frame->f_funcobj) == &PyFunction_Type);
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_ObjectBorrow(frame->f_funcobj);
+            assert(PyStackRef_FunctionCheck(frame->f_funcobj));
+            PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
             PyObject *closure = func->func_closure;
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyTuple_GET_VALUE(closure, i);
+                PyObject *o = PyTuple_GET_ITEM(closure, i);
+                frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
             }
             DISPATCH();
         }
@@ -8531,12 +9066,13 @@
             INSTRUCTION_STATS(DELETE_DEREF);
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
-            PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
-            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
-            if (PyValue_IsNull(old)) {
+            PyObject *cell = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyObject *oldobj = PyCell_SwapTakeRef((PyCellObject *)cell, NULL);
+            if (oldobj == NULL) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 JUMP_TO_LABEL(error);
             }
+            Py_DECREF(oldobj);
             DISPATCH();
         }
 
@@ -8553,15 +9089,17 @@
             INSTRUCTION_STATS(DELETE_FAST);
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
-            PyValue v = GETLOCAL(oparg);
-            if (PyValue_IsNull(v)) {
+            _PyStackRef v = GETLOCAL(oparg);
+            if (PyStackRef_IsNull(v)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
                     PyTuple_GetItem(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
                 );
                 JUMP_TO_LABEL(error);
             }
-            GETLOCAL(oparg) = PyValue_NULL;
+            _PyStackRef tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyStackRef_NULL;
+            PyStackRef_XCLOSE(tmp);
             DISPATCH();
         }
 
@@ -8576,18 +9114,42 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_SUBSCR);
-            PyValue container;
-            PyValue sub;
+            _PyStackRef container;
+            _PyStackRef sub;
             sub = IR_SLOT(IR_FIELD_B(this_instr));
             container = IR_SLOT(IR_FIELD_A(this_instr));
-            int err = PyObject_DelItemValue(container, sub);
+            if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+                container = PyStackRef_Box(container);
+                if (PyStackRef_IsInline(container)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(DELETE_SUBSCR);
+                IR_KEEP_BOX(container, IR_FIELD_A(this_instr));
+            }
+            else {
+                container = IR_BORROW_KNOWN(container, IR_FIELD_A(this_instr));
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
+                sub = PyStackRef_Box(sub);
+                if (PyStackRef_IsInline(sub)) {
+                    IR_DROP_BORROW(container, IR_FIELD_A(this_instr));
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(DELETE_SUBSCR);
+                IR_KEEP_BOX(sub, IR_FIELD_B(this_instr));
+            }
+            else {
+                sub = IR_BORROW_KNOWN(sub, IR_FIELD_B(this_instr));
+            }
+            int err = PyObject_DelItem(PyStackRef_AsPyObjectBorrow(container),
+                                       PyStackRef_AsPyObjectBorrow(sub));
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(sub);
+            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            _PyStackRef_CLOSE_POINTER(container);
             if (err) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             DISPATCH();
         }
 
@@ -8604,85 +9166,49 @@
             INSTRUCTION_STATS(DICT_MERGE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue callable;
-            PyValue dict;
-            PyValue update;
-            PyValue u;
-            PyValue value;
+            _PyStackRef callable;
+            _PyStackRef dict;
+            _PyStackRef update;
+            _PyStackRef u;
+            _PyStackRef value;
             // _DICT_MERGE
             {
                 update = window[4 + (oparg - 1)];
                 dict = window[3];
                 callable = window[0];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(DICT_MERGE, _PY_BOX_CONTAINER_STORE);
+                    BOX_STAT_INC(DICT_MERGE);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *update_object;
-                _PyValueRoot update_root;
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    update_object = _PyValue_BoxInline(update);
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (update_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                    dict = PyStackRef_Box(dict);
+                    if (PyStackRef_IsInline(dict)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(DICT_MERGE, _PY_BOX_CONTAINER_STORE);
+                    BOX_STAT_INC(DICT_MERGE);
+                    window[3] = dict;
                 }
-                else {
-                    update_object = PyValue_ObjectBorrow(update);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[4 + (oparg - 1)]))) {
+                    update = PyStackRef_Box(update);
+                    if (PyStackRef_IsInline(update)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(DICT_MERGE);
+                    window[4 + (oparg - 1)] = update;
                 }
-                assert(PyValue_IsObject(dict));
-                PyObject *callable_o = callable_object;
-                PyObject *dict_o = PyValue_ObjectBorrow(dict);
-                PyObject *update_o = update_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                PyObject *dict_o = PyStackRef_AsPyObjectBorrow(dict);
+                PyObject *update_o = PyStackRef_AsPyObjectBorrow(update);
                 PyObject *dupkey = NULL;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    _PyThreadState_PushValueRoot(tstate, &update_root);
-                    update_root.object = update_object;
-                }
                 int err = _PyDict_MergeUniq(dict_o, update_o, &dupkey);
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    _PyThreadState_PopValueRoot(tstate, &update_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
                 if (err < 0) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                        _PyThreadState_PushValueRoot(tstate, &update_root);
-                        update_root.object = update_object;
-                    }
                     _PyEval_FormatKwargsError(tstate, callable_o, update_o, dupkey);
-                    if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                        _PyThreadState_PopValueRoot(tstate, &update_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
                     Py_XDECREF(dupkey);
                     JUMP_TO_LABEL(error);
                 }
@@ -8691,9 +9217,9 @@
             // _POP_TOP
             {
                 value = u;
-                (void)value;
+                window[4 + (oparg - 1)] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[4 + (oparg - 1)] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -8710,82 +9236,48 @@
             INSTRUCTION_STATS(DICT_UPDATE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue dict;
-            PyValue update;
-            PyValue upd;
-            PyValue value;
+            _PyStackRef dict;
+            _PyStackRef update;
+            _PyStackRef upd;
+            _PyStackRef value;
             // _DICT_UPDATE
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
-                PyObject *update_object;
-                _PyValueRoot update_root;
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    update_object = _PyValue_BoxInline(update);
-                    if (update_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    dict = PyStackRef_Box(dict);
+                    if (PyStackRef_IsInline(dict)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(DICT_UPDATE, _PY_BOX_CONTAINER_STORE);
+                    BOX_STAT_INC(DICT_UPDATE);
+                    window[0] = dict;
                 }
-                else {
-                    update_object = PyValue_ObjectBorrow(update);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg - 1)]))) {
+                    update = PyStackRef_Box(update);
+                    if (PyStackRef_IsInline(update)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(DICT_UPDATE);
+                    window[1 + (oparg - 1)] = update;
                 }
-                assert(PyValue_IsObject(dict));
-                PyObject *dict_o = PyValue_ObjectBorrow(dict);
-                PyObject *update_o = update_object;
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    _PyThreadState_PushValueRoot(tstate, &update_root);
-                    update_root.object = update_object;
-                }
+                PyObject *dict_o = PyStackRef_AsPyObjectBorrow(dict);
+                PyObject *update_o = PyStackRef_AsPyObjectBorrow(update);
                 int err = PyDict_Update(dict_o, update_o);
-                if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                    _PyThreadState_PopValueRoot(tstate, &update_root);
-                }
                 if (err < 0) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
                     if (matches) {
-                        _PyValueRoot exc;
-                        _PyThreadState_PushValueRoot(tstate, &exc);
-                        if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                            _PyThreadState_PushValueRoot(tstate, &update_root);
-                            update_root.object = update_object;
-                        }
-                        exc.value = PyValue_FromObject(_PyErr_GetRaisedException(tstate));
-                        if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                            _PyThreadState_PopValueRoot(tstate, &update_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                            _PyThreadState_PushValueRoot(tstate, &update_root);
-                            update_root.object = update_object;
-                        }
+                        PyObject *exc = _PyErr_GetRaisedException(tstate);
                         int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
-                        if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                            _PyThreadState_PopValueRoot(tstate, &update_root);
-                        }
-                        PyValue exc_ref = _PyThreadState_PopValueRoot(tstate, &exc);
                         if (has_keys == 0) {
-                            if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                                _PyThreadState_PushValueRoot(tstate, &update_root);
-                                update_root.object = update_object;
-                            }
                             _PyErr_Format(tstate, PyExc_TypeError,
                                       "'%T' object is not a mapping",
                                       update_o);
-                            if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                                _PyThreadState_PopValueRoot(tstate, &update_root);
-                            }
+                            Py_DECREF(exc);
                         }
                         else {
-                            if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                                _PyThreadState_PushValueRoot(tstate, &update_root);
-                                update_root.object = update_object;
-                            }
-                            _PyErr_ChainExceptions1(PyValue_ObjectBorrow(exc_ref));
-                            if (Py_UNLIKELY(PyValue_IsInline(update))) {
-                                _PyThreadState_PopValueRoot(tstate, &update_root);
-                            }
+                            _PyErr_ChainExceptions1(exc);
                         }
                     }
                     JUMP_TO_LABEL(error);
@@ -8795,9 +9287,9 @@
             // _POP_TOP
             {
                 value = upd;
-                (void)value;
+                window[1 + (oparg - 1)] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1 + (oparg - 1)] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -8814,61 +9306,43 @@
             INSTRUCTION_STATS(END_ASYNC_FOR);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue awaitable_st;
-            PyValue exc_st;
+            _PyStackRef awaitable_st;
+            _PyStackRef exc_st;
             exc_st = window[1];
             awaitable_st = window[0];
-            PyObject *exc_st_object;
-            _PyValueRoot exc_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                exc_st_object = _PyValue_BoxInline(exc_st);
-                if (exc_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                exc_st = PyStackRef_Box(exc_st);
+                if (PyStackRef_IsInline(exc_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(END_ASYNC_FOR, _PY_BOX_OTHER);
-            }
-            else {
-                exc_st_object = PyValue_ObjectBorrow(exc_st);
+                BOX_STAT_INC(END_ASYNC_FOR);
+                window[1] = exc_st;
             }
             JUMPBY(0);
             (void)oparg;
-            (void)awaitable_st;
-            PyObject *exc = exc_st_object;
+            PyObject *exc = PyStackRef_AsPyObjectBorrow(exc_st);
             assert(exc && PyExceptionInstance_Check(exc));
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                exc_st_root.object = exc_st_object;
-            }
             int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-            }
             if (matches) {
+                _PyStackRef tmp = exc_st;
+                exc_st = PyStackRef_NULL;
+                window[1] = exc_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = awaitable_st;
+                awaitable_st = PyStackRef_NULL;
+                window[0] = awaitable_st;
+                PyStackRef_CLOSE(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
             }
             else {
                 Py_INCREF(exc);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                    exc_st_root.object = exc_st_object;
-                }
                 _PyErr_SetRaisedException(tstate, exc);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                    exc_st_root.object = exc_st_object;
-                }
                 monitor_reraise(tstate, frame, this_instr);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-                }
                 JUMP_TO_LABEL(exception_unwind);
             }
-            window[0] = PyValue_NULL;
-            window[1] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -8882,10 +9356,10 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
-            PyValue value;
-            value = IR_SLOT(IR_FIELD_C(this_instr));
-            (void)value;
+            _PyStackRef value;
+            value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            PyStackRef_CLOSE(value);
             DISPATCH();
         }
 
@@ -8900,20 +9374,20 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
-            PyValue receiver;
-            PyValue index_or_null;
-            PyValue value;
-            PyValue val;
-            value = IR_SLOT(IR_FIELD_D(this_instr));
-            index_or_null = IR_SLOT(IR_FIELD_C(this_instr));
-            receiver = IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef receiver;
+            _PyStackRef index_or_null;
+            _PyStackRef value;
+            _PyStackRef val;
+            value = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
+            index_or_null = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+            receiver = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             val = value;
-            (void)receiver;
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), val);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
+            PyStackRef_CLOSE(receiver);
             DISPATCH();
         }
 
@@ -8928,31 +9402,24 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
-            PyValue should_be_none;
+            _PyStackRef should_be_none;
             should_be_none = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *should_be_none_object;
-            _PyValueRoot should_be_none_root;
-            if (Py_UNLIKELY(PyValue_IsInline(should_be_none))) {
-                should_be_none_object = _PyValue_BoxInline(should_be_none);
-                if (should_be_none_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(should_be_none))) {
+                should_be_none = PyStackRef_Box(should_be_none);
+                if (PyStackRef_IsInline(should_be_none)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(EXIT_INIT_CHECK, _PY_BOX_OTHER);
+                BOX_STAT_INC(EXIT_INIT_CHECK);
+                IR_KEEP_BOX(should_be_none, IR_FIELD_A(this_instr));
             }
             else {
-                should_be_none_object = PyValue_ObjectBorrow(should_be_none);
+                should_be_none = IR_BORROW_KNOWN(should_be_none, IR_FIELD_A(this_instr));
             }
-            if (!_PyValue_IsNone(should_be_none)) {
-                if (Py_UNLIKELY(PyValue_IsInline(should_be_none))) {
-                    _PyThreadState_PushValueRoot(tstate, &should_be_none_root);
-                    should_be_none_root.object = should_be_none_object;
-                }
+            if (!PyStackRef_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                              "__init__() should return None, not '%.200s'",
-                             Py_TYPE(should_be_none_object)->tp_name);
-                if (Py_UNLIKELY(PyValue_IsInline(should_be_none))) {
-                    _PyThreadState_PopValueRoot(tstate, &should_be_none_root);
-                }
+                             Py_TYPE(PyStackRef_AsPyObjectBorrow(should_be_none))->tp_name);
+                IR_DROP_BORROW(should_be_none, IR_FIELD_A(this_instr));
                 JUMP_TO_LABEL(error);
             }
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -8991,21 +9458,35 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
-            PyValue value;
-            PyValue res;
+            _PyStackRef value;
+            _PyStackRef res;
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            if (PyValue_Type(value) == &PyUnicode_Type) {
-                res = value;
-            }
-            else {
-                res = PyObject_FormatValue(value, NULL);
-                if (PyValue_IsNull(res)) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
                     JUMP_TO_LABEL(error);
                 }
+                BOX_STAT_INC(FORMAT_SIMPLE);
+                IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            else {
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+            }
+            PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+            if (!PyUnicode_CheckExact(value_o)) {
+                PyObject *res_o = PyObject_Format(value_o, NULL);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(value);
+                if (res_o == NULL) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = PyStackRef_FromPyObjectSteal(res_o);
+            }
+            else {
+                res = value;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -9020,20 +9501,43 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
-            PyValue value;
-            PyValue fmt_spec;
-            PyValue res;
+            _PyStackRef value;
+            _PyStackRef fmt_spec;
+            _PyStackRef res;
             fmt_spec = IR_SLOT(IR_FIELD_C(this_instr));
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            assert(PyValue_IsObject(fmt_spec));
-            res = PyObject_FormatValue(value, PyValue_ObjectBorrow(fmt_spec));
-            if (PyValue_IsNull(res)) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(FORMAT_WITH_SPEC);
+                IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+            }
+            else {
+                value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInline(fmt_spec))) {
+                fmt_spec = PyStackRef_Box(fmt_spec);
+                if (PyStackRef_IsInline(fmt_spec)) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(FORMAT_WITH_SPEC);
+                IR_KEEP_BOX(fmt_spec, IR_FIELD_C(this_instr));
+            }
+            else {
+                fmt_spec = IR_BORROW_KNOWN(fmt_spec, IR_FIELD_C(this_instr));
+            }
+            PyObject *res_o = PyObject_Format(PyStackRef_AsPyObjectBorrow(value), PyStackRef_AsPyObjectBorrow(fmt_spec));
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(fmt_spec);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(value);
+            if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            res = PyStackRef_FromPyObjectSteal(res_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -9053,11 +9557,11 @@
             _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue next;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef next;
             // _SPECIALIZE_FOR_ITER
             {
                 null_or_index = window[1];
@@ -9075,9 +9579,9 @@
             }
             // _FOR_ITER
             {
-                PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-                if (!_PyValue_IsValid(item)) {
-                    if (_PyValue_IsError(item)) {
+                _PyStackRef item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
+                if (!PyStackRef_IsValid(item)) {
+                    if (PyStackRef_IsError(item)) {
                         window[1] = null_or_index;
                         JUMP_TO_LABEL(error);
                     }
@@ -9104,11 +9608,16 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_GEN);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue gen_frame;
-            PyValue new_frame;
+            if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
+                UPDATE_MISS_STATS(FOR_ITER);
+                assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                JUMP_TO_PREDICTED(FOR_ITER);
+            }
+            _PyStackRef iter;
+            _PyStackRef gen_frame;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -9120,8 +9629,8 @@
             // _FOR_ITER_GEN_FRAME
             {
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyGenObject *gen = (PyGenObject *)PyValue_ObjectBorrow(iter);
+                assert(PyStackRef_IsObject(iter));
+                PyGenObject *gen = (PyGenObject *)PyStackRef_AsPyObjectBorrow(iter);
                 if (Py_TYPE(gen) != &PyGen_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
@@ -9134,18 +9643,18 @@
                 }
                 STAT_INC(FOR_ITER, hit);
                 _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-                _PyFrame_SetReturnValue(pushed_frame, _PyValue_None);
+                _PyFrame_SetReturnValue(pushed_frame, PyStackRef_None);
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 pushed_frame->previous = frame;
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
-                gen_frame = _PyValue_Wrap(pushed_frame);
+                gen_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _PUSH_FRAME
             {
                 new_frame = gen_frame;
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -9172,42 +9681,71 @@
             INSTRUCTION_STATS(FOR_ITER_LIST);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue next;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef next;
             // _ITER_CHECK_LIST
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_ObjectBorrow(iter);
+                assert(PyStackRef_IsObject(iter));
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
                 if (Py_TYPE(iter_o) != &PyList_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(_PyValue_IsTaggedIndex(null_or_index));
+                assert(PyStackRef_IsTaggedIndex(null_or_index));
+                #ifdef Py_GIL_DISABLED
+                if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                #endif
             }
             // _ITER_JUMP_LIST
             {
-                PyObject *list_o = PyValue_ObjectBorrow(iter);
+                #ifdef Py_GIL_DISABLED
+
+                #else
+                PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)_PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                    null_or_index = _PyValue_TagIndex(-1);
+                if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                    null_or_index = PyStackRef_TagIndex(-1);
                     JUMPBY(oparg + 1);
                     window[1] = null_or_index;
                     DISPATCH();
                 }
+                #endif
             }
             // _ITER_NEXT_LIST
             {
-                PyObject *list_o = PyValue_ObjectBorrow(iter);
+                PyObject *list_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyList_GET_VALUE(list_o, _PyValue_UntagIndex(null_or_index));
-                null_or_index = _PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                #ifdef Py_GIL_DISABLED
+                assert(_Py_IsOwnedByCurrentThread(list_o) ||
+                  _PyObject_GC_IS_SHARED(list_o));
+                STAT_INC(FOR_ITER, hit);
+                int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyStackRef_UntagIndex(null_or_index), &next);
+                if (result < 0) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                if (result == 0) {
+                    null_or_index = PyStackRef_TagIndex(-1);
+                    JUMPBY(oparg + 1);
+                    window[1] = null_or_index;
+                    DISPATCH();
+                }
+                #else
+                next = PyStackRef_FromPyObjectNew(PyList_GET_ITEM(list_o, PyStackRef_UntagIndex(null_or_index)));
+                #endif
+                null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             window[1] = null_or_index;
             window[2] = next;
@@ -9228,25 +9766,35 @@
             INSTRUCTION_STATS(FOR_ITER_RANGE);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue next;
+            _PyStackRef iter;
+            _PyStackRef next;
             // _ITER_CHECK_RANGE
             {
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_ObjectBorrow(iter);
+                assert(PyStackRef_IsObject(iter));
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
                 if (Py_TYPE(r) != &PyRangeIter_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
+                #ifdef Py_GIL_DISABLED
+                if (!_PyObject_IsUniquelyReferenced((PyObject *)r)) {
+                    UPDATE_MISS_STATS(FOR_ITER);
+                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
+                    JUMP_TO_PREDICTED(FOR_ITER);
+                }
+                #endif
             }
             // _ITER_JUMP_RANGE
             {
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_ObjectBorrow(iter);
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
+                #ifdef Py_GIL_DISABLED
+                assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
+                #endif
                 STAT_INC(FOR_ITER, hit);
                 if (r->len <= 0) {
                     JUMPBY(oparg + 1);
@@ -9255,19 +9803,22 @@
             }
             // _ITER_NEXT_RANGE
             {
-                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_ObjectBorrow(iter);
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(r) == &PyRangeIter_Type);
+                #ifdef Py_GIL_DISABLED
+                assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
+                #endif
                 assert(r->len > 0);
                 long value = r->start;
                 r->start = value + r->step;
                 r->len--;
                 if ((int32_t)value == value) {
-                    next = PyValue_FromInt32((int32_t)value);
+                    next = PyStackRef_FromInt32((int32_t)value);
                 }
                 else {
-                    next = _PyValue_BoxInt64(value);
+                    next = _PyStackRef_BoxInt64(value);
                 }
-                if (PyValue_IsNull(next)) {
+                if (PyStackRef_IsNull(next)) {
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -9289,32 +9840,32 @@
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue next;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef next;
             // _ITER_CHECK_TUPLE
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_ObjectBorrow(iter);
+                assert(PyStackRef_IsObject(iter));
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
                 if (Py_TYPE(iter_o) != &PyTuple_Type) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(_PyValue_IsTaggedIndex(null_or_index));
+                assert(PyStackRef_IsTaggedIndex(null_or_index));
             }
             // _ITER_JUMP_TUPLE
             {
-                PyObject *tuple_o = PyValue_ObjectBorrow(iter);
+                PyObject *tuple_o = PyStackRef_AsPyObjectBorrow(iter);
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)_PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                    null_or_index = _PyValue_TagIndex(-1);
+                if ((size_t)PyStackRef_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                    null_or_index = PyStackRef_TagIndex(-1);
                     JUMPBY(oparg + 1);
                     window[1] = null_or_index;
                     DISPATCH();
@@ -9322,12 +9873,12 @@
             }
             // _ITER_NEXT_TUPLE
             {
-                PyObject *tuple_o = PyValue_ObjectBorrow(iter);
+                PyObject *tuple_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-                uintptr_t i = _PyValue_UntagIndex(null_or_index);
+                uintptr_t i = PyStackRef_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyTuple_GET_VALUE(tuple_o, i);
-                null_or_index = _PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                next = PyStackRef_FromPyObjectNew(PyTuple_GET_ITEM(tuple_o, i));
+                null_or_index = PyStackRef_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             window[1] = null_or_index;
             window[2] = next;
@@ -9348,15 +9899,15 @@
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue null_or_index;
-            PyValue iter;
-            PyValue next;
+            _PyStackRef null_or_index;
+            _PyStackRef iter;
+            _PyStackRef next;
             // _GUARD_TOS_NOT_NULL
             {
                 null_or_index = window[1];
-                if (PyValue_IsNull(null_or_index)) {
+                if (PyStackRef_IsNull(null_or_index)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
@@ -9365,20 +9916,21 @@
             // _FOR_ITER_VIRTUAL
             {
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyObject *iter_o = PyValue_ObjectBorrow(iter);
-                Py_ssize_t index = _PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                assert(PyStackRef_IsObject(iter));
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
+                Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
+                _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                PyObject *next_o = next_index.object;
                 index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
+                if (next_o == NULL) {
                     if (index < 0) {
                         JUMP_TO_LABEL(error);
                     }
                     JUMPBY(oparg + 1);
                     DISPATCH();
                 }
-                null_or_index = _PyValue_TagIndex(index);
-                next = next_index.value;
+                null_or_index = PyStackRef_TagIndex(index);
+                next = PyStackRef_FromPyObjectSteal(next_o);
             }
             window[1] = null_or_index;
             window[2] = next;
@@ -9397,74 +9949,52 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AITER);
-            PyValue obj;
-            PyValue iter;
+            _PyStackRef obj;
+            _PyStackRef iter;
             obj = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *obj_object;
-            _PyValueRoot obj_root;
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                obj_object = _PyValue_BoxInline(obj);
-                if (obj_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(obj))) {
+                obj = PyStackRef_Box(obj);
+                if (PyStackRef_IsInline(obj)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(GET_AITER, _PY_BOX_OTHER);
+                BOX_STAT_INC(GET_AITER);
+                IR_KEEP_BOX(obj, IR_FIELD_B(this_instr));
             }
             else {
-                obj_object = PyValue_ObjectBorrow(obj);
+                obj = IR_BORROW_KNOWN(obj, IR_FIELD_B(this_instr));
             }
             unaryfunc getter = NULL;
-            PyObject *obj_o = obj_object;
+            PyObject *obj_o = PyStackRef_AsPyObjectBorrow(obj);
             PyObject *iter_o;
             PyTypeObject *type = Py_TYPE(obj_o);
             if (type->tp_as_async != NULL) {
                 getter = type->tp_as_async->am_aiter;
             }
             if (getter == NULL) {
-                if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                    _PyThreadState_PushValueRoot(tstate, &obj_root);
-                    obj_root.object = obj_object;
-                }
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "'async for' requires an object with "
                               "__aiter__ method, got %.100s",
                               type->tp_name);
-                if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                    _PyThreadState_PopValueRoot(tstate, &obj_root);
-                }
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(obj);
                 JUMP_TO_LABEL(error);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PushValueRoot(tstate, &obj_root);
-                obj_root.object = obj_object;
-            }
             iter_o = (*getter)(obj_o);
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PopValueRoot(tstate, &obj_root);
-            }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(obj);
             if (iter_o == NULL) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (Py_TYPE(iter_o)->tp_as_async == NULL ||
                 Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
-                if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                    _PyThreadState_PushValueRoot(tstate, &obj_root);
-                    obj_root.object = obj_object;
-                }
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "'async for' received an object from __aiter__ "
                               "that does not implement __anext__: %.100s",
                               Py_TYPE(iter_o)->tp_name);
-                if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                    _PyThreadState_PopValueRoot(tstate, &obj_root);
-                }
                 Py_DECREF(iter_o);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            iter = PyValue_FromObject(iter_o);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            iter = PyStackRef_FromPyObjectSteal(iter_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), iter);
             DISPATCH();
         }
@@ -9480,33 +10010,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
-            PyValue aiter;
-            PyValue awaitable;
+            _PyStackRef aiter;
+            _PyStackRef awaitable;
             aiter = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *aiter_object;
-            _PyValueRoot aiter_root;
-            if (Py_UNLIKELY(PyValue_IsInline(aiter))) {
-                aiter_object = _PyValue_BoxInline(aiter);
-                if (aiter_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                aiter = PyStackRef_Box(aiter);
+                if (PyStackRef_IsInline(aiter)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(GET_ANEXT, _PY_BOX_OTHER);
+                BOX_STAT_INC(GET_ANEXT);
+                IR_SLOT(IR_FIELD_B(this_instr)) = aiter;
             }
-            else {
-                aiter_object = PyValue_ObjectBorrow(aiter);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(aiter))) {
-                _PyThreadState_PushValueRoot(tstate, &aiter_root);
-                aiter_root.object = aiter_object;
-            }
-            PyObject *awaitable_o = _PyEval_GetANext(aiter_object);
-            if (Py_UNLIKELY(PyValue_IsInline(aiter))) {
-                _PyThreadState_PopValueRoot(tstate, &aiter_root);
-            }
+            PyObject *awaitable_o = _PyEval_GetANext(PyStackRef_AsPyObjectBorrow(aiter));
             if (awaitable_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            awaitable = PyValue_FromObject(awaitable_o);
+            awaitable = PyStackRef_FromPyObjectSteal(awaitable_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), awaitable);
             DISPATCH();
         }
@@ -9524,35 +10043,27 @@
             INSTRUCTION_STATS(GET_AWAITABLE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue iterable;
-            PyValue iter;
+            _PyStackRef iterable;
+            _PyStackRef iter;
             iterable = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *iterable_object;
-            _PyValueRoot iterable_root;
-            if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                iterable_object = _PyValue_BoxInline(iterable);
-                if (iterable_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(iterable))) {
+                iterable = PyStackRef_Box(iterable);
+                if (PyStackRef_IsInline(iterable)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(GET_AWAITABLE, _PY_BOX_OTHER);
+                BOX_STAT_INC(GET_AWAITABLE);
+                IR_KEEP_BOX(iterable, IR_FIELD_B(this_instr));
             }
             else {
-                iterable_object = PyValue_ObjectBorrow(iterable);
+                iterable = IR_BORROW_KNOWN(iterable, IR_FIELD_B(this_instr));
             }
-            if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                _PyThreadState_PushValueRoot(tstate, &iterable_root);
-                iterable_root.object = iterable_object;
-            }
-            PyObject *iter_o = _PyEval_GetAwaitable(iterable_object, oparg);
-            if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                _PyThreadState_PopValueRoot(tstate, &iterable_root);
-            }
+            PyObject *iter_o = _PyEval_GetAwaitable(PyStackRef_AsPyObjectBorrow(iterable), oparg);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(iterable);
             if (iter_o == NULL) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            iter = PyValue_FromObject(iter_o);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            iter = PyStackRef_FromPyObjectSteal(iter_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), iter);
             DISPATCH();
         }
@@ -9572,9 +10083,9 @@
             _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue iterable;
-            PyValue iter;
-            PyValue index_or_null;
+            _PyStackRef iterable;
+            _PyStackRef iter;
+            _PyStackRef index_or_null;
             // _SPECIALIZE_GET_ITER
             {
                 iterable = IR_SLOT(IR_FIELD_B(this_instr));
@@ -9591,14 +10102,13 @@
             }
             // _GET_ITER
             {
-                PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
-                if (_PyValue_IsError(result)) {
-                    IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+                _PyStackRef result = _PyEval_GetIter(iterable, &index_or_null, oparg);
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
+                if (PyStackRef_IsError(result)) {
                     JUMP_TO_LABEL(error);
                 }
                 iter = result;
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), iter);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), index_or_null);
             DISPATCH();
@@ -9615,17 +10125,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_SELF);
-            PyValue iterable;
-            PyValue res;
+            _PyStackRef iterable;
+            _PyStackRef res;
             // _GUARD_ITERATOR
             {
                 iterable = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(iterable));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(iterable));
                 if (tp->tp_iter != PyObject_SelfIter) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
@@ -9635,7 +10145,7 @@
             }
             // _PUSH_NULL
             {
-                res = PyValue_NULL;
+                res = PyStackRef_NULL;
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), res);
             DISPATCH();
@@ -9652,17 +10162,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_VIRTUAL);
-            PyValue iterable;
-            PyValue zero;
+            _PyStackRef iterable;
+            _PyStackRef zero;
             // _GUARD_ITER_VIRTUAL
             {
                 iterable = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
-                PyTypeObject *tp = Py_TYPE(PyValue_ObjectBorrow(iterable));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(iterable));
                 if (tp->_tp_iteritem == NULL) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
@@ -9672,7 +10182,7 @@
             }
             // _PUSH_TAGGED_ZERO
             {
-                zero = _PyValue_TagIndex(0);
+                zero = PyStackRef_TagIndex(0);
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), zero);
             DISPATCH();
@@ -9689,44 +10199,26 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_LEN);
-            PyValue obj;
-            PyValue len;
+            _PyStackRef obj;
+            _PyStackRef len;
             obj = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *obj_object;
-            _PyValueRoot obj_root;
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                obj_object = _PyValue_BoxInline(obj);
-                if (obj_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                obj = PyStackRef_Box(obj);
+                if (PyStackRef_IsInline(obj)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(GET_LEN, _PY_BOX_OTHER);
+                BOX_STAT_INC(GET_LEN);
+                IR_SLOT(IR_FIELD_B(this_instr)) = obj;
             }
-            else {
-                obj_object = PyValue_ObjectBorrow(obj);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PushValueRoot(tstate, &obj_root);
-                obj_root.object = obj_object;
-            }
-            Py_ssize_t len_i = PyObject_Length(obj_object);
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PopValueRoot(tstate, &obj_root);
-            }
+            Py_ssize_t len_i = PyObject_Length(PyStackRef_AsPyObjectBorrow(obj));
             if (len_i < 0) {
                 JUMP_TO_LABEL(error);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PushValueRoot(tstate, &obj_root);
-                obj_root.object = obj_object;
-            }
             PyObject *len_o = PyLong_FromSsize_t(len_i);
-            if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                _PyThreadState_PopValueRoot(tstate, &obj_root);
-            }
             if (len_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            len = PyValue_FromObject(len_o);
+            len = PyStackRef_FromPyObjectSteal(len_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), len);
             DISPATCH();
         }
@@ -9744,49 +10236,31 @@
             INSTRUCTION_STATS(IMPORT_FROM);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue from;
-            PyValue res;
+            _PyStackRef from;
+            _PyStackRef res;
             from = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *from_object;
-            _PyValueRoot from_root;
-            if (Py_UNLIKELY(PyValue_IsInline(from))) {
-                from_object = _PyValue_BoxInline(from);
-                if (from_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                from = PyStackRef_Box(from);
+                if (PyStackRef_IsInline(from)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(IMPORT_FROM, _PY_BOX_OTHER);
-            }
-            else {
-                from_object = PyValue_ObjectBorrow(from);
+                BOX_STAT_INC(IMPORT_FROM);
+                IR_SLOT(IR_FIELD_B(this_instr)) = from;
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *res_o;
-            if (PyLazyImport_CheckExact(PyValue_ObjectBorrow(from))) {
-                if (Py_UNLIKELY(PyValue_IsInline(from))) {
-                    _PyThreadState_PushValueRoot(tstate, &from_root);
-                    from_root.object = from_object;
-                }
+            if (PyLazyImport_CheckExact(PyStackRef_AsPyObjectBorrow(from))) {
                 res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, from_object, name);
-                if (Py_UNLIKELY(PyValue_IsInline(from))) {
-                    _PyThreadState_PopValueRoot(tstate, &from_root);
-                }
+                    tstate, frame, PyStackRef_AsPyObjectBorrow(from), name);
             }
             else {
-                if (Py_UNLIKELY(PyValue_IsInline(from))) {
-                    _PyThreadState_PushValueRoot(tstate, &from_root);
-                    from_root.object = from_object;
-                }
                 res_o = _PyEval_ImportFrom(
-                    tstate, from_object, name);
-                if (Py_UNLIKELY(PyValue_IsInline(from))) {
-                    _PyThreadState_PopValueRoot(tstate, &from_root);
-                }
+                    tstate, PyStackRef_AsPyObjectBorrow(from), name);
             }
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromObject(res_o);
+            res = PyStackRef_FromPyObjectSteal(res_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -9804,94 +10278,58 @@
             INSTRUCTION_STATS(IMPORT_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue level;
-            PyValue fromlist;
-            PyValue res;
+            _PyStackRef level;
+            _PyStackRef fromlist;
+            _PyStackRef res;
             fromlist = window[1];
             level = window[0];
-            PyObject *level_object;
-            _PyValueRoot level_root;
-            if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                level_object = _PyValue_BoxInline(level);
-                if (level_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                level = PyStackRef_Box(level);
+                if (PyStackRef_IsInline(level)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(IMPORT_NAME, _PY_BOX_OTHER);
+                BOX_STAT_INC(IMPORT_NAME);
+                window[0] = level;
             }
-            else {
-                level_object = PyValue_ObjectBorrow(level);
-            }
-            PyObject *fromlist_object;
-            _PyValueRoot fromlist_root;
-            if (Py_UNLIKELY(PyValue_IsInline(fromlist))) {
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PushValueRoot(tstate, &level_root);
-                    level_root.object = level_object;
-                }
-                fromlist_object = _PyValue_BoxInline(fromlist);
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PopValueRoot(tstate, &level_root);
-                }
-                if (fromlist_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                fromlist = PyStackRef_Box(fromlist);
+                if (PyStackRef_IsInline(fromlist)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(IMPORT_NAME, _PY_BOX_OTHER);
-            }
-            else {
-                fromlist_object = PyValue_ObjectBorrow(fromlist);
+                BOX_STAT_INC(IMPORT_NAME);
+                window[1] = fromlist;
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             if (!(oparg & 0x02)) {
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PushValueRoot(tstate, &level_root);
-                    level_root.object = level_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(fromlist))) {
-                    _PyThreadState_PushValueRoot(tstate, &fromlist_root);
-                    fromlist_root.object = fromlist_object;
-                }
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    fromlist_object,
-                    level_object,
+                    PyStackRef_AsPyObjectBorrow(fromlist),
+                    PyStackRef_AsPyObjectBorrow(level),
                     oparg & 0x01);
-                if (Py_UNLIKELY(PyValue_IsInline(fromlist))) {
-                    _PyThreadState_PopValueRoot(tstate, &fromlist_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PopValueRoot(tstate, &level_root);
-                }
             }
             else {
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PushValueRoot(tstate, &level_root);
-                    level_root.object = level_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(fromlist))) {
-                    _PyThreadState_PushValueRoot(tstate, &fromlist_root);
-                    fromlist_root.object = fromlist_object;
-                }
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    fromlist_object,
-                    level_object);
-                if (Py_UNLIKELY(PyValue_IsInline(fromlist))) {
-                    _PyThreadState_PopValueRoot(tstate, &fromlist_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(level))) {
-                    _PyThreadState_PopValueRoot(tstate, &level_root);
-                }
+                    PyStackRef_AsPyObjectBorrow(fromlist),
+                    PyStackRef_AsPyObjectBorrow(level));
             }
+            _PyStackRef tmp = fromlist;
+            fromlist = PyStackRef_NULL;
+            window[1] = fromlist;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            tmp = level;
+            level = PyStackRef_NULL;
+            window[0] = level;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            window[0] = PyStackRef_NULL;
+            window[1] = PyStackRef_NULL;
             if (res_o == NULL) {
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromObject(res_o);
-            window[1] = PyValue_NULL;
+            res = PyStackRef_FromPyObjectSteal(res_o);
             window[0] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -9910,36 +10348,37 @@
             INSTRUCTION_STATS(INSTRUMENTED_CALL);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_CALL;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue func;
-            PyValue maybe_self;
-            PyValue *args;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef func;
+            _PyStackRef maybe_self;
+            _PyStackRef *args;
+            _PyStackRef res;
             // _MAYBE_EXPAND_METHOD
             {
                 self_or_null = window[1];
                 callable = window[0];
-                PyObject *callable_object;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                if (PyValue_Type(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                    PyObject *callable_o = callable_object;
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyValue_FromObject(self);
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    callable = PyValue_FromObject(method);
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _MONITOR_CALL
@@ -9947,96 +10386,38 @@
                 args = &window[2];
                 maybe_self = self_or_null;
                 func = callable;
-                PyObject *func_object;
-                _PyValueRoot func_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    func_object = _PyValue_BoxInline(func);
-                    if (func_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(maybe_self))) {
+                    maybe_self = PyStackRef_Box(maybe_self);
+                    if (PyStackRef_IsInline(maybe_self)) {
                         window[0] = func;
                         window[1] = maybe_self;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL);
                 }
-                else {
-                    func_object = PyValue_ObjectBorrow(func);
-                }
-                PyObject *maybe_self_object;
-                _PyValueRoot maybe_self_root;
-                if (Py_UNLIKELY(PyValue_IsInline(maybe_self))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
-                    maybe_self_object = _PyValue_BoxInline(maybe_self);
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
-                    if (maybe_self_object == NULL) {
-                        window[0] = func;
-                        window[1] = maybe_self;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL, _PY_BOX_CALL);
-                }
-                else {
-                    maybe_self_object = PyValue_ObjectBorrow(maybe_self);
-                }
-                int is_meth = !PyValue_IsNull(maybe_self);
-                PyObject *function = func_object;
+                int is_meth = !PyStackRef_IsNull(maybe_self);
+                PyObject *function = PyStackRef_AsPyObjectBorrow(func);
                 PyObject *arg0;
                 if (is_meth) {
-                    arg0 = maybe_self_object;
+                    arg0 = PyStackRef_AsPyObjectBorrow(maybe_self);
                 }
                 else if (oparg) {
-                    window[0] = func;
-                    window[1] = maybe_self;
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_root);
-                        func_root.object = func_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(maybe_self))) {
-                        _PyThreadState_PushValueRoot(tstate, &maybe_self_root);
-                        maybe_self_root.object = maybe_self_object;
-                    }
-                    arg0 = PyValue_Object(args[0]);
-                    if (Py_UNLIKELY(PyValue_IsInline(maybe_self))) {
-                        _PyThreadState_PopValueRoot(tstate, &maybe_self_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_root);
-                    }
-                    if (arg0 == NULL) {
+                    if (_PyStackRef_BoxArray(args, 1) < 0) {
+                        window[0] = func;
+                        window[1] = maybe_self;
                         JUMP_TO_LABEL(error);
                     }
+                    arg0 = PyStackRef_AsPyObjectBorrow(args[0]);
                 }
                 else {
                     arg0 = &_PyInstrumentation_MISSING;
                 }
-                _PyValueRoot arg0_root;
-                _PyThreadState_PushValueRoot(tstate, &arg0_root);
-                arg0_root.object = arg0;
                 window[0] = func;
                 window[1] = maybe_self;
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    _PyThreadState_PushValueRoot(tstate, &func_root);
-                    func_root.object = func_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(maybe_self))) {
-                    _PyThreadState_PushValueRoot(tstate, &maybe_self_root);
-                    maybe_self_root.object = maybe_self_object;
-                }
                 int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
                     frame, this_instr, function, arg0
                 );
-                if (Py_UNLIKELY(PyValue_IsInline(maybe_self))) {
-                    _PyThreadState_PopValueRoot(tstate, &maybe_self_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(func))) {
-                    _PyThreadState_PopValueRoot(tstate, &func_root);
-                }
-                _PyThreadState_PopValueRoot(tstate, &arg0_root);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -10046,22 +10427,18 @@
                 args = &window[2];
                 self_or_null = window[1];
                 callable = window[0];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *callable_o = callable_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -10071,17 +10448,10 @@
                 {
                     int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, total_args, NULL, frame
                     );
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
@@ -10089,38 +10459,30 @@
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                PyValue res_v = _Py_VectorCallInstrumentation_Values(
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
-                    PyValue_NULL,
+                    PyStackRef_NULL,
                     opcode == INSTRUMENTED_CALL,
                     frame,
                     this_instr,
                     tstate);
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                 window[0] = res;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    IR_CLEAR_SLOTS(&window[1], 1 + oparg);
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[1], 1 + oparg);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -10136,55 +10498,50 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_CALL_FUNCTION_EX;
-            PyValue callargs;
-            PyValue func_st;
-            PyValue null;
-            PyValue callargs_st;
-            PyValue kwargs_st;
-            PyValue result;
+            _PyStackRef func;
+            _PyStackRef callargs;
+            _PyStackRef func_st;
+            _PyStackRef null;
+            _PyStackRef callargs_st;
+            _PyStackRef kwargs_st;
+            _PyStackRef result;
             // _MAKE_CALLARGS_A_TUPLE
             {
                 callargs = window[2];
-                PyObject *callargs_object;
-                _PyValueRoot callargs_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                    callargs_object = _PyValue_BoxInline(callargs);
-                    if (callargs_object == NULL) {
+                func = window[0];
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    func = PyStackRef_Box(func);
+                    if (PyStackRef_IsInline(func)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX);
+                    window[0] = func;
                 }
-                else {
-                    callargs_object = PyValue_ObjectBorrow(callargs);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    callargs = PyStackRef_Box(callargs);
+                    if (PyStackRef_IsInline(callargs)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX);
+                    window[2] = callargs;
                 }
-                PyObject *callargs_o = callargs_object;
+                PyObject *callargs_o = PyStackRef_AsPyObjectBorrow(callargs);
                 if (!PyTuple_CheckExact(callargs_o)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
-                    int err = _Py_Check_ArgsIterable(tstate, callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
+                    int err = _Py_Check_ArgsIterable(tstate, PyStackRef_AsPyObjectBorrow(func), callargs_o);
                     if (err < 0) {
                         JUMP_TO_LABEL(error);
                     }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_root);
-                        callargs_root.object = callargs_object;
-                    }
                     PyObject *tuple_o = PySequence_Tuple(callargs_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_root);
-                    }
                     if (tuple_o == NULL) {
                         JUMP_TO_LABEL(error);
                     }
-                    callargs = PyValue_FromObject(tuple_o);
+                    _PyStackRef temp = callargs;
+                    callargs = PyStackRef_FromPyObjectSteal(tuple_o);
+                    window[2] = callargs;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _DO_CALL_FUNCTION_EX
@@ -10192,263 +10549,70 @@
                 kwargs_st = window[3];
                 callargs_st = callargs;
                 null = window[1];
-                func_st = window[0];
-                PyObject *func_st_object;
-                _PyValueRoot func_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                    func_st_object = _PyValue_BoxInline(func_st);
-                    if (func_st_object == NULL) {
+                func_st = func;
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[3]))) {
+                    kwargs_st = PyStackRef_Box(kwargs_st);
+                    if (PyStackRef_IsInline(kwargs_st)) {
                         window[2] = callargs_st;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    func_st_object = PyValue_ObjectBorrow(func_st);
-                }
-                PyObject *callargs_st_object;
-                _PyValueRoot callargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    callargs_st_object = _PyValue_BoxInline(callargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (callargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    callargs_st_object = PyValue_ObjectBorrow(callargs_st);
-                }
-                PyObject *kwargs_st_object;
-                _PyValueRoot kwargs_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    kwargs_st_object = _PyValue_BoxInline(kwargs_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (kwargs_st_object == NULL) {
-                        window[2] = callargs_st;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX, _PY_BOX_CALL);
-                }
-                else {
-                    kwargs_st_object = PyValue_ObjectBorrow(kwargs_st);
+                    BOX_STAT_INC(INSTRUMENTED_CALL_FUNCTION_EX);
+                    window[3] = kwargs_st;
                 }
                 (void)null;
-                if (PyValue_Type(func_st) == &PyFunction_Type) {
-                    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_EX);
-                }
-                PyValue result_v;
+                PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
+                EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
+                PyObject *result_o;
                 assert(!_PyErr_Occurred(tstate));
                 if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
-                    PyObject *func = func_st_object;
-                    PyObject *callargs = callargs_st_object;
-                    PyObject *kwargs = kwargs_st_object;
+                    PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
+                    PyObject *kwargs = PyStackRef_AsPyObjectBorrow(kwargs_st);
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                     assert(PyTuple_CheckExact(callargs));
-                    window[2] = callargs_st;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    PyObject *arg0 = PyTuple_GET_SIZE(callargs) > 0 ?
+                    PyObject *arg = PyTuple_GET_SIZE(callargs) > 0 ?
                     PyTuple_GET_ITEM(callargs, 0) : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
-                    if (arg0 == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    _PyValueRoot arg0_root;
-                    _PyThreadState_PushValueRoot(tstate, &arg0_root);
-                    arg0_root.object = arg0;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
+                    window[2] = callargs_st;
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, func, arg0_root.object);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                        frame, this_instr, func, arg);
                     if (err) {
-                        _PyThreadState_PopValueRoot(tstate, &arg0_root);
                         JUMP_TO_LABEL(error);
                     }
-                    _PyValueRoot result_root;
-                    _PyThreadState_PushValueRoot(tstate, &result_root);
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    result_root.value = _PyObject_CallValue(tstate, func_st,
-                        callargs, kwargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                    result_o = PyObject_Call(func, callargs, kwargs);
                     if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                        if (PyValue_IsNull(result_root.value)) {
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                                func_st_root.object = func_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                                callargs_st_root.object = callargs_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                                kwargs_st_root.object = kwargs_st_object;
-                            }
+                        if (result_o == NULL) {
                             _Py_call_instrumentation_exc2(
                                 tstate, PY_MONITORING_EVENT_C_RAISE,
-                                frame, this_instr, func, arg0_root.object);
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                            }
+                                frame, this_instr, func, arg);
                         }
                         else {
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                                func_st_root.object = func_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                                callargs_st_root.object = callargs_st_object;
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                                kwargs_st_root.object = kwargs_st_object;
-                            }
                             int err = _Py_call_instrumentation_2args(
                                 tstate, PY_MONITORING_EVENT_C_RETURN,
-                                frame, this_instr, func, arg0_root.object);
-                            if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                            }
-                            if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                                _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                            }
+                                frame, this_instr, func, arg);
                             if (err < 0) {
-                                result_root.value = PyValue_NULL;
+                                Py_CLEAR(result_o);
                             }
                         }
                     }
-                    result_v = result_root.value;
-                    _PyThreadState_PopValueRoot(tstate, &result_root);
-                    _PyThreadState_PopValueRoot(tstate, &arg0_root);
                 }
                 else {
-                    if (PyValue_Type(func_st) == &PyFunction_Type &&
+                    if (Py_TYPE(func) == &PyFunction_Type &&
                         !IS_PEP523_HOOKED(tstate) &&
-                        ((PyFunctionObject *)PyValue_ObjectBorrow(func_st))->vectorcall == _PyFunction_Vectorcall) {
-                        PyObject *func = func_st_object;
-                        PyObject *callargs = callargs_st_object;
+                        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
+                        PyObject *callargs = _PyStackRef_AsPyObjectStealPointer(callargs_st);
                         assert(PyTuple_CheckExact(callargs));
-                        PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : kwargs_st_object;
+                        PyObject *kwargs = PyStackRef_IsNull(kwargs_st) ? NULL : _PyStackRef_AsPyObjectStealPointer(kwargs_st);
                         assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                         Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
                         int code_flags = ((PyCodeObject *)PyFunction_GET_CODE(func))->co_flags;
                         PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(func));
-                        if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                            func_st_root.object = func_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                            callargs_st_root.object = callargs_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                            kwargs_st_root.object = kwargs_st_object;
-                        }
+                        window[2] = PyStackRef_NULL;
+                        window[3] = PyStackRef_NULL;
                         _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit_Ex(
                             tstate, func_st, locals,
                             nargs, callargs, kwargs, frame);
-                        if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                        }
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
-                        window[3] = PyValue_NULL;
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
                         if (new_frame == NULL) {
                             JUMP_TO_LABEL(error);
                         }
@@ -10456,57 +10620,33 @@
                         frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                         DISPATCH_INLINED(new_frame);
                     }
-                    PyObject *callargs = callargs_st_object;
+                    PyObject *callargs = PyStackRef_AsPyObjectBorrow(callargs_st);
                     assert(PyTuple_CheckExact(callargs));
-                    PyObject *kwargs = kwargs_st_object;
+                    PyObject *kwargs = PyStackRef_AsPyObjectBorrow(kwargs_st);
                     assert(kwargs == NULL || PyDict_CheckExact(kwargs));
                     window[2] = callargs_st;
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &func_st_root);
-                        func_st_root.object = func_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &callargs_st_root);
-                        callargs_st_root.object = callargs_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwargs_st_root);
-                        kwargs_st_root.object = kwargs_st_object;
-                    }
-                    result_v = _PyObject_CallValue(tstate, func_st, callargs, kwargs);
-                    if (Py_UNLIKELY(PyValue_IsInline(kwargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callargs_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &callargs_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(func_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &func_st_root);
-                    }
+                    result_o = PyObject_Call(func, callargs, kwargs);
                 }
-                if (PyValue_IsNull(result_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
+                window[3] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(kwargs_st);
+                window[2] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(callargs_st);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(func_st);
+                if (result_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                result = result_v;
+                result = PyStackRef_FromPyObjectSteal(result_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 window[0] = result;
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
-                    window[3] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[3] = PyValue_NULL;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -10524,129 +10664,72 @@
             INSTRUCTION_STATS(INSTRUMENTED_CALL_KW);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_CALL_KW;
-            PyValue callable;
-            PyValue self_or_null;
-            PyValue *args;
-            PyValue kwnames;
-            PyValue res;
+            _PyStackRef callable;
+            _PyStackRef self_or_null;
+            _PyStackRef *args;
+            _PyStackRef kwnames;
+            _PyStackRef res;
             // _MAYBE_EXPAND_METHOD_KW
             {
                 self_or_null = window[1];
                 callable = window[0];
-                PyObject *callable_object;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    callable = PyStackRef_Box(callable);
+                    if (PyStackRef_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_KW, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL_KW);
+                    window[0] = callable;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                if (PyValue_Type(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                    PyObject *callable_o = callable_object;
+                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyValue_FromObject(self);
+                    self_or_null = PyStackRef_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    callable = PyValue_FromObject(method);
+                    _PyStackRef temp = callable;
+                    callable = PyStackRef_FromPyObjectNew(method);
+                    window[0] = callable;
+                    window[1] = self_or_null;
+                    PyStackRef_CLOSE(temp);
                 }
             }
             // _MONITOR_CALL_KW
             {
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(self_or_null))) {
+                    self_or_null = PyStackRef_Box(self_or_null);
+                    if (PyStackRef_IsInline(self_or_null)) {
                         window[0] = callable;
                         window[1] = self_or_null;
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_KW, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL_KW);
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *self_or_null_object;
-                _PyValueRoot self_or_null_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_or_null))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    self_or_null_object = _PyValue_BoxInline(self_or_null);
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (self_or_null_object == NULL) {
-                        window[0] = callable;
-                        window[1] = self_or_null;
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_KW, _PY_BOX_CALL);
-                }
-                else {
-                    self_or_null_object = PyValue_ObjectBorrow(self_or_null);
-                }
-                int is_meth = !PyValue_IsNull(self_or_null);
+                int is_meth = !PyStackRef_IsNull(self_or_null);
                 PyObject *arg;
                 if (is_meth) {
-                    arg = self_or_null_object;
+                    arg = PyStackRef_AsPyObjectBorrow(self_or_null);
                 }
                 else if (args) {
-                    window[0] = callable;
-                    window[1] = self_or_null;
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_or_null))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_or_null_root);
-                        self_or_null_root.object = self_or_null_object;
-                    }
-                    arg = PyValue_Object(args[0]);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_or_null))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_or_null_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (arg == NULL) {
+                    if (_PyStackRef_BoxArray(args, 1) < 0) {
+                        window[0] = callable;
+                        window[1] = self_or_null;
                         JUMP_TO_LABEL(error);
                     }
+                    arg = PyStackRef_AsPyObjectBorrow(args[0]);
                 }
                 else {
                     arg = &_PyInstrumentation_MISSING;
                 }
-                PyObject *function = callable_object;
-                _PyValueRoot arg_root;
-                _PyThreadState_PushValueRoot(tstate, &arg_root);
-                arg_root.object = arg;
+                PyObject *function = PyStackRef_AsPyObjectBorrow(callable);
                 window[0] = callable;
                 window[1] = self_or_null;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(self_or_null))) {
-                    _PyThreadState_PushValueRoot(tstate, &self_or_null_root);
-                    self_or_null_root.object = self_or_null_object;
-                }
                 int err = _Py_call_instrumentation_2args(
                     tstate, PY_MONITORING_EVENT_CALL,
                     frame, this_instr, function, arg);
-                if (Py_UNLIKELY(PyValue_IsInline(self_or_null))) {
-                    _PyThreadState_PopValueRoot(tstate, &self_or_null_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                _PyThreadState_PopValueRoot(tstate, &arg_root);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -10655,42 +10738,19 @@
             {
                 kwnames = window[2 + oparg];
                 args = &window[2];
-                PyObject *callable_object;
-                _PyValueRoot callable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    callable_object = _PyValue_BoxInline(callable);
-                    if (callable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyStackRef_Box(kwnames);
+                    if (PyStackRef_IsInline(kwnames)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_KW, _PY_BOX_CALL);
+                    BOX_STAT_INC(INSTRUMENTED_CALL_KW);
+                    window[2 + oparg] = kwnames;
                 }
-                else {
-                    callable_object = PyValue_ObjectBorrow(callable);
-                }
-                PyObject *kwnames_object;
-                _PyValueRoot kwnames_root;
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    kwnames_object = _PyValue_BoxInline(kwnames);
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
-                    if (kwnames_object == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_CALL_KW, _PY_BOX_CALL);
-                }
-                else {
-                    kwnames_object = PyValue_ObjectBorrow(kwnames);
-                }
-                PyObject *callable_o = callable_object;
-                PyObject *kwnames_o = kwnames_object;
+                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
                 int total_args = oparg;
-                PyValue *arguments = args;
-                if (!PyValue_IsNull(self_or_null)) {
+                _PyStackRef *arguments = args;
+                if (!PyStackRef_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -10701,25 +10761,12 @@
                 {
                     int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PushValueRoot(tstate, &callable_root);
-                        callable_root.object = callable_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                        _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                        kwnames_root.object = kwnames_object;
-                    }
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, positional_args, kwnames_o, frame
                     );
-                    if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                        _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                        _PyThreadState_PopValueRoot(tstate, &callable_root);
-                    }
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
+                    _PyStackRef_CLOSE_POINTER(kwnames);
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -10727,15 +10774,7 @@
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PushValueRoot(tstate, &callable_root);
-                    callable_root.object = callable_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PushValueRoot(tstate, &kwnames_root);
-                    kwnames_root.object = kwnames_object;
-                }
-                PyValue res_v = _Py_VectorCallInstrumentation_Values(
+                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
                     callable,
                     arguments,
                     total_args,
@@ -10744,17 +10783,11 @@
                     frame,
                     this_instr,
                     tstate);
-                if (Py_UNLIKELY(PyValue_IsInline(kwnames))) {
-                    _PyThreadState_PopValueRoot(tstate, &kwnames_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(callable))) {
-                    _PyThreadState_PopValueRoot(tstate, &callable_root);
-                }
-                if (PyValue_IsNull(res_v)) {
+                if (res_o == NULL) {
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = res_v;
+                res = PyStackRef_FromPyObjectSteal(res_o);
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
             window[0] = res;
@@ -10775,10 +10808,10 @@
             INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue awaitable_st;
-            PyValue exc_st;
+            _PyStackRef awaitable_st;
+            _PyStackRef exc_st;
             // _MONITOR_END_ASYNC_FOR
             {
                 assert(IR_HANDLER(*(JUMP_TARGET(oparg))) == END_SEND || IR_HANDLER(*(JUMP_TARGET(oparg))) >= MIN_INSTRUMENTED_OPCODE);
@@ -10788,56 +10821,38 @@
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                PyObject *exc_st_object;
-                _PyValueRoot exc_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    exc_st_object = _PyValue_BoxInline(exc_st);
-                    if (exc_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    exc_st = PyStackRef_Box(exc_st);
+                    if (PyStackRef_IsInline(exc_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_END_ASYNC_FOR, _PY_BOX_OTHER);
-                }
-                else {
-                    exc_st_object = PyValue_ObjectBorrow(exc_st);
+                    BOX_STAT_INC(INSTRUMENTED_END_ASYNC_FOR);
+                    window[1] = exc_st;
                 }
                 JUMPBY(0);
                 (void)oparg;
-                (void)awaitable_st;
-                PyObject *exc = exc_st_object;
+                PyObject *exc = PyStackRef_AsPyObjectBorrow(exc_st);
                 assert(exc && PyExceptionInstance_Check(exc));
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                    exc_st_root.object = exc_st_object;
-                }
                 int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
-                if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-                }
                 if (matches) {
+                    _PyStackRef tmp = exc_st;
+                    exc_st = PyStackRef_NULL;
+                    window[1] = exc_st;
+                    _PyStackRef_CLOSE_POINTER(tmp);
+                    tmp = awaitable_st;
+                    awaitable_st = PyStackRef_NULL;
+                    window[0] = awaitable_st;
+                    PyStackRef_CLOSE(tmp);
+                    window[0] = PyStackRef_NULL;
+                    window[1] = PyStackRef_NULL;
                 }
                 else {
                     Py_INCREF(exc);
-                    if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                        exc_st_root.object = exc_st_object;
-                    }
                     _PyErr_SetRaisedException(tstate, exc);
-                    if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                        exc_st_root.object = exc_st_object;
-                    }
                     monitor_reraise(tstate, frame, this_instr);
-                    if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-                    }
                     JUMP_TO_LABEL(exception_unwind);
                 }
             }
-            window[0] = PyValue_NULL;
-            window[1] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -10851,36 +10866,30 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_FOR);
-            PyValue receiver;
-            PyValue value;
+            _PyStackRef receiver;
+            _PyStackRef value;
             value = IR_SLOT(IR_FIELD_C(this_instr));
             receiver = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value_object = _PyValue_BoxInline(value);
-                if (value_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(INSTRUMENTED_END_FOR, _PY_BOX_OTHER);
+                BOX_STAT_INC(INSTRUMENTED_END_FOR);
+                IR_KEEP_BOX(value, IR_FIELD_C(this_instr));
             }
             else {
-                value_object = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
             }
-            if (PyValue_Type(receiver) == &PyGen_Type) {
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                int err = monitor_stop_iteration(tstate, frame, this_instr, value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
+            if (PyStackRef_GenCheck(receiver)) {
+                int err = monitor_stop_iteration(tstate, frame, this_instr, PyStackRef_AsPyObjectBorrow(value));
                 if (err) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            _PyStackRef_CLOSE_POINTER(value);
             DISPATCH();
         }
 
@@ -10895,62 +10904,45 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_SEND);
-            PyValue receiver;
-            PyValue index_or_null;
-            PyValue value;
-            PyValue val;
+            _PyStackRef receiver;
+            _PyStackRef index_or_null;
+            _PyStackRef value;
+            _PyStackRef val;
             value = IR_SLOT(IR_FIELD_D(this_instr));
-            index_or_null = IR_SLOT(IR_FIELD_C(this_instr));
+            index_or_null = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
             receiver = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *receiver_object;
-            _PyValueRoot receiver_root;
-            if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                receiver_object = _PyValue_BoxInline(receiver);
-                if (receiver_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(receiver))) {
+                receiver = PyStackRef_Box(receiver);
+                if (PyStackRef_IsInline(receiver)) {
+                    IR_DROP_BORROW(index_or_null, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(INSTRUMENTED_END_SEND, _PY_BOX_OTHER);
+                BOX_STAT_INC(INSTRUMENTED_END_SEND);
+                IR_KEEP_BOX(receiver, IR_FIELD_B(this_instr));
             }
             else {
-                receiver_object = PyValue_ObjectBorrow(receiver);
+                receiver = IR_BORROW_KNOWN(receiver, IR_FIELD_B(this_instr));
             }
-            PyObject *value_object;
-            _PyValueRoot value_root;
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    _PyThreadState_PushValueRoot(tstate, &receiver_root);
-                    receiver_root.object = receiver_object;
-                }
-                value_object = _PyValue_BoxInline(value);
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    _PyThreadState_PopValueRoot(tstate, &receiver_root);
-                }
-                if (value_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
+                    IR_DROP_BORROW(receiver, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(index_or_null, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(INSTRUMENTED_END_SEND, _PY_BOX_OTHER);
+                BOX_STAT_INC(INSTRUMENTED_END_SEND);
+                IR_KEEP_BOX(value, IR_FIELD_D(this_instr));
             }
             else {
-                value_object = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_D(this_instr));
             }
-            PyObject *receiver_o = receiver_object;
+            PyObject *receiver_o = PyStackRef_AsPyObjectBorrow(receiver);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    _PyThreadState_PushValueRoot(tstate, &receiver_root);
-                    receiver_root.object = receiver_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PushValueRoot(tstate, &value_root);
-                    value_root.object = value_object;
-                }
-                int err = monitor_stop_iteration(tstate, frame, this_instr, value_object);
-                if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    _PyThreadState_PopValueRoot(tstate, &value_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    _PyThreadState_PopValueRoot(tstate, &receiver_root);
-                }
+                int err = monitor_stop_iteration(tstate, frame, this_instr, PyStackRef_AsPyObjectBorrow(value));
                 if (err) {
+                    IR_DROP_BORROW(receiver, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(index_or_null, IR_FIELD_C(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_D(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -10959,7 +10951,8 @@
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), val);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
+            _PyStackRef_CLOSE_POINTER(receiver);
             DISPATCH();
         }
 
@@ -10976,16 +10969,16 @@
             INSTRUCTION_STATS(INSTRUMENTED_FOR_ITER);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue next;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef next;
             null_or_index = window[1];
             iter = window[0];
-            PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-            if (!_PyValue_IsValid(item)) {
-                if (_PyValue_IsError(item)) {
+            _PyStackRef item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
+            if (!PyStackRef_IsValid(item)) {
+                if (PyStackRef_IsError(item)) {
                     window[1] = null_or_index;
                     JUMP_TO_LABEL(error);
                 }
@@ -11022,9 +11015,7 @@
             if (_PyFb_HasEntry(next_opcode)) {
                 PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
             }
-            assert(next_opcode > 0 &&
-                   _PyIR_HasProperty(next_opcode, _PyIR_H_METADATA) &&
-                   _PyIR_BaseOpcode(next_opcode) == next_opcode);
+            assert(next_opcode > 0 && next_opcode < 256);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
             DISPATCH_GOTO();
         }
@@ -11086,22 +11077,25 @@
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
-            PyValue res;
-            cond = IR_SLOT(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
             if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (!truth) {
                 res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                res = PyValue_NULL;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -11118,22 +11112,25 @@
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
-            PyValue res;
-            cond = IR_SLOT(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
             if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (truth) {
                 res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                res = PyValue_NULL;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -11154,7 +11151,7 @@
             if (tstate->tracing) {
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = (int)(_PyFrame_InstrOffset(frame, this_instr));
-                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
+                original_opcode = code->_co_monitoring->lines->data[index*code->_co_monitoring->lines->bytes_per_entry];
                 next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
@@ -11192,247 +11189,125 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
                 class_st = window[1];
                 global_super_st = window[0];
-                PyObject *global_super_st_object;
-                _PyValueRoot global_super_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    global_super_st_object = _PyValue_BoxInline(global_super_st);
-                    if (global_super_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    global_super_st = PyStackRef_Box(global_super_st);
+                    if (PyStackRef_IsInline(global_super_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[0] = global_super_st;
                 }
-                else {
-                    global_super_st_object = PyValue_ObjectBorrow(global_super_st);
-                }
-                PyObject *class_st_object;
-                _PyValueRoot class_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    class_st_object = _PyValue_BoxInline(class_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (class_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    class_st = PyStackRef_Box(class_st);
+                    if (PyStackRef_IsInline(class_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[1] = class_st;
                 }
-                else {
-                    class_st_object = PyValue_ObjectBorrow(class_st);
-                }
-                PyObject *self_st_object;
-                _PyValueRoot self_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    self_st_object = _PyValue_BoxInline(self_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (self_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    self_st = PyStackRef_Box(self_st);
+                    if (PyStackRef_IsInline(self_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[2] = self_st;
                 }
-                else {
-                    self_st_object = PyValue_ObjectBorrow(self_st);
-                }
-                PyObject *global_super = global_super_st_object;
-                PyObject *class = class_st_object;
-                PyObject *self = self_st_object;
+                PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
                         frame, this_instr, global_super, arg);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
                     if (err) {
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyStackRef tmp = self_st;
+                        self_st = PyStackRef_NULL;
+                        window[2] = self_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = class_st;
+                        class_st = PyStackRef_NULL;
+                        window[1] = class_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = global_super_st;
+                        global_super_st = PyStackRef_NULL;
+                        window[0] = global_super_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
+                        window[2] = PyStackRef_NULL;
                         JUMP_TO_LABEL(error);
                     }
                 }
                 PyObject *super;
                 {
                     PyObject *stack[] = {class, self};
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
+                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
                     }
                     else {
-                        _PyValueRoot super_ref;
-                        _PyThreadState_PushValueRoot(tstate, &super_ref);
-                        super_ref.value = PyValue_FromObject(super);
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
-                        super = PyValue_ObjectBorrow(
-                            _PyThreadState_PopValueRoot(tstate, &super_ref));
                         if (err < 0) {
-                            super = NULL;
+                            Py_CLEAR(super);
                         }
                     }
                 }
+                _PyStackRef tmp = self_st;
+                self_st = PyStackRef_NULL;
+                window[2] = self_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = class_st;
+                class_st = PyStackRef_NULL;
+                window[1] = class_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = global_super_st;
+                global_super_st = PyStackRef_NULL;
+                window[0] = global_super_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
                 if (super == NULL) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                    class_st_root.object = class_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                    self_st_root.object = self_st_object;
-                }
-                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
+                PyObject *attr_o = PyObject_GetAttr(super, name);
                 Py_DECREF(super);
-                if (PyValue_IsNull(attr_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
+                if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = attr_v;
+                attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &window[1];
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CLEAR_SLOTS(&window[1 + (oparg & 1)], 2 - (oparg & 1));
             window[0] = attr;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -11448,250 +11323,128 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR_NOFB);
+            INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
+            opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
                 class_st = window[1];
                 global_super_st = window[0];
-                PyObject *global_super_st_object;
-                _PyValueRoot global_super_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    global_super_st_object = _PyValue_BoxInline(global_super_st);
-                    if (global_super_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    global_super_st = PyStackRef_Box(global_super_st);
+                    if (PyStackRef_IsInline(global_super_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[0] = global_super_st;
                 }
-                else {
-                    global_super_st_object = PyValue_ObjectBorrow(global_super_st);
-                }
-                PyObject *class_st_object;
-                _PyValueRoot class_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    class_st_object = _PyValue_BoxInline(class_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (class_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    class_st = PyStackRef_Box(class_st);
+                    if (PyStackRef_IsInline(class_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[1] = class_st;
                 }
-                else {
-                    class_st_object = PyValue_ObjectBorrow(class_st);
-                }
-                PyObject *self_st_object;
-                _PyValueRoot self_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    self_st_object = _PyValue_BoxInline(self_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (self_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    self_st = PyStackRef_Box(self_st);
+                    if (PyStackRef_IsInline(self_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
+                    window[2] = self_st;
                 }
-                else {
-                    self_st_object = PyValue_ObjectBorrow(self_st);
-                }
-                PyObject *global_super = global_super_st_object;
-                PyObject *class = class_st_object;
-                PyObject *self = self_st_object;
+                PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
                         frame, this_instr, global_super, arg);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
                     if (err) {
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyStackRef tmp = self_st;
+                        self_st = PyStackRef_NULL;
+                        window[2] = self_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = class_st;
+                        class_st = PyStackRef_NULL;
+                        window[1] = class_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = global_super_st;
+                        global_super_st = PyStackRef_NULL;
+                        window[0] = global_super_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
+                        window[2] = PyStackRef_NULL;
                         JUMP_TO_LABEL(error);
                     }
                 }
                 PyObject *super;
                 {
                     PyObject *stack[] = {class, self};
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
+                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
                     }
                     else {
-                        _PyValueRoot super_ref;
-                        _PyThreadState_PushValueRoot(tstate, &super_ref);
-                        super_ref.value = PyValue_FromObject(super);
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
-                        super = PyValue_ObjectBorrow(
-                            _PyThreadState_PopValueRoot(tstate, &super_ref));
                         if (err < 0) {
-                            super = NULL;
+                            Py_CLEAR(super);
                         }
                     }
                 }
+                _PyStackRef tmp = self_st;
+                self_st = PyStackRef_NULL;
+                window[2] = self_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = class_st;
+                class_st = PyStackRef_NULL;
+                window[1] = class_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = global_super_st;
+                global_super_st = PyStackRef_NULL;
+                window[0] = global_super_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
                 if (super == NULL) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                    class_st_root.object = class_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                    self_st_root.object = self_st_object;
-                }
-                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
+                PyObject *attr_o = PyObject_GetAttr(super, name);
                 Py_DECREF(super);
-                if (PyValue_IsNull(attr_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
+                if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = attr_v;
+                attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &window[1];
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CLEAR_SLOTS(&window[1 + (oparg & 1)], 2 - (oparg & 1));
             window[0] = attr;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -11726,15 +11479,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
-            PyValue iter;
-            PyValue index_or_null;
-            index_or_null = IR_SLOT(IR_FIELD_B(this_instr));
-            iter = IR_SLOT(IR_FIELD_A(this_instr));
-            (void)iter;
+            _PyStackRef iter;
+            _PyStackRef index_or_null;
+            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             (void)index_or_null;
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             INSTRUMENTED_JUMP(prev_instr, this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyStackRef_CLOSE(iter);
             DISPATCH();
         }
 
@@ -11752,39 +11505,39 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _TO_BOOL
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 int err;
-                if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_Int32(value) != 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    err = PyValue_Double(value) != 0.0;
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrueValue(value);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
                 if (err < 0) {
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? _PyValue_True : _PyValue_False;
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
             // _INSTRUMENTED_POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int jump = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int jump = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
                 if (jump) {
                     INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11802,16 +11555,18 @@
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = IR_SLOT(IR_FIELD_A(this_instr));
-            int jump = _PyValue_IsNone(value);
+            _PyStackRef value;
+            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            int jump = PyStackRef_IsNone(value);
             RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11829,16 +11584,18 @@
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = IR_SLOT(IR_FIELD_A(this_instr));
-            int jump = !_PyValue_IsNone(value);
+            _PyStackRef value;
+            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            int jump = !PyStackRef_IsNone(value);
             RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11856,39 +11613,39 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _TO_BOOL
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 int err;
-                if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_Int32(value) != 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    err = PyValue_Double(value) != 0.0;
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrueValue(value);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
                 if (err < 0) {
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? _PyValue_True : _PyValue_False;
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
             // _INSTRUMENTED_POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int jump = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int jump = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
                 if (jump) {
                     INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -11907,12 +11664,16 @@
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                #ifdef Py_GIL_DISABLED
+
+                int check_instrumentation = 1;
+                #else
                 int check_instrumentation = (tstate->tracing == 0);
+                #endif
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version &&
-                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
+                    if (code_version != global_version) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);
@@ -11958,60 +11719,52 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE);
-            PyValue val;
-            PyValue retval;
-            PyValue res;
+            _PyStackRef val;
+            _PyStackRef value;
+            _PyStackRef retval;
+            _PyStackRef res;
             // _RETURN_VALUE_EVENT
             {
                 val = IR_SLOT(IR_FIELD_A(this_instr));
-                PyObject *val_object;
-                _PyValueRoot val_root;
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    val_object = _PyValue_BoxInline(val);
-                    if (val_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(val))) {
+                    val = PyStackRef_Box(val);
+                    if (PyStackRef_IsInline(val)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_RETURN_VALUE, _PY_BOX_OTHER);
+                    BOX_STAT_INC(INSTRUMENTED_RETURN_VALUE);
+                    IR_KEEP_BOX(val, IR_FIELD_A(this_instr));
                 }
                 else {
-                    val_object = PyValue_ObjectBorrow(val);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    _PyThreadState_PushValueRoot(tstate, &val_root);
-                    val_root.object = val_object;
+                    val = IR_BORROW_KNOWN(val, IR_FIELD_A(this_instr));
                 }
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
-                    frame, this_instr, val_object);
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    _PyThreadState_PopValueRoot(tstate, &val_root);
-                }
+                    frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
             }
+            // _MAKE_HEAP_SAFE
+            {
+                value = val;
+                value = PyStackRef_MakeHeapSafe(value);
+            }
             // _RETURN_VALUE
             {
-                retval = val;
+                retval = value;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-                PyValue temp = retval;
+                _PyStackRef temp = retval;
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 _PyFrame_AssertTemporariesClear(frame);
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
                 _PyInterpreterFrame *dying = frame;
-                _PyInterpreterFrame *caller = dying->previous;
-                _PyInstr *resume = NULL;
-                if (dying->owner == FRAME_OWNED_BY_GENERATOR) {
-                    resume = _PyEval_GeneratorReturnTarget(caller);
-                }
-                IR_RETURN_EARLY(caller, temp);
-                frame = tstate->current_frame = caller;
-                _PyGC_INJECT(tstate, _PyGC_SITE_RETURN);
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+                frame = tstate->current_frame = dying->previous;
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
-                if (resume != NULL) {
-                    next_instr = resume;
+                if (generator_return) {
+                    next_instr = _PyEval_GeneratorReturnTarget(frame);
                 }
                 else {
                     LOAD_IP(1);
@@ -12019,7 +11772,7 @@
                 res = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            (void)res;
+            IR_STORE_RETURN(res);
             DISPATCH();
         }
 
@@ -12036,37 +11789,26 @@
             INSTRUCTION_STATS(INSTRUMENTED_YIELD_VALUE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = INSTRUMENTED_YIELD_VALUE;
-            PyValue val;
-            PyValue retval;
-            PyValue value;
+            _PyStackRef val;
+            _PyStackRef value;
+            _PyStackRef retval;
             // _YIELD_VALUE_EVENT
             {
                 val = window[0];
-                PyObject *val_object;
-                _PyValueRoot val_root;
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    val_object = _PyValue_BoxInline(val);
-                    if (val_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    val = PyStackRef_Box(val);
+                    if (PyStackRef_IsInline(val)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(INSTRUMENTED_YIELD_VALUE, _PY_BOX_OTHER);
-                }
-                else {
-                    val_object = PyValue_ObjectBorrow(val);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    _PyThreadState_PushValueRoot(tstate, &val_root);
-                    val_root.object = val_object;
+                    BOX_STAT_INC(INSTRUMENTED_YIELD_VALUE);
+                    window[0] = val;
                 }
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
-                    frame, this_instr, val_object);
-                if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    _PyThreadState_PopValueRoot(tstate, &val_root);
-                }
+                    frame, this_instr, PyStackRef_AsPyObjectBorrow(val));
                 if (err) {
                     // Explicit stack reload
                     slots = _PyFrame_Slots(frame);
@@ -12079,17 +11821,21 @@
                     DISPATCH();
                 }
             }
+            // _MAKE_HEAP_SAFE
+            {
+                value = val;
+                value = PyStackRef_MakeHeapSafe(value);
+            }
             // _YIELD_VALUE
             {
-                retval = val;
+                retval = value;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 frame->instr_ptr++;
                 PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
                 assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
                 assert(oparg == 0 || oparg == 1);
-                PyValue temp = retval;
-                window[0] = PyValue_NULL;
-                IR_RETURN_EARLY(frame->previous, temp);
+                _PyStackRef temp = retval;
+                window[0] = PyStackRef_NULL;
                 DTRACE_FUNCTION_RETURN();
                 tstate->exc_info = gen->gi_exc_state.previous_item;
                 gen->gi_exc_state.previous_item = NULL;
@@ -12102,7 +11848,7 @@
                 ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
                 FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
                 #ifdef Py_DEBUG
-                if (!_PyValue_IsNone(frame->f_executable)) {
+                if (!PyStackRef_IsNone(frame->f_executable)) {
                     Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
                     assert(i >= 0 && i <= INT_MAX);
                     int opcode = _PyIR_BaseOpcode(
@@ -12115,7 +11861,7 @@
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            (void)value;
+            IR_STORE_RETURN(value);
             DISPATCH();
         }
 
@@ -12130,13 +11876,25 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INTERPRETER_EXIT);
-            PyValue retval;
+            _PyStackRef retval;
             retval = IR_SLOT(IR_FIELD_A(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(retval))) {
+                retval = PyStackRef_Box(retval);
+                if (PyStackRef_IsInline(retval)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(INTERPRETER_EXIT);
+                IR_KEEP_BOX(retval, IR_FIELD_A(this_instr));
+            }
+            else {
+                retval = IR_BORROW_KNOWN(retval, IR_FIELD_A(this_instr));
+            }
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
-            PyValue result = retval;
+            PyObject *result = _PyStackRef_AsPyObjectStealPointer(retval);
+            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
             #endif
@@ -12173,33 +11931,35 @@
             INSTRUCTION_STATS(IS_OP);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            _PyStackRef left;
+            _PyStackRef right;
+            _PyStackRef b;
+            _PyStackRef l;
+            _PyStackRef r;
+            _PyStackRef value;
             // _IS_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                int res = PyValue_Is(left, right) ^ oparg;
-                b = res ? _PyValue_True : _PyValue_False;
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                int res = PyStackRef_Is(left, right) ^ oparg;
+                b = res ? PyStackRef_True : PyStackRef_False;
                 l = left;
                 r = right;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             }
             // _POP_TOP
             {
                 value = r;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                PyStackRef_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = l;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
+                PyStackRef_XCLOSE(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
         }
@@ -12280,23 +12040,26 @@
             INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
-            PyValue res;
-            cond = IR_SLOT(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
             if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (!truth) {
                 res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMPTO(oparg);
             }
             else {
-                res = PyValue_NULL;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -12313,23 +12076,26 @@
             INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
-            PyValue res;
-            cond = IR_SLOT(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            _PyStackRef cond;
+            _PyStackRef res;
+            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(cond);
             if (truth < 0) {
+                IR_DROP_BORROW(cond, IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (truth) {
                 res = cond;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMPTO(oparg);
             }
             else {
-                res = PyValue_NULL;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(cond);
+                res = PyStackRef_NULL;
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -12346,19 +12112,34 @@
             INSTRUCTION_STATS(LIST_APPEND);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue list;
-            PyValue v;
+            _PyStackRef list;
+            _PyStackRef v;
             v = window[1 + (oparg-1)];
             list = window[0];
-            assert(PyValue_IsObject(list));
-            int err = _PyList_AppendValue((PyListObject *)PyValue_ObjectBorrow(list), v);
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                list = PyStackRef_Box(list);
+                if (PyStackRef_IsInline(list)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(LIST_APPEND);
+                window[0] = list;
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg-1)]))) {
+                v = PyStackRef_Box(v);
+                if (PyStackRef_IsInline(v)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(LIST_APPEND);
+            }
+            int err = _PyList_AppendTakeRef((PyListObject *)PyStackRef_AsPyObjectBorrow(list),
+                _PyStackRef_AsPyObjectStealPointer(v));
             if (err < 0) {
-                window[1 + (oparg-1)] = PyValue_NULL;
+                window[1 + (oparg-1)] = PyStackRef_NULL;
                 JUMP_TO_LABEL(error);
             }
-            window[1 + (oparg-1)] = PyValue_NULL;
+            window[1 + (oparg-1)] = PyStackRef_NULL;
             DISPATCH();
         }
 
@@ -12375,55 +12156,44 @@
             INSTRUCTION_STATS(LIST_EXTEND);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue list_st;
-            PyValue iterable_st;
-            PyValue i;
-            PyValue value;
+            _PyStackRef list_st;
+            _PyStackRef iterable_st;
+            _PyStackRef i;
+            _PyStackRef value;
             // _LIST_EXTEND
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
-                PyObject *iterable_st_object;
-                _PyValueRoot iterable_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
-                    iterable_st_object = _PyValue_BoxInline(iterable_st);
-                    if (iterable_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    list_st = PyStackRef_Box(list_st);
+                    if (PyStackRef_IsInline(list_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LIST_EXTEND, _PY_BOX_CONTAINER_STORE);
+                    BOX_STAT_INC(LIST_EXTEND);
+                    window[0] = list_st;
                 }
-                else {
-                    iterable_st_object = PyValue_ObjectBorrow(iterable_st);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg-1)]))) {
+                    iterable_st = PyStackRef_Box(iterable_st);
+                    if (PyStackRef_IsInline(iterable_st)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LIST_EXTEND);
+                    window[1 + (oparg-1)] = iterable_st;
                 }
-                assert(PyValue_IsObject(list_st));
-                PyObject *list = PyValue_ObjectBorrow(list_st);
-                PyObject *iterable = iterable_st_object;
-                if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &iterable_st_root);
-                    iterable_st_root.object = iterable_st_object;
-                }
+                PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
+                PyObject *iterable = PyStackRef_AsPyObjectBorrow(iterable_st);
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
-                if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &iterable_st_root);
-                }
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
                     if (matches &&
                         (Py_TYPE(iterable)->tp_iter == NULL && !PySequence_Check(iterable)))
                     {
                         _PyErr_Clear(tstate);
-                        if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &iterable_st_root);
-                            iterable_st_root.object = iterable_st_object;
-                        }
                         _PyErr_Format(tstate, PyExc_TypeError,
                                   "Value after * must be an iterable, not %.200s",
                                   Py_TYPE(iterable)->tp_name);
-                        if (Py_UNLIKELY(PyValue_IsInline(iterable_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &iterable_st_root);
-                        }
                     }
                     JUMP_TO_LABEL(error);
                 }
@@ -12433,9 +12203,9 @@
             // _POP_TOP
             {
                 value = i;
-                (void)value;
+                window[1 + (oparg-1)] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1 + (oparg-1)] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -12454,9 +12224,9 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue *self_or_null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *self_or_null;
             // _SPECIALIZE_LOAD_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
@@ -12475,23 +12245,37 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LOAD_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    attr = _Py_LoadAttr_Values(tstate, owner, name, self_or_null);
-                    if (PyValue_IsNull(attr)) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    if (PyStackRef_IsNull(attr)) {
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    attr = PyObject_GetAttrValue(owner, name);
-                    if (PyValue_IsNull(attr)) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                    _PyStackRef_CLOSE_POINTER(owner);
+                    if (PyStackRef_IsNull(attr)) {
+                        IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                         JUMP_TO_LABEL(error);
                     }
+                    IR_CLEAR_SLOTS(&IR_SLOT(IR_FIELD_A(this_instr) + 1), (oparg&1));
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -12510,26 +12294,29 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue *null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _CHECK_ATTR_CLASS
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t class_version = fb->class_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12537,19 +12324,20 @@
             }
             // _LOAD_ATTR_CLASS
             {
-                PyValue attr_value = fb->attr_value;
+                PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
-                assert(!PyValue_IsNull(attr_value));
-                attr = attr_value;
+                assert(descr != NULL);
+                attr = PyStackRef_FromPyObjectNew(descr);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -12568,21 +12356,23 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue *null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12591,14 +12381,16 @@
             // _CHECK_ATTR_CLASS
             {
                 uint32_t class_version = fb->class_version;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!PyType_Check(owner_o)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12606,19 +12398,20 @@
             }
             // _LOAD_ATTR_CLASS
             {
-                PyValue attr_value = fb->attr_value;
+                PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
-                assert(!PyValue_IsNull(attr_value));
-                attr = attr_value;
+                assert(descr != NULL);
+                attr = PyStackRef_FromPyObjectNew(descr);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -12637,20 +12430,22 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue new_frame;
+            _PyStackRef owner;
+            _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12659,6 +12454,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12673,6 +12469,7 @@
                 PyFunctionObject *f = (PyFunctionObject *)getattribute;
                 assert(func_version != 0);
                 if (f->func_version != func_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12680,6 +12477,7 @@
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12687,10 +12485,11 @@
                 STAT_INC(LOAD_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
-                    tstate, PyValue_FromObject(f), 2, frame);
+                    tstate, PyStackRef_FromPyObjectNew(f), 2, frame);
                 pushed_frame->base[0] = owner;
-                pushed_frame->base[1] = PyValue_FromObject(name);
-                new_frame = _PyValue_Wrap(pushed_frame);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                pushed_frame->base[1] = PyStackRef_FromPyObjectNew(name);
+                new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -12699,8 +12498,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -12711,6 +12509,102 @@
                 DTRACE_FUNCTION_ENTRY();
                 LLTRACE_RESUME_FRAME();
             }
+            DISPATCH();
+        }
+
+        TARGET(LOAD_ATTR_INSTANCE_VALUE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_INSTANCE_VALUE;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _CHECK_MANAGED_OBJECT_HAS_VALUES
+            {
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_INSTANCE_VALUE
+            {
+                uint32_t offset = fb->offset;
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
+                PyObject *attr_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(*value_ptr);
+                if (attr_o == NULL) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                #ifdef Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(value_ptr, attr_o, &attr);
+                if (!increfed) {
+                    if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                        UPDATE_MISS_STATS(LOAD_ATTR);
+                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                        JUMP_TO_PREDICTED(LOAD_ATTR);
+                    }
+                }
+                #else
+                attr = PyStackRef_FromPyObjectNew(attr_o);
+                #endif
+                STAT_INC(LOAD_ATTR, hit);
+                o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            }
+            // _POP_TOP
+            {
+                value = o;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                _PyStackRef_XCLOSE_POINTER(value);
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                if (oparg & 1) {
+                    null[0] = PyStackRef_NULL;
+                }
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
 
@@ -12729,65 +12623,59 @@
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
-            PyValue attr;
-            PyValue self;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef self;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _CHECK_DICT_WORD_NULL
+            // _CHECK_ATTR_METHOD_LAZY_DICT
             {
                 uint32_t dictoffset = fb->dictoffset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                if (_PyObject_DictAt(owner_o, (int32_t)dictoffset) != NULL) {
+                char *ptr = ((char *)PyStackRef_AsPyObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
+                PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*(PyObject **)ptr);
+                if (dict != NULL) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _LOAD_ATTR_METHOD_SHAPE
+            // _LOAD_ATTR_METHOD_LAZY_DICT
             {
                 PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromObject(descr);
+                attr = PyStackRef_FromPyObjectNew(descr);
                 self = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_METHOD_SHAPE) {
+        TARGET(LOAD_ATTR_METHOD_NO_DICT) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_METHOD_SHAPE;
+            int opcode = LOAD_ATTR_METHOD_NO_DICT;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -12795,52 +12683,110 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_METHOD_SHAPE);
+            INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
-            PyValue attr;
-            PyValue self;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef self;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _LOAD_ATTR_METHOD_SHAPE
+            // _LOAD_ATTR_METHOD_NO_DICT
+            {
+                PyObject *descr = (PyObject *)fb->descr;
+                assert(oparg & 1);
+                assert(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_dictoffset == 0);
+                STAT_INC(LOAD_ATTR, hit);
+                assert(descr != NULL);
+                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
+                attr = PyStackRef_FromPyObjectNew(descr);
+                self = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
+            DISPATCH();
+        }
+
+        TARGET(LOAD_ATTR_METHOD_WITH_VALUES) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef self;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _CHECK_MANAGED_OBJECT_HAS_VALUES
+            {
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_METHOD_WITH_VALUES
             {
                 PyObject *descr = (PyObject *)fb->descr;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromObject(descr);
+                attr = PyStackRef_FromPyObjectNew(descr);
                 self = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
             DISPATCH();
@@ -12860,27 +12806,39 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue o;
-            PyValue value;
-            PyValue *null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
             // _LOAD_ATTR_MODULE
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
-                if (PyValue_Type(owner) != &PyModule_Type) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LOAD_ATTR_MODULE);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                if (!PyModule_CheckExact(owner_o)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                assert(PyValue_IsObject(owner));
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
                 PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -12888,28 +12846,43 @@
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 assert(index < FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-                attr = ep->me_value;
-                if (PyValue_IsNull(attr)) {
+                PyObject *attr_o = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_value);
+                if (attr_o == NULL) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
+                #ifdef Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
+                if (!increfed) {
+                    if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                        UPDATE_MISS_STATS(LOAD_ATTR);
+                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                        JUMP_TO_PREDICTED(LOAD_ATTR);
+                    }
+                }
+                #else
+                attr = PyStackRef_FromPyObjectNew(attr_o);
+                #endif
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -12924,13 +12897,13 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_NOFB);
+            INSTRUCTION_STATS(LOAD_ATTR);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue *self_or_null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef *self_or_null;
             // _SPECIALIZE_LOAD_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
@@ -12949,30 +12922,44 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(LOAD_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    attr = _Py_LoadAttr_Values(tstate, owner, name, self_or_null);
-                    if (PyValue_IsNull(attr)) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    if (PyStackRef_IsNull(attr)) {
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    attr = PyObject_GetAttrValue(owner, name);
-                    if (PyValue_IsNull(attr)) {
-                        IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                    _PyStackRef_CLOSE_POINTER(owner);
+                    if (PyStackRef_IsNull(attr)) {
+                        IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                         JUMP_TO_LABEL(error);
                     }
+                    IR_CLEAR_SLOTS(&IR_SLOT(IR_FIELD_A(this_instr) + 1), (oparg&1));
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_NONDESCRIPTOR_SHAPE) {
+        TARGET(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_NONDESCRIPTOR_SHAPE;
+            int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -12980,48 +12967,103 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_SHAPE);
+            INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef attr;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _LOAD_ATTR_NONDESCRIPTOR_SHAPE
+            // _LOAD_ATTR_NONDESCRIPTOR_NO_DICT
             {
-                PyValue attr_value = fb->attr_value;
+                PyObject *descr = (PyObject *)fb->descr;
+                assert((oparg & 1) == 0);
+                assert(Py_TYPE(PyStackRef_AsPyObjectBorrow(owner))->tp_dictoffset == 0);
+                STAT_INC(LOAD_ATTR, hit);
+                assert(descr != NULL);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                attr = PyStackRef_FromPyObjectNew(descr);
+            }
+            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
+            DISPATCH();
+        }
+
+        TARGET(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            (void)oparg;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _CHECK_MANAGED_OBJECT_HAS_VALUES
+            {
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+                if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES
+            {
+                PyObject *descr = (PyObject *)fb->descr;
                 assert((oparg & 1) == 0);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(!PyValue_IsNull(attr_value));
-                attr = attr_value;
+                assert(descr != NULL);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                attr = PyStackRef_FromPyObjectNew(descr);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -13040,20 +13082,22 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue new_frame;
+            _PyStackRef owner;
+            _PyStackRef new_frame;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13062,6 +13106,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13070,31 +13115,28 @@
             // _LOAD_ATTR_PROPERTY_FRAME
             {
                 uint32_t func_version = fb->func_version;
-                PyObject *descr = (PyObject *)fb->descr;
+                PyObject *fget = (PyObject *)fb->fget;
                 assert((oparg & 1) == 0);
-                assert(Py_IS_TYPE(descr, &PyProperty_Type));
-                PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
-                if (fget == NULL || !Py_IS_TYPE(fget, &PyFunction_Type)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
+                assert(Py_IS_TYPE(fget, &PyFunction_Type));
                 PyFunctionObject *f = (PyFunctionObject *)fget;
                 if (f->func_version != func_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyCodeObject *code = (PyCodeObject *)f->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 STAT_INC(LOAD_ATTR, hit);
-                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_FromObject(fget), 1, frame);
+                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyStackRef_FromPyObjectNew(fget), 1, frame);
                 pushed_frame->base[0] = owner;
-                new_frame = _PyValue_Wrap(pushed_frame);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                new_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
             {
@@ -13103,8 +13145,7 @@
             // _PUSH_FRAME
             {
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -13132,33 +13173,35 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue o;
-            PyValue value;
-            PyValue *null;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
-            // _GUARD_SHAPE_VERSION
+            // _GUARD_SHAPE
             {
-                uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13167,78 +13210,27 @@
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                attr = *(PyValue *)((char *)owner_o + offset);
-                assert(!PyValue_IsNull(attr));
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject *attr_o = *(PyObject **)((char *)owner_o + offset);
+                assert(attr_o != NULL);
+                attr = PyStackRef_FromPyObjectNew(attr_o);
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), attr);
-            DISPATCH();
-        }
-
-        TARGET(LOAD_ATTR_SHAPE_POLY) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = LOAD_ATTR_SHAPE_POLY;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR_SHAPE_POLY);
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
-            (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue *self_or_null;
-            owner = IR_SLOT(IR_FIELD_B(this_instr));
-            self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-            if (!_PyValue_IsPointerSpace(owner)) {
-                UPDATE_MISS_STATS(LOAD_ATTR);
-                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                JUMP_TO_PREDICTED(LOAD_ATTR);
-            }
-            PyObject *owner_o = PyValue_ObjectBorrow(owner);
-            _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
-            int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
-            if (row < 0) {
-                UPDATE_MISS_STATS(LOAD_ATTR);
-                assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                JUMP_TO_PREDICTED(LOAD_ATTR);
-            }
-            STAT_INC(LOAD_ATTR, hit);
-            if (poly->handler[row] == LOAD_ATTR_SHAPE) {
-                attr = *(PyValue *)((char *)owner_o + poly->index[row]);
-                assert(!PyValue_IsNull(attr));
-                if (oparg & 1) {
-                    self_or_null[0] = PyValue_NULL;
-                }
-            }
-            else {
-                assert(poly->handler[row] == LOAD_ATTR_METHOD_SHAPE);
-                assert(oparg & 1);
-                PyObject *descr = (PyObject *)poly->descr[row];
-                assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromObject(descr);
-                self_or_null[0] = owner;
-            }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -13257,23 +13249,25 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue o;
-            PyValue value;
-            PyValue *null;
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13282,29 +13276,43 @@
             // _LOAD_ATTR_SLOT
             {
                 uint32_t index = fb->index;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                attr = *(PyValue *)((char *)owner_o + index);
-                if (PyValue_IsNull(attr)) {
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **addr = (PyObject **)((char *)owner_o + index);
+                PyObject *attr_o = FT_ATOMIC_LOAD_PTR(*addr);
+                if (attr_o == NULL) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
+                #ifdef Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(addr, attr_o, &attr);
+                if (!increfed) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                #else
+                attr = PyStackRef_FromPyObjectNew(attr_o);
+                #endif
                 STAT_INC(LOAD_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -13323,33 +13331,25 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue attr;
-            PyValue o;
-            PyValue value;
-            PyValue *null;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef attr;
+            _PyStackRef o;
+            _PyStackRef value;
+            _PyStackRef *null;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13357,23 +13357,30 @@
             }
             // _LOAD_ATTR_WITH_HINT
             {
-                uint32_t dictoffset = fb->dictoffset;
                 uint32_t hint = fb->hint;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+                PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
                 if (dict == NULL) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                if (!PyDict_CheckExact((PyObject *)dict)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
+                assert(PyDict_CheckExact((PyObject *)dict));
+                #ifdef Py_GIL_DISABLED
+                if (!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict)) {
+                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                #endif
+                PyObject *attr_o;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
                     if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13382,6 +13389,7 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 if (dk->dk_kind != DICT_KEYS_UNICODE) {
                     if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
@@ -13390,35 +13398,51 @@
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
                 if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                     if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
                     }
                 }
-                attr = ep->me_value;
-                if (PyValue_IsNull(attr)) {
+                attr_o = FT_ATOMIC_LOAD_PTR(ep->me_value);
+                if (attr_o == NULL) {
                     if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                         UPDATE_MISS_STATS(LOAD_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                         JUMP_TO_PREDICTED(LOAD_ATTR);
                     }
                 }
                 STAT_INC(LOAD_ATTR, hit);
+                #ifdef Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(&ep->me_value, attr_o, &attr);
+                if (!increfed) {
+                    if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
+                        UPDATE_MISS_STATS(LOAD_ATTR);
+                        assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                        JUMP_TO_PREDICTED(LOAD_ATTR);
+                    }
+                }
+                #else
+                attr = PyStackRef_FromPyObjectNew(attr_o);
+                #endif
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             DISPATCH();
         }
@@ -13434,7 +13458,7 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
-            PyValue bc;
+            _PyStackRef bc;
             int err;
             PyObject *bc_o = _PyMapping_GetOptionalItem2(BUILTINS(), &_Py_ID(__build_class__), &err);
             if (err < 0) {
@@ -13445,7 +13469,7 @@
                                  "__build_class__ not found");
                 JUMP_TO_LABEL(error);
             }
-            bc = PyValue_FromObject(bc_o);
+            bc = PyStackRef_FromPyObjectSteal(bc_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), bc);
             DISPATCH();
         }
@@ -13463,9 +13487,9 @@
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
+            _PyStackRef value;
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = tstate->interp->common_consts[oparg];
+            value = PyStackRef_DupImmortal(tstate->interp->common_consts[oparg]);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13484,8 +13508,9 @@
             (void)this_instr;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            _PyStackRef value;
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            value = PyStackRef_FromPyObjectBorrow(obj);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13503,9 +13528,10 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
-            assert(PyValue_IsInlineFloat(value));
+            _PyStackRef value;
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            assert(PyFloat_CheckExact(obj) && !isnan(PyFloat_AS_DOUBLE(obj)));
+            value = PyStackRef_FromDoubleNotNaN(PyFloat_AS_DOUBLE(obj));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13523,9 +13549,13 @@
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
-            assert(PyValue_IsInlineInt(value));
+            _PyStackRef value;
+            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
+            assert(_PyLong_CheckExactAndCompact(obj));
+            value = PyStackRef_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
+            if (PyStackRef_IsNull(value)) {
+                JUMP_TO_LABEL(error);
+            }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13543,14 +13573,15 @@
             INSTRUCTION_STATS(LOAD_DEREF);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
-            PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-            PyValue cell_value = _PyCell_GetValue(cell);
-            if (PyValue_IsNull(cell_value)) {
+            _PyStackRef value;
+            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            value = _PyCell_GetStackRef(cell);
+            if (PyStackRef_IsNull(value)) {
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
                 JUMP_TO_LABEL(error);
             }
-            value = cell_value;
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13568,9 +13599,9 @@
             INSTRUCTION_STATS(LOAD_FAST);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = GETLOCAL(oparg);
+            _PyStackRef value;
+            assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
+            value = PyStackRef_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13588,9 +13619,9 @@
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
+            _PyStackRef value;
             value = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
+            GETLOCAL(oparg) = PyStackRef_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13608,9 +13639,9 @@
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = GETLOCAL(oparg);
+            _PyStackRef value;
+            assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
+            value = PyStackRef_BorrowAt(&GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13629,12 +13660,12 @@
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue value1;
-            PyValue value2;
+            _PyStackRef value1;
+            _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = GETLOCAL((uintptr_t)oparg1);
-            value2 = GETLOCAL((uintptr_t)oparg2);
+            value1 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
+            value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             DISPATCH();
@@ -13653,16 +13684,16 @@
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue value_s = GETLOCAL(oparg);
-            if (PyValue_IsNull(value_s)) {
+            _PyStackRef value;
+            _PyStackRef value_s = GETLOCAL(oparg);
+            if (PyStackRef_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
                     PyTuple_GetItem(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
                 );
                 JUMP_TO_LABEL(error);
             }
-            value = value_s;
+            value = PyStackRef_DUP(value_s);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13681,12 +13712,12 @@
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue value1;
-            PyValue value2;
+            _PyStackRef value1;
+            _PyStackRef value2;
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = GETLOCAL(oparg1);
-            value2 = GETLOCAL(oparg2);
+            value1 = PyStackRef_DUP(GETLOCAL(oparg1));
+            value2 = PyStackRef_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             DISPATCH();
@@ -13705,41 +13736,51 @@
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue class_dict_st;
-            PyValue value;
+            _PyStackRef class_dict_st;
+            _PyStackRef value;
             class_dict_st = IR_SLOT(IR_FIELD_B(this_instr));
-            assert(PyValue_IsObject(class_dict_st));
+            if (Py_UNLIKELY(PyStackRef_IsInline(class_dict_st))) {
+                class_dict_st = PyStackRef_Box(class_dict_st);
+                if (PyStackRef_IsInline(class_dict_st)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
+                IR_KEEP_BOX(class_dict_st, IR_FIELD_B(this_instr));
+            }
+            else {
+                class_dict_st = IR_BORROW_KNOWN(class_dict_st, IR_FIELD_B(this_instr));
+            }
             PyObject *name;
-            PyObject *class_dict = PyValue_ObjectBorrow(class_dict_st);
+            PyObject *class_dict = PyStackRef_AsPyObjectBorrow(class_dict_st);
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
-            name = GETITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
+            name = PyTuple_GET_ITEM(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
             int err;
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
             if (err < 0) {
+                IR_DROP_BORROW(class_dict_st, IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            PyValue result;
             if (!value_o) {
-                PyCellObject *cell = (PyCellObject *)PyValue_ObjectBorrow(GETLOCAL(oparg));
-                result = _PyCell_GetValue(cell);
-                if (PyValue_IsNull(result)) {
+                PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+                value_o = PyCell_GetRef(cell);
+                if (value_o == NULL) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                    IR_DROP_BORROW(class_dict_st, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
-            else {
-                if (PyLazyImport_CheckExact(value_o)) {
-                    Py_SETREF(value_o, _PyLazyImport_Reify(
-                                  tstate, value_o, name, class_dict));
-                    if (value_o == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
+            else if (PyLazyImport_CheckExact(value_o)) {
+                Py_SETREF(value_o, _PyLazyImport_Reify(
+                              tstate, value_o, name, class_dict));
+                if (value_o == NULL) {
+                    IR_DROP_BORROW(class_dict_st, IR_FIELD_B(this_instr));
+                    JUMP_TO_LABEL(error);
                 }
-                result = PyValue_FromObject(value_o);
             }
-            value = result;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(class_dict_st);
+            value = PyStackRef_FromPyObjectSteal(value_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -13757,12 +13798,22 @@
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue mod_or_class_dict;
-            PyValue v;
+            _PyStackRef mod_or_class_dict;
+            _PyStackRef v;
             mod_or_class_dict = IR_SLOT(IR_FIELD_B(this_instr));
-            assert(PyValue_IsObject(mod_or_class_dict));
+            if (Py_UNLIKELY(PyStackRef_IsInline(mod_or_class_dict))) {
+                mod_or_class_dict = PyStackRef_Box(mod_or_class_dict);
+                if (PyStackRef_IsInline(mod_or_class_dict)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
+                IR_KEEP_BOX(mod_or_class_dict, IR_FIELD_B(this_instr));
+            }
+            else {
+                mod_or_class_dict = IR_BORROW_KNOWN(mod_or_class_dict, IR_FIELD_B(this_instr));
+            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *namespace = PyValue_ObjectBorrow(mod_or_class_dict);
+            PyObject *namespace = PyStackRef_AsPyObjectBorrow(mod_or_class_dict);
             int err;
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
@@ -13771,21 +13822,20 @@
                     err = -1;
                 }
             }
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            _PyStackRef_CLOSE_POINTER(mod_or_class_dict);
             if (err < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
             if (v_o == NULL) {
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
-                if (PyValue_IsNull(v)) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyEval_LoadGlobalStackRef(GLOBALS(), BUILTINS(), name, &v);
+                if (PyStackRef_IsNull(v)) {
                     JUMP_TO_LABEL(error);
                 }
             }
             else {
-                v = PyValue_FromObject(v_o);
+                v = PyStackRef_FromPyObjectSteal(v_o);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), v);
             DISPATCH();
         }
@@ -13805,8 +13855,8 @@
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_B(this_instr));
             (void)oparg;
-            PyValue *res;
-            PyValue *null;
+            _PyStackRef *res;
+            _PyStackRef *null;
             // _SPECIALIZE_LOAD_GLOBAL
             {
                 #if ENABLE_SPECIALIZATION
@@ -13825,8 +13875,8 @@
             {
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
-                if (PyValue_IsNull(*res)) {
+                _PyEval_LoadGlobalStackRef(GLOBALS(), BUILTINS(), name, res);
+                if (PyStackRef_IsNull(*res)) {
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -13834,7 +13884,7 @@
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
             DISPATCH();
@@ -13854,8 +13904,8 @@
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue res;
-            PyValue *null;
+            _PyStackRef res;
+            _PyStackRef *null;
             // _GUARD_GLOBALS_VERSION
             {
                 uint32_t globals_version = fb->globals_version;
@@ -13891,19 +13941,29 @@
                 }
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                res = entries[index].me_value;
-                if (PyValue_IsNull(res)) {
+                PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
+                if (res_o == NULL) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
+                #if Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
+                if (!increfed) {
+                    UPDATE_MISS_STATS(LOAD_GLOBAL);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
+                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
+                }
+                #else
+                res = PyStackRef_FromPyObjectNew(res_o);
+                #endif
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
@@ -13924,8 +13984,8 @@
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue res;
-            PyValue *null;
+            _PyStackRef res;
+            _PyStackRef *null;
             // _LOAD_GLOBAL_MODULE
             {
                 uint32_t globals_version = fb->globals_version;
@@ -13945,19 +14005,29 @@
                 assert(keys->dk_kind == DICT_KEYS_UNICODE);
                 PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
                 assert(index < DK_SIZE(keys));
-                res = entries[index].me_value;
-                if (PyValue_IsNull(res)) {
+                PyObject *res_o = FT_ATOMIC_LOAD_PTR_CONSUME(entries[index].me_value);
+                if (res_o == NULL) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
+                #if Py_GIL_DISABLED
+                int increfed = _Py_TryIncrefCompareStackRef(&entries[index].me_value, res_o, &res);
+                if (!increfed) {
+                    UPDATE_MISS_STATS(LOAD_GLOBAL);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
+                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
+                }
+                #else
+                res = PyStackRef_FromPyObjectNew(res_o);
+                #endif
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
@@ -13974,12 +14044,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL_NOFB);
+            INSTRUCTION_STATS(LOAD_GLOBAL);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *res;
-            PyValue *null;
+            _PyStackRef *res;
+            _PyStackRef *null;
             // _SPECIALIZE_LOAD_GLOBAL
             {
                 #if ENABLE_SPECIALIZATION
@@ -13998,8 +14068,8 @@
             {
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
-                if (PyValue_IsNull(*res)) {
+                _PyEval_LoadGlobalStackRef(GLOBALS(), BUILTINS(), name, res);
+                if (PyStackRef_IsNull(*res)) {
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -14007,7 +14077,7 @@
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
             DISPATCH();
@@ -14024,14 +14094,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_LOCALS);
-            PyValue locals;
+            _PyStackRef locals;
             PyObject *l = LOCALS();
             if (l == NULL) {
                 _PyErr_SetString(tstate, PyExc_SystemError,
                                  "no locals found");
                 JUMP_TO_LABEL(error);
             }
-            locals = PyValue_FromObject(l);
+            locals = PyStackRef_FromPyObjectNew(l);
             IR_STORE_DST(IR_FIELD_A(this_instr), locals);
             DISPATCH();
         }
@@ -14049,12 +14119,13 @@
             INSTRUCTION_STATS(LOAD_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
+            _PyStackRef v;
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            v = _PyEval_LoadName(tstate, frame, name);
-            if (PyValue_IsNull(v)) {
+            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
+            if (v_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
+            v = PyStackRef_FromPyObjectSteal(v_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), v);
             DISPATCH();
         }
@@ -14073,10 +14144,10 @@
             (void)this_instr;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
+            _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
             PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
-            value = PyValue_FromObject(obj);
+            value = PyStackRef_FromPyObjectBorrow(obj);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -14094,10 +14165,10 @@
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
+            _PyStackRef value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
-            if (PyValue_IsNull(value)) {
+            value = PyStackRef_FromInt32((int32_t)oparg);
+            if (PyStackRef_IsNull(value)) {
                 JUMP_TO_LABEL(error);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
@@ -14117,37 +14188,35 @@
             INSTRUCTION_STATS(LOAD_SPECIAL);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue self;
-            PyValue *method_and_self;
+            _PyStackRef self;
+            _PyStackRef *method_and_self;
             // _INSERT_NULL
             {
                 self = window[0];
                 method_and_self = &window[0];
                 method_and_self[1] = self;
-                method_and_self[0] = PyValue_NULL;
+                method_and_self[0] = PyStackRef_NULL;
             }
             // _LOAD_SPECIAL
             {
                 method_and_self = &window[0];
                 PyObject *name = _Py_SpecialMethods[oparg].name;
+                if (_PyStackRef_BoxArray(method_and_self + 1, 1) < 0) {
+                    JUMP_TO_LABEL(error);
+                }
                 int err = _PyObject_LookupSpecialMethod(name, &method_and_self[0],
                     &method_and_self[1]);
                 if (err <= 0) {
                     if (err == 0) {
-                        _PyValueRoot owner;
-                        _PyThreadState_PushValueRoot(tstate, &owner);
-                        owner.object = PyValue_Object(method_and_self[1]);
-                        if (owner.object != NULL) {
-                            const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner.object, oparg)
-                            ? _Py_SpecialMethods[oparg].error_suggestion
-                        : _Py_SpecialMethods[oparg].error;
-                            assert(!_PyErr_Occurred(tstate));
-                            assert(errfmt != NULL);
-                            _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner.object);
-                        }
-                        _PyThreadState_PopValueRoot(tstate, &owner);
+                        PyObject *owner = PyStackRef_AsPyObjectBorrow(method_and_self[1]);
+                        const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner, oparg)
+                        ? _Py_SpecialMethods[oparg].error_suggestion
+                    : _Py_SpecialMethods[oparg].error;
+                        assert(!_PyErr_Occurred(tstate));
+                        assert(errfmt != NULL);
+                        _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner);
                     }
                     JUMP_TO_LABEL(error);
                 }
@@ -14170,14 +14239,14 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14197,234 +14266,112 @@
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
-                PyObject *global_super_st_object;
-                _PyValueRoot global_super_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    global_super_st_object = _PyValue_BoxInline(global_super_st);
-                    if (global_super_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    global_super_st = PyStackRef_Box(global_super_st);
+                    if (PyStackRef_IsInline(global_super_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[0] = global_super_st;
                 }
-                else {
-                    global_super_st_object = PyValue_ObjectBorrow(global_super_st);
-                }
-                PyObject *class_st_object;
-                _PyValueRoot class_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    class_st_object = _PyValue_BoxInline(class_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (class_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    class_st = PyStackRef_Box(class_st);
+                    if (PyStackRef_IsInline(class_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[1] = class_st;
                 }
-                else {
-                    class_st_object = PyValue_ObjectBorrow(class_st);
-                }
-                PyObject *self_st_object;
-                _PyValueRoot self_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    self_st_object = _PyValue_BoxInline(self_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (self_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    self_st = PyStackRef_Box(self_st);
+                    if (PyStackRef_IsInline(self_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[2] = self_st;
                 }
-                else {
-                    self_st_object = PyValue_ObjectBorrow(self_st);
-                }
-                PyObject *global_super = global_super_st_object;
-                PyObject *class = class_st_object;
-                PyObject *self = self_st_object;
+                PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
                         frame, this_instr, global_super, arg);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
                     if (err) {
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyStackRef tmp = self_st;
+                        self_st = PyStackRef_NULL;
+                        window[2] = self_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = class_st;
+                        class_st = PyStackRef_NULL;
+                        window[1] = class_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = global_super_st;
+                        global_super_st = PyStackRef_NULL;
+                        window[0] = global_super_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
+                        window[2] = PyStackRef_NULL;
                         JUMP_TO_LABEL(error);
                     }
                 }
                 PyObject *super;
                 {
                     PyObject *stack[] = {class, self};
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
+                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
                     }
                     else {
-                        _PyValueRoot super_ref;
-                        _PyThreadState_PushValueRoot(tstate, &super_ref);
-                        super_ref.value = PyValue_FromObject(super);
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
-                        super = PyValue_ObjectBorrow(
-                            _PyThreadState_PopValueRoot(tstate, &super_ref));
                         if (err < 0) {
-                            super = NULL;
+                            Py_CLEAR(super);
                         }
                     }
                 }
+                _PyStackRef tmp = self_st;
+                self_st = PyStackRef_NULL;
+                window[2] = self_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = class_st;
+                class_st = PyStackRef_NULL;
+                window[1] = class_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = global_super_st;
+                global_super_st = PyStackRef_NULL;
+                window[0] = global_super_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
                 if (super == NULL) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                    class_st_root.object = class_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                    self_st_root.object = self_st_object;
-                }
-                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
+                PyObject *attr_o = PyObject_GetAttr(super, name);
                 Py_DECREF(super);
-                if (PyValue_IsNull(attr_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
+                if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = attr_v;
+                attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &window[1];
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CLEAR_SLOTS(&window[1 + (oparg & 1)], 2 - (oparg & 1));
             window[0] = attr;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -14444,75 +14391,42 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr_st;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr_st;
             self_st = window[2];
             class_st = window[1];
             global_super_st = window[0];
-            PyObject *global_super_st_object;
-            _PyValueRoot global_super_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                global_super_st_object = _PyValue_BoxInline(global_super_st);
-                if (global_super_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                global_super_st = PyStackRef_Box(global_super_st);
+                if (PyStackRef_IsInline(global_super_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR, _PY_BOX_OTHER);
+                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR);
+                window[0] = global_super_st;
             }
-            else {
-                global_super_st_object = PyValue_ObjectBorrow(global_super_st);
-            }
-            PyObject *class_st_object;
-            _PyValueRoot class_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                class_st_object = _PyValue_BoxInline(class_st);
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
-                if (class_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                class_st = PyStackRef_Box(class_st);
+                if (PyStackRef_IsInline(class_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR, _PY_BOX_OTHER);
+                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR);
+                window[1] = class_st;
             }
-            else {
-                class_st_object = PyValue_ObjectBorrow(class_st);
-            }
-            PyObject *self_st_object;
-            _PyValueRoot self_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                    class_st_root.object = class_st_object;
-                }
-                self_st_object = _PyValue_BoxInline(self_st);
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
-                if (self_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                self_st = PyStackRef_Box(self_st);
+                if (PyStackRef_IsInline(self_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR, _PY_BOX_OTHER);
+                BOX_STAT_INC(LOAD_SUPER_ATTR_ATTR);
+                window[2] = self_st;
             }
-            else {
-                self_st_object = PyValue_ObjectBorrow(self_st);
-            }
-            PyObject *global_super = global_super_st_object;
-            PyObject *class = class_st_object;
-            PyObject *self = self_st_object;
+            PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+            PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+            PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
             assert(!(oparg & 1));
             if (global_super != (PyObject *)&PySuper_Type) {
                 UPDATE_MISS_STATS(LOAD_SUPER_ATTR);
@@ -14526,37 +14440,26 @@
             }
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                global_super_st_root.object = global_super_st_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                class_st_root.object = class_st_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                self_st_root.object = self_st_object;
-            }
-            PyValue attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
-            if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                _PyThreadState_PopValueRoot(tstate, &self_st_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                _PyThreadState_PopValueRoot(tstate, &class_st_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-            }
-            if (PyValue_IsNull(attr)) {
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
+            PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
+            _PyStackRef tmp = self_st;
+            self_st = PyStackRef_NULL;
+            window[2] = self_st;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            tmp = class_st;
+            class_st = PyStackRef_NULL;
+            window[1] = class_st;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            tmp = global_super_st;
+            global_super_st = PyStackRef_NULL;
+            window[0] = global_super_st;
+            _PyStackRef_CLOSE_POINTER(tmp);
+            window[0] = PyStackRef_NULL;
+            window[1] = PyStackRef_NULL;
+            window[2] = PyStackRef_NULL;
+            if (attr == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            attr_st = attr;
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
+            attr_st = PyStackRef_FromPyObjectSteal(attr);
             window[0] = attr_st;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -14576,30 +14479,30 @@
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue self_or_null;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr;
+            _PyStackRef self_or_null;
             // _GUARD_LOAD_SUPER_ATTR_METHOD
             {
                 class_st = window[1];
                 global_super_st = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(LOAD_SUPER_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_SUPER_ATTR));
                     JUMP_TO_PREDICTED(LOAD_SUPER_ATTR);
                 }
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[1]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[1]))) {
                     UPDATE_MISS_STATS(LOAD_SUPER_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_SUPER_ATTR));
                     JUMP_TO_PREDICTED(LOAD_SUPER_ATTR);
                 }
-                PyObject *global_super = PyValue_ObjectBorrow(global_super_st);
-                PyObject *class = PyValue_ObjectBorrow(class_st);
+                PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
                 assert(oparg & 1);
                 if (global_super != (PyObject *)&PySuper_Type) {
                     UPDATE_MISS_STATS(LOAD_SUPER_ATTR);
@@ -14615,48 +14518,49 @@
             // _LOAD_SUPER_ATTR_METHOD
             {
                 self_st = window[2];
-                PyObject *self_st_object;
-                _PyValueRoot self_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    self_st_object = _PyValue_BoxInline(self_st);
-                    if (self_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    self_st = PyStackRef_Box(self_st);
+                    if (PyStackRef_IsInline(self_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR_METHOD, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR_METHOD);
+                    window[2] = self_st;
                 }
-                else {
-                    self_st_object = PyValue_ObjectBorrow(self_st);
-                }
-                PyObject *class = PyValue_ObjectBorrow(class_st);
-                PyObject *self = self_st_object;
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
                 STAT_INC(LOAD_SUPER_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
                 int method_found = 0;
-                PyValue attr_v;
+                PyObject *attr_o;
                 {
                     int *method_found_ptr = &method_found;
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
-                    attr_v = _PySuper_Lookup(cls, self, name,
+                    attr_o = _PySuper_Lookup(cls, self, name,
                         Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ? method_found_ptr : NULL);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
                 }
-                if (PyValue_IsNull(attr_v)) {
+                if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 if (method_found) {
                     self_or_null = self_st;
                 } else {
-                    self_or_null = PyValue_NULL;
+                    window[2] = PyStackRef_NULL;
+                    _PyStackRef_CLOSE_POINTER(self_st);
+                    self_or_null = PyStackRef_NULL;
                 }
-                attr = attr_v;
+                window[2] = PyStackRef_NULL;
+                _PyStackRef tmp = global_super_st;
+                global_super_st = self_or_null;
+                window[0] = global_super_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = class_st;
+                class_st = PyStackRef_NULL;
+                window[1] = class_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
-            window[2] = PyValue_NULL;
             window[0] = attr;
             window[1] = self_or_null;
             DISPATCH();
@@ -14672,18 +14576,18 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_SUPER_ATTR_NOFB);
+            INSTRUCTION_STATS(LOAD_SUPER_ATTR);
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            opcode = LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
+            opcode = LOAD_SUPER_ATTR_NOFB;
+            _PyStackRef global_super_st;
+            _PyStackRef class_st;
+            _PyStackRef self_st;
+            _PyStackRef attr;
+            _PyStackRef *null;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14703,234 +14607,112 @@
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
-                PyObject *global_super_st_object;
-                _PyValueRoot global_super_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    global_super_st_object = _PyValue_BoxInline(global_super_st);
-                    if (global_super_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    global_super_st = PyStackRef_Box(global_super_st);
+                    if (PyStackRef_IsInline(global_super_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[0] = global_super_st;
                 }
-                else {
-                    global_super_st_object = PyValue_ObjectBorrow(global_super_st);
-                }
-                PyObject *class_st_object;
-                _PyValueRoot class_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    class_st_object = _PyValue_BoxInline(class_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (class_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    class_st = PyStackRef_Box(class_st);
+                    if (PyStackRef_IsInline(class_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[1] = class_st;
                 }
-                else {
-                    class_st_object = PyValue_ObjectBorrow(class_st);
-                }
-                PyObject *self_st_object;
-                _PyValueRoot self_st_root;
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    self_st_object = _PyValue_BoxInline(self_st);
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
-                    if (self_st_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    self_st = PyStackRef_Box(self_st);
+                    if (PyStackRef_IsInline(self_st)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR, _PY_BOX_OTHER);
+                    BOX_STAT_INC(LOAD_SUPER_ATTR);
+                    window[2] = self_st;
                 }
-                else {
-                    self_st_object = PyValue_ObjectBorrow(self_st);
-                }
-                PyObject *global_super = global_super_st_object;
-                PyObject *class = class_st_object;
-                PyObject *self = self_st_object;
+                PyObject *global_super = PyStackRef_AsPyObjectBorrow(global_super_st);
+                PyObject *class = PyStackRef_AsPyObjectBorrow(class_st);
+                PyObject *self = PyStackRef_AsPyObjectBorrow(self_st);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
                         frame, this_instr, global_super, arg);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
                     if (err) {
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
+                        _PyStackRef tmp = self_st;
+                        self_st = PyStackRef_NULL;
+                        window[2] = self_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = class_st;
+                        class_st = PyStackRef_NULL;
+                        window[1] = class_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        tmp = global_super_st;
+                        global_super_st = PyStackRef_NULL;
+                        window[0] = global_super_st;
+                        _PyStackRef_CLOSE_POINTER(tmp);
+                        window[0] = PyStackRef_NULL;
+                        window[1] = PyStackRef_NULL;
+                        window[2] = PyStackRef_NULL;
                         JUMP_TO_LABEL(error);
                     }
                 }
                 PyObject *super;
                 {
                     PyObject *stack[] = {class, self};
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                        global_super_st_root.object = global_super_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                        class_st_root.object = class_st_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                        self_st_root.object = self_st_object;
-                    }
                     super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                        _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                    }
+                    _PyGC_CLEAR_ARRAY(stack);
                 }
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
                     }
                     else {
-                        _PyValueRoot super_ref;
-                        _PyThreadState_PushValueRoot(tstate, &super_ref);
-                        super_ref.value = PyValue_FromObject(super);
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                            global_super_st_root.object = global_super_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                            class_st_root.object = class_st_object;
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                            self_st_root.object = self_st_object;
-                        }
                         int err = _Py_call_instrumentation_2args(
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
-                        if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                        }
-                        if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                            _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                        }
-                        super = PyValue_ObjectBorrow(
-                            _PyThreadState_PopValueRoot(tstate, &super_ref));
                         if (err < 0) {
-                            super = NULL;
+                            Py_CLEAR(super);
                         }
                     }
                 }
+                _PyStackRef tmp = self_st;
+                self_st = PyStackRef_NULL;
+                window[2] = self_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = class_st;
+                class_st = PyStackRef_NULL;
+                window[1] = class_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                tmp = global_super_st;
+                global_super_st = PyStackRef_NULL;
+                window[0] = global_super_st;
+                _PyStackRef_CLOSE_POINTER(tmp);
+                window[0] = PyStackRef_NULL;
+                window[1] = PyStackRef_NULL;
+                window[2] = PyStackRef_NULL;
                 if (super == NULL) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &global_super_st_root);
-                    global_super_st_root.object = global_super_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &class_st_root);
-                    class_st_root.object = class_st_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PushValueRoot(tstate, &self_st_root);
-                    self_st_root.object = self_st_object;
-                }
-                PyValue attr_v = PyObject_GetAttrValue(PyValue_FromObject(super), name);
-                if (Py_UNLIKELY(PyValue_IsInline(self_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &self_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(class_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &class_st_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(global_super_st))) {
-                    _PyThreadState_PopValueRoot(tstate, &global_super_st_root);
-                }
+                PyObject *attr_o = PyObject_GetAttr(super, name);
                 Py_DECREF(super);
-                if (PyValue_IsNull(attr_v)) {
-                    window[0] = PyValue_NULL;
-                    window[1] = PyValue_NULL;
-                    window[2] = PyValue_NULL;
+                if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = attr_v;
+                attr = PyStackRef_FromPyObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
                 null = &window[1];
                 if (oparg & 1) {
-                    null[0] = PyValue_NULL;
+                    null[0] = PyStackRef_NULL;
                 }
             }
-            IR_CLEAR_SLOTS(&window[1 + (oparg & 1)], 2 - (oparg & 1));
             window[0] = attr;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
@@ -14949,13 +14731,17 @@
             INSTRUCTION_STATS(MAKE_CELL);
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
-            PyValue initial = GETLOCAL(oparg);
-            PyObject *cell = PyCell_New(NULL);
+            if (_PyStackRef_BoxArray(&GETLOCAL(oparg), 1) < 0) {
+                JUMP_TO_LABEL(error);
+            }
+            PyObject *initial = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyObject *cell = PyCell_New(initial);
             if (cell == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            PyCell_SET_VALUE(cell, initial);
-            GETLOCAL(oparg) = PyValue_FromObject(cell);
+            _PyStackRef tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyStackRef_FromPyObjectSteal(cell);
+            PyStackRef_XCLOSE(tmp);
             DISPATCH();
         }
 
@@ -14970,31 +14756,43 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_FUNCTION);
-            PyValue codeobj_st;
-            PyValue func;
-            PyValue co;
-            PyValue value;
+            _PyStackRef codeobj_st;
+            _PyStackRef func;
+            _PyStackRef co;
+            _PyStackRef value;
             // _MAKE_FUNCTION
             {
                 codeobj_st = IR_SLOT(IR_FIELD_B(this_instr));
-                assert(PyValue_IsObject(codeobj_st));
-                PyObject *codeobj = PyValue_ObjectBorrow(codeobj_st);
+                if (Py_UNLIKELY(PyStackRef_IsInline(codeobj_st))) {
+                    codeobj_st = PyStackRef_Box(codeobj_st);
+                    if (PyStackRef_IsInline(codeobj_st)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(MAKE_FUNCTION);
+                    IR_KEEP_BOX(codeobj_st, IR_FIELD_B(this_instr));
+                }
+                else {
+                    codeobj_st = IR_BORROW_KNOWN(codeobj_st, IR_FIELD_B(this_instr));
+                }
+                PyObject *codeobj = PyStackRef_AsPyObjectBorrow(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
                 if (func_obj == NULL) {
+                    IR_DROP_BORROW(codeobj_st, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 co = codeobj_st;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 _PyFunction_SetVersion(
                                    func_obj, ((PyCodeObject *)codeobj)->co_version);
-                func = PyValue_FromObject((PyObject *)func_obj);
+                func = PyStackRef_FromPyObjectSteal((PyObject *)func_obj);
             }
             // _POP_TOP
             {
                 value = co;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), func);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), func);
             DISPATCH();
         }
@@ -15012,25 +14810,52 @@
             INSTRUCTION_STATS(MAP_ADD);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue dict_st;
-            PyValue key;
-            PyValue value;
+            _PyStackRef dict_st;
+            _PyStackRef key;
+            _PyStackRef value;
             value = window[2 + (oparg - 1)];
             key = window[1 + (oparg - 1)];
             dict_st = window[0];
-            assert(PyValue_IsObject(dict_st));
-            PyObject *dict = PyValue_ObjectBorrow(dict_st);
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                dict_st = PyStackRef_Box(dict_st);
+                if (PyStackRef_IsInline(dict_st)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(MAP_ADD);
+                window[0] = dict_st;
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg - 1)]))) {
+                key = PyStackRef_Box(key);
+                if (PyStackRef_IsInline(key)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(MAP_ADD);
+                window[1 + (oparg - 1)] = key;
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + (oparg - 1)]))) {
+                value = PyStackRef_Box(value);
+                if (PyStackRef_IsInline(value)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(MAP_ADD);
+                window[2 + (oparg - 1)] = value;
+            }
+            PyObject *dict = PyStackRef_AsPyObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
-            int err = _PyDict_SetItemValue((PyDictObject *)dict, key, value);
+            int err = _PyDict_SetItem_Take2(
+                (PyDictObject *)dict,
+                _PyStackRef_AsPyObjectStealPointer(key),
+                _PyStackRef_AsPyObjectStealPointer(value)
+            );
             if (err != 0) {
-                window[1 + (oparg - 1)] = PyValue_NULL;
-                window[2 + (oparg - 1)] = PyValue_NULL;
+                window[1 + (oparg - 1)] = PyStackRef_NULL;
+                window[2 + (oparg - 1)] = PyStackRef_NULL;
                 JUMP_TO_LABEL(error);
             }
-            window[1 + (oparg - 1)] = PyValue_NULL;
-            window[2 + (oparg - 1)] = PyValue_NULL;
+            window[1 + (oparg - 1)] = PyStackRef_NULL;
+            window[2 + (oparg - 1)] = PyStackRef_NULL;
             DISPATCH();
         }
 
@@ -15047,113 +14872,59 @@
             INSTRUCTION_STATS(MATCH_CLASS);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue subject;
-            PyValue type;
-            PyValue names;
-            PyValue attrs;
-            PyValue s;
-            PyValue tp;
-            PyValue n;
-            PyValue value;
+            _PyStackRef subject;
+            _PyStackRef type;
+            _PyStackRef names;
+            _PyStackRef attrs;
+            _PyStackRef s;
+            _PyStackRef tp;
+            _PyStackRef n;
+            _PyStackRef value;
             // _MATCH_CLASS
             {
                 names = window[2];
                 type = window[1];
                 subject = window[0];
-                PyObject *subject_object;
-                _PyValueRoot subject_root;
-                if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                    subject_object = _PyValue_BoxInline(subject);
-                    if (subject_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    subject = PyStackRef_Box(subject);
+                    if (PyStackRef_IsInline(subject)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(MATCH_CLASS, _PY_BOX_OTHER);
+                    BOX_STAT_INC(MATCH_CLASS);
+                    window[0] = subject;
                 }
-                else {
-                    subject_object = PyValue_ObjectBorrow(subject);
-                }
-                PyObject *type_object;
-                _PyValueRoot type_root;
-                if (Py_UNLIKELY(PyValue_IsInline(type))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                        _PyThreadState_PushValueRoot(tstate, &subject_root);
-                        subject_root.object = subject_object;
-                    }
-                    type_object = _PyValue_BoxInline(type);
-                    if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                        _PyThreadState_PopValueRoot(tstate, &subject_root);
-                    }
-                    if (type_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                    type = PyStackRef_Box(type);
+                    if (PyStackRef_IsInline(type)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(MATCH_CLASS, _PY_BOX_OTHER);
+                    BOX_STAT_INC(MATCH_CLASS);
+                    window[1] = type;
                 }
-                else {
-                    type_object = PyValue_ObjectBorrow(type);
-                }
-                PyObject *names_object;
-                _PyValueRoot names_root;
-                if (Py_UNLIKELY(PyValue_IsInline(names))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                        _PyThreadState_PushValueRoot(tstate, &subject_root);
-                        subject_root.object = subject_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(type))) {
-                        _PyThreadState_PushValueRoot(tstate, &type_root);
-                        type_root.object = type_object;
-                    }
-                    names_object = _PyValue_BoxInline(names);
-                    if (Py_UNLIKELY(PyValue_IsInline(type))) {
-                        _PyThreadState_PopValueRoot(tstate, &type_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                        _PyThreadState_PopValueRoot(tstate, &subject_root);
-                    }
-                    if (names_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    names = PyStackRef_Box(names);
+                    if (PyStackRef_IsInline(names)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(MATCH_CLASS, _PY_BOX_OTHER);
+                    BOX_STAT_INC(MATCH_CLASS);
+                    window[2] = names;
                 }
-                else {
-                    names_object = PyValue_ObjectBorrow(names);
-                }
-                assert(PyTuple_CheckExact(names_object));
-                if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                    _PyThreadState_PushValueRoot(tstate, &subject_root);
-                    subject_root.object = subject_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(type))) {
-                    _PyThreadState_PushValueRoot(tstate, &type_root);
-                    type_root.object = type_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(names))) {
-                    _PyThreadState_PushValueRoot(tstate, &names_root);
-                    names_root.object = names_object;
-                }
+                assert(PyTuple_CheckExact(PyStackRef_AsPyObjectBorrow(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                    subject_object,
-                    type_object, oparg,
-                    names_object);
-                if (Py_UNLIKELY(PyValue_IsInline(names))) {
-                    _PyThreadState_PopValueRoot(tstate, &names_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(type))) {
-                    _PyThreadState_PopValueRoot(tstate, &type_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                    _PyThreadState_PopValueRoot(tstate, &subject_root);
-                }
+                    PyStackRef_AsPyObjectBorrow(subject),
+                    PyStackRef_AsPyObjectBorrow(type), oparg,
+                    PyStackRef_AsPyObjectBorrow(names));
                 if (attrs_o) {
                     assert(PyTuple_CheckExact(attrs_o));
-                    attrs = PyValue_FromObject(attrs_o);
+                    attrs = PyStackRef_FromPyObjectSteal(attrs_o);
                 }
                 else {
                     if (_PyErr_Occurred(tstate)) {
                         JUMP_TO_LABEL(error);
                     }
-                    attrs = _PyValue_None;
+                    attrs = PyStackRef_None;
                 }
                 s = subject;
                 tp = type;
@@ -15162,21 +14933,23 @@
             // _POP_TOP
             {
                 value = n;
-                (void)value;
+                window[0] = attrs;
+                window[1] = s;
+                window[2] = tp;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = tp;
-                (void)value;
+                window[2] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = s;
-                (void)value;
+                window[1] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1] = PyValue_NULL;
-            window[2] = PyValue_NULL;
-            window[0] = attrs;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -15192,62 +14965,33 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
-            PyValue subject;
-            PyValue keys;
-            PyValue values_or_none;
+            _PyStackRef subject;
+            _PyStackRef keys;
+            _PyStackRef values_or_none;
             keys = IR_SLOT(IR_FIELD_C(this_instr));
             subject = IR_SLOT(IR_FIELD_B(this_instr));
-            PyObject *subject_object;
-            _PyValueRoot subject_root;
-            if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                subject_object = _PyValue_BoxInline(subject);
-                if (subject_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                subject = PyStackRef_Box(subject);
+                if (PyStackRef_IsInline(subject)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(MATCH_KEYS, _PY_BOX_OTHER);
+                BOX_STAT_INC(MATCH_KEYS);
+                IR_SLOT(IR_FIELD_B(this_instr)) = subject;
             }
-            else {
-                subject_object = PyValue_ObjectBorrow(subject);
-            }
-            PyObject *keys_object;
-            _PyValueRoot keys_root;
-            if (Py_UNLIKELY(PyValue_IsInline(keys))) {
-                if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                    _PyThreadState_PushValueRoot(tstate, &subject_root);
-                    subject_root.object = subject_object;
-                }
-                keys_object = _PyValue_BoxInline(keys);
-                if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                    _PyThreadState_PopValueRoot(tstate, &subject_root);
-                }
-                if (keys_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&IR_SLOT(IR_FIELD_C(this_instr))))) {
+                keys = PyStackRef_Box(keys);
+                if (PyStackRef_IsInline(keys)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(MATCH_KEYS, _PY_BOX_OTHER);
-            }
-            else {
-                keys_object = PyValue_ObjectBorrow(keys);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                _PyThreadState_PushValueRoot(tstate, &subject_root);
-                subject_root.object = subject_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(keys))) {
-                _PyThreadState_PushValueRoot(tstate, &keys_root);
-                keys_root.object = keys_object;
+                BOX_STAT_INC(MATCH_KEYS);
+                IR_SLOT(IR_FIELD_C(this_instr)) = keys;
             }
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                subject_object, keys_object);
-            if (Py_UNLIKELY(PyValue_IsInline(keys))) {
-                _PyThreadState_PopValueRoot(tstate, &keys_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(subject))) {
-                _PyThreadState_PopValueRoot(tstate, &subject_root);
-            }
+                PyStackRef_AsPyObjectBorrow(subject), PyStackRef_AsPyObjectBorrow(keys));
             if (values_or_none_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            values_or_none = PyValue_FromObject(values_or_none_o);
+            values_or_none = PyStackRef_FromPyObjectSteal(values_or_none_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), values_or_none);
             DISPATCH();
         }
@@ -15263,11 +15007,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_MAPPING);
-            PyValue subject;
-            PyValue res;
+            _PyStackRef subject;
+            _PyStackRef res;
             subject = IR_SLOT(IR_FIELD_B(this_instr));
-            int match = PyValue_Type(subject)->tp_flags & Py_TPFLAGS_MAPPING;
-            res = match ? _PyValue_True : _PyValue_False;
+            int match = PyStackRef_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
+            res = match ? PyStackRef_True : PyStackRef_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -15283,11 +15027,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_SEQUENCE);
-            PyValue subject;
-            PyValue res;
+            _PyStackRef subject;
+            _PyStackRef res;
             subject = IR_SLOT(IR_FIELD_B(this_instr));
-            int match = PyValue_Type(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
-            res = match ? _PyValue_True : _PyValue_False;
+            int match = PyStackRef_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
+            res = match ? PyStackRef_True : PyStackRef_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -15331,23 +15075,23 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_EXCEPT);
-            PyValue exc_value;
+            _PyStackRef exc_value;
             exc_value = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *exc_value_object;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_value))) {
-                exc_value_object = _PyValue_BoxInline(exc_value);
-                if (exc_value_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInline(exc_value))) {
+                exc_value = PyStackRef_Box(exc_value);
+                if (PyStackRef_IsInline(exc_value)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(POP_EXCEPT, _PY_BOX_OTHER);
+                BOX_STAT_INC(POP_EXCEPT);
+                IR_KEEP_BOX(exc_value, IR_FIELD_A(this_instr));
             }
             else {
-                exc_value_object = PyValue_ObjectBorrow(exc_value);
+                exc_value = IR_BORROW_KNOWN(exc_value, IR_FIELD_A(this_instr));
             }
             _PyErr_StackItem *exc_info = tstate->exc_info;
             Py_XSETREF(exc_info->exc_value,
-                       _PyValue_IsNone(exc_value)
-                       ? NULL : exc_value_object);
+                       PyStackRef_IsNone(exc_value)
+                       ? NULL : _PyStackRef_AsPyObjectStealPointer(exc_value));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
@@ -15363,14 +15107,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
-            PyValue iter;
-            PyValue index_or_null;
-            index_or_null = IR_SLOT(IR_FIELD_B(this_instr));
-            iter = IR_SLOT(IR_FIELD_A(this_instr));
-            (void)iter;
+            _PyStackRef iter;
+            _PyStackRef index_or_null;
+            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            PyStackRef_CLOSE(iter);
             DISPATCH();
         }
 
@@ -15389,17 +15133,18 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
@@ -15409,26 +15154,27 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_Int32(value) != 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    err = PyValue_Double(value) != 0.0;
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrueValue(value);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
                 if (err < 0) {
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? _PyValue_True : _PyValue_False;
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15437,7 +15183,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15455,23 +15200,25 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15480,19 +15227,20 @@
             // _REPLACE_WITH_TRUE
             {
                 value = owner;
-                res = _PyValue_True;
+                res = PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15501,7 +15249,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15519,12 +15266,13 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef cond;
             // _GUARD_TOS_BOOL
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (!_PyValue_IsTrue(value) && !_PyValue_IsFalse(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_BoolCheck(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15534,8 +15282,9 @@
             // _POP_JUMP_IF_FALSE
             {
                 cond = value;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15544,7 +15293,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15562,14 +15310,15 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_EXACT_INT
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (PyValue_Type(value) != &PyLong_Type) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_LongCheckExact(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15579,25 +15328,27 @@
             {
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
-                if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_Int32(value) == 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    zero = PyStackRef_InlineInt(value) == 0;
                 }
                 else {
-                    zero = _PyLong_IsZero((PyLongObject *)PyValue_ObjectBorrow(value));
+                    zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
                 }
-                res = zero ? _PyValue_False : _PyValue_True;
+                res = zero ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = v;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15606,7 +15357,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15624,21 +15374,23 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue tos;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef tos;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_LIST
             {
                 tos = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_A(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15647,22 +15399,23 @@
             // _TO_BOOL_LIST
             {
                 value = tos;
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
-                res = PyList_GET_SIZE(value_o) ? _PyValue_True : _PyValue_False;
+                res = PyList_GET_SIZE(value_o) ? PyStackRef_True : PyStackRef_False;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15671,7 +15424,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15689,25 +15441,27 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _TO_BOOL_NONE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (!_PyValue_IsNone(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_IsNone(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 STAT_INC(TO_BOOL, hit);
-                res = _PyValue_False;
+                res = PyStackRef_False;
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15716,7 +15470,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15734,20 +15487,22 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_A(this_instr));
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
@@ -15756,20 +15511,22 @@
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_ObjectBorrow(value);
-                res = value_o == &_Py_STR(empty) ? _PyValue_False : _PyValue_True;
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                res = value_o == &_Py_STR(empty) ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = v;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15778,7 +15535,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15796,24 +15552,27 @@
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue b;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef b;
+            _PyStackRef cond;
             // _IS_NONE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (_PyValue_IsNone(value)) {
-                    b = _PyValue_True;
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (PyStackRef_IsNone(value)) {
+                    b = PyStackRef_True;
+                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 }
                 else {
-                    b = _PyValue_False;
+                    b = PyStackRef_False;
+                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    PyStackRef_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = b;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15822,7 +15581,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15840,24 +15598,27 @@
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue b;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef b;
+            _PyStackRef cond;
             // _IS_NONE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (_PyValue_IsNone(value)) {
-                    b = _PyValue_True;
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (PyStackRef_IsNone(value)) {
+                    b = PyStackRef_True;
+                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 }
                 else {
-                    b = _PyValue_False;
+                    b = PyStackRef_False;
+                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    PyStackRef_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = b;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsFalse(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15866,7 +15627,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15885,17 +15645,18 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
@@ -15905,26 +15666,27 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_Int32(value) != 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    err = PyValue_Double(value) != 0.0;
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrueValue(value);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(value);
                 if (err < 0) {
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? _PyValue_True : _PyValue_False;
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15933,7 +15695,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -15951,23 +15712,25 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -15976,19 +15739,20 @@
             // _REPLACE_WITH_TRUE
             {
                 value = owner;
-                res = _PyValue_True;
+                res = PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15997,7 +15761,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16015,12 +15778,13 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef cond;
             // _GUARD_TOS_BOOL
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (!_PyValue_IsTrue(value) && !_PyValue_IsFalse(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_BoolCheck(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -16030,8 +15794,9 @@
             // _POP_JUMP_IF_TRUE
             {
                 cond = value;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -16040,7 +15805,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16058,14 +15822,15 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_EXACT_INT
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (PyValue_Type(value) != &PyLong_Type) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_LongCheckExact(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -16075,25 +15840,27 @@
             {
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
-                if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_Int32(value) == 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    zero = PyStackRef_InlineInt(value) == 0;
                 }
                 else {
-                    zero = _PyLong_IsZero((PyLongObject *)PyValue_ObjectBorrow(value));
+                    zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
                 }
-                res = zero ? _PyValue_False : _PyValue_True;
+                res = zero ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = v;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -16102,7 +15869,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16120,21 +15886,23 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue tos;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef tos;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_LIST
             {
                 tos = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(tos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                tos = IR_BORROW_KNOWN(tos, IR_FIELD_A(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(tos, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -16143,22 +15911,23 @@
             // _TO_BOOL_LIST
             {
                 value = tos;
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
-                res = PyList_GET_SIZE(value_o) ? _PyValue_True : _PyValue_False;
+                res = PyList_GET_SIZE(value_o) ? PyStackRef_True : PyStackRef_False;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -16167,7 +15936,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16185,25 +15953,27 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef cond;
             // _TO_BOOL_NONE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (!_PyValue_IsNone(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                if (!PyStackRef_IsNone(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 STAT_INC(TO_BOOL, hit);
-                res = _PyValue_False;
+                res = PyStackRef_False;
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -16212,7 +15982,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16230,20 +15999,22 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue res;
-            PyValue v;
-            PyValue cond;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
+            _PyStackRef cond;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(value))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                value = IR_BORROW_KNOWN(value, IR_FIELD_A(this_instr));
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
@@ -16252,20 +16023,22 @@
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_ObjectBorrow(value);
-                res = value_o == &_Py_STR(empty) ? _PyValue_False : _PyValue_True;
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                res = value_o == &_Py_STR(empty) ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = v;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(_PyValue_IsTrue(cond) || _PyValue_IsFalse(cond));
-                int flag = _PyValue_IsTrue(cond);
+                assert(PyStackRef_BoolCheck(cond));
+                int flag = PyStackRef_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -16274,7 +16047,6 @@
                     JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -16289,10 +16061,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
-            PyValue value;
-            value = IR_SLOT(IR_FIELD_A(this_instr));
-            (void)value;
+            _PyStackRef value;
+            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            PyStackRef_XCLOSE(value);
             DISPATCH();
         }
 
@@ -16307,33 +16079,29 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue exc;
-            PyValue prev_exc;
-            PyValue new_exc;
+            _PyStackRef exc;
+            _PyStackRef prev_exc;
+            _PyStackRef new_exc;
             exc = window[0];
-            PyObject *exc_object;
-            if (Py_UNLIKELY(PyValue_IsInline(exc))) {
-                exc_object = _PyValue_BoxInline(exc);
-                if (exc_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                exc = PyStackRef_Box(exc);
+                if (PyStackRef_IsInline(exc)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(PUSH_EXC_INFO, _PY_BOX_OTHER);
-            }
-            else {
-                exc_object = PyValue_ObjectBorrow(exc);
+                BOX_STAT_INC(PUSH_EXC_INFO);
             }
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObject(exc_info->exc_value);
+                prev_exc = PyStackRef_FromPyObjectSteal(exc_info->exc_value);
             }
             else {
-                prev_exc = _PyValue_None;
+                prev_exc = PyStackRef_None;
             }
-            assert(PyExceptionInstance_Check(exc_object));
-            exc_info->exc_value = exc_object;
+            assert(PyStackRef_ExceptionInstanceCheck(exc));
+            exc_info->exc_value = PyStackRef_AsPyObjectNew(exc);
             new_exc = exc;
             window[0] = prev_exc;
             window[1] = new_exc;
@@ -16351,8 +16119,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
-            PyValue res;
-            res = PyValue_NULL;
+            _PyStackRef res;
+            res = PyStackRef_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -16370,32 +16138,23 @@
             INSTRUCTION_STATS(RAISE_VARARGS);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue *args;
+            _PyStackRef *args;
             args = &window[0];
             assert(oparg < 3);
-            _PyValueRoot exc, cause;
-            _PyThreadState_PushValueRoot(tstate, &exc);
-            _PyThreadState_PushValueRoot(tstate, &cause);
-            int boxed = 1;
-            if (oparg == 2) {
-                cause.object = PyValue_Object(args[1]);
-                boxed = cause.object != NULL;
+            if (_PyStackRef_BoxArray(args, oparg) < 0) {
+                JUMP_TO_LABEL(error);
             }
-            if (oparg > 0 && boxed) {
-                exc.object = PyValue_Object(args[0]);
-                boxed = exc.object != NULL;
-            }
-            int err = boxed ? do_raise(tstate, exc.object, cause.object) : 0;
-            _PyThreadState_PopValueRoot(tstate, &cause);
-            _PyThreadState_PopValueRoot(tstate, &exc);
+            PyObject *cause = oparg == 2 ? PyStackRef_AsPyObjectSteal(args[1]) : NULL;
+            PyObject *exc = oparg > 0 ? PyStackRef_AsPyObjectSteal(args[0]) : NULL;
+            IR_CLEAR_SLOTS(&window[0], oparg);
+            int err = do_raise(tstate, exc, cause);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
                 JUMP_TO_LABEL(exception_unwind);
             }
-            IR_CLEAR_SLOTS(&window[0], oparg);
             JUMP_TO_LABEL(error);
         }
 
@@ -16412,46 +16171,29 @@
             INSTRUCTION_STATS(RERAISE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue *values;
-            PyValue exc_st;
+            _PyStackRef *values;
+            _PyStackRef exc_st;
             exc_st = window[oparg];
             values = &window[0];
-            PyObject *exc_st_object;
-            _PyValueRoot exc_st_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                exc_st_object = _PyValue_BoxInline(exc_st);
-                if (exc_st_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[oparg]))) {
+                exc_st = PyStackRef_Box(exc_st);
+                if (PyStackRef_IsInline(exc_st)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(RERAISE, _PY_BOX_OTHER);
+                BOX_STAT_INC(RERAISE);
+                window[oparg] = exc_st;
             }
-            else {
-                exc_st_object = PyValue_ObjectBorrow(exc_st);
-            }
-            PyObject *exc = exc_st_object;
+            PyObject *exc = _PyStackRef_AsPyObjectStealPointer(exc_st);
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
-                frame->instr_ptr = _PyFrame_InstrAt(frame, _PyValue_UntagIndex(values[0]));
+                frame->instr_ptr = _PyFrame_InstrAt(frame, PyStackRef_UntagIndex(values[0]));
             }
             assert(exc && PyExceptionInstance_Check(exc));
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                exc_st_root.object = exc_st_object;
-            }
+            window[oparg] = PyStackRef_NULL;
             _PyErr_SetRaisedException(tstate, exc);
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PushValueRoot(tstate, &exc_st_root);
-                exc_st_root.object = exc_st_object;
-            }
             monitor_reraise(tstate, frame, this_instr);
-            if (Py_UNLIKELY(PyValue_IsInline(exc_st))) {
-                _PyThreadState_PopValueRoot(tstate, &exc_st_root);
-            }
             JUMP_TO_LABEL(exception_unwind);
         }
 
@@ -16486,12 +16228,16 @@
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                #ifdef Py_GIL_DISABLED
+
+                int check_instrumentation = 1;
+                #else
                 int check_instrumentation = (tstate->tracing == 0);
+                #endif
                 if (check_instrumentation) {
                     uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
                     uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version &&
-                        !(_PyFrame_GetCode(frame)->co_flags & CO_NO_MONITORING_EVENTS)) {
+                    if (code_version != global_version) {
                         int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                         if (err) {
                             JUMP_TO_LABEL(error);
@@ -16524,11 +16270,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_GENERATOR);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue res;
-            assert(PyValue_Type(frame->f_funcobj) == &PyFunction_Type);
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_ObjectBorrow(frame->f_funcobj);
+            _PyStackRef res;
+            assert(PyStackRef_FunctionCheck(frame->f_funcobj));
+            PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func);
             if (gen == NULL) {
                 JUMP_TO_LABEL(error);
@@ -16542,15 +16288,14 @@
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
-            IR_RETURN_EARLY(prev, PyValue_FromObject((PyObject *)gen));
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
             slots = _PyFrame_Slots(frame);
-            res = PyValue_FromObject((PyObject *)gen);
+            res = PyStackRef_FromPyObjectStealMortal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
-            (void)res;
+            IR_STORE_RETURN(res);
             DISPATCH();
         }
 
@@ -16565,35 +16310,38 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
-            PyValue retval;
-            PyValue res;
-            retval = IR_SLOT(IR_FIELD_A(this_instr));
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            PyValue temp = retval;
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            _PyFrame_AssertTemporariesClear(frame);
-            DTRACE_FUNCTION_RETURN();
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *dying = frame;
-            _PyInterpreterFrame *caller = dying->previous;
-            _PyInstr *resume = NULL;
-            if (dying->owner == FRAME_OWNED_BY_GENERATOR) {
-                resume = _PyEval_GeneratorReturnTarget(caller);
+            _PyStackRef value;
+            _PyStackRef retval;
+            _PyStackRef res;
+            // _MAKE_HEAP_SAFE
+            {
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = PyStackRef_MakeHeapSafe(value);
             }
-            IR_RETURN_EARLY(caller, temp);
-            frame = tstate->current_frame = caller;
-            _PyGC_INJECT(tstate, _PyGC_SITE_RETURN);
-            _PyEval_FrameClearAndPop(tstate, dying);
-            slots = _PyFrame_Slots(frame);
-            if (resume != NULL) {
-                next_instr = resume;
+            // _RETURN_VALUE
+            {
+                retval = value;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                _PyStackRef temp = retval;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyFrame_AssertTemporariesClear(frame);
+                DTRACE_FUNCTION_RETURN();
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *dying = frame;
+                int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+                frame = tstate->current_frame = dying->previous;
+                _PyEval_FrameClearAndPop(tstate, dying);
+                slots = _PyFrame_Slots(frame);
+                if (generator_return) {
+                    next_instr = _PyEval_GeneratorReturnTarget(frame);
+                }
+                else {
+                    LOAD_IP(1);
+                }
+                res = temp;
+                LLTRACE_RESUME_FRAME();
             }
-            else {
-                LOAD_IP(1);
-            }
-            res = temp;
-            LLTRACE_RESUME_FRAME();
-            (void)res;
+            IR_STORE_RETURN(res);
             DISPATCH();
         }
 
@@ -16612,12 +16360,12 @@
             _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue receiver;
-            PyValue null_or_index;
-            PyValue v;
-            PyValue retval;
+            _PyStackRef receiver;
+            _PyStackRef null_or_index;
+            _PyStackRef v;
+            _PyStackRef retval;
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
@@ -16636,38 +16384,23 @@
             {
                 v = window[2];
                 null_or_index = window[1];
-                PyObject *receiver_object;
-                _PyValueRoot receiver_root;
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    receiver_object = _PyValue_BoxInline(receiver);
-                    if (receiver_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    receiver = PyStackRef_Box(receiver);
+                    if (PyStackRef_IsInline(receiver)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SEND, _PY_BOX_OTHER);
+                    BOX_STAT_INC(SEND);
+                    window[0] = receiver;
                 }
-                else {
-                    receiver_object = PyValue_ObjectBorrow(receiver);
-                }
-                PyObject *v_object;
-                _PyValueRoot v_root;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PushValueRoot(tstate, &receiver_root);
-                        receiver_root.object = receiver_object;
-                    }
-                    v_object = _PyValue_BoxInline(v);
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PopValueRoot(tstate, &receiver_root);
-                    }
-                    if (v_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SEND, _PY_BOX_OTHER);
+                    BOX_STAT_INC(SEND);
+                    window[2] = v;
                 }
-                else {
-                    v_object = PyValue_ObjectBorrow(v);
-                }
-                PyObject *receiver_o = receiver_object;
+                PyObject *receiver_o = PyStackRef_AsPyObjectBorrow(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -16675,8 +16408,8 @@
                 {
                     PyGenObject *gen = (PyGenObject *)receiver_o;
                     _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-                    _PyFrame_SetReturnValue(gen_frame, v);
-                    window[2] = PyValue_NULL;
+                    _PyFrame_SetReturnValue(gen_frame, PyStackRef_MakeHeapSafe(v));
+                    window[2] = PyStackRef_NULL;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
                     tstate->exc_info = &gen->gi_exc_state;
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
@@ -16684,24 +16417,10 @@
                     gen_frame->previous = frame;
                     DISPATCH_INLINED(gen_frame);
                 }
-                if (!PyValue_IsNull(null_or_index) && _PyValue_IsNone(v)) {
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PushValueRoot(tstate, &receiver_root);
-                        receiver_root.object = receiver_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PushValueRoot(tstate, &v_root);
-                        v_root.object = v_object;
-                    }
-                    PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index);
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PopValueRoot(tstate, &v_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PopValueRoot(tstate, &receiver_root);
-                    }
-                    if (!_PyValue_IsValid(item)) {
-                        if (_PyValue_IsError(item)) {
+                if (!PyStackRef_IsNull(null_or_index) && PyStackRef_IsNone(v)) {
+                    _PyStackRef item = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index);
+                    if (!PyStackRef_IsValid(item)) {
+                        if (PyStackRef_IsError(item)) {
                             window[1] = null_or_index;
                             JUMP_TO_LABEL(error);
                         }
@@ -16712,26 +16431,14 @@
                     retval = item;
                 }
                 else {
-                    PyObject *v_o = v_object;
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PushValueRoot(tstate, &receiver_root);
-                        receiver_root.object = receiver_object;
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PushValueRoot(tstate, &v_root);
-                        v_root.object = v_object;
-                    }
+                    PyObject *v_o = PyStackRef_AsPyObjectBorrow(v);
                     PySendResultPair res = _PyIter_Send(receiver_o, v_o);
-                    if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                        _PyThreadState_PopValueRoot(tstate, &v_root);
-                    }
-                    if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                        _PyThreadState_PopValueRoot(tstate, &receiver_root);
-                    }
                     if (res.kind == PYGEN_ERROR) {
                         JUMP_TO_LABEL(error);
                     }
-                    retval = PyValue_FromObject(res.object);
+                    window[2] = PyStackRef_NULL;
+                    _PyStackRef_CLOSE_POINTER(v);
+                    retval = PyStackRef_FromPyObjectSteal(res.object);
                     if (res.kind == PYGEN_RETURN) {
                         JUMPBY(oparg);
                     }
@@ -16755,23 +16462,23 @@
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue iter;
-            PyValue null_in;
-            PyValue v;
-            PyValue asend;
-            PyValue null_out;
-            PyValue retval;
+            _PyStackRef iter;
+            _PyStackRef null_in;
+            _PyStackRef v;
+            _PyStackRef asend;
+            _PyStackRef null_out;
+            _PyStackRef retval;
             // _GUARD_3OS_ASYNC_GEN_ASEND
             {
                 iter = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                PyObject *iter_o = PyValue_ObjectBorrow(iter);
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
                 if (!PyAsyncGenASend_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
@@ -16782,36 +16489,27 @@
             {
                 v = window[2];
                 null_in = window[1];
-                PyObject *v_object;
-                _PyValueRoot v_root;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    v_object = _PyValue_BoxInline(v);
-                    if (v_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2]))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SEND_ASYNC_GEN, _PY_BOX_OTHER);
+                    BOX_STAT_INC(SEND_ASYNC_GEN);
+                    window[2] = v;
                 }
-                else {
-                    v_object = PyValue_ObjectBorrow(v);
-                }
-                PyObject *iter_o = PyValue_ObjectBorrow(iter);
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
-                PyObject *val = v_object;
+                PyObject *val = PyStackRef_AsPyObjectBorrow(v);
                 PyObject *retval_o;
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PushValueRoot(tstate, &v_root);
-                    v_root.object = v_object;
-                }
                 PySendResult what = _PyAsyncGenASend_Send(iter_o, val, &retval_o);
-                if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                    _PyThreadState_PopValueRoot(tstate, &v_root);
-                }
                 if (what == PYGEN_ERROR) {
                     JUMP_TO_LABEL(error);
                 }
+                window[2] = PyStackRef_NULL;
+                _PyStackRef_CLOSE_POINTER(v);
                 asend = iter;
                 null_out = null_in;
-                retval = PyValue_FromObject(retval_o);
+                retval = PyStackRef_FromPyObjectSteal(retval_o);
                 if (what == PYGEN_RETURN) {
                     JUMPBY(oparg);
                 }
@@ -16833,12 +16531,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue receiver;
-            PyValue v;
-            PyValue gen_frame;
-            PyValue new_frame;
+            _PyStackRef receiver;
+            _PyStackRef v;
+            _PyStackRef gen_frame;
+            _PyStackRef new_frame;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -16851,18 +16549,15 @@
             {
                 v = window[2];
                 receiver = window[0];
-                PyObject *receiver_object;
-                if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                    receiver_object = _PyValue_BoxInline(receiver);
-                    if (receiver_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    receiver = PyStackRef_Box(receiver);
+                    if (PyStackRef_IsInline(receiver)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SEND_GEN, _PY_BOX_OTHER);
+                    BOX_STAT_INC(SEND_GEN);
+                    window[0] = receiver;
                 }
-                else {
-                    receiver_object = PyValue_ObjectBorrow(receiver);
-                }
-                PyGenObject *gen = (PyGenObject *)receiver_object;
+                PyGenObject *gen = (PyGenObject *)PyStackRef_AsPyObjectBorrow(receiver);
                 if (Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
@@ -16875,19 +16570,19 @@
                 }
                 STAT_INC(SEND, hit);
                 _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-                _PyFrame_SetReturnValue(pushed_frame, v);
+                _PyFrame_SetReturnValue(pushed_frame, PyStackRef_MakeHeapSafe(v));
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                 pushed_frame->previous = frame;
-                gen_frame = _PyValue_Wrap(pushed_frame);
+                gen_frame = PyStackRef_Wrap(pushed_frame);
             }
             // _PUSH_FRAME
             {
                 new_frame = gen_frame;
                 assert(!IS_PEP523_HOOKED(tstate));
-                _PyInterpreterFrame *temp = _PyValue_Unwrap(new_frame);
-                window[2] = PyValue_NULL;
+                _PyInterpreterFrame *temp = PyStackRef_Unwrap(new_frame);
+                window[2] = PyStackRef_NULL;
                 assert(temp->previous == frame || temp->previous->previous == frame);
                 CALL_STAT_INC(inlined_py_calls);
                 frame = tstate->current_frame = temp;
@@ -16914,18 +16609,18 @@
             INSTRUCTION_STATS(SEND_VIRTUAL);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue val;
-            PyValue nos;
-            PyValue iter;
-            PyValue null_or_index;
-            PyValue none;
-            PyValue next;
+            _PyStackRef val;
+            _PyStackRef nos;
+            _PyStackRef iter;
+            _PyStackRef null_or_index;
+            _PyStackRef none;
+            _PyStackRef next;
             // _GUARD_TOS_IS_NONE
             {
                 val = window[2];
-                if (!_PyValue_IsNone(val)) {
+                if (!PyStackRef_IsNone(val)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
@@ -16934,7 +16629,7 @@
             // _GUARD_NOS_NOT_NULL
             {
                 nos = window[1];
-                if (PyValue_IsNull(nos)) {
+                if (PyStackRef_IsNull(nos)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
@@ -16945,30 +16640,20 @@
                 none = val;
                 null_or_index = nos;
                 iter = window[0];
-                PyObject *iter_object;
-                _PyValueRoot iter_root;
-                if (Py_UNLIKELY(PyValue_IsInline(iter))) {
-                    iter_object = _PyValue_BoxInline(iter);
-                    if (iter_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    iter = PyStackRef_Box(iter);
+                    if (PyStackRef_IsInline(iter)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SEND_VIRTUAL, _PY_BOX_OTHER);
+                    BOX_STAT_INC(SEND_VIRTUAL);
+                    window[0] = iter;
                 }
-                else {
-                    iter_object = PyValue_ObjectBorrow(iter);
-                }
-                PyObject *iter_o = iter_object;
-                Py_ssize_t index = _PyValue_UntagIndex(null_or_index);
-                if (Py_UNLIKELY(PyValue_IsInline(iter))) {
-                    _PyThreadState_PushValueRoot(tstate, &iter_root);
-                    iter_root.object = iter_object;
-                }
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-                if (Py_UNLIKELY(PyValue_IsInline(iter))) {
-                    _PyThreadState_PopValueRoot(tstate, &iter_root);
-                }
+                PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
+                Py_ssize_t index = PyStackRef_UntagIndex(null_or_index);
+                _PyObjectIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                PyObject *next_o = next_index.object;
                 index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
+                if (next_o == NULL) {
                     if (index < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -16976,8 +16661,8 @@
                     JUMPBY(oparg);
                     DISPATCH();
                 }
-                next = next_index.value;
-                null_or_index = _PyValue_TagIndex(index);
+                next = PyStackRef_FromPyObjectSteal(next_o);
+                null_or_index = PyStackRef_TagIndex(index);
             }
             window[1] = null_or_index;
             window[2] = next;
@@ -17036,19 +16721,35 @@
             INSTRUCTION_STATS(SET_ADD);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue set;
-            PyValue v;
+            _PyStackRef set;
+            _PyStackRef v;
             v = window[1 + (oparg-1)];
             set = window[0];
-            assert(PyValue_IsObject(set));
-            int err = _PySet_AddValue((PySetObject *)PyValue_ObjectBorrow(set), v);
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                set = PyStackRef_Box(set);
+                if (PyStackRef_IsInline(set)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(SET_ADD);
+                window[0] = set;
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg-1)]))) {
+                v = PyStackRef_Box(v);
+                if (PyStackRef_IsInline(v)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(SET_ADD);
+                window[1 + (oparg-1)] = v;
+            }
+            int err = _PySet_AddTakeRef((PySetObject *)PyStackRef_AsPyObjectBorrow(set),
+                                        _PyStackRef_AsPyObjectStealPointer(v));
             if (err) {
-                window[1 + (oparg-1)] = PyValue_NULL;
+                window[1 + (oparg-1)] = PyStackRef_NULL;
                 JUMP_TO_LABEL(error);
             }
-            window[1 + (oparg-1)] = PyValue_NULL;
+            window[1 + (oparg-1)] = PyStackRef_NULL;
             DISPATCH();
         }
 
@@ -17065,25 +16766,46 @@
             INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue attr_st;
-            PyValue func_in;
-            PyValue func_out;
+            _PyStackRef attr_st;
+            _PyStackRef func_in;
+            _PyStackRef func_out;
             func_in = IR_SLOT(IR_FIELD_C(this_instr));
             attr_st = IR_SLOT(IR_FIELD_B(this_instr));
-            assert(PyValue_IsObject(attr_st));
-            assert(PyValue_IsObject(func_in));
-            PyObject *func = PyValue_ObjectBorrow(func_in);
-            PyObject *attr = PyValue_ObjectBorrow(attr_st);
+            if (Py_UNLIKELY(PyStackRef_IsInline(attr_st))) {
+                attr_st = PyStackRef_Box(attr_st);
+                if (PyStackRef_IsInline(attr_st)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
+                IR_KEEP_BOX(attr_st, IR_FIELD_B(this_instr));
+            }
+            else {
+                attr_st = IR_BORROW_KNOWN(attr_st, IR_FIELD_B(this_instr));
+            }
+            if (Py_UNLIKELY(PyStackRef_IsInline(func_in))) {
+                func_in = PyStackRef_Box(func_in);
+                if (PyStackRef_IsInline(func_in)) {
+                    IR_DROP_BORROW(attr_st, IR_FIELD_B(this_instr));
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
+                IR_KEEP_BOX(func_in, IR_FIELD_C(this_instr));
+            }
+            else {
+                func_in = IR_BORROW_KNOWN(func_in, IR_FIELD_C(this_instr));
+            }
+            PyObject *func = PyStackRef_AsPyObjectBorrow(func_in);
+            PyObject *attr = _PyStackRef_AsPyObjectStealPointer(attr_st);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             func_out = func_in;
+            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             assert(PyFunction_Check(func));
             size_t offset = _Py_FunctionAttributeOffsets[oparg];
             assert(offset != 0);
             PyObject **ptr = (PyObject **)(((char *)func) + offset);
             assert(*ptr == NULL);
             *ptr = attr;
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_STORE_DST(IR_FIELD_A(this_instr), func_out);
+            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), func_out);
             DISPATCH();
         }
 
@@ -17100,38 +16822,34 @@
             INSTRUCTION_STATS(SET_UPDATE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue set;
-            PyValue iterable;
-            PyValue i;
-            PyValue value;
+            _PyStackRef set;
+            _PyStackRef iterable;
+            _PyStackRef i;
+            _PyStackRef value;
             // _SET_UPDATE
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
-                PyObject *iterable_object;
-                _PyValueRoot iterable_root;
-                if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                    iterable_object = _PyValue_BoxInline(iterable);
-                    if (iterable_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    set = PyStackRef_Box(set);
+                    if (PyStackRef_IsInline(set)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(SET_UPDATE, _PY_BOX_CONTAINER_STORE);
+                    BOX_STAT_INC(SET_UPDATE);
+                    window[0] = set;
                 }
-                else {
-                    iterable_object = PyValue_ObjectBorrow(iterable);
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1 + (oparg-1)]))) {
+                    iterable = PyStackRef_Box(iterable);
+                    if (PyStackRef_IsInline(iterable)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(SET_UPDATE);
+                    window[1 + (oparg-1)] = iterable;
                 }
-                assert(PyValue_IsObject(set));
-                if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                    _PyThreadState_PushValueRoot(tstate, &iterable_root);
-                    iterable_root.object = iterable_object;
-                }
-                int err = _PySet_Update(PyValue_ObjectBorrow(set),
-                                    iterable_object);
-                if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                    _PyThreadState_PopValueRoot(tstate, &iterable_root);
-                }
+                int err = _PySet_Update(PyStackRef_AsPyObjectBorrow(set),
+                                    PyStackRef_AsPyObjectBorrow(iterable));
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -17140,9 +16858,9 @@
             // _POP_TOP
             {
                 value = i;
-                (void)value;
+                window[1 + (oparg-1)] = PyStackRef_NULL;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            window[1 + (oparg-1)] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -17161,8 +16879,8 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            _PyStackRef v;
+            _PyStackRef owner;
             // _SPECIALIZE_STORE_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
@@ -17170,10 +16888,10 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyValue_IsNull(v)) {
+                    if (!PyStackRef_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, v, next_instr, name);
+                        _Py_Specialize_StoreAttr(owner, next_instr, name);
                         DISPATCH_SAME_OPARG();
                     }
                 }
@@ -17183,16 +16901,146 @@
             }
             // _STORE_ATTR
             {
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(v, IR_FIELD_B(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_A(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                int err = PyObject_SetAttrValue(owner, name, v);
+                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
+                                       name, PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_XCLOSE_POINTER(v);
                 if (err) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            DISPATCH();
+        }
+
+        TARGET(STORE_ATTR_INSTANCE_VALUE) {
+            #if _Py_TAIL_CALL_INTERP
+            int opcode = STORE_ATTR_INSTANCE_VALUE;
+            (void)(opcode);
+            _PyInterpreterFrame *frame = tstate->current_frame;
+            #endif
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
+            _PyStackRef value;
+            _PyStackRef owner;
+            _PyStackRef o;
+            // _LOCK_OBJECT
+            {
+                value = IR_SLOT(IR_FIELD_A(this_instr));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(value))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                value = IR_BORROW_KNOWN(value, IR_FIELD_A(this_instr));
+                if (!LOCK_OBJECT(PyStackRef_AsPyObjectBorrow(value))) {
+                    IR_DROP_BORROW(value, IR_FIELD_A(this_instr));
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _GUARD_TYPE_VERSION_LOCKED
+            {
+                owner = value;
+                uint32_t type_version = fb->type_version;
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(type_version != 0);
+                PyTypeObject *tp = Py_TYPE(owner_o);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UNLOCK_OBJECT(owner_o);
+                    if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        UPDATE_MISS_STATS(STORE_ATTR);
+                        assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                        JUMP_TO_PREDICTED(STORE_ATTR);
+                    }
+                }
+            }
+            // _GUARD_DORV_NO_DICT
+            {
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+                if (_PyObject_GetManagedDict(owner_o) ||
+                    !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
+                    UNLOCK_OBJECT(owner_o);
+                    if (true) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        UPDATE_MISS_STATS(STORE_ATTR);
+                        assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                        JUMP_TO_PREDICTED(STORE_ATTR);
+                    }
+                }
+            }
+            // _STORE_ATTR_INSTANCE_VALUE
+            {
+                value = IR_SLOT(IR_FIELD_B(this_instr));
+                uint32_t offset = fb->offset;
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_INSTANCE_VALUE);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                STAT_INC(STORE_ATTR, hit);
+                assert(_PyObject_GetManagedDict(owner_o) == NULL);
+                PyObject **value_ptr = (PyObject**)(((char *)owner_o) + offset);
+                PyObject *old_value = *value_ptr;
+                FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, _PyStackRef_AsPyObjectStealPointer(value));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                if (old_value == NULL) {
+                    PyDictValues *values = _PyObject_InlineValues(owner_o);
+                    Py_ssize_t index = value_ptr - values->values;
+                    _PyDictValues_AddToInsertionOrder(values, index);
+                    _PyDictValues_ShapeAfterAdd(Py_TYPE(owner_o), values, index);
+                }
+                UNLOCK_OBJECT(owner_o);
+                o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                Py_XDECREF(old_value);
+            }
+            // _POP_TOP
+            {
+                value = o;
+                _PyStackRef_XCLOSE_POINTER(value);
+            }
             DISPATCH();
         }
 
@@ -17206,12 +17054,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR_NOFB);
+            INSTRUCTION_STATS(STORE_ATTR);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            _PyStackRef v;
+            _PyStackRef owner;
             // _SPECIALIZE_STORE_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
@@ -17219,10 +17067,10 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyValue_IsNull(v)) {
+                    if (!PyStackRef_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, v, next_instr, name);
+                        _Py_Specialize_StoreAttr(owner, next_instr, name);
                         DISPATCH_SAME_OPARG();
                     }
                 }
@@ -17232,16 +17080,40 @@
             }
             // _STORE_ATTR
             {
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(v, IR_FIELD_B(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
+                    owner = PyStackRef_Box(owner);
+                    if (PyStackRef_IsInline(owner)) {
+                        IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR);
+                    IR_KEEP_BOX(owner, IR_FIELD_A(this_instr));
+                }
+                else {
+                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                int err = PyObject_SetAttrValue(owner, name, v);
+                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
+                                       name, PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(owner);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_XCLOSE_POINTER(v);
                 if (err) {
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17257,41 +17129,33 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
-            PyValue o;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _GUARD_SLOT_KIND
+            // _GUARD_SHAPE
             {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t slot_kind = fb->slot_kind;
-                if (!_PyValue_FitsKind(value, slot_kind)) {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17299,88 +17163,42 @@
             }
             // _STORE_ATTR_SHAPE
             {
-                uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
-                assert(!PyValue_IsNull(*value_ptr));
-                *value_ptr = value;
-                STAT_INC(STORE_ATTR, hit);
-                o = owner;
-            }
-            // _POP_TOP
-            {
-                value = o;
-                (void)value;
-            }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            DISPATCH();
-        }
-
-        TARGET(STORE_ATTR_SHAPE_POLY) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = STORE_ATTR_SHAPE_POLY;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR_SHAPE_POLY);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue value;
-            PyValue owner;
-            PyValue o;
-            // _STORE_ATTR_SHAPE_POLY
-            {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsPointerSpace(owner)) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                _PyFbPoly *poly = _PyFrame_FbPoly(frame, ((_PyFbHeader *)fb));
-                int row = _PyFb_ShapeRow(poly, _PyObject_SHAPE(owner_o));
-                if (row < 0) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                if (!_PyValue_FitsKind(value, poly->slot_kind[row])) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + poly->index[row]);
-                STAT_INC(STORE_ATTR, hit);
-                if (poly->handler[row] == STORE_ATTR_SHAPE) {
-                    assert(!PyValue_IsNull(*value_ptr));
-                    *value_ptr = value;
+                uint32_t offset = fb->offset;
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_SHAPE);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
                 }
                 else {
-                    assert(poly->handler[row] == STORE_ATTR_SHAPE_TRANSITION);
-                    assert(PyValue_IsNull(*value_ptr));
-                    *value_ptr = value;
-                    _PyObject_SetShape(owner_o, (_PyShape *)poly->descr[row]);
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
                 }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+                PyObject *old_value = *value_ptr;
+                assert(old_value != NULL);
+                *value_ptr = _PyStackRef_AsPyObjectStealPointer(value);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                STAT_INC(STORE_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                Py_DECREF(old_value);
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
-        TARGET(STORE_ATTR_SHAPE_TRANSITION) {
+        TARGET(STORE_ATTR_SHAPE_ADD) {
             #if _Py_TAIL_CALL_INTERP
-            int opcode = STORE_ATTR_SHAPE_TRANSITION;
+            int opcode = STORE_ATTR_SHAPE_ADD;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
             #endif
@@ -17388,67 +17206,74 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR_SHAPE_TRANSITION);
+            INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
-            PyValue o;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
             }
-            // _GUARD_SLOT_KIND
+            // _GUARD_SHAPE
+            {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyStackRef_AsPyObjectBorrow(owner)) != shape) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+            }
+            // _STORE_ATTR_SHAPE_ADD
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t slot_kind = fb->slot_kind;
-                if (!_PyValue_FitsKind(value, slot_kind)) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _STORE_ATTR_SHAPE_TRANSITION
-            {
-                _PyShape *shape_to = fb->shape_to;
+                uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
-                assert(PyValue_IsNull(*value_ptr));
-                *value_ptr = value;
-                _PyObject_SetShape(owner_o, shape_to);
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_SHAPE_ADD);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                PyObject **value_ptr = (PyObject **)((char *)owner_o + offset);
+                assert(*value_ptr == NULL);
+                *value_ptr = _PyStackRef_AsPyObjectStealPointer(value);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyDictValues *values = _PyObject_InlineValues(owner_o);
+                _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
+                _PyDictValues_SetShape(values, (uint8_t)shape_to);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17464,21 +17289,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
-            PyValue o;
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17488,24 +17315,41 @@
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t index = fb->index;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_SLOT);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
                 if (!LOCK_OBJECT(owner_o)) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
+                char *addr = (char *)owner_o + index;
                 STAT_INC(STORE_ATTR, hit);
-                *(PyValue *)((char *)owner_o + index) = value;
+                PyObject *old_value = *(PyObject **)addr;
+                FT_ATOMIC_STORE_PTR_RELEASE(*(PyObject **)addr, _PyStackRef_AsPyObjectStealPointer(value));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 UNLOCK_OBJECT(owner_o);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 o = owner;
+                Py_XDECREF(old_value);
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17523,31 +17367,23 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue value;
-            PyValue o;
-            // _GUARD_SHAPE
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef o;
+            // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
-                _PyShape *shape = fb->shape;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-                if ((PyValue_ObjectBorrow(owner)->ob_header & _Py_HEADER_SHAPE_MASK)
-                    != (uintptr_t)shape) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
-                }
-            }
-            // _GUARD_SHAPE_VERSION
-            {
                 uint32_t type_version = fb->type_version;
-                _PyShape *live = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(STORE_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                    JUMP_TO_PREDICTED(STORE_ATTR);
+                }
+                owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(live->type_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17556,31 +17392,45 @@
             // _STORE_ATTR_WITH_HINT
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                uint32_t dictoffset = fb->dictoffset;
                 uint32_t hint = fb->hint;
-                PyObject *owner_o = PyValue_ObjectBorrow(owner);
-                PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner_o, (int32_t)dictoffset);
-                if (dict == NULL) {
-                    UPDATE_MISS_STATS(STORE_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
-                    JUMP_TO_PREDICTED(STORE_ATTR);
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_ATTR_WITH_HINT);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
                 }
-                if (!PyDict_CheckExact((PyObject *)dict)) {
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
+                PyObject *owner_o = PyStackRef_AsPyObjectBorrow(owner);
+                assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+                PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
+                if (dict == NULL) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
                 if (!LOCK_OBJECT(dict)) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                    IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
+                assert(PyDict_CheckExact((PyObject *)dict));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                 PyDictKeysObject *dk = dict->ma_keys;
                 if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
                     dk->dk_kind == DICT_KEYS_GENERAL) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
+                        IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(STORE_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                         JUMP_TO_PREDICTED(STORE_ATTR);
@@ -17590,33 +17440,40 @@
                 if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
+                        IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(STORE_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                if (PyValue_IsNull(ep->me_value)) {
+                PyObject **value_ptr = dict->ma_values == NULL ?
+                &ep->me_value : &dict->ma_values->values[hint];
+                PyObject *old_value = *value_ptr;
+                if (old_value == NULL) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
+                        IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                        IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
                         UPDATE_MISS_STATS(STORE_ATTR);
                         assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                         JUMP_TO_PREDICTED(STORE_ATTR);
                     }
                 }
-                _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict,
-                                PyValue_FromObject(name), value);
-                ep->me_value = value;
+                _PyDict_NotifyEvent(PyDict_EVENT_MODIFIED, dict, name, PyStackRef_AsPyObjectBorrow(value));
+                FT_ATOMIC_STORE_PTR_RELEASE(*value_ptr, _PyStackRef_AsPyObjectStealPointer(value));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 UNLOCK_OBJECT(dict);
                 STAT_INC(STORE_ATTR, hit);
                 o = owner;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                Py_XDECREF(old_value);
             }
             // _POP_TOP
             {
                 value = o;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17633,10 +17490,21 @@
             INSTRUCTION_STATS(STORE_DEREF);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue v;
+            _PyStackRef v;
             v = IR_SLOT(IR_FIELD_A(this_instr));
-            PyObject *cell = PyValue_ObjectBorrow(GETLOCAL(oparg));
-            PyCell_SET_VALUE(cell, v);
+            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                v = PyStackRef_Box(v);
+                if (PyStackRef_IsInline(v)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(STORE_DEREF);
+                IR_KEEP_BOX(v, IR_FIELD_A(this_instr));
+            }
+            else {
+                v = IR_BORROW_KNOWN(v, IR_FIELD_A(this_instr));
+            }
+            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyCell_SetTakeRef(cell, _PyStackRef_AsPyObjectStealPointer(v));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
@@ -17654,21 +17522,21 @@
             INSTRUCTION_STATS(STORE_FAST);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue trash;
+            _PyStackRef value;
+            _PyStackRef trash;
             // _SWAP_FAST
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
-                PyValue tmp = GETLOCAL(oparg);
+                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                _PyStackRef tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 trash = tmp;
             }
             // _POP_TOP
             {
                 value = trash;
-                (void)value;
+                PyStackRef_XCLOSE(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17685,14 +17553,17 @@
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value1;
-            PyValue value2;
-            value1 = IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef value1;
+            _PyStackRef value2;
+            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
+            _PyStackRef tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            value2 = GETLOCAL(oparg2);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            value2 = PyStackRef_DUP(GETLOCAL(oparg2));
+            IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
+            PyStackRef_XCLOSE(tmp);
             IR_STORE_DST(IR_FIELD_A(this_instr), value2);
             DISPATCH();
         }
@@ -17710,16 +17581,20 @@
             INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value2;
-            PyValue value1;
-            value1 = IR_SLOT(IR_FIELD_B(this_instr));
-            value2 = IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef value2;
+            _PyStackRef value1;
+            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            value2 = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
+            _PyStackRef tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyStackRef_XCLOSE(tmp);
+            tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyStackRef_XCLOSE(tmp);
             DISPATCH();
         }
 
@@ -17736,11 +17611,23 @@
             INSTRUCTION_STATS(STORE_GLOBAL);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
+            _PyStackRef v;
             v = IR_SLOT(IR_FIELD_A(this_instr));
+            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                v = PyStackRef_Box(v);
+                if (PyStackRef_IsInline(v)) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(STORE_GLOBAL);
+                IR_KEEP_BOX(v, IR_FIELD_A(this_instr));
+            }
+            else {
+                v = IR_BORROW_KNOWN(v, IR_FIELD_A(this_instr));
+            }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
-            if (PyValue_IsNull(v)) {
+            if (PyStackRef_IsNull(v)) {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 err = PyDict_Pop(GLOBALS(), name, NULL);
                 if (err == 0) {
                     err = -1;
@@ -17749,14 +17636,13 @@
                 }
             }
             else {
-                err = _PyDict_SetItemValue((PyDictObject *)GLOBALS(),
-                    PyValue_FromObject(name), v);
+                err = PyDict_SetItem(GLOBALS(), name, PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(v);
             }
             if (err < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17773,20 +17659,21 @@
             INSTRUCTION_STATS(STORE_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            v = IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef v;
+            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);
-            if (PyValue_IsNull(v)) {
+            if (PyStackRef_IsNull(v)) {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             }
             else {
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(v);
             }
             if (error) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             DISPATCH();
         }
 
@@ -17801,10 +17688,10 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
-            PyValue v;
-            PyValue container;
-            PyValue start;
-            PyValue stop;
+            _PyStackRef v;
+            _PyStackRef container;
+            _PyStackRef start;
+            _PyStackRef stop;
             // _SPECIALIZE_STORE_SLICE
             {
                 #if ENABLE_SPECIALIZATION
@@ -17813,23 +17700,23 @@
             }
             // _STORE_SLICE
             {
-                stop = IR_SLOT(IR_FIELD_C(this_instr));
-                start = IR_SLOT(IR_FIELD_B(this_instr));
-                container = IR_SLOT(IR_FIELD_A(this_instr));
-                v = IR_SLOT(IR_FIELD_D(this_instr));
+                stop = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                start = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                v = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
                 int err = _PyEval_StoreSlice(v, container, start, stop);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                PyStackRef_CLOSE(stop);
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                PyStackRef_CLOSE(start);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                PyStackRef_CLOSE(container);
+                IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
+                PyStackRef_CLOSE(v);
                 if (err) {
-                    IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             DISPATCH();
         }
 
@@ -17846,9 +17733,9 @@
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
-            PyValue container;
-            PyValue sub;
-            PyValue v;
+            _PyStackRef container;
+            _PyStackRef sub;
+            _PyStackRef v;
             // _SPECIALIZE_STORE_SUBSCR
             {
                 sub = IR_SLOT(IR_FIELD_B(this_instr));
@@ -17867,17 +17754,53 @@
             // _STORE_SUBSCR
             {
                 v = IR_SLOT(IR_FIELD_C(this_instr));
-                int err = PyObject_SetItemValue(container, sub, v);
+                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
+                    v = PyStackRef_Box(v);
+                    if (PyStackRef_IsInline(v)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(v, IR_FIELD_C(this_instr));
+                }
+                else {
+                    v = IR_BORROW_KNOWN(v, IR_FIELD_C(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
+                    container = PyStackRef_Box(container);
+                    if (PyStackRef_IsInline(container)) {
+                        IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(container, IR_FIELD_A(this_instr));
+                }
+                else {
+                    container = IR_BORROW_KNOWN(container, IR_FIELD_A(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
+                    sub = PyStackRef_Box(sub);
+                    if (PyStackRef_IsInline(sub)) {
+                        IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
+                        IR_DROP_BORROW(container, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR);
+                    IR_KEEP_BOX(sub, IR_FIELD_B(this_instr));
+                }
+                else {
+                    sub = IR_BORROW_KNOWN(sub, IR_FIELD_B(this_instr));
+                }
+                int err = PyObject_SetItem(PyStackRef_AsPyObjectBorrow(container), PyStackRef_AsPyObjectBorrow(sub), PyStackRef_AsPyObjectBorrow(v));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                _PyStackRef_CLOSE_POINTER(sub);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                _PyStackRef_CLOSE_POINTER(container);
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                _PyStackRef_CLOSE_POINTER(v);
                 if (err) {
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             DISPATCH();
         }
 
@@ -17892,26 +17815,29 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_DICT);
-            PyValue nos;
-            PyValue value;
-            PyValue dict_st;
-            PyValue sub;
-            PyValue st;
+            _PyStackRef nos;
+            _PyStackRef value;
+            _PyStackRef dict_st;
+            _PyStackRef sub;
+            _PyStackRef st;
             // _GUARD_NOS_DICT_STORE_SUBSCRIPT
             {
                 nos = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_A(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
+                    IR_DROP_BORROW(nos, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
                 if (Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript) {
+                    IR_DROP_BORROW(nos, IR_FIELD_A(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
@@ -17922,26 +17848,52 @@
                 sub = IR_SLOT(IR_FIELD_B(this_instr));
                 dict_st = nos;
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                PyObject *dict = PyValue_ObjectBorrow(dict_st);
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(dict_st, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR_DICT);
+                    IR_KEEP_BOX(value, IR_FIELD_C(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
+                }
+                if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
+                    sub = PyStackRef_Box(sub);
+                    if (PyStackRef_IsInline(sub)) {
+                        IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
+                        IR_DROP_BORROW(dict_st, IR_FIELD_A(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR_DICT);
+                    IR_KEEP_BOX(sub, IR_FIELD_B(this_instr));
+                }
+                else {
+                    sub = IR_BORROW_KNOWN(sub, IR_FIELD_B(this_instr));
+                }
+                PyObject *dict = PyStackRef_AsPyObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
                 STAT_INC(STORE_SUBSCR, hit);
-                int err = _PyDict_SetItemValue((PyDictObject *)dict, sub, value);
+                int err = _PyDict_SetItem_Take2((PyDictObject *)dict,
+                    _PyStackRef_AsPyObjectStealPointer(sub),
+                    _PyStackRef_AsPyObjectStealPointer(value));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 if (err) {
-                    IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                    _PyStackRef_CLOSE_POINTER(dict_st);
                     JUMP_TO_LABEL(error);
                 }
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 st = dict_st;
             }
             // _POP_TOP
             {
                 value = st;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             DISPATCH();
         }
 
@@ -17956,16 +17908,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
-            PyValue ls;
-            PyValue ss;
+            _PyStackRef value;
+            _PyStackRef nos;
+            _PyStackRef list_st;
+            _PyStackRef sub_st;
+            _PyStackRef ls;
+            _PyStackRef ss;
             // _GUARD_TOS_INT
             {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
-                if (!_PyValue_IsCompactInt(value)) {
+                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (!PyStackRef_IsCompactInt(value)) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
@@ -17974,13 +17927,17 @@
             // _GUARD_NOS_LIST
             {
                 nos = IR_SLOT(IR_FIELD_A(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpace(nos))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpace(nos))) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
                 }
-                PyObject *o = PyValue_ObjectBorrow(nos);
+                nos = IR_BORROW_KNOWN(nos, IR_FIELD_A(this_instr));
+                PyObject *o = PyStackRef_AsPyObjectBorrow(nos);
                 if (!PyList_CheckExact(o)) {
+                    IR_DROP_BORROW(nos, IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
@@ -17991,10 +17948,26 @@
                 sub_st = value;
                 list_st = nos;
                 value = IR_SLOT(IR_FIELD_C(this_instr));
-                PyObject *list = PyValue_ObjectBorrow(list_st);
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        IR_DROP_BORROW(list_st, IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(sub_st, IR_FIELD_B(this_instr));
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(STORE_SUBSCR_LIST_INT);
+                    IR_KEEP_BOX(value, IR_FIELD_C(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_C(this_instr));
+                }
+                PyObject *list = PyStackRef_AsPyObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
-                Py_ssize_t index = _PyValue_CompactInt(sub_st);
+                Py_ssize_t index = PyStackRef_CompactIntValue(sub_st);
                 if (!LOCK_OBJECT(list)) {
+                    IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
+                    IR_DROP_BORROW(list_st, IR_FIELD_A(this_instr));
+                    IR_DROP_BORROW(sub_st, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
@@ -18006,30 +17979,38 @@
                 if (index < 0 || index >= len) {
                     UNLOCK_OBJECT(list);
                     if (true) {
+                        IR_DROP_BORROW(value, IR_FIELD_C(this_instr));
+                        IR_DROP_BORROW(list_st, IR_FIELD_A(this_instr));
+                        IR_DROP_BORROW(sub_st, IR_FIELD_B(this_instr));
                         UPDATE_MISS_STATS(STORE_SUBSCR);
                         assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                         JUMP_TO_PREDICTED(STORE_SUBSCR);
                     }
                 }
                 STAT_INC(STORE_SUBSCR, hit);
-                _PyList_ITEMS(list)[index] = value;
+                PyObject *old_value = PyList_GET_ITEM(list, index);
+                FT_ATOMIC_STORE_PTR_RELEASE(_PyList_ITEMS(list)[index],
+                                        _PyStackRef_AsPyObjectStealPointer(value));
+                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                assert(old_value != NULL);
                 UNLOCK_OBJECT(list);
+                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 ls = list_st;
                 ss = sub_st;
+                Py_DECREF(old_value);
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = ss;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
             // _POP_TOP
             {
                 value = ls;
-                (void)value;
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             DISPATCH();
         }
 
@@ -18046,13 +18027,13 @@
             INSTRUCTION_STATS(SWAP);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue bottom;
-            PyValue top;
+            _PyStackRef bottom;
+            _PyStackRef top;
             top = window[1 + (oparg-2)];
             bottom = window[0];
-            PyValue temp = bottom;
+            _PyStackRef temp = bottom;
             bottom = top;
             top = temp;
             window[0] = bottom;
@@ -18073,8 +18054,8 @@
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue value;
-            PyValue res;
+            _PyStackRef value;
+            _PyStackRef res;
             // _SPECIALIZE_TO_BOOL
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
@@ -18092,22 +18073,22 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_Int32(value) != 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    err = PyStackRef_InlineInt(value) != 0;
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    err = PyValue_Double(value) != 0.0;
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    err = PyStackRef_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrueValue(value);
+                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
                 }
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
+                PyStackRef_CLOSE(value);
                 if (err < 0) {
-                    IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? _PyValue_True : _PyValue_False;
+                res = err ? PyStackRef_True : PyStackRef_False;
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
@@ -18124,22 +18105,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef owner;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _GUARD_TYPE_VERSION
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                _PyShape *shape = _PyObject_SHAPE(PyValue_ObjectBorrow(owner));
+                PyTypeObject *tp = Py_TYPE(PyStackRef_AsPyObjectBorrow(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(shape->class_version) != type_version) {
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
@@ -18148,16 +18129,16 @@
             // _REPLACE_WITH_TRUE
             {
                 value = owner;
-                res = _PyValue_True;
+                res = PyStackRef_True;
                 v = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -18172,9 +18153,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_BOOL);
-            PyValue value;
+            _PyStackRef value;
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            if (!_PyValue_IsTrue(value) && !_PyValue_IsFalse(value)) {
+            if (!PyStackRef_BoolCheck(value)) {
                 UPDATE_MISS_STATS(TO_BOOL);
                 assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                 JUMP_TO_PREDICTED(TO_BOOL);
@@ -18194,13 +18175,13 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_INT);
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _GUARD_TOS_EXACT_INT
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                if (PyValue_Type(value) != &PyLong_Type) {
+                if (!PyStackRef_LongCheckExact(value)) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
@@ -18210,21 +18191,22 @@
             {
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
-                if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_Int32(value) == 0;
+                if (PyStackRef_IsInlineInt(value)) {
+                    zero = PyStackRef_InlineInt(value) == 0;
                 }
                 else {
-                    zero = _PyLong_IsZero((PyLongObject *)PyValue_ObjectBorrow(value));
+                    zero = _PyLong_IsZero((PyLongObject *)PyStackRef_AsPyObjectBorrow(value));
                 }
-                res = zero ? _PyValue_False : _PyValue_True;
+                res = zero ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
             }
-            // _POP_TOP
+            // _POP_TOP_INT
             {
                 value = v;
-                (void)value;
+                assert(PyStackRef_LongCheckExact(value));
+                PyStackRef_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
@@ -18240,19 +18222,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_LIST);
-            PyValue tos;
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef tos;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _GUARD_TOS_LIST
             {
                 tos = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
@@ -18262,19 +18244,19 @@
             // _TO_BOOL_LIST
             {
                 value = tos;
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
-                res = PyList_GET_SIZE(value_o) ? _PyValue_True : _PyValue_False;
+                res = PyList_GET_SIZE(value_o) ? PyStackRef_True : PyStackRef_False;
                 v = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
-            IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
 
@@ -18289,17 +18271,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_NONE);
-            PyValue value;
-            PyValue res;
+            _PyStackRef value;
+            _PyStackRef res;
             value = IR_SLOT(IR_FIELD_B(this_instr));
-            if (!_PyValue_IsNone(value)) {
+            if (!PyStackRef_IsNone(value)) {
                 UPDATE_MISS_STATS(TO_BOOL);
                 assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                 JUMP_TO_PREDICTED(TO_BOOL);
             }
+            IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
             STAT_INC(TO_BOOL, hit);
-            res = _PyValue_False;
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+            res = PyStackRef_False;
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
@@ -18315,18 +18297,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_STR);
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _GUARD_TOS_UNICODE
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyObject *value_o = PyValue_ObjectBorrow(value);
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
@@ -18336,16 +18318,17 @@
             // _TO_BOOL_STR
             {
                 STAT_INC(TO_BOOL, hit);
-                PyObject *value_o = PyValue_ObjectBorrow(value);
-                res = value_o == &_Py_STR(empty) ? _PyValue_False : _PyValue_True;
+                PyObject *value_o = PyStackRef_AsPyObjectBorrow(value);
+                res = value_o == &_Py_STR(empty) ? PyStackRef_False : PyStackRef_True;
                 v = value;
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
             }
-            // _POP_TOP
+            // _POP_TOP_UNICODE
             {
                 value = v;
-                (void)value;
+                assert(PyUnicode_CheckExact(PyStackRef_AsPyObjectBorrow(value)));
+                _PyStackRef_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
             }
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
         }
@@ -18361,24 +18344,38 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_INVERT);
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _UNARY_INVERT
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
-                res = PyNumber_InvertValue(value);
-                if (PyValue_IsNull(res)) {
+                if (Py_UNLIKELY(PyStackRef_IsInline(value))) {
+                    value = PyStackRef_Box(value);
+                    if (PyStackRef_IsInline(value)) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    BOX_STAT_INC(UNARY_INVERT);
+                    IR_KEEP_BOX(value, IR_FIELD_B(this_instr));
+                }
+                else {
+                    value = IR_BORROW_KNOWN(value, IR_FIELD_B(this_instr));
+                }
+                PyObject *res_o = PyNumber_Invert(PyStackRef_AsPyObjectBorrow(value));
+                if (res_o == NULL) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
+                res = PyStackRef_FromPyObjectSteal(res_o);
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                _PyStackRef_XCLOSE_POINTER(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -18394,41 +18391,46 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
-            PyValue value;
-            PyValue res;
-            PyValue v;
+            _PyStackRef value;
+            _PyStackRef res;
+            _PyStackRef v;
             // _UNARY_NEGATIVE
             {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
-                if (PyValue_IsInlineInt(value)) {
-                    int32_t i = PyValue_Int32(value);
+                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                if (PyStackRef_IsInlineInt(value)) {
+                    int32_t i = PyStackRef_InlineInt(value);
                     if (i == INT32_MIN) {
-                        res = _PyValue_BoxInt64(-(int64_t)i);
+                        res = _PyStackRef_BoxInt64(-(int64_t)i);
                     }
                     else {
-                        res = PyValue_FromInt32(-i);
+                        res = PyStackRef_FromInt32(-i);
                     }
                 }
-                else if (PyValue_IsInlineFloat(value)) {
-                    res = _PyValue_FromBits(_PyValue_DoubleBits(-PyValue_Double(value)));
+                else if (PyStackRef_IsInlineFloat(value)) {
+                    res = PyStackRef_FromDoubleNotNaN(-PyStackRef_InlineFloat(value));
                 }
-                else if (_PyValue_FloatCheckExact(value)) {
-                    res = PyValue_FromDouble(-_PyValue_NumberAsDouble(value));
+                else if (PyStackRef_FloatCheckExact(value) &&
+                     tstate->interp->opt_config.tagged_values_enabled)
+                {
+                    res = PyStackRef_FromDouble(-PyStackRef_FloatValue(value));
                 }
                 else {
-                    res = PyNumber_NegativeValue(value);
+                    PyObject *res_o = PyNumber_Negative(PyStackRef_AsPyObjectBorrow(value));
+                    res = res_o == NULL ? PyStackRef_NULL : PyStackRef_FromPyObjectSteal(res_o);
                 }
-                if (PyValue_IsNull(res)) {
+                if (PyStackRef_IsNull(res)) {
+                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
+                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             }
             // _POP_TOP
             {
                 value = v;
-                (void)value;
+                IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
+                PyStackRef_XCLOSE(value);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -18444,16 +18446,16 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
-            PyValue value;
-            PyValue res;
-            value = IR_SLOT(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(value);
+            _PyStackRef value;
+            _PyStackRef res;
+            value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            int truth = _PyStackRef_Truth(value);
+            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            PyStackRef_CLOSE(value);
             if (truth < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 JUMP_TO_LABEL(error);
             }
-            res = truth ? _PyValue_False : _PyValue_True;
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            res = truth ? PyStackRef_False : PyStackRef_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -18471,36 +18473,25 @@
             INSTRUCTION_STATS(UNPACK_EX);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue seq;
-            PyValue *top;
+            _PyStackRef seq;
+            _PyStackRef *top;
             seq = window[0];
             top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
-            PyObject *seq_object;
-            _PyValueRoot seq_root;
-            if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                seq_object = _PyValue_BoxInline(seq);
-                if (seq_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                seq = PyStackRef_Box(seq);
+                if (PyStackRef_IsInline(seq)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(UNPACK_EX, _PY_BOX_OTHER);
+                BOX_STAT_INC(UNPACK_EX);
+                window[0] = seq;
             }
-            else {
-                seq_object = PyValue_ObjectBorrow(seq);
-            }
-            PyObject *seq_o = seq_object;
-            if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                _PyThreadState_PushValueRoot(tstate, &seq_root);
-                seq_root.object = seq_object;
-            }
-            int res = _PyEval_UnpackIterableValues(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                _PyThreadState_PopValueRoot(tstate, &seq_root);
-            }
+            PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
+            window[0] = PyStackRef_NULL;
+            int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             Py_DECREF(seq_o);
             if (res == 0) {
-                window[0] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
             }
             DISPATCH();
@@ -18521,10 +18512,10 @@
             _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue seq;
-            PyValue *top;
+            _PyStackRef seq;
+            _PyStackRef *top;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = window[0];
@@ -18543,34 +18534,22 @@
             // _UNPACK_SEQUENCE
             {
                 top = &window[oparg];
-                PyObject *seq_object;
-                _PyValueRoot seq_root;
-                if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                    seq_object = _PyValue_BoxInline(seq);
-                    if (seq_object == NULL) {
+                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                    seq = PyStackRef_Box(seq);
+                    if (PyStackRef_IsInline(seq)) {
                         JUMP_TO_LABEL(error);
                     }
-                    BOX_STAT_INC(UNPACK_SEQUENCE, _PY_BOX_OTHER);
+                    BOX_STAT_INC(UNPACK_SEQUENCE);
+                    window[0] = seq;
                 }
-                else {
-                    seq_object = PyValue_ObjectBorrow(seq);
-                }
-                PyObject *seq_o = seq_object;
-                if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                    _PyThreadState_PushValueRoot(tstate, &seq_root);
-                    seq_root.object = seq_object;
-                }
-                int res = _PyEval_UnpackIterableValues(tstate, seq_o, oparg, -1, top);
-                if (Py_UNLIKELY(PyValue_IsInline(seq))) {
-                    _PyThreadState_PopValueRoot(tstate, &seq_root);
-                }
+                PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
+                window[0] = PyStackRef_NULL;
+                int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg, -1, top);
                 Py_DECREF(seq_o);
                 if (res == 0) {
-                    window[0] = PyValue_NULL;
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
             DISPATCH();
         }
 
@@ -18587,20 +18566,20 @@
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
+            _PyStackRef tos;
+            _PyStackRef seq;
+            _PyStackRef *values;
             // _GUARD_TOS_LIST
             {
                 tos = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -18611,7 +18590,7 @@
             {
                 seq = tos;
                 values = &window[0];
-                PyObject *seq_o = PyValue_ObjectBorrow(seq);
+                PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyList_CheckExact(seq_o));
                 if (!LOCK_OBJECT(seq_o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
@@ -18627,13 +18606,14 @@
                     }
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyList_ITEMS(seq_o);
+                PyObject **items = _PyList_ITEMS(seq_o);
                 for (int i = oparg; --i >= 0; ) {
-                    *values++ = items[i];
+                    *values++ = PyStackRef_FromPyObjectNew(items[i]);
                 }
                 UNLOCK_OBJECT(seq_o);
+                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
+                _PyStackRef_CLOSE_POINTER(seq);
             }
-            IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
             DISPATCH();
         }
 
@@ -18650,20 +18630,20 @@
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
+            _PyStackRef tos;
+            _PyStackRef seq;
+            _PyStackRef *values;
             // _GUARD_TOS_TUPLE
             {
                 tos = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyTuple_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -18674,7 +18654,7 @@
             {
                 seq = tos;
                 values = &window[0];
-                PyObject *seq_o = PyValue_ObjectBorrow(seq);
+                PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != oparg) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
@@ -18682,12 +18662,13 @@
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyTuple_ITEMS(seq_o);
+                PyObject **items = _PyTuple_ITEMS(seq_o);
                 for (int i = oparg; --i >= 0; ) {
-                    *values++ = items[i];
+                    *values++ = PyStackRef_FromPyObjectNew(items[i]);
                 }
+                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
+                _PyStackRef_CLOSE_POINTER(seq);
             }
-            IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
             DISPATCH();
         }
 
@@ -18704,21 +18685,21 @@
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue val1;
-            PyValue val0;
+            _PyStackRef tos;
+            _PyStackRef seq;
+            _PyStackRef val1;
+            _PyStackRef val0;
             // _GUARD_TOS_TUPLE
             {
                 tos = window[0];
-                if (Py_UNLIKELY(!_PyValue_IsPointerSpaceAt(&window[0]))) {
+                if (Py_UNLIKELY(!PyStackRef_IsPointerSpaceAt(&window[0]))) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
-                PyObject *o = PyValue_ObjectBorrow(tos);
+                PyObject *o = PyStackRef_AsPyObjectBorrow(tos);
                 if (!PyTuple_CheckExact(o)) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
                     assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
@@ -18729,7 +18710,7 @@
             {
                 seq = tos;
                 assert(oparg == 2);
-                PyObject *seq_o = PyValue_ObjectBorrow(seq);
+                PyObject *seq_o = PyStackRef_AsPyObjectBorrow(seq);
                 assert(PyTuple_CheckExact(seq_o));
                 if (PyTuple_GET_SIZE(seq_o) != 2) {
                     UPDATE_MISS_STATS(UNPACK_SEQUENCE);
@@ -18737,11 +18718,12 @@
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                val0 = PyTuple_GET_VALUE(seq_o, 0);
-                val1 = PyTuple_GET_VALUE(seq_o, 1);
+                val0 = PyStackRef_FromPyObjectNew(PyTuple_GET_ITEM(seq_o, 0));
+                val1 = PyStackRef_FromPyObjectNew(PyTuple_GET_ITEM(seq_o, 1));
+                window[0] = val1;
+                window[1] = val0;
+                _PyStackRef_CLOSE_POINTER(seq);
             }
-            window[0] = val1;
-            window[1] = val0;
             DISPATCH();
         }
 
@@ -18756,105 +18738,65 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            PyValue exit_func;
-            PyValue exit_self;
-            PyValue lasti;
-            PyValue val;
-            PyValue res;
+            _PyStackRef exit_func;
+            _PyStackRef exit_self;
+            _PyStackRef lasti;
+            _PyStackRef val;
+            _PyStackRef res;
             val = window[4];
             lasti = window[2];
             exit_self = window[1];
             exit_func = window[0];
-            PyObject *exit_func_object;
-            _PyValueRoot exit_func_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                exit_func_object = _PyValue_BoxInline(exit_func);
-                if (exit_func_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
+                exit_func = PyStackRef_Box(exit_func);
+                if (PyStackRef_IsInline(exit_func)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(WITH_EXCEPT_START, _PY_BOX_OTHER);
+                BOX_STAT_INC(WITH_EXCEPT_START);
+                window[0] = exit_func;
             }
-            else {
-                exit_func_object = PyValue_ObjectBorrow(exit_func);
-            }
-            PyObject *exit_self_object;
-            _PyValueRoot exit_self_root;
-            if (Py_UNLIKELY(PyValue_IsInline(exit_self))) {
-                if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                    _PyThreadState_PushValueRoot(tstate, &exit_func_root);
-                    exit_func_root.object = exit_func_object;
-                }
-                exit_self_object = _PyValue_BoxInline(exit_self);
-                if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                    _PyThreadState_PopValueRoot(tstate, &exit_func_root);
-                }
-                if (exit_self_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[1]))) {
+                exit_self = PyStackRef_Box(exit_self);
+                if (PyStackRef_IsInline(exit_self)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(WITH_EXCEPT_START, _PY_BOX_OTHER);
+                BOX_STAT_INC(WITH_EXCEPT_START);
+                window[1] = exit_self;
             }
-            else {
-                exit_self_object = PyValue_ObjectBorrow(exit_self);
-            }
-            PyObject *val_object;
-            _PyValueRoot val_root;
-            if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                    _PyThreadState_PushValueRoot(tstate, &exit_func_root);
-                    exit_func_root.object = exit_func_object;
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(exit_self))) {
-                    _PyThreadState_PushValueRoot(tstate, &exit_self_root);
-                    exit_self_root.object = exit_self_object;
-                }
-                val_object = _PyValue_BoxInline(val);
-                if (Py_UNLIKELY(PyValue_IsInline(exit_self))) {
-                    _PyThreadState_PopValueRoot(tstate, &exit_self_root);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                    _PyThreadState_PopValueRoot(tstate, &exit_func_root);
-                }
-                if (val_object == NULL) {
+            if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[4]))) {
+                val = PyStackRef_Box(val);
+                if (PyStackRef_IsInline(val)) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(WITH_EXCEPT_START, _PY_BOX_OTHER);
+                BOX_STAT_INC(WITH_EXCEPT_START);
+                window[4] = val;
             }
-            else {
-                val_object = PyValue_ObjectBorrow(val);
+            PyObject *exc, *tb;
+            PyObject *val_o = PyStackRef_AsPyObjectBorrow(val);
+            PyObject *exit_func_o = PyStackRef_AsPyObjectBorrow(exit_func);
+            assert(val_o && PyExceptionInstance_Check(val_o));
+            exc = PyExceptionInstance_Class(val_o);
+            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
+            if (tb == NULL) {
+                tb = Py_None;
             }
-            assert(_PyValue_IsTaggedIndex(lasti));
+            assert(PyStackRef_IsTaggedIndex(lasti));
             (void)lasti;
-            if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                _PyThreadState_PushValueRoot(tstate, &exit_func_root);
-                exit_func_root.object = exit_func_object;
+            PyObject* res_o;
+            {
+                PyObject *stack[5] = {NULL, PyStackRef_AsPyObjectBorrow(exit_self), exc, val_o, tb};
+                int has_self = !PyStackRef_IsNull(exit_self);
+                res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
+                    (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+                _PyGC_CLEAR_ARRAY(stack);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(exit_self))) {
-                _PyThreadState_PushValueRoot(tstate, &exit_self_root);
-                exit_self_root.object = exit_self_object;
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                _PyThreadState_PushValueRoot(tstate, &val_root);
-                val_root.object = val_object;
-            }
-            PyObject *res_o = _PyEval_CallExitWithException(
-                exit_func_object,
-                exit_self_object,
-                val_object);
-            if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                _PyThreadState_PopValueRoot(tstate, &val_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(exit_self))) {
-                _PyThreadState_PopValueRoot(tstate, &exit_self_root);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(exit_func))) {
-                _PyThreadState_PopValueRoot(tstate, &exit_func_root);
-            }
+            Py_XDECREF(original_tb);
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromObject(res_o);
+            res = PyStackRef_FromPyObjectSteal(res_o);
             window[5] = res;
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[5]);
             DISPATCH();
@@ -18873,45 +18815,52 @@
             INSTRUCTION_STATS(YIELD_VALUE);
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
             opcode = YIELD_VALUE;
-            PyValue retval;
-            PyValue value;
-            retval = window[0];
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            frame->instr_ptr++;
-            PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
-            assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
-            assert(oparg == 0 || oparg == 1);
-            PyValue temp = retval;
-            window[0] = PyValue_NULL;
-            IR_RETURN_EARLY(frame->previous, temp);
-            DTRACE_FUNCTION_RETURN();
-            tstate->exc_info = gen->gi_exc_state.previous_item;
-            gen->gi_exc_state.previous_item = NULL;
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *gen_frame = frame;
-            gen_frame->return_slot = (uint16_t)IR_FIELD_B(this_instr);
-            _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
-            frame = tstate->current_frame = frame->previous;
-            gen_frame->previous = NULL;
-            ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-            #ifdef Py_DEBUG
-            if (!_PyValue_IsNone(frame->f_executable)) {
-                Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
-                assert(i >= 0 && i <= INT_MAX);
-                int opcode = _PyIR_BaseOpcode(
-                    _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                assert(opcode == SEND || opcode == FOR_ITER);
+            _PyStackRef value;
+            _PyStackRef retval;
+            // _MAKE_HEAP_SAFE
+            {
+                value = window[0];
+                value = PyStackRef_MakeHeapSafe(value);
             }
-            #endif
-            slots = _PyFrame_Slots(frame);
-            LOAD_IP(1);
-            value = temp;
-            LLTRACE_RESUME_FRAME();
-            (void)value;
+            // _YIELD_VALUE
+            {
+                retval = value;
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                frame->instr_ptr++;
+                PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+                assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
+                assert(oparg == 0 || oparg == 1);
+                _PyStackRef temp = retval;
+                window[0] = PyStackRef_NULL;
+                DTRACE_FUNCTION_RETURN();
+                tstate->exc_info = gen->gi_exc_state.previous_item;
+                gen->gi_exc_state.previous_item = NULL;
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *gen_frame = frame;
+                gen_frame->return_slot = (uint16_t)IR_FIELD_B(this_instr);
+                _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
+                frame = tstate->current_frame = frame->previous;
+                gen_frame->previous = NULL;
+                ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
+                #ifdef Py_DEBUG
+                if (!PyStackRef_IsNone(frame->f_executable)) {
+                    Py_ssize_t i = _PyFrame_InstrOffset(frame, frame->instr_ptr);
+                    assert(i >= 0 && i <= INT_MAX);
+                    int opcode = _PyIR_BaseOpcode(
+                        _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
+                    assert(opcode == SEND || opcode == FOR_ITER);
+                }
+                #endif
+                slots = _PyFrame_Slots(frame);
+                LOAD_IP(1);
+                value = temp;
+                LLTRACE_RESUME_FRAME();
+            }
+            IR_STORE_RETURN(value);
             DISPATCH();
         }
 
@@ -18984,10 +18933,10 @@ JUMP_TO_LABEL(error);
                 slots = _PyFrame_Slots(frame);
                 if (lasti) {
                     int frame_lasti = _PyInterpreterFrame_LASTI(frame);
-                    slots[first] = _PyValue_TagIndex(frame_lasti);
+                    slots[first] = PyStackRef_TagIndex(frame_lasti);
                 }
                 PyObject *exc = _PyErr_GetRaisedException(tstate);
-                slots[exc_slot] = PyValue_FromObject(exc);
+                slots[exc_slot] = PyStackRef_FromPyObjectSteal(exc);
                 next_instr = _PyFrame_InstrAt(frame, handler);
                 int err = monitor_handled(tstate, frame, next_instr, exc);
                 if (err < 0) {
@@ -19029,7 +18978,7 @@ JUMP_TO_LABEL(error);
                     #if !_Py_TAIL_CALL_INTERP
                     assert(frame == &entry.frame);
                     #endif
-                    return PyValue_NULL;
+                    return NULL;
                 }
                 next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);
                 JUMP_TO_LABEL(error);

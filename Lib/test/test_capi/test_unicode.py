@@ -77,8 +77,11 @@ class CAPITest(unittest.TestCase):
         # Test PyUnicode_CheckExact()
         self._test_check(_testlimitedcapi.unicode_checkexact, exact=True)
 
-    def assert_is_mutable(self, result):
-        # Check that result is a "mutable" Unicode string.
+    def assert_is_mutable(self, result, refcnt):
+        # Check that result is a "mutable" Unicode string.  Py_GC reports
+        # no reference counts.
+        if not support.Py_GC:
+            self.assertEqual(refcnt, 1)
         self.assertFalse(sys._is_immortal(result))
 
     def assert_is_empty_singleton(self, result):
@@ -93,7 +96,8 @@ class CAPITest(unittest.TestCase):
         def new(size, maxchar):
             result = _unicode_new(size, maxchar)
             if size != 0:
-                self.assert_is_mutable(result)
+                refcnt = None if support.Py_GC else sys.getrefcount(result)
+                self.assert_is_mutable(result, refcnt)
             else:
                 self.assert_is_empty_singleton(result)
             return result
@@ -141,6 +145,12 @@ class CAPITest(unittest.TestCase):
                         self.assertEqual(fill(to, start, length, fill_char),
                                         (expected, filled))
 
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                fill('abc', 0, 3, ord('x'), incref=True)
+
         s = strings[0]
         self.assertRaises(IndexError, fill, s, -1, 0, 0x78)
         self.assertRaises(IndexError, fill, s, PY_SSIZE_T_MIN, 0, 0x78)
@@ -183,6 +193,12 @@ class CAPITest(unittest.TestCase):
         writechar = _testlimitedcapi.unicode_writechar
         self._test_writechar(writechar, check=True)
 
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                writechar('abc', 1, ord('x'), incref=True)
+
     def test_write_macro(self):
         """Test PyUnicode_WRITE()"""
         self._test_writechar(_testcapi.unicode_write, check=False)
@@ -210,12 +226,12 @@ class CAPITest(unittest.TestCase):
                 self.assertTrue(is_new_obj)
             elif (not new) or compute_hash:
                 # Get a fresh copy
-                self.assert_is_mutable(result)
+                self.assert_is_mutable(result, refcnt)
                 self.assertTrue(is_new_obj)
             else:
                 # In-size replace can return the same address, or not.
                 # So 'is_new_obj' cannot be tested.
-                self.assert_is_mutable(result)
+                self.assert_is_mutable(result, refcnt)
 
             return result
 
@@ -1811,6 +1827,12 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(SystemError, unicode_copycharacters, s, 0, b'', 0, 0)
         self.assertRaises(SystemError, unicode_copycharacters, s, 0, [], 0, 0)
 
+        # A string with 2 references cannot be modified; Py_GC cannot
+        # tell that it has 2.
+        if not support.Py_GC:
+            with self.assertRaisesRegex(SystemError, USED_STR_ERROR):
+                unicode_copycharacters('abc', 0, 'abc', 0, 1, incref=True)
+
         # CRASHES unicode_copycharacters(s, 0, NULL, 0, 0)
         # TODO: Test PyUnicode_CopyCharacters() with non-unicode and
         # non-modifiable unicode as "to".
@@ -1957,13 +1979,7 @@ class CAPITest(unittest.TestCase):
 class PyUnicodeWriterTest(unittest.TestCase):
     def create_writer(self, size):
         # Test PyUnicodeWriter_Create()
-        return _testinternalcapi.PyUnicodeWriter(size)
-
-    def test_opaque_public_api(self):
-        _testcapi.test_unicode_writer()
-
-    def test_private_lifecycle(self):
-        _testinternalcapi.test_unicode_writer_lifecycle()
+        return _testcapi.PyUnicodeWriter(size)
 
     def test_basic(self):
         writer = self.create_writer(100)
@@ -2482,7 +2498,7 @@ class PyUnicodeWriterTest(unittest.TestCase):
 @unittest.skipIf(ctypes is None, 'need ctypes')
 class PyUnicodeWriterFormatTest(unittest.TestCase):
     def create_writer(self, size):
-        return _testinternalcapi.PyUnicodeWriter(size)
+        return _testcapi.PyUnicodeWriter(size)
 
     def writer_format(self, writer, *args):
         from ctypes import c_char_p, pythonapi, c_int, c_void_p

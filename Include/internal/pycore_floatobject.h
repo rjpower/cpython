@@ -35,6 +35,7 @@ _PyFloat_OrLongExactDealloc(PyObject *op)
 }
 
 
+extern void _PyFloat_DebugMallocStats(FILE* out);
 
 
 /* Format the object based on the format_spec, as defined in PEP 3101
@@ -53,25 +54,6 @@ extern PyObject* _Py_string_to_number_with_underscores(
 extern double _Py_parse_inf_or_nan(const char *p, char **endptr);
 
 extern int _Py_convert_int_to_double(PyObject **v, double *dbl);
-
-/* float's %, divmod() and ** on doubles, shared by the float type's slots
-   and the value number protocol (Objects/abstract.c).  The divisor of
-   _PyFloat_Rem() and _PyFloat_DivMod() is not zero.  _PyFloat_Pow()
-   returns 0 with the result in *res, -1 with an exception set, or 1 if the
-   result is complex. */
-extern double _PyFloat_Rem(double vx, double wx);
-extern void _PyFloat_DivMod(double vx, double wx, double *floordiv, double *mod);
-extern int _PyFloat_Pow(double iv, double iw, double *res);
-
-/* repr() of a float, and its format() with format_spec[start:end], from
-   its double. */
-extern PyObject *_PyFloat_ReprDouble(double value);
-extern int _PyFloat_FormatDoubleWriter(
-    _PyUnicodeWriter *writer,
-    double value,
-    PyObject *format_spec,
-    Py_ssize_t start,
-    Py_ssize_t end);
 
 /* Should match endianness of the platform in most (all?) cases. */
 

@@ -29,6 +29,9 @@
 /******************************************************************/
 
 
+#ifdef Py_GIL_DISABLED
+static PyMutex malloc_closure_lock;
+#endif
 
 typedef union _tagITEM {
     ffi_closure closure;

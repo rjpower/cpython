@@ -60,21 +60,17 @@ class FinderTests(abc.FinderTests):
     def test_failure(self):
         self.assertIsNone(self.find_spec('asdfjkl;'))
 
-    def test_abi3_extension_suffixes(self):
+    def test_runtime_extension_suffixes(self):
         suffixes = self.machinery.EXTENSION_SUFFIXES
-        platform = sysconfig.get_config_var("SOABI_PLATFORM")
         if 'win32' in sys.platform:
             # Either "_d.pyd" or ".pyd" must be in suffixes
             self.assertTrue({"_d.pyd", ".pyd"}.intersection(suffixes))
-        elif 'cygwin' in sys.platform:
-            pass
         else:
-            # There is no stable ABI, so no abi3 or abi3t suffix.
-            self.assertNotIn(".abi3.so", suffixes)
-            self.assertNotIn(".abi3t.so", suffixes)
-            if platform:
-                self.assertNotIn(f".abi3-{platform}.so", suffixes)
-                self.assertNotIn(f".abi3t-{platform}.so", suffixes)
+            # This fork's compiler/object ABI requires rebuilt extensions.
+            # Generic upstream stable-ABI and untagged names are excluded.
+            self.assertTrue(suffixes)
+            self.assertTrue(all(suffix.startswith('.boilrc1-')
+                                for suffix in suffixes), suffixes)
 
 
 (Frozen_FinderTests,

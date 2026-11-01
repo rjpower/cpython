@@ -48,13 +48,6 @@ Xxo_dealloc(PyObject *op)
     PyObject_Free(self);
 }
 
-static int
-Xxo_traverse(PyObject *op, visitproc visit, void *arg)
-{
-    Py_VISIT(XxoObject_CAST(op)->x_attr);
-    return 0;
-}
-
 static PyObject *
 Xxo_demo(PyObject *Py_UNUSED(op), PyObject *args)
 {
@@ -69,16 +62,17 @@ static PyMethodDef Xxo_methods[] = {
     {NULL, NULL}  /* sentinel */
 };
 
-static PyValue
+static PyObject *
 Xxo_getattro(PyObject *op, PyObject *name)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr != NULL) {
-        // An inline item is returned as it is, with no box.
-        PyValue v;
-        if (PyDict_GetItemRefValue(self->x_attr, name, &v) != 0) {
-            // found, or an error and PyValue_NULL
-            return v;
+        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
+        if (v != NULL) {
+            return Py_NewRef(v);
+        }
+        else if (PyErr_Occurred()) {
+            return NULL;
         }
     }
     return PyObject_GenericGetAttr(op, name);
@@ -130,7 +124,7 @@ static PyTypeObject Xxo_Type = {
     0,                          /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT,         /*tp_flags*/
     0,                          /*tp_doc*/
-    Xxo_traverse,               /*tp_traverse*/
+    0,                          /*tp_traverse*/
     0,                          /*tp_clear*/
     0,                          /*tp_richcompare*/
     0,                          /*tp_weaklistoffset*/

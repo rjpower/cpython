@@ -1508,71 +1508,59 @@ PyCodec_SurrogateEscapeErrors(PyObject *exc)
 
 // --- Codecs registry handlers -----------------------------------------------
 
-/* Call handler, a PyCodec_*Errors() function, on the exception exc. */
-static PyValue
-call_errors(PyObject *(*handler)(PyObject *), PyValue exc)
+static inline PyObject *
+strict_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    PyObject *exc_o = PyValue_Object(exc);
-    if (exc_o == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(handler(exc_o));
+    return PyCodec_StrictErrors(exc);
 }
 
 
-static PyValue
-strict_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+ignore_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_StrictErrors, exc);
+    return PyCodec_IgnoreErrors(exc);
 }
 
 
-static PyValue
-ignore_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+replace_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_IgnoreErrors, exc);
+    return PyCodec_ReplaceErrors(exc);
 }
 
 
-static PyValue
-replace_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+xmlcharrefreplace_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_ReplaceErrors, exc);
+    return PyCodec_XMLCharRefReplaceErrors(exc);
 }
 
 
-static PyValue
-xmlcharrefreplace_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+backslashreplace_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_XMLCharRefReplaceErrors, exc);
+    return PyCodec_BackslashReplaceErrors(exc);
 }
 
 
-static PyValue
-backslashreplace_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+namereplace_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_BackslashReplaceErrors, exc);
+    return PyCodec_NameReplaceErrors(exc);
 }
 
 
-static PyValue
-namereplace_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+surrogatepass_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_NameReplaceErrors, exc);
+    return PyCodec_SurrogatePassErrors(exc);
 }
 
 
-static PyValue
-surrogatepass_errors(PyObject *Py_UNUSED(self), PyValue exc)
+static inline PyObject *
+surrogateescape_errors(PyObject *Py_UNUSED(self), PyObject *exc)
 {
-    return call_errors(PyCodec_SurrogatePassErrors, exc);
-}
-
-
-static PyValue
-surrogateescape_errors(PyObject *Py_UNUSED(self), PyValue exc)
-{
-    return call_errors(PyCodec_SurrogateEscapeErrors, exc);
+    return PyCodec_SurrogateEscapeErrors(exc);
 }
 
 
@@ -1588,7 +1576,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "strict",
             {
                 "strict_errors",
-                _PyCFunction_CAST(strict_errors),
+                strict_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'strict' error handling, which "
                           "raises a UnicodeError on coding errors.")
@@ -1598,7 +1586,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "ignore",
             {
                 "ignore_errors",
-                _PyCFunction_CAST(ignore_errors),
+                ignore_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'ignore' error handling, which "
                           "ignores malformed data and continues.")
@@ -1608,7 +1596,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "replace",
             {
                 "replace_errors",
-                _PyCFunction_CAST(replace_errors),
+                replace_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'replace' error handling, which "
                           "replaces malformed data with a replacement marker.")
@@ -1618,7 +1606,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "xmlcharrefreplace",
             {
                 "xmlcharrefreplace_errors",
-                _PyCFunction_CAST(xmlcharrefreplace_errors),
+                xmlcharrefreplace_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'xmlcharrefreplace' error handling, "
                           "which replaces an unencodable character with the "
@@ -1629,7 +1617,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "backslashreplace",
             {
                 "backslashreplace_errors",
-                _PyCFunction_CAST(backslashreplace_errors),
+                backslashreplace_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'backslashreplace' error handling, "
                           "which replaces malformed data with a backslashed "
@@ -1640,7 +1628,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "namereplace",
             {
                 "namereplace_errors",
-                _PyCFunction_CAST(namereplace_errors),
+                namereplace_errors,
                 METH_O,
                 PyDoc_STR("Implements the 'namereplace' error handling, "
                           "which replaces an unencodable character with a "
@@ -1651,7 +1639,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "surrogatepass",
             {
                 "surrogatepass",
-                _PyCFunction_CAST(surrogatepass_errors),
+                surrogatepass_errors,
                 METH_O
             }
         },
@@ -1659,7 +1647,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             "surrogateescape",
             {
                 "surrogateescape",
-                _PyCFunction_CAST(surrogateescape_errors),
+                surrogateescape_errors,
                 METH_O
             }
         }

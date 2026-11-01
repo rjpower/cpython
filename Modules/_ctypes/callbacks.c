@@ -143,8 +143,9 @@ static void _CallPythonObject(ctypes_state *st,
     nargs = PyTuple_GET_SIZE(converters);
     assert(nargs <= CTYPES_MAX_ARGCOUNT);
     PyObject **args = alloca(nargs * sizeof(PyObject *));
+    PyObject **cnvs = PySequence_Fast_ITEMS(converters);
     for (i = 0; i < nargs; i++) {
-        PyObject *cnv = PyTuple_GET_ITEM(converters, i); // a type, never boxed
+        PyObject *cnv = cnvs[i]; // borrowed ref
 
         StgInfo *info;
         if (PyStgInfo_FromType(st, cnv, &info) < 0) {
@@ -437,8 +438,9 @@ CThunkObject *_ctypes_alloc_callback(ctypes_state *st,
     }
 
     p->flags = flags;
+    PyObject **cnvs = PySequence_Fast_ITEMS(converters);
     for (i = 0; i < nargs; ++i) {
-        PyObject *cnv = PyTuple_GET_ITEM(converters, i); // a type, never boxed
+        PyObject *cnv = cnvs[i]; // borrowed ref
         p->atypes[i] = _ctypes_get_ffi_type(st, cnv);
     }
     p->atypes[i] = NULL;

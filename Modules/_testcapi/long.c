@@ -19,8 +19,8 @@ _testcapi.call_long_compact_api
 [clinic start generated code]*/
 
 static PyObject *
-_testcapi_call_long_compact_api_impl(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=a25e5bf0926c09a1 input=87b87396967af14c]*/
+_testcapi_call_long_compact_api(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=7e3894f611b1b2b7 input=87b87396967af14c]*/
 
 {
     assert(PyLong_Check(arg));
@@ -93,71 +93,51 @@ pylong_fromnativebytes(PyObject *module, PyObject *args)
 }
 
 
-static PyValue
-pylong_getsign(PyObject *module, PyValue arg_value)
+static PyObject *
+pylong_getsign(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     int sign;
     NULLABLE(arg);
     if (PyLong_GetSign(arg, &sign) == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromLong(sign));
+    return PyLong_FromLong(sign);
 }
 
 
-static PyValue
-pylong_ispositive(PyObject *module, PyValue arg_value)
+static PyObject *
+pylong_ispositive(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    RETURN_INT_VALUE(PyLong_IsPositive(arg));
+    RETURN_INT(PyLong_IsPositive(arg));
 }
 
 
-static PyValue
-pylong_isnegative(PyObject *module, PyValue arg_value)
+static PyObject *
+pylong_isnegative(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    RETURN_INT_VALUE(PyLong_IsNegative(arg));
+    RETURN_INT(PyLong_IsNegative(arg));
 }
 
 
-static PyValue
-pylong_iszero(PyObject *module, PyValue arg_value)
+static PyObject *
+pylong_iszero(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
-    RETURN_INT_VALUE(PyLong_IsZero(arg));
+    RETURN_INT(PyLong_IsZero(arg));
 }
 
 
-static PyValue
-pylong_aspid(PyObject *module, PyValue arg_value)
+static PyObject *
+pylong_aspid(PyObject *module, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(arg_value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(arg);
     pid_t value = PyLong_AsPid(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromPid(value));
+    return PyLong_FromPid(value);
 }
 
 
@@ -172,16 +152,12 @@ layout_to_dict(const PyLongLayout *layout)
 }
 
 
-static PyValue
-pylong_export(PyObject *module, PyValue obj_value)
+static PyObject *
+pylong_export(PyObject *module, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(obj_value);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     PyLongExport export_long;
     if (PyLong_Export(obj, &export_long) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     if (export_long.digits == NULL) {
@@ -190,7 +166,7 @@ pylong_export(PyObject *module, PyValue obj_value)
         assert(export_long.digits == NULL);
         PyObject *res = PyLong_FromInt64(export_long.value);
         PyLong_FreeExport(&export_long);
-        return PyValue_FromResult(res);
+        return res;
     }
 
     assert(PyLong_GetNativeLayout()->digit_size == sizeof(digit));
@@ -219,12 +195,12 @@ pylong_export(PyObject *module, PyValue obj_value)
     PyLong_FreeExport(&export_long);
     assert(export_long._reserved == 0);
 
-    return PyValue_FromResult(res);
+    return res;
 
 error:
     Py_XDECREF(digits);
     PyLong_FreeExport(&export_long);
-    return PyValue_NULL;
+    return NULL;
 }
 
 
@@ -325,15 +301,15 @@ static PyMethodDef test_methods[] = {
     {"pylong_fromunicodeobject",    pylong_fromunicodeobject,   METH_VARARGS},
     {"pylong_asnativebytes",        pylong_asnativebytes,       METH_VARARGS},
     {"pylong_fromnativebytes",      pylong_fromnativebytes,     METH_VARARGS},
-    {"pylong_getsign",              _PyCFunction_CAST(pylong_getsign), METH_O},
-    {"pylong_aspid",                _PyCFunction_CAST(pylong_aspid), METH_O},
-    {"pylong_export",               _PyCFunction_CAST(pylong_export), METH_O},
+    {"pylong_getsign",              pylong_getsign,             METH_O},
+    {"pylong_aspid",                pylong_aspid,               METH_O},
+    {"pylong_export",               pylong_export,              METH_O},
     {"pylongwriter_create",         pylongwriter_create,        METH_VARARGS},
     {"pylongwriter_finish_bug",     pylongwriter_finish_bug,    METH_NOARGS},
     {"get_pylong_layout",           get_pylong_layout,          METH_NOARGS},
-    {"pylong_ispositive",           _PyCFunction_CAST(pylong_ispositive), METH_O},
-    {"pylong_isnegative",           _PyCFunction_CAST(pylong_isnegative), METH_O},
-    {"pylong_iszero",               _PyCFunction_CAST(pylong_iszero), METH_O},
+    {"pylong_ispositive",           pylong_ispositive,          METH_O},
+    {"pylong_isnegative",           pylong_isnegative,          METH_O},
+    {"pylong_iszero",               pylong_iszero,              METH_O},
     {"corrupt_long",                corrupt_long,               METH_VARARGS},
     {NULL},
 };

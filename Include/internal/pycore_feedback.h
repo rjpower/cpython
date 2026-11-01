@@ -36,7 +36,7 @@ extern "C" {
  *              24  POP_JUMP_IF_FALSE, _TRUE
  *     UNARY    24  TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
  *     BINARY   32  BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
- *     ATTR     48  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
+ *     ATTR     40  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
  *     GLOBAL   32  LOAD_GLOBAL
  *     CALL     24  CALL, CALL_KW, CALL_FUNCTION_EX
  *
@@ -109,9 +109,8 @@ typedef struct {
     const void *descr;              // _PyBinaryOpSpecializationDescr for BINARY_OP_EXTEND
 } _PyFbBinary;
 
-/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  shape and shape_to are borrowed
- * from the owner's type, which outlives every object that has them
- * (Include/internal/pycore_shape.h). */
+/* LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR.  The shape fields are used with
+ * Py_SHAPES (Include/internal/pycore_dict.h). */
 typedef struct {
     _PyFbHeader h;
     uint32_t type_version;          // Py_TYPE(owner)
@@ -119,30 +118,21 @@ typedef struct {
         uint32_t dict_version;      // LOAD_ATTR_MODULE: keys version of the module dict
         uint32_t func_version;      // property getter or __getattribute__
         uint32_t class_version;     // owner, for loads from a class
+        uint32_t shape;             // the owner's shape index
     };
     union {
         uint32_t index;
         uint32_t offset;
         uint32_t hint;
+        uint32_t dictoffset;
     };
-    union {
-        // LOAD_ATTR_WITH_HINT, STORE_ATTR_WITH_HINT: where the dict word
-        // is, as _PyObject_DictAt() takes it
-        int32_t dictoffset;
-        // LOAD_ATTR_SHAPE, STORE_ATTR_SHAPE, STORE_ATTR_SHAPE_TRANSITION:
-        // the field's _PySlotKind, which the stores guard (note 09
-        // section 5); valid while the shape's version matches
-        uint32_t slot_kind;
-    };
+    uint32_t _pad;
     union {                         // borrowed; valid while the versions match
-        PyObject *descr;            // LOAD_ATTR_PROPERTY: the property
-        // LOAD_ATTR_CLASS, LOAD_ATTR_NONDESCRIPTOR_*: the class attribute,
-        // canonical, which may be an inline value
-        PyValue attr_value;
+        PyObject *descr;
+        PyObject *fget;
         PyObject *getattribute;
-        _PyShape *shape_to;         // STORE_ATTR_SHAPE_TRANSITION: the shape after the store
+        uint32_t shape_to;          // STORE_ATTR_SHAPE_ADD: the shape after the store
     };
-    _PyShape *shape;                // the owner's shape, for the shape handlers
 } _PyFbAttr;
 
 // LOAD_GLOBAL
@@ -167,19 +157,14 @@ typedef struct {
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the
  * receiver type and the dict, function or class version for ATTR, the
- * function and callable type versions for CALL.  index[i], descr[i] and
- * shape[i] are the entry's index, descr and shape fields, handler[i] the
- * specialised opcode. */
+ * function and callable type versions for CALL.  index[i] and descr[i] are
+ * the entry's index and descr fields, handler[i] the specialised opcode. */
 typedef struct {
     uint32_t type_version[FB_POLY_SIZE];
     uint32_t aux[FB_POLY_SIZE];
     uint32_t index[FB_POLY_SIZE];
     uint16_t handler[FB_POLY_SIZE];
     const void *descr[FB_POLY_SIZE];    // borrowed, as in the entry
-    _PyShape *shape[FB_POLY_SIZE];      // ATTR: the entry's shape, borrowed
-    // The field kind of a shape slot handler's row, 0 for other rows: a
-    // row's shape is never read (_PyFb_ShapeRow()), so its kind is kept.
-    uint8_t slot_kind[FB_POLY_SIZE];
 } _PyFbPoly;
 
 typedef struct _PyFbBlock {

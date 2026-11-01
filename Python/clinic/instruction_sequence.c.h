@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
@@ -49,14 +50,15 @@ static PyObject *
 InstructionSequenceType_use_label_impl(_PyInstructionSequence *self,
                                        int label);
 
-static PyValue
-InstructionSequenceType_use_label(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+InstructionSequenceType_use_label(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -79,21 +81,19 @@ InstructionSequenceType_use_label(PyObject *self, const PyValue *args, Py_ssize_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     int label;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    label = PyLong_AsIntValue(args[0]);
+    label = PyLong_AsInt(args[0]);
     if (label == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = InstructionSequenceType_use_label_impl((_PyInstructionSequence *)self, label);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = InstructionSequenceType_use_label_impl((_PyInstructionSequence *)self, label);
 
 exit:
     return return_value;
@@ -114,14 +114,15 @@ InstructionSequenceType_addop_impl(_PyInstructionSequence *self, int opcode,
                                    int oparg, int lineno, int col_offset,
                                    int end_lineno, int end_col_offset);
 
-static PyValue
-InstructionSequenceType_addop(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+InstructionSequenceType_addop(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -144,46 +145,44 @@ InstructionSequenceType_addop(PyObject *self, const PyValue *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[6];
+    PyObject *argsbuf[6];
     int opcode;
     int oparg;
     int lineno;
     int col_offset;
     int end_lineno;
     int end_col_offset;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 6, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    opcode = PyLong_AsIntValue(args[0]);
+    opcode = PyLong_AsInt(args[0]);
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    oparg = PyLong_AsIntValue(args[1]);
+    oparg = PyLong_AsInt(args[1]);
     if (oparg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    lineno = PyLong_AsIntValue(args[2]);
+    lineno = PyLong_AsInt(args[2]);
     if (lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    col_offset = PyLong_AsIntValue(args[3]);
+    col_offset = PyLong_AsInt(args[3]);
     if (col_offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    end_lineno = PyLong_AsIntValue(args[4]);
+    end_lineno = PyLong_AsInt(args[4]);
     if (end_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    end_col_offset = PyLong_AsIntValue(args[5]);
+    end_col_offset = PyLong_AsInt(args[5]);
     if (end_col_offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = InstructionSequenceType_addop_impl((_PyInstructionSequence *)self, opcode, oparg, lineno, col_offset, end_lineno, end_col_offset);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = InstructionSequenceType_addop_impl((_PyInstructionSequence *)self, opcode, oparg, lineno, col_offset, end_lineno, end_col_offset);
 
 exit:
     return return_value;
@@ -230,14 +229,15 @@ static PyObject *
 InstructionSequenceType_add_nested_impl(_PyInstructionSequence *self,
                                         PyObject *nested);
 
-static PyValue
-InstructionSequenceType_add_nested(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+InstructionSequenceType_add_nested(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -260,21 +260,16 @@ InstructionSequenceType_add_nested(PyObject *self, const PyValue *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *nested;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    nested = PyValue_Object(args[0]);
-    if (nested == NULL) {
-        goto exit;
-    }
-    _return_value = InstructionSequenceType_add_nested_impl((_PyInstructionSequence *)self, nested);
-    return_value = PyValue_FromResult(_return_value);
+    nested = args[0];
+    return_value = InstructionSequenceType_add_nested_impl((_PyInstructionSequence *)self, nested);
 
 exit:
     return return_value;
@@ -315,4 +310,4 @@ InstructionSequenceType_get_instructions(PyObject *self, PyObject *Py_UNUSED(ign
 {
     return InstructionSequenceType_get_instructions_impl((_PyInstructionSequence *)self);
 }
-/*[clinic end generated code: output=62813f4b4e713536 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c80501a59a1a1103 input=a9049054013a1b77]*/

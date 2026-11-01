@@ -1,49 +1,41 @@
+#include "pyconfig.h"   // Py_GIL_DISABLED
+#ifdef Py_GIL_DISABLED
+#  define Py_TARGET_ABI3T 0x030f0000
+#else
+   // Need limited C API 3.5 for PyModule_AddFunctions()
+#  define Py_LIMITED_API 0x03050000
+#endif
+
 #include "parts.h"
 #include "util.h"
 
 
-static PyValue
-pyweakref_check(PyObject *module, PyValue arg)
+static PyObject *
+pyweakref_check(PyObject *module, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PyWeakref_Check(obj)));
+    return PyLong_FromLong(PyWeakref_Check(obj));
 }
 
-static PyValue
-pyweakref_checkref(PyObject *module, PyValue arg)
+static PyObject *
+pyweakref_checkref(PyObject *module, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PyWeakref_CheckRef(obj)));
+    return PyLong_FromLong(PyWeakref_CheckRef(obj));
 }
 
-static PyValue
-pyweakref_checkrefexact(PyObject *module, PyValue arg)
+static PyObject *
+pyweakref_checkrefexact(PyObject *module, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PyWeakref_CheckRefExact(obj)));
+    return PyLong_FromLong(PyWeakref_CheckRefExact(obj));
 }
 
-static PyValue
-pyweakref_checkproxy(PyObject *module, PyValue arg)
+static PyObject *
+pyweakref_checkproxy(PyObject *module, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     NULLABLE(obj);
-    return PyValue_FromResult(PyLong_FromLong(PyWeakref_CheckProxy(obj)));
+    return PyLong_FromLong(PyWeakref_CheckProxy(obj));
 }
 
 static PyObject *
@@ -72,10 +64,10 @@ pyweakref_newproxy(PyObject *module, PyObject *args)
 
 
 static PyMethodDef test_methods[] = {
-    {"pyweakref_check", _PyCFunction_CAST(pyweakref_check), METH_O},
-    {"pyweakref_checkref", _PyCFunction_CAST(pyweakref_checkref), METH_O},
-    {"pyweakref_checkrefexact", _PyCFunction_CAST(pyweakref_checkrefexact), METH_O},
-    {"pyweakref_checkproxy", _PyCFunction_CAST(pyweakref_checkproxy), METH_O},
+    {"pyweakref_check", pyweakref_check, METH_O},
+    {"pyweakref_checkref", pyweakref_checkref, METH_O},
+    {"pyweakref_checkrefexact", pyweakref_checkrefexact, METH_O},
+    {"pyweakref_checkproxy", pyweakref_checkproxy, METH_O},
     {"pyweakref_newref", pyweakref_newref, METH_VARARGS},
     {"pyweakref_newproxy", pyweakref_newproxy, METH_VARARGS},
     {NULL},

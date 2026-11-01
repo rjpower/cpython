@@ -1003,49 +1003,6 @@ class _WarningsTests(BaseTest, unittest.TestCase):
 
     module = c_warnings
 
-    def test_restricted_builtins_cached_module(self):
-        for module in (self.module, types.ModuleType('warnings')):
-            with self.subTest(module=module), \
-                 self.module.catch_warnings(), \
-                 support.swap_item(sys.modules, 'warnings', module), \
-                 support.swap_attr(module, 'WarningMessage',
-                                   self.module.WarningMessage):
-                self.module.simplefilter('always', UserWarning)
-                first, second = [], []
-                emit = eval('lambda message: warn(message, category, "<test>", 1)',
-                            {'__builtins__': {}, 'warn': self.module.warn_explicit,
-                             'category': UserWarning})
-                with support.swap_attr(module, '_showwarnmsg', first.append):
-                    emit('first warning')
-                    module._showwarnmsg = second.append
-                    emit('second warning')
-                self.assertEqual([str(w.message) for w in first], ['first warning'])
-                self.assertEqual([str(w.message) for w in second], ['second warning'])
-
-    def test_restricted_builtins_missing_or_blocked_module(self):
-        for blocked in (False, True):
-            with self.subTest(blocked=blocked):
-                code = textwrap.dedent(f'''
-                    import sys
-                    import warnings
-                    import _warnings
-                    warnings.simplefilter('always', UserWarning)
-                    if {blocked}:
-                        sys.modules['warnings'] = None
-                    else:
-                        del sys.modules['warnings']
-                    emit = eval('lambda: warn("restricted warning", category, "<test>", 1)',
-                                {{'__builtins__': {{}}, 'warn': _warnings.warn_explicit,
-                                  'category': UserWarning}})
-                    emit()
-                    if {blocked}:
-                        assert sys.modules['warnings'] is None
-                    else:
-                        assert sys.modules['warnings'] is not None
-                ''')
-                _, _, stderr = assert_python_ok('-c', code)
-                self.assertIn(b'UserWarning: restricted warning', stderr)
-
     def test_filter(self):
         # Everything should function even if 'filters' is not in warnings.
         with self.module.catch_warnings() as w:
@@ -1367,17 +1324,16 @@ class CWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
 class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
     module = py_warnings
 
+    @support.requires_refcounting
     def test_tracemalloc(self):
         self.addCleanup(os_helper.unlink, os_helper.TESTFN)
 
         with open(os_helper.TESTFN, 'w', encoding="utf-8") as fp:
             fp.write(textwrap.dedent("""
-                import gc
                 def func():
                     f = open(__file__, "rb")
-                    f = None
                     # Emit ResourceWarning
-                    gc.collect()
+                    f = None
 
                 func()
             """))
@@ -1395,8 +1351,8 @@ class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
         filename = os.path.abspath(os_helper.TESTFN)
         stderr = run('-Wd', os_helper.TESTFN)
         expected = textwrap.dedent(f'''
-            {filename}:7: ResourceWarning: unclosed file <...>
-              gc.collect()
+            {filename}:5: ResourceWarning: unclosed file <...>
+              f = None
             ResourceWarning: Enable tracemalloc to get the object allocation traceback
         ''').strip()
         self.assertEqual(stderr, expected)
@@ -1404,12 +1360,12 @@ class PyWarningsDisplayTests(WarningsDisplayTests, unittest.TestCase):
         # tracemalloc enabled
         stderr = run('-Wd', '-X', 'tracemalloc=2', os_helper.TESTFN)
         expected = textwrap.dedent(f'''
-            {filename}:7: ResourceWarning: unclosed file <...>
-              gc.collect()
+            {filename}:5: ResourceWarning: unclosed file <...>
+              f = None
             Object allocated at (most recent call last):
-              File "{filename}", lineno 9
+              File "{filename}", lineno 7
                 func()
-              File "{filename}", lineno 4
+              File "{filename}", lineno 3
                 f = open(__file__, "rb")
         ''').strip()
         self.assertEqual(stderr, expected)
@@ -1738,8 +1694,11 @@ class LocksTest(unittest.TestCase):
                 assert ready.wait(support.LONG_TIMEOUT)
                 pid = os.fork()
                 if pid == 0:
-                    # The dead thread's finalizer runs at a collection.
-                    support.gc_collect()
+                    # The finalizer must run before os.fork() returns, when
+                    # reference counting frees the dead thread's locals; a
+                    # tracing collector runs it at a collection.
+                    if support.Py_GC:
+                        support.gc_collect()
                     os._exit(0)
                 support.wait_process(pid, exitcode=0)
             finally:

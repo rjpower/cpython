@@ -43,6 +43,8 @@ typedef struct
     int closed;
     int locked;
     int initialized;
+
+    PyObject* in_weakreflist; /* List of weak references */
 } pysqlite_Cursor;
 
 int pysqlite_cursor_setup_types(PyObject *module);

@@ -71,17 +71,12 @@ Invariants:
 
 import argparse
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from enum import IntFlag
-from types import MappingProxyType
 
 from analyzer import (
     Analysis,
     CodeSection,
     Instruction,
-    Family,
-    PseudoInstruction,
     Uop,
     Skip,
     Flush,
@@ -94,8 +89,6 @@ from generators_common import (
     DEFAULT_INPUT,
     ROOT,
     Emitter,
-    box_kind,
-    ReplacementFunctionType,
     TokenIterator,
     type_and_null,
     write_header,
@@ -128,6 +121,11 @@ INSTRUCTION_START_MARKER = "/* BEGIN INSTRUCTIONS */"
 INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
 LABEL_START_MARKER = "/* BEGIN LABELS */"
 LABEL_END_MARKER = "/* END LABELS */"
+
+def first_ir_only_handler(analysis: Analysis) -> int:
+    """The first handler of the IR only.  They follow the pseudo-instructions,
+    so that a number names one opcode, pseudo-instruction or handler."""
+    return 1 + max((p.opcode for p in analysis.pseudos.values()), default=255)
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Python/ceval_macros.h), from this_instr, which every handler defines.
@@ -204,14 +202,13 @@ class IRFormat:
     fb: str                         # where the feedback index lives
     jumps: bool                     # the oparg is an absolute target
     forward: bool = False           # the oparg is a forward distance
+    no_fold: bool = False
     transparent: bool = False       # see is_transparent()
     # What place_fields() placed, from which the NOFB form follows
     slot_roles: tuple[str, ...] = ()
     imm_kind: str | None = None
     store_dst: bool = False         # dst may name a local, see
                                     # stores_to_dst()
-    runs_code: bool = False         # a member may run Python code, see
-                                    # runs_code()
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -256,6 +253,19 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
                 declare_variable(var, out)
 
 
+def stack_read_later(inst: Instruction, uop: Uop) -> bool:
+    """Whether the stack slots of uop's inputs may be read after its body
+    starts: a deopt or exit re-executes the instruction from the stack, an
+    error without pop leaves the stack to exception_unwind, and an escaping
+    call exposes the frame."""
+    parts = inst.parts[inst.parts.index(uop):]
+    return any(
+        p.properties.deopts or p.properties.side_exit
+        or p.properties.escapes or p.properties.error_without_pop
+        for p in parts if isinstance(p, Uop)
+    )
+
+
 def is_transparent(inst: Instruction) -> bool:
     """Whether inst runs another handler on the same fields: it has no stack
     effect, oparg or feedback, and ends in DISPATCH_GOTO()."""
@@ -286,6 +296,7 @@ class Entry:
     "An item on the abstract stack of external_io()"
     external: int                   # index of the external input, or -1
     item: StackItem
+    aliased: bool = False           # assigned from an input, `out = in;`
 
 
 def passed_through(uop: Uop, j: int) -> int | None:
@@ -329,11 +340,11 @@ def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
             if i is not None:
                 stack.append(popped[i])
             else:
-                stack.append(Entry(-1, item))
+                stack.append(Entry(-1, item, item.name in part.aliased_outputs))
     n = len(external)
     inputs = list(reversed(external))
     outputs = [
-        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item)
+        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item, e.aliased)
         for e in stack
     ]
     return inputs, outputs
@@ -397,65 +408,6 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
     return result
 
 
-def uop_runs_code(uop: Uop) -> bool:
-    """Whether uop may run Python code: an escaping call, which
-    call_effects.py defines as the reentrant kind, the eval breaker, or a
-    frame switch, which pushes a frame or goes back to one.  A specializer
-    (annotation `specializing`) inspects types and rewrites the handler
-    and runs none; when it specialises, it dispatches the same word again,
-    which reads every field anew."""
-    if "specializing" in uop.annotations:
-        return False
-    p = uop.properties
-    return p.escapes or p.eval_breaker or p.switches_frame or p.returns
-
-
-def runs_code(inst: Instruction) -> bool:
-    """Whether inst may run Python code (uop_runs_code()), or is an
-    instrumented twin, which fires a monitoring event and so calls a Python
-    callback: INSTRUMENTED_JUMP() hides that call from the escape analysis."""
-    if inst.name.startswith("INSTRUMENTED_"):
-        return True
-    return any(uop_runs_code(part) for part in inst.parts
-               if isinstance(part, Uop))
-
-
-def inputs_read_after_code(inst: Instruction, n_inputs: int) -> set[int]:
-    """The inputs of inst, bottom first, that the handler first reads after
-    a uop that may run Python code (uop_runs_code()).  The handler reads an
-    input's field where the first uop that uses it takes it; a uop that
-    takes it unused, as a peek that passes it through, reads nothing
-    (Stack.pop()).  A local folded into such a field would be read after
-    the code ran."""
-    late: set[int] = set()
-    # Per stack entry: the external index (bottom first) or -1, and
-    # whether the handler has read it
-    stack: list[tuple[int, bool]] = []
-    depth = n_inputs        # external inputs not yet reached
-    ran = False
-    for part in inst.parts:
-        if not isinstance(part, Uop):
-            continue
-        popped: list[tuple[int, bool]] = []     # top first
-        for item in reversed(part.stack.inputs):
-            if stack:
-                ext, read = stack.pop()
-            else:
-                depth -= 1
-                ext, read = depth, False
-            if ext >= 0 and item.used and not read:
-                read = True
-                if ran:
-                    late.add(ext)
-            popped.append((ext, read))
-        popped.reverse()
-        for j in range(len(part.stack.outputs)):
-            i = passed_through(part, j)
-            stack.append(popped[i] if i is not None else (-1, True))
-        ran = ran or uop_runs_code(part)
-    return late
-
-
 def group_name(inst: Instruction, analysis: Analysis) -> str:
     "The instruction whose format inst shares"
     if inst.family is not None:
@@ -488,289 +440,23 @@ def nofb_bases(analysis: Analysis) -> list[str]:
         and formats[name].imm == LOC_FBARG)
 
 
-class HandlerKind(IntFlag):
-    SPECIALIZED = 1
-    INSTRUMENTED = 2
-    BINARY_OP = 4
-    IR_ONLY = 8
-    NOFB = 16
-    PSEUDO = 32
-    METADATA = 64
-    DISPATCH = 128
-    PRISTINE = 256
-    ADAPTIVE = 512
+def handler_ids(analysis: Analysis) -> dict[str, int]:
+    """Handler index of each handler, by name.  BINARY_OP itself has none:
+    its operations do."""
+    ids = {name: inst.opcode for name, inst in analysis.instructions.items()
+           if name != BINARY_OP_FAMILY}
+    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+             + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
+    for i, name in enumerate(names):
+        ids[name] = first_ir_only_handler(analysis) + i
+    return ids
 
 
-class HandlerState(IntFlag):
-    SPECIALIZATION = 1
-    MONITORING = 2
-    STATIC_EXEC = 4
-
-
-def check_handler_count(count: int) -> None:
-    if not 0 < count <= 1 << 16:
-        raise ValueError(f"handler count {count} does not fit the 16-bit domain")
-
-
-@dataclass(frozen=True)
-class HandlerDomain:
-    """One numeric product shared by all generators for a symbolic analysis.
-
-    The initial layout retains the existing pseudo positions and thresholds.
-    They move only after every runtime consumer supports the full ID width.
-    """
-    analysis: Analysis
-    opmap: Mapping[str, int]
-    handlers: Mapping[str, int]
-    bases: Mapping[str, str]
-    kinds: Mapping[str, HandlerKind]
-    required_state: Mapping[str, HandlerState]
-    operations: Mapping[str, int]
-    instrumented: Mapping[str, str]
-    deinstrumented: Mapping[str, str]
-    have_arg: int
-    min_instrumented: int
-    first_ir_only: int
-    count: int
-
-    def __post_init__(self) -> None:
-        check_handler_count(self.count)
-        for field in ("opmap", "handlers", "bases", "kinds", "required_state",
-                      "operations", "instrumented", "deinstrumented"):
-            object.__setattr__(self, field,
-                               MappingProxyType(dict(getattr(self, field))))
-        ids = dict(self.opmap)
-        for name, handler in self.handlers.items():
-            if name in ids and ids[name] != handler:
-                raise ValueError(f"conflicting handler ID for {name}")
-            ids[name] = handler
-        if len(set(ids.values())) != len(ids):
-            raise ValueError("duplicate handler ID")
-        if any(not 0 <= handler < self.count for handler in ids.values()):
-            raise ValueError("handler ID outside domain")
-        if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)
-                or set(self.required_state) != set(ids)):
-            raise ValueError("incomplete handler base/kind metadata")
-        expected_operations = {name for name, kind in self.kinds.items()
-                               if kind & HandlerKind.BINARY_OP}
-        if set(self.operations) != expected_operations:
-            raise ValueError("incomplete handler operation metadata")
-        operation_count = len(binary_ops())
-        if (len(set(self.operations.values())) != len(self.operations)
-                or any(not 0 <= op < operation_count
-                       for op in self.operations.values())):
-            raise ValueError("invalid handler operation metadata")
-        for base, monitored in self.instrumented.items():
-            if (base not in ids or monitored not in ids
-                    or not self.kinds[monitored] & HandlerKind.INSTRUMENTED
-                    or self.bases[base] != base
-                    or self.bases[monitored] != monitored):
-                raise ValueError(f"invalid instrumentation relation: {base}")
-        for monitored, base in self.deinstrumented.items():
-            if self.instrumented.get(base) != monitored or base == monitored:
-                raise ValueError(f"invalid deinstrumentation relation: {monitored}")
-        for name, base in self.bases.items():
-            if base not in ids or self.bases[base] != base:
-                raise ValueError(f"invalid handler base for {name}: {base}")
-        for name, kind in self.kinds.items():
-            if kind & HandlerKind.DISPATCH and not kind & HandlerKind.METADATA:
-                raise ValueError(f"dispatch handler has no metadata: {name}")
-            if kind & HandlerKind.PRISTINE and (
-                    not kind & HandlerKind.DISPATCH or self.required_state[name]):
-                raise ValueError(f"invalid pristine handler: {name}")
-            if kind & HandlerKind.ADAPTIVE and (
-                    not kind & HandlerKind.DISPATCH or kind & (
-                        HandlerKind.SPECIALIZED | HandlerKind.INSTRUMENTED
-                        | HandlerKind.NOFB)):
-                raise ValueError(f"invalid adaptive handler: {name}")
-
-    def require_analysis(self, analysis: Analysis) -> None:
-        if analysis is not self.analysis:
-            raise ValueError("handler domain belongs to a different analysis")
-
-
-def _assign_opcodes(
-    instructions: dict[str, Instruction],
-    families: dict[str, Family],
-    pseudos: dict[str, PseudoInstruction],
-) -> tuple[dict[str, int], int, int]:
-    """Assigns opcodes, then returns the opmap,
-    have_arg and min_instrumented values"""
-    instmap: dict[str, int] = {}
-
-    # 0 is reserved for cache entries. This helps debugging.
-    instmap["CACHE"] = 0
-
-    # 17 is reserved as it is the initial value for the specializing counter.
-    # This helps catch cases where we attempt to execute a cache.
-    instmap["RESERVED"] = 17
-
-    # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
-    instmap["RESUME"] = 128
-
-    # This is an historical oddity.
-    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
-
-    # A reserved slot exists even when a small DSL has no body for it.
-    pinned_instrumented = {"INSTRUMENTED_LINE": 255}
-    instmap.update(pinned_instrumented)
-
-    instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
-
-    specialized: set[str] = set()
-    no_arg: list[str] = []
-    has_arg: list[str] = []
-
-    for family in families.values():
-        specialized.update(inst.name for inst in family.members)
-
-    for inst in instructions.values():
-        name = inst.name
-        if name in specialized:
-            continue
-        if name in instrumented:
-            continue
-        if inst.properties.oparg:
-            has_arg.append(name)
-        else:
-            no_arg.append(name)
-
-    # Specialized ops appear in their own section, and those that do not fit
-    # take the numbers below RESUME that no other instruction uses.
-    # Instrumented opcodes are at the end of the valid range
-    min_internal = instmap["RESUME"] + 1
-    min_instrumented = 256 - len(set(instrumented) | pinned_instrumented.keys())
-
-    next_opcode = 1
-
-    def add_instruction(name: str) -> None:
-        nonlocal next_opcode
-        if name in instmap:
-            return  # Pre-defined name
-        while next_opcode in instmap.values():
-            next_opcode += 1
-        instmap[name] = next_opcode
-        next_opcode += 1
-
-    for name in sorted(no_arg):
-        add_instruction(name)
-    for name in sorted(has_arg):
-        add_instruction(name)
-    # For compatibility
-    next_opcode = min_internal
-    for name in sorted(specialized):
-        if next_opcode == min_instrumented:
-            next_opcode = 1
-        add_instruction(name)
-        assert instmap[name] < min_instrumented
-    next_opcode = min_instrumented
-    for name in instrumented:
-        add_instruction(name)
-
-    for op, name in enumerate(sorted(pseudos), 256):
-        instmap[name] = op
-
-    return instmap, len(no_arg), min_instrumented
-
-
-def build_handler_domain(analysis: Analysis) -> HandlerDomain:
-    opmap, have_arg, min_instrumented = _assign_opcodes(
-        analysis.instructions, analysis.families, analysis.pseudos)
-    first = 1 + max((opmap[name] for name in analysis.pseudos), default=255)
-    handlers = {name: opmap[name] for name in analysis.instructions
-                if name != BINARY_OP_FAMILY}
-    binary = binary_op_handlers(analysis)
-    nofb = nofb_bases(analysis)
-    derived = (sorted(analysis.ir_only) + binary
-               + [name + NOFB_SUFFIX for name in nofb])
-    for handler, name in enumerate(derived, first):
-        if name in opmap or name in handlers:
-            raise ValueError(f"duplicate handler name: {name}")
-        handlers[name] = handler
-    ids = {**opmap, **handlers}
-    bases = {name: name for name in ids}
-    kinds = {name: HandlerKind(0) for name in ids}
-    for name, inst in analysis.instructions.items():
-        if is_specialization(inst):
-            assert inst.family is not None
-            bases[name] = inst.family.name
-            kinds[name] |= HandlerKind.SPECIALIZED
-        if name.startswith("INSTRUMENTED"):
-            kinds[name] |= HandlerKind.INSTRUMENTED
-    for name in analysis.pseudos:
-        kinds[name] |= HandlerKind.PSEUDO
-    for name in analysis.ir_only:
-        kinds[name] |= HandlerKind.IR_ONLY
-    if "IR_JUMP" in analysis.ir_only:
-        bases["IR_JUMP"] = "JUMP_FORWARD"
-    for name in binary:
-        bases[name] = BINARY_OP_FAMILY
-        kinds[name] |= HandlerKind.BINARY_OP
-    for name in nofb:
-        variant = name + NOFB_SUFFIX
-        bases[variant] = bases[name]
-        kinds[variant] = kinds[name] | HandlerKind.NOFB
-    required_state = {name: HandlerState(0) for name in ids}
-    insts = all_instructions(analysis)
-    for name in ids:
-        if name in insts or name in analysis.pseudos or name in derived:
-            kinds[name] |= HandlerKind.METADATA
-        if name in handlers:
-            kinds[name] |= HandlerKind.DISPATCH
-        inst = insts.get(name)
-        annotations = {annotation for part in inst.parts if isinstance(part, Uop)
-                       for annotation in part.annotations} if inst else set()
-        if kinds[name] & HandlerKind.INSTRUMENTED:
-            required_state[name] |= HandlerState.MONITORING
-        if kinds[name] & HandlerKind.SPECIALIZED and "pristine" not in annotations:
-            required_state[name] |= HandlerState.SPECIALIZATION
-        if "static_exec" in annotations:
-            required_state[name] |= HandlerState.STATIC_EXEC
-        if "pristine" in annotations and required_state[name]:
-            raise ValueError(f"pristine handler requires runtime state: {name}")
-        if kinds[name] & HandlerKind.DISPATCH and not required_state[name]:
-            kinds[name] |= HandlerKind.PRISTINE
-    instrumented: dict[str, str] = {}
-    deinstrumented: dict[str, str] = {}
-    formats = compute_formats(analysis)
-    for name in handlers:
-        inst = insts.get(name)
-        if name in binary:
-            inst = insts[BINARY_OP_FAMILY]
-        if (inst is not None
-                and not kinds[name] & (HandlerKind.SPECIALIZED
-                                      | HandlerKind.INSTRUMENTED | HandlerKind.NOFB)
-                and formats[name].fb != LOC_NONE and uses_feedback(inst)
-                and any("specializing" in part.annotations for part in inst.parts
-                        if isinstance(part, Uop))):
-            kinds[name] |= HandlerKind.ADAPTIVE
-    for name in analysis.instructions:
-        if not kinds[name] & HandlerKind.INSTRUMENTED:
-            continue
-        if name in ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"):
-            instrumented[name] = name
-            continue
-        base = name.removeprefix("INSTRUMENTED_")
-        if base not in analysis.instructions:
-            continue
-        if (kinds[base] & (HandlerKind.INSTRUMENTED | HandlerKind.SPECIALIZED)
-                or formats[base] != formats[name]):
-            raise ValueError(f"incompatible instrumentation pair: {base}, {name}")
-        instrumented[base] = name
-        instrumented[name] = name
-        deinstrumented[name] = base
-    operations = {name: op for op, name in enumerate(binary)}
-    return HandlerDomain(analysis, opmap, handlers, bases, kinds, required_state,
-                         operations, instrumented, deinstrumented,
-                         have_arg, min_instrumented, first, first + len(derived))
-
-
-def handler_instructions(analysis: Analysis,
-                         domain: HandlerDomain) -> dict[str, Instruction]:
+def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     "The instruction that each handler runs, by handler name"
-    domain.require_analysis(analysis)
     insts = all_instructions(analysis)
-    result = {name: insts[name] for name in domain.handlers if name in insts}
+    result = {name: insts[name] for name in handler_ids(analysis)
+              if name in insts}
     for name in binary_op_handlers(analysis):
         result[name] = insts[BINARY_OP_FAMILY]
     for name in nofb_bases(analysis):
@@ -936,6 +622,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         imm_kind = "wide"
     else:
         imm_kind = "narrow"
+    no_fold = any(m.properties.no_fold for m in members) or any(
+        e.aliased for m in members for e in io[m.name][1])
 
     placed = None
     if not array_inputs:
@@ -971,20 +659,16 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         names = [item.name for item in inputs]
         uses: list[list[str]] = []
         passthrough: set[int] = set()
-        late: set[int] = set()
         for m in members:
             m_inputs, m_outputs = io[m.name]
             shift = n_inputs - len(m_inputs)
             uses.append(["unused"] * shift + classify_inputs(m, len(m_inputs)))
             passthrough |= {e.external + shift for e in m_outputs if e.external >= 0}
-            late |= {k + shift for k in inputs_read_after_code(m, len(m_inputs))}
         for k in range(n_inputs):
-            if k in passthrough or k in late:
+            if k in passthrough:
                 continue
             # Every member reads the input, so that its canonical slot
-            # holds a value whenever code that reads the stack runs, and
-            # reads it before any code runs, so that a folded local is
-            # read when its load would have run.
+            # holds a value whenever code that reads the stack runs.
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
     store_dst = stores_to_dst(members, io, dst_offset, window)
@@ -992,8 +676,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
-        slot_roles=slot_roles, imm_kind=imm_kind,
-        store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
+        no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
+        store_dst=store_dst,
     )
 
 
@@ -1008,7 +692,7 @@ STORE_NEVER = "never"      # pushes more than the result, so dst never names
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
-    of inst; it may be a copy of an input (`out = in;`).  Members of a
+    of inst, not an alias of an input, which may be a borrow.  Members of a
     family share their stack effect for each oparg, and the assembler folds
     a store only where the instruction pushes the result alone, so a member
     that always pushes more never sees a local dst.  The result of a frame
@@ -1023,8 +707,10 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
             return STORE_LEAVE
         if pushes_always(inst):
             return STORE_RETURN
+    if inst.properties.no_fold:
+        return None
     j = result_offset(inst, outputs)
-    if j is None:
+    if j is None or outputs[j].aliased:
         return None
     if all(e.item.is_array() and not e.item.size.isdigit()
            for e in outputs[j + 1:]):
@@ -1038,19 +724,11 @@ def uop_tokens(inst: Instruction) -> list[str]:
 
 
 def names_return_slot(inst: Instruction) -> bool:
-    """Whether the frames that inst pushes hand dst only what a store of the
-    result into a local should see.  A generator's frame that a SEND resumes
-    also hands dst each value the generator yields, on its way out of the
-    SEND's own frame, which a local must not see.  One that a FOR_ITER
-    resumes hands dst only the values it yields, each the loop target's
-    next value, and returns its return value to the slot after the
-    iterator's window, which END_FOR consumes
-    (_PyEval_GeneratorReturnTarget())."""
+    """Whether the frames that inst pushes return only their result, to the
+    slot dst names.  A generator's frame also hands each value it yields to
+    that slot, and its return value at the end of a FOR_ITER."""
     tokens = uop_tokens(inst)
-    if "IR_DST_SLOT" not in tokens:
-        return False
-    return ("gi_iframe" not in tokens
-            or (inst.family is not None and inst.family.name == "FOR_ITER"))
+    return "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens
 
 
 def pushes_always(inst: Instruction) -> bool:
@@ -1187,9 +865,14 @@ class IRStack(Stack):
     slot of its input (its home) until the handler writes another value
     there, which goes to the slot counted from dst."""
 
-    def __init__(self, layout: SlotLayout | None = None) -> None:
+    def __init__(self, layout: SlotLayout | None = None,
+                 raw_inputs: set[int] | None = None) -> None:
         super().__init__()
         self.layout = layout if layout is not None else SlotLayout.empty()
+        # The positions of the borrowable inputs that the handler consumes
+        # as they are: those read through a local come borrowed, as
+        # LOAD_FAST_BORROW would have pushed them.
+        self.raw_inputs = set(raw_inputs or ())
         # Register style: where the frame holds the value at a constant
         # position, "in" the slot of its input or "out" the slot from dst.
         # Positions that are not constant are outputs.
@@ -1202,12 +885,6 @@ class IRStack(Stack):
         self.final = False
         self.reloaded = False
         self.error_exit = False
-        # The handler's body stores what it hands to the frame it switches
-        # to before the switch (`stores_early`).
-        self.stores_early = False
-        # Set at SYNC_SP(), SAVE_STACK() and RELOAD_STACK(), where the
-        # frame's slots must be as the stack is, as at the end.
-        self.syncing = False
         # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
         # that the slots of the dead inputs stay as it left them.
         self.window_taken = False
@@ -1216,8 +893,8 @@ class IRStack(Stack):
         other = super().copy()
         assert isinstance(other, IRStack)
         other.owner = dict(self.owner)
+        other.raw_inputs = set(self.raw_inputs)
         other.window_taken = self.window_taken
-        other.stores_early = self.stores_early
         return other
 
     def input_field(self, p: int) -> str:
@@ -1257,6 +934,15 @@ class IRStack(Stack):
             return "in"
         return None
 
+    def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        lay = self.layout
+        if not lay.window and not var.is_array():
+            p = memory_offset.as_int()
+            if (p is not None and self.owner.get(p) == "in"
+                    and p in lay.borrowable and p in self.raw_inputs):
+                return f"IR_LOAD_BORROWED({self.input_field(p)})"
+        return super().load(var, memory_offset)
+
     def pop(self, var: StackItem, out: CWriter) -> Local:
         local = super().pop(var, out)
         lay = self.layout
@@ -1267,6 +953,7 @@ class IRStack(Stack):
                 local.ir_input = p
                 if p in lay.borrowable:
                     local.ir_field = lay.in_fields[p]
+                    local.ir_borrowed = p in self.raw_inputs
         return local
 
     def consume(self, out: CWriter, p: int) -> None:
@@ -1275,7 +962,7 @@ class IRStack(Stack):
         if p in self.layout.borrowable:
             out.emit(f"IR_CONSUME_INPUT({f});\n")
         else:
-            out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+            out.emit(f"IR_SLOT({f}) = PyStackRef_NULL;\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
@@ -1286,11 +973,7 @@ class IRStack(Stack):
             # to: the slot that frame named when it called or resumed
             if memory_offset.as_int() != 0:
                 raise StackError(f"'{var.name}' is written after the frame changed")
-            if self.stores_early:
-                # The body stored it with IR_RETURN_EARLY()
-                out.emit(f"(void){var.name};\n")
-            else:
-                out.emit(f"IR_STORE_RETURN({var.name});\n")
+            out.emit(f"IR_STORE_RETURN({var.name});\n")
             return True
         lay = self.layout
         if lay.window:
@@ -1326,13 +1009,7 @@ class IRStack(Stack):
                 out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
                 return True
             # Before the end, dst gets the result only if it is a
-            # temporary; a local gets it at the end.  Across a collecting
-            # call the result would be held only in a C local of the eval
-            # loop, whose frame is precise and so not scanned.
-            if self.collecting:
-                raise StackError(
-                    f"'{var.name}' is defined before a collecting call, and "
-                    "dst may name a local, which takes it only at the end")
+            # temporary; a local gets it at the end, releasing its value.
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
@@ -1350,10 +1027,6 @@ class IRStack(Stack):
         leave with it."""
         if self.final or self.error_exit:
             raise StackError(f"'{var.name}' has no slot at position {p}")
-        if self.collecting:
-            # The eval loop's C frame is precise: the collector does not
-            # scan it, so a value live across the call needs a slot.
-            raise StackError(f"'{var.name}' has no slot across a collecting call")
         return False
 
     def save_variables(self, out: CWriter) -> None:
@@ -1378,7 +1051,7 @@ class IRStack(Stack):
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
                 return
             for i in range(n):
-                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyValue_NULL;\n")
+                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyStackRef_NULL;\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -1387,7 +1060,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
+                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyStackRef_NULL;\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -1404,17 +1077,10 @@ class IRStack(Stack):
                 raise StackError("flush while the frame is switching")
             return
         self._print(out)
-        above = may_be_positive(self.physical_sp - self.logical_sp)
-        # Until the handler leaves, the slots that the stack gave up keep
-        # their values: what the handler took from its dead inputs is held
-        # there across its collecting calls, since the eval loop's C frame
-        # is precise and not scanned.
-        leaving = self.final or self.error_exit or self.syncing
-        if above and leaving:
+        if may_be_positive(self.physical_sp - self.logical_sp):
             self.vacate(out, self.logical_sp, self.physical_sp)
         self.save_variables(out)
-        if leaving or not above:
-            self.physical_sp = self.logical_sp
+        self.physical_sp = self.logical_sp
         out.start_line()
 
     def align(self, other: Stack, out: CWriter) -> None:
@@ -1516,6 +1182,85 @@ class IREmitter(Emitter):
 
     exit_if = deopt_if
 
+    def emit_borrow_drops(self, inst: Instruction | None,
+                          storage: Storage | None = None) -> None:
+        """Before a deopt, or a specialisation that runs the word again,
+        where the handler reads the locals again, drop the object inputs
+        read through fields that name locals: the borrows that
+        IR_BORROW_KNOWN and IR_LOAD_BORROWED made, which only the
+        Py_STACKREF_DEBUG checker tracks, and the boxes of inline values."""
+        if storage is None:
+            storage = self.deopt_storage
+        if storage is None:
+            return
+        seen = set()
+        for var in storage.inputs + storage.stack.variables + storage.outputs:
+            if (var.ir_borrowed and var.in_local and var.ir_field is not None
+                    and var.name not in seen):
+                seen.add(var.name)
+                self.emit(f"IR_DROP_BORROW({var.name}, "
+                          f"{FIELD_VARS[var.ir_field]});\n")
+
+    def consume_killed(self, storage: Storage) -> None:
+        """Clear the slots of the inputs that the handler has taken: a dead
+        input's slot holds NULL, on every path"""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.layout.window:
+            return
+        for var in storage.inputs:
+            p = var.ir_input
+            if var.is_dead() and p is not None and stack.owner.get(p) == "in":
+                self.out.start_line()
+                stack.consume(self.out, p)
+                del stack.owner[p]
+
+    def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
+                        storage: Storage, inst: Instruction | None
+                        ) -> tuple[bool, Token | None, Storage]:
+        """A statement that kills an input, as DEAD(), a close or a steal,
+        gives up its slot"""
+        reachable, tkn, storage = super().emit_SimpleStmt(stmt, uop, storage, inst)
+        if reachable:
+            self.consume_killed(storage)
+        return reachable, tkn, storage
+
+    def decref_inputs(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """In register style, close each input from the top after clearing
+        its slot; an output defined before stays in its variable."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.layout.window or self.cannot_escape:
+            return super().decref_inputs(tkn, tkn_iter, uop, storage, inst)
+        next(tkn_iter)
+        next(tkn_iter)
+        next(tkn_iter)
+        storage.clear_dead_inputs()
+        for var in reversed(storage.inputs):
+            if var.is_dead():
+                continue
+            if var.is_array():
+                raise analysis_error("register-style array input", tkn)
+            close = "PyStackRef_XCLOSE" if "null" in var.name else "PyStackRef_CLOSE"
+            if var.known_object:
+                close = f"_{close}_POINTER"
+            self.out.start_line()
+            p = var.ir_input
+            if p is not None and stack.owner.get(p) == "in":
+                stack.consume(self.out, p)
+                del stack.owner[p]
+            self.emit(f"{close}({var.name});\n")
+            var.kill()
+        storage.clear_inputs("after DECREF_INPUTS")
+        return True
+
     def goto_error(self, offset: int, storage: Storage) -> str:
         """Clear the slots that the stack gave up, which the stack machine
         left above its stack pointer, and leave the rest to
@@ -1536,6 +1281,7 @@ class IREmitter(Emitter):
     ) -> bool:
         "The inputs stay in their slots; drop what was read from locals"
         self.out.start_line()
+        self.emit_borrow_drops(inst, storage)
         return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
 
     def dispatch(
@@ -1549,29 +1295,6 @@ class IREmitter(Emitter):
         assert isinstance(storage.stack, IRStack)
         storage.stack.final = True
         return super().dispatch(tkn, tkn_iter, uop, storage, inst)
-
-    def synced(self, replacer: ReplacementFunctionType, tkn: Token,
-               tkn_iter: TokenIterator, uop: CodeSection, storage: Storage,
-               inst: Instruction | None) -> bool:
-        stack = storage.stack
-        assert isinstance(stack, IRStack)
-        stack.syncing = True
-        try:
-            return replacer(tkn, tkn_iter, uop, storage, inst)
-        finally:
-            stack.syncing = False
-
-    def sync_sp(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
-                storage: Storage, inst: Instruction | None) -> bool:
-        return self.synced(super().sync_sp, tkn, tkn_iter, uop, storage, inst)
-
-    def save_stack(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
-                   storage: Storage, inst: Instruction | None) -> bool:
-        return self.synced(super().save_stack, tkn, tkn_iter, uop, storage, inst)
-
-    def reload_stack(self, tkn: Token, tkn_iter: TokenIterator, uop: CodeSection,
-                     storage: Storage, inst: Instruction | None) -> bool:
-        return self.synced(super().reload_stack, tkn, tkn_iter, uop, storage, inst)
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
                                  inst: Instruction | None) -> str:
@@ -1644,11 +1367,13 @@ class IREmitter(Emitter):
     ) -> bool:
         "The handler runs again on the same word, and reads its inputs again"
         assert inst is not None
+        self.emit_borrow_drops(inst, storage)
         self.emit(tkn)
         return True
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
+        self.emit_borrow_drops(inst)
         fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
         if binary_op:
@@ -1694,38 +1419,63 @@ class IREmitter(Emitter):
         return True
 
     def emit_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
-        """Inputs read through a field: check, or box (see
-        Emitter.emit_object_inputs())."""
+        """Inputs read through a field: check, box and tag as borrowed when
+        the field names a local.  A box belongs to the handler, as the box of
+        the temporary that LOAD_FAST_BORROW pushed would: a temporary's goes
+        back to its slot, and a local keeps its inline value."""
         self.deopt_storage = storage
         try:
-            super().emit_object_inputs(uop, storage, inst)
+            self.convert_object_inputs(uop, storage, inst, stack_read_later)
         finally:
             self.deopt_storage = None
 
     def convert_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
+        kept = {item.name for item in uop.stack.outputs}
         for var in storage.inputs:
-            if var.ir_field is None or var.known_object:
+            if var.ir_field is None or var.known_object or var.ir_borrowed:
                 continue
+            f = FIELD_VARS[var.ir_field]
             converts = not uop.properties.inline_ok and (
                 var.name in uop.object_inputs or var.name in uop.asserted_objects)
             if not converts:
-                continue
-            if var.name in uop.asserted_objects:
-                var.known_object = True
-            elif uop.is_guard():
+                if var.name in kept and not assigns_to(uop, var.name):
+                    continue  # An inspection, see classify_inputs()
+                assert inst is not None
+                raise analysis_error(
+                    f"{inst.name}: input '{var.name}' may name a borrowed "
+                    f"local but {uop.name} consumes it as is", inst.where)
+            if var.name not in uop.asserted_objects:
                 self.out.start_line()
-                self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace({var.name}))) {{\n")
-                self.emit_jump_to_predicted(inst)
+                if uop.is_guard():
+                    self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace({var.name}))) {{\n")
+                    self.emit_jump_to_predicted(inst)
+                else:
+                    self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
+                    self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                    self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                    # The inputs converted before this one, if they name
+                    # locals, hold borrows or boxes that only C owns
+                    self.emit_borrow_drops(inst, storage)
+                    storage.stack.copy().flush(self.out)
+                    self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+                    self.emit("}\n")
+                    if inst is not None:
+                        self.emit(f"BOX_STAT_INC({inst.name});\n")
+                    self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
+                    self.emit("}\n")
+                    self.emit("else {\n")
+                    self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
                 self.emit("}\n")
-                var.known_object = True
-            else:
+            if uop.is_guard() or var.name in uop.asserted_objects:
                 self.out.start_line()
-                self.emit_box(var, uop, storage, inst)
-        super().convert_object_inputs(uop, storage, inst)
+                self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
+            var.known_object = True
+            var.ir_borrowed = True
+        super().emit_object_inputs(uop, storage, inst, stack_read_later)
 
 
 def write_uop(
@@ -1748,19 +1498,14 @@ def write_uop(
     storage = Storage.for_uop(stack, uop, emitter.out)
     for cache in uop.caches:
         if cache.name != "unused":
-            if cache.name in ("shape", "shape_to"):
-                # Shape pointers, borrowed from the owner's type.
-                value = f"_PyShape *{cache.name} = fb->{cache.name};"
-            elif cache.size == 4 and cache.name.endswith("_value"):
-                value = f"PyValue {cache.name} = fb->{cache.name};"
-            elif cache.size == 4:
+            if cache.size == 4:
                 value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
             else:
                 value = f"uint32_t {cache.name} = fb->{cache.name};"
             emitter.emit(value + "\n")
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
-    emitter.emit_object_inputs(uop, storage, inst)
+    emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if braces:
         emitter.out.start_line()
@@ -1819,7 +1564,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({name});\n")
+    out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
         out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
@@ -1844,12 +1589,10 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)oparg;\n")
     if fmt.window:
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
-        out.emit(f"PyValue *window = &IR_SLOT({base});\n")
+        out.emit(f"_PyStackRef *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
     if inst.properties.uses_opcode:
-        # A derived handler shares the instruction body, including its
-        # semantic opcode tests. Dispatch still uses the raw handler ID.
-        out.emit(f"opcode = {inst.name};\n")
+        out.emit(f"opcode = {name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")
@@ -1858,10 +1601,12 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     elif mode == STORE_NEVER:
         out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
     declare_variables(inst, out)
-    stack: Stack = IRStack(slot_layout(inst, fmt, mode))
-    assert isinstance(stack, IRStack)
-    stack.stores_early = any(isinstance(p, Uop) and p.properties.stores_early
-                             for p in inst.parts)
+    raw_inputs: set[int] = set()
+    if fmt.borrow_mask:
+        uses = classify_inputs(inst, fmt.n_inputs)
+        raw_inputs = {k - fmt.n_inputs for k in range(fmt.n_inputs)
+                      if fmt.borrow_mask & (1 << k) and uses[k] == "raw"}
+    stack: Stack = IRStack(slot_layout(inst, fmt, mode), raw_inputs)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
@@ -1885,12 +1630,12 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("\n")
 
 
-def generate_ir_cases(analysis: Analysis, domain: HandlerDomain, formats: dict[str, IRFormat],
+def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                       outfile: TextIO, lines: bool) -> None:
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
-    for name, inst in sorted(handler_instructions(analysis, domain).items()):
+    for name, inst in sorted(handler_instructions(analysis).items()):
         emitter.handler_format = formats[name]
         generate_handler(name, inst, formats[name], emitter, out)
         emitter.handler_format = None
@@ -1910,9 +1655,8 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
         emitter.emit("}\n\n")
 
 
-def generate_ir(filenames: list[str], analysis: Analysis, domain: HandlerDomain,
-                outfile: TextIO, lines: bool) -> None:
-    domain.require_analysis(analysis)
+def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
+                lines: bool) -> None:
     formats = compute_formats(analysis)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
@@ -1925,7 +1669,7 @@ def generate_ir(filenames: list[str], analysis: Analysis, domain: HandlerDomain,
 #endif /* _Py_TAIL_CALL_INTERP */
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, domain, formats, outfile, lines)
+    generate_ir_cases(analysis, formats, outfile, lines)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
 #if !_Py_TAIL_CALL_INTERP
@@ -1954,16 +1698,19 @@ def generate_ir(filenames: list[str], analysis: Analysis, domain: HandlerDomain,
 
 
 def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
-    return (f"static PyValue Py_GC_PRECISE_PRESERVE_NONE Py_PRESERVE_NONE_CC "
-            f"{prefix}{name}(TAIL_CALL_PARAMS)")
+    return f"static PyObject *Py_PRESERVE_NONE_CC {prefix}{name}(TAIL_CALL_PARAMS)"
+
+
+def num_handlers(analysis: Analysis) -> int:
+    return (first_ir_only_handler(analysis) + len(analysis.ir_only)
+            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
-                        domain: HandlerDomain, outfile: TextIO) -> None:
+                        outfile: TextIO) -> None:
     "The dispatch tables, indexed by handler"
-    domain.require_analysis(analysis)
-    ids = domain.handlers
-    n = domain.count
+    ids = handler_ids(analysis)
+    n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     targets = ["&&_unknown_opcode,\n"] * n
@@ -2002,9 +1749,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
 def generate_ir_from_files(filenames: list[str], outfilename: str,
                            lines: bool) -> None:
     data = analyze_files(filenames)
-    domain = build_handler_domain(data)
     with open(outfilename, "w") as outfile:
-        generate_ir(filenames, data, domain, outfile, lines)
+        generate_ir(filenames, data, outfile, lines)
 
 
 arg_parser = argparse.ArgumentParser(
@@ -2035,8 +1781,7 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
-    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_ir(args.input, data, domain, outfile, args.emit_line_directives)
+        generate_ir(args.input, data, outfile, args.emit_line_directives)
     with open(args.targets, "w") as outfile:
-        generate_ir_targets(args.input, data, domain, outfile)
+        generate_ir_targets(args.input, data, outfile)

@@ -4,7 +4,6 @@ preserve
 
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_tuple.h"         // _PyTuple_FromValues()
 
 PyDoc_STRVAR(_io__IOBase_seek__doc__,
 "seek($self, offset, whence=os.SEEK_SET, /)\n"
@@ -35,13 +34,12 @@ static PyObject *
 _io__IOBase_seek_impl(PyObject *self, PyTypeObject *cls,
                       int Py_UNUSED(offset), int Py_UNUSED(whence));
 
-static PyValue
-_io__IOBase_seek(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_io__IOBase_seek(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int offset;
     int whence = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("seek", kwnames)) {
         goto exit;
@@ -49,20 +47,19 @@ _io__IOBase_seek(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssiz
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
-    offset = PyLong_AsIntValue(args[0]);
+    offset = PyLong_AsInt(args[0]);
     if (offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    whence = PyLong_AsIntValue(args[1]);
+    whence = PyLong_AsInt(args[1]);
     if (whence == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _io__IOBase_seek_impl(self, cls, offset, whence);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__IOBase_seek_impl(self, cls, offset, whence);
 
 exit:
     return return_value;
@@ -102,12 +99,11 @@ static PyObject *
 _io__IOBase_truncate_impl(PyObject *self, PyTypeObject *cls,
                           PyObject *Py_UNUSED(size));
 
-static PyValue
-_io__IOBase_truncate(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_io__IOBase_truncate(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *size = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_NoKwnames("truncate", kwnames)) {
         goto exit;
@@ -118,13 +114,9 @@ _io__IOBase_truncate(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_
     if (nargs < 1) {
         goto skip_optional;
     }
-    size = PyValue_Object(args[0]);
-    if (size == NULL) {
-        goto exit;
-    }
+    size = args[0];
 skip_optional:
-    _return_value = _io__IOBase_truncate_impl(self, cls, size);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__IOBase_truncate_impl(self, cls, size);
 
 exit:
     return return_value;
@@ -156,17 +148,17 @@ PyDoc_STRVAR(_io__IOBase_closed__doc__,
 static int
 _io__IOBase_closed_get_impl(PyObject *self);
 
-static PyValue
+static PyObject *
 _io__IOBase_closed_get(PyObject *self, void *Py_UNUSED(context))
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int _return_value;
 
     _return_value = _io__IOBase_closed_get_impl(self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
+    return_value = PyBool_FromLong((long)_return_value);
 
 exit:
     return return_value;
@@ -351,19 +343,17 @@ PyDoc_STRVAR(_io__IOBase___exit____doc__,
 static PyObject *
 _io__IOBase___exit___impl(PyObject *self, PyObject *args);
 
-static PyValue
-_io__IOBase___exit__(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_io__IOBase___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *__clinic_args = NULL;
-    PyObject *_return_value;
 
-    __clinic_args = _PyTuple_FromValues(args, nargs);
+    __clinic_args = PyTuple_FromArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
     }
-    _return_value = _io__IOBase___exit___impl(self, __clinic_args);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__IOBase___exit___impl(self, __clinic_args);
 
 exit:
     /* Cleanup for args */
@@ -386,14 +376,14 @@ PyDoc_STRVAR(_io__IOBase_fileno__doc__,
 static PyObject *
 _io__IOBase_fileno_impl(PyObject *self, PyTypeObject *cls);
 
-static PyValue
-_io__IOBase_fileno(PyObject *self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_io__IOBase_fileno(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "fileno() takes no arguments");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(_io__IOBase_fileno_impl(self, cls));
+    return _io__IOBase_fileno_impl(self, cls);
 }
 
 PyDoc_STRVAR(_io__IOBase_isatty__doc__,
@@ -434,12 +424,11 @@ PyDoc_STRVAR(_io__IOBase_readline__doc__,
 static PyObject *
 _io__IOBase_readline_impl(PyObject *self, Py_ssize_t limit);
 
-static PyValue
-_io__IOBase_readline(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_io__IOBase_readline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t limit = -1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
@@ -447,18 +436,11 @@ _io__IOBase_readline(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_convert_optional_to_ssize_t(_arg, &limit)) {
-            goto exit;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[0], &limit)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = _io__IOBase_readline_impl(self, limit);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__IOBase_readline_impl(self, limit);
 
 exit:
     return return_value;
@@ -480,12 +462,11 @@ PyDoc_STRVAR(_io__IOBase_readlines__doc__,
 static PyObject *
 _io__IOBase_readlines_impl(PyObject *self, Py_ssize_t hint);
 
-static PyValue
-_io__IOBase_readlines(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_io__IOBase_readlines(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t hint = -1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("readlines", nargs, 0, 1)) {
         goto exit;
@@ -493,18 +474,11 @@ _io__IOBase_readlines(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!_Py_convert_optional_to_ssize_t(_arg, &hint)) {
-            goto exit;
-        }
+    if (!_Py_convert_optional_to_ssize_t(args[0], &hint)) {
+        goto exit;
     }
 skip_optional:
-    _return_value = _io__IOBase_readlines_impl(self, hint);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__IOBase_readlines_impl(self, hint);
 
 exit:
     return return_value;
@@ -520,28 +494,7 @@ PyDoc_STRVAR(_io__IOBase_writelines__doc__,
 "lines provided to have a line separator at the end.");
 
 #define _IO__IOBASE_WRITELINES_METHODDEF    \
-    {"writelines", _PyCFunction_CAST(_io__IOBase_writelines), METH_O, _io__IOBase_writelines__doc__},
-
-static PyObject *
-_io__IOBase_writelines_impl(PyObject *self, PyObject *lines);
-
-static PyValue
-_io__IOBase_writelines(PyObject *self, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *lines;
-    PyObject *_return_value;
-
-    lines = PyValue_Object(arg);
-    if (lines == NULL) {
-        goto exit;
-    }
-    _return_value = _io__IOBase_writelines_impl(self, lines);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"writelines", (PyCFunction)_io__IOBase_writelines, METH_O, _io__IOBase_writelines__doc__},
 
 PyDoc_STRVAR(_io__RawIOBase_read__doc__,
 "read($self, size=-1, /)\n"
@@ -554,12 +507,11 @@ PyDoc_STRVAR(_io__RawIOBase_read__doc__,
 static PyObject *
 _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n);
 
-static PyValue
-_io__RawIOBase_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_io__RawIOBase_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_ssize_t n = -1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
@@ -569,9 +521,10 @@ _io__RawIOBase_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[0]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[0]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -579,8 +532,7 @@ _io__RawIOBase_read(PyObject *self, const PyValue *args, Py_ssize_t nargs)
         n = ival;
     }
 skip_optional:
-    _return_value = _io__RawIOBase_read_impl(self, n);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _io__RawIOBase_read_impl(self, n);
 
 exit:
     return return_value;
@@ -610,28 +562,7 @@ PyDoc_STRVAR(_io__RawIOBase_readinto__doc__,
 "\n");
 
 #define _IO__RAWIOBASE_READINTO_METHODDEF    \
-    {"readinto", _PyCFunction_CAST(_io__RawIOBase_readinto), METH_O, _io__RawIOBase_readinto__doc__},
-
-static PyObject *
-_io__RawIOBase_readinto_impl(PyObject *self, PyObject *buffer);
-
-static PyValue
-_io__RawIOBase_readinto(PyObject *self, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *buffer;
-    PyObject *_return_value;
-
-    buffer = PyValue_Object(arg);
-    if (buffer == NULL) {
-        goto exit;
-    }
-    _return_value = _io__RawIOBase_readinto_impl(self, buffer);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"readinto", (PyCFunction)_io__RawIOBase_readinto, METH_O, _io__RawIOBase_readinto__doc__},
 
 PyDoc_STRVAR(_io__RawIOBase_write__doc__,
 "write($self, buffer, /)\n"
@@ -639,28 +570,7 @@ PyDoc_STRVAR(_io__RawIOBase_write__doc__,
 "\n");
 
 #define _IO__RAWIOBASE_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io__RawIOBase_write), METH_O, _io__RawIOBase_write__doc__},
+    {"write", (PyCFunction)_io__RawIOBase_write, METH_O, _io__RawIOBase_write__doc__},
+#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", (getter)_io__IOBase_closed_get, (setter)NULL, _io__IOBase_closed__doc__},
 
-static PyObject *
-_io__RawIOBase_write_impl(PyObject *self, PyObject *buffer);
-
-static PyValue
-_io__RawIOBase_write(PyObject *self, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *buffer;
-    PyObject *_return_value;
-
-    buffer = PyValue_Object(arg);
-    if (buffer == NULL) {
-        goto exit;
-    }
-    _return_value = _io__RawIOBase_write_impl(self, buffer);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
-#define _IO__IOBASE_CLOSED_GETSETDEF {"closed", _io__IOBase_closed_get, NULL, _io__IOBase_closed__doc__},
-
-/*[clinic end generated code: output=054e264f03d67d7d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fd729b0ef2ad52b8 input=a9049054013a1b77]*/

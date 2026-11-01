@@ -1,6 +1,7 @@
 // Stack of Python objects
 
 #include "Python.h"
+#include "pycore_freelist.h"
 #include "pycore_pystate.h"
 #include "pycore_object_stack.h"
 
@@ -10,12 +11,15 @@ extern void _PyObjectStackChunk_Free(_PyObjectStackChunk *);
 _PyObjectStackChunk *
 _PyObjectStackChunk_New(void)
 {
-    // NOTE: we use PyMem_RawMalloc() here because this is used by the GC
-    // during mimalloc heap traversal. In that context, it is not safe to
-    // allocate mimalloc memory, such as via PyMem_Malloc().
-    _PyObjectStackChunk *buf = PyMem_RawMalloc(sizeof(_PyObjectStackChunk));
+    _PyObjectStackChunk *buf = _Py_FREELIST_POP_MEM(object_stack_chunks);
     if (buf == NULL) {
-        return NULL;
+        // NOTE: we use PyMem_RawMalloc() here because this is used by the GC
+        // during mimalloc heap traversal. In that context, it is not safe to
+        // allocate mimalloc memory, such as via PyMem_Malloc().
+        buf = PyMem_RawMalloc(sizeof(_PyObjectStackChunk));
+        if (buf == NULL) {
+            return NULL;
+        }
     }
     buf->prev = NULL;
     buf->n = 0;
@@ -26,7 +30,7 @@ void
 _PyObjectStackChunk_Free(_PyObjectStackChunk *buf)
 {
     assert(buf->n == 0);
-    PyMem_RawFree(buf);
+    _Py_FREELIST_FREE(object_stack_chunks, buf, PyMem_RawFree);
 }
 
 void

@@ -58,9 +58,9 @@ def root_relative_path(filename: str) -> str:
 
 def type_and_null(var: StackItem) -> tuple[str, str]:
     if var.is_array():
-        return "PyValue *", "NULL"
+        return "_PyStackRef *", "NULL"
     else:
-        return "PyValue", "PyValue_NULL"
+        return "_PyStackRef", "PyStackRef_NULL"
 
 
 def write_header(
@@ -96,6 +96,33 @@ def always_true(tkn: Token | None) -> bool:
     if tkn is None:
         return False
     return tkn.text in {"true", "1"}
+
+NON_ESCAPING_DEALLOCS = {
+    "_PyFloat_ExactDealloc",
+    "_PyFloat_OrLongExactDealloc",
+    "_PyLong_ExactDealloc",
+    "_PyUnicode_ExactDealloc",
+}
+
+# Cheaper forms of these calls for a reference known to be in pointer space
+# (see Local.known_object and _PyStackRef_CLOSE_POINTER()).
+POINTER_VARIANTS = {
+    "PyStackRef_CLOSE": "_PyStackRef_CLOSE_POINTER",
+    "PyStackRef_XCLOSE": "_PyStackRef_XCLOSE_POINTER",
+    "PyStackRef_CLOSE_SPECIALIZED": "_PyStackRef_CLOSE_SPECIALIZED_POINTER",
+    "PyStackRef_DUP": "_PyStackRef_DUP_POINTER",
+    "PyStackRef_AsPyObjectSteal": "_PyStackRef_AsPyObjectStealPointer",
+}
+
+# Calls that always return a reference in pointer space.
+POINTER_CONSTRUCTORS = {
+    "PyStackRef_FromPyObjectBorrow",
+    "PyStackRef_FromPyObjectImmortal",
+    "PyStackRef_FromPyObjectNew",
+    "PyStackRef_FromPyObjectNewMortal",
+    "PyStackRef_FromPyObjectSteal",
+    "PyStackRef_FromPyObjectStealMortal",
+}
 
 
 # Macros of the DSL that name the instruction stream or the feedback entry.
@@ -150,6 +177,18 @@ def find_local(name: str, storage: Storage) -> Local | None:
     return None
 
 
+def matching_rparen(tkns: list[Token], lparen: int) -> int:
+    depth = 0
+    for i in range(lparen, len(tkns)):
+        if tkns[i].kind == "LPAREN":
+            depth += 1
+        elif tkns[i].kind == "RPAREN":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
 def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
     """Before a loop body: a later iteration may see a value assigned by an
     earlier one, which need not be a pointer."""
@@ -157,29 +196,6 @@ def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
     for var in storage.inputs + storage.outputs:
         if var.name in stored:
             var.known_object = False
-
-
-# Instructions whose boxes of inline inputs are counted as container stores
-# (Py_STATS object_stats.value_boxes, pycore_stats.h)
-CONTAINER_STORES = (
-    "STORE_SUBSCR", "STORE_SLICE", "LIST_APPEND", "LIST_EXTEND", "SET_ADD",
-    "SET_UPDATE", "MAP_ADD", "DICT_UPDATE", "DICT_MERGE", "BUILD_",
-    "STORE_GLOBAL", "STORE_NAME", "STORE_DEREF",
-)
-
-
-def box_kind(inst_name: str) -> str:
-    """What a box made by inst_name is for, as a _PY_BOX_* class."""
-    name = inst_name.removeprefix("INSTRUMENTED_")
-    if name.startswith(CONTAINER_STORES):
-        return "_PY_BOX_CONTAINER_STORE"
-    if name.startswith("STORE_ATTR"):
-        return "_PY_BOX_ATTRIBUTE_STORE"
-    if name.startswith("CALL"):
-        return "_PY_BOX_CALL"
-    if name == "INTERPRETER_EXIT":
-        return "_PY_BOX_RETURN"
-    return "_PY_BOX_OTHER"
 
 
 class Emitter:
@@ -196,26 +212,29 @@ class Emitter:
             "DEOPT_IF": self.deopt_if,
             "ERROR_IF": self.error_if,
             "ERROR_NO_POP": self.error_no_pop,
+            "DECREF_INPUTS": self.decref_inputs,
             "DEAD": self.kill,
             "INPUTS_DEAD": self.kill_inputs,
             "SYNC_SP": self.sync_sp,
             "SAVE_STACK": self.save_stack,
             "RELOAD_STACK": self.reload_stack,
+            "PyStackRef_CLOSE_SPECIALIZED": self.stackref_close_specialized,
+            "PyStackRef_CLOSE": self.stackref_pointer_variant,
+            "PyStackRef_XCLOSE": self.stackref_pointer_variant,
+            "PyStackRef_DUP": self.stackref_pointer_variant,
+            "PyStackRef_AsPyObjectSteal": self.stackref_steal,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
             "Py_UNREACHABLE": self.unreachable,
-            "PyValue_ObjectBorrow": self.object_borrow,
         }
         for name in self.instruction_macros:
             self._replacers[name] = self.instruction_macro
         self.out = out
+        self.killed_pointer: str | None = None
         self.labels = labels
         self.cannot_escape = cannot_escape
         self.jump_prefix = jump_prefix
-        # The inputs of the current uop that emit_object_inputs() converted
-        # with a test, which may have boxed them into NAME_object
-        self.boxes: list[str] = []
 
     def dispatch(
         self,
@@ -275,110 +294,69 @@ class Emitter:
         self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
 
     def emit_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
     ) -> None:
-        """Give each input that uop converts to PyObject * an object.
+        """Make each input that uop converts to PyObject * hold a pointer.
 
-        A guard exits if the input holds an inline value, and the input is
-        known to be an object for the rest of the instruction.  Any other uop
-        converts the input into NAME_object, a box if it holds an inline
-        value, and PyValue_ObjectBorrow(NAME) in the body reads that.  The
-        input and its slot keep the inline value, so that every value in a
-        slot stays canonical.  The test is marked unlikely, so the boxing code
-        goes out of line.  Across each collecting call in the body a value
-        root holds the box (emit_SimpleStmt()), and so it does while a later
-        input is boxed, which may collect.  See "Inline values" in
-        interpreter_definition.md.
+        A guard exits if the input holds an inline value; any other uop boxes
+        the value, by value so that the input can stay in a register. Either
+        way the input is known to be an object for the rest of the
+        instruction. The test is marked unlikely, so the boxing code goes out
+        of line. See "Inline values" in interpreter_definition.md.
+
+        The box is written back to the input's stack slot only if something
+        can still read that slot: the input outlives the uop, or
+        stack_read_later says that a deopt, exit, escaping call or error
+        without pop may follow.
         """
-        self.boxes = []
-        self.convert_object_inputs(uop, storage, inst)
-
-    def convert_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None
-    ) -> None:
         for var in storage.inputs:
             if var.name in uop.asserted_objects:
                 var.known_object = True
         if uop.properties.inline_ok:
             return
         guard = uop.is_guard()
+        peeks = {item.name for item in uop.stack.inputs if item.peek}
+        # Boxed inputs whose stack slot still holds the inline value.
+        unsynced: list[Local] = []
         for var in storage.inputs:
-            if (var.name not in uop.object_inputs or var.known_object
-                    or var.name in self.boxes):
+            if var.name not in uop.object_inputs or var.known_object:
                 continue
             self.out.start_line()
+            # Test the stack slot rather than the local where the slot holds
+            # the value, which is cheaper (see _PyStackRef_TopBitsAt()).
+            ref = var.name
+            at = ""
+            if var.memory_offset is not None:
+                ref = f"&{storage.stack.address(var.memory_offset)}"
+                at = "At"
             if guard:
-                # Test the stack slot rather than the local where the slot
-                # holds the value, which is cheaper (see
-                # _PyValue_TopBitsAt()).
-                ref, at = var.name, ""
-                if var.memory_offset is not None:
-                    ref = f"&{storage.stack.address(var.memory_offset)}"
-                    at = "At"
-                self.emit(f"if (Py_UNLIKELY(!_PyValue_IsPointerSpace{at}({ref}))) {{\n")
+                self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace{at}({ref}))) {{\n")
                 self.emit_jump_to_predicted(inst)
-                self.emit("}\n")
-                var.known_object = True
             else:
-                self.emit_box(var, uop, storage, inst)
+                self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline{at}({ref}))) {{\n")
+                self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                # A failed box leaves the value inline. Every input is still
+                # live, so leave them all to exception_unwind, boxes included.
+                self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                for other in unsynced:
+                    self.emit_store_input(other, storage)
+                storage.stack.copy().flush(self.out)
+                self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+                self.emit("}\n")
+                if inst is not None:
+                    self.emit(f"BOX_STAT_INC({inst.name});\n")
+                if var.memory_offset is not None:
+                    if var.name in peeks or stack_read_later:
+                        self.emit_store_input(var, storage)
+                    else:
+                        unsynced.append(var)
+            self.emit("}\n")
+            var.known_object = True
 
-    def emit_box(
-        self, var: Local, uop: Uop, storage: Storage, inst: Instruction | None
-    ) -> None:
-        name = var.name
-        # A box is held in a C local, so it needs a root across each
-        # collecting call of the body ...
-        body_roots = bool(uop.properties.collecting_calls) and not self.cannot_escape
-        self.emit(f"PyObject *{name}_object;\n")
-        if body_roots:
-            self.emit(f"_PyValueRoot {name}_root;\n")
-        self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({name}))) {{\n")
-        # ... and while a later input is boxed, which allocates.  Without
-        # collecting calls those roots are needed only here.
-        earlier = list(self.boxes) if not self.cannot_escape else []
-        if not body_roots:
-            for other in earlier:
-                self.emit(f"_PyValueRoot {other}_root;\n")
-        self.emit_box_roots(earlier, push=True)
-        self.emit(f"{name}_object = _PyValue_BoxInline({name});\n")
-        self.emit_box_roots(earlier, push=False)
-        # Every input is still live: leave them to exception_unwind.
-        self.emit(f"if ({name}_object == NULL) {{\n")
-        storage.stack.copy().flush(self.out)
-        self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
-        self.emit("}\n")
-        if inst is not None:
-            self.emit(f"BOX_STAT_INC({inst.name}, {box_kind(inst.name)});\n")
-        self.emit("}\n")
-        self.emit("else {\n")
-        self.emit(f"{name}_object = PyValue_ObjectBorrow({name});\n")
-        self.emit("}\n")
-        self.boxes.append(name)
-
-    def object_borrow(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        """PyValue_ObjectBorrow(NAME) of an input that emit_object_inputs()
-        converted reads NAME_object."""
-        lparen = next(tkn_iter)
-        arg = tkn_iter.peek()
-        if arg is None or arg.text not in self.boxes:
-            self.emit(tkn)
-            self.emit(lparen)
-            return True
-        next(tkn_iter)
-        rparen = tkn_iter.peek()
-        if rparen is None or rparen.kind != "RPAREN":
-            raise analysis_error(f"{arg.text} is boxed: convert it alone", arg)
-        next(tkn_iter)
-        self.out.emit_at(f"{arg.text}_object", tkn)
-        self.out.last_token = rparen
-        return True
+    def emit_store_input(self, var: Local, storage: Storage) -> None:
+        assert var.memory_offset is not None
+        self.out.start_line()
+        storage.stack.store(self.out, var, var.memory_offset)
 
     def goto_error(self, offset: int, storage: Storage) -> str:
         if offset > 0:
@@ -436,6 +414,28 @@ class Emitter:
         self.out.emit_at(self.goto_error(0, storage), tkn)
         return False
 
+    def decref_inputs(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        next(tkn_iter)
+        next(tkn_iter)
+        next(tkn_iter)
+        self._print_storage("DECREF_INPUTS", storage)
+        try:
+            if not self.cannot_escape:
+                storage.close_inputs(self.out)
+        except StackError as ex:
+            raise analysis_error(ex.args[0], tkn)
+        except Exception as ex:
+            ex.args = (ex.args[0] + str(tkn),)
+            raise
+        return True
+
     def kill_inputs(
         self,
         tkn: Token,
@@ -472,6 +472,101 @@ class Emitter:
             raise analysis_error(
                 f"'{name}' is not a live input-only variable", name_tkn
             )
+        return True
+
+    def stackref_kill(
+        self,
+        name: Token,
+        storage: Storage,
+        escapes: bool
+    ) -> bool:
+        live = ""
+        for var in reversed(storage.inputs):
+            if var.name == name.text:
+                if live and escapes:
+                    raise analysis_error(
+                        f"Cannot close '{name.text}' when "
+                        f"'{live}' is still live", name)
+                var.kill()
+                break
+            if var.in_local:
+                live = var.name
+        return True
+
+    def emit_function_name(self, func: Token, arg: Token, storage: Storage) -> None:
+        "Emit func, or its pointer-only variant if arg is known to be a pointer"
+        var = find_local(arg.text, storage) if arg.kind == "IDENTIFIER" else None
+        if (var is not None and var.known_object) or (
+            arg.kind == "IDENTIFIER" and arg.text == self.killed_pointer
+        ):
+            self.out.emit_at(POINTER_VARIANTS[func.text], func)
+        else:
+            self.out.emit(func)
+
+    def stackref_pointer_variant(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        arg = tkn_iter.peek()
+        assert arg is not None
+        self.emit_function_name(tkn, arg, storage)
+        self.out.emit(lparen)
+        return True
+
+    def stackref_close_specialized(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        name = next(tkn_iter)
+        self.emit_function_name(tkn, name, storage)
+        self.out.emit(lparen)
+        self.out.emit(name)
+        comma = next(tkn_iter)
+        if comma.kind != "COMMA":
+            raise analysis_error("Expected comma", comma)
+        self.out.emit(comma)
+        dealloc = next(tkn_iter)
+        if dealloc.kind != "IDENTIFIER":
+            raise analysis_error("Expected identifier", dealloc)
+        self.out.emit(dealloc)
+        if name.kind == "IDENTIFIER":
+            escapes = dealloc.text not in NON_ESCAPING_DEALLOCS
+            return self.stackref_kill(name, storage, escapes)
+        rparen = emit_to(self.out, tkn_iter, "RPAREN")
+        self.emit(rparen)
+        return True
+
+    def stackref_steal(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        name = next(tkn_iter)
+        self.emit_function_name(tkn, name, storage)
+        self.out.emit(lparen)
+        self.out.emit(name)
+        if name.kind == "IDENTIFIER":
+            return self.stackref_kill(name, storage, False)
+        rparen = emit_to(self.out, tkn_iter, "RPAREN")
+        self.emit(rparen)
         return True
 
     def sync_sp(
@@ -650,17 +745,18 @@ class Emitter:
         local_stores = set(uop.local_stores)
         reachable = True
         tkn = stmt.contents[-1]
+        self.killed_pointer = None
         try:
-            collecting = (stmt in uop.properties.collecting_calls
-                          and not self.cannot_escape)
-            rooted = list(self.boxes) if collecting else []
-            if collecting:
-                storage.stack.collecting = True
-                try:
-                    self.emit_save(storage)
-                finally:
-                    storage.stack.collecting = False
-                self.emit_box_roots(rooted, push=True)
+            if stmt in uop.properties.escaping_calls and not self.cannot_escape:
+                escape = uop.properties.escaping_calls[stmt]
+                if escape.kills is not None:
+                    # The kill drops the input from storage before its call
+                    # is emitted, so remember whether it holds a pointer.
+                    killed = find_local(escape.kills.text, storage)
+                    if killed is not None and killed.known_object:
+                        self.killed_pointer = killed.name
+                    self.stackref_kill(escape.kills, storage, True)
+                self.emit_save(storage)
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:
                 if tkn.kind == "GOTO":
@@ -678,16 +774,12 @@ class Emitter:
                             reachable = False
                     else:
                         if tkn in local_stores:
-                            if tkn.text in rooted:
-                                raise analysis_error(
-                                    f"a collecting call assigns to {tkn.text}, which is boxed", tkn)
-                            if tkn.text in self.boxes:
-                                self.boxes.remove(tkn.text)
                             for var in storage.inputs:
                                 if var.name == tkn.text:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
+                                    var.ir_borrowed = False
                                     var.ir_field = None
                                     break
                             for var in storage.outputs:
@@ -695,6 +787,7 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
+                                    var.ir_borrowed = False
                                     var.ir_field = None
                                     break
                         if tkn.text.startswith("DISPATCH"):
@@ -703,36 +796,25 @@ class Emitter:
                 else:
                     self.out.emit(tkn)
             self.note_pointer_assignment(stmt, storage)
-            if collecting:
-                self.emit_box_roots(rooted, push=False)
+            if stmt in uop.properties.escaping_calls and not self.cannot_escape:
                 self.emit_reload(storage)
             return reachable, None, storage
         except StackError as ex:
             raise analysis_error(ex.args[0], tkn) #from None
 
 
-    def emit_box_roots(self, names: list[str], push: bool) -> None:
-        """Push, or pop, the value root of each box among names: the collector
-        does not scan the eval loop's frame, which is precise and where the
-        box is, during a collecting call."""
-        for name in (names if push else reversed(names)):
-            self.out.start_line()
-            self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({name}))) {{\n")
-            if push:
-                self.emit(f"_PyThreadState_PushValueRoot(tstate, &{name}_root);\n")
-                self.emit(f"{name}_root.object = {name}_object;\n")
-            else:
-                self.emit(f"_PyThreadState_PopValueRoot(tstate, &{name}_root);\n")
-            self.emit("}\n")
-
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
-        """After `a = b;` with b known to hold a pointer, a is known to hold a
-        pointer too.  (PyValue_FromObject() may return an inline value.)"""
+        """After `a = b;` with b known to hold a pointer, or `a = C(...);` with
+        C in POINTER_CONSTRUCTORS, a is known to hold a pointer too."""
         tkns = stmt.contents
-        if len(tkns) != 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
+        if len(tkns) < 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
             return
-        source = find_local(tkns[2].text, storage)
-        if source is None or not source.known_object:
+        if len(tkns) == 4:
+            source = find_local(tkns[2].text, storage)
+            if source is None or not source.known_object:
+                return
+        elif not (tkns[2].text in POINTER_CONSTRUCTORS and tkns[3].kind == "LPAREN"
+                  and matching_rparen(tkns, 3) == len(tkns) - 2):
             return
         # A peeked item has one Local among the inputs and another among the
         # outputs of a copied storage; mark both, as the store cleared both.

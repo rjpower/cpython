@@ -6,17 +6,13 @@ static struct PyModuleDef *_testcapimodule = NULL;  // set at initialization
 
 /* Tests for heap types (PyType_From*) */
 
-static PyValue pytype_fromspec_meta(PyObject* self, PyValue meta_value)
+static PyObject *pytype_fromspec_meta(PyObject* self, PyObject *meta)
 {
-    PyObject *meta = PyValue_Object(meta_value);
-    if (meta == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyType_Check(meta)) {
         PyErr_SetString(
             PyExc_TypeError,
             "pytype_fromspec_meta: must be invoked with a type argument!");
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyType_Slot HeapCTypeViaMetaclass_slots[] = {
@@ -31,8 +27,8 @@ static PyValue pytype_fromspec_meta(PyObject* self, PyValue meta_value)
         HeapCTypeViaMetaclass_slots
     };
 
-    return PyValue_FromResult(PyType_FromMetaclass(
-        (PyTypeObject *) meta, NULL, &HeapCTypeViaMetaclass_spec, NULL));
+    return PyType_FromMetaclass(
+        (PyTypeObject *) meta, NULL, &HeapCTypeViaMetaclass_spec, NULL);
 }
 
 
@@ -353,17 +349,13 @@ PyType_Spec repeated_members_slots_spec = {
     .slots = repeated_members_slots,
 };
 
-static PyValue
-create_type_from_repeated_slots(PyObject *self, PyValue variant_obj_value)
+static PyObject *
+create_type_from_repeated_slots(PyObject *self, PyObject *variant_obj)
 {
-    PyObject *variant_obj = PyValue_Object(variant_obj_value);
-    if (variant_obj == NULL) {
-        return PyValue_NULL;
-    }
     PyObject *class = NULL;
     int variant = PyLong_AsLong(variant_obj);
     if (PyErr_Occurred()) {
-        return PyValue_NULL;
+        return NULL;
     }
     switch (variant) {
         case 0:
@@ -376,17 +368,13 @@ create_type_from_repeated_slots(PyObject *self, PyValue variant_obj_value)
             PyErr_SetString(PyExc_ValueError, "bad test variant");
             break;
         }
-    return PyValue_FromResult(class);
+    return class;
 }
 
 
-static PyValue
-make_immutable_type_with_base(PyObject *self, PyValue base_value)
+static PyObject *
+make_immutable_type_with_base(PyObject *self, PyObject *base)
 {
-    PyObject *base = PyValue_Object(base_value);
-    if (base == NULL) {
-        return PyValue_NULL;
-    }
     assert(PyType_Check(base));
     PyType_Spec ImmutableSubclass_spec = {
         .name = "ImmutableSubclass",
@@ -394,17 +382,12 @@ make_immutable_type_with_base(PyObject *self, PyValue base_value)
         .slots = empty_type_slots,
         .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE,
     };
-    return PyValue_FromResult(
-        PyType_FromSpecWithBases(&ImmutableSubclass_spec, base));
+    return PyType_FromSpecWithBases(&ImmutableSubclass_spec, base);
 }
 
-static PyValue
-make_type_with_base(PyObject *self, PyValue base_value)
+static PyObject *
+make_type_with_base(PyObject *self, PyObject *base)
 {
-    PyObject *base = PyValue_Object(base_value);
-    if (base == NULL) {
-        return PyValue_NULL;
-    }
     assert(PyType_Check(base));
     PyType_Spec ImmutableSubclass_spec = {
         .name = "_testcapi.Subclass",
@@ -412,24 +395,19 @@ make_type_with_base(PyObject *self, PyValue base_value)
         .slots = empty_type_slots,
         .flags = Py_TPFLAGS_DEFAULT,
     };
-    return PyValue_FromResult(
-        PyType_FromSpecWithBases(&ImmutableSubclass_spec, base));
+    return PyType_FromSpecWithBases(&ImmutableSubclass_spec, base);
 }
 
 
-static PyValue
-pyobject_getitemdata(PyObject *self, PyValue o_value)
+static PyObject *
+pyobject_getitemdata(PyObject *self, PyObject *o)
 {
-    PyObject *o = PyValue_Object(o_value);
-    if (o == NULL) {
-        return PyValue_NULL;
-    }
     void *pointer = PyObject_GetItemData(o);
     assert(pointer == PyObject_GetItemData_DuringGC(o));
     if (pointer == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromVoidPtr(pointer));
+    return PyLong_FromVoidPtr(pointer);
 }
 
 
@@ -479,18 +457,14 @@ create_type_with_token(PyObject *module, PyObject *args)
     return PyType_FromMetaclass(NULL, module, &spec, NULL);
 }
 
-static PyValue
-get_tp_token(PyObject *self, PyValue type_value)
+static PyObject *
+get_tp_token(PyObject *self, PyObject *type)
 {
-    PyObject *type = PyValue_Object(type_value);
-    if (type == NULL) {
-        return PyValue_NULL;
-    }
     void *token = PyType_GetSlot((PyTypeObject *)type, Py_tp_token);
     if (PyErr_Occurred()) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromVoidPtr(token));
+    return PyLong_FromVoidPtr(token);
 }
 
 static PyObject *
@@ -559,16 +533,12 @@ error:
     return NULL;
 }
 
-static PyValue
-pytype_getmodulebydef(PyObject *self, PyValue type_value)
+static PyObject *
+pytype_getmodulebydef(PyObject *self, PyObject *type)
 {
-    PyObject *type = PyValue_Object(type_value);
-    if (type == NULL) {
-        return PyValue_NULL;
-    }
     PyObject *mod = PyType_GetModuleByDef((PyTypeObject *)type, _testcapimodule);
     assert(mod == PyType_GetModuleByToken_DuringGC((PyTypeObject *)type, _testcapimodule));
-    return PyValue_FromResult(Py_XNewRef(mod));
+    return Py_XNewRef(mod);
 }
 
 static PyObject *
@@ -608,26 +578,23 @@ create_heapctype_with_none_bases_slot(PyObject *self, PyObject *Py_UNUSED(ignore
 }
 
 
-static PyObject *heapvarmanaged_resize(PyObject *, PyObject *);
-
 static PyMethodDef TestMethods[] = {
-    {"heapvarmanaged_resize", heapvarmanaged_resize, METH_VARARGS},
-    {"pytype_fromspec_meta",    _PyCFunction_CAST(pytype_fromspec_meta), METH_O},
+    {"pytype_fromspec_meta",    pytype_fromspec_meta,            METH_O},
     {"test_type_from_ephemeral_spec", test_type_from_ephemeral_spec, METH_NOARGS},
     {"create_type_from_repeated_slots",
-        _PyCFunction_CAST(create_type_from_repeated_slots), METH_O},
+        create_type_from_repeated_slots, METH_O},
     {"test_from_spec_metatype_inheritance", test_from_spec_metatype_inheritance,
      METH_NOARGS},
     {"test_from_spec_invalid_metatype_inheritance",
      test_from_spec_invalid_metatype_inheritance,
      METH_NOARGS},
-    {"make_immutable_type_with_base", _PyCFunction_CAST(make_immutable_type_with_base), METH_O},
-    {"make_type_with_base", _PyCFunction_CAST(make_type_with_base), METH_O},
-    {"pyobject_getitemdata", _PyCFunction_CAST(pyobject_getitemdata), METH_O},
+    {"make_immutable_type_with_base", make_immutable_type_with_base, METH_O},
+    {"make_type_with_base", make_type_with_base, METH_O},
+    {"pyobject_getitemdata", pyobject_getitemdata, METH_O},
     {"create_type_with_token", create_type_with_token, METH_VARARGS},
-    {"get_tp_token", _PyCFunction_CAST(get_tp_token), METH_O},
+    {"get_tp_token", get_tp_token, METH_O},
     {"pytype_getbasebytoken", pytype_getbasebytoken, METH_VARARGS},
-    {"pytype_getmodulebydef", _PyCFunction_CAST(pytype_getmodulebydef), METH_O},
+    {"pytype_getmodulebydef", pytype_getmodulebydef, METH_O},
     {"pytype_getmodulebytoken", pytype_getmodulebytoken, METH_VARARGS},
     {"create_heapctype_with_none_bases_slot",
         create_heapctype_with_none_bases_slot, METH_NOARGS},
@@ -1065,134 +1032,6 @@ static PyType_Spec  HeapCTypeWithManagedDict_spec = {
     HeapCTypeWithManagedDict_slots
 };
 
-/* A managed-dict type whose traverse does not call
- * PyObject_VisitManagedDict: the collector marks the storage itself. */
-static int
-heapmanaged_novisit_traverse(PyObject *self, visitproc visit, void *arg)
-{
-    Py_VISIT(Py_TYPE(self));
-    return 0;
-}
-
-static PyType_Slot HeapCTypeWithManagedDictNoVisit_slots[] = {
-    {Py_tp_traverse, heapmanaged_novisit_traverse},
-    {Py_tp_getset, heapctypewithdict_getsetlist},
-    {Py_tp_clear, heapmanaged_clear},
-    {Py_tp_dealloc, heapmanaged_dealloc},
-    {0, 0},
-};
-
-static PyType_Spec  HeapCTypeWithManagedDictNoVisit_spec = {
-    "_testcapi.HeapCTypeWithManagedDictNoVisit",
-    sizeof(PyObject),
-    0,
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_MANAGED_DICT,
-    HeapCTypeWithManagedDictNoVisit_slots
-};
-
-/* A variable-size type that asks for a managed dict: its instances get a
- * dict word after the items, which PyObject_GC_NewVar must initialise. */
-typedef struct {
-    PyObject_VAR_HEAD
-    PyObject *items[1];
-} HeapCVarWithManagedDictObject;
-
-static PyObject *
-heapvarmanaged_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    Py_ssize_t n = PyTuple_GET_SIZE(args);
-    HeapCVarWithManagedDictObject *self =
-        PyObject_GC_NewVar(HeapCVarWithManagedDictObject, type, n);
-    if (self == NULL) {
-        return NULL;
-    }
-    for (Py_ssize_t i = 0; i < n; i++) {
-        self->items[i] = Py_NewRef(PyTuple_GET_ITEM(args, i));
-    }
-    PyObject_GC_Track(self);
-    return (PyObject *)self;
-}
-
-// heapvarmanaged_resize(type, before, after, value): an instance of type,
-// a HeapCVarWithManagedDict, built with `before` items and the attribute
-// `a` set to value, then resized to `after` items before it is tracked,
-// which moves its dict word.
-static PyObject *
-heapvarmanaged_resize(PyObject *module, PyObject *args)
-{
-    PyTypeObject *type;
-    Py_ssize_t before, after;
-    PyObject *value;
-    if (!PyArg_ParseTuple(args, "O!nnO", &PyType_Type, &type,
-                          &before, &after, &value)) {
-        return NULL;
-    }
-    HeapCVarWithManagedDictObject *self =
-        PyObject_GC_NewVar(HeapCVarWithManagedDictObject, type, before);
-    if (self == NULL) {
-        return NULL;
-    }
-    for (Py_ssize_t i = 0; i < before; i++) {
-        self->items[i] = Py_None;
-    }
-    if (PyObject_SetAttrString((PyObject *)self, "a", value) < 0) {
-        return NULL;
-    }
-    self = PyObject_GC_Resize(HeapCVarWithManagedDictObject, self, after);
-    if (self == NULL) {
-        return NULL;
-    }
-    for (Py_ssize_t i = before; i < after; i++) {
-        self->items[i] = Py_None;
-    }
-    PyObject_GC_Track(self);
-    return (PyObject *)self;
-}
-
-static Py_ssize_t
-heapvarmanaged_length(PyObject *self)
-{
-    return Py_SIZE(self);
-}
-
-static PyObject *
-heapvarmanaged_item(PyObject *self, Py_ssize_t i)
-{
-    if (i < 0 || i >= Py_SIZE(self)) {
-        PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
-    }
-    return Py_NewRef(((HeapCVarWithManagedDictObject *)self)->items[i]);
-}
-
-static int
-heapvarmanaged_traverse(PyObject *self, visitproc visit, void *arg)
-{
-    for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
-        Py_VISIT(((HeapCVarWithManagedDictObject *)self)->items[i]);
-    }
-    return heapmanaged_traverse(self, visit, arg);
-}
-
-static PyType_Slot HeapCVarWithManagedDict_slots[] = {
-    {Py_tp_new, heapvarmanaged_new},
-    {Py_sq_length, heapvarmanaged_length},
-    {Py_sq_item, heapvarmanaged_item},
-    {Py_tp_traverse, heapvarmanaged_traverse},
-    {Py_tp_getset, heapctypewithdict_getsetlist},
-    {Py_tp_clear, heapmanaged_clear},
-    {Py_tp_dealloc, heapmanaged_dealloc},
-    {0, 0},
-};
-
-static PyType_Spec HeapCVarWithManagedDict_spec = {
-    "_testcapi.HeapCVarWithManagedDict",
-    offsetof(HeapCVarWithManagedDictObject, items),
-    sizeof(PyObject *),
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_MANAGED_DICT,
-    HeapCVarWithManagedDict_slots
-};
-
 static void
 heapctypewithmanagedweakref_dealloc(PyObject* self)
 {
@@ -1317,7 +1156,7 @@ heapctypesetattr_dealloc(PyObject *op)
 }
 
 static int
-heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyValue value)
+heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyObject *value)
 {
     HeapCTypeSetattrObject *self = (HeapCTypeSetattrObject*)op;
     PyObject *svalue = PyUnicode_FromString("value");
@@ -1330,16 +1169,15 @@ heapctypesetattr_setattro(PyObject *op, PyObject *attr, PyValue value)
     if (!eq) {
         return PyObject_GenericSetAttr((PyObject*) self, attr, value);
     }
-    if (PyValue_IsNull(value)) {
+    if (value == NULL) {
         self->value = 0;
         return 0;
     }
-    // int() of the value, then a C long, as before: an inline int passes
-    // through int() with no box.
-    PyValue ivalue = PyNumber_LongValue(value);
-    if (PyValue_IsNull(ivalue))
+    PyObject *ivalue = PyNumber_Long(value);
+    if (ivalue == NULL)
         return -1;
-    long v = PyLong_AsLongValue(ivalue);
+    long v = PyLong_AsLong(ivalue);
+    Py_DECREF(ivalue);
     if (v == -1 && PyErr_Occurred())
         return -1;
     self->value = v;
@@ -1382,27 +1220,25 @@ typedef struct {
     long value;
 } HeapCTypeVectorcallObject;
 
-static PyValue heapctype_vectorcall_vectorcall(PyValue self,
-                                               const PyValue *args_in,
-                                               size_t nargsf,
-                                               PyObject *kwargs_in)
+static PyObject *heapctype_vectorcall_vectorcall(PyObject *self,
+                                                 PyObject *const *args_in,
+                                                 size_t nargsf,
+                                                 PyObject *kwargs_in)
 {
     if (kwargs_in || PyVectorcall_NARGS(nargsf)) {
-        PyErr_Format(PyExc_IndexError, "HeapCTypeVectorcall() takes no arguments!");
-        return PyValue_NULL;
+        return PyErr_Format(PyExc_IndexError, "HeapCTypeVectorcall() takes no arguments!");
     }
 
     HeapCTypeVectorcallObject *r =
-        PyObject_New(HeapCTypeVectorcallObject,
-                     (PyTypeObject *)PyValue_ObjectBorrow(self));
+        PyObject_New(HeapCTypeVectorcallObject, (PyTypeObject *) self);
 
     if (!r) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     r->value = 1;
 
-    return PyValue_FromObject((PyObject *)r);
+    return (PyObject *) r;
 }
 
 static PyObject *
@@ -1609,13 +1445,6 @@ _PyTestCapi_Init_Heaptype(PyObject *m) {
 
     PyObject *HeapCTypeWithManagedDict = PyType_FromSpec(&HeapCTypeWithManagedDict_spec);
     ADD("HeapCTypeWithManagedDict", HeapCTypeWithManagedDict);
-
-    PyObject *HeapCTypeWithManagedDictNoVisit =
-        PyType_FromSpec(&HeapCTypeWithManagedDictNoVisit_spec);
-    ADD("HeapCTypeWithManagedDictNoVisit", HeapCTypeWithManagedDictNoVisit);
-
-    PyObject *HeapCVarWithManagedDict = PyType_FromSpec(&HeapCVarWithManagedDict_spec);
-    ADD("HeapCVarWithManagedDict", HeapCVarWithManagedDict);
 
     PyObject *HeapCTypeWithManagedWeakref = PyType_FromSpec(&HeapCTypeWithManagedWeakref_spec);
     ADD("HeapCTypeWithManagedWeakref", HeapCTypeWithManagedWeakref);

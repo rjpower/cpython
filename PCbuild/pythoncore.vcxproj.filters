@@ -675,6 +675,12 @@
     <ClInclude Include="..\Include\internal\pycore_frame.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_freelist.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_freelist_state.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_function.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
@@ -682,9 +688,6 @@
       <Filter>Include\internal</Filter>
     </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_gc_trace.h">
-      <Filter>Include\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Include\internal\pycore_gc_walk.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_genobject.h">
@@ -858,12 +861,6 @@
     <ClInclude Include="..\Include\internal\pycore_setobject.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
-    <ClInclude Include="..\Include\internal\pycore_lookup.h">
-      <Filter>Include\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Include\internal\pycore_shape.h">
-      <Filter>Include\internal</Filter>
-    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_signal.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
@@ -888,7 +885,7 @@
     <ClInclude Include="..\Include\internal\pycore_symtable.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
-    <ClInclude Include="..\Include\internal\pycore_value.h">
+    <ClInclude Include="..\Include\internal\pycore_stackref.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_template.h">
@@ -1313,12 +1310,6 @@
     <ClCompile Include="..\Objects\setobject.c">
       <Filter>Objects</Filter>
     </ClCompile>
-    <ClCompile Include="..\Objects\lookupplan.c">
-      <Filter>Objects</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Objects\shapeobject.c">
-      <Filter>Objects</Filter>
-    </ClCompile>
     <ClCompile Include="..\Objects\sliceobject.c">
       <Filter>Objects</Filter>
     </ClCompile>
@@ -1472,13 +1463,10 @@
     <ClCompile Include="..\Python\gc_free_threading.c">
       <Filter>Python</Filter>
     </ClCompile>
-    <ClCompile Include="..\Python\gc_live.c">
+    <ClCompile Include="..\Python\gc_gil.c">
       <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Python\gc_trace.c">
-      <Filter>Python</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Python\gc_walk.c">
       <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Python\getargs.c">

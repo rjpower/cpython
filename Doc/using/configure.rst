@@ -431,15 +431,15 @@ General Options
    .. c:macro:: Py_GIL_DISABLED
       :no-typesetting:
 
-   Enabled support for running Python without the :term:`global interpreter
+   Enables support for running Python without the :term:`global interpreter
    lock` (GIL): :term:`free-threaded build`.
 
-   .. versionadded:: 3.13
+   Defines the ``Py_GIL_DISABLED`` macro and adds ``"t"`` to
+   :data:`sys.abiflags`.
 
-   .. versionchanged:: 3.16
-      Removed.  The tracing collector, which owns the memory of every object,
-      is single-threaded, so there is no free-threaded build and
-      ``Py_GIL_DISABLED`` is never defined.
+   See :ref:`whatsnew313-free-threaded-cpython` for more detail.
+
+   .. versionadded:: 3.13
 
 .. option:: PKG_CONFIG
 
@@ -821,8 +821,8 @@ also be used to improve performance.
    Disable the fast :ref:`mimalloc <mimalloc>` allocator
    (enabled by default).
 
-   This option is rejected: the tracing collector finds objects and frees
-   them through mimalloc's heaps.
+   This option cannot be used together with :option:`--disable-gil`
+   because the :term:`free-threaded <free threading>` build requires mimalloc.
 
    See also :envvar:`PYTHONMALLOC` environment variable.
 
@@ -918,13 +918,15 @@ Effects of a debug build:
 * Display all warnings by default: the list of default warning filters is empty
   in the :mod:`warnings` module.
 * Add ``d`` to :data:`sys.abiflags`.
+* Add :func:`!sys.gettotalrefcount` function.
+* Add :option:`-X showrefcount <-X>` command line option.
 * Add :option:`-d` command line option and :envvar:`PYTHONDEBUG` environment
   variable to debug the parser.
 * Add support for the ``__lltrace__`` variable: enable low-level tracing in the
   bytecode evaluation loop if the variable is defined.
 * Install :ref:`debug hooks on memory allocators <default-memory-allocators>`
   to detect buffer overflow and other memory errors.
-* Define the ``Py_DEBUG`` macro.
+* Define ``Py_DEBUG`` and ``Py_REF_DEBUG`` macros.
 * Add runtime checks: code surrounded by ``#ifdef Py_DEBUG`` and ``#endif``.
   Enable ``assert(...)`` and ``_PyObject_ASSERT(...)`` assertions: don't set
   the ``NDEBUG`` macro (see also the :option:`--with-assertions` configure
@@ -941,7 +943,8 @@ Effects of a debug build:
   * The :c:macro:`!Py_SAFE_DOWNCAST()` macro checks for integer underflow and
     overflow when downcasting from wide types to narrow types.
 
-See also the :ref:`Python Development Mode <devmode>`.
+See also the :ref:`Python Development Mode <devmode>` and the
+:option:`--with-trace-refs` configure option.
 
 .. versionchanged:: 3.8
    Release builds are now ABI compatible with debug builds: defining the
@@ -961,17 +964,24 @@ Debug options
 
 .. option:: --with-trace-refs
 
-   Enabled tracing references for debugging purpose.
+   Enable tracing references for debugging purpose (disabled by default).
+
+   Effects:
+
+   * Define the ``Py_TRACE_REFS`` macro.
+   * Add :func:`sys.getobjects` function.
+   * Add :envvar:`PYTHONDUMPREFS` environment variable.
+
+   The :envvar:`PYTHONDUMPREFS` environment variable can be used to dump
+   objects and reference counts still alive at Python exit.
+
+   :ref:`Statically allocated objects <static-types>` are not traced.
 
    .. versionadded:: 3.8
 
    .. versionchanged:: 3.13
       This build is now ABI compatible with release build and :ref:`debug build
       <debug-build>`.
-
-   .. versionchanged:: 3.16
-      Removed, with reference counting: the tracing collector owns memory.
-      :func:`gc.get_objects` lists the live objects.
 
 .. option:: --with-assertions
 

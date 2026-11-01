@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -18,14 +19,15 @@ PyDoc_STRVAR(_ssl_Certificate_public_bytes__doc__,
 static PyObject *
 _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format);
 
-static PyValue
-_ssl_Certificate_public_bytes(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_ssl_Certificate_public_bytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -48,10 +50,9 @@ _ssl_Certificate_public_bytes(PyObject *self, const PyValue *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
     int format = PY_SSL_ENCODING_PEM;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
@@ -61,13 +62,12 @@ _ssl_Certificate_public_bytes(PyObject *self, const PyValue *args, Py_ssize_t na
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    format = PyLong_AsIntValue(args[0]);
+    format = PyLong_AsInt(args[0]);
     if (format == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = _ssl_Certificate_public_bytes_impl((PySSLCertificate *)self, format);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _ssl_Certificate_public_bytes_impl((PySSLCertificate *)self, format);
 
 exit:
     return return_value;
@@ -89,4 +89,4 @@ _ssl_Certificate_get_info(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return _ssl_Certificate_get_info_impl((PySSLCertificate *)self);
 }
-/*[clinic end generated code: output=3313b9cdd67944ea input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bab2dba7dbc1523c input=a9049054013a1b77]*/

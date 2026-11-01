@@ -3,6 +3,7 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
@@ -20,28 +21,7 @@ PyDoc_STRVAR(_codecs_register__doc__,
 "a CodecInfo object).");
 
 #define _CODECS_REGISTER_METHODDEF    \
-    {"register", _PyCFunction_CAST(_codecs_register), METH_O, _codecs_register__doc__},
-
-static PyObject *
-_codecs_register_impl(PyObject *module, PyObject *search_function);
-
-static PyValue
-_codecs_register(PyObject *module, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *search_function;
-    PyObject *_return_value;
-
-    search_function = PyValue_Object(arg);
-    if (search_function == NULL) {
-        goto exit;
-    }
-    _return_value = _codecs_register_impl(module, search_function);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"register", (PyCFunction)_codecs_register, METH_O, _codecs_register__doc__},
 
 PyDoc_STRVAR(_codecs_unregister__doc__,
 "unregister($module, search_function, /)\n"
@@ -52,28 +32,7 @@ PyDoc_STRVAR(_codecs_unregister__doc__,
 "If the search function is not registered, do nothing.");
 
 #define _CODECS_UNREGISTER_METHODDEF    \
-    {"unregister", _PyCFunction_CAST(_codecs_unregister), METH_O, _codecs_unregister__doc__},
-
-static PyObject *
-_codecs_unregister_impl(PyObject *module, PyObject *search_function);
-
-static PyValue
-_codecs_unregister(PyObject *module, PyValue arg)
-{
-    PyValue return_value = PyValue_NULL;
-    PyObject *search_function;
-    PyObject *_return_value;
-
-    search_function = PyValue_Object(arg);
-    if (search_function == NULL) {
-        goto exit;
-    }
-    _return_value = _codecs_unregister_impl(module, search_function);
-    return_value = PyValue_FromResult(_return_value);
-
-exit:
-    return return_value;
-}
+    {"unregister", (PyCFunction)_codecs_unregister, METH_O, _codecs_unregister__doc__},
 
 PyDoc_STRVAR(_codecs_lookup__doc__,
 "lookup($module, encoding, /)\n"
@@ -82,34 +41,26 @@ PyDoc_STRVAR(_codecs_lookup__doc__,
 "Looks up a codec tuple in the Python codec registry and returns a CodecInfo object.");
 
 #define _CODECS_LOOKUP_METHODDEF    \
-    {"lookup", _PyCFunction_CAST(_codecs_lookup), METH_O, _codecs_lookup__doc__},
+    {"lookup", (PyCFunction)_codecs_lookup, METH_O, _codecs_lookup__doc__},
 
 static PyObject *
 _codecs_lookup_impl(PyObject *module, const char *encoding);
 
-static PyValue
-_codecs_lookup(PyObject *module, PyValue arg)
+static PyObject *
+_codecs_lookup(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *encoding;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("lookup", "argument", "str", _arg);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (encoding == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("lookup", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _codecs_lookup_impl(module, encoding);
-    return_value = PyValue_FromResult(_return_value);
+    encoding = _PyUnicode_AsUTF8NoNUL(arg);
+    if (encoding == NULL) {
+        goto exit;
+    }
+    return_value = _codecs_lookup_impl(module, encoding);
 
 exit:
     return return_value;
@@ -134,14 +85,15 @@ static PyObject *
 _codecs_encode_impl(PyObject *module, PyObject *obj, const char *encoding,
                     const char *errors);
 
-static PyValue
-_codecs_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_codecs_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -164,61 +116,44 @@ _codecs_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *obj;
     const char *encoding = NULL;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        {
-            PyObject *_arg = PyValue_Object(args[1]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyUnicode_Check(_arg)) {
-                _PyArg_BadArgument("encode", "argument 'encoding'", "str", _arg);
-                goto exit;
-            }
-            encoding = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (encoding == NULL) {
-                goto exit;
-            }
+    if (args[1]) {
+        if (!PyUnicode_Check(args[1])) {
+            _PyArg_BadArgument("encode", "argument 'encoding'", "str", args[1]);
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (encoding == NULL) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("encode", "argument 'errors'", "str", _arg);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (errors == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("encode", "argument 'errors'", "str", args[2]);
+        goto exit;
+    }
+    errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+    if (errors == NULL) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = _codecs_encode_impl(module, obj, encoding, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_encode_impl(module, obj, encoding, errors);
 
 exit:
     return return_value;
@@ -243,14 +178,15 @@ static PyObject *
 _codecs_decode_impl(PyObject *module, PyObject *obj, const char *encoding,
                     const char *errors);
 
-static PyValue
-_codecs_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_codecs_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -273,61 +209,44 @@ _codecs_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *obj;
     const char *encoding = NULL;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    obj = PyValue_Object(args[0]);
-    if (obj == NULL) {
-        goto exit;
-    }
+    obj = args[0];
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        {
-            PyObject *_arg = PyValue_Object(args[1]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyUnicode_Check(_arg)) {
-                _PyArg_BadArgument("decode", "argument 'encoding'", "str", _arg);
-                goto exit;
-            }
-            encoding = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (encoding == NULL) {
-                goto exit;
-            }
+    if (args[1]) {
+        if (!PyUnicode_Check(args[1])) {
+            _PyArg_BadArgument("decode", "argument 'encoding'", "str", args[1]);
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (encoding == NULL) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("decode", "argument 'errors'", "str", _arg);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (errors == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[2])) {
+        _PyArg_BadArgument("decode", "argument 'errors'", "str", args[2]);
+        goto exit;
+    }
+    errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+    if (errors == NULL) {
+        goto exit;
     }
 skip_optional_pos:
-    _return_value = _codecs_decode_impl(module, obj, encoding, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_decode_impl(module, obj, encoding, errors);
 
 exit:
     return return_value;
@@ -345,63 +264,49 @@ static PyObject *
 _codecs_escape_decode_impl(PyObject *module, Py_buffer *data,
                            const char *errors);
 
-static PyValue
-_codecs_escape_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_escape_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("escape_decode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyUnicode_Check(args[0])) {
+        Py_ssize_t len;
+        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        if (ptr == NULL) {
             goto exit;
         }
-        if (PyUnicode_Check(_arg)) {
-            Py_ssize_t len;
-            const char *ptr = PyUnicode_AsUTF8AndSize(_arg, &len);
-            if (ptr == NULL) {
-                goto exit;
-            }
-            if (PyBuffer_FillInfo(&data, _arg, (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
-                goto exit;
-            }
+        if (PyBuffer_FillInfo(&data, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+            goto exit;
         }
-        else { /* any bytes-like object */
-            if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    }
+    else { /* any bytes-like object */
+        if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("escape_decode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("escape_decode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_escape_decode_impl(module, &data, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_escape_decode_impl(module, &data, errors);
 
 exit:
     /* Cleanup for data */
@@ -424,53 +329,39 @@ static PyObject *
 _codecs_escape_encode_impl(PyObject *module, PyObject *data,
                            const char *errors);
 
-static PyValue
-_codecs_escape_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_escape_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *data;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("escape_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyBytes_Check(_arg)) {
-            _PyArg_BadArgument("escape_encode", "argument 1", "bytes", _arg);
-            goto exit;
-        }
-        data = _arg;
+    if (!PyBytes_Check(args[0])) {
+        _PyArg_BadArgument("escape_encode", "argument 1", "bytes", args[0]);
+        goto exit;
     }
+    data = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("escape_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("escape_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_escape_encode_impl(module, data, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_escape_encode_impl(module, data, errors);
 
 exit:
     return return_value;
@@ -488,59 +379,45 @@ static PyObject *
 _codecs_utf_7_decode_impl(PyObject *module, Py_buffer *data,
                           const char *errors, int final);
 
-static PyValue
-_codecs_utf_7_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_7_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_7_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_7_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_7_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_7_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_7_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -563,59 +440,45 @@ static PyObject *
 _codecs_utf_8_decode_impl(PyObject *module, Py_buffer *data,
                           const char *errors, int final);
 
-static PyValue
-_codecs_utf_8_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_8_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_8_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_8_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_8_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_8_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_8_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -638,59 +501,45 @@ static PyObject *
 _codecs_utf_16_decode_impl(PyObject *module, Py_buffer *data,
                            const char *errors, int final);
 
-static PyValue
-_codecs_utf_16_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_16_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_16_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -713,59 +562,45 @@ static PyObject *
 _codecs_utf_16_le_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int final);
 
-static PyValue
-_codecs_utf_16_le_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_le_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_le_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_le_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_16_le_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_16_le_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_le_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -788,59 +623,45 @@ static PyObject *
 _codecs_utf_16_be_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int final);
 
-static PyValue
-_codecs_utf_16_be_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_be_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_be_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_be_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_16_be_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_16_be_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_be_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -864,67 +685,53 @@ static PyObject *
 _codecs_utf_16_ex_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int byteorder, int final);
 
-static PyValue
-_codecs_utf_16_ex_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_ex_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int byteorder = 0;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_ex_decode", nargs, 1, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_ex_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_16_ex_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    byteorder = PyLong_AsIntValue(args[2]);
+    byteorder = PyLong_AsInt(args[2]);
     if (byteorder == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[3]);
+    final = PyObject_IsTrue(args[3]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_16_ex_decode_impl(module, &data, errors, byteorder, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_ex_decode_impl(module, &data, errors, byteorder, final);
 
 exit:
     /* Cleanup for data */
@@ -947,59 +754,45 @@ static PyObject *
 _codecs_utf_32_decode_impl(PyObject *module, Py_buffer *data,
                            const char *errors, int final);
 
-static PyValue
-_codecs_utf_32_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_32_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_32_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1022,59 +815,45 @@ static PyObject *
 _codecs_utf_32_le_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int final);
 
-static PyValue
-_codecs_utf_32_le_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_le_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_le_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_le_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_32_le_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_32_le_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_le_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1097,59 +876,45 @@ static PyObject *
 _codecs_utf_32_be_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int final);
 
-static PyValue
-_codecs_utf_32_be_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_be_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_be_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_be_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_32_be_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_32_be_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_be_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1173,67 +938,53 @@ static PyObject *
 _codecs_utf_32_ex_decode_impl(PyObject *module, Py_buffer *data,
                               const char *errors, int byteorder, int final);
 
-static PyValue
-_codecs_utf_32_ex_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_ex_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int byteorder = 0;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_ex_decode", nargs, 1, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_ex_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_32_ex_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    byteorder = PyLong_AsIntValue(args[2]);
+    byteorder = PyLong_AsInt(args[2]);
     if (byteorder == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[3]);
+    final = PyObject_IsTrue(args[3]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_32_ex_decode_impl(module, &data, errors, byteorder, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_ex_decode_impl(module, &data, errors, byteorder, final);
 
 exit:
     /* Cleanup for data */
@@ -1256,71 +1007,57 @@ static PyObject *
 _codecs_unicode_escape_decode_impl(PyObject *module, Py_buffer *data,
                                    const char *errors, int final);
 
-static PyValue
-_codecs_unicode_escape_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_unicode_escape_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unicode_escape_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyUnicode_Check(args[0])) {
+        Py_ssize_t len;
+        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        if (ptr == NULL) {
             goto exit;
         }
-        if (PyUnicode_Check(_arg)) {
-            Py_ssize_t len;
-            const char *ptr = PyUnicode_AsUTF8AndSize(_arg, &len);
-            if (ptr == NULL) {
-                goto exit;
-            }
-            if (PyBuffer_FillInfo(&data, _arg, (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
-                goto exit;
-            }
+        if (PyBuffer_FillInfo(&data, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+            goto exit;
         }
-        else { /* any bytes-like object */
-            if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    }
+    else { /* any bytes-like object */
+        if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("unicode_escape_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("unicode_escape_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_unicode_escape_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_unicode_escape_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1343,71 +1080,57 @@ static PyObject *
 _codecs_raw_unicode_escape_decode_impl(PyObject *module, Py_buffer *data,
                                        const char *errors, int final);
 
-static PyValue
-_codecs_raw_unicode_escape_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_raw_unicode_escape_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 1;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("raw_unicode_escape_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyUnicode_Check(args[0])) {
+        Py_ssize_t len;
+        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        if (ptr == NULL) {
             goto exit;
         }
-        if (PyUnicode_Check(_arg)) {
-            Py_ssize_t len;
-            const char *ptr = PyUnicode_AsUTF8AndSize(_arg, &len);
-            if (ptr == NULL) {
-                goto exit;
-            }
-            if (PyBuffer_FillInfo(&data, _arg, (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
-                goto exit;
-            }
+        if (PyBuffer_FillInfo(&data, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+            goto exit;
         }
-        else { /* any bytes-like object */
-            if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    }
+    else { /* any bytes-like object */
+        if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("raw_unicode_escape_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("raw_unicode_escape_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_raw_unicode_escape_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_raw_unicode_escape_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1430,51 +1153,37 @@ static PyObject *
 _codecs_latin_1_decode_impl(PyObject *module, Py_buffer *data,
                             const char *errors);
 
-static PyValue
-_codecs_latin_1_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_latin_1_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("latin_1_decode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("latin_1_decode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("latin_1_decode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_latin_1_decode_impl(module, &data, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_latin_1_decode_impl(module, &data, errors);
 
 exit:
     /* Cleanup for data */
@@ -1497,51 +1206,37 @@ static PyObject *
 _codecs_ascii_decode_impl(PyObject *module, Py_buffer *data,
                           const char *errors);
 
-static PyValue
-_codecs_ascii_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_ascii_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ascii_decode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("ascii_decode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("ascii_decode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_ascii_decode_impl(module, &data, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_ascii_decode_impl(module, &data, errors);
 
 exit:
     /* Cleanup for data */
@@ -1564,59 +1259,42 @@ static PyObject *
 _codecs_charmap_decode_impl(PyObject *module, Py_buffer *data,
                             const char *errors, PyObject *mapping);
 
-static PyValue
-_codecs_charmap_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_charmap_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     PyObject *mapping = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("charmap_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("charmap_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("charmap_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    mapping = PyValue_Object(args[2]);
-    if (mapping == NULL) {
-        goto exit;
-    }
+    mapping = args[2];
 skip_optional:
-    _return_value = _codecs_charmap_decode_impl(module, &data, errors, mapping);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_charmap_decode_impl(module, &data, errors, mapping);
 
 exit:
     /* Cleanup for data */
@@ -1641,59 +1319,45 @@ static PyObject *
 _codecs_mbcs_decode_impl(PyObject *module, Py_buffer *data,
                          const char *errors, int final);
 
-static PyValue
-_codecs_mbcs_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_mbcs_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("mbcs_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("mbcs_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("mbcs_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_mbcs_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_mbcs_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1720,59 +1384,45 @@ static PyObject *
 _codecs_oem_decode_impl(PyObject *module, Py_buffer *data,
                         const char *errors, int final);
 
-static PyValue
-_codecs_oem_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_oem_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("oem_decode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("oem_decode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("oem_decode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[2]);
+    final = PyObject_IsTrue(args[2]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_oem_decode_impl(module, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_oem_decode_impl(module, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1799,64 +1449,50 @@ static PyObject *
 _codecs_code_page_decode_impl(PyObject *module, int codepage,
                               Py_buffer *data, const char *errors, int final);
 
-static PyValue
-_codecs_code_page_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_code_page_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int codepage;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("code_page_decode", nargs, 2, 4)) {
         goto exit;
     }
-    codepage = PyLong_AsIntValue(args[0]);
+    codepage = PyLong_AsInt(args[0]);
     if (codepage == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+    if (args[2] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[2])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("code_page_decode", "argument 3", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("code_page_decode", "argument 3", "str or None", args[2]);
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[3]);
+    final = PyObject_IsTrue(args[3]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_code_page_decode_impl(module, codepage, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_code_page_decode_impl(module, codepage, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1883,74 +1519,54 @@ static PyObject *
 _codecs_iconv_decode_impl(PyObject *module, const char *encoding,
                           Py_buffer *data, const char *errors, int final);
 
-static PyValue
-_codecs_iconv_decode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_iconv_decode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *encoding;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
     int final = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("iconv_decode", nargs, 2, 4)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("iconv_decode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (encoding == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("iconv_decode", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    encoding = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (encoding == NULL) {
+        goto exit;
+    }
+    if (PyObject_GetBuffer(args[1], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
+    if (args[2] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[2])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("iconv_decode", "argument 3", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("iconv_decode", "argument 3", "str or None", args[2]);
+        goto exit;
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    final = PyObject_IsTrueValue(args[3]);
+    final = PyObject_IsTrue(args[3]);
     if (final < 0) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_iconv_decode_impl(module, encoding, &data, errors, final);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_iconv_decode_impl(module, encoding, &data, errors, final);
 
 exit:
     /* Cleanup for data */
@@ -1975,63 +1591,49 @@ static PyObject *
 _codecs_readbuffer_encode_impl(PyObject *module, Py_buffer *data,
                                const char *errors);
 
-static PyValue
-_codecs_readbuffer_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_readbuffer_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("readbuffer_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
+    if (PyUnicode_Check(args[0])) {
+        Py_ssize_t len;
+        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        if (ptr == NULL) {
             goto exit;
         }
-        if (PyUnicode_Check(_arg)) {
-            Py_ssize_t len;
-            const char *ptr = PyUnicode_AsUTF8AndSize(_arg, &len);
-            if (ptr == NULL) {
-                goto exit;
-            }
-            if (PyBuffer_FillInfo(&data, _arg, (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
-                goto exit;
-            }
+        if (PyBuffer_FillInfo(&data, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+            goto exit;
         }
-        else { /* any bytes-like object */
-            if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    }
+    else { /* any bytes-like object */
+        if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("readbuffer_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("readbuffer_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_readbuffer_encode_impl(module, &data, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_readbuffer_encode_impl(module, &data, errors);
 
 exit:
     /* Cleanup for data */
@@ -2054,53 +1656,39 @@ static PyObject *
 _codecs_utf_7_encode_impl(PyObject *module, PyObject *str,
                           const char *errors);
 
-static PyValue
-_codecs_utf_7_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_7_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_7_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_7_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_7_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_7_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_7_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_7_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_7_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2118,53 +1706,39 @@ static PyObject *
 _codecs_utf_8_encode_impl(PyObject *module, PyObject *str,
                           const char *errors);
 
-static PyValue
-_codecs_utf_8_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_8_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_8_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_8_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_8_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_8_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_8_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_8_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_8_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2182,61 +1756,47 @@ static PyObject *
 _codecs_utf_16_encode_impl(PyObject *module, PyObject *str,
                            const char *errors, int byteorder);
 
-static PyValue
-_codecs_utf_16_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
     int byteorder = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_encode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_16_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_16_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_encode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_16_encode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    byteorder = PyLong_AsIntValue(args[2]);
+    byteorder = PyLong_AsInt(args[2]);
     if (byteorder == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_16_encode_impl(module, str, errors, byteorder);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_encode_impl(module, str, errors, byteorder);
 
 exit:
     return return_value;
@@ -2254,53 +1814,39 @@ static PyObject *
 _codecs_utf_16_le_encode_impl(PyObject *module, PyObject *str,
                               const char *errors);
 
-static PyValue
-_codecs_utf_16_le_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_le_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_le_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_16_le_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_16_le_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_le_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_16_le_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_16_le_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_le_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2318,53 +1864,39 @@ static PyObject *
 _codecs_utf_16_be_encode_impl(PyObject *module, PyObject *str,
                               const char *errors);
 
-static PyValue
-_codecs_utf_16_be_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_16_be_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_16_be_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_16_be_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_16_be_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_16_be_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_16_be_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_16_be_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_16_be_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2382,61 +1914,47 @@ static PyObject *
 _codecs_utf_32_encode_impl(PyObject *module, PyObject *str,
                            const char *errors, int byteorder);
 
-static PyValue
-_codecs_utf_32_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
     int byteorder = 0;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_encode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_32_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_32_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_encode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("utf_32_encode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    byteorder = PyLong_AsIntValue(args[2]);
+    byteorder = PyLong_AsInt(args[2]);
     if (byteorder == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    _return_value = _codecs_utf_32_encode_impl(module, str, errors, byteorder);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_encode_impl(module, str, errors, byteorder);
 
 exit:
     return return_value;
@@ -2454,53 +1972,39 @@ static PyObject *
 _codecs_utf_32_le_encode_impl(PyObject *module, PyObject *str,
                               const char *errors);
 
-static PyValue
-_codecs_utf_32_le_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_le_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_le_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_32_le_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_32_le_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_le_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_32_le_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_32_le_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_le_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2518,53 +2022,39 @@ static PyObject *
 _codecs_utf_32_be_encode_impl(PyObject *module, PyObject *str,
                               const char *errors);
 
-static PyValue
-_codecs_utf_32_be_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_utf_32_be_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("utf_32_be_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("utf_32_be_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("utf_32_be_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("utf_32_be_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("utf_32_be_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_utf_32_be_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_utf_32_be_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2582,53 +2072,39 @@ static PyObject *
 _codecs_unicode_escape_encode_impl(PyObject *module, PyObject *str,
                                    const char *errors);
 
-static PyValue
-_codecs_unicode_escape_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_unicode_escape_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("unicode_escape_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("unicode_escape_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("unicode_escape_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("unicode_escape_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("unicode_escape_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_unicode_escape_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_unicode_escape_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2646,53 +2122,39 @@ static PyObject *
 _codecs_raw_unicode_escape_encode_impl(PyObject *module, PyObject *str,
                                        const char *errors);
 
-static PyValue
-_codecs_raw_unicode_escape_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_raw_unicode_escape_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("raw_unicode_escape_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("raw_unicode_escape_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("raw_unicode_escape_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("raw_unicode_escape_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("raw_unicode_escape_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_raw_unicode_escape_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_raw_unicode_escape_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2710,53 +2172,39 @@ static PyObject *
 _codecs_latin_1_encode_impl(PyObject *module, PyObject *str,
                             const char *errors);
 
-static PyValue
-_codecs_latin_1_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_latin_1_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("latin_1_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("latin_1_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("latin_1_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("latin_1_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("latin_1_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_latin_1_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_latin_1_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2774,53 +2222,39 @@ static PyObject *
 _codecs_ascii_encode_impl(PyObject *module, PyObject *str,
                           const char *errors);
 
-static PyValue
-_codecs_ascii_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_ascii_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("ascii_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("ascii_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("ascii_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("ascii_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("ascii_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_ascii_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_ascii_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -2838,61 +2272,44 @@ static PyObject *
 _codecs_charmap_encode_impl(PyObject *module, PyObject *str,
                             const char *errors, PyObject *mapping);
 
-static PyValue
-_codecs_charmap_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_charmap_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
     PyObject *mapping = Py_None;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("charmap_encode", nargs, 1, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("charmap_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("charmap_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("charmap_encode", "argument 2", "str or None", _arg);
-            goto exit;
-        }
+    }
+    else {
+        _PyArg_BadArgument("charmap_encode", "argument 2", "str or None", args[1]);
+        goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    mapping = PyValue_Object(args[2]);
-    if (mapping == NULL) {
-        goto exit;
-    }
+    mapping = args[2];
 skip_optional:
-    _return_value = _codecs_charmap_encode_impl(module, str, errors, mapping);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_charmap_encode_impl(module, str, errors, mapping);
 
 exit:
     return return_value;
@@ -2904,31 +2321,23 @@ PyDoc_STRVAR(_codecs_charmap_build__doc__,
 "\n");
 
 #define _CODECS_CHARMAP_BUILD_METHODDEF    \
-    {"charmap_build", _PyCFunction_CAST(_codecs_charmap_build), METH_O, _codecs_charmap_build__doc__},
+    {"charmap_build", (PyCFunction)_codecs_charmap_build, METH_O, _codecs_charmap_build__doc__},
 
 static PyObject *
 _codecs_charmap_build_impl(PyObject *module, PyObject *map);
 
-static PyValue
-_codecs_charmap_build(PyObject *module, PyValue arg)
+static PyObject *
+_codecs_charmap_build(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *map;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("charmap_build", "argument", "str", _arg);
-            goto exit;
-        }
-        map = _arg;
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("charmap_build", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _codecs_charmap_build_impl(module, map);
-    return_value = PyValue_FromResult(_return_value);
+    map = arg;
+    return_value = _codecs_charmap_build_impl(module, map);
 
 exit:
     return return_value;
@@ -2947,53 +2356,39 @@ PyDoc_STRVAR(_codecs_mbcs_encode__doc__,
 static PyObject *
 _codecs_mbcs_encode_impl(PyObject *module, PyObject *str, const char *errors);
 
-static PyValue
-_codecs_mbcs_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_mbcs_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("mbcs_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("mbcs_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("mbcs_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("mbcs_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("mbcs_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_mbcs_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_mbcs_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -3014,53 +2409,39 @@ PyDoc_STRVAR(_codecs_oem_encode__doc__,
 static PyObject *
 _codecs_oem_encode_impl(PyObject *module, PyObject *str, const char *errors);
 
-static PyValue
-_codecs_oem_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_oem_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("oem_encode", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("oem_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("oem_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
+    str = args[0];
     if (nargs < 2) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("oem_encode", "argument 2", "str or None", _arg);
+    if (args[1] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[1])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("oem_encode", "argument 2", "str or None", args[1]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_oem_encode_impl(module, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_oem_encode_impl(module, str, errors);
 
 exit:
     return return_value;
@@ -3082,58 +2463,44 @@ static PyObject *
 _codecs_code_page_encode_impl(PyObject *module, int code_page, PyObject *str,
                               const char *errors);
 
-static PyValue
-_codecs_code_page_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_code_page_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int code_page;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("code_page_encode", nargs, 2, 3)) {
         goto exit;
     }
-    code_page = PyLong_AsIntValue(args[0]);
+    code_page = PyLong_AsInt(args[0]);
     if (code_page == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("code_page_encode", "argument 2", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("code_page_encode", "argument 2", "str", args[1]);
+        goto exit;
     }
+    str = args[1];
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("code_page_encode", "argument 3", "str or None", _arg);
+    if (args[2] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[2])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("code_page_encode", "argument 3", "str or None", args[2]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_code_page_encode_impl(module, code_page, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_code_page_encode_impl(module, code_page, str, errors);
 
 exit:
     return return_value;
@@ -3155,68 +2522,48 @@ static PyObject *
 _codecs_iconv_encode_impl(PyObject *module, const char *encoding,
                           PyObject *str, const char *errors);
 
-static PyValue
-_codecs_iconv_encode(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_iconv_encode(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *encoding;
     PyObject *str;
     const char *errors = NULL;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("iconv_encode", nargs, 2, 3)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("iconv_encode", "argument 1", "str", _arg);
-            goto exit;
-        }
-        encoding = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (encoding == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("iconv_encode", "argument 1", "str", args[0]);
+        goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("iconv_encode", "argument 2", "str", _arg);
-            goto exit;
-        }
-        str = _arg;
+    encoding = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (encoding == NULL) {
+        goto exit;
     }
+    if (!PyUnicode_Check(args[1])) {
+        _PyArg_BadArgument("iconv_encode", "argument 2", "str", args[1]);
+        goto exit;
+    }
+    str = args[1];
     if (nargs < 3) {
         goto skip_optional;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[2]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (_arg == Py_None) {
-            errors = NULL;
-        }
-        else if (PyUnicode_Check(_arg)) {
-            errors = _PyUnicode_AsUTF8NoNUL(_arg);
-            if (errors == NULL) {
-                goto exit;
-            }
-        }
-        else {
-            _PyArg_BadArgument("iconv_encode", "argument 3", "str or None", _arg);
+    if (args[2] == Py_None) {
+        errors = NULL;
+    }
+    else if (PyUnicode_Check(args[2])) {
+        errors = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (errors == NULL) {
             goto exit;
         }
     }
+    else {
+        _PyArg_BadArgument("iconv_encode", "argument 3", "str or None", args[2]);
+        goto exit;
+    }
 skip_optional:
-    _return_value = _codecs_iconv_encode_impl(module, encoding, str, errors);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _codecs_iconv_encode_impl(module, encoding, str, errors);
 
 exit:
     return return_value;
@@ -3242,37 +2589,26 @@ static PyObject *
 _codecs_register_error_impl(PyObject *module, const char *errors,
                             PyObject *handler);
 
-static PyValue
-_codecs_register_error(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_codecs_register_error(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *errors;
     PyObject *handler;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("register_error", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("register_error", "argument 1", "str", _arg);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (errors == NULL) {
-            goto exit;
-        }
-    }
-    handler = PyValue_Object(args[1]);
-    if (handler == NULL) {
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("register_error", "argument 1", "str", args[0]);
         goto exit;
     }
-    _return_value = _codecs_register_error_impl(module, errors, handler);
-    return_value = PyValue_FromResult(_return_value);
+    errors = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (errors == NULL) {
+        goto exit;
+    }
+    handler = args[1];
+    return_value = _codecs_register_error_impl(module, errors, handler);
 
 exit:
     return return_value;
@@ -3293,37 +2629,31 @@ PyDoc_STRVAR(_codecs__unregister_error__doc__,
 "handling exists.");
 
 #define _CODECS__UNREGISTER_ERROR_METHODDEF    \
-    {"_unregister_error", _PyCFunction_CAST(_codecs__unregister_error), METH_O, _codecs__unregister_error__doc__},
+    {"_unregister_error", (PyCFunction)_codecs__unregister_error, METH_O, _codecs__unregister_error__doc__},
 
 static int
 _codecs__unregister_error_impl(PyObject *module, const char *errors);
 
-static PyValue
-_codecs__unregister_error(PyObject *module, PyValue arg)
+static PyObject *
+_codecs__unregister_error(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *errors;
     int _return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("_unregister_error", "argument", "str", _arg);
-            goto exit;
-        }
-        errors = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (errors == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("_unregister_error", "argument", "str", arg);
+        goto exit;
+    }
+    errors = _PyUnicode_AsUTF8NoNUL(arg);
+    if (errors == NULL) {
+        goto exit;
     }
     _return_value = _codecs__unregister_error_impl(module, errors);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromResult(PyBool_FromLong((long)_return_value));
+    return_value = PyBool_FromLong((long)_return_value);
 
 exit:
     return return_value;
@@ -3339,34 +2669,26 @@ PyDoc_STRVAR(_codecs_lookup_error__doc__,
 "a LookupError, if no handler exists under this name.");
 
 #define _CODECS_LOOKUP_ERROR_METHODDEF    \
-    {"lookup_error", _PyCFunction_CAST(_codecs_lookup_error), METH_O, _codecs_lookup_error__doc__},
+    {"lookup_error", (PyCFunction)_codecs_lookup_error, METH_O, _codecs_lookup_error__doc__},
 
 static PyObject *
 _codecs_lookup_error_impl(PyObject *module, const char *name);
 
-static PyValue
-_codecs_lookup_error(PyObject *module, PyValue arg)
+static PyObject *
+_codecs_lookup_error(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     const char *name;
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("lookup_error", "argument", "str", _arg);
-            goto exit;
-        }
-        name = _PyUnicode_AsUTF8NoNUL(_arg);
-        if (name == NULL) {
-            goto exit;
-        }
+    if (!PyUnicode_Check(arg)) {
+        _PyArg_BadArgument("lookup_error", "argument", "str", arg);
+        goto exit;
     }
-    _return_value = _codecs_lookup_error_impl(module, name);
-    return_value = PyValue_FromResult(_return_value);
+    name = _PyUnicode_AsUTF8NoNUL(arg);
+    if (name == NULL) {
+        goto exit;
+    }
+    return_value = _codecs_lookup_error_impl(module, name);
 
 exit:
     return return_value;
@@ -3386,14 +2708,15 @@ PyDoc_STRVAR(_codecs__normalize_encoding__doc__,
 static PyObject *
 _codecs__normalize_encoding_impl(PyObject *module, PyObject *encoding);
 
-static PyValue
-_codecs__normalize_encoding(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+_codecs__normalize_encoding(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -3416,28 +2739,20 @@ _codecs__normalize_encoding(PyObject *module, const PyValue *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[1];
+    PyObject *argsbuf[1];
     PyObject *encoding;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!PyUnicode_Check(_arg)) {
-            _PyArg_BadArgument("_normalize_encoding", "argument 'encoding'", "str", _arg);
-            goto exit;
-        }
-        encoding = _arg;
+    if (!PyUnicode_Check(args[0])) {
+        _PyArg_BadArgument("_normalize_encoding", "argument 'encoding'", "str", args[0]);
+        goto exit;
     }
-    _return_value = _codecs__normalize_encoding_impl(module, encoding);
-    return_value = PyValue_FromResult(_return_value);
+    encoding = args[0];
+    return_value = _codecs__normalize_encoding_impl(module, encoding);
 
 exit:
     return return_value;
@@ -3474,4 +2789,4 @@ exit:
 #ifndef _CODECS_ICONV_ENCODE_METHODDEF
     #define _CODECS_ICONV_ENCODE_METHODDEF
 #endif /* !defined(_CODECS_ICONV_ENCODE_METHODDEF) */
-/*[clinic end generated code: output=cea3ef12bee0648c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2bf386d7e284e6f3 input=a9049054013a1b77]*/

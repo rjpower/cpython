@@ -17,33 +17,27 @@
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
 #include "pycore_compile.h"       // _PyCompile_CodeGen()
 #include "pycore_context.h"       // _PyContext_NewHamtForTests()
+#include "pycore_dict.h"          // PyDictValues
 #include "pycore_fileutils.h"     // _Py_normpath()
 #include "pycore_flowgraph.h"     // _PyCompile_OptimizeCfg()
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_function.h"      // _PyFunction_GET_BUILTINS
-#include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_gc.h"            // PyGC_Head
 #include "pycore_gc_trace.h"      // _PyGC_TraceVerify()
 #include "pycore_hashtable.h"     // _Py_hashtable_new()
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
-#include "pycore_instruments.h"  // monitoring storage and deinstrumentation
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
-#include "pycore_ir.h"              // _PyIR_MakeWord(), _PyIR_SetHandler()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
-#include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_opcode_metadata.h" // _PyOpcode_OpName
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
-#include "pycore_shape.h"         // _PyShape_Index()
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
-#include "pycore_value.h"         // _PyThreadState_PushValueSpan()
-#include "pycore_gc_walk.h"       // _PyGC_WalkStack()
 
 #include "clinic/_testinternalcapi.c.h"
 
@@ -217,6 +211,17 @@ get_stack_margin(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 test_stop_the_world(PyObject *self, PyObject *Py_UNUSED(args))
 {
+#ifdef Py_GIL_DISABLED
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    // Request consecutive pauses without running Python code between them.
+    for (int i = 0; i < 100; i++) {
+        _PyEval_StopTheWorld(interp);
+        // Give detached threads time to try to reattach during the pause.
+        PyEvent event = {0};
+        PyEvent_WaitTimed(&event, 10 * 1000 * 1000, /*detach=*/0);
+        _PyEval_StartTheWorld(interp);
+    }
+#endif
     Py_RETURN_NONE;
 }
 
@@ -299,9 +304,9 @@ classify_stack_addresses(PyObject *self, PyObject *args)
         Py_DECREF(fast);
         return NULL;
     }
+    PyObject **items = PySequence_Fast_ITEMS(fast);
     for (Py_ssize_t i = 0; i < n; i++) {
-        unsigned long long value = PyLong_AsUnsignedLongLong(
-            PySequence_Fast_GET_ITEM(fast, i));
+        unsigned long long value = PyLong_AsUnsignedLongLong(items[i]);
         if (PyErr_Occurred()) {
             Py_DECREF(labels);
             Py_DECREF(fast);
@@ -940,23 +945,19 @@ test_bytes_find(PyObject *self, PyObject *Py_UNUSED(args))
 }
 
 
-static PyValue
-normalize_path(PyObject *self, PyValue arg)
+static PyObject *
+normalize_path(PyObject *self, PyObject *filename)
 {
-    PyObject *filename = PyValue_Object(arg);
-    if (filename == NULL) {
-        return PyValue_NULL;
-    }
     Py_ssize_t size = -1;
     wchar_t *encoded = PyUnicode_AsWideCharString(filename, &size);
     if (encoded == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     PyObject *result = PyUnicode_FromWideChar(_Py_normpath(encoded, size), -1);
     PyMem_Free(encoded);
 
-    return PyValue_FromResult(result);
+    return result;
 }
 
 static PyObject *
@@ -1092,10 +1093,10 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
     Py_RETURN_NONE;
 }
 
-static PyValue
+static PyObject *
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
+    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1104,32 +1105,28 @@ record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
         int res = PyList_Append(state->record_list,
                                 FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name));
         if (res < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
     return _PyEval_EvalFrameDefault(tstate, f, exc);
 }
 
 
-static PyValue
-set_eval_frame_record(PyObject *self, PyValue arg)
+static PyObject *
+set_eval_frame_record(PyObject *self, PyObject *list)
 {
-    PyObject *list = PyValue_Object(arg);
-    if (list == NULL) {
-        return PyValue_NULL;
-    }
     module_state *state = get_module_state(self);
     if (!PyList_Check(list)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a list");
-        return PyValue_NULL;
+        return NULL;
     }
     Py_XSETREF(state->record_list, Py_NewRef(list));
     _PyInterpreterState_SetEvalFrameFunc(_PyInterpreterState_GET(), record_eval);
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 // Defined in interpreter.c
-extern PyValue
+extern PyObject*
 Test_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag);
 extern int Test_EvalFrame_Resumes, Test_EvalFrame_Loads;
 
@@ -1158,10 +1155,10 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
     return res;
 }
 
-static PyValue
+static PyObject *
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyValue_Type(f->f_funcobj) == &PyFunction_Type) {
+    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1170,7 +1167,7 @@ record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc
         int res = PyList_Append(state->record_list,
                                 FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name));
         if (res < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
 
@@ -1454,82 +1451,60 @@ perf_map_state_teardown(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
-static PyValue
-iframe_getcode(PyObject *self, PyValue arg)
+static PyObject *
+iframe_getcode(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(arg);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyValue_FromResult(PyUnstable_InterpreterFrame_GetCode(f));
+    return PyUnstable_InterpreterFrame_GetCode(f);
 }
 
-static PyValue
-iframe_getline(PyObject *self, PyValue arg)
+static PyObject *
+iframe_getline(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(arg);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyValue_FromResult(
-        PyLong_FromLong(PyUnstable_InterpreterFrame_GetLine(f)));
+    return PyLong_FromLong(PyUnstable_InterpreterFrame_GetLine(f));
 }
 
-static PyValue
-iframe_getlasti(PyObject *self, PyValue arg)
+static PyObject *
+iframe_getlasti(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(arg);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
     struct _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
-    return PyValue_FromResult(
-        PyLong_FromLong(PyUnstable_InterpreterFrame_GetLasti(f)));
+    return PyLong_FromLong(PyUnstable_InterpreterFrame_GetLasti(f));
 }
 
-static PyValue
-code_returns_only_none(PyObject *self, PyValue value)
+static PyObject *
+code_returns_only_none(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return PyValue_NULL;
+        return NULL;
     }
     PyCodeObject *code = (PyCodeObject *)arg;
     int res = _PyCode_ReturnsOnlyNone(code);
-    return PyValue_FromResult(PyBool_FromLong(res));
+    return PyBool_FromLong(res);
 }
 
-static PyValue
-get_co_framesize(PyObject *self, PyValue value)
+static PyObject *
+get_co_framesize(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return PyValue_NULL;
+        return NULL;
     }
     PyCodeObject *code = (PyCodeObject *)arg;
-    return PyValue_FromResult(PyLong_FromLong(code->co_framesize));
+    return PyLong_FromLong(code->co_framesize);
 }
 
 /* The feedback entry of the instruction at word index I of the executing
@@ -1610,7 +1585,9 @@ get_ir(PyObject *self, PyObject *args)
     for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
-        const char *name = _PyOpcode_OpName[handler];
+        const char *name = handler < IR_FIRST_ONLY_HANDLER
+            ? _PyOpcode_OpName[handler]
+            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
         PyObject *item = Py_BuildValue(
             "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
@@ -1623,135 +1600,36 @@ get_ir(PyObject *self, PyObject *args)
     return result;
 }
 
-static PyObject *
-code_safe_addr2line(PyObject *self, PyObject *args)
-{
-    PyCodeObject *code;
-    int offset;
-    if (!PyArg_ParseTuple(args, "O!i:code_safe_addr2line",
-                          &PyCode_Type, &code, &offset)) {
-        return NULL;
-    }
-    return PyLong_FromLong(_PyCode_SafeAddr2Line(code, offset));
-}
-
-static PyObject *
-monitoring_storage_roundtrip(PyObject *self, PyObject *args)
-{
-    int index, opcode, line;
-    if (!PyArg_ParseTuple(args, "iii:monitoring_storage_roundtrip",
-                          &index, &opcode, &line)) {
-        return NULL;
-    }
-    uint16_t originals[3] = {0};
-    const int nwords = Py_ARRAY_LENGTH(originals);
-    if (index < 0 || index >= nwords || opcode < 0 || opcode > UINT16_MAX ||
-        line < -1) {
-        PyErr_SetString(PyExc_ValueError, "invalid monitoring storage input");
-        return NULL;
-    }
-    struct {
-        _PyCoLineInstrumentationData lines;
-        int extra[Py_ARRAY_LENGTH(originals)];
-    } storage = {0};
-    uint16_t tokens[Py_ARRAY_LENGTH(originals)] = {255, 511, UINT16_MAX};
-    int lines[Py_ARRAY_LENGTH(originals)] = {-1, 0, INT_MAX};
-    tokens[index] = (uint16_t)opcode;
-    lines[index] = line;
-    storage.lines.original_opcodes = originals;
-    for (int i = 0; i < nwords; i++) {
-        _PyCode_SetOriginalOpcode(&storage.lines, i, tokens[i]);
-        _PyCode_SetMonitoringLine(&storage.lines, i, lines[i]);
-    }
-    return Py_BuildValue("((ii)(ii)(ii))",
-                         _PyCode_GetOriginalOpcode(&storage.lines, 0),
-                         _Py_Instrumentation_GetLine(&storage.lines, 0),
-                         _PyCode_GetOriginalOpcode(&storage.lines, 1),
-                         _Py_Instrumentation_GetLine(&storage.lines, 1),
-                         _PyCode_GetOriginalOpcode(&storage.lines, 2),
-                         _Py_Instrumentation_GetLine(&storage.lines, 2));
-}
-
-static PyObject *
-monitoring_deinstrument(PyObject *self, PyObject *args)
-{
-    int opcode;
-    if (!PyArg_ParseTuple(args, "i:monitoring_deinstrument", &opcode)) {
-        return NULL;
-    }
-    return PyLong_FromLong(_PyCode_Deinstrument(opcode));
-}
-
-static PyObject *
-monitoring_state(PyObject *self, PyObject *args)
-{
-    PyCodeObject *code;
-    if (!PyArg_ParseTuple(args, "O!:monitoring_state", &PyCode_Type, &code)) {
-        return NULL;
-    }
-    _PyCoMonitoringData *data = code->_co_monitoring;
-    if (data == NULL) {
-        Py_RETURN_NONE;
-    }
-    _Py_LocalMonitors local = data->local_monitors;
-    _Py_LocalMonitors active = data->active_monitors;
-    uintptr_t versions[PY_MONITORING_TOOL_IDS];
-    memcpy(versions, data->tool_versions, sizeof(versions));
-    uintptr_t code_version = code->_co_instrumentation_version;
-    int present[5] = {
-        data->tools != NULL, data->lines != NULL, data->line_tools != NULL,
-        data->per_instruction_opcodes != NULL,
-        data->per_instruction_tools != NULL
-    };
-    return Py_BuildValue("(y#y#y#K(iiiii))",
-                         (const char *)local.tools,
-                         (Py_ssize_t)sizeof(local.tools),
-                         (const char *)active.tools,
-                         (Py_ssize_t)sizeof(active.tools),
-                         (const char *)versions,
-                         (Py_ssize_t)sizeof(versions),
-                         (unsigned long long)code_version,
-                         present[0], present[1], present[2], present[3], present[4]);
-}
-
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
  * relax, for code compiled from now on, and return the previous one. */
-static PyValue
-set_ir_max_forward(PyObject *self, PyValue v)
+static PyObject *
+set_ir_max_forward(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(v);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     int value = PyLong_AsInt(arg);
     if (value == -1 && PyErr_Occurred()) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (value < 0 || value > IR_MAX_FORWARD) {
         PyErr_SetString(PyExc_ValueError, "distance out of range");
-        return PyValue_NULL;
+        return NULL;
     }
     int old = _PyIR_MaxForward;
     _PyIR_MaxForward = value;
-    return PyValue_FromResult(PyLong_FromLong(old));
+    return PyLong_FromLong(old);
 }
 
-static PyValue
-get_co_localskinds(PyObject *self, PyValue value)
+static PyObject *
+get_co_localskinds(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyCode_Check(arg)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a code object");
-        return PyValue_NULL;
+        return NULL;
     }
     PyCodeObject *co = (PyCodeObject *)arg;
 
     PyObject *kinds = PyDict_New();
     if (kinds == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     for (int offset = 0; offset < co->co_nlocalsplus; offset++) {
         PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, offset);
@@ -1759,16 +1637,16 @@ get_co_localskinds(PyObject *self, PyValue value)
         PyObject *kind = PyLong_FromLong(k);
         if (kind == NULL) {
             Py_DECREF(kinds);
-            return PyValue_NULL;
+            return NULL;
         }
         int res = PyDict_SetItem(kinds, name, kind);
         Py_DECREF(kind);
         if (res < 0) {
             Py_DECREF(kinds);
-            return PyValue_NULL;
+            return NULL;
         }
     }
-    return PyValue_FromResult(kinds);
+    return kinds;
 }
 
 static PyObject *
@@ -2154,17 +2032,13 @@ test_tstate_capi(PyObject *self, PyObject *Py_UNUSED(args))
 
 
 /* Test _PyUnicode_TransformDecimalAndSpaceToASCII() */
-static PyValue
-unicode_transformdecimalandspacetoascii(PyObject *self, PyValue value)
+static PyObject *
+unicode_transformdecimalandspacetoascii(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     if (arg == Py_None) {
         arg = NULL;
     }
-    return PyValue_FromResult(_PyUnicode_TransformDecimalAndSpaceToASCII(arg));
+    return _PyUnicode_TransformDecimalAndSpaceToASCII(arg);
 }
 
 static PyObject *
@@ -2196,7 +2070,7 @@ check_pyobject_uninitialized_is_freed(PyObject *self,
     }
     /* Initialize reference count to avoid early crash in ceval or GC */
     Py_SET_REFCNT(op, 1);
-    /* object fields like the header word are uninitialized! */
+    /* object fields like ob_type are uninitialized! */
     return test_pyobject_is_freed("check_pyobject_uninitialized_is_freed", op);
 }
 
@@ -2205,13 +2079,15 @@ static PyObject *
 check_pyobject_forbidden_bytes_is_freed(PyObject *self,
                                         PyObject *Py_UNUSED(args))
 {
-    /* Allocate an incomplete PyObject structure: the header word, which
-       holds the type, is after the memory block: part of "forbidden bytes"
-       when using debug hooks on memory allocators! */
-    PyObject *op = (PyObject *)PyObject_Malloc(0);
+    /* Allocate an incomplete PyObject structure: truncate 'ob_type' field */
+    PyObject *op = (PyObject *)PyObject_Malloc(offsetof(PyObject, ob_type));
     if (op == NULL) {
         return NULL;
     }
+    /* Initialize reference count to avoid early crash in ceval or GC */
+    Py_SET_REFCNT(op, 1);
+    /* ob_type field is after the memory block: part of "forbidden bytes"
+       when using debug hooks on memory allocators! */
     return test_pyobject_is_freed("check_pyobject_forbidden_bytes_is_freed", op);
 }
 
@@ -2247,42 +2123,67 @@ test_pymem_getallocatorsname(PyObject *self, PyObject *args)
     return PyUnicode_FromString(name);
 }
 
-// The index of the shape of an object with inline values in its type's
-// table, or None in dictionary mode or for a type without inline values.
-static PyValue
-get_object_shape(PyObject *self, PyValue arg)
+static PyObject *
+get_object_dict_values(PyObject *self, PyObject *obj)
 {
-    PyObject *obj = PyValue_Object(arg);
-    if (obj == NULL) {
-        return PyValue_NULL;
+    PyTypeObject *type = Py_TYPE(obj);
+    if (!_PyType_HasFeature(type, Py_TPFLAGS_INLINE_VALUES)) {
+        Py_RETURN_NONE;
     }
+    PyDictValues *values = _PyObject_InlineValues(obj);
+    if (!values->valid) {
+        Py_RETURN_NONE;
+    }
+    PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
+    assert(keys != NULL);
+    int size = (int)keys->dk_nentries;
+    assert(size >= 0);
+    PyObject *res = PyTuple_New(size);
+    if (res == NULL) {
+        return NULL;
+    }
+    _Py_DECLARE_STR(anon_null, "<NULL>");
+    for(int i = 0; i < size; i++) {
+        PyObject *item = values->values[i];
+        if (item == NULL) {
+            item = &_Py_STR(anon_null);
+        }
+        else {
+            Py_INCREF(item);
+        }
+        PyTuple_SET_ITEM(res, i, item);
+    }
+    return res;
+}
+
+#ifdef Py_SHAPES
+// The shape index of an object with inline values, or None if it has none.
+static PyObject *
+get_object_shape(PyObject *self, PyObject *obj)
+{
     if (!_PyType_HasFeature(Py_TYPE(obj), Py_TPFLAGS_INLINE_VALUES)) {
-        return PyValue_FromObject(Py_None);
+        Py_RETURN_NONE;
     }
-    int shape = _PyShape_Index(_PyObject_SHAPE(obj));
-    if (shape == _Py_SHAPE_INDEX_DICT) {
-        return PyValue_FromObject(Py_None);
+    uint8_t shape = _PyObject_InlineValues(obj)->shape;
+    if (shape == _Py_SHAPE_NONE) {
+        Py_RETURN_NONE;
     }
-    return PyValue_FromResult(PyLong_FromLong(shape));
+    return PyLong_FromLong(shape);
 }
 
 // The number of shapes of a type with inline values.
-static PyValue
-get_type_shape_count(PyObject *self, PyValue arg)
+static PyObject *
+get_type_shape_count(PyObject *self, PyObject *type)
 {
-    PyObject *type = PyValue_Object(arg);
-    if (type == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyType_Check(type) ||
         !_PyType_HasFeature((PyTypeObject *)type, Py_TPFLAGS_INLINE_VALUES))
     {
         PyErr_SetString(PyExc_TypeError, "expected a type with inline values");
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(
-        PyLong_FromLong(_PyType_ShapeCount((PyTypeObject *)type)));
+    return PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes);
 }
+#endif
 
 
 static PyObject*
@@ -2332,89 +2233,6 @@ _init_interp_config_from_object(PyInterpreterConfig *config, PyObject *obj)
         return -1;
     }
     return 0;
-}
-
-static PyObject *
-check_interpreter_creation_rejected(PyObject *self, PyObject *args)
-{
-    int api, detached;
-    if (!PyArg_ParseTuple(args, "ip:check_interpreter_creation_rejected",
-                          &api, &detached)) {
-        return NULL;
-    }
-    if (api < 0 || api > 3) {
-        PyErr_SetString(PyExc_ValueError, "unknown creation API");
-        return NULL;
-    }
-
-    PyThreadState *saved = PyThreadState_Get();
-    PyInterpreterState *main = PyInterpreterState_Main();
-    PyInterpreterState *head = _PyRuntime.interpreters.head;
-    int64_t next_id = _PyRuntime.interpreters.next_id;
-    int check_enabled = _Py_atomic_load_int_relaxed(
-        &_PyRuntime.gilstate.check_enabled);
-    if (detached) {
-        PyThreadState_Swap(NULL);
-    }
-
-    PyThreadState *created_thread = NULL;
-    PyInterpreterState *created_interp = NULL;
-    int rejected;
-    if (api == 0 || api == 3) {
-        PyStatus status;
-        if (api == 0) {
-            const PyInterpreterConfig config = _PyInterpreterConfig_INIT;
-            // A failing call must clear even a non-NULL output argument.
-            created_thread = saved;
-            status = Py_NewInterpreterFromConfig(&created_thread, &config);
-        }
-        else {
-            created_interp = main;
-            status = _PyInterpreterState_New(
-                _PyThreadState_GET(), &created_interp);
-        }
-        rejected = (PyStatus_IsError(status)
-                    && status.err_msg != NULL
-                    && strcmp(status.err_msg,
-                              "subinterpreters are not supported") == 0
-                    && created_thread == NULL && created_interp == NULL);
-    }
-    else if (api == 1) {
-        created_thread = Py_NewInterpreter();
-        rejected = (created_thread == NULL);
-    }
-    else {
-        created_interp = PyInterpreterState_New();
-        rejected = (created_interp == NULL);
-    }
-    int attachment_unchanged = (
-        _PyThreadState_GET() == (detached ? NULL : saved));
-
-    // Keep an accidentally successful creation from leaking into later tests.
-    if (created_thread != NULL && created_thread != saved) {
-        Py_EndInterpreter(created_thread);
-    }
-    if (created_interp != NULL && created_interp != main) {
-        // A bare state has not been initialized and cannot be cleared.
-        PyInterpreterState_Delete(created_interp);
-    }
-    PyThreadState_Swap(saved);
-
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    if (!rejected || !attachment_unchanged
-        || PyInterpreterState_Main() != main
-        || _PyRuntime.interpreters.head != head
-        || _PyRuntime.interpreters.next_id != next_id
-        || _Py_atomic_load_int_relaxed(
-               &_PyRuntime.gilstate.check_enabled) != check_enabled)
-    {
-        PyErr_SetString(PyExc_AssertionError,
-                        "interpreter creation was not rejected without side effects");
-        return NULL;
-    }
-    Py_RETURN_NONE;
 }
 
 static PyInterpreterState *
@@ -2699,18 +2517,14 @@ run_in_subinterp_with_config(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 
-static PyValue
-normalize_interp_id(PyObject *self, PyValue arg)
+static PyObject *
+normalize_interp_id(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     int64_t interpid = _PyInterpreterState_ObjectToID(idobj);
     if (interpid < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromLongLong(interpid));
+    return PyLong_FromLongLong(interpid);
 }
 
 static PyObject *
@@ -2728,86 +2542,66 @@ unused_interpreter_id(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyLong_FromLongLong(interpid);
 }
 
-static PyValue
-interpreter_exists(PyObject *self, PyValue arg)
+static PyObject *
+interpreter_exists(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         if (PyErr_ExceptionMatches(PyExc_InterpreterNotFoundError)) {
             PyErr_Clear();
-            return PyValue_FromObject(Py_False);
+            Py_RETURN_FALSE;
         }
         assert(PyErr_Occurred());
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromObject(Py_True);
+    Py_RETURN_TRUE;
 }
 
-static PyValue
-get_interpreter_refcount(PyObject *self, PyValue arg)
+static PyObject *
+get_interpreter_refcount(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromResult(PyLong_FromLongLong(interp->id_refcount));
+    return PyLong_FromLongLong(interp->id_refcount);
 }
 
-static PyValue
-link_interpreter_refcount(PyObject *self, PyValue arg)
+static PyObject *
+link_interpreter_refcount(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         assert(PyErr_Occurred());
-        return PyValue_NULL;
+        return NULL;
     }
     _PyInterpreterState_RequireIDRef(interp, 1);
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-unlink_interpreter_refcount(PyObject *self, PyValue arg)
+static PyObject *
+unlink_interpreter_refcount(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
         assert(PyErr_Occurred());
-        return PyValue_NULL;
+        return NULL;
     }
     _PyInterpreterState_RequireIDRef(interp, 0);
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-interpreter_refcount_linked(PyObject *self, PyValue arg)
+static PyObject *
+interpreter_refcount_linked(PyObject *self, PyObject *idobj)
 {
-    PyObject *idobj = PyValue_Object(arg);
-    if (idobj == NULL) {
-        return PyValue_NULL;
-    }
     PyInterpreterState *interp = _PyInterpreterState_LookUpIDObject(idobj);
     if (interp == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     if (_PyInterpreterState_RequiresIDRef(interp)) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
 
@@ -3050,6 +2844,82 @@ reset_rare_event_counters(PyObject *self, PyObject *Py_UNUSED(type))
 }
 
 
+#ifdef Py_GIL_DISABLED
+static PyObject *
+get_py_thread_id(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    uintptr_t tid = _Py_ThreadId();
+    Py_BUILD_ASSERT(sizeof(unsigned long long) >= sizeof(tid));
+    return PyLong_FromUnsignedLongLong(tid);
+}
+
+static PyCodeObject *
+get_code(PyObject *obj)
+{
+    if (PyCode_Check(obj)) {
+        return (PyCodeObject *)obj;
+    }
+    else if (PyFunction_Check(obj)) {
+        return (PyCodeObject *)PyFunction_GetCode(obj);
+    }
+    return (PyCodeObject *)PyErr_Format(
+        PyExc_TypeError, "expected function or code object, got %T", obj);
+}
+
+static PyObject *
+get_tlbc(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    PyCodeObject *code = get_code(obj);
+    if (code == NULL) {
+        return NULL;
+    }
+    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(PyThreadState_GET(), code);
+    if (bc == NULL) {
+        Py_RETURN_NONE;
+    }
+    return PyBytes_FromStringAndSize((const char *)bc, _PyCode_NBYTES(code));
+}
+
+static PyObject *
+get_tlbc_id(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    PyCodeObject *code = get_code(obj);
+    if (code == NULL) {
+        return NULL;
+    }
+    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(PyThreadState_GET(), code);
+    if (bc == NULL) {
+        Py_RETURN_NONE;
+    }
+    return PyLong_FromVoidPtr(bc);
+}
+
+static PyObject *
+get_long_lived_total(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return PyLong_FromInt64(PyInterpreterState_Get()->gc.long_lived_total);
+}
+
+#endif
+
+static PyObject *
+has_inline_values(PyObject *self, PyObject *obj)
+{
+    if ((Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
+        _PyObject_InlineValues(obj)->valid) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+static PyObject *
+has_split_table(PyObject *self, PyObject *obj)
+{
+    if (PyDict_Check(obj) && _PyDict_HasSplitTable((PyDictObject *)obj)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
 
 // Circumvents standard version assignment machinery - use with caution and only on
 // short-lived heap types
@@ -3110,15 +2980,10 @@ identify_type_slot_wrappers(PyObject *self, PyObject *Py_UNUSED(ignored))
 }
 
 
-static PyValue
-has_deferred_refcount(PyObject *self, PyValue arg)
+static PyObject *
+has_deferred_refcount(PyObject *self, PyObject *op)
 {
-    PyObject *op = PyValue_Object(arg);
-    if (op == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(
-        PyBool_FromLong(_PyObject_HasDeferredRefcount(op)));
+    return PyBool_FromLong(_PyObject_HasDeferredRefcount(op));
 }
 
 static PyObject *
@@ -3127,118 +2992,113 @@ get_tracked_heap_size(PyObject *self, PyObject *Py_UNUSED(ignored))
     return PyLong_FromInt64(PyInterpreterState_Get()->gc.heap_size);
 }
 
-static PyValue
-is_static_immortal(PyObject *self, PyValue arg)
+static PyObject *
+is_static_immortal(PyObject *self, PyObject *op)
 {
-    PyObject *op = PyValue_Object(arg);
-    if (op == NULL) {
-        return PyValue_NULL;
-    }
     if (_Py_IsStaticImmortal(op)) {
-        return PyValue_FromObject(Py_True);
+        Py_RETURN_TRUE;
     }
-    return PyValue_FromObject(Py_False);
+    Py_RETURN_FALSE;
 }
 
-static PyValue
-incref_decref_delayed(PyObject *self, PyValue op)
+static PyObject *
+incref_decref_delayed(PyObject *self, PyObject *op)
 {
-    return PyValue_FromObject(Py_None);
+    _PyObject_XDecRefDelayed(Py_NewRef(op));
+    Py_RETURN_NONE;
 }
 
+#ifdef Py_STACKREF_INLINE_VALUES
 // Encode an exact int32 or non-NaN float as an inline stack value, check that
-// the operations valid on any PyValue treat it as a value, then box it.
-static PyValue
-value_box_roundtrip(PyObject *self, PyValue v)
+// the operations valid on any stackref treat it as a value, then box it.
+static PyObject *
+stackref_box_roundtrip(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(v);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
-    PyValue ref;
+    _PyStackRef ref;
     if (PyLong_CheckExact(arg)) {
         int32_t i;
         if (PyLong_AsInt32(arg, &i) < 0) {
-            return PyValue_NULL;
+            return NULL;
         }
-        ref = PyValue_FromInt32(i);
-        if (!PyValue_IsInlineInt(ref) || PyValue_Int32(ref) != i
-            || !_PyValue_BothInlineInt(ref, ref) || PyValue_Type(ref) != &PyLong_Type)
+        ref = PyStackRef_FromInt32(i);
+        if (!PyStackRef_IsInlineInt(ref) || PyStackRef_InlineInt(ref) != i
+            || !PyStackRef_BothInlineInt(ref, ref) || !PyStackRef_LongCheck(ref))
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline int");
-            return PyValue_NULL;
+            return NULL;
         }
     }
     else if (PyFloat_CheckExact(arg)) {
         double d = PyFloat_AS_DOUBLE(arg);
         if (isnan(d)) {
             PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
-            return PyValue_NULL;
+            return NULL;
         }
-        ref = PyValue_FromDouble(d);
-        double back = PyValue_Double(ref);
-        if (!PyValue_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
-            || PyValue_IsInlineInt(ref) || PyValue_Type(ref) != &PyFloat_Type)
+        ref = PyStackRef_FromDoubleNotNaN(d);
+        double back = PyStackRef_InlineFloat(ref);
+        if (!PyStackRef_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
+            || PyStackRef_IsInlineInt(ref) || !PyStackRef_FloatCheck(ref))
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline float");
-            return PyValue_NULL;
+            return NULL;
         }
     }
     else {
         PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
-        return PyValue_NULL;
+        return NULL;
     }
-    if (!PyValue_IsInline(ref) || _PyValue_IsPointerSpace(ref)
-        || _PyValue_IsTaggedIndex(ref) || PyValue_IsNull(ref)
-        || _PyValue_IsError(ref) || !_PyValue_IsValid(ref)
-        || PyValue_Type(ref) != Py_TYPE(arg)
-        || !PyValue_Is(ref, ref)
-        || !_PyValue_IsInlineAt(&ref) || _PyValue_IsPointerSpaceAt(&ref)
-        || PyValue_Is(ref, _PyValue_None))
+    _PyStackRef dup = PyStackRef_DUP(ref);
+    if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
+        || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
+        || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
+        || PyStackRef_RefcountOnObject(ref)
+        || PyStackRef_TYPE(ref) != Py_TYPE(arg)
+        || !PyStackRef_Is(dup, ref) || !PyStackRef_Is(PyStackRef_Borrow(ref), ref)
+        || !PyStackRef_Is(PyStackRef_BorrowAt(&ref), ref)
+        || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
+        || PyStackRef_Is(ref, PyStackRef_None))
     {
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
-        return PyValue_NULL;
+        return NULL;
     }
-    PyObject *box = PyValue_Object(ref);
-    if (box == NULL) {
-        return PyValue_NULL;
+    PyStackRef_CLOSE(dup);
+    _PyStackRef boxed = PyStackRef_Box(ref);
+    if (PyStackRef_IsInline(boxed)) {
+        return NULL;
     }
-    // A box converts back to the canonical, inline value.
-    if (PyValue_FromObject(box).bits != ref.bits) {
-        PyErr_SetString(PyExc_AssertionError, "box is not canonicalised");
-        return PyValue_NULL;
+    if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
+        PyStackRef_CLOSE(boxed);
+        PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
+        return NULL;
     }
-    return PyValue_FromResult(box);
+    return PyStackRef_AsPyObjectSteal(boxed);
 }
 
 // The names of the frame's local variables that hold inline values.
-static PyValue
-inline_locals(PyObject *self, PyValue arg)
+static PyObject *
+inline_locals(PyObject *self, PyObject *frame)
 {
-    PyObject *frame = PyValue_Object(arg);
-    if (frame == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFrame_Check(frame)) {
         PyErr_SetString(PyExc_TypeError, "argument must be a frame");
-        return PyValue_NULL;
+        return NULL;
     }
     _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
     PyCodeObject *co = _PyFrame_GetCode(f);
     PyObject *names = PySet_New(NULL);
     if (names == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
-        if (PyValue_IsInline(f->base[i]) &&
+        if (PyStackRef_IsInline(f->base[i]) &&
             PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
-            return PyValue_NULL;
+            return NULL;
         }
     }
-    return PyValue_FromResult(names);
+    return names;
 }
+#endif
 
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
@@ -3271,50 +3131,38 @@ emscripten_set_up_async_input_device(PyObject *self, PyObject *Py_UNUSED(ignored
 }
 #endif
 
-static PyValue
-simple_pending_call(PyObject *self, PyValue arg)
+static PyObject *
+simple_pending_call(PyObject *self, PyObject *callable)
 {
-    PyObject *callable = PyValue_Object(arg);
-    if (callable == NULL) {
-        return PyValue_NULL;
-    }
     if (_PyEval_AddPendingCall(_PyInterpreterState_GET(), _pending_callback, Py_NewRef(callable), 0) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
 
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-vectorcall_nop(PyValue callable, const PyValue *args,
+static PyObject *
+vectorcall_nop(PyObject *callable, PyObject *const *args,
                size_t nargsf, PyObject *kwnames)
 {
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-set_vectorcall_nop(PyObject *self, PyValue arg)
+static PyObject *
+set_vectorcall_nop(PyObject *self, PyObject *func)
 {
-    PyObject *func = PyValue_Object(arg);
-    if (func == NULL) {
-        return PyValue_NULL;
-    }
     if (!PyFunction_Check(func)) {
         PyErr_SetString(PyExc_TypeError, "expected function");
-        return PyValue_NULL;
+        return NULL;
     }
 
     ((PyFunctionObject*)func)->vectorcall = vectorcall_nop;
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
-static PyValue
-module_get_gc_hooks(PyObject *self, PyValue value)
+static PyObject *
+module_get_gc_hooks(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     PyModuleObject *mod = (PyModuleObject *)arg;
     PyObject *traverse = NULL;
     PyObject *clear = NULL;
@@ -3337,7 +3185,7 @@ finally:
     Py_XDECREF(traverse);
     Py_XDECREF(clear);
     Py_XDECREF(free);
-    return PyValue_FromResult(result);
+    return result;
 }
 
 
@@ -3455,13 +3303,9 @@ test_interp_view_countdown(PyObject *self, PyObject *unused)
 
 #undef NUM_LOCKS
 
-static PyValue
-_pyerr_setkeyerror(PyObject *self, PyValue value)
+static PyObject *
+_pyerr_setkeyerror(PyObject *self, PyObject *arg)
 {
-    PyObject *arg = PyValue_Object(value);
-    if (arg == NULL) {
-        return PyValue_NULL;
-    }
     // Test that _PyErr_SetKeyError() overrides the current exception
     // if an exception is set
     PyErr_NoMemory();
@@ -3469,7 +3313,7 @@ _pyerr_setkeyerror(PyObject *self, PyValue value)
     _PyErr_SetKeyError(arg);
 
     assert(PyErr_Occurred());
-    return PyValue_NULL;
+    return NULL;
 }
 
 static PyObject *
@@ -3635,1119 +3479,15 @@ gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
     return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
 }
 
-/* The current interpreter's active live verifier: (mode, extra bits).
-   Mode is 0 off, 1 retain, 2 kill; extra bits are 1 pymem and 2 structs. */
-static PyObject *
-gc_verify_mode(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    int extra;
-    int mode = _PyGC_TraceGetVerifyMode(_PyInterpreterState_GET(), &extra);
-    return Py_BuildValue("(ii)", mode, extra);
-}
-
-static PyObject *
-root_stats_dict(const _PyGCRootStats *s)
-{
-    static const char *const names[] = _PyGC_SCAN_CLASS_NAMES;
-    PyObject *d = PyDict_New();
-    if (d == NULL) {
-        return NULL;
-    }
-#define SET(key, value) \
-    do { \
-        PyObject *v = PyLong_FromLongLong(value); \
-        if (v == NULL || PyDict_SetItemString(d, (key), v) < 0) { \
-            return NULL; \
-        } \
-    } while (0)
-#define FIELD(name) SET(#name, s->name);
-    _PyGC_ROOT_STATS_FIELDS(FIELD)
-#undef FIELD
-    for (int i = 0; i < _PyGC_SCAN_CLASSES; i++) {
-        char key[32];
-        PyOS_snprintf(key, sizeof(key), "%s_words", names[i]);
-        SET(key, s->words[i]);
-        PyOS_snprintf(key, sizeof(key), "%s_hits", names[i]);
-        SET(key, s->hits[i]);
-    }
-#undef SET
-    return d;
-}
-
-/* Simulate the signal's arrival, then collect, as a signal that arrives
-   while a collection marks: the collection's queue of weak reference
-   callbacks and finalizers waits for the eval breaker, which handles the
-   signal first. */
-static PyValue
-gc_collect_with_signal(PyObject *self, PyValue arg)
-{
-    if (!PyValue_IsInlineInt(arg)) {
-        PyErr_SetString(PyExc_TypeError, "a signal number");
-        return PyValue_NULL;
-    }
-    if (PyErr_SetInterruptEx(PyValue_Int32(arg)) < 0) {
-        PyErr_SetString(PyExc_ValueError, "not a signal Python handles");
-        return PyValue_NULL;
-    }
-    (void)PyGC_Collect();
-    return PyValue_FromObject(Py_None);
-}
-
-/* The live collector's root-phase counters (note 11 section 9): a dict
-   with "total", summed over this interpreter's collections, and "last",
-   its last collection. */
-static PyObject *
-gc_root_stats(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    _PyGCRootStats total, last;
-    _PyGC_LiveGetRootStats(_PyInterpreterState_GET(), &total, &last);
-    PyObject *t = root_stats_dict(&total);
-    if (t == NULL) {
-        return NULL;
-    }
-    PyObject *l = root_stats_dict(&last);
-    if (l == NULL) {
-        return NULL;
-    }
-    return Py_BuildValue("{sNsN}", "total", t, "last", l);
-}
-
-/* The stack walk's descriptor for a lookup pc (an int), or None. */
-static PyObject *
-frame_descriptor(PyObject *arg)
-{
-    uintptr_t pc = (uintptr_t)PyLong_AsVoidPtr(arg);
-    if (pc == 0 && PyErr_Occurred()) {
-        return NULL;
-    }
-    _PyGCFrameDesc d;
-    if (_PyGC_DecodeDescriptor(pc, &d) < 0) {
-        Py_RETURN_NONE;
-    }
-    PyObject *rules = PyList_New(_PyGC_NSAVED);
-    if (rules == NULL) {
-        return NULL;
-    }
-    for (int i = 0; i < _PyGC_NSAVED; i++) {
-        PyObject *r = d.rule[i] == _PyGC_RULE_OFFSET
-            ? PyLong_FromLong(d.off[i])
-            : PyUnicode_FromString(d.rule[i] == _PyGC_RULE_SAME
-                                   ? "same" : "undefined");
-        if (r == NULL) {
-            Py_DECREF(rules);
-            return NULL;
-        }
-        PyList_SET_ITEM(rules, i, r);
-    }
-    return Py_BuildValue("{sNsNsisisisNsi}",
-                         "start", PyLong_FromVoidPtr((void *)d.func_start),
-                         "end", PyLong_FromVoidPtr((void *)d.func_end),
-                         "cfa_reg", d.cfa_reg, "cfa_off", d.cfa_off,
-                         "ra_off", d.ra_off, "saved", rules,
-                         "extension", d.extension);
-}
-
-static PyValue
-gc_frame_descriptor(PyObject *self, PyValue arg)
-{
-    PyObject *op = PyValue_Object(arg);
-    if (op == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(frame_descriptor(op));
-}
-
-struct walk_record {
-    PyObject *frames;
-    int failed;
-    // gc_walk_precise_regs(): the register words given to precise frames,
-    // as the index of the frame, and that frame's extent
-    PyObject *regs;
-    uintptr_t sp, cfa;
-};
-
-static void
-walk_record_scan(void *arg, uintptr_t start, uintptr_t end)
-{
-}
-
-static void
-walk_record_frame(void *arg, uintptr_t pc, uintptr_t sp, uintptr_t cfa,
-                  int cls)
-{
-    struct walk_record *r = arg;
-    if (r->failed) {
-        return;
-    }
-    PyObject *item = Py_BuildValue("(NNNi)", PyLong_FromVoidPtr((void *)pc),
-                                   PyLong_FromVoidPtr((void *)sp),
-                                   PyLong_FromVoidPtr((void *)cfa), cls);
-    if (item == NULL || PyList_Append(r->frames, item) < 0) {
-        r->failed = 1;
-    }
-    Py_XDECREF(item);
-    r->sp = sp;
-    r->cfa = cfa;
-}
-
-/* A precise frame's words: those outside its extent are registers pending
-   when it called, which the walk gives to it. */
-static void
-walk_record_precise(void *arg, uintptr_t start, uintptr_t end)
-{
-    struct walk_record *r = arg;
-    if (r->failed || (r->sp <= start && start < r->cfa)) {
-        return;
-    }
-    PyObject *index = PyLong_FromSsize_t(PyList_GET_SIZE(r->frames) - 1);
-    if (index == NULL || PyList_Append(r->regs, index) < 0) {
-        r->failed = 1;
-    }
-    Py_XDECREF(index);
-}
-
-/* Walk this thread's stack from here: the frames as gc_walk_here() gives
-   them; the frame index of each register word given to a precise frame;
-   and the bounds of the preserve_none handlers' section, or None. */
-static PyObject *
-gc_walk_precise_regs(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    struct walk_record r = {PyList_New(0), 0, PyList_New(0), 0, 0};
-    if (r.frames == NULL || r.regs == NULL) {
-        Py_XDECREF(r.frames);
-        Py_XDECREF(r.regs);
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyGCWalk w = {
-        .scan = walk_record_scan,
-        .precise = walk_record_precise,
-        .frame = walk_record_frame,
-        .arg = &r,
-        .top = ts->c_stack_top,
-    };
-    _PyGCContext ctx;
-    _PyGC_CaptureCaller(&ctx);
-    (void)_PyGC_WalkStack(&w, &ctx);
-    if (r.failed) {
-        Py_DECREF(r.frames);
-        Py_DECREF(r.regs);
-        return NULL;
-    }
-    uintptr_t start, stop;
-    PyObject *section = _PyGC_PreservesNothingSection(&start, &stop)
-        ? Py_BuildValue("(NN)", PyLong_FromVoidPtr((void *)start),
-                        PyLong_FromVoidPtr((void *)stop))
-        : Py_NewRef(Py_None);
-    if (section == NULL) {
-        Py_DECREF(r.frames);
-        Py_DECREF(r.regs);
-        return NULL;
-    }
-    return Py_BuildValue("(NNN)", r.frames, r.regs, section);
-}
-
-/* Walk this thread's stack from here: a list of (pc, sp, cfa, class) and
-   whether the walk fell back. */
-static PyObject *
-gc_walk_here(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    struct walk_record r = {PyList_New(0), 0};
-    if (r.frames == NULL) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
-    _PyGCWalk w = {
-        .scan = walk_record_scan,
-        .frame = walk_record_frame,
-        .arg = &r,
-        .top = ts->c_stack_top,
-    };
-    _PyGCContext ctx;
-    _PyGC_CaptureCaller(&ctx);
-    int fell_back = _PyGC_WalkStack(&w, &ctx);
-    if (r.failed) {
-        Py_DECREF(r.frames);
-        return NULL;
-    }
-    return Py_BuildValue("(Ni)", r.frames, fell_back);
-}
-
-/* Arm one collection at site (_PyGC_SITE_*) on this thread; 0 disarms.
-   Returns the collections the sites have run on this thread. */
-static PyValue
-gc_collect_at(PyObject *self, PyValue arg)
-{
-    if (!PyValue_IsInlineInt(arg)) {
-        PyErr_SetString(PyExc_TypeError, "a site number");
-        return PyValue_NULL;
-    }
-    int site = PyValue_Int32(arg);
-    if (site < 0 || site >= _PyGC_SITE_COUNT) {
-        PyErr_SetString(PyExc_ValueError, "no such site");
-        return PyValue_NULL;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
-    ts->gc_trace.inject_site = site;
-    return PyValue_FromResult(PyLong_FromLongLong(ts->gc_trace.injected));
-}
-
-/* callable("first", "second", 3), built by Py_VaBuildStack(), whose
-   do_mkstack() is an injection site */
-static PyValue
-gc_call_built(PyObject *self, PyValue arg)
-{
-    PyObject *callable = PyValue_Object(arg);
-    if (callable == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(
-        PyObject_CallFunction(callable, "ssi", "first", "second", 3));
-}
-
-/* 6d rung 4: a getset setter that stores into a PyObject * field boxes
-   the value at its top, as the hand-written setters do.  The box is held
-   by a C local, which the stack scan covers, until the field takes it;
-   _PyGC_SITE_SETTER_BOX collects in between. */
-typedef struct {
-    PyObject_HEAD
-    PyObject *field;
-} SetterBoxObject;
-
-static PyValue
-setterbox_get_field(PyObject *op, void *Py_UNUSED(closure))
-{
-    PyObject *field = ((SetterBoxObject *)op)->field;
-    return PyValue_FromObject(field != NULL ? field : Py_None);
-}
-
-static int
-setterbox_set_field(PyObject *op, PyValue value, void *Py_UNUSED(closure))
-{
-    if (PyValue_IsNull(value)) {
-        PyErr_SetString(PyExc_AttributeError, "cannot delete field");
-        return -1;
-    }
-    PyObject *box = PyValue_Object(value);
-    if (box == NULL) {
-        return -1;
-    }
-    _PyGC_INJECT(_PyThreadState_GET(), _PyGC_SITE_SETTER_BOX);
-    Py_XSETREF(((SetterBoxObject *)op)->field, Py_NewRef(box));
-    return 0;
-}
-
-static int
-setterbox_traverse(PyObject *op, visitproc visit, void *arg)
-{
-    Py_VISIT(Py_TYPE(op));
-    Py_VISIT(((SetterBoxObject *)op)->field);
-    return 0;
-}
-
-static int
-setterbox_clear(PyObject *op)
-{
-    Py_CLEAR(((SetterBoxObject *)op)->field);
-    return 0;
-}
-
-static void
-setterbox_dealloc(PyObject *op)
-{
-    PyTypeObject *tp = Py_TYPE(op);
-    PyObject_GC_UnTrack(op);
-    (void)setterbox_clear(op);
-    tp->tp_free(op);
-    Py_DECREF(tp);
-}
-
-static PyGetSetDef setterbox_getset[] = {
-    {"field", setterbox_get_field, setterbox_set_field, NULL},
-    {NULL},
-};
-
-static PyType_Slot setterbox_slots[] = {
-    {Py_tp_new, PyType_GenericNew},
-    {Py_tp_getset, setterbox_getset},
-    {Py_tp_traverse, setterbox_traverse},
-    {Py_tp_clear, setterbox_clear},
-    {Py_tp_dealloc, setterbox_dealloc},
-    {0, NULL},
-};
-
-static PyType_Spec setterbox_spec = {
-    .name = "_testinternalcapi.SetterBox",
-    .basicsize = sizeof(SetterBoxObject),
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
-    .slots = setterbox_slots,
-};
-
-/* Collect through the inline path, which queues callbacks for the eval
-   breaker, then return callable(arg) without reaching the eval loop in
-   between. */
-static PyObject *
-gc_collect_inline_then(PyObject *self, PyObject *args)
-{
-    PyObject *callable, *arg;
-    if (!PyArg_ParseTuple(args, "OO", &callable, &arg)) {
-        return NULL;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
-    int64_t before = ts->gc_trace.injected;
-    _PyGC_InjectCollect((PyThreadState *)ts);
-    if (ts->gc_trace.injected == before) {
-        PyErr_SetString(PyExc_RuntimeError, "the collector cannot run here");
-        return NULL;
-    }
-    return PyObject_CallOneArg(callable, arg);
-}
-
-/* A child-process fixture for the first receiving GIL acquisition after
-   an inline collection.  The collector cannot start until the receiver is
-   in C; it then publishes its queue and stays blocked until Python has
-   checked the receiver's one safepoint.  No Python runs in the handshake. */
-static PyEvent queue_ready_go;
-static PyEvent queue_ready_queued;
-static PyEvent queue_ready_release;
-
-#define QUEUE_READY_TIMEOUT ((PyTime_t)30 * 1000 * 1000 * 1000)
-
-static int
-queue_ready_wait(PyEvent *event)
-{
-    if (!PyEvent_WaitTimed(event, QUEUE_READY_TIMEOUT, 1)) {
-        PyErr_SetString(PyExc_TimeoutError, "queue readiness handshake timed out");
-        return -1;
-    }
-    return 0;
-}
-
-static PyObject *
-gc_queue_ready_collect(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    if (queue_ready_wait(&queue_ready_go) < 0) {
-        return NULL;
-    }
-    _PyThreadStateImpl *ts = (_PyThreadStateImpl *)_PyThreadState_GET();
-    int64_t before = ts->gc_trace.injected;
-    _PyGC_InjectCollect((PyThreadState *)ts);
-    _PyEvent_Notify(&queue_ready_queued);
-    if (queue_ready_wait(&queue_ready_release) < 0) {
-        return NULL;
-    }
-    if (ts->gc_trace.injected == before) {
-        PyErr_SetString(PyExc_AssertionError, "inline collection did not run");
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-gc_queue_ready_receive(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    // Drain an earlier GC request before the collector is allowed to run.
-    // Otherwise a stale event could conceal missing queue publication.
-    if (PyErr_CheckSignals() < 0) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (_Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT)) {
-        PyErr_SetString(PyExc_AssertionError, "an old GC event is still pending");
-        return NULL;
-    }
-    _PyEvent_Notify(&queue_ready_go);
-    int queued;
-    // Always detach once, including when the collector already notified us.
-    Py_BEGIN_ALLOW_THREADS
-    queued = PyEvent_WaitTimed(&queue_ready_queued, QUEUE_READY_TIMEOUT, 0);
-    Py_END_ALLOW_THREADS
-    if (!queued) {
-        PyErr_SetString(PyExc_TimeoutError, "inline collection did not finish");
-        return NULL;
-    }
-    int scheduled = _Py_eval_breaker_bit_is_set(tstate, _PY_GC_SCHEDULED_BIT);
-    PyInterpreterState *interp = tstate->interp;
-    PyObject *before = _PyGC_LiveQueueInfo(interp);
-    if (before == NULL || PyErr_CheckSignals() < 0) {
-        return NULL;
-    }
-    PyObject *after = _PyGC_LiveQueueInfo(interp);
-    if (after == NULL) {
-        return NULL;
-    }
-    return Py_BuildValue("(NNi)", before, after, scheduled);
-}
-
-static PyObject *
-gc_queue_ready_release(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    _PyEvent_Notify(&queue_ready_release);
-    Py_RETURN_NONE;
-}
-
-/* A reference tracer that, against its contract, allocates on each
-   creation event, run over n allocations under PYTHON_GCSTRESS=1: no
-   collection may start inside it (10a-1b.md item 3).  Returns (events,
-   collections inside the tracer, collections in all). */
-static struct {
-    int depth;
-    int64_t events;
-    int64_t inside;
-} alloc_tracer_state;
-
-static int
-alloc_tracer(PyObject *obj, PyRefTracerEvent event, void *data)
-{
-    if (event != PyRefTracer_CREATE || alloc_tracer_state.depth) {
-        return 0;
-    }
-    alloc_tracer_state.depth = 1;
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    _PyGCRootStats before, after, last;
-    _PyGC_LiveGetRootStats(interp, &before, &last);
-    PyObject *junk = PyBytes_FromStringAndSize(NULL, 64);
-    if (junk == NULL) {
-        PyErr_Clear();
-    }
-    _PyGC_LiveGetRootStats(interp, &after, &last);
-    alloc_tracer_state.events++;
-    alloc_tracer_state.inside += after.collections - before.collections;
-    alloc_tracer_state.depth = 0;
-    return 0;
-}
-
-static PyValue
-gc_alloc_in_reftracer(PyObject *self, PyValue arg)
-{
-    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
-        PyErr_SetString(PyExc_ValueError, "a count of allocations");
-        return PyValue_NULL;
-    }
-    int32_t n = PyValue_Int32(arg);
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    void *old_data;
-    PyRefTracer old = PyRefTracer_GetTracer(&old_data);
-    memset(&alloc_tracer_state, 0, sizeof(alloc_tracer_state));
-    _PyGCRootStats before, after, last;
-    _PyGC_LiveGetRootStats(interp, &before, &last);
-    if (PyRefTracer_SetTracer(alloc_tracer, NULL) < 0) {
-        return PyValue_NULL;
-    }
-    int old_stress = _PyGC_LiveGetStress();
-    _PyGC_LiveSetStress(interp, 1);
-    for (int32_t i = 0; i < n; i++) {
-        PyObject *item = PyList_New(0);
-        if (item == NULL) {
-            break;
-        }
-    }
-    _PyGC_LiveSetStress(interp, old_stress);
-    (void)PyRefTracer_SetTracer(old, old_data);
-    if (PyErr_Occurred()) {
-        return PyValue_NULL;
-    }
-    _PyGC_LiveGetRootStats(interp, &after, &last);
-    return PyValue_FromResult(Py_BuildValue(
-        "(LLL)", (long long)alloc_tracer_state.events,
-        (long long)alloc_tracer_state.inside,
-        (long long)(after.collections - before.collections)));
-}
-
-/* The configured process-wide allocation interval, without changing it. */
-static PyObject *
-gc_get_stress(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    return PyLong_FromLong(_PyGC_LiveGetStress());
-}
-
-/* PYTHON_GCSTRESS=every from now on; 0 turns it off */
-static PyValue
-gc_set_stress(PyObject *self, PyValue arg)
-{
-    if (!PyValue_IsInlineInt(arg) || PyValue_Int32(arg) < 0) {
-        PyErr_SetString(PyExc_ValueError, "a count of allocations");
-        return PyValue_NULL;
-    }
-    _PyGC_LiveSetStress(_PyInterpreterState_GET(), PyValue_Int32(arg));
-    return PyValue_FromObject(Py_None);
-}
-
-/* Temporary experiment control; normal gc.collect(0) is the minor consumer.
-   Keep the opt-in out of the public GC configuration until its usefulness and
-   supported modes have been evaluated. */
-static PyValue
-gc_set_young_enabled(PyObject *self, PyValue arg)
-{
-    if (!PyValue_IsInlineInt(arg)
-        || (PyValue_Int32(arg) != 0 && PyValue_Int32(arg) != 1))
-    {
-        PyErr_SetString(PyExc_ValueError, "expected 0 or 1");
-        return PyValue_NULL;
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    struct _gc_runtime_state *gc = &interp->gc;
-    if (gc->collecting || gc->sweeping || gc->queue_draining) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "cannot change young mode during collection or delivery");
-        return PyValue_NULL;
-    }
-    int enabled = PyValue_Int32(arg);
-    if (enabled) {
-#if !defined(WITH_MIMALLOC) || defined(Py_GIL_DISABLED)
-        PyErr_SetString(PyExc_RuntimeError,
-                        "experimental minor requires GIL and mimalloc");
-        return PyValue_NULL;
-#else
-        int extra;
-        if (!_Py_IsMainInterpreter(interp)
-            || _PyGC_TraceGetVerifyMode(interp, &extra) != 0
-            || _PyGC_LiveGetStress() != 0)
-        {
-            PyErr_SetString(PyExc_RuntimeError,
-                            "experimental minor requires main interpreter, "
-                            "verifier and stress off");
-            return PyValue_NULL;
-        }
-#endif
-    }
-    int previous = gc->young_enabled;
-    gc->young_enabled = enabled;
-    return PyValue_FromInt32(previous);
-}
-
-/* A static type that only gc_ready_static_type() readies, as an extension
-   module readies its static types: the header leaves ob_type to
-   PyType_Ready(), which allocates before it sets it. */
-static PyTypeObject LateStatic_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_testinternalcapi.LateStatic",
-    .tp_basicsize = sizeof(PyObject),
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-};
-
-static PyObject *
-gc_ready_static_type(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    if (PyType_Ready(&LateStatic_Type) < 0) {
-        return NULL;
-    }
-    return Py_NewRef(&LateStatic_Type);
-}
-
-/* Call callable while a core frame holds [None] only in a PyMem block, and
-   return the list if give_back is set (_PyGC_TestHoldInCoreMem()). */
-static PyObject *
-gc_hold_in_core_mem(PyObject *self, PyObject *args)
-{
-    PyObject *callable;
-    int give_back;
-    if (!PyArg_ParseTuple(args, "Op", &callable, &give_back)) {
-        return NULL;
-    }
-    return _PyGC_TestHoldInCoreMem(callable, give_back);
-}
-
-static PyObject *
-gc_verify_carrier_origins(PyObject *self, PyObject *args)
-{
-    int shape, reverse;
-    if (!PyArg_ParseTuple(args, "ip", &shape, &reverse)) {
-        return NULL;
-    }
-    return _PyGC_TestCarrierOrigins(shape, reverse);
-}
-
-/* _PyGC_TestBorrowAcross(container, callback, kind). */
-static PyObject *
-gc_borrow_across(PyObject *self, PyObject *args)
-{
-    PyObject *container, *callback;
-    int kind;
-    if (!PyArg_ParseTuple(args, "OOi", &container, &callback, &kind)) {
-        return NULL;
-    }
-    if (kind & _PyGC_BORROW_WEAK ? !PyWeakref_CheckRef(container)
-                                 : !PyList_Check(container)
-                                   || PyList_GET_SIZE(container) < 1) {
-        PyErr_SetString(PyExc_TypeError,
-                        "a weak reference, or a list of one item or more");
-        return NULL;
-    }
-    return _PyGC_TestBorrowAcross(container, callback, kind);
-}
-
-/* Push a frame for func that is never linked into the chain, with [None]
-   in its first slot, and report whether the frame roots reach the list,
-   with the frame holding it and with the slot cleared.  With cross, frames
-   pushed and never initialized follow it until the data stack moves to a
-   new chunk, so that the frame is in an earlier chunk under frames that
-   the collector must skip (note 11 section 4.4). */
-static PyObject *
-gc_frames_off_chain(PyObject *self, PyObject *args)
-{
-    PyObject *func;
-    int cross;
-    if (!PyArg_ParseTuple(args, "O!p", &PyFunction_Type, &func, &cross)) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
-    PyObject *obj = PyList_New(0);
-    if (obj == NULL || PyList_Append(obj, Py_None) < 0) {
-        Py_XDECREF(obj);
-        return NULL;
-    }
-    _PyInterpreterFrame *frame =
-        _PyThreadState_PushFrame(tstate, code->co_framesize);
-    if (frame == NULL) {
-        Py_DECREF(obj);
-        return PyErr_NoMemory();
-    }
-    _PyFrame_Initialize(tstate, frame, PyValue_FromObject(Py_NewRef(func)),
-                        NULL, code, frame->base, 0, NULL);
-    frame->base[0] = PyValue_FromObject(obj);
-    _PyInterpreterFrame *fillers[64];
-    int nfillers = 0;
-    _PyStackChunk *chunk = tstate->datastack_chunk;
-    while (cross && tstate->datastack_chunk == chunk
-           && nfillers < (int)Py_ARRAY_LENGTH(fillers))
-    {
-        _PyInterpreterFrame *f = _PyThreadState_PushFrame(tstate, 1024);
-        if (f == NULL) {
-            break;
-        }
-        fillers[nfillers++] = f;
-    }
-    int crossed = tstate->datastack_chunk != chunk;
-    int with = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
-    frame->base[0] = PyValue_NULL;
-    int without = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
-    while (nfillers > 0) {
-        _PyThreadState_PopFrame(tstate, fillers[--nfillers]);
-    }
-    Py_DECREF(func);
-    _PyThreadState_PopFrame(tstate, frame);
-    Py_DECREF(obj);
-    if (with < 0 || without < 0) {
-        return NULL;
-    }
-    return Py_BuildValue("(iii)", (with & _PyGC_TRACE_ROOT_FRAMES) != 0,
-                         (without & _PyGC_TRACE_ROOT_FRAMES) != 0, crossed);
-}
-
-/* Is op reached from the thread states' roots, which hold the value
-   roots and spans?  -1 on error. */
-static int
-in_value_roots(PyObject *op)
-{
-    int r = _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)op);
-    return r < 0 ? -1 : (r & _PyGC_TRACE_ROOT_TSTATE) != 0;
-}
-
-#define SPAN_EXPECT(op, want, what) \
-    do { \
-        int _r = in_value_roots(op); \
-        if (_r < 0) { \
-            goto error; \
-        } \
-        if (_r != (want)) { \
-            PyErr_Format(PyExc_AssertionError, "%s: %s", (what), \
-                         (want) ? "not visited" : "still visited"); \
-            goto error; \
-        } \
-    } while (0)
-
-/* The collector visits a span's values from base[0] to base[n - 1]: only
-   appended values, NULL and inline ones skipped, a raw box as the box, a
-   rebased buffer, and nothing once popped; a one-value root is a span of
-   one. */
-static PyObject *
-test_value_spans(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *a = NULL, *b = NULL, *c = NULL, *box = NULL;
-    _PyValueRoot span, one;
-    int pushed = 0;
-    PyValue *buf = PyMem_Malloc(4 * sizeof(PyValue));
-    if (buf == NULL) {
-        return PyErr_NoMemory();
-    }
-    a = PyList_New(0);
-    b = PyList_New(0);
-    c = PyList_New(0);
-    box = PyFloat_FromDouble(1.5);
-    if (a == NULL || b == NULL || c == NULL || box == NULL) {
-        goto error;
-    }
-    _PyThreadState_PushValueSpan(tstate, &span, buf);
-    pushed = 1;
-    _PyValueSpan_Append(&span, PyValue_FromObject(a));
-    // Stored past the prefix, not appended: not visited
-    buf[1] = PyValue_FromObject(b);
-    SPAN_EXPECT(a, 1, "an appended value");
-    SPAN_EXPECT(b, 0, "a value past the span");
-    _PyValueSpan_Append(&span, PyValue_NULL);
-    _PyValueSpan_Append(&span, PyValue_FromInt32(7));
-    _PyValueSpan_Append(&span, _PyValue_FromBits((uintptr_t)box));
-    if (buf[3].bits != (uintptr_t)box) {
-        PyErr_SetString(PyExc_AssertionError, "a raw box was canonicalized");
-        goto error;
-    }
-    SPAN_EXPECT(box, 1, "a raw box");
-    PyValue *moved = PyMem_Realloc(buf, 64 * sizeof(PyValue));
-    if (moved == NULL) {
-        PyErr_NoMemory();
-        goto error;
-    }
-    buf = moved;
-    _PyValueSpan_Rebase(&span, buf);
-    SPAN_EXPECT(a, 1, "a value after a rebase");
-    _PyThreadState_PopValueRoot(tstate, &span);
-    pushed = 0;
-    SPAN_EXPECT(a, 0, "a popped span's value");
-
-    _PyThreadState_PushValueRoot(tstate, &one);
-    one.object = c;
-    SPAN_EXPECT(c, 1, "a one-value root");
-    _PyThreadState_PopValueRoot(tstate, &one);
-    SPAN_EXPECT(c, 0, "a popped one-value root");
-    PyMem_Free(buf);
-    Py_RETURN_NONE;
-
-error:
-    if (pushed) {
-        _PyThreadState_PopValueRoot(tstate, &span);
-    }
-    PyMem_Free(buf);
-    return NULL;
-}
-
-#undef SPAN_EXPECT
-
-/* The classes of roots that keep the object at an address (an int, so that
-   the argument does not keep it), as a _PyGC_TRACE_ROOT_* mask. */
-static PyValue
-gc_live_roots_of(PyObject *self, PyValue arg)
-{
-    PyObject *addr = PyValue_Object(arg);
-    if (addr == NULL) {
-        return PyValue_NULL;
-    }
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(PyLong_FromLong(
-        _PyGC_TraceLiveRootsOf(_PyThreadState_GET(), (uintptr_t)p)));
-}
-
-static int
-byteswriter_expect_root(PyObject *obj, int expected, const char *stage)
-{
-#ifndef Py_GIL_DISABLED
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot guard;
-    _PyThreadState_PushValueRoot(tstate, &guard);
-    guard.object = obj;
-    int roots = _PyGC_TraceLiveRootsOf(tstate, (uintptr_t)obj);
-    int rc = 0;
-    if (roots < 0) {
-        PyErr_NoMemory();
-        rc = -1;
-    }
-    else if (((roots & _PyGC_TRACE_ROOT_INTERP) != 0) != expected) {
-        // Keep a separate thread root even when the tested registration fails.
-        PyErr_Format(PyExc_AssertionError, "%s: writer owner %s registered",
-                     stage, expected ? "not" : "still");
-        rc = -1;
-    }
-    _PyThreadState_PopValueRoot(tstate, &guard);
-    return rc;
-#else
-    return 0;
-#endif
-}
-
-/* The INTERP root class, rather than conservative-stack survival, must own
-   the heap buffer.  Finish results get a separate fixture root immediately. */
-static PyObject *
-gc_byteswriter_roots(PyObject *self, PyObject *args)
-{
-    int use_bytearray;
-    if (!PyArg_ParseTuple(args, "p:gc_byteswriter_roots", &use_bytearray)) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyValueRoot result_root;
-    _PyThreadState_PushValueRoot(tstate, &result_root);
-    PyBytesWriter *writer = NULL;
-    PyObject *result = NULL;
-
-    for (int small = 0; small < 2; small++) {
-        Py_ssize_t initial = small ? 16 : 512;
-        writer = use_bytearray ? _PyBytesWriter_CreateByteArray(initial)
-                               : PyBytesWriter_Create(initial);
-        if (writer == NULL) {
-            goto error;
-        }
-        memset(PyBytesWriter_GetData(writer), 'a', initial);
-        if (!small && byteswriter_expect_root(writer->obj, 1, "create") < 0) {
-            goto error;
-        }
-        if (PyBytesWriter_Resize(writer, 1024) < 0) {
-            goto error;
-        }
-        if (byteswriter_expect_root(writer->obj, 1, "grow") < 0) {
-            goto error;
-        }
-        for (Py_ssize_t i = 0; i < initial; i++) {
-            if (_PyBytesWriter_GetData(writer)[i] != 'a') {
-                PyErr_SetString(PyExc_AssertionError, "writer lost its prefix");
-                goto error;
-            }
-        }
-        memset(PyBytesWriter_GetData(writer), 'a', 1024);
-        if (PyBytesWriter_Resize(writer, PY_SSIZE_T_MAX) == 0) {
-            PyErr_SetString(PyExc_AssertionError, "oversized resize succeeded");
-            goto error;
-        }
-        if (!PyErr_ExceptionMatches(PyExc_MemoryError)
-            && !PyErr_ExceptionMatches(PyExc_OverflowError))
-        {
-            goto error;
-        }
-        PyErr_Clear();
-        if (byteswriter_expect_root(writer->obj, 1, "failed resize") < 0) {
-            goto error;
-        }
-        (void)PyGC_Collect();
-        result = PyBytesWriter_FinishWithSize(writer, 513);
-        writer = NULL;
-        result_root.object = result;
-        if (result == NULL) {
-            goto error;
-        }
-        if (byteswriter_expect_root(result, 0, "finish") < 0) {
-            goto error;
-        }
-        (void)PyGC_Collect();
-        if (!Py_IS_TYPE(result, use_bytearray ? &PyByteArray_Type : &PyBytes_Type)) {
-            PyErr_SetString(PyExc_AssertionError, "wrong writer result type");
-            goto error;
-        }
-        Py_ssize_t size = use_bytearray ? PyByteArray_GET_SIZE(result)
-                                       : PyBytes_GET_SIZE(result);
-        const char *data = use_bytearray ? PyByteArray_AS_STRING(result)
-                                        : PyBytes_AS_STRING(result);
-        if (size != 513) {
-            PyErr_SetString(PyExc_AssertionError, "wrong writer result size");
-            goto error;
-        }
-        for (Py_ssize_t i = 0; i < size; i++) {
-            if (data[i] != 'a') {
-                PyErr_SetString(PyExc_AssertionError, "writer lost its contents");
-                goto error;
-            }
-        }
-        result_root.object = NULL;
-        Py_CLEAR(result);
-    }
-
-    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(512)
-                           : PyBytesWriter_Create(512);
-    if (writer == NULL || byteswriter_expect_root(writer->obj, 1, "discard") < 0) {
-        goto error;
-    }
-    PyBytesWriter_Discard(writer);
-    writer = NULL;
-    (void)PyGC_Collect();
-
-    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(512)
-                           : PyBytesWriter_Create(512);
-    if (writer == NULL) {
-        goto error;
-    }
-    result = PyBytesWriter_FinishWithSize(writer, -1);
-    writer = NULL;
-    result_root.object = result;
-    if (result != NULL || !PyErr_ExceptionMatches(PyExc_ValueError)) {
-        PyErr_SetString(PyExc_AssertionError, "invalid finish did not fail");
-        goto error;
-    }
-    PyErr_Clear();
-    (void)PyGC_Collect();
-
-    writer = use_bytearray ? _PyBytesWriter_CreateByteArray(PY_SSIZE_T_MAX)
-                           : PyBytesWriter_Create(PY_SSIZE_T_MAX);
-    if (writer != NULL) {
-        PyErr_SetString(PyExc_AssertionError, "oversized creation succeeded");
-        goto error;
-    }
-    if (!PyErr_ExceptionMatches(PyExc_MemoryError)
-        && !PyErr_ExceptionMatches(PyExc_OverflowError))
-    {
-        goto error;
-    }
-    PyErr_Clear();
-    (void)PyGC_Collect();
-    _PyThreadState_PopValueRoot(tstate, &result_root);
-    Py_RETURN_NONE;
-
-error:
-    PyBytesWriter_Discard(writer);
-    _PyThreadState_PopValueRoot(tstate, &result_root);
-    Py_XDECREF(result);
-    return NULL;
-}
-
-/* gc_stack_hits([addr]) -> (hits, dropped): the stack hits listed since
-   the last call (PYTHON_GCSTACKHITS=1), those of the object at addr if it
-   is given, and clears them.  Each hit is (object address, type name, word
-   address or 0 for a register, word value, frame owner, the word's offset
-   from the frame's sp, the frame's size, "stack" or "regs", collection). */
-static PyObject *
-gc_stack_hits(PyObject *self, PyObject *args)
-{
-    PyObject *addr_obj = NULL;
-    if (!PyArg_ParseTuple(args, "|O", &addr_obj)) {
-        return NULL;
-    }
-    uintptr_t addr = 0;
-    if (addr_obj != NULL) {
-        addr = (uintptr_t)PyLong_AsVoidPtr(addr_obj);
-        if (addr == 0 && PyErr_Occurred()) {
-            return NULL;
-        }
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    size_t n;
-    int64_t dropped;
-    const _PyGCStackHit *hits = _PyGC_TraceStackHits(interp, &n, &dropped);
-    size_t count = n;
-    PyObject *list = PyList_New(0);
-    if (list == NULL) {
-        return NULL;
-    }
-    hits = _PyGC_TraceStackHits(interp, &n, &dropped);
-    // Building the list allocates, so a collection may list more hits and
-    // move the array: each hit is copied first, the array read again, and
-    // the hits listed meanwhile are not reported.
-    for (size_t i = 0; i < count; i++) {
-        _PyGCStackHit h = hits[i];
-        if (addr != 0 && h.op != addr) {
-            continue;
-        }
-        char owner[600];
-        _PyGC_TraceOwnerOf(h.pc, owner, sizeof(owner));
-        long long offset = h.word != 0 && h.pc != 0
-                           ? (long long)(h.word - h.sp) : -1;
-        long long size = h.pc != 0 ? (long long)(h.cfa - h.sp) : -1;
-        PyObject *item = Py_BuildValue(
-            "(KsKKsLLsL)", (unsigned long long)h.op, h.type_name,
-            (unsigned long long)h.word, (unsigned long long)h.value,
-            owner, offset, size,
-            h.scan_class == _PyGC_SCAN_STACK ? "stack" : "regs",
-            (long long)h.collection);
-        if (item == NULL || PyList_Append(list, item) < 0) {
-            Py_XDECREF(item);
-            Py_DECREF(list);
-            return NULL;
-        }
-        Py_DECREF(item);
-        hits = _PyGC_TraceStackHits(interp, &n, &dropped);
-    }
-    _PyGC_TraceClearStackHits(interp);
-    return Py_BuildValue("(NL)", list, (long long)dropped);
-}
-
-/* The address of the object that the live mark finds at an address, or 0. */
-static PyObject *
-gc_live_lookup(PyObject *self, PyObject *args)
-{
-    PyObject *addr;
-    int interior;
-    if (!PyArg_ParseTuple(args, "Op", &addr, &interior)) {
-        return NULL;
-    }
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return NULL;
-    }
-    return PyLong_FromVoidPtr((void *)_PyGC_TraceLiveLookup(
-        _PyThreadState_GET(), (uintptr_t)p, interior));
-}
-
-/* Does the live mark take a raw PyObject_Malloc() block that starts with a
-   copy of op's header word for an object?  The block is in an object heap's
-   page, but the object map has no bit for it. */
-static PyValue
-gc_raw_block_is_object(PyObject *self, PyValue arg)
-{
-    PyObject *op = PyValue_Object(arg);
-    if (op == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *block = PyObject_Malloc(4 * sizeof(PyObject *));
-    if (block == NULL) {
-        return PyValue_FromResult(PyErr_NoMemory());
-    }
-    memset(block, 0, 4 * sizeof(PyObject *));
-    block->ob_header = op->ob_header;
-    uintptr_t found = _PyGC_TraceLiveLookup(_PyThreadState_GET(),
-                                            (uintptr_t)block, 0);
-    PyObject_Free(block);
-    return PyValue_FromResult(PyBool_FromLong(found != 0));
-}
-
-/* The mimalloc segment that the collector's segment map holds for an
-   address, or 0. */
-static PyValue
-gc_segment_of(PyObject *self, PyValue arg)
-{
-    PyObject *addr = PyValue_Object(arg);
-    if (addr == NULL) {
-        return PyValue_NULL;
-    }
-    void *p = PyLong_AsVoidPtr(addr);
-    if (p == NULL && PyErr_Occurred()) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromResult(
-        PyLong_FromVoidPtr((void *)_PyGC_TraceSegmentOf((uintptr_t)p)));
-}
-
-/* Addresses in the object's mimalloc segment that hold no block. */
-static PyValue
-gc_segment_probes(PyObject *self, PyValue arg)
-{
-    PyObject *op = PyValue_Object(arg);
-    if (op == NULL) {
-        return PyValue_NULL;
-    }
-    uintptr_t probes[4];
-    _PyGC_TraceSegmentProbes(op, probes);
-    return PyValue_FromResult(Py_BuildValue("(KKKK)",
-                                            (unsigned long long)probes[0],
-                                            (unsigned long long)probes[1],
-                                            (unsigned long long)probes[2],
-                                            (unsigned long long)probes[3]));
-}
 
 /* Call factory() and keep the result only in a C local across a verified
    collection.  Return (holes, id of the object). */
-static PyValue
-gc_verify_with_c_local(PyObject *self, PyValue arg)
+static PyObject *
+gc_verify_with_c_local(PyObject *self, PyObject *factory)
 {
-    PyObject *factory = PyValue_Object(arg);
-    if (factory == NULL) {
-        return PyValue_NULL;
-    }
     PyObject *obj = PyObject_CallNoArgs(factory);
     if (obj == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     PyObject *holes = verify_and_get_holes();
     PyObject *res = NULL;
@@ -4755,7 +3495,7 @@ gc_verify_with_c_local(PyObject *self, PyValue arg)
         res = Py_BuildValue("(NK)", holes, (unsigned long long)(uintptr_t)obj);
     }
     Py_DECREF(obj);
-    return PyValue_FromResult(res);
+    return res;
 }
 
 /* Call factory() and keep the result only in a C local while calling
@@ -4817,15 +3557,11 @@ clear_dead_stack(void)
 /* Call factory() and keep the result only in a PyMem_Malloc() array across
    a verified collection: the pattern that a tracing collector cannot see,
    which the verifier must report.  Return (holes, the object). */
-static PyValue
-gc_verify_with_pymem_array(PyObject *self, PyValue arg)
+static PyObject *
+gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 {
-    PyObject *factory = PyValue_Object(arg);
-    if (factory == NULL) {
-        return PyValue_NULL;
-    }
     if (store_in_hidden_array(factory) < 0) {
-        return PyValue_NULL;
+        return NULL;
     }
     clear_dead_stack();
     PyObject *holes = verify_and_get_holes();
@@ -4841,429 +3577,16 @@ gc_verify_with_pymem_array(PyObject *self, PyValue arg)
         Py_DECREF(array[2]);
     }
     PyMem_Free(array);
-    return PyValue_FromResult(res);
-}
-
-/* --- step 7a: the per-interpreter callback queue (note 13) ------------ */
-
-/* gc_queue_info([interp_id]) -> dict: the queue of the given interpreter,
-   the current one by default. */
-static PyObject *
-gc_queue_info(PyObject *self, PyObject *args)
-{
-    PyObject *id = NULL;
-    if (!PyArg_ParseTuple(args, "|O", &id)) {
-        return NULL;
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (id != NULL) {
-        interp = _PyInterpreterState_LookUpIDObject(id);
-        if (interp == NULL) {
-            return NULL;
-        }
-    }
-    return _PyGC_LiveQueueInfo(interp);
-}
-
-/* gc_queue_never_open_for_test(isolated[, referent, callback]): create an
-   interpreter whose initialisation fails just before its queue would open,
-   with one call queued (note 13 test 9.5 b).  An isolated interpreter's is
-   a finalizer call on one of its objects, discarded at its close; a
-   legacy one's is a weak reference callback, callback(ref) for a weak
-   reference to referent, which runs on the main interpreter. */
-static PyObject *
-gc_queue_never_open_for_test(PyObject *self, PyObject *args)
-{
-    int isolated;
-    PyObject *referent = NULL, *callback = NULL;
-    if (!PyArg_ParseTuple(args, "p|OO", &isolated, &referent, &callback)) {
-        return NULL;
-    }
-    if (!isolated && (referent == NULL || callback == NULL)) {
-        PyErr_SetString(PyExc_TypeError, "a legacy interpreter's call needs "
-                        "a referent and a callback");
-        return NULL;
-    }
-    PyInterpreterConfig config = isolated
-        ? (PyInterpreterConfig)_PyInterpreterConfig_INIT
-        : (PyInterpreterConfig)_PyInterpreterConfig_LEGACY_INIT;
-    _PyGC_LiveFailOpenForTest(isolated ? NULL : referent,
-                              isolated ? NULL : callback);
-    PyThreadState *save = PyThreadState_Get();
-    PyThreadState *sub = NULL;
-    PyStatus status = Py_NewInterpreterFromConfig(&sub, &config);
-    if (PyThreadState_Get() != save) {
-        Py_FatalError("gc_queue_never_open_for_test: lost the thread state");
-    }
-    if (!PyStatus_Exception(status) || sub != NULL) {
-        PyErr_SetString(PyExc_AssertionError,
-                        "the interpreter's initialisation did not fail");
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-/* gc_collect_after_close(code) -> tuple: run code in a legacy
-   subinterpreter, close its collector as _PyGC_Fini() does, enter the
-   collector by each entry there (_PyGC_LiveCollectAfterCloseForTest()), and
-   end the interpreter.  Returns the hook's six results. */
-static PyObject *
-gc_collect_after_close(PyObject *self, PyObject *args)
-{
-    const char *code;
-    if (!PyArg_ParseTuple(args, "s", &code)) {
-        return NULL;
-    }
-    PyThreadState *save = PyThreadState_Get();
-    PyThreadState *sub = Py_NewInterpreter();
-    if (sub == NULL) {
-        PyThreadState_Swap(save);
-        PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
-        return NULL;
-    }
-    Py_ssize_t out[6] = {0};
-    int r = PyRun_SimpleString(code);
-    if (r == 0) {
-        _PyGC_LiveCollectAfterCloseForTest(sub, out);
-    }
-    Py_EndInterpreter(sub);
-    PyThreadState_Swap(save);
-    if (r < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "the code raised");
-        return NULL;
-    }
-    return Py_BuildValue("nnnnnn", out[0], out[1], out[2], out[3], out[4],
-                         out[5]);
-}
-
-/* check_signals_loop(n[, code]) -> list: run code in a legacy
-   subinterpreter, if given, and return to this interpreter, then call
-   PyErr_CheckSignals() n times without releasing the GIL; returns this
-   interpreter's queue length before the first call and after each
-   (note 13 test 9.12). */
-static PyObject *
-check_signals_loop(PyObject *self, PyObject *args)
-{
-    int n;
-    const char *code = NULL;
-    if (!PyArg_ParseTuple(args, "i|s", &n, &code)) {
-        return NULL;
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (code != NULL) {
-        PyThreadState *save = PyThreadState_Get();
-        PyThreadState *sub = Py_NewInterpreter();
-        if (sub == NULL) {
-            PyThreadState_Swap(save);
-            PyErr_SetString(PyExc_RuntimeError, "Py_NewInterpreter failed");
-            return NULL;
-        }
-        int r = PyRun_SimpleString(code);
-        Py_EndInterpreter(sub);
-        PyThreadState_Swap(save);
-        if (r < 0) {
-            PyErr_SetString(PyExc_RuntimeError, "the code raised");
-            return NULL;
-        }
-    }
-    PyObject *lengths = PyList_New(0);
-    if (lengths == NULL) {
-        return NULL;
-    }
-    for (int i = 0; i <= n; i++) {
-        if (i > 0 && PyErr_CheckSignals() < 0) {
-            Py_DECREF(lengths);
-            return NULL;
-        }
-        PyObject *info = _PyGC_LiveQueueInfo(interp);
-        if (info == NULL) {
-            Py_DECREF(lengths);
-            return NULL;
-        }
-        PyObject *len = PyDict_GetItemString(info, "length");
-        int rc = len == NULL ? -1 : PyList_Append(lengths, len);
-        Py_DECREF(info);
-        if (rc < 0) {
-            Py_DECREF(lengths);
-            return NULL;
-        }
-    }
-    return lengths;
-}
-
-/* gc_delete_barrier(on): arm the deletion barrier of note 13 test 9.16
-   (_PyGC_LiveDeleteBarrierForTest()); gc_queue_info()["barrier"] reports
-   it. */
-static PyObject *
-gc_delete_barrier(PyObject *self, PyObject *args)
-{
-    int on;
-    if (!PyArg_ParseTuple(args, "p", &on)) {
-        return NULL;
-    }
-    _PyGC_LiveDeleteBarrierForTest(on);
-    Py_RETURN_NONE;
-}
-
-/* gc_hold_on_stack(factory, func) -> func(): call factory(), hold its result
-   in a C local only, call func(), then drop it (note 13 test 9.17). */
-static Py_NO_INLINE PyObject *
-gc_hold_on_stack(PyObject *self, PyObject *args)
-{
-    PyObject *factory, *func;
-    if (!PyArg_ParseTuple(args, "OO", &factory, &func)) {
-        return NULL;
-    }
-    PyObject *volatile held = PyObject_CallNoArgs(factory);
-    if (held == NULL) {
-        return NULL;
-    }
-    PyObject *r = PyObject_CallNoArgs(func);
-    // The local is read after the call, so it stays in this frame.
-    if (Py_TYPE(held) == NULL) {
-        Py_FatalError("unreachable");
-    }
-    held = NULL;
-    return r;
-}
-
-/* stash_set(obj), stash_get() -> obj: one object in a C static, a root
-   registered by the first stash_set(), which must run on the main
-   interpreter; legacy subinterpreters share it (note 13 test 9.17). */
-static PyObject *stash_obj = NULL;
-static int stash_rooted = 0;
-
-static PyObject *
-stash_set(PyObject *self, PyObject *args)
-{
-    PyObject *obj;
-    if (!PyArg_ParseTuple(args, "O", &obj)) {
-        return NULL;
-    }
-    if (!stash_rooted) {
-        if (!_Py_IsMainInterpreter(_PyInterpreterState_GET())) {
-            PyErr_SetString(PyExc_RuntimeError, "the first stash_set() "
-                            "must run on the main interpreter");
-            return NULL;
-        }
-        if (PyGC_AddRoot(&stash_obj) < 0) {
-            return NULL;
-        }
-        stash_rooted = 1;
-    }
-    stash_obj = obj;
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-stash_get(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    return Py_NewRef(stash_obj != NULL ? stash_obj : Py_None);
-}
-
-/* gc_queue_fail_alloc(n) -> int: the nth queue node allocation from now
-   fails; returns what was left of the previous countdown, 0 once its
-   failure has fired. */
-static PyObject *
-gc_queue_fail_alloc(PyObject *self, PyObject *args)
-{
-    int n;
-    if (!PyArg_ParseTuple(args, "i", &n)) {
-        return NULL;
-    }
-    return PyLong_FromLong(_PyGC_LiveFailAlloc(n));
-}
-
-static PyObject *
-gc_fail_order_alloc(PyObject *self, PyObject *args)
-{
-    int n;
-    if (!PyArg_ParseTuple(args, "i:gc_fail_order_alloc", &n)) {
-        return NULL;
-    }
-    if (n < 0) {
-        PyErr_SetString(PyExc_ValueError, "a nonnegative allocation count");
-        return NULL;
-    }
-    return PyLong_FromLong(_PyGC_LiveFailOrderAlloc(n));
-}
-
-static PyObject *
-gc_fail_work_alloc(PyObject *self, PyObject *args)
-{
-    int n;
-    if (!PyArg_ParseTuple(args, "i:gc_fail_work_alloc", &n)) {
-        return NULL;
-    }
-    if (n < 0) {
-        PyErr_SetString(PyExc_ValueError, "a nonnegative allocation count");
-        return NULL;
-    }
-    return PyLong_FromLong(_PyGC_LiveFailWorkAlloc(n));
-}
-
-static PyObject *
-gc_memoryview_export_blocker(PyObject *self, PyObject *args)
-{
-    PyObject *op, *blocked;
-    if (!PyArg_ParseTuple(args, "OO:gc_memoryview_export_blocker", &op, &blocked)) {
-        return NULL;
-    }
-    if (!Py_IS_TYPE(op, &PyMemoryView_Type) ||
-        (blocked != Py_True && blocked != Py_False))
-    {
-        PyErr_SetString(PyExc_TypeError, "an exact memoryview and bool required");
-        return NULL;
-    }
-    PyMemoryViewObject *view = (PyMemoryViewObject *)op;
-    if ((view->flags & _Py_MEMORYVIEW_RELEASED) || view->mbuf == NULL ||
-        (view->mbuf->flags & _Py_MANAGED_BUFFER_RELEASED))
-    {
-        PyErr_SetString(PyExc_ValueError, "an active memoryview required");
-        return NULL;
-    }
-    Py_ssize_t expected = blocked == Py_True ? 0 : 1;
-    if (view->exports != expected) {
-        PyErr_SetString(PyExc_ValueError, "unexpected outstanding export count");
-        return NULL;
-    }
-    /* A synthetic readiness blocker, not a Py_buffer acquisition or root.
-       Unblock checks only count==1; the caller must exclude real exports and
-       restore the synthetic count before releasing the real view. */
-    view->exports = 1 - expected;
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-gc_fail_debug_alloc(PyObject *self, PyObject *args)
-{
-    int n;
-    if (!PyArg_ParseTuple(args, "i:gc_fail_debug_alloc", &n)) {
-        return NULL;
-    }
-    if (n < 0) {
-        PyErr_SetString(PyExc_ValueError, "a nonnegative allocation count");
-        return NULL;
-    }
-    return PyLong_FromLong(_PyGC_LiveFailDebugAlloc(n));
-}
-
-/* Invoke only the specializer for a word in the calling Python frame.
-   Tests can distinguish callbacks during this call from the subsequent generic
-   operation, without depending on an adaptive counter reaching its threshold. */
-static PyObject *
-specialize_current_instruction(PyObject *self, PyObject *args)
-{
-    int offset;
-    PyObject *owner, *operand;
-    if (!PyArg_ParseTuple(args, "iOO:specialize_current_instruction",
-                          &offset, &owner, &operand)) {
-        return NULL;
-    }
-    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    if (offset < 0 || offset >= Py_SIZE(code)
-        || _PyCode_InstrFbIndex(code, offset) <= 0)
-    {
-        PyErr_SetString(PyExc_ValueError, "word has no private feedback entry");
-        return NULL;
-    }
-    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, offset));
-    int oparg = _PyCode_InstrOparg(code, offset);
-    _PyInstr *instr = frame->ir_words + offset;
-    PyValue owner_value = PyValue_FromObject(owner);
-    switch (opcode) {
-        case LOAD_ATTR:
-            _Py_Specialize_LoadAttr(owner_value, instr,
-                                   PyTuple_GET_ITEM(code->co_names, oparg >> 1));
-            break;
-        case STORE_ATTR:
-            _Py_Specialize_StoreAttr(owner_value, PyValue_FromObject(operand),
-                                    instr, PyTuple_GET_ITEM(code->co_names, oparg));
-            break;
-        case BINARY_OP:
-            _Py_Specialize_BinaryOp(owner_value, PyValue_FromObject(operand),
-                                   instr, oparg, frame->base);
-            break;
-        default:
-            PyErr_SetString(PyExc_ValueError, "unsupported specialization family");
-            return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-/* Exercise the actual scalar boundaries before their uint16_t casts. */
-static PyObject *
-ir_scalar_boundary(PyObject *self, PyObject *args)
-{
-    int rewrite, handler;
-    if (!PyArg_ParseTuple(args, "pi:ir_scalar_boundary", &rewrite, &handler)) {
-        return NULL;
-    }
-    _PyIRWord before = IR_WORD(NOP, 1, 2, 3, 4);
-    _PyIRWord word = before;
-    int accepted;
-    if (rewrite) {
-        accepted = _PyIR_SetHandler(&word, handler);
-    }
-    else {
-        accepted = _PyIR_MakeWord(handler, 1, 2, 3, 4, &word);
-    }
-    return Py_BuildValue("(iKK)", accepted,
-                         (unsigned long long)before, (unsigned long long)word);
+    return res;
 }
 
 static PyMethodDef module_functions[] = {
-    {"ir_scalar_boundary", ir_scalar_boundary, METH_VARARGS},
-    {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
     {"get_configs", get_configs, METH_NOARGS},
-    {"gc_queue_info", gc_queue_info, METH_VARARGS},
-    {"gc_queue_fail_alloc", gc_queue_fail_alloc, METH_VARARGS},
-    {"gc_fail_debug_alloc", gc_fail_debug_alloc, METH_VARARGS},
-    {"gc_fail_work_alloc", gc_fail_work_alloc, METH_VARARGS},
-    {"gc_memoryview_export_blocker", gc_memoryview_export_blocker, METH_VARARGS},
-    {"gc_fail_order_alloc", gc_fail_order_alloc, METH_VARARGS},
-    {"gc_queue_never_open_for_test", gc_queue_never_open_for_test, METH_VARARGS},
-    {"gc_collect_after_close", gc_collect_after_close, METH_VARARGS},
-    {"check_signals_loop", check_signals_loop, METH_VARARGS},
-    {"gc_delete_barrier", gc_delete_barrier, METH_VARARGS},
-    {"gc_hold_on_stack", gc_hold_on_stack, METH_VARARGS},
-    {"stash_set", stash_set, METH_VARARGS},
-    {"stash_get", stash_get, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
     {"gc_verify_count", gc_verify_count, METH_NOARGS},
-    {"gc_verify_mode", gc_verify_mode, METH_NOARGS},
-    {"gc_live_roots_of", _PyCFunction_CAST(gc_live_roots_of), METH_O},
-    {"gc_byteswriter_roots", gc_byteswriter_roots, METH_VARARGS},
-    {"gc_stack_hits", gc_stack_hits, METH_VARARGS},
-    {"test_value_spans", test_value_spans, METH_NOARGS},
-    {"gc_frame_descriptor", _PyCFunction_CAST(gc_frame_descriptor), METH_O},
-    {"gc_walk_here", gc_walk_here, METH_NOARGS},
-    {"gc_walk_precise_regs", gc_walk_precise_regs, METH_NOARGS},
-    {"gc_root_stats", gc_root_stats, METH_NOARGS},
-    {"gc_collect_with_signal", _PyCFunction_CAST(gc_collect_with_signal), METH_O},
-    {"gc_frames_off_chain", gc_frames_off_chain, METH_VARARGS},
-    {"gc_hold_in_core_mem", gc_hold_in_core_mem, METH_VARARGS},
-    {"gc_verify_carrier_origins", gc_verify_carrier_origins, METH_VARARGS},
-    {"gc_borrow_across", gc_borrow_across, METH_VARARGS},
-    {"gc_collect_at", _PyCFunction_CAST(gc_collect_at), METH_O},
-    {"gc_call_built", _PyCFunction_CAST(gc_call_built), METH_O},
-    {"gc_get_stress", gc_get_stress, METH_NOARGS},
-    {"gc_set_stress", _PyCFunction_CAST(gc_set_stress), METH_O},
-    {"gc_set_young_enabled", _PyCFunction_CAST(gc_set_young_enabled), METH_O},
-    {"gc_alloc_in_reftracer", _PyCFunction_CAST(gc_alloc_in_reftracer), METH_O},
-    {"gc_collect_inline_then", gc_collect_inline_then, METH_VARARGS},
-    {"gc_queue_ready_collect", gc_queue_ready_collect, METH_NOARGS},
-    {"gc_queue_ready_receive", gc_queue_ready_receive, METH_NOARGS},
-    {"gc_queue_ready_release", gc_queue_ready_release, METH_NOARGS},
-    {"gc_ready_static_type", gc_ready_static_type, METH_NOARGS},
-    {"gc_live_lookup", gc_live_lookup, METH_VARARGS},
-    {"gc_raw_block_is_object", _PyCFunction_CAST(gc_raw_block_is_object), METH_O},
-    {"gc_segment_of", _PyCFunction_CAST(gc_segment_of), METH_O},
-    {"gc_segment_probes", _PyCFunction_CAST(gc_segment_probes), METH_O},
-    {"gc_verify_with_c_local", _PyCFunction_CAST(gc_verify_with_c_local), METH_O},
-    {"gc_verify_with_pymem_array", _PyCFunction_CAST(gc_verify_with_pymem_array), METH_O},
+    {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
+    {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
     {"call_with_c_local", call_with_c_local, METH_VARARGS},
     {"get_eval_frame_stats", get_eval_frame_stats, METH_NOARGS, NULL},
     {"get_recursion_depth", get_recursion_depth, METH_NOARGS},
@@ -5281,13 +3604,13 @@ static PyMethodDef module_functions[] = {
     {"reset_path_config", test_reset_path_config, METH_NOARGS},
     {"test_edit_cost", test_edit_cost, METH_NOARGS},
     {"test_bytes_find", test_bytes_find, METH_NOARGS},
-    {"normalize_path", _PyCFunction_CAST(normalize_path), METH_O, NULL},
+    {"normalize_path", normalize_path, METH_O, NULL},
     {"get_getpath_codeobject", get_getpath_codeobject, METH_NOARGS, NULL},
     {"encode_locale", encode_locale, METH_VARARGS},
     {"decode_locale", decode_locale, METH_VARARGS},
     {"set_eval_frame_default", set_eval_frame_default, METH_NOARGS, NULL},
     {"set_eval_frame_interp", set_eval_frame_interp, METH_VARARGS, NULL},
-    {"set_eval_frame_record", _PyCFunction_CAST(set_eval_frame_record), METH_O, NULL},
+    {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF
@@ -5298,19 +3621,15 @@ static PyMethodDef module_functions[] = {
     {"clear_extension", clear_extension, METH_VARARGS, NULL},
     {"write_perf_map_entry", write_perf_map_entry, METH_VARARGS},
     {"perf_map_state_teardown", perf_map_state_teardown, METH_NOARGS},
-    {"iframe_getcode", _PyCFunction_CAST(iframe_getcode), METH_O, NULL},
-    {"iframe_getline", _PyCFunction_CAST(iframe_getline), METH_O, NULL},
-    {"iframe_getlasti", _PyCFunction_CAST(iframe_getlasti), METH_O, NULL},
-    {"code_returns_only_none", _PyCFunction_CAST(code_returns_only_none), METH_O, NULL},
-    {"get_co_framesize", _PyCFunction_CAST(get_co_framesize), METH_O, NULL},
-    {"get_co_localskinds", _PyCFunction_CAST(get_co_localskinds), METH_O, NULL},
+    {"iframe_getcode", iframe_getcode, METH_O, NULL},
+    {"iframe_getline", iframe_getline, METH_O, NULL},
+    {"iframe_getlasti", iframe_getlasti, METH_O, NULL},
+    {"code_returns_only_none", code_returns_only_none, METH_O, NULL},
+    {"get_co_framesize", get_co_framesize, METH_O, NULL},
+    {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
-    {"code_safe_addr2line", code_safe_addr2line, METH_VARARGS, NULL},
-    {"monitoring_storage_roundtrip", monitoring_storage_roundtrip, METH_VARARGS, NULL},
-    {"monitoring_deinstrument", monitoring_deinstrument, METH_VARARGS, NULL},
-    {"monitoring_state", monitoring_state, METH_VARARGS, NULL},
-    {"set_ir_max_forward", _PyCFunction_CAST(set_ir_max_forward), METH_O, NULL},
+    {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),
@@ -5320,7 +3639,7 @@ static PyMethodDef module_functions[] = {
     {"pending_identify", pending_identify, METH_VARARGS, NULL},
     {"_PyTraceMalloc_GetTraceback", tracemalloc_get_traceback, METH_VARARGS},
     {"test_tstate_capi", test_tstate_capi, METH_NOARGS, NULL},
-    {"_PyUnicode_TransformDecimalAndSpaceToASCII", _PyCFunction_CAST(unicode_transformdecimalandspacetoascii), METH_O},
+    {"_PyUnicode_TransformDecimalAndSpaceToASCII", unicode_transformdecimalandspacetoascii, METH_O},
     {"check_pyobject_forbidden_bytes_is_freed",
                             check_pyobject_forbidden_bytes_is_freed, METH_NOARGS},
     {"check_pyobject_freed_is_freed", check_pyobject_freed_is_freed, METH_NOARGS},
@@ -5328,12 +3647,13 @@ static PyMethodDef module_functions[] = {
     {"check_pyobject_uninitialized_is_freed",
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
-    {"get_object_shape", _PyCFunction_CAST(get_object_shape), METH_O},
-    {"get_type_shape_count", _PyCFunction_CAST(get_type_shape_count), METH_O},
+    {"get_object_dict_values", get_object_dict_values, METH_O},
+#ifdef Py_SHAPES
+    {"get_object_shape", get_object_shape, METH_O},
+    {"get_type_shape_count", get_type_shape_count, METH_O},
+#endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
-    {"check_interpreter_creation_rejected", check_interpreter_creation_rejected,
-     METH_VARARGS, NULL},
     {"create_interpreter", _PyCFunction_CAST(create_interpreter),
      METH_VARARGS | METH_KEYWORDS},
     {"destroy_interpreter", _PyCFunction_CAST(destroy_interpreter),
@@ -5343,14 +3663,14 @@ static PyMethodDef module_functions[] = {
     {"run_in_subinterp_with_config",
      _PyCFunction_CAST(run_in_subinterp_with_config),
      METH_VARARGS | METH_KEYWORDS},
-    {"normalize_interp_id", _PyCFunction_CAST(normalize_interp_id), METH_O},
+    {"normalize_interp_id", normalize_interp_id, METH_O},
     {"next_interpreter_id", next_interpreter_id, METH_NOARGS},
     {"unused_interpreter_id", unused_interpreter_id, METH_NOARGS},
-    {"interpreter_exists", _PyCFunction_CAST(interpreter_exists), METH_O},
-    {"get_interpreter_refcount", _PyCFunction_CAST(get_interpreter_refcount), METH_O},
-    {"link_interpreter_refcount", _PyCFunction_CAST(link_interpreter_refcount), METH_O},
-    {"unlink_interpreter_refcount", _PyCFunction_CAST(unlink_interpreter_refcount), METH_O},
-    {"interpreter_refcount_linked", _PyCFunction_CAST(interpreter_refcount_linked), METH_O},
+    {"interpreter_exists", interpreter_exists, METH_O},
+    {"get_interpreter_refcount", get_interpreter_refcount, METH_O},
+    {"link_interpreter_refcount", link_interpreter_refcount,     METH_O},
+    {"unlink_interpreter_refcount", unlink_interpreter_refcount, METH_O},
+    {"interpreter_refcount_linked", interpreter_refcount_linked, METH_O},
     {"compile_perf_trampoline_entry", compile_perf_trampoline_entry, METH_VARARGS},
     {"perf_trampoline_set_persist_after_fork", perf_trampoline_set_persist_after_fork, METH_VARARGS},
     {"get_crossinterp_data",    _PyCFunction_CAST(get_crossinterp_data),
@@ -5359,28 +3679,38 @@ static PyMethodDef module_functions[] = {
     _TESTINTERNALCAPI_TEST_LONG_NUMBITS_METHODDEF
     {"get_rare_event_counters", get_rare_event_counters, METH_NOARGS},
     {"reset_rare_event_counters", reset_rare_event_counters, METH_NOARGS},
+    {"has_inline_values", has_inline_values, METH_O},
+    {"has_split_table", has_split_table, METH_O},
     {"type_assign_specific_version_unsafe", type_assign_specific_version_unsafe, METH_VARARGS,
      PyDoc_STR("forcefully assign type->tp_version_tag")},
 
+#ifdef Py_GIL_DISABLED
+    {"py_thread_id", get_py_thread_id, METH_NOARGS},
+    {"get_tlbc", get_tlbc, METH_O, NULL},
+    {"get_tlbc_id", get_tlbc_id, METH_O, NULL},
+    {"get_long_lived_total", get_long_lived_total, METH_NOARGS},
+#endif
     GH_119213_GETARGS_METHODDEF
     {"get_static_builtin_types", get_static_builtin_types, METH_NOARGS},
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
-    {"has_deferred_refcount", _PyCFunction_CAST(has_deferred_refcount), METH_O},
+    {"has_deferred_refcount", has_deferred_refcount, METH_O},
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
-    {"is_static_immortal", _PyCFunction_CAST(is_static_immortal), METH_O},
-    {"incref_decref_delayed", _PyCFunction_CAST(incref_decref_delayed), METH_O},
-    {"value_box_roundtrip", _PyCFunction_CAST(value_box_roundtrip), METH_O},
-    {"inline_locals", _PyCFunction_CAST(inline_locals), METH_O},
+    {"is_static_immortal", is_static_immortal, METH_O},
+    {"incref_decref_delayed", incref_decref_delayed, METH_O},
+#ifdef Py_STACKREF_INLINE_VALUES
+    {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+    {"inline_locals", inline_locals, METH_O},
+#endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},
 #endif
-    {"simple_pending_call", _PyCFunction_CAST(simple_pending_call), METH_O},
-    {"set_vectorcall_nop", _PyCFunction_CAST(set_vectorcall_nop), METH_O},
-    {"module_get_gc_hooks", _PyCFunction_CAST(module_get_gc_hooks), METH_O},
+    {"simple_pending_call", simple_pending_call, METH_O},
+    {"set_vectorcall_nop", set_vectorcall_nop, METH_O},
+    {"module_get_gc_hooks", module_get_gc_hooks, METH_O},
     {"test_threadstate_set_stack_protection",
      test_threadstate_set_stack_protection, METH_NOARGS},
-    {"_pyerr_setkeyerror", _PyCFunction_CAST(_pyerr_setkeyerror), METH_O},
+    {"_pyerr_setkeyerror", _pyerr_setkeyerror, METH_O},
     {"test_interp_guard_countdown", test_interp_guard_countdown, METH_NOARGS},
     {"test_interp_view_countdown", test_interp_view_countdown, METH_NOARGS},
     {"test_thread_state_ensure_from_view_interp_switch", test_thread_state_ensure_from_view_interp_switch, METH_NOARGS},
@@ -5394,11 +3724,6 @@ static PyMethodDef module_functions[] = {
 static int
 module_exec(PyObject *module)
 {
-    PyObject *setterbox = PyType_FromModuleAndSpec(module, &setterbox_spec,
-                                                   NULL);
-    if (PyModule_Add(module, "SetterBox", setterbox) < 0) {
-        return 1;
-    }
     if (_PyTestInternalCapi_Init_Lock(module) < 0) {
         return 1;
     }
@@ -5420,13 +3745,22 @@ module_exec(PyObject *module)
     if (_PyTestInternalCapi_Init_Tuple(module) < 0) {
         return 1;
     }
-    if (_PyTestInternalCapi_Init_GCWalk(module) < 0) {
-        return 1;
-    }
-    if (_PyTestInternalCapi_Init_UnicodeWriter(module) < 0) {
-        return 1;
-    }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {
+        return 1;
+    }
+
+    Py_ssize_t sizeof_gc_head = 0;
+#ifndef Py_GIL_DISABLED
+    sizeof_gc_head = sizeof(PyGC_Head);
+#endif
+
+    if (PyModule_Add(module, "SIZEOF_PYGC_HEAD",
+                        PyLong_FromSsize_t(sizeof_gc_head)) < 0) {
+        return 1;
+    }
+
+    if (PyModule_Add(module, "SIZEOF_MANAGED_PRE_HEADER",
+                        PyLong_FromSsize_t(2 * sizeof(PyObject*))) < 0) {
         return 1;
     }
 
@@ -5450,18 +3784,8 @@ module_exec(PyObject *module)
         return 1;
     }
 
-    if (PyModule_Add(module, "SLOT_BOXED", PyLong_FromLong(_Py_SLOT_BOXED)) < 0
-        || PyModule_Add(module, "SLOT_I32", PyLong_FromLong(_Py_SLOT_I32)) < 0
-        || PyModule_Add(module, "SLOT_F64", PyLong_FromLong(_Py_SLOT_F64)) < 0)
-    {
-        return 1;
-    }
-    if (PyModule_Add(module, "SHAPE_MIN_SLOTS",
-                        PyLong_FromLong(_Py_SHAPE_MIN_SLOTS)) < 0) {
-        return 1;
-    }
-    if (PyModule_Add(module, "SHAPE_MAX_SLOTS",
-                        PyLong_FromLong(_Py_SHAPE_MAX_SLOTS)) < 0) {
+    if (PyModule_Add(module, "SHARED_KEYS_MAX_SIZE",
+                        PyLong_FromLong(SHARED_KEYS_MAX_SIZE)) < 0) {
         return 1;
     }
 
@@ -5469,9 +3793,20 @@ module_exec(PyObject *module)
         return 1;
     }
 
+#ifdef Py_STACKREF_INLINE_VALUES
+    // Absent from builds without inline values; false under
+    // PYTHON_TAGGED_VALUES=0.
+    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
+            _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
+        return 1;
+    }
+#endif
+
+#ifdef Py_SHAPES
     if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {
         return 1;
     }
+#endif
 
 #ifdef _Py_WITH_FRAME_POINTERS
     if (PyModule_AddIntMacro(module, _Py_WITH_FRAME_POINTERS) < 0) {

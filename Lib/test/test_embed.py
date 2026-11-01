@@ -226,14 +226,12 @@ class EmbeddingTestsMixin:
 class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
     maxDiff = 100 * 50
 
-    @support.requires_subinterpreters
     def test_subinterps_main(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main = run[0]
 
             self.assertEqual(main.id, '0')
 
-    @support.requires_subinterpreters
     def test_subinterps_different_ids(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main, *subs, _ = run
@@ -242,7 +240,6 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
             for i, sub in enumerate(subs):
                 self.assertEqual(sub.id, str(mainid + i + 1))
 
-    @support.requires_subinterpreters
     def test_subinterps_distinct_state(self):
         for run in self.run_repeated_init_and_subinterpreters():
             main, *subs, _ = run
@@ -460,6 +457,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         out, err = self.run_embedded_interpreter("test_repeated_init_exec", code)
         self.assertEqual(out, 'Tests passed\n' * INIT_LOOPS)
 
+    @support.requires_refcounting
     def test_asyncio_task_during_interpreter_clear(self):
         import_helper.import_module('_asyncio')
         code = textwrap.dedent("""
@@ -495,10 +493,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
             "test_interpreter_clear_and_delete", code,
             timeout=support.SHORT_TIMEOUT)
         self.assertEqual(out, "task created\n")
-        # The task's never-awaited coroutine dies at a collection during
-        # interpreter clear, where its finalizer reports that sys.modules is
-        # gone; that report is not the crash this test is about.
-        self.assertNotIn("Fatal Python error", err)
+        self.assertEqual(err, "")
 
     def test_simple_initialization_api(self):
         # _testembed now uses Py_InitializeFromConfig by default
@@ -2072,7 +2067,6 @@ class AuditingTests(EmbeddingTestsMixin, unittest.TestCase):
     def test_audit_tuple(self):
         self.run_embedded_interpreter("test_audit_tuple")
 
-    @support.requires_subinterpreters
     def test_audit_subinterpreter(self):
         self.run_embedded_interpreter("test_audit_subinterpreter")
 
@@ -2164,6 +2158,35 @@ class MiscTests(EmbeddingTestsMixin, unittest.TestCase):
             config buffered_stdio: False
         """).lstrip()
         self.assertEqual(out, expected)
+
+    @unittest.skipUnless(support.Py_DEBUG,
+                         '-X showrefcount requires a Python debug build')
+    @support.requires_refcounting
+    def test_no_memleak(self):
+        # bpo-1635741: Python must release all memory at exit
+        tests = (
+            ('off', 'pass'),
+            ('on', 'pass'),
+            ('off', 'import __hello__'),
+            ('on', 'import __hello__'),
+        )
+        for flag, stmt in tests:
+            xopt = f"frozen_modules={flag}"
+            cmd = [sys.executable, "-I", "-X", "showrefcount", "-X", xopt, "-c", stmt]
+            proc = subprocess.run(cmd,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT,
+                                  text=True)
+            self.assertEqual(proc.returncode, 0)
+            out = proc.stdout.rstrip()
+            match = re.match(r'^\[(-?\d+) refs, (-?\d+) blocks\]', out)
+            if not match:
+                self.fail(f"unexpected output: {out!a}")
+            refs = int(match.group(1))
+            blocks = int(match.group(2))
+            with self.subTest(frozen_modules=flag, stmt=stmt):
+                self.assertEqual(refs, 0, out)
+                self.assertEqual(blocks, 0, out)
 
     @unittest.skipUnless(support.Py_DEBUG,
                          '-X presite requires a Python debug build')

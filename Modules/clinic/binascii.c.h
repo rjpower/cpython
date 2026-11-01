@@ -3,8 +3,10 @@ preserve
 [clinic start generated code]*/
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
+#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_long.h"          // _PyLong_Size_t_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -15,29 +17,21 @@ PyDoc_STRVAR(binascii_a2b_uu__doc__,
 "Decode a line of uuencoded data.");
 
 #define BINASCII_A2B_UU_METHODDEF    \
-    {"a2b_uu", _PyCFunction_CAST(binascii_a2b_uu), METH_O, binascii_a2b_uu__doc__},
+    {"a2b_uu", (PyCFunction)binascii_a2b_uu, METH_O, binascii_a2b_uu__doc__},
 
 static PyObject *
 binascii_a2b_uu_impl(PyObject *module, Py_buffer *data);
 
-static PyValue
-binascii_a2b_uu(PyObject *module, PyValue arg)
+static PyObject *
+binascii_a2b_uu(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
-    PyObject *_return_value;
 
-    {
-        PyObject *_arg = PyValue_Object(arg);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(arg, &data)) {
+        goto exit;
     }
-    _return_value = binascii_a2b_uu_impl(module, &data);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_uu_impl(module, &data);
 
 exit:
     /* Cleanup for data */
@@ -59,14 +53,15 @@ PyDoc_STRVAR(binascii_b2a_uu__doc__,
 static PyObject *
 binascii_b2a_uu_impl(PyObject *module, Py_buffer *data, int backtick);
 
-static PyValue
-binascii_b2a_uu(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_uu(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -89,36 +84,28 @@ binascii_b2a_uu(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int backtick = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    backtick = PyObject_IsTrueValue(args[1]);
+    backtick = PyObject_IsTrue(args[1]);
     if (backtick < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_b2a_uu_impl(module, &data, backtick);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_uu_impl(module, &data, backtick);
 
 exit:
     /* Cleanup for data */
@@ -157,14 +144,15 @@ binascii_a2b_base64_impl(PyObject *module, Py_buffer *data, int strict_mode,
                          int padded, PyBytesObject *alphabet,
                          Py_buffer *ignorechars, int canonical);
 
-static PyValue
-binascii_a2b_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_base64(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -187,7 +175,7 @@ binascii_a2b_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[6];
+    PyObject *argsbuf[6];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int strict_mode = -1;
@@ -195,27 +183,20 @@ binascii_a2b_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
     PyBytesObject *alphabet = NULL;
     Py_buffer ignorechars = {NULL, NULL};
     int canonical = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &data)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        strict_mode = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        strict_mode = PyObject_IsTrue(args[1]);
         if (strict_mode < 0) {
             goto exit;
         }
@@ -223,8 +204,8 @@ binascii_a2b_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        padded = PyObject_IsTrueValue(args[2]);
+    if (args[2]) {
+        padded = PyObject_IsTrue(args[2]);
         if (padded < 0) {
             goto exit;
         }
@@ -232,43 +213,30 @@ binascii_a2b_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        {
-            PyObject *_arg = PyValue_Object(args[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyBytes_Check(_arg)) {
-                _PyArg_BadArgument("a2b_base64", "argument 'alphabet'", "bytes", _arg);
-                goto exit;
-            }
-            alphabet = (PyBytesObject *)_arg;
+    if (args[3]) {
+        if (!PyBytes_Check(args[3])) {
+            _PyArg_BadArgument("a2b_base64", "argument 'alphabet'", "bytes", args[3]);
+            goto exit;
+        }
+        alphabet = (PyBytesObject *)args[3];
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    if (args[4]) {
+        if (PyObject_GetBuffer(args[4], &ignorechars, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[4])) {
-        {
-            PyObject *_arg = PyValue_Object(args[4]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    canonical = PyObject_IsTrueValue(args[5]);
+    canonical = PyObject_IsTrue(args[5]);
     if (canonical < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_base64_impl(module, &data, strict_mode, padded, alphabet, &ignorechars, canonical);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_base64_impl(module, &data, strict_mode, padded, alphabet, &ignorechars, canonical);
 
 exit:
     /* Cleanup for data */
@@ -299,14 +267,15 @@ static PyObject *
 binascii_b2a_base64_impl(PyObject *module, Py_buffer *data, int padded,
                          size_t wrapcol, int newline, Py_buffer *alphabet);
 
-static PyValue
-binascii_b2a_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_base64(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -329,34 +298,27 @@ binascii_b2a_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int padded = 1;
     size_t wrapcol = 0;
     int newline = 1;
     Py_buffer alphabet = {NULL, NULL};
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        padded = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        padded = PyObject_IsTrue(args[1]);
         if (padded < 0) {
             goto exit;
         }
@@ -364,22 +326,16 @@ binascii_b2a_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_Size_t_Converter(_arg, &wrapcol)) {
-                goto exit;
-            }
+    if (args[2]) {
+        if (!_PyLong_Size_t_Converter(args[2], &wrapcol)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        newline = PyObject_IsTrueValue(args[3]);
+    if (args[3]) {
+        newline = PyObject_IsTrue(args[3]);
         if (newline < 0) {
             goto exit;
         }
@@ -387,18 +343,11 @@ binascii_b2a_base64(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[4]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &alphabet, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[4], &alphabet, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_b2a_base64_impl(module, &data, padded, wrapcol, newline, &alphabet);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_base64_impl(module, &data, padded, wrapcol, newline, &alphabet);
 
 exit:
     /* Cleanup for data */
@@ -437,14 +386,15 @@ static PyObject *
 binascii_a2b_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
                           int adobe, Py_buffer *ignorechars, int canonical);
 
-static PyValue
-binascii_a2b_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_ascii85(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -467,34 +417,27 @@ binascii_a2b_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int foldspaces = 0;
     int adobe = 0;
     Py_buffer ignorechars = {.buf = "", .obj = NULL, .len = 0};
     int canonical = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &data)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        foldspaces = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        foldspaces = PyObject_IsTrue(args[1]);
         if (foldspaces < 0) {
             goto exit;
         }
@@ -502,8 +445,8 @@ binascii_a2b_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        adobe = PyObject_IsTrueValue(args[2]);
+    if (args[2]) {
+        adobe = PyObject_IsTrue(args[2]);
         if (adobe < 0) {
             goto exit;
         }
@@ -511,27 +454,20 @@ binascii_a2b_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        {
-            PyObject *_arg = PyValue_Object(args[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
+    if (args[3]) {
+        if (PyObject_GetBuffer(args[3], &ignorechars, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    canonical = PyObject_IsTrueValue(args[4]);
+    canonical = PyObject_IsTrue(args[4]);
     if (canonical < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_ascii85_impl(module, &data, foldspaces, adobe, &ignorechars, canonical);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_ascii85_impl(module, &data, foldspaces, adobe, &ignorechars, canonical);
 
 exit:
     /* Cleanup for data */
@@ -568,14 +504,15 @@ static PyObject *
 binascii_b2a_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
                           size_t wrapcol, int pad, int adobe);
 
-static PyValue
-binascii_b2a_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_ascii85(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -598,34 +535,27 @@ binascii_b2a_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int foldspaces = 0;
     size_t wrapcol = 0;
     int pad = 0;
     int adobe = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        foldspaces = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        foldspaces = PyObject_IsTrue(args[1]);
         if (foldspaces < 0) {
             goto exit;
         }
@@ -633,22 +563,16 @@ binascii_b2a_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_Size_t_Converter(_arg, &wrapcol)) {
-                goto exit;
-            }
+    if (args[2]) {
+        if (!_PyLong_Size_t_Converter(args[2], &wrapcol)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        pad = PyObject_IsTrueValue(args[3]);
+    if (args[3]) {
+        pad = PyObject_IsTrue(args[3]);
         if (pad < 0) {
             goto exit;
         }
@@ -656,13 +580,12 @@ binascii_b2a_ascii85(PyObject *module, const PyValue *args, Py_ssize_t nargs, Py
             goto skip_optional_kwonly;
         }
     }
-    adobe = PyObject_IsTrueValue(args[4]);
+    adobe = PyObject_IsTrue(args[4]);
     if (adobe < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_b2a_ascii85_impl(module, &data, foldspaces, wrapcol, pad, adobe);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_ascii85_impl(module, &data, foldspaces, wrapcol, pad, adobe);
 
 exit:
     /* Cleanup for data */
@@ -693,14 +616,15 @@ binascii_a2b_base85_impl(PyObject *module, Py_buffer *data,
                          PyBytesObject *alphabet, Py_buffer *ignorechars,
                          int canonical);
 
-static PyValue
-binascii_a2b_base85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_base85(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -723,68 +647,48 @@ binascii_a2b_base85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     PyBytesObject *alphabet = NULL;
     Py_buffer ignorechars = {.buf = "", .obj = NULL, .len = 0};
     int canonical = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &data)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        {
-            PyObject *_arg = PyValue_Object(args[1]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyBytes_Check(_arg)) {
-                _PyArg_BadArgument("a2b_base85", "argument 'alphabet'", "bytes", _arg);
-                goto exit;
-            }
-            alphabet = (PyBytesObject *)_arg;
+    if (args[1]) {
+        if (!PyBytes_Check(args[1])) {
+            _PyArg_BadArgument("a2b_base85", "argument 'alphabet'", "bytes", args[1]);
+            goto exit;
+        }
+        alphabet = (PyBytesObject *)args[1];
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    if (args[2]) {
+        if (PyObject_GetBuffer(args[2], &ignorechars, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    canonical = PyObject_IsTrueValue(args[3]);
+    canonical = PyObject_IsTrue(args[3]);
     if (canonical < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_base85_impl(module, &data, alphabet, &ignorechars, canonical);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_base85_impl(module, &data, alphabet, &ignorechars, canonical);
 
 exit:
     /* Cleanup for data */
@@ -815,14 +719,15 @@ static PyObject *
 binascii_b2a_base85_impl(PyObject *module, Py_buffer *data, int pad,
                          size_t wrapcol, Py_buffer *alphabet);
 
-static PyValue
-binascii_b2a_base85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_base85(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -845,33 +750,26 @@ binascii_b2a_base85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int pad = 0;
     size_t wrapcol = 0;
     Py_buffer alphabet = {NULL, NULL};
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        pad = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        pad = PyObject_IsTrue(args[1]);
         if (pad < 0) {
             goto exit;
         }
@@ -879,32 +777,19 @@ binascii_b2a_base85(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_Size_t_Converter(_arg, &wrapcol)) {
-                goto exit;
-            }
+    if (args[2]) {
+        if (!_PyLong_Size_t_Converter(args[2], &wrapcol)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &alphabet, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[3], &alphabet, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_b2a_base85_impl(module, &data, pad, wrapcol, &alphabet);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_base85_impl(module, &data, pad, wrapcol, &alphabet);
 
 exit:
     /* Cleanup for data */
@@ -941,14 +826,15 @@ binascii_a2b_base32_impl(PyObject *module, Py_buffer *data, int padded,
                          PyBytesObject *alphabet, Py_buffer *ignorechars,
                          int canonical);
 
-static PyValue
-binascii_a2b_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_base32(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -971,34 +857,27 @@ binascii_a2b_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[5];
+    PyObject *argsbuf[5];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int padded = 1;
     PyBytesObject *alphabet = NULL;
     Py_buffer ignorechars = {.buf = "", .obj = NULL, .len = 0};
     int canonical = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &data)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        padded = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        padded = PyObject_IsTrue(args[1]);
         if (padded < 0) {
             goto exit;
         }
@@ -1006,43 +885,30 @@ binascii_a2b_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!PyBytes_Check(_arg)) {
-                _PyArg_BadArgument("a2b_base32", "argument 'alphabet'", "bytes", _arg);
-                goto exit;
-            }
-            alphabet = (PyBytesObject *)_arg;
+    if (args[2]) {
+        if (!PyBytes_Check(args[2])) {
+            _PyArg_BadArgument("a2b_base32", "argument 'alphabet'", "bytes", args[2]);
+            goto exit;
+        }
+        alphabet = (PyBytesObject *)args[2];
+        if (!--noptargs) {
+            goto skip_optional_kwonly;
+        }
+    }
+    if (args[3]) {
+        if (PyObject_GetBuffer(args[3], &ignorechars, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[3])) {
-        {
-            PyObject *_arg = PyValue_Object(args[3]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-                goto exit;
-            }
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    canonical = PyObject_IsTrueValue(args[4]);
+    canonical = PyObject_IsTrue(args[4]);
     if (canonical < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_base32_impl(module, &data, padded, alphabet, &ignorechars, canonical);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_base32_impl(module, &data, padded, alphabet, &ignorechars, canonical);
 
 exit:
     /* Cleanup for data */
@@ -1073,14 +939,15 @@ static PyObject *
 binascii_b2a_base32_impl(PyObject *module, Py_buffer *data, int padded,
                          size_t wrapcol, Py_buffer *alphabet);
 
-static PyValue
-binascii_b2a_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_base32(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1103,33 +970,26 @@ binascii_b2a_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int padded = 1;
     size_t wrapcol = 0;
     Py_buffer alphabet = {NULL, NULL};
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    if (!PyValue_IsNull(args[1])) {
-        padded = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        padded = PyObject_IsTrue(args[1]);
         if (padded < 0) {
             goto exit;
         }
@@ -1137,32 +997,19 @@ binascii_b2a_base32(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyO
             goto skip_optional_kwonly;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        {
-            PyObject *_arg = PyValue_Object(args[2]);
-            if (_arg == NULL) {
-                goto exit;
-            }
-            if (!_PyLong_Size_t_Converter(_arg, &wrapcol)) {
-                goto exit;
-            }
+    if (args[2]) {
+        if (!_PyLong_Size_t_Converter(args[2], &wrapcol)) {
+            goto exit;
         }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
-    {
-        PyObject *_arg = PyValue_Object(args[3]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &alphabet, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[3], &alphabet, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_b2a_base32_impl(module, &data, padded, wrapcol, &alphabet);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_base32_impl(module, &data, padded, wrapcol, &alphabet);
 
 exit:
     /* Cleanup for data */
@@ -1189,50 +1036,36 @@ PyDoc_STRVAR(binascii_crc_hqx__doc__,
 static PyObject *
 binascii_crc_hqx_impl(PyObject *module, Py_buffer *data, unsigned int crc);
 
-static PyValue
-binascii_crc_hqx(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+binascii_crc_hqx(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     unsigned int crc;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("crc_hqx", nargs, 2, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &crc, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &crc, sizeof(unsigned int),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
             }
-            if ((size_t)_bytes > sizeof(unsigned int)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
-            }
         }
     }
-    _return_value = binascii_crc_hqx_impl(module, &data, crc);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_crc_hqx_impl(module, &data, crc);
 
 exit:
     /* Cleanup for data */
@@ -1255,10 +1088,10 @@ PyDoc_STRVAR(binascii_crc32__doc__,
 static unsigned int
 binascii_crc32_impl(PyObject *module, Py_buffer *data, unsigned int crc);
 
-static PyValue
-binascii_crc32(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+binascii_crc32(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     Py_buffer data = {NULL, NULL};
     unsigned int crc = 0;
     unsigned int _return_value;
@@ -1266,37 +1099,25 @@ binascii_crc32(PyObject *module, const PyValue *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("crc32", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
     {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
+        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &crc, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
             goto exit;
         }
-        {
-            Py_ssize_t _bytes = PyLong_AsNativeBytes(_arg, &crc, sizeof(unsigned int),
-                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                    Py_ASNATIVEBYTES_ALLOW_INDEX |
-                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-            if (_bytes < 0) {
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                "integer value out of range", 1) < 0)
+            {
                 goto exit;
-            }
-            if ((size_t)_bytes > sizeof(unsigned int)) {
-                if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                    "integer value out of range", 1) < 0)
-                {
-                    goto exit;
-                }
             }
         }
     }
@@ -1305,7 +1126,7 @@ skip_optional:
     if ((_return_value == (unsigned int)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyValue_FromUnsignedLongLong((unsigned long long)_return_value);
+    return_value = PyLong_FromUnsignedLong((unsigned long)_return_value);
 
 exit:
     /* Cleanup for data */
@@ -1346,14 +1167,15 @@ static PyObject *
 binascii_b2a_hex_impl(PyObject *module, Py_buffer *data, PyObject *sep,
                       Py_ssize_t bytes_per_sep);
 
-static PyValue
-binascii_b2a_hex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_hex(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1376,44 +1198,35 @@ binascii_b2a_hex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     PyObject *sep = NULL;
     Py_ssize_t bytes_per_sep = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        sep = PyValue_Object(args[1]);
-        if (sep == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        sep = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[2]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[2]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1421,8 +1234,7 @@ binascii_b2a_hex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         bytes_per_sep = ival;
     }
 skip_optional_pos:
-    _return_value = binascii_b2a_hex_impl(module, &data, sep, bytes_per_sep);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_hex_impl(module, &data, sep, bytes_per_sep);
 
 exit:
     /* Cleanup for data */
@@ -1455,14 +1267,15 @@ static PyObject *
 binascii_hexlify_impl(PyObject *module, Py_buffer *data, PyObject *sep,
                       Py_ssize_t bytes_per_sep);
 
-static PyValue
-binascii_hexlify(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_hexlify(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1485,44 +1298,35 @@ binascii_hexlify(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     PyObject *sep = NULL;
     Py_ssize_t bytes_per_sep = 1;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        sep = PyValue_Object(args[1]);
-        if (sep == NULL) {
-            goto exit;
-        }
+    if (args[1]) {
+        sep = args[1];
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     {
         Py_ssize_t ival = -1;
-        PyValue ivalue = PyNumber_IndexValue(args[2]);
-        if (!PyValue_IsNull(ivalue)) {
-            ival = PyLong_AsSsize_tValue(ivalue);
+        PyObject *iobj = _PyNumber_Index(args[2]);
+        if (iobj != NULL) {
+            ival = PyLong_AsSsize_t(iobj);
+            Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1530,8 +1334,7 @@ binascii_hexlify(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         bytes_per_sep = ival;
     }
 skip_optional_pos:
-    _return_value = binascii_hexlify_impl(module, &data, sep, bytes_per_sep);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_hexlify_impl(module, &data, sep, bytes_per_sep);
 
 exit:
     /* Cleanup for data */
@@ -1561,14 +1364,15 @@ static PyObject *
 binascii_a2b_hex_impl(PyObject *module, Py_buffer *hexstr,
                       Py_buffer *ignorechars);
 
-static PyValue
-binascii_a2b_hex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_hex(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1591,41 +1395,27 @@ binascii_a2b_hex(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer hexstr = {NULL, NULL};
     Py_buffer ignorechars = {.buf = "", .obj = NULL, .len = 0};
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &hexstr)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &hexstr)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &ignorechars, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_hex_impl(module, &hexstr, &ignorechars);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_hex_impl(module, &hexstr, &ignorechars);
 
 exit:
     /* Cleanup for hexstr */
@@ -1657,14 +1447,15 @@ static PyObject *
 binascii_unhexlify_impl(PyObject *module, Py_buffer *hexstr,
                         Py_buffer *ignorechars);
 
-static PyValue
-binascii_unhexlify(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_unhexlify(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1687,41 +1478,27 @@ binascii_unhexlify(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[2];
+    PyObject *argsbuf[2];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer hexstr = {NULL, NULL};
     Py_buffer ignorechars = {.buf = "", .obj = NULL, .len = 0};
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &hexstr)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &hexstr)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[1]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &ignorechars, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[1], &ignorechars, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_unhexlify_impl(module, &hexstr, &ignorechars);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_unhexlify_impl(module, &hexstr, &ignorechars);
 
 exit:
     /* Cleanup for hexstr */
@@ -1751,14 +1528,15 @@ static PyObject *
 binascii_a2b_qp_impl(PyObject *module, Py_buffer *data, int header,
                      int strip_ws);
 
-static PyValue
-binascii_a2b_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_a2b_qp(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1781,32 +1559,25 @@ binascii_a2b_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[3];
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int header = 0;
     int strip_ws = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (!ascii_buffer_converter(_arg, &data)) {
-            goto exit;
-        }
+    if (!ascii_buffer_converter(args[0], &data)) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        header = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        header = PyObject_IsTrue(args[1]);
         if (header < 0) {
             goto exit;
         }
@@ -1818,13 +1589,12 @@ skip_optional_pos:
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
-    strip_ws = PyObject_IsTrueValue(args[2]);
+    strip_ws = PyObject_IsTrue(args[2]);
     if (strip_ws < 0) {
         goto exit;
     }
 skip_optional_kwonly:
-    _return_value = binascii_a2b_qp_impl(module, &data, header, strip_ws);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_a2b_qp_impl(module, &data, header, strip_ws);
 
 exit:
     /* Cleanup for data */
@@ -1851,14 +1621,15 @@ static PyObject *
 binascii_b2a_qp_impl(PyObject *module, Py_buffer *data, int quotetabs,
                      int istext, int header);
 
-static PyValue
-binascii_b2a_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyObject *
+binascii_b2a_qp(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
     static struct {
+        PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
         PyObject *ob_item[NUM_KEYWORDS];
@@ -1881,33 +1652,26 @@ binascii_b2a_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyValue argsbuf[4];
+    PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     Py_buffer data = {NULL, NULL};
     int quotetabs = 0;
     int istext = 1;
     int header = 0;
-    PyObject *_return_value;
 
     args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!args) {
         goto exit;
     }
-    {
-        PyObject *_arg = PyValue_Object(args[0]);
-        if (_arg == NULL) {
-            goto exit;
-        }
-        if (PyObject_GetBuffer(_arg, &data, PyBUF_SIMPLE) != 0) {
-            goto exit;
-        }
+    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    if (!PyValue_IsNull(args[1])) {
-        quotetabs = PyObject_IsTrueValue(args[1]);
+    if (args[1]) {
+        quotetabs = PyObject_IsTrue(args[1]);
         if (quotetabs < 0) {
             goto exit;
         }
@@ -1915,8 +1679,8 @@ binascii_b2a_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
             goto skip_optional_pos;
         }
     }
-    if (!PyValue_IsNull(args[2])) {
-        istext = PyObject_IsTrueValue(args[2]);
+    if (args[2]) {
+        istext = PyObject_IsTrue(args[2]);
         if (istext < 0) {
             goto exit;
         }
@@ -1924,13 +1688,12 @@ binascii_b2a_qp(PyObject *module, const PyValue *args, Py_ssize_t nargs, PyObjec
             goto skip_optional_pos;
         }
     }
-    header = PyObject_IsTrueValue(args[3]);
+    header = PyObject_IsTrue(args[3]);
     if (header < 0) {
         goto exit;
     }
 skip_optional_pos:
-    _return_value = binascii_b2a_qp_impl(module, &data, quotetabs, istext, header);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = binascii_b2a_qp_impl(module, &data, quotetabs, istext, header);
 
 exit:
     /* Cleanup for data */
@@ -1940,4 +1703,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=448e648dfd12bdea input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ec23792754b04657 input=a9049054013a1b77]*/

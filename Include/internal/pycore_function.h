@@ -8,9 +8,9 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-PyAPI_FUNC(PyValue) _PyFunction_Vectorcall(
-    PyValue func,
-    const PyValue *stack,
+PyAPI_FUNC(PyObject *) _PyFunction_Vectorcall(
+    PyObject *func,
+    PyObject *const *stack,
     size_t nargsf,
     PyObject *kwnames);
 
@@ -21,9 +21,6 @@ PyAPI_FUNC(PyValue) _PyFunction_Vectorcall(
 
 extern PyFunctionObject* _PyFunction_FromConstructor(PyFrameConstructor *constr);
 
-/* The collector makes this call of the dealloc's before the
-   sweep, where it may run code (Python/gc_live.c); the dealloc does not. */
-extern void _PyFunction_NotifyDestroy(PyObject *func);
 
 static inline int
 _PyFunction_IsVersionValid(uint32_t version)

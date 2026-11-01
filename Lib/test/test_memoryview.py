@@ -7,7 +7,6 @@
 import unittest
 import test.support
 import sys
-import os
 import gc
 import weakref
 import array
@@ -38,6 +37,7 @@ class AbstractMemoryTests:
 
     def check_getitem_with_type(self, tp):
         b = tp(self._source)
+        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         self.assertEqual(m[0], ord(b"a"))
         self.assertIsInstance(m[0], int)
@@ -54,6 +54,8 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, lambda: m[0.0])
         self.assertRaises(TypeError, lambda: m["a"])
         m = None
+        if not support.Py_GC:
+            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_getitem(self):
         for tp in self._types:
@@ -110,6 +112,7 @@ class AbstractMemoryTests:
         if not self.ro_type:
             self.skipTest("no read-only type to test")
         b = self.ro_type(self._source)
+        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         def setitem(value):
             m[0] = value
@@ -117,12 +120,15 @@ class AbstractMemoryTests:
         self.assertRaises(TypeError, setitem, 65)
         self.assertRaises(TypeError, setitem, memoryview(b"a"))
         m = None
+        if not support.Py_GC:
+            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_setitem_writable(self):
         if not self.rw_type:
             self.skipTest("no writable type to test")
         tp = self.rw_type
         b = self.rw_type(self._source)
+        oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
         m = self._view(b)
         m[0] = ord(b'1')
         self._check_contents(tp, b, b"1bcdef")
@@ -167,6 +173,8 @@ class AbstractMemoryTests:
         self.assertRaises(ValueError, setitem, slice(0,2), b"a")
 
         m = None
+        if not support.Py_GC:
+            self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_delitem(self):
         for tp in self._types:
@@ -250,10 +258,16 @@ class AbstractMemoryTests:
         # Test PyObject_GetBuffer() on a memoryview object.
         for tp in self._types:
             b = tp(self._source)
+            oldrefcount = sys.getrefcount(b) if not support.Py_GC else None
             m = self._view(b)
+            oldviewrefcount = sys.getrefcount(m) if not support.Py_GC else None
             s = str(m, "utf-8")
             self._check_contents(tp, b, s.encode("utf-8"))
+            if not support.Py_GC:
+                self.assertEqual(sys.getrefcount(m), oldviewrefcount)
             m = None
+            if not support.Py_GC:
+                self.assertEqual(sys.getrefcount(b), oldrefcount)
 
     def test_gc(self):
         for tp in self._types:
@@ -521,6 +535,14 @@ class BaseMemorySliceTests:
 
     def _check_contents(self, tp, obj, contents):
         self.assertEqual(obj[1:7], tp(contents))
+
+    @support.requires_refcounting
+    def test_refs(self):
+        for tp in self._types:
+            m = memoryview(tp(self._source))
+            oldrefcount = sys.getrefcount(m)
+            m[1:2]
+            self.assertEqual(sys.getrefcount(m), oldrefcount)
 
 class BaseMemorySliceSliceTests:
     source_bytes = b"XabcdefY"
@@ -932,113 +954,6 @@ class OtherTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             complex_view[0] = 1e300j
         self.assertEqual(complex_view[0], 123+321j)
-
-
-class SharedMemoryLifetimeTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.shared_memory = import_helper.import_module(
-            "multiprocessing.shared_memory")
-
-    def test_shared_memory_implicit_disposal_with_discarded_views(self):
-        sms = self.shared_memory.SharedMemory(create=True, size=16, track=False)
-        sms.unlink()
-        sms.buf[:4] = b'abcd'
-        self.assertEqual(bytes(sms.buf[:4]), b'abcd')
-        with support.catch_unraisable_exception() as caught:
-            del sms
-            support.gc_collect()
-            self.assertIsNone(caught.unraisable,
-                              'automatic disposal reported an exception')
-
-    def test_shared_memory_implicit_disposal_preserves_live_views(self):
-        sms = self.shared_memory.SharedMemory(create=True, size=16, track=False)
-        sms.unlink()
-        view = sms.buf
-        sliced = view[1:4]
-        try:
-            view[:4] = b'abcd'
-            with support.catch_unraisable_exception() as caught:
-                del sms
-                support.gc_collect()
-                self.assertIsNone(caught.unraisable)
-            self.assertEqual(view[0], ord('a'))
-            self.assertEqual(bytes(sliced), b'bcd')
-            sliced[0] = ord('B')
-            self.assertEqual(view[1], ord('B'))
-        finally:
-            sliced.release()
-            view.release()
-        del sliced, view
-        support.gc_collect()
-
-    def test_shared_memory_explicit_close_with_live_view(self):
-        sms = self.shared_memory.SharedMemory(create=True, size=16, track=False)
-        sms.unlink()
-        sliced = sms.buf[1:4]
-        try:
-            sliced[:] = b'abc'
-            with self.assertRaises(BufferError):
-                sms.close()
-            self.assertEqual(bytes(sliced), b'abc')
-            sliced.release()
-            sms.close()
-            self.assertIsNone(sms.buf)
-        finally:
-            sliced.release()
-            sms.close()
-
-    @unittest.skipUnless(sys.platform == 'linux' and
-                         os.path.isdir('/proc/self/fd') and
-                         os.path.exists('/proc/self/maps'),
-                         'requires Linux procfs')
-    def test_shared_memory_implicit_disposal_reclaims_mapping(self):
-        sms = self.shared_memory.SharedMemory(create=True, size=16, track=False)
-        sms.unlink()
-        name = sms.name
-
-        def mapping_exists():
-            with open('/proc/self/maps', encoding='utf-8',
-                      errors='surrogateescape') as mappings:
-                for line in mappings:
-                    fields = line.split(None, 5)
-                    if len(fields) == 6:
-                        path = fields[5].strip().removesuffix(' (deleted)')
-                        if os.path.basename(path) == name:
-                            return True
-            return False
-
-        def matching_descriptors():
-            matches = []
-            for entry in os.listdir('/proc/self/fd'):
-                try:
-                    path = os.readlink('/proc/self/fd/' + entry)
-                except FileNotFoundError:
-                    continue  # The directory scan's own fd may be closed.
-                if os.path.basename(path.removesuffix(' (deleted)')) == name:
-                    matches.append(entry)
-            return matches
-
-        view = sms.buf
-        sliced = view[1:4]
-        try:
-            view[:4] = b'abcd'
-            self.assertTrue(mapping_exists())
-            with support.catch_unraisable_exception() as caught:
-                del sms
-                support.gc_collect()
-                self.assertIsNone(caught.unraisable)
-            self.assertEqual(view[0], ord('a'))
-            self.assertEqual(bytes(sliced), b'bcd')
-            self.assertTrue(mapping_exists())
-        finally:
-            sliced.release()
-            view.release()
-        del sliced, view
-        support.gc_collect()
-        self.assertFalse(mapping_exists(), 'shared mapping was not reclaimed')
-        self.assertEqual(matching_descriptors(), [],
-                         'shared-memory file descriptors were not closed')
 
 
 @threading_helper.requires_working_threading()

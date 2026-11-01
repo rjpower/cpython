@@ -10,24 +10,22 @@ PyDoc_STRVAR(_testcapi_pyfile_newstdprinter__doc__,
 "\n");
 
 #define _TESTCAPI_PYFILE_NEWSTDPRINTER_METHODDEF    \
-    {"pyfile_newstdprinter", _PyCFunction_CAST(_testcapi_pyfile_newstdprinter), METH_O, _testcapi_pyfile_newstdprinter__doc__},
+    {"pyfile_newstdprinter", (PyCFunction)_testcapi_pyfile_newstdprinter, METH_O, _testcapi_pyfile_newstdprinter__doc__},
 
 static PyObject *
 _testcapi_pyfile_newstdprinter_impl(PyObject *module, int fd);
 
-static PyValue
-_testcapi_pyfile_newstdprinter(PyObject *module, PyValue arg)
+static PyObject *
+_testcapi_pyfile_newstdprinter(PyObject *module, PyObject *arg)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     int fd;
-    PyObject *_return_value;
 
-    fd = PyLong_AsIntValue(arg);
+    fd = PyLong_AsInt(arg);
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _testcapi_pyfile_newstdprinter_impl(module, fd);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testcapi_pyfile_newstdprinter_impl(module, fd);
 
 exit:
     return return_value;
@@ -46,21 +44,19 @@ static PyObject *
 _testcapi_py_fopen_impl(PyObject *module, PyObject *path, const char *mode,
                         Py_ssize_t mode_length);
 
-static PyValue
-_testcapi_py_fopen(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_testcapi_py_fopen(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *path;
     const char *mode;
     Py_ssize_t mode_length;
-    PyObject *_return_value;
 
     if (!PyArg_ParseArray(args, nargs, "Oz#:py_fopen",
         &path, &mode, &mode_length)) {
         goto exit;
     }
-    _return_value = _testcapi_py_fopen_impl(module, path, mode, mode_length);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testcapi_py_fopen_impl(module, path, mode, mode_length);
 
 exit:
     return return_value;
@@ -79,29 +75,24 @@ static PyObject *
 _testcapi_py_universalnewlinefgets_impl(PyObject *module, PyObject *file,
                                         int size);
 
-static PyValue
-_testcapi_py_universalnewlinefgets(PyObject *module, const PyValue *args, Py_ssize_t nargs)
+static PyObject *
+_testcapi_py_universalnewlinefgets(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyValue return_value = PyValue_NULL;
+    PyObject *return_value = NULL;
     PyObject *file;
     int size;
-    PyObject *_return_value;
 
     if (!_PyArg_CheckPositional("py_universalnewlinefgets", nargs, 2, 2)) {
         goto exit;
     }
-    file = PyValue_Object(args[0]);
-    if (file == NULL) {
-        goto exit;
-    }
-    size = PyLong_AsIntValue(args[1]);
+    file = args[0];
+    size = PyLong_AsInt(args[1]);
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _testcapi_py_universalnewlinefgets_impl(module, file, size);
-    return_value = PyValue_FromResult(_return_value);
+    return_value = _testcapi_py_universalnewlinefgets_impl(module, file, size);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=f4bd763e7100f7de input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8079c9d50d559d71 input=a9049054013a1b77]*/

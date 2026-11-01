@@ -75,16 +75,17 @@ static PyMethodDef Example_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static PyValue
+static PyObject *
 Example_getattro(PyObject *op, PyObject *name)
 {
     ExampleObject *self = ExampleObject_CAST(op);
     if (self->x_attr != NULL) {
-        // An inline item is returned as it is, with no box.
-        PyValue v;
-        if (PyDict_GetItemRefValue(self->x_attr, name, &v) != 0) {
-            // found, or an error and PyValue_NULL
-            return v;
+        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
+        if (v != NULL) {
+            return Py_NewRef(v);
+        }
+        else if (PyErr_Occurred()) {
+            return NULL;
         }
     }
     return PyObject_GenericGetAttr((PyObject *)self, name);
@@ -225,21 +226,21 @@ PyDoc_STRVAR(_StateAccessType_decrement_count__doc__,
 "(This is to test both positional and keyword arguments.");
 
 // Intentionally does not use Argument Clinic
-static PyValue
+static PyObject *
 _StateAccessType_increment_count_noclinic(PyObject *self,
                                           PyTypeObject *defining_class,
-                                          const PyValue *args,
+                                          PyObject *const *args,
                                           Py_ssize_t nargs,
                                           PyObject *kwnames)
 {
     if (!_PyArg_CheckPositional("StateAccessTypeObject.decrement_count", nargs, 0, 1)) {
-        return PyValue_NULL;
+        return NULL;
     }
     long n = 1;
     if (nargs) {
-        n = PyLong_AsLongValue(args[0]);
+        n = PyLong_AsLong(args[0]);
         if (PyErr_Occurred()) {
-            return PyValue_NULL;
+            return NULL;
         }
     }
     if (kwnames && PyTuple_Check(kwnames)) {
@@ -252,7 +253,7 @@ _StateAccessType_increment_count_noclinic(PyObject *self,
                 PyExc_TypeError,
                 "decrement_count only takes 'twice' keyword argument"
             );
-            return PyValue_NULL;
+            return NULL;
         }
         n *= 2;
     }
@@ -260,7 +261,7 @@ _StateAccessType_increment_count_noclinic(PyObject *self,
     assert(m_state == PyType_GetModuleState_DuringGC(defining_class));
     m_state->counter += n;
 
-    return PyValue_FromObject(Py_None);
+    Py_RETURN_NONE;
 }
 
 /*[clinic input]
@@ -950,6 +951,9 @@ PyInit__test_module_state_shared(void)
     if (module == NULL) {
         return NULL;
     }
+#ifdef Py_GIL_DISABLED
+    PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
+#endif
 
     if (PyModule_AddObjectRef(module, "Error", PyExc_Exception) < 0) {
         Py_DECREF(module);

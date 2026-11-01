@@ -428,7 +428,7 @@ _PyImport_RunModInitFunc(PyModInitFunction p0,
         goto error;
     }
 
-    if (_PyObject_SHAPE(m) == NULL) {
+    if (Py_IS_TYPE(m, NULL)) {
         /* This can happen when a PyModuleDef is returned without calling
          * PyModuleDef_Init on it
          */

@@ -42,8 +42,8 @@ class HANDLE_return_converter(CReturnConverter):
         self.err_occurred_if(
             "_return_value == NULL || _return_value == INVALID_HANDLE_VALUE",
             data)
-        data.return_conversion.append(self.result_assignment(
-            'PyLong_FromVoidPtr(_return_value)', data))
+        data.return_conversion.append(
+            'return_value = PyLong_FromVoidPtr(_return_value);\n')
 
 class byte_char_return_converter(CReturnConverter):
     type = 'int'
@@ -51,18 +51,19 @@ class byte_char_return_converter(CReturnConverter):
     def render(self, function, data):
         data.declarations.append('char s[1];')
         data.return_value = 's[0]'
-        data.return_conversion.append(self.result_assignment(
-            'PyBytes_FromStringAndSize(s, 1)', data))
+        data.return_conversion.append(
+            f'{data.parser_retval} = PyBytes_FromStringAndSize(s, 1);\n')
 
 class wchar_t_return_converter(CReturnConverter):
     type = 'wchar_t'
 
     def render(self, function, data):
         self.declare(data)
-        data.return_conversion.append(self.result_assignment(
-            f'PyUnicode_FromOrdinal({data.converter_retval})', data))
+        data.return_conversion.append(
+            f'{data.parser_retval} = '
+            f'PyUnicode_FromOrdinal({data.converter_retval});\n')
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=4f27467664a1b8c5]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=f61ae699a69482ba]*/
 
 /*[clinic input]
 module msvcrt

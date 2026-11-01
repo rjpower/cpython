@@ -5,10 +5,10 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
   which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations and of the NOFB forms (the count is in opcode_ids.h);
-- metadata, dispatch, pristine and installation-state properties;
+  operations and of the NOFB forms, and IR_NUM_HANDLERS;
 - _PyIR_Formats, the format of every handler, indexed by handler, as
   ir_generator.compute_formats() computes it for the handlers it generates;
+- _PyIR_OnlyNames, the names of the IR-only handlers.
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere. Handler indices without an instruction have a zeroed
@@ -22,23 +22,30 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
-    HandlerDomain,
-    HandlerKind,
-    HandlerState,
-    build_handler_domain,
+    first_ir_only_handler,
     NOFB_SUFFIX,
     IRFormat,
     binary_op_handlers,
     binary_ops,
     compute_formats,
+    handler_ids,
     nofb_bases,
+    num_handlers,
 )
 from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 
 
-def format_initializer(fmt: IRFormat, nofb: str) -> str:
+def shadow_of(name: str, analysis: Analysis) -> str:
+    """The instruction that the handler stands for: itself, for the handler
+    of a BINARY_OP operation BINARY_OP, and for a NOFB form its base."""
+    if name in binary_op_handlers(analysis):
+        return BINARY_OP_FAMILY
+    return name.removesuffix(NOFB_SUFFIX)
+
+
+def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
     flags = ["_PyIR_VALID"]
     if fmt.window:
         flags.append("_PyIR_WINDOW")
@@ -46,31 +53,29 @@ def format_initializer(fmt: IRFormat, nofb: str) -> str:
         flags.append("_PyIR_JUMPS")
     if fmt.forward:
         flags.append("_PyIR_FORWARD")
+    if fmt.no_fold:
+        flags.append("_PyIR_NO_FOLD")
     if fmt.transparent:
         flags.append("_PyIR_TRANSPARENT")
     if fmt.store_dst:
         flags.append("_PyIR_STORE_DST")
-    if fmt.runs_code:
-        flags.append("_PyIR_RUNS_CODE")
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
     return (
         f"{{ .flags = {' | '.join(flags)}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
         f".fb = {fmt.fb}, .ninputs = {fmt.n_inputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, "
+        f".borrow_mask = {fmt.borrow_mask:#x}, .shadow = {shadow}, "
         f".nofb = {nofb} }}"
     )
 
 
 def generate_ir_metadata(
-    filenames: list[str], analysis: Analysis, domain: HandlerDomain,
-    outfile: TextIO
+    filenames: list[str], analysis: Analysis, outfile: TextIO
 ) -> None:
-    domain.require_analysis(analysis)
     formats = compute_formats(analysis)
-    ids = domain.handlers
-    n = domain.count
-    first = domain.first_ir_only
+    ids = handler_ids(analysis)
+    n = num_handlers(analysis)
+    first = first_ir_only_handler(analysis)
     ir_only = sorted((name for name in ids if ids[name] >= first),
                      key=lambda name: ids[name])
     write_header(__file__, filenames, outfile)
@@ -84,34 +89,7 @@ def generate_ir_metadata(
         out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
-        out.emit("\n")
-        for kind in HandlerKind:
-            out.emit(f"#define _PyIR_H_{kind.name} {kind.value}\n")
-        for state in HandlerState:
-            out.emit(f"#define _PyIR_STATE_{state.name} {state.value}\n")
-        out.emit("\n")
-        indices = {**domain.opmap, **domain.handlers}
-        for ctype, table, values, prefix, enum in (
-            ("uint16_t", "_PyIR_HandlerFlags", domain.kinds, "_PyIR_H_", HandlerKind),
-            ("uint8_t", "_PyIR_RequiredState", domain.required_state,
-             "_PyIR_STATE_", HandlerState),
-        ):
-            out.emit(f"PyAPI_DATA(const {ctype}) {table}[IR_NUM_HANDLERS];\n")
-            out.emit("#ifdef NEED_IR_METADATA\n")
-            out.emit(f"const {ctype} {table}[IR_NUM_HANDLERS] = {{\n")
-            for name, i in sorted(indices.items(), key=lambda pair: pair[1]):
-                flags = " | ".join(prefix + flag.name for flag in enum
-                                   if values[name] & flag) or "0"
-                out.emit(f"[{i}] = {flags}, /* {name} */\n")
-            out.emit("};\n#endif\n\n")
-        for table, values in (("_PyIR_Instrumented", domain.instrumented),
-                              ("_PyIR_Deinstrument", domain.deinstrumented)):
-            out.emit(f"PyAPI_DATA(const uint16_t) {table}[IR_NUM_HANDLERS];\n")
-            out.emit("#ifdef NEED_IR_METADATA\n")
-            out.emit(f"const uint16_t {table}[IR_NUM_HANDLERS] = {{\n")
-            for name in sorted(values, key=lambda name: indices[name]):
-                out.emit(f"[{name}] = {values[name]},\n")
-            out.emit("};\n#endif\n\n")
+        out.emit(f"#define {'IR_NUM_HANDLERS':<46} {n}\n\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "
@@ -128,14 +106,24 @@ def generate_ir_metadata(
         # BINARY_OP has a format but no handler: its operations decode as it.
         indices = dict(ids)
         if BINARY_OP_FAMILY in analysis.instructions:
-            indices[BINARY_OP_FAMILY] = domain.opmap[BINARY_OP_FAMILY]
+            indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
         has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
             nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
-            init = format_initializer(formats[name], nofb)
+            init = format_initializer(formats[name], shadow_of(name, analysis),
+                                      nofb)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
+
+        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[{len(ir_only)}];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
+        for name in ir_only:
+            out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
+        out.emit("};\n")
+        out.emit("#endif\n")
+
 
 arg_parser = argparse.ArgumentParser(
     description="Generate the metadata of the register IR.",
@@ -155,6 +143,5 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
-    domain = build_handler_domain(data)
     with open(args.output, "w") as outfile:
-        generate_ir_metadata(args.input, data, domain, outfile)
+        generate_ir_metadata(args.input, data, outfile)

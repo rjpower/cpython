@@ -11,7 +11,6 @@ from concurrent.interpreters import InterpreterError
 from .utils import TestBase
 
 
-@support.requires_subinterpreters
 class StressTests(TestBase):
 
     # In these tests we generally want a lot of interpreters,

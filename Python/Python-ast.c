@@ -4,12 +4,11 @@
 #include "pycore_ast.h"
 #include "pycore_ast_state.h"     // struct ast_state
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
-#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_lock.h"          // _PyOnceFlag
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_unionobject.h"   // _Py_union_type_or
 
 #include <stddef.h>               // offsetof()
@@ -1536,7 +1535,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
 
     Py_ssize_t i, numfields = 0;
     int res = -1;
-    PyObject *key, *fields, *attributes = NULL, *remaining_fields = NULL;
+    PyObject *key, *value, *fields, *attributes = NULL, *remaining_fields = NULL;
 
     fields = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_fields);
     if (fields == NULL) {
@@ -1567,8 +1566,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             res = -1;
             goto cleanup;
         }
-        res = PyObject_SetAttrValue(PyValue_FromObject(self), name,
-                                    PyTuple_GET_VALUE(args, i));
+        res = PyObject_SetAttr(self, name, PyTuple_GET_ITEM(args, i));
         if (PySet_Discard(remaining_fields, name) < 0) {
             res = -1;
             Py_DECREF(name);
@@ -1580,15 +1578,8 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         }
     }
     if (kw) {
-        PyValue key_value, value;
-        i = 0;  /* needed by _PyDict_NextValue */
-        while (_PyDict_NextValue(kw, &i, &key_value, &value, NULL)) {
-            // A keyword is a str, so this normally makes no box.
-            key = PyValue_Object(key_value);
-            if (key == NULL) {
-                res = -1;
-                goto cleanup;
-            }
+        i = 0;  /* needed by PyDict_Next */
+        while (PyDict_Next(kw, &i, &key, &value)) {
             int contains = PySequence_Contains(fields, key);
             if (contains == -1) {
                 res = -1;
@@ -1630,7 +1621,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     goto cleanup;
                 }
             }
-            res = PyObject_SetAttrValue(PyValue_FromObject(self), key, value);
+            res = PyObject_SetAttr(self, key, value);
             if (res < 0) {
                 goto cleanup;
             }
@@ -1845,23 +1836,21 @@ ast_type_replace_update_payload(PyObject *payload,
         if (key == NULL) {
             return -1;
         }
-        // The value is copied as it is: an inline position is not boxed.
-        PyValue value;
-        int found = _PyDict_GetItemValue(dict, PyValue_FromObject(key), &value);
-        if (found < 0) {
+        PyObject *value;
+        if (PyDict_GetItemRef(dict, key, &value) < 0) {
             Py_DECREF(key);
             return -1;
         }
-        if (!found) {
+        if (value == NULL) {
             Py_DECREF(key);
             // If a field or attribute is not present at runtime, it should
             // be explicitly given in 'kwargs'. If not, the constructor will
             // issue a warning (which becomes an error in 3.15).
             continue;
         }
-        int rc = _PyDict_SetItemValue((PyDictObject *)payload,
-                                      PyValue_FromObject(key), value);
+        int rc = PyDict_SetItem(payload, key, value);
         Py_DECREF(key);
+        Py_DECREF(value);
         if (rc < 0) {
             return -1;
         }
@@ -2278,12 +2267,9 @@ static PyObject* ast2obj_object(struct ast_state *Py_UNUSED(state), void *o)
 #define ast2obj_identifier ast2obj_object
 #define ast2obj_string ast2obj_object
 
-/* Set node's int field name to value.  An int is inline, so this makes no
-   box. */
-static int ast2obj_set_int(PyObject *node, PyObject *name, int value)
+static PyObject* ast2obj_int(struct ast_state *Py_UNUSED(state), long b)
 {
-    return PyObject_SetAttrValue(PyValue_FromObject(node), name,
-                                 PyValue_FromLongLong(value));
+    return PyLong_FromLong(b);
 }
 
 /* Conversion Python -> AST */
@@ -5447,8 +5433,11 @@ ast2obj_stmt(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->value, value) == -1)
             goto failed;
         Py_DECREF(value);
-        if (ast2obj_set_int(result, state->simple, o->v.AnnAssign.simple) < 0)
+        value = ast2obj_int(state, o->v.AnnAssign.simple);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->simple, value) == -1)
             goto failed;
+        Py_DECREF(value);
         break;
     case For_kind:
         tp = (PyTypeObject *)state->For_type;
@@ -5706,8 +5695,11 @@ ast2obj_stmt(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->names, value) == -1)
             goto failed;
         Py_DECREF(value);
-        if (ast2obj_set_int(result, state->is_lazy, o->v.Import.is_lazy) < 0)
+        value = ast2obj_int(state, o->v.Import.is_lazy);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->is_lazy, value) == -1)
             goto failed;
+        Py_DECREF(value);
         break;
     case ImportFrom_kind:
         tp = (PyTypeObject *)state->ImportFrom_type;
@@ -5724,10 +5716,16 @@ ast2obj_stmt(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->names, value) == -1)
             goto failed;
         Py_DECREF(value);
-        if (ast2obj_set_int(result, state->level, o->v.ImportFrom.level) < 0)
+        value = ast2obj_int(state, o->v.ImportFrom.level);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->level, value) == -1)
             goto failed;
-        if (ast2obj_set_int(result, state->is_lazy, o->v.ImportFrom.is_lazy) < 0)
+        Py_DECREF(value);
+        value = ast2obj_int(state, o->v.ImportFrom.is_lazy);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->is_lazy, value) == -1)
             goto failed;
+        Py_DECREF(value);
         break;
     case Global_kind:
         tp = (PyTypeObject *)state->Global_type;
@@ -5777,14 +5775,26 @@ ast2obj_stmt(struct ast_state *state, void* _o)
         if (!result) goto failed;
         break;
     }
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6089,8 +6099,11 @@ ast2obj_expr(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->value, value) == -1)
             goto failed;
         Py_DECREF(value);
-        if (ast2obj_set_int(result, state->conversion, o->v.FormattedValue.conversion) < 0)
+        value = ast2obj_int(state, o->v.FormattedValue.conversion);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->conversion, value) == -1)
             goto failed;
+        Py_DECREF(value);
         value = ast2obj_expr(state, o->v.FormattedValue.format_spec);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->format_spec, value) == -1)
@@ -6111,8 +6124,11 @@ ast2obj_expr(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->str, value) == -1)
             goto failed;
         Py_DECREF(value);
-        if (ast2obj_set_int(result, state->conversion, o->v.Interpolation.conversion) < 0)
+        value = ast2obj_int(state, o->v.Interpolation.conversion);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->conversion, value) == -1)
             goto failed;
+        Py_DECREF(value);
         value = ast2obj_expr(state, o->v.Interpolation.format_spec);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->format_spec, value) == -1)
@@ -6277,14 +6293,26 @@ ast2obj_expr(struct ast_state *state, void* _o)
         Py_DECREF(value);
         break;
     }
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6418,8 +6446,11 @@ ast2obj_comprehension(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->ifs, value) == -1)
         goto failed;
     Py_DECREF(value);
-    if (ast2obj_set_int(result, state->is_async, o->is_async) < 0)
+    value = ast2obj_int(state, o->is_async);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->is_async, value) == -1)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6464,14 +6495,26 @@ ast2obj_excepthandler(struct ast_state *state, void* _o)
         Py_DECREF(value);
         break;
     }
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6570,14 +6613,26 @@ ast2obj_arg(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->type_comment, value) == -1)
         goto failed;
     Py_DECREF(value);
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6612,14 +6667,26 @@ ast2obj_keyword(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->value, value) == -1)
         goto failed;
     Py_DECREF(value);
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6654,14 +6721,26 @@ ast2obj_alias(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->asname, value) == -1)
         goto failed;
     Py_DECREF(value);
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6875,14 +6954,26 @@ ast2obj_pattern(struct ast_state *state, void* _o)
         Py_DECREF(value);
         break;
     }
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -6909,8 +7000,11 @@ ast2obj_type_ignore(struct ast_state *state, void* _o)
         tp = (PyTypeObject *)state->TypeIgnore_type;
         result = PyType_GenericNew(tp, NULL, NULL);
         if (!result) goto failed;
-        if (ast2obj_set_int(result, state->lineno, o->v.TypeIgnore.lineno) < 0)
+        value = ast2obj_int(state, o->v.TypeIgnore.lineno);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->lineno, value) == -1)
             goto failed;
+        Py_DECREF(value);
         value = ast2obj_string(state, o->v.TypeIgnore.tag);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->tag, value) == -1)
@@ -6991,14 +7085,26 @@ ast2obj_type_param(struct ast_state *state, void* _o)
         Py_DECREF(value);
         break;
     }
-    if (ast2obj_set_int(result, state->lineno, o->lineno) < 0)
+    value = ast2obj_int(state, o->lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->col_offset, o->col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->col_offset, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_lineno, o->end_lineno) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_lineno);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_lineno, value) < 0)
         goto failed;
-    if (ast2obj_set_int(result, state->end_col_offset, o->end_col_offset) < 0)
+    Py_DECREF(value);
+    value = ast2obj_int(state, o->end_col_offset);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
+    Py_DECREF(value);
     Py_LeaveRecursiveCall();
     return result;
 failed:
@@ -14223,25 +14329,24 @@ obj2ast_type_param(struct ast_state *state, PyObject* obj, type_param_ty* out,
 
 
 /* Helper for checking if a node class is abstract in the tests. */
-static PyValue
-ast_is_abstract(PyObject *Py_UNUSED(module), PyValue cls_value) {
-    PyObject *cls = PyValue_Object(cls_value);
-    if (cls == NULL) {
-        return PyValue_NULL;
-    }
+static PyObject *
+ast_is_abstract(PyObject *Py_UNUSED(module), PyObject *cls) {
     struct ast_state *state = get_ast_state();
     if (state == NULL) {
-        return PyValue_NULL;
+        return NULL;
     }
     int contains = PySet_Contains(state->abstract_types, cls);
     if (contains == -1) {
-        return PyValue_NULL;
+        return NULL;
     }
-    return PyValue_FromObject(contains ? Py_True : Py_False);
+    else if (contains == 1) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
 }
 
 static struct PyMethodDef astmodule_methods[] = {
-    {"_is_abstract", _PyCFunction_CAST(ast_is_abstract), METH_O, NULL},
+    {"_is_abstract", ast_is_abstract, METH_O, NULL},
     {NULL}  /* Sentinel */
 };
 

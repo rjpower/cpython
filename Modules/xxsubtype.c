@@ -94,11 +94,11 @@ spamlist_init(PyObject *op, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-static PyValue
+static PyObject *
 spamlist_state_get(PyObject *op, void *Py_UNUSED(closure))
 {
     spamlistobject *self = _spamlistobject_CAST(op);
-    return PyValue_FromLongLong(self->state);
+    return PyLong_FromLong(self->state);
 }
 
 static PyGetSetDef spamlist_getsets[] = {

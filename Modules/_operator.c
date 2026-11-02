@@ -1033,49 +1033,86 @@ itemgetter_call_impl(itemgetterobject *, PyObject *);
 static PyObject *
 itemgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    itemgetterobject *ig;
-    PyObject *item;
-    Py_ssize_t nitems;
-    Py_ssize_t index;
-
-    if (!_PyArg_NoKeywords("itemgetter", kwds))
-        return NULL;
-
-    nitems = PyTuple_GET_SIZE(args);
+    PyObject *type_owner = Py_NewRef((PyObject *)type);
+    PyObject *args_owner = Py_NewRef(args);
+    PyObject *kwds_owner = Py_XNewRef(kwds);
+    PyObject *item = NULL;
+    PyObject *result = NULL;
+    PyObject *saved;
+    itemgetterobject *ig = NULL;
+    Py_ssize_t nitems = PyTuple_GET_SIZE(args_owner);
+    Py_ssize_t index = -1;
+    if (PyErr_Occurred()) goto done;
+    if (!_PyArg_NoKeywords("itemgetter", kwds_owner)) goto done;
     if (nitems <= 1) {
-        if (!PyArg_UnpackTuple(args, "itemgetter", 1, 1, &item))
-            return NULL;
+        if (!_PyArg_CheckPositional("itemgetter", nitems, 1, 1)) goto done;
+        item = PyTuple_GetItemRef(args_owner, 0);
     } else {
-        item = args;
+        item = Py_NewRef(args_owner);
     }
-    _operator_state *state = _PyType_GetModuleState(type);
-    /* create itemgetterobject structure */
-    ig = PyObject_GC_New(itemgetterobject, (PyTypeObject *) state->itemgetter_type);
-    if (ig == NULL) {
+    if (item == NULL || PyErr_Occurred()) goto done;
+    _operator_state *state = _PyType_GetModuleState((PyTypeObject *)type_owner);
+    ig = PyObject_GC_New(itemgetterobject, (PyTypeObject *)state->itemgetter_type);
+    if (ig == NULL) goto done;
+    ig->item = NULL;
+    ig->nitems = 0;
+    ig->index = -1;
+    ig->vectorcall = NULL;
+    if (PyErr_Occurred()) goto done;
+    ig->item = item; item = NULL;
+    ig->nitems = nitems;
+    ig->vectorcall = itemgetter_vectorcall;
+    if (PyLong_CheckExact(ig->item)) {
+        index = PyLong_AsSsize_t(ig->item);
+        if (index < 0) PyErr_Clear();
+        else ig->index = index;
+    }
+    PyObject_GC_Track(ig);
+    result = (PyObject *)ig; ig = NULL;
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds_owner;
+        kwds_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (ig != NULL) {
+        saved=PyErr_GetRaisedException();
+        itemgetterobject *retired_ig=ig; ig=NULL;
+        Py_DECREF(retired_ig);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = type_owner;
+        type_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
         return NULL;
     }
-
-    ig->item = Py_NewRef(item);
-    ig->nitems = nitems;
-    ig->index = -1;
-    if (PyLong_CheckExact(item)) {
-        index = PyLong_AsSsize_t(item);
-        if (index < 0) {
-            /* If we get here, then either the index conversion failed
-             * due to being out of range, or the index was a negative
-             * integer.  Either way, we clear any possible exception
-             * and fall back to the slow path, where ig->index is -1.
-             */
-            PyErr_Clear();
-        }
-        else {
-            ig->index = index;
-        }
-    }
-
-    ig->vectorcall = itemgetter_vectorcall;
-    PyObject_GC_Track(ig);
-    return (PyObject *)ig;
+    return result;
 }
 
 static int
@@ -1108,13 +1145,53 @@ itemgetter_traverse(PyObject *op, visitproc visit, void *arg)
 static PyObject *
 itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
-    assert(PyTuple_CheckExact(args));
-    if (!_PyArg_NoKeywords("itemgetter", kw))
+    PyObject *op_owner = Py_NewRef(op), *args_owner = Py_NewRef(args);
+    PyObject *selected = NULL, *result = NULL, *saved;
+    if (PyErr_Occurred()) goto done;
+    assert(PyTuple_CheckExact(args_owner));
+    if (!_PyArg_NoKeywords("itemgetter", kw) ||
+        !_PyArg_CheckPositional("itemgetter", PyTuple_GET_SIZE(args_owner), 1, 1)) goto done;
+    selected = PyTuple_GetItemRef(args_owner, 0);
+    if (selected == NULL || PyErr_Occurred()) goto done;
+    result = itemgetter_call_impl(itemgetterobject_CAST(op_owner), selected);
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+    }
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = selected;
+        selected = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
         return NULL;
-    if (!_PyArg_CheckPositional("itemgetter", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
-    itemgetterobject *ig = itemgetterobject_CAST(op);
-    return itemgetter_call_impl(ig, PyTuple_GET_ITEM(args, 0));
+    }
+    return result;
 }
 
 static PyObject *
@@ -1135,35 +1212,64 @@ itemgetter_vectorcall(PyObject *op, PyObject *const *args,
 static PyObject *
 itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
 {
-    PyObject *result;
+    PyObject *ig_owner=Py_NewRef((PyObject *)ig), *obj_owner=Py_NewRef(obj);
+    PyObject *result=NULL, *saved;
     Py_ssize_t i, nitems=ig->nitems;
+    if (PyErr_Occurred()) goto done;
     if (nitems == 1) {
-        if (ig->index >= 0
-            && PyTuple_CheckExact(obj)
-            && ig->index < PyTuple_GET_SIZE(obj))
-        {
-            result = PyTuple_GET_ITEM(obj, ig->index);
-            return Py_NewRef(result);
-        }
-        return PyObject_GetItem(obj, ig->item);
+        if (ig->index >= 0 && PyTuple_CheckExact(obj_owner) && ig->index < PyTuple_GET_SIZE(obj_owner))
+            result=PyTuple_GetItemRef(obj_owner, ig->index);
+        else
+            result=PyObject_GetItem(obj_owner, ig->item);
+        goto done;
     }
-
     assert(PyTuple_Check(ig->item));
     assert(PyTuple_GET_SIZE(ig->item) == nitems);
-
-    result = PyTuple_New(nitems);
-    if (result == NULL)
-        return NULL;
-
-    for (i=0 ; i < nitems ; i++) {
-        PyObject *item, *val;
-        item = PyTuple_GET_ITEM(ig->item, i);
-        val = PyObject_GetItem(obj, item);
-        if (val == NULL) {
-            Py_DECREF(result);
-            return NULL;
+    result=PyTuple_New(nitems);
+    if (result==NULL || PyErr_Occurred()) goto done;
+    for (i=0; i<nitems; i++) {
+        PyObject *item=PyTuple_GetItemRef(ig->item, i), *value=NULL;
+        if (item != NULL && !PyErr_Occurred()) value=PyObject_GetItem(obj_owner,item);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = item;
+            item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
-        PyTuple_SET_ITEM(result, i, val);
+        if (value==NULL || PyErr_Occurred()) {
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = value;
+                value = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            } goto done;
+        }
+        if (PyTuple_SetItem(result,i,value)<0 || PyErr_Occurred()) goto done;
+    }
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = obj_owner;
+        obj_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = ig_owner;
+        ig_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
     return result;
 }
@@ -1261,109 +1367,150 @@ attrgetter_call_impl(attrgetterobject *, PyObject *);
 static PyObject *
 attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    attrgetterobject *ag;
-    PyObject *attr;
+    PyObject *type_owner=Py_NewRef((PyObject *)type), *args_owner=Py_NewRef(args);
+    PyObject *kwds_owner=Py_XNewRef(kwds), *attr=NULL, *item=NULL;
+    PyObject *chain=NULL, *chain_item=NULL, *result=NULL, *saved;
+    attrgetterobject *ag=NULL;
     Py_ssize_t nattrs, idx, char_idx;
-
-    if (!_PyArg_NoKeywords("attrgetter", kwds))
-        return NULL;
-
-    nattrs = PyTuple_GET_SIZE(args);
-    if (nattrs <= 1) {
-        if (!PyArg_UnpackTuple(args, "attrgetter", 1, 1, &attr))
-            return NULL;
-    }
-
-    attr = PyTuple_New(nattrs);
-    if (attr == NULL)
-        return NULL;
-
-    /* prepare attr while checking args */
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    for (idx = 0; idx < nattrs; ++idx) {
-        PyObject *item = PyTuple_GET_ITEM(args, idx);
-        int dot_count;
-
-        if (!PyUnicode_Check(item)) {
-            PyErr_SetString(PyExc_TypeError,
-                            "attribute name must be a string");
-            Py_DECREF(attr);
-            return NULL;
+    PyInterpreterState *interp=_PyInterpreterState_GET();
+    if (PyErr_Occurred()) goto error;
+    if (!_PyArg_NoKeywords("attrgetter",kwds_owner) || PyErr_Occurred()) goto error;
+    nattrs=PyTuple_GET_SIZE(args_owner);
+    if (nattrs<=1 && !_PyArg_CheckPositional("attrgetter",nattrs,1,1)) goto error;
+    attr=PyTuple_New(nattrs);
+    if (attr==NULL || PyErr_Occurred()) goto error;
+    for (idx=0; idx<nattrs; ++idx) {
+        PyValue candidate=PyTuple_GET_VALUE(args_owner,idx);
+        if (!PyValue_IsObject(candidate) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(candidate))) {
+            PyErr_SetString(PyExc_TypeError,"attribute name must be a string");
+            goto error;
         }
-        Py_ssize_t item_len = PyUnicode_GET_LENGTH(item);
-        int kind = PyUnicode_KIND(item);
-        const void *data = PyUnicode_DATA(item);
-
-        /* check whether the string is dotted */
-        dot_count = 0;
-        for (char_idx = 0; char_idx < item_len; ++char_idx) {
-            if (PyUnicode_READ(kind, data, char_idx) == '.')
-                ++dot_count;
+        item=PyTuple_GetItemRef(args_owner,idx);
+        if (item==NULL || PyErr_Occurred()) goto error;
+        int dot_count=0;
+        Py_ssize_t item_len=PyUnicode_GET_LENGTH(item);
+        int kind=PyUnicode_KIND(item);
+        const void *data=PyUnicode_DATA(item);
+        for (char_idx=0;char_idx<item_len;++char_idx)
+            if (PyUnicode_READ(kind,data,char_idx)=='.') ++dot_count;
+        if (dot_count==0) {
+            chain_item=Py_NewRef(item);
+            if (PyErr_Occurred()) goto error;
+            _PyUnicode_InternMortal(interp,&chain_item);
+            if (PyErr_Occurred()) goto error;
+            if (PyTuple_SetItem(attr,idx,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+            chain_item=NULL;
+        } else {
+            chain=PyTuple_New(dot_count+1);
+            if (chain==NULL || PyErr_Occurred()) goto error;
+            Py_ssize_t from=0, till=0, chain_idx=0;
+            while (dot_count>0) {
+                while (PyUnicode_READ(kind,data,till)!='.') ++till;
+                chain_item=PyUnicode_Substring(item,from,till);
+                if (chain_item==NULL || PyErr_Occurred()) goto error;
+                _PyUnicode_InternMortal(interp,&chain_item);
+                if (PyErr_Occurred()) goto error;
+                if (PyTuple_SetItem(chain,chain_idx++,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+                chain_item=NULL;
+                --dot_count;
+                till=from=till+1;
+            }
+            chain_item=PyUnicode_Substring(item,from,item_len);
+            if (chain_item==NULL || PyErr_Occurred()) goto error;
+            _PyUnicode_InternMortal(interp,&chain_item);
+            if (PyErr_Occurred()) goto error;
+            if (PyTuple_SetItem(chain,chain_idx,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+            chain_item=NULL;
+            if (PyTuple_SetItem(attr,idx,chain)<0 || PyErr_Occurred()) { chain=NULL; goto error; }
+            chain=NULL;
         }
-
-        if (dot_count == 0) {
-            Py_INCREF(item);
-            _PyUnicode_InternMortal(interp, &item);
-            PyTuple_SET_ITEM(attr, idx, item);
-        } else { /* make it a tuple of non-dotted attrnames */
-            PyObject *attr_chain = PyTuple_New(dot_count + 1);
-            PyObject *attr_chain_item;
-            Py_ssize_t unibuff_from = 0;
-            Py_ssize_t unibuff_till = 0;
-            Py_ssize_t attr_chain_idx = 0;
-
-            if (attr_chain == NULL) {
-                Py_DECREF(attr);
-                return NULL;
-            }
-
-            for (; dot_count > 0; --dot_count) {
-                while (PyUnicode_READ(kind, data, unibuff_till) != '.') {
-                    ++unibuff_till;
-                }
-                attr_chain_item = PyUnicode_Substring(item,
-                                      unibuff_from,
-                                      unibuff_till);
-                if (attr_chain_item == NULL) {
-                    Py_DECREF(attr_chain);
-                    Py_DECREF(attr);
-                    return NULL;
-                }
-                _PyUnicode_InternMortal(interp, &attr_chain_item);
-                PyTuple_SET_ITEM(attr_chain, attr_chain_idx, attr_chain_item);
-                ++attr_chain_idx;
-                unibuff_till = unibuff_from = unibuff_till + 1;
-            }
-
-            /* now add the last dotless name */
-            attr_chain_item = PyUnicode_Substring(item,
-                                                  unibuff_from, item_len);
-            if (attr_chain_item == NULL) {
-                Py_DECREF(attr_chain);
-                Py_DECREF(attr);
-                return NULL;
-            }
-            _PyUnicode_InternMortal(interp, &attr_chain_item);
-            PyTuple_SET_ITEM(attr_chain, attr_chain_idx, attr_chain_item);
-
-            PyTuple_SET_ITEM(attr, idx, attr_chain);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = item;
+            item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
+        if (PyErr_Occurred()) goto error;
     }
-
-    _operator_state *state = _PyType_GetModuleState(type);
-    /* create attrgetterobject structure */
-    ag = PyObject_GC_New(attrgetterobject, (PyTypeObject *)state->attrgetter_type);
-    if (ag == NULL) {
-        Py_DECREF(attr);
-        return NULL;
-    }
-
-    ag->attr = attr;
-    ag->nattrs = nattrs;
-    ag->vectorcall = attrgetter_vectorcall;
-
+    _operator_state *state=_PyType_GetModuleState((PyTypeObject *)type_owner);
+    ag=PyObject_GC_New(attrgetterobject,(PyTypeObject *)state->attrgetter_type);
+    if (ag==NULL) goto error;
+    ag->attr=NULL; ag->nattrs=0; ag->vectorcall=NULL;
+    if (PyErr_Occurred()) goto error;
+    ag->attr=attr; attr=NULL;
+    ag->nattrs=nattrs;
+    ag->vectorcall=attrgetter_vectorcall;
     PyObject_GC_Track(ag);
-    return (PyObject *)ag;
+    result=(PyObject *)ag; ag=NULL;
+    goto close_inputs;
+error:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = chain_item;
+        chain_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = chain;
+        chain = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attr;
+        attr = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (ag!=NULL) {
+        saved=PyErr_GetRaisedException();
+        attrgetterobject *retired_ag=ag; ag=NULL;
+        Py_DECREF(retired_ag);
+        _PyValue_RestoreException(saved);
+    }
+close_inputs:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds_owner;
+        kwds_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = type_owner;
+        type_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
 }
 
 static int
@@ -1396,45 +1543,126 @@ attrgetter_traverse(PyObject *op, visitproc visit, void *arg)
 static PyObject *
 dotted_getattr(PyObject *obj, PyObject *attr)
 {
-    PyObject *newobj;
-
-    /* attr is either a tuple or instance of str.
-       Ensured by the setup code of attrgetter_new */
-    if (PyTuple_CheckExact(attr)) { /* chained getattr */
-        Py_ssize_t name_idx = 0, name_count;
-        PyObject *attr_name;
-
-        name_count = PyTuple_GET_SIZE(attr);
-        Py_INCREF(obj);
-        for (name_idx = 0; name_idx < name_count; ++name_idx) {
-            attr_name = PyTuple_GET_ITEM(attr, name_idx);
-            newobj = PyObject_GetAttr(obj, attr_name);
-            Py_DECREF(obj);
-            if (newobj == NULL) {
-                return NULL;
+    PyObject *current=Py_NewRef(obj), *attr_owner=Py_NewRef(attr);
+    PyObject *result=NULL, *saved;
+    if (PyErr_Occurred()) goto done;
+    if (PyTuple_CheckExact(attr_owner)) {
+        Py_ssize_t count=PyTuple_GET_SIZE(attr_owner);
+        for (Py_ssize_t i=0; i<count; i++) {
+            PyObject *name=PyTuple_GetItemRef(attr_owner,i);
+            PyObject *next=NULL;
+            if (name != NULL && !PyErr_Occurred()) next=PyObject_GetAttr(current,name);
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = name;
+                name = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
             }
-            /* here */
-            obj = newobj;
+            if (next==NULL || PyErr_Occurred()) {
+                {
+                    saved = PyErr_GetRaisedException();
+                    PyObject *retired = next;
+                    next = NULL;
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                goto done;
+            }
+            {
+                saved=PyErr_GetRaisedException();
+                PyObject *retired_current=current; current=NULL;
+                Py_DECREF(retired_current);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                saved=PyErr_GetRaisedException();
+                PyObject *retired_next=next; next=NULL;
+                Py_XDECREF(retired_next);
+                _PyValue_RestoreException(saved);
+                goto done;
+            }
+            current=next;
         }
-    } else { /* single getattr */
-        newobj = PyObject_GetAttr(obj, attr);
-        if (newobj == NULL)
-            return NULL;
-        obj = newobj;
+        result=current; current=NULL;
+    } else {
+        result=PyObject_GetAttr(current,attr_owner);
     }
-
-    return obj;
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = current;
+        current = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attr_owner;
+        attr_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
 }
 
 static PyObject *
 attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
-    if (!_PyArg_NoKeywords("attrgetter", kw))
+    PyObject *op_owner=Py_NewRef(op), *args_owner=Py_NewRef(args);
+    PyObject *selected=NULL, *result=NULL, *saved;
+    if (PyErr_Occurred()) goto done;
+    if (!_PyArg_NoKeywords("attrgetter",kw) ||
+        !_PyArg_CheckPositional("attrgetter",PyTuple_GET_SIZE(args_owner),1,1)) goto done;
+    selected=PyTuple_GetItemRef(args_owner,0);
+    if (selected==NULL || PyErr_Occurred()) goto done;
+    result=attrgetter_call_impl(attrgetterobject_CAST(op_owner),selected);
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+    }
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = selected;
+        selected = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
         return NULL;
-    if (!_PyArg_CheckPositional("attrgetter", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
-    attrgetterobject *ag = attrgetterobject_CAST(op);
-    return attrgetter_call_impl(ag, PyTuple_GET_ITEM(args, 0));
+    }
+    return result;
 }
 
 static PyObject *
@@ -1455,30 +1683,76 @@ attrgetter_vectorcall(PyObject *op, PyObject *const *args,
 static PyObject *
 attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
 {
-    PyObject *result;
-    Py_ssize_t i, nattrs=ag->nattrs;
-
-    if (ag->nattrs == 1) {
-        /* ag->attr is always a tuple */
-        return dotted_getattr(obj, PyTuple_GET_ITEM(ag->attr, 0));
-    }
-
-    assert(PyTuple_Check(ag->attr));
-    assert(PyTuple_GET_SIZE(ag->attr) == nattrs);
-
-    result = PyTuple_New(nattrs);
-    if (result == NULL)
-        return NULL;
-
-    for (i=0 ; i < nattrs ; i++) {
-        PyObject *attr, *val;
-        attr = PyTuple_GET_ITEM(ag->attr, i);
-        val = dotted_getattr(obj, attr);
-        if (val == NULL) {
-            Py_DECREF(result);
-            return NULL;
+    PyObject *result=NULL, *ag_owner=Py_NewRef((PyObject *)ag), *obj_owner=Py_NewRef(obj), *saved;
+    PyObject *attrs=Py_NewRef(ag->attr);
+    Py_ssize_t nattrs=ag->nattrs;
+    if (PyErr_Occurred()) goto done;
+    if (nattrs==1) {
+        PyObject *attr=PyTuple_GetItemRef(attrs,0);
+        if (attr != NULL && !PyErr_Occurred()) result=dotted_getattr(obj_owner,attr);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = attr;
+            attr = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
-        PyTuple_SET_ITEM(result, i, val);
+        goto done;
+    }
+    assert(PyTuple_Check(attrs));
+    assert(PyTuple_GET_SIZE(attrs)==nattrs);
+    result=PyTuple_New(nattrs);
+    if (result==NULL || PyErr_Occurred()) goto done;
+    for (Py_ssize_t i=0;i<nattrs;i++) {
+        PyObject *attr=PyTuple_GetItemRef(attrs,i), *val=NULL;
+        if (attr != NULL && !PyErr_Occurred()) val=dotted_getattr(obj_owner,attr);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = attr;
+            attr = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (val==NULL || PyErr_Occurred()) {
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = val;
+                val = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            } goto done;
+        }
+        if (PyTuple_SetItem(result,i,val)<0 || PyErr_Occurred()) goto done;
+    }
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrs;
+        attrs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = obj_owner;
+        obj_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = ag_owner;
+        ag_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
     return result;
 }
@@ -1501,56 +1775,143 @@ dotjoinattr(PyObject *attr, PyObject **attrsep)
 static PyObject *
 attrgetter_args(attrgetterobject *ag)
 {
-    Py_ssize_t i;
-    PyObject *attrsep = NULL;
-    PyObject *attrstrings = PyTuple_New(ag->nattrs);
-    if (attrstrings == NULL)
-        return NULL;
-
-    for (i = 0; i < ag->nattrs; ++i) {
-        PyObject *attr = PyTuple_GET_ITEM(ag->attr, i);
-        PyObject *attrstr = dotjoinattr(attr, &attrsep);
-        if (attrstr == NULL) {
-            Py_XDECREF(attrsep);
-            Py_DECREF(attrstrings);
-            return NULL;
+    PyObject *ag_owner=Py_NewRef((PyObject *)ag), *attrs=Py_NewRef(ag->attr);
+    PyObject *attrsep=NULL, *attrstrings=NULL, *saved;
+    if (PyErr_Occurred()) goto done;
+    attrstrings=PyTuple_New(ag->nattrs);
+    if (attrstrings==NULL || PyErr_Occurred()) goto done;
+    for (Py_ssize_t i=0;i<ag->nattrs;i++) {
+        PyObject *attr=PyTuple_GetItemRef(attrs,i), *attrstr=NULL;
+        if (attr!=NULL && !PyErr_Occurred()) attrstr=dotjoinattr(attr,&attrsep);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = attr;
+            attr = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
-        PyTuple_SET_ITEM(attrstrings, i, attrstr);
+        if (attrstr==NULL || PyErr_Occurred()) {
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = attrstr;
+                attrstr = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            } goto done;
+        }
+        if (PyTuple_SetItem(attrstrings,i,attrstr)<0 || PyErr_Occurred()) goto done;
     }
-    Py_XDECREF(attrsep);
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrsep;
+        attrsep = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrs;
+        attrs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = ag_owner;
+        ag_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = attrstrings;
+        attrstrings = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return attrstrings;
 }
 
 static PyObject *
 attrgetter_repr(PyObject *op)
 {
-    PyObject *repr = NULL;
-    attrgetterobject *ag = attrgetterobject_CAST(op);
-    int status = Py_ReprEnter(op);
-    if (status != 0) {
-        if (status < 0)
-            return NULL;
-        return PyUnicode_FromFormat("%s(...)", Py_TYPE(ag)->tp_name);
+    PyObject *op_owner=Py_NewRef(op), *attrs=NULL, *attrsep=NULL, *attr=NULL;
+    PyObject *attrstrings=NULL, *repr=NULL, *saved;
+    attrgetterobject *ag=attrgetterobject_CAST(op_owner);
+    if (PyErr_Occurred()) goto done;
+    int status=Py_ReprEnter(op_owner);
+    if (status<0) {
+        saved=PyErr_GetRaisedException();
+        PyObject *retired_op=op_owner; op_owner=NULL;
+        Py_DECREF(retired_op);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
-
-    if (ag->nattrs == 1) {
-        PyObject *attrsep = NULL;
-        PyObject *attr = dotjoinattr(PyTuple_GET_ITEM(ag->attr, 0), &attrsep);
-        if (attr != NULL) {
-            repr = PyUnicode_FromFormat("%s(%R)", Py_TYPE(ag)->tp_name, attr);
-            Py_DECREF(attr);
+    if (status>0) {
+        repr=PyUnicode_FromFormat("%s(...)",Py_TYPE(ag)->tp_name);
+        goto done;
+    }
+    attrs=Py_NewRef(ag->attr);
+    if (PyErr_Occurred()) goto leave;
+    if (ag->nattrs==1) {
+        attr=PyTuple_GetItemRef(attrs,0);
+        if (attr!=NULL && !PyErr_Occurred()) attrstrings=dotjoinattr(attr,&attrsep);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = attr;
+            attr = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
-        Py_XDECREF(attrsep);
-    }
-    else {
-        PyObject *attrstrings = attrgetter_args(ag);
-        if (attrstrings != NULL) {
-            repr = PyUnicode_FromFormat("%s%R",
-                                        Py_TYPE(ag)->tp_name, attrstrings);
-            Py_DECREF(attrstrings);
+        if (attrstrings!=NULL && !PyErr_Occurred()) {
+            repr=PyUnicode_FromFormat("%s(%R)",Py_TYPE(ag)->tp_name,attrstrings);
         }
+    } else {
+        attrstrings=attrgetter_args(ag);
+        if (attrstrings!=NULL && !PyErr_Occurred())
+            repr=PyUnicode_FromFormat("%s%R",Py_TYPE(ag)->tp_name,attrstrings);
     }
-    Py_ReprLeave(op);
+leave:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrstrings;
+        attrstrings = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrsep;
+        attrsep = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = attrs;
+        attrs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    Py_ReprLeave(op_owner);
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = repr;
+        repr = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return repr;
 }
 
@@ -1628,21 +1989,119 @@ static PyObject *
 methodcaller_vectorcall(PyObject *op, PyObject *const *args,
                         size_t nargsf, PyObject* kwnames)
 {
-    methodcallerobject *mc = methodcallerobject_CAST(op);
-    if (!_PyArg_CheckPositional("methodcaller", PyVectorcall_NARGS(nargsf), 1, 1)
-        || !_PyArg_NoKwnames("methodcaller", kwnames)) {
+    methodcallerobject *mc;
+    PyObject *op_owner=Py_NewRef(op), *kwnames_owner=Py_XNewRef(kwnames);
+    PyObject *target=NULL, *name=NULL, *posargs=NULL, *combined=NULL, *names=NULL;
+    PyObject *result=NULL, *saved;
+    int scope_status=0;
+    PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
+    _PyArg_OwnerScope scope={0};
+    bool scope_started=false;
+    PyObject *const *owned=NULL;
+    Py_ssize_t nargs=PyVectorcall_NARGS(nargsf), nall, npos, nkw;
+    if (PyErr_Occurred()) goto done;
+    if (!_PyArg_CheckPositional("methodcaller",nargs,1,1) ||
+        !_PyArg_NoKwnames("methodcaller",kwnames_owner)) goto done;
+    target=Py_NewRef(args[0]);
+    if (PyErr_Occurred()) goto done;
+    mc=methodcallerobject_CAST(op_owner);
+    name=Py_XNewRef(mc->name); posargs=Py_XNewRef(mc->args);
+    combined=Py_XNewRef(mc->vectorcall_args); names=Py_XNewRef(mc->vectorcall_kwnames);
+    if (PyErr_Occurred()) goto done;
+    if (posargs==NULL || combined==NULL ||
+        !PyTuple_Check(posargs) || !PyTuple_Check(combined) ||
+        (names!=NULL && !PyTuple_Check(names))) {
+        PyErr_SetString(PyExc_RuntimeError,"methodcaller argument layout changed");
+        goto done;
+    }
+    nall=PyTuple_GET_SIZE(combined); npos=PyTuple_GET_SIZE(posargs);
+    nkw=names ? PyTuple_GET_SIZE(names) : 0;
+    if (nall > _METHODCALLER_MAX_ARGS-1 || npos > nall || nkw != nall-npos) {
+        PyErr_SetString(PyExc_RuntimeError,"methodcaller argument layout changed");
+        goto done;
+    }
+    assert(1 + nall <= _METHODCALLER_MAX_ARGS);
+    for (Py_ssize_t i=0;i<nkw;i++) {
+        PyValue key=PyTuple_GET_VALUE(names,i);
+        if (!PyValue_IsObject(key) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(key))) {
+            PyErr_SetString(PyExc_TypeError,"keywords must be strings");
+            goto done;
+        }
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&scope,combined,0)<0 || PyErr_Occurred()) {
+        scope_started=true;
+        goto done;
+    }
+    scope_started=true;
+    owned=_PyArg_UnpackPositionalOwned(&scope,NULL,nall,nall);
+    if (owned==NULL || PyErr_Occurred()) goto done;
+    tmp_args[0]=target;
+    for (Py_ssize_t i=0;i<nall;i++) tmp_args[i+1]=owned[i];
+    result=PyObject_VectorcallMethod(name,tmp_args,
+            (1+npos)|PY_VECTORCALL_ARGUMENTS_OFFSET,names);
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = names;
+        names = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = combined;
+        combined = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = posargs;
+        posargs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = name;
+        name = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = target;
+        target = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwnames_owner;
+        kwnames_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (scope_started) {
+        scope_status = _PyArg_OwnerScope_End(&scope);
+    }
+    if (scope_status < 0 || PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
         return NULL;
     }
-    assert(mc->vectorcall_args != NULL);
-
-    PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
-    tmp_args[0] = args[0];
-    assert(1 + PyTuple_GET_SIZE(mc->vectorcall_args) <= _METHODCALLER_MAX_ARGS);
-    memcpy(tmp_args + 1, _PyTuple_ITEMS(mc->vectorcall_args), sizeof(PyObject *) * PyTuple_GET_SIZE(mc->vectorcall_args));
-
-    return PyObject_VectorcallMethod(mc->name, tmp_args,
-            (1 + PyTuple_GET_SIZE(mc->args)) | PY_VECTORCALL_ARGUMENTS_OFFSET,
-            mc->vectorcall_kwnames);
+    return result;
 }
 
 static int
@@ -1689,55 +2148,109 @@ _methodcaller_initialize_vectorcall(methodcallerobject* mc)
 static PyObject *
 methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    methodcallerobject *mc;
-    PyObject *name;
-
-    if (PyTuple_GET_SIZE(args) < 1) {
-        PyErr_SetString(PyExc_TypeError, "methodcaller needs at least "
-                        "one argument, the method name");
-        return NULL;
+    PyObject *type_owner=Py_NewRef((PyObject *)type), *args_owner=Py_NewRef(args);
+    PyObject *kwds_owner=Py_XNewRef(kwds), *name=NULL, *interned=NULL, *result=NULL, *saved;
+    methodcallerobject *mc=NULL;
+    Py_ssize_t nitems=PyTuple_GET_SIZE(args_owner);
+    if (PyErr_Occurred()) goto error;
+    if (nitems<1) {
+        PyErr_SetString(PyExc_TypeError,"methodcaller needs at least one argument, the method name");
+        goto error;
     }
-
-    name = PyTuple_GET_ITEM(args, 0);
-    if (!PyUnicode_Check(name)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "method name must be a string");
-        return NULL;
+    PyValue candidate=PyTuple_GET_VALUE(args_owner,0);
+    if (!PyValue_IsObject(candidate) ||
+        !PyUnicode_Check(PyValue_AsPyObjectBorrow(candidate))) {
+        PyErr_SetString(PyExc_TypeError,"method name must be a string");
+        goto error;
     }
-
-    _operator_state *state = _PyType_GetModuleState(type);
-    /* create methodcallerobject structure */
-    mc = PyObject_GC_New(methodcallerobject, (PyTypeObject *)state->methodcaller_type);
-    if (mc == NULL) {
-        return NULL;
+    name=PyTuple_GetItemRef(args_owner,0);
+    if (name==NULL || PyErr_Occurred()) goto error;
+    _operator_state *state=_PyType_GetModuleState((PyTypeObject *)type_owner);
+    mc=PyObject_GC_New(methodcallerobject,(PyTypeObject *)state->methodcaller_type);
+    if (mc==NULL) goto error;
+    mc->name=NULL;
+    mc->args=NULL;
+    mc->kwds=NULL;
+    mc->vectorcall_args=NULL;
+    mc->vectorcall_kwnames=NULL;
+    mc->vectorcall=NULL;
+    if (PyErr_Occurred()) goto error;
+    mc->kwds=Py_XNewRef(kwds_owner);
+    if (PyErr_Occurred()) goto error;
+    PyInterpreterState *interp=_PyInterpreterState_GET();
+    interned=Py_NewRef(name);
+    if (PyErr_Occurred()) goto error;
+    _PyUnicode_InternMortal(interp,&interned);
+    if (interned==NULL || PyErr_Occurred()) goto error;
+    mc->name=interned;
+    interned=NULL;
+    mc->args=PyTuple_GetSlice(args_owner,1,nitems);
+    if (mc->args==NULL || PyErr_Occurred()) goto error;
+    Py_ssize_t vectorcall_size=nitems+(kwds_owner ? PyDict_Size(kwds_owner) : 0);
+    if (PyErr_Occurred()) goto error;
+    if (vectorcall_size<_METHODCALLER_MAX_ARGS) {
+        if (_methodcaller_initialize_vectorcall(mc)<0 || PyErr_Occurred()) goto error;
     }
-    mc->vectorcall = NULL;
-    mc->vectorcall_args = NULL;
-    mc->vectorcall_kwnames = NULL;
-    mc->kwds = Py_XNewRef(kwds);
-
-    Py_INCREF(name);
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    _PyUnicode_InternMortal(interp, &name);
-    mc->name = name;
-
-    mc->args = PyTuple_GetSlice(args, 1, PyTuple_GET_SIZE(args));
-    if (mc->args == NULL) {
-        Py_DECREF(mc);
-        return NULL;
-    }
-
-    Py_ssize_t vectorcall_size = PyTuple_GET_SIZE(args)
-                                   + (kwds ? PyDict_Size(kwds) : 0);
-    if (vectorcall_size < (_METHODCALLER_MAX_ARGS)) {
-        if (_methodcaller_initialize_vectorcall(mc) < 0) {
-            Py_DECREF(mc);
-            return NULL;
-        }
-    }
-
     PyObject_GC_Track(mc);
-    return (PyObject *)mc;
+    result=(PyObject *)mc; mc=NULL;
+    goto close_inputs;
+error:
+    if (mc!=NULL) {
+        saved=PyErr_GetRaisedException(); Py_CLEAR(mc->vectorcall_kwnames); _PyValue_RestoreException(saved);
+        saved=PyErr_GetRaisedException(); Py_CLEAR(mc->vectorcall_args); _PyValue_RestoreException(saved);
+        saved=PyErr_GetRaisedException(); Py_CLEAR(mc->kwds); _PyValue_RestoreException(saved);
+        saved=PyErr_GetRaisedException(); Py_CLEAR(mc->args); _PyValue_RestoreException(saved);
+        saved=PyErr_GetRaisedException(); Py_CLEAR(mc->name); _PyValue_RestoreException(saved);
+        saved=PyErr_GetRaisedException();
+        methodcallerobject *retired_mc=mc; mc=NULL;
+        Py_DECREF(retired_mc);
+        _PyValue_RestoreException(saved);
+    }
+close_inputs:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = interned;
+        interned = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = name;
+        name = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds_owner;
+        kwds_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = type_owner;
+        type_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
 }
 
 static int
@@ -1778,133 +2291,384 @@ methodcaller_traverse(PyObject *op, visitproc visit, void *arg)
 static PyObject *
 methodcaller_call(PyObject *op, PyObject *args, PyObject *kw)
 {
-    PyObject *method, *obj, *result;
-    methodcallerobject *mc = methodcallerobject_CAST(op);
-
-    if (!_PyArg_NoKeywords("methodcaller", kw))
+    PyObject *op_owner=Py_NewRef(op), *args_owner=Py_NewRef(args);
+    PyObject *obj=NULL, *name=NULL, *callargs=NULL, *callkw=NULL;
+    PyObject *method=NULL, *result=NULL, *saved;
+    if (PyErr_Occurred()) goto done;
+    if (!_PyArg_NoKeywords("methodcaller",kw) ||
+        !_PyArg_CheckPositional("methodcaller",PyTuple_GET_SIZE(args_owner),1,1)) goto done;
+    obj=PyTuple_GetItemRef(args_owner,0);
+    methodcallerobject *mc=methodcallerobject_CAST(op_owner);
+    name=Py_XNewRef(mc->name); callargs=Py_XNewRef(mc->args); callkw=Py_XNewRef(mc->kwds);
+    if (obj==NULL || PyErr_Occurred()) goto done;
+    method=PyObject_GetAttr(obj,name);
+    if (method!=NULL && !PyErr_Occurred()) result=PyObject_Call(method,callargs,callkw);
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = method;
+        method = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = callkw;
+        callkw = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = callargs;
+        callargs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = name;
+        name = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = obj;
+        obj = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
         return NULL;
-    if (!_PyArg_CheckPositional("methodcaller", PyTuple_GET_SIZE(args), 1, 1))
-        return NULL;
-    obj = PyTuple_GET_ITEM(args, 0);
-    method = PyObject_GetAttr(obj, mc->name);
-    if (method == NULL)
-        return NULL;
-
-    result = PyObject_Call(method, mc->args, mc->kwds);
-    Py_DECREF(method);
+    }
     return result;
 }
 
 static PyObject *
 methodcaller_repr(PyObject *op)
 {
-    methodcallerobject *mc = methodcallerobject_CAST(op);
-    PyObject *argreprs, *repr = NULL, *sep, *joinedargreprs;
-    Py_ssize_t numtotalargs, numposargs, numkwdargs, i;
-    int status = Py_ReprEnter(op);
-    if (status != 0) {
-        if (status < 0)
-            return NULL;
-        return PyUnicode_FromFormat("%s(...)", Py_TYPE(mc)->tp_name);
-    }
-
-    numkwdargs = mc->kwds != NULL ? PyDict_GET_SIZE(mc->kwds) : 0;
-    numposargs = PyTuple_GET_SIZE(mc->args);
-    numtotalargs = numposargs + numkwdargs;
-
-    if (numtotalargs == 0) {
-        repr = PyUnicode_FromFormat("%s(%R)", Py_TYPE(mc)->tp_name, mc->name);
-        Py_ReprLeave(op);
-        return repr;
-    }
-
-    argreprs = PyTuple_New(numtotalargs);
-    if (argreprs == NULL) {
-        Py_ReprLeave(op);
+    PyObject *op_owner=Py_NewRef(op), *name=NULL, *args=NULL, *kwds=NULL;
+    PyObject *argreprs=NULL, *one=NULL, *sep=NULL, *joined=NULL, *repr=NULL;
+    PyObject *key=NULL, *value=NULL, *saved;
+    Py_ssize_t npos=0, nkw=0, total=0, i;
+    if (PyErr_Occurred()) goto finish;
+    int status=Py_ReprEnter(op_owner);
+    if (status<0) {
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = op_owner;
+            op_owner = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
         return NULL;
     }
-
-    for (i = 0; i < numposargs; ++i) {
-        PyObject *onerepr = PyObject_Repr(PyTuple_GET_ITEM(mc->args, i));
-        if (onerepr == NULL)
-            goto done;
-        PyTuple_SET_ITEM(argreprs, i, onerepr);
+    if (status>0) {
+        repr=PyUnicode_FromFormat("%s(...)",Py_TYPE(op_owner)->tp_name);
+        goto finish;
     }
-
-    if (numkwdargs != 0) {
-        PyObject *key, *value;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(mc->kwds, &pos, &key, &value)) {
-            PyObject *onerepr = PyUnicode_FromFormat("%U=%R", key, value);
-            if (onerepr == NULL)
-                goto done;
-            if (i >= numtotalargs) {
-                i = -1;
-                Py_DECREF(onerepr);
+    methodcallerobject *mc=methodcallerobject_CAST(op_owner);
+    name=Py_XNewRef(mc->name); args=Py_XNewRef(mc->args); kwds=Py_XNewRef(mc->kwds);
+    if (PyErr_Occurred()) goto cleanup;
+    npos=PyTuple_GET_SIZE(args); nkw=kwds ? PyDict_GET_SIZE(kwds) : 0; total=npos+nkw;
+    if (total==0) {
+        repr=PyUnicode_FromFormat("%s(%R)",Py_TYPE(op_owner)->tp_name,name);
+        goto cleanup;
+    }
+    argreprs=PyTuple_New(total);
+    if (argreprs==NULL || PyErr_Occurred()) goto cleanup;
+    for (i=0;i<npos;i++) {
+        PyObject *item=PyTuple_GetItemRef(args,i);
+        if (item!=NULL && !PyErr_Occurred()) one=PyObject_Repr(item);
+        {
+            saved = PyErr_GetRaisedException();
+            PyObject *retired = item;
+            item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (one==NULL || PyErr_Occurred()) goto cleanup;
+        if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
+        one=NULL;
+    }
+    if (nkw) {
+        Py_ssize_t pos=0;
+        int iter_status;
+        while ((iter_status=PyDict_NextEntryRef(kwds,&pos,&key,&value))>0) {
+            if (PyErr_Occurred()) goto cleanup;
+            if (!PyUnicode_Check(key)) {
+                PyErr_SetString(PyExc_TypeError,"keywords must be strings");
+                goto cleanup;
+            }
+            one=PyUnicode_FromFormat("%U=%R",key,value);
+            if (one==NULL || PyErr_Occurred()) goto cleanup;
+            if (i>=total) {
+                {
+                    saved = PyErr_GetRaisedException();
+                    PyObject *retired = one;
+                    one = NULL;
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                {
+                    saved = PyErr_GetRaisedException();
+                    PyObject *retired = key;
+                    key = NULL;
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                {
+                    saved = PyErr_GetRaisedException();
+                    PyObject *retired = value;
+                    value = NULL;
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) goto cleanup;
+                i=-1;
                 break;
             }
-            PyTuple_SET_ITEM(argreprs, i, onerepr);
+            if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
+            one=NULL;
             ++i;
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = key;
+                key = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            {
+                saved = PyErr_GetRaisedException();
+                PyObject *retired = value;
+                value = NULL;
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) goto cleanup;
         }
-        if (i != numtotalargs) {
-            PyErr_SetString(PyExc_RuntimeError,
-                            "keywords dict changed size during iteration");
-            goto done;
+        if (key!=NULL || value!=NULL) goto cleanup;
+        if (iter_status<0 || PyErr_Occurred()) goto cleanup;
+        if (i!=total) {
+            PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during iteration");
+            goto cleanup;
         }
     }
-
-    sep = PyUnicode_FromString(", ");
-    if (sep == NULL)
-        goto done;
-
-    joinedargreprs = PyUnicode_Join(sep, argreprs);
-    Py_DECREF(sep);
-    if (joinedargreprs == NULL)
-        goto done;
-
-    repr = PyUnicode_FromFormat("%s(%R, %U)", Py_TYPE(mc)->tp_name,
-                                mc->name, joinedargreprs);
-    Py_DECREF(joinedargreprs);
-
-done:
-    Py_DECREF(argreprs);
-    Py_ReprLeave(op);
+    sep=PyUnicode_FromString(", ");
+    if (sep==NULL || PyErr_Occurred()) goto cleanup;
+    joined=PyUnicode_Join(sep,argreprs);
+    if (joined==NULL || PyErr_Occurred()) goto cleanup;
+    repr=PyUnicode_FromFormat("%s(%R, %U)",Py_TYPE(op_owner)->tp_name,name,joined);
+cleanup:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = one;
+        one = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = key;
+        key = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = value;
+        value = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = joined;
+        joined = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = sep;
+        sep = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = argreprs;
+        argreprs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds;
+        kwds = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args;
+        args = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = name;
+        name = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    Py_ReprLeave(op_owner);
+finish:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = repr;
+        repr = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return repr;
 }
 
 static PyObject *
 methodcaller_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
 {
-    methodcallerobject *mc = methodcallerobject_CAST(op);
-    if (!mc->kwds || PyDict_GET_SIZE(mc->kwds) == 0) {
-        Py_ssize_t i;
-        Py_ssize_t callargcount = PyTuple_GET_SIZE(mc->args);
-        PyObject *newargs = PyTuple_New(1 + callargcount);
-        if (newargs == NULL)
-            return NULL;
-        PyTuple_SET_ITEM(newargs, 0, Py_NewRef(mc->name));
-        for (i = 0; i < callargcount; ++i) {
-            PyObject *arg = PyTuple_GET_ITEM(mc->args, i);
-            PyTuple_SET_ITEM(newargs, i + 1, Py_NewRef(arg));
+    PyObject *op_owner=Py_NewRef(op), *name=NULL, *args=NULL, *kwds=NULL;
+    PyObject *partial=NULL, *constructor=NULL, *newargs=NULL, *result=NULL, *selected=NULL, *saved;
+    Py_ssize_t npos;
+    methodcallerobject *mc=methodcallerobject_CAST(op_owner);
+    name=Py_XNewRef(mc->name); args=Py_XNewRef(mc->args); kwds=Py_XNewRef(mc->kwds);
+    if (PyErr_Occurred()) goto done;
+    npos=PyTuple_GET_SIZE(args);
+    if (kwds==NULL || PyDict_GET_SIZE(kwds)==0) {
+        newargs=PyTuple_New(1+npos);
+        if (newargs==NULL || PyErr_Occurred()) goto done;
+        if (PyTuple_SetItem(newargs,0,Py_NewRef(name))<0 || PyErr_Occurred()) goto done;
+        for (Py_ssize_t i=0;i<npos;i++) {
+            selected=PyTuple_GetItemRef(args,i);
+            if (selected==NULL || PyErr_Occurred()) goto done;
+            PyObject *transfer=selected;
+            selected=NULL;
+            if (PyTuple_SetItem(newargs,i+1,transfer)<0 || PyErr_Occurred()) goto done;
         }
-        return Py_BuildValue("ON", Py_TYPE(mc), newargs);
+        result=Py_BuildValue("ON",Py_TYPE(op_owner),newargs);
+        newargs=NULL;
+        goto done;
     }
-    else {
-        PyObject *partial;
-        PyObject *constructor;
-        PyObject *newargs[2];
-
-        partial = PyImport_ImportModuleAttrString("functools", "partial");
-        if (!partial)
-            return NULL;
-
-        newargs[0] = (PyObject *)Py_TYPE(mc);
-        newargs[1] = mc->name;
-        constructor = PyObject_VectorcallDict(partial, newargs, 2, mc->kwds);
-
-        Py_DECREF(partial);
-        return Py_BuildValue("NO", constructor, mc->args);
+    partial=PyImport_ImportModuleAttrString("functools","partial");
+    if (partial==NULL || PyErr_Occurred()) goto done;
+    PyObject *vector_args[2]={(PyObject *)Py_TYPE(op_owner),name};
+    constructor=PyObject_VectorcallDict(partial,vector_args,2,kwds);
+    if (PyErr_Occurred()) { saved=PyErr_GetRaisedException(); Py_CLEAR(constructor); _PyValue_RestoreException(saved); }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = partial;
+        partial = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
     }
+    if (constructor==NULL || PyErr_Occurred()) goto done;
+    result=Py_BuildValue("NO",constructor,args);
+    constructor=NULL;
+done:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = selected;
+        selected = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = constructor;
+        constructor = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = partial;
+        partial = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = newargs;
+        newargs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds;
+        kwds = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args;
+        args = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = name;
+        name = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = op_owner;
+        op_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired_result = result;
+        result = NULL;
+        Py_XDECREF(retired_result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
 }
 
 static PyMethodDef methodcaller_methods[] = {

@@ -8,6 +8,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
+#include "pycore_value.h"         // PyValue
 
 
 #include "clinic/_functoolsmodule.c.h"
@@ -1249,61 +1250,216 @@ static PyObject *
 lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                    PyObject *kwds, int typed)
 {
-    PyObject *key, *keyword, *value;
-    Py_ssize_t key_size, pos, key_pos, kwds_size;
+    PyObject *args_owner = Py_NewRef(args);
+    PyObject *kwds_owner = Py_XNewRef(kwds);
+    PyObject *mark_owner = Py_NewRef(kwd_mark);
+    PyObject *key = NULL;
+    PyObject *saved;
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args_owner);
+    Py_ssize_t nkwargs = kwds_owner ? PyDict_GET_SIZE(kwds_owner) : 0;
+    Py_ssize_t key_size = nargs, pos, cursor = 0, written = 0;
+    PyValue value = PyValue_NULL, dict_key = PyValue_NULL;
+    int status;
 
-    kwds_size = kwds ? PyDict_GET_SIZE(kwds) : 0;
-
-    /* short path, key will match args anyway, which is a tuple */
-    if (!typed && !kwds_size) {
-        if (PyTuple_GET_SIZE(args) == 1) {
-            key = PyTuple_GET_ITEM(args, 0);
-            if (PyUnicode_CheckExact(key) || PyLong_CheckExact(key)) {
-                /* For common scalar keys, save space by
-                   dropping the enclosing args tuple  */
-                return Py_NewRef(key);
+    if (PyErr_Occurred()) goto error;
+    if (!typed && nkwargs == 0 && nargs == 1) {
+        value = PyTuple_GetValue(args_owner, 0);
+        if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
+        if (PyValue_IsInlineInt(value) ||
+            (PyValue_IsObject(value) &&
+             (Py_IS_TYPE(PyValue_AsPyObjectBorrow(value), &PyLong_Type) ||
+              Py_IS_TYPE(PyValue_AsPyObjectBorrow(value), &PyUnicode_Type)))) {
+            key = PyValue_AsObject(value);
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyValue retired = value;
+                value = PyValue_NULL;
+                PyValue_XCLOSE(retired);
+                _PyValue_RestoreException(saved);
             }
+            if (key == NULL || PyErr_Occurred()) goto error;
+            goto close_inputs;
         }
-        return Py_NewRef(args);
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue retired = value;
+            value = PyValue_NULL;
+            PyValue_XCLOSE(retired);
+            _PyValue_RestoreException(saved);
+        }if (PyErr_Occurred()) goto error;
     }
-
-    key_size = PyTuple_GET_SIZE(args);
-    if (kwds_size)
-        key_size += kwds_size * 2 + 1;
-    if (typed)
-        key_size += PyTuple_GET_SIZE(args) + kwds_size;
-
-    key = PyTuple_New(key_size);
-    if (key == NULL)
-        return NULL;
-
-    key_pos = 0;
-    for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
-        PyObject *item = PyTuple_GET_ITEM(args, pos);
-        PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
+    if (!typed && nkwargs==0) {
+        key=Py_NewRef(args_owner);
+        if (PyErr_Occurred()) goto error;
+        goto close_inputs;
     }
-    if (kwds_size) {
-        PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(kwd_mark));
-        for (pos = 0; PyDict_Next(kwds, &pos, &keyword, &value);) {
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(keyword));
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(value));
-        }
-        assert(key_pos == PyTuple_GET_SIZE(args) + kwds_size * 2 + 1);
+    if (nkwargs) {
+        if (nkwargs > (PY_SSIZE_T_MAX - key_size - 1) / 2) { PyErr_NoMemory(); goto error; }
+        key_size += nkwargs * 2 + 1;
     }
     if (typed) {
-        for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
-            PyObject *item = (PyObject *)Py_TYPE(PyTuple_GET_ITEM(args, pos));
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
+        if (nargs > PY_SSIZE_T_MAX - key_size || nkwargs > PY_SSIZE_T_MAX - key_size - nargs) {
+            PyErr_NoMemory(); goto error;
         }
-        if (kwds_size) {
-            for (pos = 0; PyDict_Next(kwds, &pos, &keyword, &value);) {
-                PyObject *item = (PyObject *)Py_TYPE(value);
-                PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
+        key_size += nargs + nkwargs;
+    }
+    key = PyTuple_New(key_size);
+    if (key == NULL || PyErr_Occurred()) goto error;
+    if (kwds_owner && PyDict_GET_SIZE(kwds_owner) != nkwargs) {
+        PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
+        goto error;
+    }
+    for (pos=0; pos<nargs; pos++) {
+        if (written >= key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
+        value=PyTuple_GetValue(args_owner,pos);
+        if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
+        if (PyTuple_SetValue(key,written++,value)<0 || PyErr_Occurred()) { value=PyValue_NULL; goto error; }
+        value=PyValue_NULL;
+    }
+    if (nkwargs) {
+        if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
+        if (PyTuple_SetItem(key,written++,Py_NewRef(mark_owner))<0 || PyErr_Occurred()) goto error;
+        cursor=0;
+        while ((status=_PyDict_NextValue(kwds_owner,&cursor,&dict_key,&value,NULL))>0) {
+            if (PyErr_Occurred()) goto error;
+            if (written > key_size - 2) {
+                PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
+                goto error;
             }
+            if (PyTuple_SetValue(key,written++,dict_key)<0 || PyErr_Occurred()) { dict_key=PyValue_NULL; goto error; }
+            dict_key=PyValue_NULL;
+            if (PyTuple_SetValue(key,written++,value)<0 || PyErr_Occurred()) { value=PyValue_NULL; goto error; }
+            value=PyValue_NULL;
+        }
+        if (status<0 || PyErr_Occurred()) goto error;
+        if (PyDict_GET_SIZE(kwds_owner)!=nkwargs) {
+            PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
+            goto error;
         }
     }
-    assert(key_pos == key_size);
+    if (typed) {
+        for (pos=0; pos<nargs; pos++) {
+            if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
+            value=PyTuple_GetValue(args_owner,pos);
+            if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
+            PyTypeObject *type=PyValue_TYPE(value);
+            PyObject *type_owner=Py_NewRef((PyObject *)type);
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyValue retired = value;
+                value = PyValue_NULL;
+                PyValue_XCLOSE(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (type_owner==NULL) goto error;
+            if (PyErr_Occurred()) {
+                saved=PyErr_GetRaisedException();
+                PyObject *retired_type=type_owner; type_owner=NULL;
+                Py_XDECREF(retired_type);
+                _PyValue_RestoreException(saved);
+                goto error;
+            }
+            if (PyTuple_SetItem(key,written++,type_owner)<0 || PyErr_Occurred()) goto error;
+        }
+        if (nkwargs) {
+            cursor=0;
+            while ((status=_PyDict_NextValue(kwds_owner,&cursor,NULL,&value,NULL))>0) {
+                if (PyErr_Occurred()) goto error;
+                if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
+                PyTypeObject *type=PyValue_TYPE(value);
+                PyObject *type_owner=Py_NewRef((PyObject *)type);
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyValue retired = value;
+                    value = PyValue_NULL;
+                    PyValue_XCLOSE(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (type_owner==NULL) goto error;
+                if (PyErr_Occurred()) {
+                    saved=PyErr_GetRaisedException();
+                    PyObject *retired_type=type_owner; type_owner=NULL;
+                    Py_XDECREF(retired_type);
+                    _PyValue_RestoreException(saved);
+                    goto error;
+                }
+                if (PyTuple_SetItem(key,written++,type_owner)<0 || PyErr_Occurred()) goto error;
+            }
+            if (status<0 || PyErr_Occurred()) goto error;
+        }
+    }
+    if (written!=key_size) {
+        PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
+        goto error;
+    }
+close_inputs:
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds_owner;
+        kwds_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = mark_owner;
+        mark_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
     return key;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = dict_key;
+        dict_key = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = value;
+        value = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = kwds_owner;
+        kwds_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = mark_owner;
+        mark_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        saved = PyErr_GetRaisedException();
+        PyObject *retired = key;
+        key = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static PyObject *

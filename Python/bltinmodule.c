@@ -1253,8 +1253,8 @@ builtin_exec_impl(PyObject *module, PyObject *source, PyObject *globals,
                 && (PyTuple_GET_SIZE(closure) == num_free);
             if (closure_is_ok) {
                 for (Py_ssize_t i = 0; i < num_free; i++) {
-                    PyObject *cell = PyTuple_GET_ITEM(closure, i);
-                    if (!PyCell_Check(cell)) {
+                    PyValue value = PyTuple_GET_VALUE(closure, i);
+                    if (PyValue_TYPE(value) != &PyCell_Type) {
                         closure_is_ok = 0;
                         break;
                     }
@@ -3482,7 +3482,8 @@ static struct PyModuleDef builtinsmodule = {
 int
 _PyBuiltin_InitPythonFunctions(PyObject *dict)
 {
-    if (PyImport_ImportFrozenModule("_pybuiltins") <= 0) {
+    int imported = PyImport_ImportFrozenModule("_pybuiltins");
+    if (imported <= 0 || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ImportError,
                             "frozen module _pybuiltins not found");
@@ -3490,36 +3491,99 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
         return -1;
     }
     PyObject *mod = PyImport_AddModuleRef("_pybuiltins");
-    if (mod == NULL) {
+    if (mod == NULL || PyErr_Occurred()) {
+        if (mod != NULL) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = mod;
+                mod = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+        }
         return -1;
     }
 
     int rc = -1;
     PyObject *all = PyObject_GetAttr(mod, &_Py_ID(__all__));
-    if (all == NULL) {
+    if (all == NULL || PyErr_Occurred()) {
         goto done;
     }
     Py_ssize_t n = PyList_Size(all);
-    if (n < 0) {
+    if (n < 0 || PyErr_Occurred()) {
         goto done;
     }
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *name = PyList_GET_ITEM(all, i);
+        PyObject *name = PyList_GetItemRef(all, i);
+        if (name == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = name;
+                name = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            goto done;
+        }
         PyObject *func = PyObject_GetAttr(mod, name);
-        if (func == NULL) {
+        if (func == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = func;
+                func = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = name;
+                name = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
             goto done;
         }
         int r = PyDict_SetItem(dict, name, func);
-        Py_DECREF(func);
-        if (r < 0) {
+        int failed = r < 0 || PyErr_Occurred();
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = func;
+            func = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) failed = 1;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = name;
+            name = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) failed = 1;
+        if (failed) {
             goto done;
         }
     }
     rc = 0;
 
 done:
-    Py_XDECREF(all);
-    Py_DECREF(mod);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = all;
+        all = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) rc = -1;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = mod;
+        mod = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) rc = -1;
     return rc;
 }
 

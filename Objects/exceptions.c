@@ -15,6 +15,7 @@
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
 #include "pycore_tuple.h"         // _PyTuple_FromPair
+#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 
 #include "osdefs.h"               // SEP
@@ -173,8 +174,46 @@ BaseException_str_impl(PyBaseExceptionObject *self)
     switch (PyTuple_GET_SIZE(self->args)) {
     case 0:
         return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
-    case 1:
-        return PyObject_Str(PyTuple_GET_ITEM(self->args, 0));
+    case 1: {
+        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
+        if (arg == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = arg;
+                arg = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            return NULL;
+        }
+        PyObject *result = PyObject_Str(arg);
+        if (result == NULL || PyErr_Occurred()) goto str_cleanup_error;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto str_cleanup_error;
+        return result;
+str_cleanup_error:
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = result;
+            result = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
     default:
         return PyObject_Str(self->args);
     }
@@ -191,8 +230,44 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
 {
     const char *name = _PyType_Name(Py_TYPE(self));
     if (PyTuple_GET_SIZE(self->args) == 1) {
-        return PyUnicode_FromFormat("%s(%R)", name,
-                                    PyTuple_GET_ITEM(self->args, 0));
+        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
+        if (arg == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = arg;
+                arg = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            return NULL;
+        }
+        PyObject *result = PyUnicode_FromFormat("%s(%R)", name, arg);
+        if (result == NULL || PyErr_Occurred()) goto repr_cleanup_error;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto repr_cleanup_error;
+        return result;
+repr_cleanup_error:
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = result;
+            result = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
     }
     return PyUnicode_FromFormat("%s%R", name, self->args);
 }
@@ -3066,7 +3141,44 @@ KeyError_str(PyObject *op)
     */
     PyBaseExceptionObject *self = PyBaseExceptionObject_CAST(op);
     if (PyTuple_GET_SIZE(self->args) == 1) {
-        return PyObject_Repr(PyTuple_GET_ITEM(self->args, 0));
+        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
+        if (arg == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = arg;
+                arg = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            return NULL;
+        }
+        PyObject *result = PyObject_Repr(arg);
+        if (result == NULL || PyErr_Occurred()) goto keyerror_cleanup_error;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto keyerror_cleanup_error;
+        return result;
+keyerror_cleanup_error:
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = arg;
+            arg = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = result;
+            result = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
     }
     return BaseException_str(op);
 }

@@ -18,6 +18,7 @@ Copyright (c) Corporation for National Research Initiatives.
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_unicodeobject.h" // _PyUnicode_InternMortal()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_pyatomic_ft_wrappers.h"
 
 static const char *codecs_builtin_error_handlers[] = {
@@ -263,15 +264,39 @@ PyObject *args_tuple(PyObject *object,
 static
 PyObject *codec_getitem(const char *encoding, int index)
 {
-    PyObject *codecs;
-    PyObject *v;
+    PyObject *codecs = NULL;
+    PyObject *v = NULL;
 
     codecs = _PyCodec_Lookup(encoding);
-    if (codecs == NULL)
-        return NULL;
-    v = Py_NewRef(PyTuple_GET_ITEM(codecs, index));
-    Py_DECREF(codecs);
+    if (codecs == NULL) return NULL;
+    if (PyErr_Occurred()) goto error;
+    v = PyTuple_GetItemRef(codecs, index);
+    if (v == NULL || PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codecs;
+        codecs = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
     return v;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codecs;
+        codecs = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = v;
+        v = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 /* Helper functions to create an incremental codec. */
@@ -316,19 +341,59 @@ PyObject *codec_getstreamcodec(const char *encoding,
                                const char *errors,
                                const int index)
 {
-    PyObject *codecs, *streamcodec, *codeccls;
+    PyObject *codecs = NULL, *streamcodec = NULL, *codeccls = NULL;
 
     codecs = _PyCodec_Lookup(encoding);
-    if (codecs == NULL)
-        return NULL;
+    if (codecs == NULL) return NULL;
+    if (PyErr_Occurred()) goto error;
 
-    codeccls = PyTuple_GET_ITEM(codecs, index);
+    codeccls = PyTuple_GetItemRef(codecs, index);
+    if (codeccls == NULL || PyErr_Occurred()) goto error;
     if (errors != NULL)
         streamcodec = PyObject_CallFunction(codeccls, "Os", stream, errors);
     else
         streamcodec = PyObject_CallOneArg(codeccls, stream);
-    Py_DECREF(codecs);
+    if (streamcodec == NULL || PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codeccls;
+        codeccls = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codecs;
+        codecs = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
     return streamcodec;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codeccls;
+        codeccls = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codecs;
+        codecs = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = streamcodec;
+        streamcodec = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 /* Helpers to work with the result of _PyCodec_Lookup
@@ -406,11 +471,11 @@ _PyCodec_EncodeInternal(PyObject *object,
     PyObject *v = NULL;
 
     args = args_tuple(object, errors);
-    if (args == NULL)
+    if (args == NULL || PyErr_Occurred())
         goto onError;
 
     result = PyObject_Call(encoder, args, NULL);
-    if (result == NULL) {
+    if (result == NULL || PyErr_Occurred()) {
         _PyErr_FormatNote("%s with '%s' codec failed", "encoding", encoding);
         goto onError;
     }
@@ -421,19 +486,48 @@ _PyCodec_EncodeInternal(PyObject *object,
                         "encoder must return a tuple (object, integer)");
         goto onError;
     }
-    v = Py_NewRef(PyTuple_GET_ITEM(result,0));
+    v = PyTuple_GetItemRef(result, 0);
+    if (v == NULL || PyErr_Occurred()) {
+        goto onError;
+    }
     /* We don't check or use the second (integer) entry. */
 
-    Py_DECREF(args);
-    Py_DECREF(encoder);
-    Py_DECREF(result);
-    return v;
+    goto cleanup;
 
- onError:
-    Py_XDECREF(result);
-    Py_XDECREF(args);
-    Py_XDECREF(encoder);
-    return NULL;
+onError:
+cleanup:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = args;
+        args = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = encoder;
+        encoder = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = result;
+        result = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (v == NULL || PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = v;
+            v = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return v;
 }
 
 /* Decode an object (usually a Python string) using the given encoding
@@ -448,14 +542,14 @@ _PyCodec_DecodeInternal(PyObject *object,
                         const char *errors)
 {
     PyObject *args = NULL, *result = NULL;
-    PyObject *v;
+    PyObject *v = NULL;
 
     args = args_tuple(object, errors);
-    if (args == NULL)
+    if (args == NULL || PyErr_Occurred())
         goto onError;
 
     result = PyObject_Call(decoder, args, NULL);
-    if (result == NULL) {
+    if (result == NULL || PyErr_Occurred()) {
         _PyErr_FormatNote("%s with '%s' codec failed", "decoding", encoding);
         goto onError;
     }
@@ -465,19 +559,48 @@ _PyCodec_DecodeInternal(PyObject *object,
                         "decoder must return a tuple (object,integer)");
         goto onError;
     }
-    v = Py_NewRef(PyTuple_GET_ITEM(result,0));
+    v = PyTuple_GetItemRef(result, 0);
+    if (v == NULL || PyErr_Occurred()) {
+        goto onError;
+    }
     /* We don't check or use the second (integer) entry. */
 
-    Py_DECREF(args);
-    Py_DECREF(decoder);
-    Py_DECREF(result);
-    return v;
+    goto cleanup;
 
- onError:
-    Py_XDECREF(args);
-    Py_XDECREF(decoder);
-    Py_XDECREF(result);
-    return NULL;
+onError:
+cleanup:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = args;
+        args = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = decoder;
+        decoder = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = result;
+        result = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (v == NULL || PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = v;
+            v = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return v;
 }
 
 /* Generic encoding/decoding API */
@@ -561,16 +684,41 @@ PyObject *codec_getitem_checked(const char *encoding,
                                 const char *alternate_command,
                                 int index)
 {
-    PyObject *codec;
-    PyObject *v;
+    PyObject *codec = NULL;
+    PyObject *v = NULL;
 
     codec = _PyCodec_LookupTextEncoding(encoding, alternate_command);
     if (codec == NULL)
         return NULL;
+    if (PyErr_Occurred()) goto error;
 
-    v = Py_NewRef(PyTuple_GET_ITEM(codec, index));
-    Py_DECREF(codec);
+    v = PyTuple_GetItemRef(codec, index);
+    if (v == NULL || PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codec;
+        codec = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
     return v;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = codec;
+        codec = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = v;
+        v = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static PyObject * _PyCodec_TextEncoder(const char *encoding)

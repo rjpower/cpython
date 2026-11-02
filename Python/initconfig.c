@@ -12,6 +12,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pystats.h"       // _Py_StatsOn()
 #include "pycore_sysmodule.h"     // _PySys_SetIntMaxStrDigits()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 #include "osdefs.h"               // DELIM
 
@@ -1511,18 +1512,32 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
     if (list == NULL) {
         return -1;
     }
-
-    int is_list = PyList_CheckExact(list);
-    if (!is_list && !PyTuple_CheckExact(list)) {
-        Py_DECREF(list);
-        config_dict_invalid_type(name);
+    if (PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = list;
+            list = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
         return -1;
     }
 
     PyWideStringList wstrlist = _PyWideStringList_INIT;
+    PyObject *item = NULL;
+    wchar_t *wstr = NULL;
+    int is_list = PyList_CheckExact(list);
+    if (!is_list && !PyTuple_CheckExact(list)) {
+        config_dict_invalid_type(name);
+        goto error;
+    }
+
     Py_ssize_t len = is_list ? PyList_GET_SIZE(list) : PyTuple_GET_SIZE(list);
     for (Py_ssize_t i=0; i < len; i++) {
-        PyObject *item = is_list ? PyList_GET_ITEM(list, i) : PyTuple_GET_ITEM(list, i);
+        item = is_list ? PyList_GetItemRef(list, i) : PyTuple_GetItemRef(list, i);
+        if (item == NULL || PyErr_Occurred()) {
+            goto error;
+        }
 
         if (item == Py_None) {
             config_dict_invalid_value(name);
@@ -1532,29 +1547,85 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
             config_dict_invalid_type(name);
             goto error;
         }
-        wchar_t *wstr = PyUnicode_AsWideCharString(item, NULL);
-        if (wstr == NULL) {
+        wstr = PyUnicode_AsWideCharString(item, NULL);
+        if (wstr == NULL || PyErr_Occurred()) {
             goto error;
         }
         PyStatus status = PyWideStringList_Append(&wstrlist, wstr);
-        PyMem_Free(wstr);
-        if (_PyStatus_EXCEPTION(status)) {
+        if (_PyStatus_EXCEPTION(status) && !PyErr_Occurred()) {
             PyErr_NoMemory();
+        }
+        if (_PyStatus_EXCEPTION(status) || PyErr_Occurred()) {
             goto error;
         }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            wchar_t *tmp = wstr;
+            wstr = NULL;
+            PyMem_Free(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto error;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = item;
+            item = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto error;
     }
 
-    if (_PyWideStringList_Copy(result, &wstrlist) < 0) {
+    int copy_result = _PyWideStringList_Copy(result, &wstrlist);
+    if (copy_result < 0 && !PyErr_Occurred()) {
         PyErr_NoMemory();
+    }
+    if (copy_result < 0 || PyErr_Occurred()) {
         goto error;
     }
-    _PyWideStringList_Clear(&wstrlist);
-    Py_DECREF(list);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        _PyWideStringList_Clear(&wstrlist);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = list;
+        list = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) return -1;
     return 0;
 
 error:
-    _PyWideStringList_Clear(&wstrlist);
-    Py_DECREF(list);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        wchar_t *tmp = wstr;
+        wstr = NULL;
+        PyMem_Free(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = item;
+        item = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        _PyWideStringList_Clear(&wstrlist);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = list;
+        list = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
     return -1;
 }
 

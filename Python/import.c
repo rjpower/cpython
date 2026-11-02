@@ -25,6 +25,7 @@
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_time.h"          // _PyTime_AsMicroseconds()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString()
@@ -2928,10 +2929,13 @@ update_code_filenames(PyCodeObject *co, PyObject *oldname, PyObject *newname)
     constants = co->co_consts;
     n = PyTuple_GET_SIZE(constants);
     for (i = 0; i < n; i++) {
-        tmp = PyTuple_GET_ITEM(constants, i);
-        if (PyCode_Check(tmp))
+        PyValue value = PyTuple_GET_VALUE(constants, i);
+        if (PyValue_IsObject(value) &&
+            PyCode_Check(PyValue_AsPyObjectBorrow(value))) {
+            tmp = PyValue_AsPyObjectBorrow(value);
             update_code_filenames((PyCodeObject *)tmp,
                                   oldname, newname);
+        }
     }
 }
 
@@ -3522,7 +3526,7 @@ static PyObject *
 get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
                   PyObject *path_hooks, PyObject *p)
 {
-    PyObject *importer;
+    PyObject *importer = NULL;
     Py_ssize_t j, nhooks;
 
     if (!PyList_Check(path_hooks)) {
@@ -3535,39 +3539,67 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     }
 
     nhooks = PyList_Size(path_hooks);
-    if (nhooks < 0)
+    if (nhooks < 0 || PyErr_Occurred())
         return NULL; /* Shouldn't happen */
 
-    if (PyDict_GetItemRef(path_importer_cache, p, &importer) != 0) {
-        // found or error
-        return importer;
+    int cached = PyDict_GetItemRef(path_importer_cache, p, &importer);
+    if (cached != 0 || PyErr_Occurred()) {
+        if (cached > 0 && !PyErr_Occurred()) return importer;
+        goto error;
     }
     // not found
     /* set path_importer_cache[p] to None to avoid recursion */
-    if (PyDict_SetItem(path_importer_cache, p, Py_None) != 0)
-        return NULL;
+    if (PyDict_SetItem(path_importer_cache, p, Py_None) != 0 || PyErr_Occurred())
+        goto error;
 
     for (j = 0; j < nhooks; j++) {
-        PyObject *hook = PyList_GetItem(path_hooks, j);
-        if (hook == NULL)
-            return NULL;
+        PyObject *hook = PyList_GetItemRef(path_hooks, j);
+        if (hook == NULL || PyErr_Occurred()) {
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = hook;
+                hook = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
+            goto error;
+        }
         importer = PyObject_CallOneArg(hook, p);
-        if (importer != NULL)
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = hook;
+            hook = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (importer != NULL) {
+            if (PyErr_Occurred()) {
+                goto error;
+            }
             break;
+        }
 
         if (!_PyErr_ExceptionMatches(tstate, PyExc_ImportError)) {
-            return NULL;
+            goto error;
         }
         _PyErr_Clear(tstate);
+        if (PyErr_Occurred()) goto error;
     }
     if (importer == NULL) {
         Py_RETURN_NONE;
     }
-    if (PyDict_SetItem(path_importer_cache, p, importer) < 0) {
-        Py_DECREF(importer);
-        return NULL;
-    }
+    if (PyDict_SetItem(path_importer_cache, p, importer) < 0 || PyErr_Occurred())
+        goto error;
     return importer;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = importer;
+        importer = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 PyObject *

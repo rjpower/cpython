@@ -274,6 +274,21 @@
       "commit": "99012f782ea49b7ec1f37eeafd7171cbedf02767",
       "changed_paths": 5,
       "runnable": false
+    },
+    "generic_native_adapters": {
+      "commit": "1a2adf3da574fedda7587caafac0f2c8f17953c4",
+      "changed_paths": 2,
+      "runnable": false
+    },
+    "scoped_constructor_parsers": {
+      "commit": "55d410ca39f42c08dd9e5272083127d9d3db7be9",
+      "changed_paths": 18,
+      "runnable": false
+    },
+    "marshal_consumers": {
+      "commit": "69a1b3ea5330a6381a6caf374112b5b1b5a43450",
+      "changed_paths": 2,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

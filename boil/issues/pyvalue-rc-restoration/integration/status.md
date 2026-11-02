@@ -1,7 +1,7 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: eleven source checkpoints; first real diagnostic build failed
-- Owner: coordinator; fresh wiki_audit reviews checkpoint boundaries
+- Stage: fourteen source checkpoints; first real diagnostic build failed
+- Owner: coordinator; independent peer reviews precede each source checkpoint
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
 
@@ -30,7 +30,7 @@ results cannot supply it. Use results to improve specific mechanisms.
 
 ## Current checkpoint
 
-Eleven reviewed source commits end at `99012f782ea`; their exact receipts are
+Fourteen reviewed source commits end at `69a1b3ea533`; their exact receipts are
 linked from the [board](../../README.md). The shared composition commit
 `c21d0a374ee` excludes three object/type files with concrete scalar/cache holds.
 Codegen `ebc9740c4d5` and sys.flags `015eb226fb3` passed independent reviews and
@@ -50,8 +50,16 @@ Canonical read providers `99012f782ea` compile and define four strong symbols;
 existing compile.o and flowgraph.o reference GetValue. Thirteen candidate methods
 remain unexecuted. PopValue is still a separate missing mutation provider.
 
-Next: implement the accepted cohesive Clinic/parser invocation model in its two
-disjoint lanes, independently review and integrate their useful increments. Resolve held object/type bridges and cache
-proof separately; port remaining concrete consumers. Reuse the configured build
-for affected rebuilds, then link and run focused tests. Broad qualification and
-quiet timing wait for a coherent candidate.
+Generic NativeScope adapters `1a2adf3da57`, scoped constructor parsers
+`55d410ca39f` and marshal consumers `69a1b3ea533` passed independent review and
+are committed. NativeScope, Struct and marshal compile as real objects. Parser
+diagnostics include failures in unchanged consumer bodies; these are not full-TU
+passes. Candidate tests remain unexecuted. See
+[native/parser status](../native-parsers/status.md) and
+[marshal status](../core-consumers/marshal/status.md).
+
+Next: complete and independently review the caller transaction and its producer
+metadata, then integrate its useful increment. Resolve held object/type bridges
+and the type-cache proof separately; port remaining concrete consumers. Reuse
+the configured build for affected rebuilds, then link and run focused tests.
+Broad qualification and quiet timing wait for a coherent candidate.

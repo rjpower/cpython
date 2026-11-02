@@ -16,8 +16,10 @@ The accepted revision names exact declarations/wrappers, simplifies the private
 owning default path, ports the pure key predicate, and keeps the actually used
 index-only specialization primitive. Stable-ABI manifest/products change through
 their producer; owning migration fixtures exercise real retained APIs. Targeted
-ledger: 50 core/startup, 37 bundled and 24 C test/example sites remain. All port
-before qualification; the provider API cut alone is not runtime closure.
+ledger at the API cut: 50 core/startup, 37 bundled and 24 C test/example sites.
+Later increments reduce that inventory; these are not current remaining counts.
+All required consumers port before qualification; the provider API cut alone is
+not runtime closure.
 
 [Design workspace](../../../../build/pyvalue-dict-boundary-closure-20261102-v1),
 [coordinator review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/coordinator-review-v1.md).
@@ -32,6 +34,7 @@ unexecuted, with host controls limited to ordinary supported owning semantics.
 [independent code/result review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/independent-review.md),
 [results](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/results.json),
 [commit](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/commit.json).
-Next: port the explicit core/bundled/test consumers, define active missing
-canonical readers, then validate the merged runtime. Source commit is not
+Four active canonical read providers are now committed as `99012f782ea`;
+PopValue remains a missing mutation provider. Next: port remaining core/bundled/
+test consumers, then validate the merged runtime. Source commit is not
 runtime or ABI admission. Older prepared scripts remain historical.

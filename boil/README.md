@@ -9,8 +9,8 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
-has eleven independently reviewed source commits on `boil/pyvalue-rc-universal`,
-HEAD `99012f782ea`. Three object/type files remain held for explicit correctness
+has fourteen independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `69a1b3ea533`. Three object/type files remain held for explicit correctness
 findings. There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** use the first build's concrete diagnostics to close shared
@@ -19,8 +19,9 @@ produced 141 objects, including the new symtable, codegen and sys.flags ports;
 the interpreter did not link. The dictionary API cut and exception port are
 committed and compile as real objects. Four canonical read APIs are now also
 reviewed and committed, supplying active compiler link dependencies. The
-reviewed native-call/parser design is in implementation: state_audit owns caller
-transactions; wiki_audit owns scoped parsers and the first constructor family.
+reviewed parser/constructor increment and generic NativeScope adapters are now
+committed. Marshal also compiles and is committed. State_audit implements the
+remaining caller transaction; wiki_audit closes the type-cache design proof.
 The coordinator reviews and integrates increments, then validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 

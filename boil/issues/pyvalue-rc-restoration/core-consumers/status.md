@@ -1,6 +1,6 @@
 # Remaining core and extension consumers
 
-- Stage: symtable, codegen, sys.flags and errors committed; further ports queued
+- Stage: symtable, codegen, sys.flags, errors and marshal committed; further ports queued
 - Owner: coordinator assigns scoped ports and independent review
 - Goal: remove accidental boxed/borrowed assumptions while making extension
   ports possible and incremental.
@@ -41,3 +41,6 @@ and namespaceobject passed provisional syntax. These are compile diagnostics,
 not a linked build. [Codegen design](../../../../build/pyvalue-codegen-consumers-20261102-v1/design.md)
 was implemented, reviewed and committed. The subsequent [full build](../first-build/status.md)
 now supplies concrete grouped diagnostics; use it instead of repeating the inventory.
+
+[Marshal port](marshal/status.md): reviewed two-file checkpoint committed as `69a1b3ea533`;
+actual full TU/object and nine host controls pass. Candidate tests await linking.

@@ -263,9 +263,9 @@ build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
 Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
 
-Current parallel work: Sol reviews the next fifteen-function operator/LRU
-consumer rule and shared explicit caller-owned format parser. Luna applies the
-next bulk packet after its design gate.
+Current parallel work: two Luna streams implement the fifteen-function
+operator/LRU rule and explicit caller-owned flat-format kernel/five callers in
+isolated copies. Sol designs the next non-transaction type-reader packet.
 Root owns code/result review, composition and merged validation. The v9 family
 census records 376 errors/320 sites/59 paths and 57 separate warnings; it does not
 count independent ports. Evidence: build/pyvalue-v9-error-families-20261102-v1.
@@ -297,3 +297,14 @@ The isolated compiler receipt initially counted only seven C-file warnings;
 sixteen header warnings bring both TU totals to 23. Original receipts and the
 correction are retained. Evidence:
 build/pyvalue-type-construction-readers-bulk-20261102-v1/commit.json.
+
+Operator/LRU design v2 passed peer/root review after a vector-layout guard and
+false-provenance correction. The same fifteen-body/three-path grant now goes to
+Luna; v1 and its REVISE are preserved. Evidence:
+build/pyvalue-operator-lru-readers-design-20261102-v2/coordinator-accept.md.
+
+The flat-format kernel/five-caller design passed peer/root review with an exact
+third registered fixture for O! and nullable text. Its six-path isolated Luna
+grant does not admit the remaining raw parsers: backend, public opaque scope,
+producer and mechanical caller closure remain mandatory. Evidence:
+build/pyvalue-flat-format-scoped-design-20261102-v1/coordinator-grant.md.

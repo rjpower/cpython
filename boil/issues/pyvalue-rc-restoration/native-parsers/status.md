@@ -1,6 +1,6 @@
 # Native callers, scoped parsers and registration
 
-- Stage: generic adapters, scoped constructors, caller transaction and object call bridges committed
+- Stage: prior adapters committed; flat-format kernel/five callers in isolated implementation
 - Owner: coordinator assigns remaining scopes and validates composition
 - Goal: repair real call preparation/publication and port production constructor families
 
@@ -38,11 +38,21 @@ the caller nor parser runtime routes are admitted by these source checkpoints.
 
 Further parser families, varpos/recursive converters, exact-argument preparation,
 the constructor-init shim, broader binder cleanup, other gateways and the opaque
-extension backend remain unfinished. Object and abstract consumer repairs are committed; typeobject.c remains held. Hard
-compatibility is not a gate. All native/parser source grants above are closed.
+extension backend remain unfinished. Object and abstract consumer repairs are
+committed; typeobject.c remains partly held. Hard compatibility is not a gate.
+The earlier native/parser source grants listed above are closed.
 The [positional Clinic increment](positional-owners/status.md) is reviewed and
-committed as `be15f9856b5`. State_audit designs the next startup/parser port.
-The next type-cache core design has a bounded first-checkpoint source grant.
+committed as `be15f9856b5`. Fixed-keyword and constructor-helper producer rules
+are also committed; the [board](../../README.md) owns their current checkpoints.
+
+Luna now implements the reviewed explicit caller-owned flat-format kernel and
+five consumers, in isolated copies. Three exact registered fixtures cover object/
+UTF8 leases, unsupported formats, and typed/nullable output. Root owns independent
+actual code/results review, controlled native checks and integration. This first
+kernel does not close the old raw parsers: keyword/nested/resource backends,
+public opaque scopes, producer and mechanical caller migrations remain mandatory.
+[Exact grant](../../../../build/pyvalue-flat-format-scoped-design-20261102-v1/coordinator-grant.md),
+[baseline closure](../../../../build/pyvalue-flat-format-scoped-design-20261102-v1/baseline-closure.md).
 
 ## Design evidence
 
@@ -56,6 +66,7 @@ preflight/materialization sequencing. Earlier proposals remain in the
 
 [Object C call bridges](object-call-bridges/status.md) are now reviewed and committed,
 with actual call.c/fixture TUs and objects passing. The
-[startup type constructor](../core-consumers/type-new/status.md) is applied/reviewed
-as a pending typeobject delta. General flat/keyword/nested format-parser caller
-leases and their production consumers remain design/implementation work.
+[startup type constructor](../core-consumers/type-new/status.md) is committed
+as checkpoint38, followed by ten construction readers and caller pins in39.
+General keyword/nested/resource format-parser ownership and its consumer ports
+remain design/implementation work.

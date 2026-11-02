@@ -13,10 +13,10 @@ objects present and failed to link. No restored runtime, qualification or perfor
 1. The first safe universal-value register-interpreter baseline remains the goal.
    Merged v11 failed before linking: 350 compiler-error observations, 164 objects
    present, all 7,345 inputs unchanged. Focused component passes are not a runtime pass.
-2. The constructor argument boundary and ten construction readers are committed.
-   Sol reviews the fifteen-function operator/LRU rule and shared explicit scoped
-   format-parser kernel. Luna applies the next bulk batch after its design gate;
-   root reviews, composes accepted changes and runs the shared build.
+2. Two Luna streams implement the reviewed fifteen-function operator/LRU rule
+   and scoped flat-format parser kernel/five callers, in isolated copies. Sol
+   designs the remaining type-reader packet. Root reviews actual code/results,
+   composes accepted changes and runs the shared build.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    publication needs graph/slot rollback, repeated-receiver and dependency proof;
    the separate spec-constructor envelope awaits a root/peer design gate.
@@ -28,9 +28,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Call and parser dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
+| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat-format kernel/five callers in isolated implementation | Luna parser bulk; root integration | Independent code/native gate; then keyword/nested/resource/public scope and mechanical caller closure |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | Coordinator; Sol design/review | C3/MRO, remaining parser/startup/container ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Construction readers committed; operator/LRU rule in design review | Sol design/review; Luna next bulk; root integration | Close finite design corrections, fan out the fifteen-function packet |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Construction readers committed; operator/LRU in isolated implementation | Luna consumer bulk; Sol next type-reader design; root integration | Review fifteen-function code/results, native probe and integrate |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Recording-only counter foundation committed; full MRO transaction needs revision | Root gate; Sol design/review when assigned | Review spec envelope; resolve graph/slot/reentry proof |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |

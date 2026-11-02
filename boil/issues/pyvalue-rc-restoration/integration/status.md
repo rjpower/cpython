@@ -48,8 +48,9 @@ It exited 2, with 164 objects present and no executable. All 7,345 source paths
 stayed unchanged; 350 repeated/cascading errors remain. Focused component checks
 do not make this a passing merged build. The counter foundation and thirteen
 slot wrappers are committed. Construction readers and
-the earlier constructor boundary are committed. Sol reviews the next shared
-consumer batch and parser kernel before Luna bulk implementation.
+the earlier constructor boundary are committed. Two Luna streams implement the
+reviewed operator/LRU batch and flat-format parser kernel in isolated copies;
+Sol designs the remaining type-reader packet.
 The full MRO transaction remains in revision. The board owns live assignments.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.

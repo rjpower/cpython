@@ -22,9 +22,10 @@ slot wrappers are committed. The earlier type_new boundary and ten construction
 readers with selected base/metaclass pins are now committed. Full MRO
 publication/rollback remains in revision.
 
-Sol is reviewing the next fifteen-function operator/LRU consumer rule and the
-shared explicit scoped format-parser kernel. Approved rules go to Luna for bulk
-implementation. The construction batch passed independent code/native review.
+Two Luna streams implement the reviewed fifteen-function operator/LRU rule and
+flat-format parser kernel with five callers, in isolated copies. Sol designs
+the remaining type-reader packet. The construction batch passed independent
+code/native review.
 The coordinator reviews actual code/results, integrates
 accepted deltas, rebuilds and repeats. Luna completed the latest error-family
 census; counts are compiler observations, not independent edits or percent done.

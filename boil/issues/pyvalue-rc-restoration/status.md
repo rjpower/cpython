@@ -28,8 +28,9 @@ bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
 Clinic helper constructors are checkpoint34, iterator constructors checkpoint35,
 the recording-only counter foundation checkpoint36 and slot wrappers checkpoint37.
 The earlier type_new argument boundary is checkpoint38 and construction readers
-with explicit caller pins checkpoint39. Sol reviews the next operator/LRU batch
-and scoped format-parser kernel; Luna applies approved bulk rules.
+with explicit caller pins checkpoint39. Two Luna streams implement operator/LRU
+readers and the flat-format parser kernel/five callers in isolated copies. Sol
+designs the remaining type-reader packet.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,

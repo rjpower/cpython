@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(batched_new__doc__,
 "batched(iterable, n, *, strict=False)\n"
@@ -122,19 +123,31 @@ pairwise_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->pairwise_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("pairwise", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("pairwise", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "pairwise",
+                                          1, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    iterable = fastargs[0];
     return_value = pairwise_new_impl(type, iterable);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -218,6 +231,8 @@ itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->_grouper_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *parent;
     PyObject *tgtkey;
 
@@ -225,18 +240,28 @@ itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("_grouper", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_grouper", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(PyTuple_GET_ITEM(args, 0), clinic_state_by_cls()->groupby_type)) {
-        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, PyTuple_GET_ITEM(args, 0));
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_grouper",
+                                          2, 2);
+    if (fastargs == NULL) {
         goto exit;
     }
-    parent = PyTuple_GET_ITEM(args, 0);
-    tgtkey = PyTuple_GET_ITEM(args, 1);
+    if (!PyObject_TypeCheck(fastargs[0], clinic_state_by_cls()->groupby_type)) {
+        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, fastargs[0]);
+        goto exit;
+    }
+    parent = fastargs[0];
+    tgtkey = fastargs[1];
     return_value = itertools__grouper_impl(type, parent, tgtkey);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -255,6 +280,8 @@ itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->teedataobject_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *it;
     PyObject *values;
     PyObject *next;
@@ -263,19 +290,29 @@ itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("teedataobject", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("teedataobject", PyTuple_GET_SIZE(args), 3, 3)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    it = PyTuple_GET_ITEM(args, 0);
-    if (!PyList_Check(PyTuple_GET_ITEM(args, 1))) {
-        _PyArg_BadArgument("teedataobject", "argument 2", "list", PyTuple_GET_ITEM(args, 1));
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "teedataobject",
+                                          3, 3);
+    if (fastargs == NULL) {
         goto exit;
     }
-    values = PyTuple_GET_ITEM(args, 1);
-    next = PyTuple_GET_ITEM(args, 2);
+    it = fastargs[0];
+    if (!PyList_Check(fastargs[1])) {
+        _PyArg_BadArgument("teedataobject", "argument 2", "list", fastargs[1]);
+        goto exit;
+    }
+    values = fastargs[1];
+    next = fastargs[2];
     return_value = itertools_teedataobject_impl(type, it, values, next);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -293,19 +330,31 @@ itertools__tee(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->tee_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("_tee", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_tee", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_tee",
+                                          1, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    iterable = fastargs[0];
     return_value = itertools__tee_impl(type, iterable);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -373,19 +422,31 @@ itertools_cycle(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->cycle_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("cycle", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("cycle", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "cycle",
+                                          1, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    iterable = fastargs[0];
     return_value = itertools_cycle_impl(type, iterable);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -405,6 +466,8 @@ itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->dropwhile_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -412,14 +475,24 @@ itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("dropwhile", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("dropwhile", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "dropwhile",
+                                          2, 2);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    func = fastargs[0];
+    seq = fastargs[1];
     return_value = itertools_dropwhile_impl(type, func, seq);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -437,6 +510,8 @@ itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->takewhile_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -444,14 +519,24 @@ itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("takewhile", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("takewhile", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "takewhile",
+                                          2, 2);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    func = fastargs[0];
+    seq = fastargs[1];
     return_value = itertools_takewhile_impl(type, func, seq);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -469,6 +554,8 @@ itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->starmap_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -476,14 +563,24 @@ itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("starmap", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("starmap", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "starmap",
+                                          2, 2);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    func = fastargs[0];
+    seq = fastargs[1];
     return_value = itertools_starmap_impl(type, func, seq);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -977,6 +1074,8 @@ itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->filterfalse_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -984,14 +1083,24 @@ itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("filterfalse", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("filterfalse", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    func = PyTuple_GET_ITEM(args, 0);
-    seq = PyTuple_GET_ITEM(args, 1);
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "filterfalse",
+                                          2, 2);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    func = fastargs[0];
+    seq = fastargs[1];
     return_value = itertools_filterfalse_impl(type, func, seq);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -1086,4 +1195,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=4b55088ac24582b7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c8d055d738220d12 input=a9049054013a1b77]*/

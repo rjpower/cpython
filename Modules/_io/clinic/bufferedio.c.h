@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io__BufferedIOBase_readinto__doc__,
 "readinto($self, buffer, /)\n"
@@ -1068,6 +1069,8 @@ _io_BufferedRWPair___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = clinic_state()->PyBufferedRWPair_Type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *reader;
     PyObject *writer;
     Py_ssize_t buffer_size = DEFAULT_BUFFER_SIZE;
@@ -1077,17 +1080,22 @@ _io_BufferedRWPair___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("BufferedRWPair", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("BufferedRWPair", PyTuple_GET_SIZE(args), 2, 3)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    reader = PyTuple_GET_ITEM(args, 0);
-    writer = PyTuple_GET_ITEM(args, 1);
-    if (PyTuple_GET_SIZE(args) < 3) {
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "BufferedRWPair",
+                                          2, 3);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    reader = fastargs[0];
+    writer = fastargs[1];
+    if (_args_scope.nargs < 3) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(PyTuple_GET_ITEM(args, 2));
+        PyObject *iobj = _PyNumber_Index(fastargs[2]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -1101,6 +1109,9 @@ skip_optional:
     return_value = _io_BufferedRWPair___init___impl((rwpair *)self, reader, writer, buffer_size);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -1441,4 +1452,4 @@ exit:
 
 #define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", (getter)_io_BufferedRWPair_closed_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=d9e1eb0efa4a2431 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6f1b385aca225580 input=a9049054013a1b77]*/

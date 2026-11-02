@@ -2577,7 +2577,9 @@ arg_scope_materialize(_PyArg_OwnerScope *scope)
         size_t values_size = (size_t)nargs * sizeof(PyValue);
         scope->storage = PyMem_Malloc(values_size + (size_t)count * sizeof(PyObject *));
         if (scope->storage == NULL) {
-            PyErr_NoMemory();
+            if (!PyErr_Occurred()) {
+                PyErr_NoMemory();
+            }
             return -1;
         }
         if (PyErr_Occurred()) {
@@ -2607,6 +2609,25 @@ arg_scope_materialize(_PyArg_OwnerScope *scope)
     }
     scope->materialized = 1;
     return 0;
+}
+
+PyObject *const *
+_PyArg_UnpackPositionalOwned(_PyArg_OwnerScope *scope, const char *name,
+                             Py_ssize_t min, Py_ssize_t max)
+{
+    assert(!scope->ended && !scope->materialized);
+    assert(scope->tuple != NULL && scope->keyword_budget == 0);
+    assert(0 <= min && min <= max);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (!_PyArg_CheckPositional(name, scope->nargs, min, max)) {
+        return NULL;
+    }
+    if (arg_scope_materialize(scope) < 0) {
+        return NULL;
+    }
+    return _PyArg_OwnerScope_Objects(scope);
 }
 
 PyObject *const *

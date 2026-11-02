@@ -26,6 +26,8 @@ custom_converter(PyObject *obj, custom_t *val)
 static PyTypeObject OwnerEcho_Type;
 static PyTypeObject OwnerProbe_Type;
 static PyTypeObject OwnerAlias_Type;
+static PyTypeObject PositionalOwnerNew_Type;
+static PyTypeObject PositionalOwnerInit_Type;
 static PyTypeObject VcNew_Type;
 static PyTypeObject VcNewBase_Type;
 static PyTypeObject VcKwOnly_Type;
@@ -2976,6 +2978,111 @@ static PyTypeObject OwnerAlias_Type = {
     .tp_new = owner_alias,
 };
 
+/* Positional views survive conversion, nested callbacks and implementation
+ * use. Both types use real type-call dispatch, including the init finale. */
+/*[clinic input]
+class _testclinic.PositionalOwnerNew "PyObject *" "&PositionalOwnerNew_Type"
+class _testclinic.PositionalOwnerInit "PyObject *" "&PositionalOwnerInit_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=720b63372c1ad232]*/
+
+static PyObject *
+positional_owner_probe(PyObject *value, int index, PyObject *tail)
+{
+    PyObject *callback = PyObject_GetAttrString(value, "visit");
+    PyObject *number = NULL, *called = NULL, *result = NULL;
+    if (callback == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    number = PyLong_FromLong(index);
+    if (number == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    called = PyObject_CallFunctionObjArgs(callback, number, tail, NULL);
+    if (called == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    owner_fixture_close(called);
+    called = NULL;
+    owner_fixture_close(number);
+    number = NULL;
+    owner_fixture_close(callback);
+    callback = NULL;
+    if (!PyErr_Occurred()) {
+        result = PyObject_Repr(value);
+    }
+done:
+    owner_fixture_close(called);
+    owner_fixture_close(number);
+    owner_fixture_close(callback);
+    if (PyErr_Occurred()) {
+        owner_fixture_close(result);
+        return NULL;
+    }
+    return result;
+}
+
+/*[clinic input]
+@classmethod
+_testclinic.PositionalOwnerNew.__new__ as positional_owner_new
+
+    value: object
+    index: int = 7
+    tail: object = None
+    /
+
+Call visit with converted arguments, then repr the retained value.
+[clinic start generated code]*/
+
+static PyObject *
+positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
+                          PyObject *tail)
+/*[clinic end generated code: output=7d8a8266f9dd7eeb input=3b1baab3afd14e89]*/
+{
+    return positional_owner_probe(value, index, tail);
+}
+
+/*[clinic input]
+_testclinic.PositionalOwnerInit.__init__ as positional_owner_init
+
+    value: object
+    index: int
+    tail: object = None
+    /
+
+Exercise the init return/error finale with the same retained inputs.
+[clinic start generated code]*/
+
+static int
+positional_owner_init_impl(PyObject *self, PyObject *value, int index,
+                           PyObject *tail)
+/*[clinic end generated code: output=efcd62c7c2fcff3b input=9f1dbebb623440b1]*/
+{
+    PyObject *result = positional_owner_probe(value, index, tail);
+    if (result == NULL) {
+        return -1;
+    }
+    owner_fixture_close(result);
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+static PyTypeObject PositionalOwnerNew_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testclinic.PositionalOwnerNew",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = positional_owner_new,
+};
+
+static PyTypeObject PositionalOwnerInit_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testclinic.PositionalOwnerInit",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_init = positional_owner_init,
+};
+
 static struct PyModuleDef _testclinic_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "_testclinic",
@@ -3030,6 +3137,10 @@ PyInit__testclinic(void)
     if (PyModule_AddType(m, &OwnerEcho_Type) < 0 ||
         PyModule_AddType(m, &OwnerProbe_Type) < 0 ||
         PyModule_AddType(m, &OwnerAlias_Type) < 0) {
+        goto error;
+    }
+    if (PyModule_AddType(m, &PositionalOwnerNew_Type) < 0 ||
+        PyModule_AddType(m, &PositionalOwnerInit_Type) < 0) {
         goto error;
     }
     return m;

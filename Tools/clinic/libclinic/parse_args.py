@@ -10,7 +10,8 @@ from libclinic.function import (
     ACCESSORS, SETTERS)
 from libclinic.converter import CConverter
 from libclinic.converters import (
-    defining_class_converter, object_converter, self_converter)
+    defining_class_converter, int_converter, object_converter,
+    Py_ssize_t_converter, self_converter, unicode_converter)
 if TYPE_CHECKING:
     from libclinic.clanguage import CLanguage
     from libclinic.codegen import CodeGen
@@ -399,6 +400,23 @@ class ParseArgsCodeGen:
                 and self.converters[0].format_unit == 'O'
                 and self.converters[0].alias_of is None)
 
+    def use_scoped_tuple_positional(self) -> bool:
+        """Bounded positional constructor views without converter resources."""
+        return (self.is_new_or_init()
+                and not self.limited_capi and not self.fastcall
+                and not self.func.vectorcall
+                and not self.varpos and not self.var_keyword
+                and not self.requires_defining_class
+                and not self.has_option_groups()
+                and bool(self.parameters)
+                and self.pos_only == len(self.parameters)
+                and all(type(c) in (object_converter, int_converter,
+                                   Py_ssize_t_converter, unicode_converter)
+                        and c.alias_of is None and not c.cleanup()
+                        and (type(c) is not object_converter
+                             or c.format_unit in ('O', 'O!'))
+                        for c in self.converters))
+
     def is_new_or_init(self) -> bool:
         return self.func.kind.new_or_init
 
@@ -488,7 +506,7 @@ class ParseArgsCodeGen:
                 {initializers}
         """) + "\n"
         finale = PARSER_FINALE_SKELETON
-        if self.use_scoped_tuple_keywords():
+        if self.use_scoped_tuple_keywords() or self.scoped_tuple_positional:
             self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
             if self.func.kind is METHOD_INIT:
                 cleanup = """
@@ -1121,10 +1139,30 @@ class ParseArgsCodeGen:
         else:
             parser_code.extend(self._check_positional(nargs))
 
+        scoped = self.use_scoped_tuple_positional()
         pos_code = self._parse_positional_args(
-            argname_fmt=argname_fmt, nargs=nargs,
+            argname_fmt='fastargs[%s]' if scoped else argname_fmt,
+            nargs='_args_scope.nargs' if scoped else nargs,
             limited_capi=self.limited_capi)
         if pos_code is not None:
+            if scoped:
+                self.scoped_tuple_positional = True
+                self.codegen.add_include('pycore_modsupport.h',
+                                         '_PyArg_UnpackPositionalOwned()')
+                self.declarations += libclinic.normalize_snippet("""
+                    _PyArg_OwnerScope _args_scope = {{0}};
+                    PyObject *const *fastargs;
+                """)
+                parser_code = [libclinic.normalize_snippet("""
+                    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {{
+                        goto exit;
+                    }}
+                    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "{name}",
+                                                          %d, %d);
+                    if (fastargs == NULL) {{
+                        goto exit;
+                    }}
+                """ % (self.min_pos, self.max_pos), indent=4)]
             parser_code.extend(pos_code)
         else:
             parse_call = self.render_parse_all_arguments()
@@ -1537,7 +1575,12 @@ class ParseArgsCodeGen:
             raise ValueError("Slot methods cannot access their defining class.")
 
         if not parses_keywords:
-            self.declarations = '{base_type_ptr}'
+            if self.scoped_tuple_positional:
+                # The slot reconstruction must retain its initialized owners,
+                # including on the keyword guard's early exit.
+                self.declarations = '{base_type_ptr}\n' + self.declarations
+            else:
+                self.declarations = '{base_type_ptr}'
             self.codegen.add_include('pycore_modsupport.h',
                                      '_PyArg_NoKeywords()')
             fields.insert(0, libclinic.normalize_snippet("""
@@ -1834,6 +1877,7 @@ class ParseArgsCodeGen:
 
         self.flags = ""
         self.declarations = ""
+        self.scoped_tuple_positional = False
         self.parser_prototype = ""
         self.parser_definition = ""
         self.parser_helper = ""

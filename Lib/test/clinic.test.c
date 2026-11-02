@@ -6437,3 +6437,142 @@ dump buffer
 dump buffer
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=524ce2e021e4eba6]*/
+
+/*[clinic input]
+@classmethod
+Test.__new__ as positional_owner_new
+    value: object
+    index: int = 7
+    tail: object = None
+    /
+Positional views survive implementation and declaration rebuilding.
+[clinic start generated code]*/
+
+PyDoc_STRVAR(positional_owner_new__doc__,
+"Test(value, index=7, tail=None, /)\n"
+"--\n"
+"\n"
+"Positional views survive implementation and declaration rebuilding.");
+
+static PyObject *
+positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
+                          PyObject *tail);
+
+static PyObject *
+positional_owner_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    PyObject *return_value = NULL;
+    PyTypeObject *base_tp = TestType;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
+    PyObject *value;
+    int index = 7;
+    PyObject *tail = Py_None;
+
+    if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
+        !_PyArg_NoKeywords("Test", kwargs)) {
+        goto exit;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Test",
+                                          1, 3);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    value = fastargs[0];
+    if (_args_scope.nargs < 2) {
+        goto skip_optional;
+    }
+    index = PyLong_AsInt(fastargs[1]);
+    if (index == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 3) {
+        goto skip_optional;
+    }
+    tail = fastargs[2];
+skip_optional:
+    return_value = positional_owner_new_impl(type, value, index, tail);
+
+exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
+    return return_value;
+}
+
+static PyObject *
+positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
+                          PyObject *tail)
+/*[clinic end generated code: output=1d5057218da6fda4 input=c24d4e9bccd1a0cc]*/
+
+/*[clinic input]
+Test.__init__ as positional_owner_init
+    value: object
+    index: int
+    tail: object = None
+    /
+Positional init retains its own result and error finale.
+[clinic start generated code]*/
+
+PyDoc_STRVAR(positional_owner_init__doc__,
+"Test(value, index, tail=None, /)\n"
+"--\n"
+"\n"
+"Positional init retains its own result and error finale.");
+
+static int
+positional_owner_init_impl(TestObj *self, PyObject *value, int index,
+                           PyObject *tail);
+
+static int
+positional_owner_init(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    int return_value = -1;
+    PyTypeObject *base_tp = TestType;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
+    PyObject *value;
+    int index;
+    PyObject *tail = Py_None;
+
+    if ((Py_IS_TYPE(self, base_tp) ||
+         Py_TYPE(self)->tp_new == base_tp->tp_new) &&
+        !_PyArg_NoKeywords("Test", kwargs)) {
+        goto exit;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Test",
+                                          2, 3);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    value = fastargs[0];
+    index = PyLong_AsInt(fastargs[1]);
+    if (index == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 3) {
+        goto skip_optional;
+    }
+    tail = fastargs[2];
+skip_optional:
+    return_value = positional_owner_init_impl((TestObj *)self, value, index, tail);
+
+exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
+    return return_value;
+}
+
+static int
+positional_owner_init_impl(TestObj *self, PyObject *value, int index,
+                           PyObject *tail)
+/*[clinic end generated code: output=9f73a79f30873122 input=0319e0c64bd3efbd]*/

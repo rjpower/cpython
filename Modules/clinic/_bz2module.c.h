@@ -8,6 +8,7 @@ preserve
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_bz2_BZ2Compressor_compress__doc__,
 "compress($self, data, /)\n"
@@ -87,19 +88,26 @@ _bz2_BZ2Compressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->bz2_compressor_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     int compresslevel = 9;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("BZ2Compressor", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("BZ2Compressor", PyTuple_GET_SIZE(args), 0, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    if (PyTuple_GET_SIZE(args) < 1) {
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "BZ2Compressor",
+                                          0, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 1) {
         goto skip_optional;
     }
-    compresslevel = PyLong_AsInt(PyTuple_GET_ITEM(args, 0));
+    compresslevel = PyLong_AsInt(fastargs[0]);
     if (compresslevel == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -107,6 +115,11 @@ skip_optional:
     return_value = _bz2_BZ2Compressor_impl(type, compresslevel);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -238,4 +251,4 @@ _bz2_BZ2Decompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1dce5396d592bad7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2ed97017f98398a2 input=a9049054013a1b77]*/

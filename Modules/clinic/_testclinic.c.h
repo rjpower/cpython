@@ -5505,4 +5505,114 @@ exit:
     }
     return return_value;
 }
-/*[clinic end generated code: output=f10fdd523c697a32 input=a9049054013a1b77]*/
+
+PyDoc_STRVAR(positional_owner_new__doc__,
+"PositionalOwnerNew(value, index=7, tail=None, /)\n"
+"--\n"
+"\n"
+"Call visit with converted arguments, then repr the retained value.");
+
+static PyObject *
+positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
+                          PyObject *tail);
+
+static PyObject *
+positional_owner_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    PyObject *return_value = NULL;
+    PyTypeObject *base_tp = &PositionalOwnerNew_Type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
+    PyObject *value;
+    int index = 7;
+    PyObject *tail = Py_None;
+
+    if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
+        !_PyArg_NoKeywords("PositionalOwnerNew", kwargs)) {
+        goto exit;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "PositionalOwnerNew",
+                                          1, 3);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    value = fastargs[0];
+    if (_args_scope.nargs < 2) {
+        goto skip_optional;
+    }
+    index = PyLong_AsInt(fastargs[1]);
+    if (index == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 3) {
+        goto skip_optional;
+    }
+    tail = fastargs[2];
+skip_optional:
+    return_value = positional_owner_new_impl(type, value, index, tail);
+
+exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
+    return return_value;
+}
+
+PyDoc_STRVAR(positional_owner_init__doc__,
+"PositionalOwnerInit(value, index, tail=None, /)\n"
+"--\n"
+"\n"
+"Exercise the init return/error finale with the same retained inputs.");
+
+static int
+positional_owner_init_impl(PyObject *self, PyObject *value, int index,
+                           PyObject *tail);
+
+static int
+positional_owner_init(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    int return_value = -1;
+    PyTypeObject *base_tp = &PositionalOwnerInit_Type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
+    PyObject *value;
+    int index;
+    PyObject *tail = Py_None;
+
+    if ((Py_IS_TYPE(self, base_tp) ||
+         Py_TYPE(self)->tp_new == base_tp->tp_new) &&
+        !_PyArg_NoKeywords("PositionalOwnerInit", kwargs)) {
+        goto exit;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "PositionalOwnerInit",
+                                          2, 3);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    value = fastargs[0];
+    index = PyLong_AsInt(fastargs[1]);
+    if (index == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 3) {
+        goto skip_optional;
+    }
+    tail = fastargs[2];
+skip_optional:
+    return_value = positional_owner_init_impl(self, value, index, tail);
+
+exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
+    return return_value;
+}
+/*[clinic end generated code: output=340f5bc5f415aa3b input=a9049054013a1b77]*/

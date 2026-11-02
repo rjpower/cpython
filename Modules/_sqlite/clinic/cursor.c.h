@@ -9,6 +9,7 @@ preserve
 #include "pycore_long.h"          // _PyLong_UInt32_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static int
 pysqlite_cursor_init_impl(pysqlite_Cursor *self,
@@ -19,6 +20,8 @@ pysqlite_cursor_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = clinic_state()->CursorType;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     pysqlite_Connection *connection;
 
     if ((Py_IS_TYPE(self, base_tp) ||
@@ -26,17 +29,25 @@ pysqlite_cursor_init(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("Cursor", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("Cursor", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(PyTuple_GET_ITEM(args, 0), clinic_state()->ConnectionType)) {
-        _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, PyTuple_GET_ITEM(args, 0));
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Cursor",
+                                          1, 1);
+    if (fastargs == NULL) {
         goto exit;
     }
-    connection = (pysqlite_Connection *)PyTuple_GET_ITEM(args, 0);
+    if (!PyObject_TypeCheck(fastargs[0], clinic_state()->ConnectionType)) {
+        _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, fastargs[0]);
+        goto exit;
+    }
+    connection = (pysqlite_Connection *)fastargs[0];
     return_value = pysqlite_cursor_init_impl((pysqlite_Cursor *)self, connection);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -360,4 +371,4 @@ exit:
 }
 #define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=c24b4d93900ed908 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c5da06d4103c7e0a input=a9049054013a1b77]*/

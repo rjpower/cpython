@@ -104,6 +104,11 @@ PyAPI_FUNC(PyObject *const *) _PyArg_OwnerScope_Objects(const _PyArg_OwnerScope 
 PyAPI_FUNC(PyObject *const *) _PyArg_UnpackKeywordsOwned(
     _PyArg_OwnerScope *, PyObject *kwargs, struct _PyArg_Parser *,
     int minpos, int maxpos, int minkw, int varpos, PyObject **buf);
+/* Fresh successful BeginTuple(args, 0), valid 0 <= min <= max. Check the
+ * positional count before materializing; NULL reports an error. The returned
+ * views borrow independent scope owners through implementation and cleanup. */
+PyAPI_FUNC(PyObject *const *) _PyArg_UnpackPositionalOwned(
+    _PyArg_OwnerScope *, const char *name, Py_ssize_t min, Py_ssize_t max);
 /* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
  * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
 PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);

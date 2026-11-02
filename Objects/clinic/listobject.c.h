@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static PyObject *
 list_repr_impl(PyListObject *v);
@@ -472,6 +473,8 @@ list___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = &PyList_Type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     PyObject *iterable = NULL;
 
     if ((Py_IS_TYPE(self, base_tp) ||
@@ -479,17 +482,25 @@ list___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("list", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("list", PyTuple_GET_SIZE(args), 0, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    if (PyTuple_GET_SIZE(args) < 1) {
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "list",
+                                          0, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    if (_args_scope.nargs < 1) {
         goto skip_optional;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    iterable = fastargs[0];
 skip_optional:
     return_value = list___init___impl((PyListObject *)self, iterable);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -528,4 +539,4 @@ list___reversed__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return list___reversed___impl((PyListObject *)self);
 }
-/*[clinic end generated code: output=9eab9551fc4cea1c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b9788461ae2c3996 input=a9049054013a1b77]*/

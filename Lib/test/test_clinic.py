@@ -121,7 +121,7 @@ class ClinicWholeFileTest(TestCase):
 
     def test_owned_tuple_family_does_not_capture_other_converters(self):
         for parameter in ('value: object = None', 'value: int',
-                          'value: object\n    /'):
+                          'value: object(converter="PyUnicode_FSConverter")\n    /'):
             source = (
                 '/*[clinic input]\noutput everything block\n'
                 'class Owner "OwnerObject *" "&Owner_Type"\n'
@@ -130,6 +130,101 @@ class ClinicWholeFileTest(TestCase):
             generated = _make_clinic(filename='owner.c').parse(source)
             with self.subTest(parameter=parameter):
                 self.assertNotIn('_PyArg_OwnerScope_', generated)
+
+    def test_owned_positional_constructor_order_and_defaults(self):
+        for kind in ('__new__', '__init__'):
+            decorator = '@classmethod\n' if kind == '__new__' else ''
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                f'{decorator}Owner.{kind}\n'
+                '    value: object\n    index: int = 7\n'
+                '    tail: object = None\n    /\n'
+                '[clinic start generated code]*/\n')
+            generated = _make_clinic(filename='owner.c').parse(source)
+            with self.subTest(kind=kind):
+                declaration = generated.index('_PyArg_OwnerScope _args_scope = {0};')
+                keywords = generated.index('_PyArg_NoKeywords(')
+                begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
+                unpack = generated.index('_PyArg_UnpackPositionalOwned(')
+                convert = generated.index('PyLong_AsInt(fastargs[1])')
+                invoke = generated.index('_impl(', convert)
+                end = generated.index('_PyArg_OwnerScope_End(', invoke)
+                self.assertLess(declaration, keywords)
+                self.assertLess(keywords, begin)
+                self.assertLess(begin, unpack)
+                self.assertLess(unpack, convert)
+                self.assertLess(convert, invoke)
+                self.assertLess(invoke, end)
+                self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
+                self.assertIn('1, 3);', generated[unpack:convert])
+                self.assertIn('int index = 7;', generated)
+                self.assertIn('PyObject *tail = Py_None;', generated)
+                self.assertIn('if (_args_scope.nargs < 2)', generated)
+                self.assertIn('if (_args_scope.nargs < 3)', generated)
+                self.assertNotIn('PyTuple_GET_ITEM', generated)
+                self.assertNotIn('_PyTuple_CAST', generated)
+                self.assertIn('goto exit;', generated[keywords:unpack])
+                self.assertIn('exit:', generated[invoke:end])
+                if kind == '__new__':
+                    self.assertIn('Py_CLEAR(return_value);', generated[end:])
+                    self.assertIn('_PyValue_RestoreException(_saved);', generated[end:])
+                else:
+                    self.assertIn('return_value = -1;', generated[end:])
+
+    def test_owned_positional_direct_parse_once_and_fallback(self):
+        from unittest.mock import patch
+
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\nOwner.__new__\n    index: int\n    /\n'
+            '[clinic start generated code]*/\n')
+        original = int_converter.parse_arg
+        calls = []
+
+        def parse(converter, *args, **kwargs):
+            calls.append(args[0])
+            return original(converter, *args, **kwargs)
+
+        with patch.object(int_converter, 'parse_arg', parse):
+            generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertEqual(calls, ['fastargs[0]'])
+        self.assertIn('_PyArg_UnpackPositionalOwned', generated)
+        calls.clear()
+
+        def unsupported(converter, *args, **kwargs):
+            calls.append(args[0])
+            return None
+
+        with patch.object(int_converter, 'parse_arg', unsupported):
+            generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertEqual(calls, ['fastargs[0]'])
+        self.assertIn('PyArg_ParseTuple(', generated)
+        self.assertNotIn('_PyArg_OwnerScope_', generated)
+
+    def test_owned_positional_family_exclusions(self):
+        cases = (
+            ('value: object\n    /', '@vectorcall\n', False),
+            ('value: object\n    /', '', True),
+            ('value: object(converter="PyUnicode_FSConverter")\n    /', '', False),
+            ('value: str\n    /', '', False),
+            ('value: object\n    *values: tuple', '', False),
+            ('value: object\n    [\n    tail: object\n    ]\n    /', '', False),
+            ('value: object\n    *\n    other as value: object = None', '', False),
+        )
+        for parameters, decorators, limited in cases:
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                f'@classmethod\n{decorators}Owner.__new__\n'
+                f'    {parameters}\n[clinic start generated code]*/\n')
+            with self.subTest(parameters=parameters, decorators=decorators,
+                              limited=limited):
+                generated = _make_clinic(filename='owner.c',
+                                         limited_capi=limited).parse(source)
+                self.assertNotIn('_PyArg_UnpackPositionalOwned', generated)
+                self.assertNotIn('_PyArg_OwnerScope_End', generated)
 
     def expect_failure(self, raw, errmsg, *, filename=None, lineno=None):
         _expect_failure(self, self.clinic.parse, raw, errmsg,

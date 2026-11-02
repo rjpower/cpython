@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(deque_pop__doc__,
 "pop($self, /)\n"
@@ -679,6 +680,8 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->tuplegetter_type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     Py_ssize_t index;
     PyObject *doc;
 
@@ -686,12 +689,17 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("_tuplegetter", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_tuplegetter", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_tuplegetter",
+                                          2, 2);
+    if (fastargs == NULL) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(PyTuple_GET_ITEM(args, 0));
+        PyObject *iobj = _PyNumber_Index(fastargs[0]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -701,10 +709,15 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         }
         index = ival;
     }
-    doc = PyTuple_GET_ITEM(args, 1);
+    doc = fastargs[1];
     return_value = tuplegetter_new_impl(type, index, doc);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
-/*[clinic end generated code: output=de400069cf6f11a4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f424b16c2067cea9 input=a9049054013a1b77]*/

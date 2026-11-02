@@ -12,6 +12,7 @@ preserve
 #include "pycore_long.h"          // _PyLong_Size_t_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_ssl__SSLSocket_do_handshake__doc__,
 "do_handshake($self, /)\n"
@@ -876,16 +877,23 @@ _ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = get_state_type(type)->PySSLContext_Type;
+    _PyArg_OwnerScope _args_scope = {0};
+    PyObject *const *fastargs;
     int proto_version;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("_SSLContext", kwargs)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_SSLContext", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
         goto exit;
     }
-    proto_version = PyLong_AsInt(PyTuple_GET_ITEM(args, 0));
+    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_SSLContext",
+                                          1, 1);
+    if (fastargs == NULL) {
+        goto exit;
+    }
+    proto_version = PyLong_AsInt(fastargs[0]);
     if (proto_version == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -894,6 +902,11 @@ _ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     Py_END_CRITICAL_SECTION();
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -3083,4 +3096,4 @@ exit:
 
 #define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", (getter)_ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
 
-/*[clinic end generated code: output=14ced41bd24b60c3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9b7ce34091fba70f input=a9049054013a1b77]*/

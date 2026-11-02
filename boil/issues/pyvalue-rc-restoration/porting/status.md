@@ -9,8 +9,9 @@ Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
 Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
 rule is committed as checkpoint32; ABC pair readers are checkpoint33.
 The Clinic helper rule for bytes, bytearray and enumerate plus four existing
-fixtures is checkpoint34 after independent review. Luna ports three iterator
-constructors; Sol designs type wrappers and reviews the isolated counter patch.
+fixtures is checkpoint34 after independent review. Three iterator
+constructors are committed, followed by counter, slot and construction checkpoints.
+Operator/LRU and the first flat-parser stage are also committed.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
@@ -206,8 +207,8 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v11 merged probe reports 350 errors/164 objects present and no
-executable; all 7,345 source paths stayed unchanged at checkpoint39 plus held
+The latest v12 merged probe reports 332 errors/166 objects present and no
+executable; all 7,347 source paths stayed unchanged at checkpoint41 plus held
 typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
@@ -278,9 +279,9 @@ build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
 Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
 
-Current parallel work: two Luna streams implement the fifteen-function
-operator/LRU rule and explicit caller-owned flat-format kernel/five callers in
-isolated copies. Sol designs the next non-transaction type-reader packet.
+Current parallel work: Luna corrects one leaked canonical child owner in the
+six-reader type packet and implements four reviewed MRO-adjacent readers, in
+isolated copies. Sol designs the shared parser backend closure.
 Root owns code/result review, composition and merged validation. The v9 family
 census records 376 errors/320 sites/59 paths and 57 separate warnings; it does not
 count independent ports. Evidence: build/pyvalue-v9-error-families-20261102-v1.
@@ -314,12 +315,31 @@ correction are retained. Evidence:
 build/pyvalue-type-construction-readers-bulk-20261102-v1/commit.json.
 
 Operator/LRU design v2 passed peer/root review after a vector-layout guard and
-false-provenance correction. The same fifteen-body/three-path grant now goes to
-Luna; v1 and its REVISE are preserved. Evidence:
+false-provenance correction. Its corrected v3 implementation is checkpoint40,
+`d1a9a80d25b`: full operator syntax/object pass with zero diagnostics; selected
+LRU clean, remaining functools TU has fifteen errors/four warnings outside scope.
+Seven host 3.14.4 controls pass; candidate/fault gates remain unexecuted. V1 and
+its REVISE are preserved. Admission: build/pyvalue-operator-lru-readers-bulk-20261102-v3/commit.json. Evidence:
 build/pyvalue-operator-lru-readers-design-20261102-v2/coordinator-accept.md.
 
 The flat-format kernel/five-caller design passed peer/root review with an exact
 third registered fixture for O! and nullable text. Its six-path isolated Luna
-grant does not admit the remaining raw parsers: backend, public opaque scope,
+implementation is checkpoint41, `aa7a4335ddf`: no new configured diagnostics,
+actual fixture object pass, candidate fixtures unexecuted. It does not admit the
+remaining raw parsers: backend, public opaque scope,
 producer and mechanical caller closure remain mandatory. Evidence:
 build/pyvalue-flat-format-scoped-design-20261102-v1/coordinator-grant.md.
+
+The six-reader type packet is in correction after independent code review found
+a leaked owning child value in set_flags_recursive. Five other bodies have no
+identified blocker; none is committed yet. A frozen design-control log originally
+claimed four passes but contains three passes/one error. Original evidence and
+author/peer corrigenda are retained beside the corrected four-pass control.
+Hash identity is not evidence of test success. Evidence:
+build/pyvalue-type-reader-tail-bulk-20261102-v1/evidence/independent-code-review.md.
+
+Four MRO-adjacent readers passed amended v2 design review and root grant, with
+actual receiver and both diagnostic-name leases. Luna implements only those
+four bodies and their dedicated test. This dependent source port leaves the
+full graph/caller-error transaction held. Evidence:
+build/pyvalue-mro-adjacent-readers-design-20261102-v2/coordinator-grant.md.

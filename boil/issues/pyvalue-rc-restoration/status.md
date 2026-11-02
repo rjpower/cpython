@@ -28,9 +28,10 @@ bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
 Clinic helper constructors are checkpoint34, iterator constructors checkpoint35,
 the recording-only counter foundation checkpoint36 and slot wrappers checkpoint37.
 The earlier type_new argument boundary is checkpoint38 and construction readers
-with explicit caller pins checkpoint39. Two Luna streams implement operator/LRU
-readers and the flat-format parser kernel/five callers in isolated copies. Sol
-designs the remaining type-reader packet.
+with explicit caller pins checkpoint39. Operator/LRU readers are checkpoint40
+and the flat-format kernel/five callers checkpoint41. Luna corrects one leaked
+owner in the six-reader type packet and implements four reviewed MRO-adjacent
+readers in isolated copies. Sol designs the shared parser backend closure.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -50,8 +51,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v11 snapshot at checkpoint39 plus held typeobject has 164 objects
-present and 350 repeated/cascading error diagnostics. All 7,345 source paths
+link. Its latest v12 snapshot at checkpoint41 plus held typeobject has 166 objects
+present and 332 repeated/cascading error diagnostics. All 7,347 source paths
 remained unchanged; no candidate was executed. Iterator, slot-wrapper and
 construction-reader selected contexts are native-clean; the current typeobject
 TU has twelve remaining errors and 23 warnings. The counter comparison uses corresponding

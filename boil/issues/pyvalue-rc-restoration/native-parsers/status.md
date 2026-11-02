@@ -1,6 +1,6 @@
 # Native callers, scoped parsers and registration
 
-- Stage: prior adapters committed; flat-format kernel/five callers in isolated implementation
+- Stage: prior adapters committed; flat-format kernel/five callers committed; shared backend design
 - Owner: coordinator assigns remaining scopes and validates composition
 - Goal: repair real call preparation/publication and port production constructor families
 
@@ -45,10 +45,12 @@ The [positional Clinic increment](positional-owners/status.md) is reviewed and
 committed as `be15f9856b5`. Fixed-keyword and constructor-helper producer rules
 are also committed; the [board](../../README.md) owns their current checkpoints.
 
-Luna now implements the reviewed explicit caller-owned flat-format kernel and
-five consumers, in isolated copies. Three exact registered fixtures cover object/
-UTF8 leases, unsupported formats, and typed/nullable output. Root owns independent
-actual code/results review, controlled native checks and integration. This first
+The explicit caller-owned flat-format kernel and five consumers are committed
+as checkpoint41, `aa7a4335ddf`, after independent actual-code review and root
+composed native checks. Three registered fixtures cover object/UTF8 leases,
+unsupported formats, and typed/nullable output. Native diagnostic signatures
+are unchanged; the actual fixture object builds. Candidate fixtures have not run.
+Sol designs the shared keyword/nested/resource backend engine next. This first
 kernel does not close the old raw parsers: keyword/nested/resource backends,
 public opaque scopes, producer and mechanical caller migrations remain mandatory.
 [Exact grant](../../../../build/pyvalue-flat-format-scoped-design-20261102-v1/coordinator-grant.md),

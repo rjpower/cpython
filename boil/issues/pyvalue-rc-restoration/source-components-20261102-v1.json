@@ -564,6 +564,48 @@
       "changed_paths": 2,
       "runnable": false,
       "evidence": "build/pyvalue-type-construction-readers-bulk-20261102-v1/commit.json"
+    },
+    "operator_lru_readers": {
+      "base": "913c15ce15b2a2ec1cc3948c88e3130edbb81d17",
+      "commit": "d1a9a80d25bb83da8f427a079acc7dee3c6dfd82",
+      "paths_sha256": {
+        "Modules/_operator.c": "aa06a50fe05d4d78d0db8f789a22428f8a278c31c44eaf3f6c000953c5f77b81",
+        "Modules/_functoolsmodule.c": "7e5fac21eeaf416bd929ba10d3167bdbb7ebb5e2aa9e8b491064a1b81dd78f5d",
+        "Lib/test/test_pyvalue_operator_readers.py": "e8415966ed89a2a79ef6167e1778e2f1166fe6b8de0345e2bd1b2a928ad60272"
+      },
+      "staged_patch_sha256": "24ff5e99f8ea09cec91be5b12815e7b66bd4dabbe0248be9bd059336668a41ea",
+      "candidate_executed": false,
+      "full_operator_object_pass": true,
+      "functools_remaining_errors": 15,
+      "native_receipt_sha256": "3bdd91f59a1688a3dd7f6b4a8a0af546f48e80a9f089e47e5db300f528ebd2cf",
+      "independent_review_sha256": "c1cd58572d4066eee26e3d0b99e0bd281cb60f3744a6c6b3df5d193706f61228",
+      "coordinator_review_sha256": "d387b4bde0873609f8b698cd59526868a3f87e348373166cbed252c532a3ca93",
+      "changed_paths": 3,
+      "runnable": false,
+      "evidence": "build/pyvalue-operator-lru-readers-bulk-20261102-v3/commit.json"
+    },
+    "flat_format_parser_stage1": {
+      "base": "d1a9a80d25bb83da8f427a079acc7dee3c6dfd82",
+      "commit": "aa7a4335ddfcf1557bd9757f013e1f997d8ca6b4",
+      "paths_sha256": {
+        "Python/getargs.c": "81078b8f73dbbb787ae019f76d0ccb7d03a52d48ebe4f9d0aa5e2043ccc1bac4",
+        "Include/internal/pycore_modsupport.h": "4eb201ad84c4daf1d02ca683151d8e857f93a8a805fa1b613eefd746f3b47594",
+        "Objects/exceptions.c": "c8eba9cea12620bf271de3d71b5d2545d825d634b33b2ac580a120c08e774f60",
+        "Modules/_testmultiphase.c": "43fc55345458c314112a56a834b4d127cc5bdac23726153de5770de274266acd",
+        "Modules/_testinternalcapi/native_scope.c": "2e561c6ff72ee6faaeac9d70fda78472c80575db24cc72944b954bc9328ff264",
+        "Lib/test/test_pyvalue_flat_format.py": "faabfcea5a3512714393dbb4697d62bc60ed08a724ea68a18744be4b9addc999"
+      },
+      "staged_patch_sha256": "7fcd2c8e3fd598af7c1df3500f672614af64101e14ec6891d44b130f884a149c",
+      "candidate_executed": false,
+      "full_fixture_object_pass": true,
+      "native_errors_unchanged": true,
+      "native_receipt_sha256": "17965d343e7a200bbc8e6dd1fa0998c02c2479cd73285f4ff798b293a0c73bfa",
+      "coordinator_review_sha256": "64ae5bda4d07d6daae5b85dfd3221e24824c2a540ed904f550893d99ac2b947a",
+      "independent_code_review_sha256": "405ba24b22f87eff3e241088a96481421d591f0c5ee0bb7b03b87700d3f609fd",
+      "independent_include_review_sha256": "fdbbee39cda5716812108dbe40e3af5f7e0aab82eff88faaad71fec553b2a84a",
+      "changed_paths": 6,
+      "runnable": false,
+      "evidence": "build/pyvalue-flat-format-scoped-bulk-20261102-v3/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -573,15 +615,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "913c15ce15b2a2ec1cc3948c88e3130edbb81d17",
-    "objects_present": 164,
-    "error_diagnostics": 350,
+    "head": "aa7a4335ddfcf1557bd9757f013e1f997d8ca6b4",
+    "objects_present": 166,
+    "error_diagnostics": 332,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7345,
-    "evidence": "build/pyvalue-merged-build-20261102-v11"
+    "source_manifest_paths": 7347,
+    "evidence": "build/pyvalue-merged-build-20261102-v12"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

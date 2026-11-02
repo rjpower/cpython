@@ -4,7 +4,19 @@
 - Owner: coordinator
 - Purpose: expose actual baseline compiler/linker dependencies on frozen merged source
 
-Latest attempt: [v11 record](../../../../build/pyvalue-merged-build-20261102-v11/results.json),
+Latest attempt: [v12 record](../../../../build/pyvalue-merged-build-20261102-v12/results.json),
+at checkpoint41 `aa7a4335ddf` plus held typeobject composition `80615584`.
+Make exited 2 in 35.80 seconds: 332 repeated/cascading errors, 166 objects present,
+no executable. All 7,347 inputs stayed unchanged. There are 278 distinct sites
+in 58 source/header paths. The candidate was not executed.
+
+[Identity](../../../../build/pyvalue-merged-build-20261102-v12/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v12/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v12/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v12/source-after.json),
+[summary](../../../../build/pyvalue-merged-build-20261102-v12/summary.json).
+
+Previous attempt: [v11 record](../../../../build/pyvalue-merged-build-20261102-v11/results.json),
 at checkpoint39 `913c15ce15b` plus held typeobject composition `80615584`.
 Make exited 2 in 2.88 seconds: 350 repeated/cascading errors, 164 objects present,
 no executable. All 7,345 inputs stayed unchanged. There are 295 distinct sites

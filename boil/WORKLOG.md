@@ -62,3 +62,7 @@ verbatim; new checkpoint transcripts do not belong here.
 - 2026-11-02 — [Constructor boundary checkpoint](issues/pyvalue-rc-restoration/porting/status.md): exact previously reviewed body/test committed as `d2f39118c93`; live source unchanged, twelve host controls, candidate execution pending.
 - 2026-11-02 — [Construction readers](issues/pyvalue-rc-restoration/porting/status.md): reviewed ten-reader/caller-pin batch committed as `913c15ce15b`; selected errors 11→0/full TU 23→12, warnings unchanged, six host controls, candidate unexecuted.
 - 2026-11-02 — [Merged diagnostic v11](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint39 plus held typeobject, make exit 2/350 errors/164 objects, all 7,345 inputs unchanged, no executable.
+
+- 2026-11-02 — [Operator/LRU readers](issues/pyvalue-rc-restoration/porting/status.md): corrected v3 committed as `d1a9a80d25b`; full operator object passes, selected LRU clean with other functools errors remaining, seven host controls; candidate unexecuted.
+- 2026-11-02 — [Flat-format parser Stage1](issues/pyvalue-rc-restoration/native-parsers/status.md): kernel/five callers/three fixtures committed as `aa7a4335ddf`; configured diagnostic signatures unchanged, fixture object passes, candidate unexecuted; remaining parser closure mandatory.
+- 2026-11-02 — [Merged diagnostic v12](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint41 plus held typeobject, make exit2/332 errors/166 objects, all7,347 inputs unchanged, no executable.

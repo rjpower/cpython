@@ -39,7 +39,7 @@ benchmark-specific typed variants. Receiver admission, stored representation,
 result facts, call adaptation and observer behavior are separate dimensions.
 A producer promise is useful only when consumers and fallbacks agree on it.
 
-Source and emitted-code findings belong to the
-[interpreter issue](../issues/interpreter-shared-costs/status.md); active bounded
-investigation belongs to the [work index](../issues/README.md). No speedup or
-new optimization follows from this reference alone.
+The optimizing JIT uses a distinct [typed SSA design](jit-e2e-system.md), with
+method/trace builders, explicit effects, recovery and hardware allocation.
+The interpreter's frame-home design is not presumed optimal. Active experiments
+belong to the [work board](../issues/README.md); this reference claims no speedup.

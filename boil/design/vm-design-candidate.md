@@ -1,5 +1,10 @@
 # Candidate: explicit interpreter state transport
 
+Historical proposal. Its tracing collector and source assignments are superseded.
+Use the [overall design](runtime-architecture.md),
+[interpreter contract](handler-and-observer-contract.md) and
+[current board](../issues/README.md) for the selected runtime and work.
+
 2026-11-01. Coordinator synthesis for design review. Proposed architecture,
 not a landed backend or a speedup claim. Repository source at the start of
 this review is `417a9443a599e879c76c34c13ae76943bd6f6b3e`.

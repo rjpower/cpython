@@ -1,5 +1,11 @@
 # Cohesive method and tracing JIT
 
+**Current assignment:** deferred until the unified-value interpreter checkpoint.
+The [board](../README.md) owns current work. Previous agents are stopped; owner
+tables, source windows and pending steps below are historical execution detail,
+not instructions to resume those assignments. The selected system design
+remains [method/tracing JIT](../../design/jit-e2e-system.md).
+
 **M3 first native batch failed: 35 passes, one admission regression.**
 The fresh debug build passed, and all eight new observed-loop tests passed.
 An unchanged old test errors after a zero-iteration call causes recorder

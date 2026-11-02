@@ -1,54 +1,49 @@
 # Boil the ocean
 
-A CPython performance fork with compiler-produced register IR, eight-byte
-NaN-boxed frame values, boxed-slot shapes, reference counting and cyclic collection.
-The upstream base is `321925c92c9`. Interpreter improvements precede JIT work;
-roughly 2× on simple arithmetic is guidance, not a numerical gate.
+We are rebuilding CPython with universal eight-byte PyValues, a register
+interpreter, and a cohesive method and tracing JIT. Reference counting with
+cyclic collection is the selected memory policy. Extensions are rebuilt and
+ported; hard source or binary compatibility with upstream is not required.
 
-**Current decision (2026-11-01):** stop tracing-GC optimization and adopt the
-[reference-counting successor](issues/rc-integration/status.md). Candidate
-qualification, local integration and fresh release/debug checks are accepted.
-Register IR, eight-byte NaN-boxed frame values and boxed-slot shapes are retained.
-The RC restoration also removed universal heap PyValues; the user has reaffirmed
-that they must be [restored under RC](issues/pyvalue-rc-restoration/status.md).
-Boxed heap fields are the current interim implementation, not the target. No
-collector switch will be added. [Earlier decision and evidence](issues/gc-parity-deadline/decision-20261101.md).
+## Where we are
 
-Current images, built from `eba351fee7d`:
+The qualified interim interpreter is built from `eba351fee7d`: register IR and
+NaN-boxed frame values, with boxed heap fields. Universal PyValues are being
+restored across containers, attributes and core operations in a separate source
+worktree. Many components have passed source review, but that composed source
+is still uncommitted and has no qualified build or performance result.
+
+**Current step:** the coordinator checkpoints reviewed source in coherent
+commits, then finishes remaining consumers and validates the integrated runtime.
+The wiki/assignment reset passed fresh independent review; previous agents are
+stopped. No new runtime implementation owner is assigned yet. The
+[work board](issues/README.md) names the next steps.
+
+Next milestone: measure the unified-value register interpreter with JIT
+explicitly disabled against matched interim RC and upstream controls. Then
+continue the shared method/tracing JIT. No new JIT is in the interim images.
+
+## Project wiki
+
+| Page | Purpose |
+| --- | --- |
+| [Standing goal](GOAL.md) | User direction and recovery after restart or compaction |
+| [Process](PROCESS.md) | Increment lifecycle, compatibility, extension ports and integration |
+| [Overall design](design/runtime-architecture.md) | System structure and IR, interpreter, values and JIT details |
+| [Testing and admission](design/validation.md) | Feedback, qualification, performance and merge gates |
+| [Current work](issues/README.md) | One row per experiment, current stage and next action |
+| [Experiment log](WORKLOG.md) | Concise concluded outcomes; detail stays with each experiment |
+| [Documentation rules](DOCUMENTATION.md) | Authoritative pages, evidence and historical records |
+
+## Run the interim interpreter
 
 ```sh
 ./build/rc-integrated-release-20261101/python your_script.py
 ./build/rc-integrated-debug-20261101/python your_script.py
 ```
 
-These Linux/GIL/GCC builds retain the private `boilrc1` ABI and the documented
-optional-module limits. Global `Py_STACKREF_DEBUG` is unsupported and unvalidated.
-The first JIT increment is an isolated experiment; these images contain no new JIT.
-
-| Need | Start here |
-| --- | --- |
-| Current work, owners and next actions | [Issue board](issues/README.md) |
-| Required universal values under RC | [PyValue restoration](issues/pyvalue-rc-restoration/status.md) |
-| Runtime structure and contracts | [Runtime architecture](design/runtime-architecture.md) |
-| Proposed integrated runtime and experiments | [IR, VM and allocator/collector reassessment](design/integrated-runtime-candidate.md) |
-| Current hypotheses and parallel assignments | [Runtime work after peer review](design/runtime-work-breakdown.md) |
-| Whole-method compilation, tracing and optimization roadmap | [Cohesive JIT system](design/jit-e2e-system.md) |
-| Attribute semantics, feedback and proposed typed SSA | [IR and feedback design](design/jit-ir-feedback/design.md) |
-| Opaque extension API and gradual rebuilt-source migration | [Extension API](design/extension-api.md) |
-| LuaJIT dictionary prediction versus shapes and slots | [Storage comparison](design/jit-ir-feedback/dictionary-storage-comparison.md) |
-| Performance findings and recommendation | [GC and interpreter performance](design/gc-and-interpreter-performance.md) |
-| Measured results | [Performance report](issues/gc-cleanup-scanning/performance.md) |
-| Development workflow | [Process](PROCESS.md) |
-| Document organization and experiments | [Documentation](DOCUMENTATION.md) |
-| High-level outcomes | [Worklog](WORKLOG.md) |
-
-Each issue's `status.md` owns its current state. Designs explain contracts;
-plans describe the work; results retain evidence. Start with the relevant issue
-and actual source/process state rather than inferring an assignment from a design.
-
-The coordinator integrates changes and maintains the board. Owners execute
-bounded tasks; independent reviewers check significant changes. Source, build
-and measurement identities belong in the relevant result record.
-
-Keep WORKLOG append-only: concise, high-level actions and outcomes with links.
-Detailed evidence stays with the linked issue results.
+These are the earlier Linux x86-64/GIL/GCC builds with private `boilrc1` ABI;
+they do not contain restored universal heap values. Profile and optional-module
+limits are recorded in [RC integration](issues/rc-integration/status.md).
+Upstream base: `321925c92c9`. Earlier tracing-GC work is closed; its
+[decision](issues/gc-parity-deadline/decision-20261101.md) and evidence remain.

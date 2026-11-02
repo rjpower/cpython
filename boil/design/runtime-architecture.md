@@ -1,67 +1,67 @@
 # Runtime architecture
 
-The accepted runtime compiles Python into register IR, executes generated C
-handlers over eight-byte NaN-boxed frame values, and uses reference counting
-with cyclic collection. The accepted images were built from `eba351fee7d`.
-[Current work](../issues/README.md) distinguishes implemented contracts from
-proposals and isolated experiments.
+The selected design combines canonical eight-byte PyValues, a compiler-produced
+register interpreter, reference counting with cyclic collection, and a cohesive
+method/tracing JIT. The [work board](../issues/README.md) separates this target
+from the qualified interim runtime and unfinished source.
 
-## Compiler and execution
+```mermaid
+flowchart TD
+    Source[Python source] --> CFG[Stack CFG and register lowering]
+    CFG --> IR[Pristine register IR and source maps]
+    IR --> VM[Generated C interpreter]
+    IR --> Baseline[Whole-method baseline]
+    IR --> Methods[Optimizing method builder]
+    VM --> Feedback[Guarded feedback and hot paths]
+    Feedback --> Traces[Trace builder]
+    Methods --> SSA[Shared typed SSA and optimization]
+    Traces --> SSA
+    SSA --> Native[Shared allocation and native backend]
+    Baseline --> Native
+    Native --> Recovery[Frame recovery and VM transitions]
+    Recovery --> VM
+    Values[Canonical PyValue and RC ownership] --- VM
+    Values --- Native
+    Extensions[Rebuilt bridges and opaque extension API] --> Values
+```
 
-`compile.c` and `codegen.c` produce stack-shaped control-flow graphs. `regcfg.c`
-converts them to register operations; `regcfg_passes.c` folds loads/stores,
-propagates values, computes liveness and compacts frame slots. `assemble.c`
-emits fixed-width IR words, feedback initializers, line and exception tables.
-There is no runtime conversion from stack bytecode.
+## Subsystem references
 
-An IR word contains a handler ID and four physical operand fields. Executable
-IR registers name frame homes. They are distinct from hardware registers and
-from a proposed optimizing compiler's SSA values. RegCFG has fresh temporaries
-within regions and canonical homes at joins; it is not a general SSA optimizer.
+| Subsystem | Design and source organization |
+| --- | --- |
+| [Compiler and IR](compiler-and-ir.md) | compile/codegen/flowgraph → regcfg/regcfg_passes → assemble; physical frame homes, liveness and generated formats |
+| [Interpreter](handler-and-observer-contract.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation |
+| [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
+| [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
+| [Extension API](extension-api.md) | Owning, fallible rebuilt-source bridges and gradual opaque handle adoption |
+| [Method/tracing JIT](jit-e2e-system.md) | Shared semantic helpers, typed SSA, effects, state recovery, backend and code lifetime |
+| [JIT feedback and attribute IR](jit-ir-feedback/design.md) | Receiver/descriptor/storage facts, guards and dictionary prediction |
 
-Code objects retain pristine words. `Python/ir.c` creates the executing copy
-and feedback state, which specialization and instrumentation update.
-`Python/bytecodes.c` defines operations. The cases generators produce handler
-bodies and metadata; `Python/ceval.c` runs them. Calls, returns, exceptions,
-yield/resume and observation obey real frame and initialized-home contracts.
+Interpreter IR registers are memory homes, not hardware registers or optimizing
+SSA identities. The optimizing compiler must choose registers and spills. The
+interpreter encoding and generated C quality remain subjects for measurement;
+choosing register IR did not prove either optimal.
 
-## Values, ownership and memory
+All paths share Python semantics: descriptors and custom hooks, arbitrary-size
+integers, object identity, exceptions and callbacks. Specialization may guard
+common cases; opaque code uses explicit boundaries and recovery. It must not
+silently discard effects or confuse a stored value kind with receiver behavior.
 
-`Include/internal/pycore_stackref.h` defines `_PyStackRef`. On the supported
-Linux/GIL builds, exact int32 values and non-NaN doubles may be inline in an
-eight-byte frame value. Other values retain object references and ownership.
-Heap container fields and shape slots remain boxed; a core-wide inline heap
-representation and its ABI were removed during RC restoration. The user has
-reaffirmed that [universal PyValues must be restored under RC](../issues/pyvalue-rc-restoration/status.md).
-The boxed heap is an interim implementation, not the selected final design.
+## What exists today
 
-Borrowing, stealing, duplicating and closing a reference are semantic operations.
-Closing a mortal object can run a destructor and reenter Python. Boxing at a C
-API boundary can allocate and fail. A native compiler must model these effects
-and preserve observable ownership, identity, exceptions and frame state.
+The qualified interim images at `eba351fee7d` use register IR, NaN-boxed frame
+values and boxed heap/shape fields under RC. Universal PyValue restoration is
+partially implemented and source-reviewed in a separate uncommitted worktree;
+there is no restored runtime or measured speed claim. JIT experiments contain
+partial implementation, but the interim images contain no new native tier.
 
-The object allocator and ordinary cyclic collector remain in use. Tracing-GC
-optimization and nursery work are closed; no collector selector is planned.
-`Python/gc_trace.c` remains as an RC tracing verifier, not the selected freeing
-collector. Its diagnostic presence does not imply a tracing-GC runtime.
+The target has one canonical core representation and one selected collector.
+Internal PyValue bits are private; opaque extension handles do not expose them.
+The HPy-compatible backend is still unimplemented. Existing object/JIT patterns
+may change when better designs are supported by evidence.
 
-## Native compilation
-
-The accepted main images contain no new native tier. Three isolated frame-entry
-JIT experiments were rejected on elapsed results. A subsequent arithmetic-block
-source candidate passed source review but was superseded before activation;
-its source and helper evidence are retained as components.
-
-The active [method and tracing JIT design](jit-e2e-system.md) proposes a baseline
-whole-method compiler and a shared optimizing SSA/backend pipeline. Method
-compilation and trace recording are different region builders over common
-semantic, state-recovery, ownership and native-code lifetime contracts. These
-are proposed contracts, not claims of implemented coverage or speed.
-
-## Current limits
-
-RC integration qualified Linux x86-64/GIL, GCC computed dispatch, boxed-slot
-shapes and the private `boilrc1` ABI. Global `Py_STACKREF_DEBUG` remains unsupported
-and unvalidated. See [RC integration](../issues/rc-integration/status.md) for
-profile, optional-module and qualification limits. Historical tracing/value
-papers describe earlier source and must not be used as the current ABI.
+The supported interim profile is Linux x86-64/GIL, GCC computed dispatch and
+private `boilrc1` ABI. Free-threaded/32-bit and global StackRef-ID debugging are
+unqualified. [RC integration](../issues/rc-integration/status.md) records exact
+limits. Earlier tracing/nursery proposals remain historical evidence, not the
+current architecture or active work.

@@ -37,7 +37,8 @@ workloads after seeing the score.
   and elapsed normalization. Invariant unused `x + y` diagnostics are not an
   `i += 1` recurrence; verify the executed path before interpreting arithmetic.
 
-The [benchmark guide](../bench/README.md) describes the existing CLI. The
-[landed results](../issues/gc-cleanup-scanning/performance.md) supply the current
-comparison; [current direction](gc-and-interpreter-performance.md) uses that
-budget without promising a general 2× improvement.
+The [benchmark guide](../bench/README.md) describes the existing CLI.
+[Earlier GC results](../issues/gc-cleanup-scanning/performance.md) are historical
+measurements, not restored-runtime performance. The
+[current interpreter checkpoint](../issues/pyvalue-rc-restoration/integration/status.md)
+requires fresh matched JIT-off measurements after coherent integration.

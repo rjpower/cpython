@@ -1,57 +1,50 @@
 # Values and object protocol
 
-**Historical value/heap design.** The accepted RC runtime uses NaN-boxed
-`_PyStackRef` frame values and boxed heap fields. Core-wide inline heap values
-and the `PyValue` interfaces described below are not its current ABI. See the
-[runtime architecture](runtime-architecture.md) and
-[method/tracing JIT design](jit-e2e-system.md) for current and proposed contracts.
-The user has reaffirmed that [universal PyValues must be restored under RC](../issues/pyvalue-rc-restoration/status.md).
-This document records real earlier implementation; its tracing-only ownership
-assumptions require adaptation, not removal of the universal representation.
+The selected core uses one canonical eight-byte PyValue in frames, containers,
+cells, attribute fields and operation arguments/results. Restoration under RC
+is incomplete; the qualified interim images still have boxed heap fields.
+[Current restoration](../issues/pyvalue-rc-restoration/status.md) owns progress.
 
-`Include/pyvalue.h` defines the tagged value representation. Exact int32 and
-non-NaN doubles can be inline; object-valued cases retain object identity.
-Representations must be canonical at producers and boundaries. Raw pointer
-identity, language identity and value comparison are distinct operations;
-use the declared API rather than treating every value as a `PyObject *`.
+Exact int32 and non-NaN double values are inline. None/bools retain immortal
+singleton identity; NaNs, large integers, subclasses and other objects retain
+object form. Internal NULL/error/index sentinels are not language values.
+Canonical producers and boundaries keep representations consistent. Raw bits,
+pointer identity, language identity and comparison are different operations.
 
-## Managed storage
+PyValue is private core representation. Rebuilt object APIs and opaque extension
+handles have explicit [boundary contracts](extension-api.md); they do not expose
+core bits or cast a tagged array into PyObject pointers.
 
-Frames, list/tuple elements, dictionary entries, cells and positional instance
-slots carry values. Traversal visits strong object-valued fields with their
-actual initialized bounds. An inline scalar is not an object address; an
-unaligned or stale tag is not permission to read a header.
+## Ownership and storage
 
-Object and value forms meet at C API boundaries. Boxing can allocate and collect;
-unboxing requires the promised type/range checks. Values and objects needed across
-a collecting call must be kept by initialized frame slots or declared C roots.
-An object-form API without an error channel is not interchangeable with a
-fallible conversion.
+Borrow, duplicate, move, steal and close are semantic operations even for a
+tagged value. Heap fields own strong or immortal references; promote a mortal
+borrow before storing it. Inline scalars need no object refcount. Traversal
+visits initialized strong object edges and skips scalar/sentinel payloads.
 
-## Attribute lookup
+Publish initialized slots and structural metadata before exposing storage.
+Detach or replace old owners before releasing them; release may reenter Python.
+Clearing containers and cycles follows the [RC lifetime contract](gc-roots-and-lifetimes.md).
 
-Shapes hold positional layout information and associated version facts.
-Lookup plans distinguish stored fields, descriptors, methods, dictionaries and
-custom hooks. Reading an existing value payload need not box it. A storage-type
-promise does not prove that every lookup route returns that representation.
+Canonicalizing an owned scalar object cannot hide an early release. Prepare
+the immediate while retaining its retired box, publish the destination and
+caller state, then release displaced owners/boxes in the required order and
+refresh callback-sensitive facts. Boxing at an outward boundary can allocate
+and fail; it returns an owned result with an error channel.
 
-Keep owner shape, type version, descriptor precedence and dictionary/materialized
-storage transitions coherent. A speculative fast path must retain the generic
-behavior for subclasses, hooks, missing attributes, mutation and exceptions.
-Type mutation and shape invalidation are part of the same contract as a load.
+## Attributes and calls
 
-## Slots and calls
+Distinguish normal instance fields, managed dictionaries, descriptors, methods,
+builtin receivers and custom attribute hooks. A storage kind does not determine
+the whole operation. Guard type/version, shape and descriptor precedence before
+using a specialized access; keep generic Python behavior when guards fail.
 
-The maintained value slot interfaces carry attribute/descriptor/call values;
-object receivers and object-form compatibility functions remain explicit.
-Native call conventions differ, so a value argument path does not prove a
-value receiver or result path. Generic calls, specialization, escaped methods,
-generated wrappers and error paths must agree when an interface changes.
+Native boundaries capture roots → prepare arguments → invoke → stage → publish
+caller state → clean up → refresh. Scope-owned object arrays can support ordinary
+rebuilt parser bodies; borrowed scalar boxes cannot escape a local arena.
+The same semantic/ownership contract applies to interpreter and JIT paths.
 
-Do not introduce object-form twins or silent fallback interfaces merely to
-avoid updating affected callers. Preserve externally visible data, errors,
-identity and collection safety across a conversion.
-
-The [value/native issue](../issues/value-native-interfaces/status.md) tracks
-remaining interface work. The [GC contract](gc-roots-and-lifetimes.md) governs
-root lifetime; relocation and borrowed-pointer updates need additional contracts.
+The [restoration design](../issues/pyvalue-rc-restoration/design.md) records
+encoding and migration detail. Its original public-value-ABI proposal is
+superseded by the private-core/opaque-extension design above. Do not restore old
+tracing-only no-op ownership or keep boxed/value runtime modes.

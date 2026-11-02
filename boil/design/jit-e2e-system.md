@@ -1,7 +1,8 @@
 # One method and tracing JIT system
 
-2026-11-01. Integrated design draft responding to Loom review36. Implementation
-is not authorized by this document. The accepted RC interpreter remains active.
+Selected system design, initially responding to Loom review36. Partial source
+experiments exist; the [work board](../issues/README.md) owns implementation state
+and assignments. The qualified interim RC images contain no new native tier.
 The JIT is the chosen development direction; experiments select mechanisms and
 optimization policies inside that system. They do not repeatedly ask whether
 an unfinished arithmetic prototype proves that a JIT should exist.

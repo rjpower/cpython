@@ -1,55 +1,40 @@
-# Documentation
+# Documentation rules
 
-Keep one authoritative current record per issue. Documents have distinct jobs;
-link them instead of copying status, plans or logs between entry points.
+Treat this directory as a wiki. A reader should reach the selected design,
+current work and next steps from [README](README.md) without reconstructing a
+conversation or a chronology of receipt hashes.
 
-## Where things belong
-
-| Path | Purpose |
+| Page | Owns |
 | --- | --- |
-| `README.md` | Project orientation and navigation |
-| `issues/README.md` | Current work index |
-| `issues/<id>/status.md` | State, owner, dependencies, next action and completion |
-| `design/<descriptive-name>.md` | Current cross-cutting architecture and contracts |
-| Issue `design.md` / `plan.md` | Proposed change and implementation sequence |
-| Issue `reviews/` | Findings and dispositions for a named revision |
-| Issue `results.md` or `results/` | Actual behavior, measurements and evidence links |
-| `PROCESS.md` | Short development workflow |
-| `WORKLOG.md` | Append-only, concise high-level outcomes |
+| `README.md` | Orientation, current milestone and navigation |
+| `GOAL.md` | Standing instructions and compaction/restart recovery |
+| `PROCESS.md` | Work cycle, extension migration and integration policy |
+| `design/runtime-architecture.md` | Overall selected design and detail links |
+| Other `design/` pages | Durable subsystem contracts; label proposals and history |
+| `design/validation.md` | Testing and feature-admission rules |
+| `issues/README.md` | Current board, about one row per experiment |
+| Experiment `status.md` | Stage, owner, hypothesis, dependencies, evidence and next action |
+| Experiment design/reviews/results | Detailed design, reviews and execution evidence |
+| `WORKLOG.md` | About one short line per concluded experiment, linked to its record |
 
-Only `status.md` is required. A small task can keep its scope and result there.
-Use descriptive, stable IDs; do not create an issue per agent, run or review
-message. Split a child only when it has independent ownership and a useful
-completion condition. Keep paths stable when work closes.
+Use existing issue directories and stable descriptive child IDs for independent
+increments. Do not create a public document for every agent message, command,
+receipt or approval event. Small increments may keep everything in status.md.
+The [template](issues/_template/status.md) is a guide, not a demand for empty files.
 
-## Bounded experiments
+Rewrite current status when it changes; retain chronology in experiment results
+or Git. Update one authoritative record and link it from the board. Distinguish
+source review, build, executed runtime tests, commit, integration and measurement.
+Include exact source/image identities in results, not every navigation paragraph.
 
-Before execution, record:
+Preserve failures and old evidence. Label superseded plans as historical and
+remove them from current assignments. The pre-reset
+[worklog](archive/WORKLOG-before-wiki-reset-20261102.md) and
+[board](archive/work-board-before-wiki-reset-20261102.md) are preserved verbatim;
+their links and assignments are historical, not execution instructions. Do not
+rewrite unrelated user work while reorganizing records.
 
-- **Hypothesis:** the specific uncertainty or bottleneck being tested.
-- **Owner and budget:** one accountable owner and a concrete elapsed-time budget.
-- **Minimum change:** the smallest coherent implementation or observation.
-- **Checks:** externally useful behavior and measurable success/failure criteria.
-- **Stop rule:** when to stop on failure, ambiguity or budget exhaustion.
-- **Decision:** integrate or reject the attempt; name the deciding evidence.
-  An investigation can report a finding without landing runtime code.
-
-Choose a useful first increment rather than closing every future contract before
-feedback. Follow-ups are optional new work, not automatic extensions. Broader
-qualification belongs to the coherent landing, under the
-[validation contract](design/validation.md).
-
-## Keep records legible
-
-- Status describes what is true now. Rewrite it at meaningful transitions;
-  chronology and logs belong in results, Git and WORKLOG.
-- Use `queued`, `active`, `blocked`, `review`, `deferred` or `closed`. A closed
-  issue records `landed`, `reported`, `abandoned` or `superseded` as its outcome.
-- Distinguish proposed, reviewed, built, measured and landed work. Name source,
-  runtime library, native image and integration identities separately when needed.
-- Preserve raw results, failures and source/product bindings. Put large outputs
-  in project storage; commit a readable result with evidence locators and hashes.
-- Review outputs identify their input revision and remain under unique names.
-  Active navigation points to current contracts and relevant issue records.
-- The owner updates its issue; the coordinator updates integration and the board.
-  Published views identify their repository source and revision.
+Loom mirrors the wiki for discussion; repository pages own design and execution
+state. The `goal` artifact mirrors [GOAL](GOAL.md). Published summaries link to
+source pages. After compaction, read GOAL, README, PROCESS and the board, then
+inspect actual state instead of reviving an old agent or prepared script.

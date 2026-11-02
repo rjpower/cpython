@@ -1,4 +1,11 @@
-Restore universal PyValue with reference counting
+# Universal PyValue restoration: original design
+
+This is the original design/provenance record, not a live execution plan. Its
+canonical RC ownership direction remains selected. Its public-value-ABI proposal
+is superseded by the [private core and opaque extension design](../../design/extension-api.md).
+Partial implementation is now source-reviewed; [status](status.md) owns current
+state and [values](../../design/values-and-object-protocol.md) owns the current
+summary. Original pre-implementation statements below describe that revision.
 
 DESIGN ONLY. No source changes, builds or candidate execution. Preserve RC and cyclic collection as the single runtime policy; preserve all failed GC/JIT attempts. This restores a required representation and value API, not a collector experiment.
 

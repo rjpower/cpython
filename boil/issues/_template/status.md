@@ -1,39 +1,27 @@
 # Experiment title
 
-- State: queued / active / blocked / review / deferred / closed
-- Owner: accountable owner and active agent when assigned
-- Updated: YYYY-MM-DD
-- Budget: concrete elapsed/work budget; checkpoint and decision deadline
-- Depends on: linked experiment IDs, or none
-- Branch/worktree/head: actual identity when assigned
-- Outcome: landed / reported / abandoned / superseded (closed only)
-- Decision: integrate / reject (when concluded)
+- Stage: queued / design / review / implement / test / commit / integrate / accepted / rejected / deferred
+- Owner: accountable owner; independent reviewer
+- Goal/hypothesis: concrete problem, expected benefit and baseline
+- Scope: minimum useful change, files/interfaces and dependencies
+- Checkpoint/timebox: useful completion condition; timebox when needed
+- Decision rule: evidence for accepting, revising or rejecting this mechanism
 
-## Hypothesis
+## Design and review
 
-One falsifiable claim about useful behavior, performance or maintainability.
-State the baseline and the smallest change that can answer it.
+Describe semantics, ownership/effects, recovery and migration when relevant.
+Link the reviewed design and resolve material findings before dependent code.
 
-## Experiment
+## Implementation and evidence
 
-List the bounded change, owned files, relevant behavior checks and measurements.
-Use the smallest functioning consumer that answers the question. Record the
-control, comparison conditions and evidence links; prefer observed data,
-liveness, resource behavior and memory over incidental implementation counters.
+Link actual diff/commit, meaningful tests, outcomes and limitations. Distinguish
+syntax/host controls from candidate behavior; keep exact sources/images and raw
+results here. Detailed reviews/runs may use sibling files when useful.
 
-## Decision rule
+## Decision and next step
 
-Integrate when the behavior is correct and the stated benefit/structural result
-justifies the change. Reject when evidence refutes the hypothesis or complexity
-outweighs the benefit. Define both conditions before running the experiment.
-At the budget limit, stop and record the result. Reject an inconclusive attempt
-without claiming the hypothesis disproved; narrow or split a follow-up instead
-of silently extending scope. Partial foundations can integrate when
-they are useful and correct; they need not deliver every later optimization.
-
-## Now / next
-
-Current source-bound result, immediate action and blocker/resume condition.
-Keep this record current; put long designs, run history and reviews in linked
-optional files. Close with the decision, actual landing identity if applicable,
-and separate follow-ups. A reported finding is not a runtime landing.
+Record independent code/result review, commit, coordinator merge and merged-tree
+validation separately. State what is true now and the next useful action.
+A source checkpoint is not an integrated feature. Rejected attempts retain
+their evidence; follow-ups get a concrete new question rather than silent scope
+growth. Update the board and add one concise outcome line to WORKLOG on closure.

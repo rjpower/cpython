@@ -1,5 +1,12 @@
 # Implementation progress
 
+Historical chronology, retained with its original checkpoints and corrections.
+The [current status](status.md) and [board](../README.md) own present work.
+Previous agents are stopped; their assignments, source windows and compatibility
+approval questions below are superseded. Full rebuild/extension porting is
+authorized. Runtime source work is held during the wiki reset, not awaiting
+compatibility approval. Read later entries as outcomes of their dated stages.
+
 The working source is in `build/worktrees/pyvalue-rc-universal`, based on
 `95be1d28`. It remains an incomplete dependency state: there is no runnable
 restored candidate or performance result. RC and cyclic collection remain
@@ -371,3 +378,50 @@ fixture ASTs remain exact,29 total. Repr Writer_Discard now preserves the
 primary exception. The actual fixture passes syntax; full Dict still fails
 six retained borrowed bodies. Value-native iterator VM adoption and the explicit
 legacy API/core-caller migration remain required. No candidate execution.
+
+## Native caller and canonical consumer checkpoints,2026-11-02 03:48 UTC
+
+A generic native caller checkpoint6f45ad14 arrived03:27:00.488936 before
+03:30:41. Exact review corrects fallback callable/names homes before consumption,
+cold inline auto-restoration and the final event-poll seam: first forced refresh
+and error gate, original poll once, second forced refresh/error gate, finalmove.
+The separately recorded fixture amendmenta2a8c1de adds an actual-VM one-shot
+hook witness for +1 fallback versus observer redispatch. Final source review
+is pending under the unchanged04:10:41 ceiling; no runtime route is claimed.
+
+The new retained-boundary script was rejected before execution, then rejected
+once more through the same review path with the exact latest user authorization.
+The second review requires specific approval of GetItem/Next scalar error and
+borrowed SetDefault behavior after its downstream risk is disclosed. That
+question is pending; no source/header/backups/start receipt from either attempt.
+The held script/equivalents will not run. Distinct additive-only designf30310e3
+passed review and separate execution approval: actual first edit03:44:44.893642.
+It adds two owned providers/declarations/fixtures with all old contracts exact;
+original03:52:40 checkpoint/04:32:40 ceiling remain. Core and bundled consumers
+must still migrate. See the authorization-context and separate source grants.
+
+Root compiler metadata checkpoint61a1d727 at03:46:25.540899 precedes03:55:07.
+Exactly six bodies plus two includes are independently checkable against the
+preserved baseline; all other source is exact. Direct inline integer arithmetic
+and independently owned canonical keys/values replace borrowed scalar reads.
+Post-allocation size checks and pre-store bounds protect tuple/cell offsets.
+Full actual compile.c, assemble.c and flowgraph.c syntax passes. Four new test
+expectations pass host-reference controls, not candidate execution; independent
+source review is pending. Symtable/codegen/marshal/AST consumers remain required.
+
+Typecache v2c172b13e remains design-only HOLD after review37695118. A live-write
+ledger additionally identifies annotation getters/setters and static shared-tag
+initialization/teardown obligations. No cache source grant exists. Loom62 was
+published/read back;63 corrects only its UTC header from03:49 to actual03:47.
+Latest63 has51,544 characters/five diagrams. No coherent restored runtime/timing.
+
+Subsequent explicit user direction resolves the compatibility question: this
+is a rebuild of Python and all extensions; use judgment for possible incremental
+ports, with no hard compatibility gate. The additive bridge remains separate;
+apply the reviewed remaining legacy-only delta against that frozen baseline,
+not the stale combined script. No further compatibility confirmation is needed.
+
+Compiler61a1d727 subsequently passed independent review39a69223 and closes its
+source window early. The reviewer independently reproduced exact six-body/two-
+include scope and bound all three passing actual syntax checks. Host fixture
+controls remain distinct from candidate runtime; other consumers remain required.

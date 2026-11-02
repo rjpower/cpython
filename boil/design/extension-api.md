@@ -1,6 +1,13 @@
 # Extension API
 
-The preferred direction is an opaque, HPy-compatible extension API backed by canonical internal PyValue, plus a slower interpreter-specific bridge for rebuilt Python.h source. This is a design direction; the runtime backend and bridge described here are unimplemented. Existing universal-value storage work remains partial. Hard binary compatibility with old CPython extensions is not a goal.
+The preferred direction is an opaque, HPy-compatible extension API backed by canonical internal PyValue, plus a slower interpreter-specific bridge for rebuilt Python.h source. The opaque backend is unimplemented; the bridge has partially implemented, source-reviewed components and no qualified runtime. Universal-value restoration remains incomplete. Hard binary compatibility with old CPython extensions is not a goal.
+
+The user explicitly authorizes rebuilding and porting all extensions. Use
+judgment to make migration possible and incremental; preserving old source or
+binary compatibility is not an acceptance gate. Provide owned, fallible bridges
+for ordinary ports, identify required source changes, and migrate affected core
+and bundled callers. Do not retain an unsafe API or a second core representation
+solely to avoid a compatibility break.
 
 Reuse HPy's context API, declaration machinery and suitable tooling rather than publishing PyValue's representation or designing another complete public C API. HPy's current repository says it is no longer actively maintained, so adoption would require a maintained fork and a verified source pin. HPy 0.9.0 (`f6114734b4a5d03cfb9d24d3e8c71f77e8803881`) is the proposed evaluation baseline, not an installed or verified dependency. Its MIT notices must accompany reused code. Its CPython backend's pointer/array casts cannot implement this runtime's value storage. [HPy repository](https://github.com/hpyproject/hpy), [release](https://github.com/hpyproject/hpy/releases/tag/0.9.0), [license](https://github.com/hpyproject/hpy/blob/master/LICENSE).
 
@@ -51,31 +58,16 @@ Stage 1 names the actual route: `_CALL_NON_PY_GENERAL` and specialized `_CALL_BU
 
 The first checks exercise canonical scalar/object results, displaced owners, callbacks during boxing, OOM, abort, pending exceptions and exact-once cleanup through both cold and warmed real dispatch. Later slices add field cycles, globals/subinterpreters, buffer leases and ABI rejection. Completing HPy ecosystem coverage is not a prerequisite for completing and measuring the internal universal-value interpreter checkpoint.
 
-Implementation status, 2026-11-01 23:49 UTC: the fixed scope engine and gateway
-passed independent component source review. A separate
-[specialized O-call successor](../issues/pyvalue-rc-restoration/o-caller-source-grant-20261101-v1.md)
-now supplies actual generated publication and post-cleanup reload; its corrected
-checkpoint has 40 host tests and four selected syntax checks passing. Independent
-review accepts the actual specialized O-call production route; corrected legal
-cleanup fixtures are now source-bound and still need candidate execution. Generic dispatch/NOARGS adoption,
-other calling conventions, the HPy backend and rebuilt-extension conformance
-remain required later work. No candidate native execution is claimed.
+Current implementation and evidence belong to the
+[selected native caller experiment](../issues/pyvalue-rc-restoration/native-callers/status.md),
+[owned dictionary bridge](../issues/pyvalue-rc-restoration/owned-dict-entry/status.md)
+and [parser/registration work](../issues/pyvalue-rc-restoration/native-parsers/status.md).
+Their source reviews do not establish a complete extension backend or runtime
+conformance. The existing 660-path consumer census remains the migration inventory.
+The [original proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md)
+retains wrapper classification and research provenance.
 
-Variable-engine update,2026-11-02: author5c218de9 passes independent partial
-component review3f0c4a38. The same scope now has drainable variable storage,
-typed C-function dispatch, actual current-vectorcall eligibility/recheck, and
-generated flat Clinic fixtures. Header6270ec5d is frozen. Three actual syntax
-TUs pass;22 methods remain AST-only. Generic VM caller adoption follows the
-attribute source freeze and must preserve caller publication and original
-retirement order. Recursive/kwargs-dictionary parser contexts and typed scoped
-registration remain unimplemented; engine source acceptance is not real-route,
-HPy-backend or runtime conformance.
-
-The detailed source cut, wrapper-family classification, official-source limitations, and retained dictionary rejection/supersession evidence are in [the design proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md). The existing 660-path consumer census remains the migration inventory; this design does not replace it or authorize broad API removals.
-
-Exception-contract correction,2026-11-02: deallocators preserve the entry
-exception and report failures as unraisable. Earlier unexecuted destructor-error
-injections are retracted as valid witnesses. Corrected tests cover legal reentry,
-unraisable reports and primary preservation. Checked native-body and execution-
-refresh failures remain real error routes; no deallocator contract or debug
-assertion is relaxed. See the [correction record](../issues/pyvalue-rc-restoration/deallocator-fixture-correction-20261102-v1.md).
+Deallocators preserve the entry exception and report their own failures as
+unraisable. Earlier invalid test injections and their correction remain in the
+[experiment record](../issues/pyvalue-rc-restoration/deallocator-fixture-correction-20261102-v1.md);
+no deallocator contract or debug assertion is relaxed.

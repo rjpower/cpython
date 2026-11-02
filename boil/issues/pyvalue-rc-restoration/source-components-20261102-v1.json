@@ -76,7 +76,10 @@
   "dictionary_reader_provider_handoff": {
     "author_sha256": "fddc8b4f9a30437c03bedd5c9143f976af5b9cacec5ce16799db1791ef53d41d",
     "review_sha256": "589b030d098d889472c8c90f390b12af6a1742903774f2f29e7a840aff9bc3f0",
-    "functions": ["_PyDict_LookupIndexAndOwnedValue", "_PyDict_Subscript"],
+    "functions": [
+      "_PyDict_LookupIndexAndOwnedValue",
+      "_PyDict_Subscript"
+    ],
     "actual_vm_reader_composition_source_accepted": true,
     "dictionary_storage_window_still_active": false
   },
@@ -178,8 +181,42 @@
     "value_iterator_vm_adoption_accepted": false,
     "legacy_borrowed_boundary_accepted": false
   },
+  "compiler_metadata_dictionary_consumers": {
+    "author_sha256": "61a1d7279cef0ec65738f6add7d9a20330902a50c06ee21c53a530bd0d2a0f3d",
+    "review_sha256": "39a69223ccce29573a2cde0852e076e76efad7bc747d7e4576370f6f5442b81b",
+    "source_window_closed_early": true,
+    "changed_functions": 6,
+    "actual_full_syntax_units_pass": 3,
+    "new_runtime_ast_methods": 4,
+    "host_reference_controls_pass": 4,
+    "other_source_exact": true,
+    "whole_compiler_runtime_accepted": false
+  },
   "candidate_build": false,
   "runtime_tests_executed": false,
   "performance_measured": false,
-  "integration_complete": false
+  "integration_complete": false,
+  "dictionary_owned_entry_bridge": {
+    "author_sha256": "0ef3ace1f514568040d12bd2426b7046907677e56be19d08ef38f29eae0d173c",
+    "review_sha256": "c43dd5121dcb41fbbddd0e9e3f752229604c31a3f1588e66eba7d72575e8a6f1",
+    "source_window_closed_early": true,
+    "new_providers": 2,
+    "existing_bodies_and_contracts_exact": true,
+    "runtime_ast_methods": 32,
+    "new_runtime_ast_methods": 3,
+    "fixture_syntax_pass": true,
+    "whole_dict_remaining_legacy_bodies": 6,
+    "runtime_accepted": false
+  },
+  "selected_generic_native_callers": {
+    "author_sha256": "e56eeac223559897d6142a998c0190425f8e51c00cb67caaea51e5c467ba42ad",
+    "review_sha256": "9db64497d46c08a6a7d288e514daf3b4aa1c68b8466af8d24eb34b1747a787a6",
+    "source_window_closed_early": true,
+    "generators_pass": 7,
+    "host_generator_tests_pass": 46,
+    "actual_syntax_units_pass": 3,
+    "runtime_ast_methods": 27,
+    "whole_call_family_accepted": false,
+    "runtime_accepted": false
+  }
 }

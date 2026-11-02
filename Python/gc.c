@@ -463,27 +463,27 @@ visit_decref(PyObject *op, void *parent)
 }
 
 int
-_PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
+_PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 {
-    // This is a bit tricky! We want to ignore stackrefs with embedded
+    // This is a bit tricky! We want to ignore values with embedded
     // refcounts when computing the incoming references, but otherwise treat
     // them like normal.
-    assert(PyStackRef_IsObject(*ref));
-    if (!PyStackRef_RefcountOnObject(*ref) && (visit == visit_decref)) {
+    assert(PyValue_IsObject(*ref));
+    if (!PyValue_RefcountOnObject(*ref) && (visit == visit_decref)) {
         return 0;
     }
-    Py_VISIT(PyStackRef_AsPyObjectBorrow(*ref));
+    Py_VISIT(PyValue_AsPyObjectBorrow(*ref));
     return 0;
 }
 
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
-    /* all slots; _Py_VISIT_STACKREF skips NULL, indices and inline values */
+    PyValue *ref = _PyFrame_GetLocalsArray(frame);
+    PyValue *end = ref + _PyFrame_NumSlots(frame);
+    /* all slots; _Py_VISIT_VALUE skips NULL, indices and inline values */
     for (; ref < end; ref++) {
-        _Py_VISIT_STACKREF(*ref);
+        _Py_VISIT_VALUE(*ref);
     }
     return 0;
 }

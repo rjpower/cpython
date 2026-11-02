@@ -310,7 +310,7 @@ Include/internal/pycore_interp.h          @ericsnowcurrently
 Include/internal/pycore_obmalloc.h        @ericsnowcurrently
 Include/internal/pycore_pymem.h           @ericsnowcurrently
 Include/internal/pycore_runtime.h         @ericsnowcurrently
-Include/internal/pycore_stackref.h        @Fidget-Spinner
+Include/internal/pycore_value.h        @Fidget-Spinner
 Include/internal/pycore_tstate.h          @ericsnowcurrently
 Tools/build/generate_global_objects.py    @ericsnowcurrently
 

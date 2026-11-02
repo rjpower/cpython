@@ -107,7 +107,6 @@
       <PreprocessorDefinitions Condition="'$(UseTailCallInterp)' == 'true'">_Py_TAIL_CALL_INTERP=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(WITH_COMPUTED_GOTOS)' != ''">HAVE_COMPUTED_GOTOS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(DisableRemoteDebug)' != 'true'">Py_REMOTE_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(StackRefDebug)' == 'true'">Py_STACKREF_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>version.lib;ws2_32.lib;pathcch.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -314,7 +313,7 @@
     <ClInclude Include="..\Include\internal\pycore_sliceobject.h" />
     <ClInclude Include="..\Include\internal\pycore_slots.h" />
     <ClInclude Include="..\Include\internal\pycore_slots_generated.h" />
-    <ClInclude Include="..\Include\internal\pycore_stackref.h" />
+    <ClInclude Include="..\Include\internal\pycore_value.h" />
     <ClInclude Include="..\Include\internal\pycore_stats.h" />
     <ClInclude Include="..\Include\internal\pycore_strhex.h" />
     <ClInclude Include="..\Include\internal\pycore_structs.h" />

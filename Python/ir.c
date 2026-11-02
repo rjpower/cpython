@@ -23,7 +23,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_stackref.h"        // Py_STACKREF_INLINE_VALUES
+#include "pycore_value.h"        // Py_VALUE_INLINE_VALUES
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
@@ -207,40 +207,11 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     return _PyIR_FbEntry(exec->entries, (uint32_t)fb);
 }
 
-/* Whether every value stays boxed: in a build without inline values, or
- * under PYTHON_TAGGED_VALUES=0.  The assembler emits the inline constant
- * handlers in every build, so that code objects do not depend on it. */
-static inline int
-inline_values_off(void)
-{
-#ifdef Py_STACKREF_INLINE_VALUES
-    return !_PyInterpreterState_GET()->opt_config.tagged_values_enabled;
-#else
-    return 1;
-#endif
-}
-
-/* The boxing form of an inline constant handler if values stay boxed, or
- * handler itself */
-static inline int
-boxing_handler(int handler)
-{
-    if (inline_values_off()) {
-        switch (handler) {
-            case LOAD_SMALL_INT_INLINE:
-                return LOAD_SMALL_INT;
-            case LOAD_CONST_INLINE_INT:
-            case LOAD_CONST_INLINE_FLOAT:
-                return LOAD_CONST;
-        }
-    }
-    return handler;
-}
 
 int
 _PyCode_GenericHandler(PyCodeObject *co, int i)
 {
-    return boxing_handler(_PyCode_InstrHandler(co, i));
+    return _PyCode_InstrHandler(co, i);
 }
 
 int
@@ -248,7 +219,7 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
     int handler = _PyCode_InstrHandler(co, i);
     if (_PyIR_BaseOpcode(handler) == opcode) {
-        return boxing_handler(handler);
+        return handler;
     }
     // The instrumented twin of a NOFB form is NOFB too
     if (handler >= IR_FIRST_ONLY_HANDLER && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
@@ -302,14 +273,6 @@ make_exec(PyCodeObject *co)
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
     _PyJit_SeedBackedges(co, exec);
-    if (inline_values_off()) {
-        for (Py_ssize_t i = 0; i < nwords; i++) {
-            int handler = boxing_handler(IR_HANDLER(words[i]));
-            if (handler != IR_HANDLER(words[i])) {
-                _PyIR_SetHandler(&words[i], handler);
-            }
-        }
-    }
     if (fb_size == 0) {
         return exec;
     }

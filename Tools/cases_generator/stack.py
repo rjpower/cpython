@@ -37,7 +37,7 @@ class PointerOffset:
     """The offset of a pointer from the reference pointer
         The 'reference pointer' is the address of the physical stack pointer
         at the start of the code section, as if each code section started with
-        `const PyStackRef *reference = stack_pointer`
+        `const PyValue *reference = stack_pointer`
     """
     numeric: int
     positive: tuple[str, ...]
@@ -746,7 +746,7 @@ class Storage:
             nonlocal tmp_defined
             if overwrite:
                 if not tmp_defined:
-                    out.emit("_PyStackRef ")
+                    out.emit("PyValue ")
                     tmp_defined = True
                 out.emit(f"tmp = {name};\n")
                 out.emit(f"{name} = {overwrite};\n")
@@ -757,11 +757,11 @@ class Storage:
 
         def close_variable(var: Local, overwrite: str) -> None:
             nonlocal tmp_defined
-            close = "PyStackRef_CLOSE"
+            close = "PyValue_CLOSE"
             if "null" in var.name:
-                close = "PyStackRef_XCLOSE"
+                close = "PyValue_XCLOSE"
             if var.known_object and not var.size:
-                # Known to hold a pointer; see _PyStackRef_CLOSE_POINTER().
+                # Known to hold a pointer; see _PyValue_CLOSE_POINTER().
                 close = f"_{close}_POINTER"
             var.memory_offset = None
             self.save(out)
@@ -771,7 +771,7 @@ class Storage:
                     close_named(close, f"{var.name}[0]", overwrite)
                 else:
                     if overwrite and not tmp_defined:
-                        out.emit("_PyStackRef tmp;\n")
+                        out.emit("PyValue tmp;\n")
                         tmp_defined = True
                     out.emit(f"for (int _i = {var.size}; --_i >= 0;) {{\n")
                     close_named(close, f"{var.name}[_i]", overwrite)
@@ -811,9 +811,9 @@ class Storage:
             close_variable(lowest, output.name)
             assert lowest.memory_offset is not None
         for input in reversed(self.inputs[1:]):
-            close_variable(input, "PyStackRef_NULL")
+            close_variable(input, "PyValue_NULL")
         if output is None:
-            close_variable(self.inputs[0], "PyStackRef_NULL")
+            close_variable(self.inputs[0], "PyValue_NULL")
         for input in reversed(self.inputs[1:]):
             input.kill()
             self.stack.drop(input.item, self.check_liveness)

@@ -94,7 +94,7 @@ build_method(PyCodeObject *code, _PyCodeExec *exec,
         }
         if (handler == JUMP_BACKWARD && op->target < i && unit->record_header == UINT32_MAX &&
             _PyFrame_NumSlotsForCodeObject(code) <= JIT_GRAPH_HOMES &&
-            _PyThreadState_GET()->interp->opt_config.tagged_values_enabled &&
+
             exec->jit != NULL && !exec->jit->record_attempted) {
             unit->record_header = op->target;
             unit->record_backedge = i;

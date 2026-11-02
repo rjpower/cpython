@@ -239,18 +239,18 @@ An example of the latter would be:
 ### Inline values
 
 On 64-bit builds without free threading, a stack item may hold an int or a
-float without a heap object (see `Include/internal/pycore_stackref.h`). Such an
+float without a heap object (see `Include/internal/pycore_value.h`). Such an
 inline value must be boxed before C code treats it as a `PyObject *`.
 
 The generator finds each scalar input whose name a uop passes, as the whole
-argument, to `PyStackRef_AsPyObjectBorrow`, `PyStackRef_AsPyObjectNew` or
-`PyStackRef_AsPyObjectSteal` outside an `assert()`. Before the uop's body it
+argument, to `PyValue_AsPyObjectBorrow`, `PyValue_AsPyObjectNew` or
+`PyValue_AsPyObjectSteal` outside an `assert()`. Before the uop's body it
 emits one of two checks for that input, marked unlikely:
 
 * In a guard, a uop that may deopt or exit but does not escape and only peeks
   at its inputs, it exits if the input is not a pointer. The guard then sees
   only objects, and the specialized family member never meets an inline value.
-* In any other uop, it boxes an inline value with `x = PyStackRef_Box(x)`.
+* In any other uop, it boxes an inline value with `x = PyValue_Box(x)`.
   If boxing fails, it jumps to `error` with all inputs still on the stack.
   In `Py_STATS` builds each box counts towards the instruction's `boxes`
   statistic.
@@ -262,23 +262,23 @@ emits one of two checks for that input, marked unlikely:
 While the input is still in its stack slot, the check reads the slot in memory,
 which is shorter than testing the loaded value.
 
-A uop that contains `assert(PyStackRef_IsObject(name));` declares that the
+A uop that contains `assert(PyValue_IsObject(name));` declares that the
 input `name` is never an inline value, and the generator emits no check for it.
 An input checked once is not checked again by later uops of the same
 instruction, until the code assigns to it. Array inputs are not checked; C
-helpers that convert stackref arrays must box their elements. Code that
-converts a stackref by another route, or that handles inline values itself,
+helpers that convert value arrays must box their elements. Code that
+converts a value by another route, or that handles inline values itself,
 should use the `inline_ok` annotation and box explicitly where needed. Accessors
-that read inline values, such as `PyStackRef_TYPE()` and
-`PyStackRef_CompactIntValue()`, are not conversions, so a uop that reads an
+that read inline values, such as `PyValue_TYPE()` and
+`PyValue_CompactIntValue()`, are not conversions, so a uop that reads an
 input only through them needs no box.
 
 An input that was checked, boxed or declared an object, and a variable assigned
-from such an input or from a `PyStackRef_FromPyObject...()` constructor, is
-known to be a pointer. `PyStackRef_CLOSE`, `PyStackRef_XCLOSE`,
-`PyStackRef_CLOSE_SPECIALIZED`, `PyStackRef_DUP` and
-`PyStackRef_AsPyObjectSteal` on such a variable, and the generator's own close
-of such an input, become the `_PyStackRef_..._POINTER` variants, which test
+from such an input or from a `PyValue_FromPyObject...()` constructor, is
+known to be a pointer. `PyValue_CLOSE`, `PyValue_XCLOSE`,
+`PyValue_CLOSE_SPECIALIZED`, `PyValue_DUP` and
+`PyValue_AsPyObjectSteal` on such a variable, and the generator's own close
+of such an input, become the `_PyValue_..._POINTER` variants, which test
 only the reference count tag.
 
 ### Semantics

@@ -122,8 +122,14 @@ def generate(filenames, outfile):
 #undef JUMP_TO_LABEL
 #undef DISPATCH_INLINED
 #define JIT_FINISH(KIND, PHASE) do { \\
+    Py_ssize_t value_raising_word = (KIND) == _PyJIT_RAISE ? this_instr - frame->ir_words : 0; \\
+    int value_failed = finish_value_bridges(tstate, frame, &next_instr, value_temps); \\
     ctx->frame = frame; ctx->next_instr = next_instr; \\
-    ctx->raising_instr = (KIND) == _PyJIT_RAISE ? this_instr : NULL; ctx->phase = (PHASE); \\
+    ctx->raising_instr = (KIND) == _PyJIT_RAISE ? frame->ir_words + value_raising_word : NULL; ctx->phase = (PHASE); \\
+    if (value_failed < 0 && (KIND) != _PyJIT_RAISE) { \\
+        ctx->raising_instr = frame->instr_ptr; ctx->phase = _PyJIT_ERROR_LOG_PENDING; \\
+        return _PyJIT_RAISE; \\
+    } \\
     return (KIND); \\
 } while (0)
 #define DISPATCH() JIT_FINISH(jit_action, jit_phase)
@@ -136,6 +142,12 @@ def generate(filenames, outfile):
 #define JUMP_TO_LABEL(LABEL) JIT_FINISH(_PyJIT_RAISE, JIT_PHASE_##LABEL)
 #define DISPATCH_INLINED(NEW_FRAME) do { \\
     assert((NEW_FRAME)->previous == frame); \\
+    if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \\
+        PyObject *value_error = PyErr_GetRaisedException(); \\
+        _PyEval_FrameClearAndPop(tstate, (NEW_FRAME)); \\
+        _PyValue_RestoreException(value_error); \\
+        JUMP_TO_LABEL(error); \\
+    } \\
     frame = (NEW_FRAME); next_instr = frame->instr_ptr; \\
     JIT_FINISH(_PyJIT_ENTER_FRAME, _PyJIT_ENTER_PREPARED); \\
 } while (0)

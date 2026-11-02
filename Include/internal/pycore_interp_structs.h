@@ -447,8 +447,6 @@ typedef struct _rare_events {
 // Optimization configuration for the interpreter.
 typedef struct _PyOptimizationConfig {
     bool specialization_enabled;
-    // PYTHON_TAGGED_VALUES=0 keeps every int boxed (see pycore_stackref.h).
-    bool tagged_values_enabled;
 } _PyOptimizationConfig;
 
 struct
@@ -992,7 +990,7 @@ struct _is {
     struct ast_state ast;
     struct types_state types;
     struct callable_cache callable_cache;
-    _PyStackRef common_consts[NUM_COMMON_CONSTANTS];
+    PyValue common_consts[NUM_COMMON_CONSTANTS];
 
     _PyOptimizationConfig opt_config;
     _rare_events rare_events;
@@ -1012,13 +1010,6 @@ struct _is {
 
     Py_ssize_t _interactive_src_count;
 
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    uint64_t next_stackref;
-    _Py_hashtable_t *open_stackrefs_table;
-#  ifdef Py_STACKREF_CLOSE_DEBUG
-    _Py_hashtable_t *closed_stackrefs_table;
-#  endif
-#endif
 
 #ifdef Py_STATS
     // true if recording of pystats is on, this is used when new threads

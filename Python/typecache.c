@@ -197,7 +197,7 @@ struct _PyTypeCacheLookupResult
 _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
 {
     assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
-    struct _PyTypeCacheLookupResult miss = {PyStackRef_NULL, 0, 0};
+    struct _PyTypeCacheLookupResult miss = {PyValue_NULL, 0, 0};
     struct type_cache *cache = cache_get(type);
     if (cache == NULL) {
         return miss;
@@ -205,17 +205,17 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
     uint32_t index = hash & cache->mask;
-    _PyStackRef out_ref;
+    PyValue out_ref;
     for (;;) {
         PyObject *entry_name = FT_ATOMIC_LOAD_PTR_ACQUIRE(cache->hashtable[index].name);
         if (entry_name == name) {
 #ifdef Py_GIL_DISABLED
-            if (!_Py_TryXGetStackRef(&cache->hashtable[index].value, &out_ref)) {
+            if (!_Py_TryXGetValue(&cache->hashtable[index].value, &out_ref)) {
                 return miss;
             }
 #else
             PyObject *v = cache->hashtable[index].value;
-            out_ref = v ? PyStackRef_FromPyObjectNew(v) : PyStackRef_NULL;
+            out_ref = v ? PyValue_FromPyObjectNew(v) : PyValue_NULL;
 #endif
             break;
         }
@@ -227,7 +227,7 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     // Check the cache version against the type version tag to maintain
     // consistency with find_name_in_mro and prevent stale cache reads
     if (cache->version_tag != FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag)) {
-        PyStackRef_XCLOSE(out_ref);
+        PyValue_XCLOSE(out_ref);
         return miss;
     }
     return (struct _PyTypeCacheLookupResult){out_ref, 1, cache->version_tag};

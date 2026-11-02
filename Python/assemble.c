@@ -8,6 +8,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_symtable.h"        // _Py_SourceLocation
+#include "pycore_value.h"           // Canonical constant representation
 
 #include <stdbool.h>
 
@@ -640,18 +641,17 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
-    // The executing copy runs the boxing forms instead in a build without
-    // inline values or under PYTHON_TAGGED_VALUES=0 (Python/ir.c), so the
-    // words do not depend on the build.
+    // Canonical scalar constants have the same representation in every
+    // supported interpreter.
     if (opcode == LOAD_SMALL_INT) {
         return LOAD_SMALL_INT_INLINE;
     }
     if (opcode == LOAD_CONST) {
-        PyObject *value = PyList_GET_ITEM(consts, oparg);
-        if (_PyLong_CheckExactAndCompact(value)) {
+        PyValue value = PyList_GET_VALUE(consts, oparg);
+        if (PyValue_IsInlineInt(value)) {
             return LOAD_CONST_INLINE_INT;
         }
-        if (PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value))) {
+        if (PyValue_IsInlineFloat(value)) {
             return LOAD_CONST_INLINE_FLOAT;
         }
     }

@@ -1353,7 +1353,7 @@ class DisTests(DisTestBase):
     @requires_specialization
     def test_loop_with_conditional_at_end_is_quickened(self):
         _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        # PYTHON_TAGGED_VALUES=0 leaves range loops unspecialized.
+        # The private runtime always supports inline range values.
         range_loops = getattr(_testinternalcapi, "TAGGED_VALUES", True)
         def for_loop_true(x):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):

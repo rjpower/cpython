@@ -974,7 +974,7 @@ class IRStack(Stack):
         if p in self.layout.borrowable:
             out.emit(f"IR_CONSUME_INPUT({f});\n")
         else:
-            out.emit(f"IR_SLOT({f}) = PyStackRef_NULL;\n")
+            out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
@@ -989,7 +989,7 @@ class IRStack(Stack):
             return True
         lay = self.layout
         if lay.window:
-            out.emit(f"{self.window_slot(memory_offset)} = {var.name};\n")
+            out.emit(f"{self.window_slot(memory_offset)} = _PyValueTemps_Publish(value_temps, &{var.name});\n")
             return True
         p = memory_offset.as_int()
         if p is not None and var.ir_input == p and self.owner.get(p) == "in":
@@ -999,12 +999,12 @@ class IRStack(Stack):
             if p in lay.borrowable:
                 out.emit(f"IR_STORE_INPUT({f}, {var.name});\n")
             else:
-                out.emit(f"IR_SLOT({f}) = {var.name};\n")
+                out.emit(f"IR_SLOT({f}) = _PyValueTemps_Publish(value_temps, &{var.name});\n")
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
                 # An input that the instruction passes through, changed
-                out.emit(f"IR_SLOT({self.input_field(p)}) = {var.name};\n")
+                out.emit(f"IR_SLOT({self.input_field(p)}) = _PyValueTemps_Publish(value_temps, &{var.name});\n")
                 return True
             return self.keep(var, p)
         if lay.store_dst and p != lay.dst_offset:
@@ -1025,7 +1025,7 @@ class IRStack(Stack):
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
-            out.emit(f"{slot} = {var.name};\n")
+            out.emit(f"{slot} = _PyValueTemps_Publish(value_temps, &{var.name});\n")
         else:
             out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
         if p is not None:
@@ -1063,7 +1063,7 @@ class IRStack(Stack):
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
                 return
             for i in range(n):
-                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyStackRef_NULL;\n")
+                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyValue_NULL;\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -1072,7 +1072,7 @@ class IRStack(Stack):
                 if owner == "in":
                     self.consume(out, p)
                 elif owner == "out":
-                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyStackRef_NULL;\n")
+                    out.emit(f"{self.out_slot(PointerOffset(p, (), ()))} = PyValue_NULL;\n")
             return
         # Outputs whose count is not constant, above the inputs
         if any(p >= (lo if lo is not None else low.numeric) for p in self.owner
@@ -1199,9 +1199,8 @@ class IREmitter(Emitter):
                           storage: Storage | None = None) -> None:
         """Before a deopt, or a specialisation that runs the word again,
         where the handler reads the locals again, drop the object inputs
-        read through fields that name locals: the borrows that
-        IR_BORROW_KNOWN and IR_LOAD_BORROWED made, which only the
-        Py_STACKREF_DEBUG checker tracks, and the boxes of inline values."""
+        read through fields that name locals. Scalar bridges must not cross
+        these restart edges; their original canonical homes remain intact."""
         if storage is None:
             storage = self.deopt_storage
         if storage is None:
@@ -1261,7 +1260,7 @@ class IREmitter(Emitter):
                 continue
             if var.is_array():
                 raise analysis_error("register-style array input", tkn)
-            close = "PyStackRef_XCLOSE" if "null" in var.name else "PyStackRef_CLOSE"
+            close = "PyValue_XCLOSE" if "null" in var.name else "PyValue_CLOSE"
             if var.known_object:
                 close = f"_{close}_POINTER"
             self.out.start_line()
@@ -1464,12 +1463,12 @@ class IREmitter(Emitter):
             if var.name not in uop.asserted_objects:
                 self.out.start_line()
                 if uop.is_guard():
-                    self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace({var.name}))) {{\n")
+                    self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace({var.name}))) {{\n")
                     self.emit_jump_to_predicted(inst)
                 else:
-                    self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline({var.name}))) {{\n")
-                    self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
-                    self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                    self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({var.name}))) {{\n")
+                    self.emit(f"{var.name} = PyValue_Box({var.name});\n")
+                    self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
                     # The inputs converted before this one, if they name
                     # locals, hold borrows or boxes that only C owns
                     self.emit_borrow_drops(inst, storage)
@@ -1575,7 +1574,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("PyThreadState *tstate = ctx->tstate;\n")
         out.emit("_PyInterpreterFrame *frame = ctx->frame;\n")
         out.emit("_PyIRWord *next_instr = ctx->next_instr;\n")
-        out.emit("_PyStackRef *slots = _PyFrame_Slots(frame);\n")
+        out.emit("PyValue *slots = _PyFrame_Slots(frame);\n")
         out.emit("(void)tstate; (void)slots;\n")
         out.emit(f"int opcode = {name}; (void)opcode;\n")
         out.emit("assert(next_instr == op->instruction);\n")
@@ -1588,6 +1587,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit("(void)jit_action; (void)jit_phase;\n")
     else:
         out.emit(f"TARGET({name}) {{\n")
+    # Each fixed scalar input can be boxed once per uop, and each output can
+    # create one owned result per uop. Publishing the same C variable again
+    # uses its borrowed view. Window loops use their own object arrays.
+    bridge_bound = 1 + sum(
+        len(part.stack.inputs) + len(part.stack.outputs)
+        for part in inst.parts if isinstance(part, Uop)
+    )
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
@@ -1606,6 +1612,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"IR_PREDICTED({name});\n")
         out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
+    out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
+    out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};\n")
+    out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     if use_fb and name != "CALL_JIT_WARM":
@@ -1626,13 +1635,19 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)oparg;\n")
     if fmt.window:
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
-        out.emit(f"_PyStackRef *window = &IR_SLOT({base});\n")
+        out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
+    call_family = inst.family.name if inst.family is not None else inst.name
+    if call_family == "INSTRUMENTED_CALL":
+        call_family = "CALL"
+    elif call_family == "INSTRUMENTED_CALL_KW":
+        call_family = "CALL_KW"
+    if fmt.window and call_family in ("CALL", "CALL_KW"):
+        inputs, _ = external_io(inst)
+        count = " + ".join(f"({item.size or '1'})" for item in inputs)
+        out.emit(f"_PyValue_OwnArray(window, {count});\n")
     if name in ("CALL", "CALL_JIT_WARM", "CALL_KW"):
         out.emit("if (JIT_CALL_NEEDS_PREPARE(this_instr)) {\n")
-        count = "oparg + 3" if name == "CALL_KW" else "oparg + 2"
-        out.emit(f"for (int jit_i = 0; jit_i < {count}; jit_i++) {{\n")
-        out.emit("window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);\n}\n")
         out.emit("int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);\n")
         out.emit("if (jit_prepare < 0) { JUMP_TO_LABEL(error); }\n")
         out.emit("if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }\n")

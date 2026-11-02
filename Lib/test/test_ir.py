@@ -109,8 +109,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(get_ir(f.__code__), ir)
 
     def test_deopt_after_borrowing_a_local(self):
-        # A Py_STACKREF_DEBUG build aborts when the frame closes a local
-        # whose borrow a deoptimising LOAD_ATTR left out.
+        # A deoptimising LOAD_ATTR must preserve the local's owner.
         def f(o):
             try:
                 return o.attr

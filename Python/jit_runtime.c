@@ -467,7 +467,7 @@ _PyJit_ReplaceRecorded(_PyJitContext *ctx, _PyJitRecord *record)
     int valid = !PyErr_Occurred() && code->_co_exec == exec && exec->jit == state &&
         state->unit == ctx->unit && state->generation == generation &&
         source == jit_source_stamp(code) && epoch == jit_epoch(ctx->tstate) &&
-        (fresh == NULL || fresh->graph == NULL || ctx->tstate->interp->opt_config.tagged_values_enabled) &&
+
         _PyJit_ObserversAllow(ctx->tstate, ctx->frame);
     int installed = valid && fresh != NULL && reserve_budget(fresh);
     state->last_failure = !valid ? _PyJIT_FAILURE_INVALIDATED :
@@ -526,7 +526,7 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
     Py_ssize_t word = next_instr - exec->words;
     if (unit->detached || word < 0 || word >= unit->nwords ||
         tstate->current_frame != frame ||
-        (unit->graph != NULL && !tstate->interp->opt_config.tagged_values_enabled) ||
+
         unit->interpreter_id != PyInterpreterState_GetID(tstate->interp) ||
         !_PyJit_ObserversAllow(tstate, frame) ||
         unit->epoch != jit_epoch(tstate) || unit->generation != exec->jit->generation) {
@@ -971,7 +971,7 @@ automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObjec
 }
 
 int
-_PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, _PyStackRef callable)
+_PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
 {
     PyCodeObject *caller_code = _PyFrame_GetCode(ctx->frame);
     _PyCodeExec *caller_exec = caller_code->_co_exec;
@@ -1004,7 +1004,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, _PyStackRef callable)
     }
     if (caller_code->_co_exec != caller_exec || caller_exec == NULL ||
         caller_exec->words != ctx->frame->ir_words || IR_HANDLER(*instr) != CALL_JIT_WARM ||
-        PyStackRef_IsInline(callable)) return 0;
+        PyValue_IsInline(callable)) return 0;
     int index = _PyCode_InstrFbIndex(caller_code, (int)word);
     if (index <= 0 || index >= caller_code->co_nfeedback) {
         return 0;
@@ -1013,7 +1013,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, _PyStackRef callable)
     if (fb->h.kind != FB_CALL) {
         return 0;
     }
-    PyObject *function = PyStackRef_AsPyObjectBorrow(callable);
+    PyObject *function = PyValue_AsPyObjectBorrow(callable);
     if (PyMethod_Check(function)) {
         function = ((PyMethodObject *)function)->im_func;
     }

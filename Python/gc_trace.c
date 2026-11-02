@@ -1667,7 +1667,7 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
          f = f->previous)
     {
         if (f->owner >= FRAME_OWNED_BY_INTERPRETER
-            || !PyCode_Check(PyStackRef_AsPyObjectBorrow(f->f_executable)))
+            || !PyCode_Check(PyValue_AsPyObjectBorrow(f->f_executable)))
         {
             continue;
         }

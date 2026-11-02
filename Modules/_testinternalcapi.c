@@ -40,6 +40,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
+#include "pycore_tuple.h"       // _PyTuple_GET_OBJECT()
 
 #include "clinic/_testinternalcapi.c.h"
 
@@ -306,9 +307,25 @@ classify_stack_addresses(PyObject *self, PyObject *args)
         Py_DECREF(fast);
         return NULL;
     }
-    PyObject **items = PySequence_Fast_ITEMS(fast);
     for (Py_ssize_t i = 0; i < n; i++) {
-        unsigned long long value = PyLong_AsUnsignedLongLong(items[i]);
+        PyValue item = PyList_Check(fast) ? PyList_GetValue(fast, i)
+                                         : PyTuple_GetValue(fast, i);
+        if (PyValue_IsNull(item)) {
+            Py_DECREF(labels);
+            Py_DECREF(fast);
+            return NULL;
+        }
+        PyObject *object = PyValue_AsObject(item);
+        PyValue_Close(item);
+        if (object == NULL) {
+            Py_DECREF(labels);
+            Py_DECREF(fast);
+            return NULL;
+        }
+        unsigned long long value = PyLong_AsUnsignedLongLong(object);
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_DECREF(object);
+        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             Py_DECREF(labels);
             Py_DECREF(fast);
@@ -1098,7 +1115,7 @@ set_eval_frame_default(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
+    if (PyValue_FunctionCheck(f->f_funcobj)) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1160,7 +1177,7 @@ get_eval_frame_stats(PyObject *self, PyObject *Py_UNUSED(args))
 static PyObject *
 record_eval_interp(PyThreadState *tstate, struct _PyInterpreterFrame *f, int exc)
 {
-    if (PyStackRef_FunctionCheck(f->f_funcobj)) {
+    if (PyValue_FunctionCheck(f->f_funcobj)) {
         PyFunctionObject *func = _PyFrame_GetFunction(f);
         PyObject *module = _get_current_module();
         assert(module != NULL);
@@ -1181,11 +1198,13 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
 {
     if (PyTuple_GET_SIZE(args) == 1) {
         module_state *state = get_module_state(self);
-        PyObject *list = PyTuple_GET_ITEM(args, 0);
-        if (!PyList_Check(list)) {
+        PyValue item = PyTuple_GET_VALUE(args, 0);
+        if (!PyValue_IsObject(item) ||
+            !PyList_Check(PyValue_AsPyObjectBorrow(item))) {
             PyErr_SetString(PyExc_TypeError, "argument must be a list");
             return NULL;
         }
+        PyObject *list = PyValue_AsPyObjectBorrow(item);
         Py_XSETREF(state->record_list, Py_NewRef(list));
         _PyInterpreterState_SetEvalFrameFunc(_PyInterpreterState_GET(), record_eval_interp);
         _PyInterpreterState_SetEvalFrameAllowSpecialization(_PyInterpreterState_GET(), 1);
@@ -1634,7 +1653,7 @@ get_co_localskinds(PyObject *self, PyObject *arg)
         return NULL;
     }
     for (int offset = 0; offset < co->co_nlocalsplus; offset++) {
-        PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, offset);
+        PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, offset);
         _PyLocals_Kind k = _PyLocals_GetKind(co->co_localspluskinds, offset);
         PyObject *kind = PyLong_FromLong(k);
         if (kind == NULL) {
@@ -2144,16 +2163,20 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     if (res == NULL) {
         return NULL;
     }
+    if (Py_TYPE(obj) != type ||
+        ((PyHeapTypeObject *)type)->ht_cached_keys != keys ||
+        keys->dk_nentries != size || !_PyObject_InlineValues(obj)->valid) {
+        Py_DECREF(res);
+        PyErr_SetString(PyExc_RuntimeError, "inline values changed while reading");
+        return NULL;
+    }
+    values = _PyObject_InlineValues(obj);
     _Py_DECLARE_STR(anon_null, "<NULL>");
     for(int i = 0; i < size; i++) {
-        PyObject *item = values->values[i];
-        if (item == NULL) {
-            item = &_Py_STR(anon_null);
-        }
-        else {
-            Py_INCREF(item);
-        }
-        PyTuple_SET_ITEM(res, i, item);
+        PyValue item = values->values[i];
+        PyTuple_SET_VALUE(res, i, PyValue_IsNull(item)
+            ? PyValue_FromObjectBorrow(&_Py_STR(anon_null))
+            : PyValue_NewRef(item));
     }
     return res;
 }
@@ -3010,21 +3033,21 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
-#ifdef Py_STACKREF_INLINE_VALUES
+#ifdef Py_VALUE_INLINE_VALUES
 // Encode an exact int32 or non-NaN float as an inline stack value, check that
-// the operations valid on any stackref treat it as a value, then box it.
+// the operations valid on any value treat it as a value, then box it.
 static PyObject *
-stackref_box_roundtrip(PyObject *self, PyObject *arg)
+value_box_roundtrip(PyObject *self, PyObject *arg)
 {
-    _PyStackRef ref;
+    PyValue ref;
     if (PyLong_CheckExact(arg)) {
         int32_t i;
         if (PyLong_AsInt32(arg, &i) < 0) {
             return NULL;
         }
-        ref = PyStackRef_FromInt32(i);
-        if (!PyStackRef_IsInlineInt(ref) || PyStackRef_InlineInt(ref) != i
-            || !PyStackRef_BothInlineInt(ref, ref) || !PyStackRef_LongCheck(ref))
+        ref = PyValue_FromInt32(i);
+        if (!PyValue_IsInlineInt(ref) || PyValue_InlineInt(ref) != i
+            || !PyValue_BothInlineInt(ref, ref) || !PyValue_LongCheck(ref))
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline int");
             return NULL;
@@ -3036,10 +3059,10 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
             PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
             return NULL;
         }
-        ref = PyStackRef_FromDoubleNotNaN(d);
-        double back = PyStackRef_InlineFloat(ref);
-        if (!PyStackRef_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
-            || PyStackRef_IsInlineInt(ref) || !PyStackRef_FloatCheck(ref))
+        ref = PyValue_FromDoubleNotNaN(d);
+        double back = PyValue_InlineFloat(ref);
+        if (!PyValue_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
+            || PyValue_IsInlineInt(ref) || !PyValue_FloatCheck(ref))
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline float");
             return NULL;
@@ -3049,31 +3072,31 @@ stackref_box_roundtrip(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
         return NULL;
     }
-    _PyStackRef dup = PyStackRef_DUP(ref);
-    if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
-        || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
-        || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
-        || PyStackRef_RefcountOnObject(ref)
-        || PyStackRef_TYPE(ref) != Py_TYPE(arg)
-        || !PyStackRef_Is(dup, ref) || !PyStackRef_Is(PyStackRef_Borrow(ref), ref)
-        || !PyStackRef_Is(PyStackRef_BorrowAt(&ref), ref)
-        || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
-        || PyStackRef_Is(ref, PyStackRef_None))
+    PyValue dup = PyValue_DUP(ref);
+    if (!PyValue_IsInline(ref) || PyValue_IsPointerSpace(ref)
+        || PyValue_IsTaggedIndex(ref) || PyValue_IsNull(ref)
+        || PyValue_IsError(ref) || !PyValue_IsValid(ref)
+        || PyValue_RefcountOnObject(ref)
+        || PyValue_TYPE(ref) != Py_TYPE(arg)
+        || !PyValue_Is(dup, ref) || !PyValue_Is(PyValue_Borrow(ref), ref)
+        || !PyValue_Is(PyValue_BorrowAt(&ref), ref)
+        || !PyValue_IsInlineAt(&ref) || PyValue_IsPointerSpaceAt(&ref)
+        || PyValue_Is(ref, PyValue_None))
     {
         PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
         return NULL;
     }
-    PyStackRef_CLOSE(dup);
-    _PyStackRef boxed = PyStackRef_Box(ref);
-    if (PyStackRef_IsInline(boxed)) {
+    PyValue_CLOSE(dup);
+    PyValue boxed = PyValue_Box(ref);
+    if (PyValue_IsInline(boxed)) {
         return NULL;
     }
-    if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
-        PyStackRef_CLOSE(boxed);
+    if (!PyValue_IsPointerSpaceAt(&boxed) || PyValue_IsInlineAt(&boxed)) {
+        PyValue_CLOSE(boxed);
         PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
         return NULL;
     }
-    return PyStackRef_AsPyObjectSteal(boxed);
+    return PyValue_AsPyObjectSteal(boxed);
 }
 
 // The names of the frame's local variables that hold inline values.
@@ -3091,14 +3114,93 @@ inline_locals(PyObject *self, PyObject *frame)
         return NULL;
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
-        if (PyStackRef_IsInline(f->base[i]) &&
-            PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
+        if (PyValue_IsInline(f->base[i]) &&
+            PySet_Add(names, _PyTuple_GET_OBJECT(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
             return NULL;
         }
     }
     return names;
+}
+
+/* Exercise the public owning bridge, including canonicalization of an owned
+ * object result and the separately retired scalar owner. */
+static PyObject *
+pyvalue_contract(PyObject *self, PyObject *arg)
+{
+    PyObject *retired;
+    PyValue value = PyValue_PrepareOwned(Py_NewRef(arg), &retired);
+    const char *kind = PyValue_IsInlineInt(value) ? "int32" :
+                       PyValue_IsInlineFloat(value) ? "float64" : "object";
+    PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
+    assert(PyValue_Is(value, duplicate));
+    assert(PyValue_IsLanguageValue(value));
+    PyObject *object = PyValue_AsObject(duplicate);
+    PyValue_Close(duplicate);
+    PyValue_Close(value);
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(retired);
+    _PyValue_RestoreException(saved);
+    if (object == NULL || PyErr_Occurred()) {
+        saved = PyErr_GetRaisedException();
+        Py_XDECREF(object);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return Py_BuildValue("sN", kind, object);
+}
+
+static PyObject *
+pyvalue_internal_contract(PyObject *self, PyObject *unused)
+{
+    PyObject *retired = (PyObject *)1;
+    PyValue absent = PyValue_PrepareOwned(NULL, &retired);
+    assert(PyValue_IsNull(absent));
+    assert(retired == NULL);
+    PyValue invalid[] = {
+        PyValue_NULL, PyValue_ERROR, PyValue_TagIndex(7),
+        PyValue_Wrap((void *)0x1000),
+    };
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(invalid); i++) {
+        assert(!PyValue_IsLanguageValue(invalid[i]));
+        PyObject *object = PyValue_AsObject(invalid[i]);
+        if (object != NULL) {
+            Py_DECREF(object);
+            PyErr_SetString(PyExc_AssertionError, "internal value escaped");
+            return NULL;
+        }
+        if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
+            return NULL;
+        }
+        PyErr_Clear();
+    }
+    PyObject *primary = PyObject_CallNoArgs(PyExc_ValueError);
+    if (primary == NULL) {
+        return NULL;
+    }
+    /* A free hook may raise the same saved exception, or an exception whose
+     * context already points at it. Neither may introduce a context cycle. */
+    PyErr_SetRaisedException(Py_NewRef(primary));
+    _PyValue_RestoreException(Py_NewRef(primary));
+    PyObject *restored = PyErr_GetRaisedException();
+    assert(restored == primary);
+    assert(((PyBaseExceptionObject *)primary)->context == NULL);
+    Py_DECREF(restored);
+    PyObject *secondary = PyObject_CallNoArgs(PyExc_RuntimeError);
+    if (secondary == NULL) {
+        Py_DECREF(primary);
+        return NULL;
+    }
+    PyException_SetContext(secondary, Py_NewRef(primary));
+    PyErr_SetRaisedException(secondary);
+    _PyValue_RestoreException(Py_NewRef(primary));
+    restored = PyErr_GetRaisedException();
+    assert(restored == primary);
+    assert(((PyBaseExceptionObject *)primary)->context == NULL);
+    Py_DECREF(restored);
+    Py_DECREF(primary);
+    Py_RETURN_NONE;
 }
 #endif
 
@@ -3634,6 +3736,10 @@ jit_method_record_index(PyObject *module, PyObject *unused)
 }
 
 static PyMethodDef module_functions[] = {
+#ifdef Py_VALUE_INLINE_VALUES
+    {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
+    {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
+#endif
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},
@@ -3755,8 +3861,8 @@ static PyMethodDef module_functions[] = {
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
     {"is_static_immortal", is_static_immortal, METH_O},
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
-#ifdef Py_STACKREF_INLINE_VALUES
-    {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+#ifdef Py_VALUE_INLINE_VALUES
+    {"value_box_roundtrip", value_box_roundtrip, METH_O},
     {"inline_locals", inline_locals, METH_O},
 #endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
@@ -3851,11 +3957,8 @@ module_exec(PyObject *module)
         return 1;
     }
 
-#ifdef Py_STACKREF_INLINE_VALUES
-    // Absent from builds without inline values; false under
-    // PYTHON_TAGGED_VALUES=0.
-    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
-            _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
+#ifdef Py_VALUE_INLINE_VALUES
+    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(1)) < 0) {
         return 1;
     }
 #endif

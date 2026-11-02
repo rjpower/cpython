@@ -266,7 +266,7 @@ emit_graph(jit_buf *b, _PyJitCodeUnit *unit, int *labels, int epilogue, int fall
                 jit_load(b, X86_RSI, X86_R12, offsetof(_PyJitContext, frame));
                 jit_load(b, X86_RSI, X86_RSI, offsetof(_PyInterpreterFrame, base));
                 jit_load16(b, X86_RDI, X86_RSI, n->home * 8 + 6);
-                jit_cmp_imm32(b, X86_RDI, 2); /* IsInline, including debug StackRefs */
+                jit_cmp_imm32(b, X86_RDI, 2); /* IsInline, including debug Values */
                 jit_jcc(b, X86_AE, inline_old);
                 save_values(b, g, at, 1);
                 scalar_call(b, (uintptr_t)_PyJit_TraceCommit, (uintptr_t)n);

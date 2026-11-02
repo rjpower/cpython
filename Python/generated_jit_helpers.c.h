@@ -42,8 +42,14 @@
 #undef JUMP_TO_LABEL
 #undef DISPATCH_INLINED
 #define JIT_FINISH(KIND, PHASE) do { \
+    Py_ssize_t value_raising_word = (KIND) == _PyJIT_RAISE ? this_instr - frame->ir_words : 0; \
+    int value_failed = finish_value_bridges(tstate, frame, &next_instr, value_temps); \
     ctx->frame = frame; ctx->next_instr = next_instr; \
-    ctx->raising_instr = (KIND) == _PyJIT_RAISE ? this_instr : NULL; ctx->phase = (PHASE); \
+    ctx->raising_instr = (KIND) == _PyJIT_RAISE ? frame->ir_words + value_raising_word : NULL; ctx->phase = (PHASE); \
+    if (value_failed < 0 && (KIND) != _PyJIT_RAISE) { \
+        ctx->raising_instr = frame->instr_ptr; ctx->phase = _PyJIT_ERROR_LOG_PENDING; \
+        return _PyJIT_RAISE; \
+    } \
     return (KIND); \
 } while (0)
 #define DISPATCH() JIT_FINISH(jit_action, jit_phase)
@@ -56,6 +62,12 @@
 #define JUMP_TO_LABEL(LABEL) JIT_FINISH(_PyJIT_RAISE, JIT_PHASE_##LABEL)
 #define DISPATCH_INLINED(NEW_FRAME) do { \
     assert((NEW_FRAME)->previous == frame); \
+    if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+        PyObject *value_error = PyErr_GetRaisedException(); \
+        _PyEval_FrameClearAndPop(tstate, (NEW_FRAME)); \
+        _PyValue_RestoreException(value_error); \
+        JUMP_TO_LABEL(error); \
+    } \
     frame = (NEW_FRAME); next_instr = frame->instr_ptr; \
     JIT_FINISH(_PyJIT_ENTER_FRAME, _PyJIT_ENTER_PREPARED); \
 } while (0)
@@ -64,7 +76,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_ADD; (void)opcode;
             assert(next_instr == op->instruction);
@@ -80,15 +92,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -111,9 +126,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -122,9 +137,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -134,8 +149,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -143,7 +158,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -153,13 +168,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -169,7 +184,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_AND; (void)opcode;
             assert(next_instr == op->instruction);
@@ -185,15 +200,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -216,9 +234,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -227,9 +245,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -239,8 +257,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -248,7 +266,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -258,13 +276,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -274,7 +292,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_FLOOR_DIVIDE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -290,15 +308,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -321,9 +342,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -332,9 +353,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -344,8 +365,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -353,7 +374,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -363,13 +384,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -379,7 +400,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_ADD; (void)opcode;
             assert(next_instr == op->instruction);
@@ -395,15 +416,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -426,9 +450,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -437,9 +461,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -449,8 +473,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -458,7 +482,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -468,13 +492,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -484,7 +508,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_AND; (void)opcode;
             assert(next_instr == op->instruction);
@@ -500,15 +524,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -531,9 +558,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -542,9 +569,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -554,8 +581,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -563,7 +590,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -573,13 +600,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -589,7 +616,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_FLOOR_DIVIDE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -605,15 +632,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -636,9 +666,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -647,9 +677,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -659,8 +689,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -668,7 +698,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -678,13 +708,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -694,7 +724,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_LSHIFT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -710,15 +740,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -741,9 +774,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -752,9 +785,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -764,8 +797,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -773,7 +806,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -783,13 +816,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -799,7 +832,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_MATRIX_MULTIPLY; (void)opcode;
             assert(next_instr == op->instruction);
@@ -815,15 +848,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -846,9 +882,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -857,9 +893,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -869,8 +905,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -878,7 +914,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -888,13 +924,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -904,7 +940,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_MULTIPLY; (void)opcode;
             assert(next_instr == op->instruction);
@@ -920,15 +956,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -951,9 +990,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -962,9 +1001,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -974,8 +1013,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -983,7 +1022,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -993,13 +1032,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1009,7 +1048,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_OR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1025,15 +1064,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1056,9 +1098,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1067,9 +1109,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1079,8 +1121,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1088,7 +1130,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1098,13 +1140,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1114,7 +1156,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_POWER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1130,15 +1172,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1161,9 +1206,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1172,9 +1217,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1184,8 +1229,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1193,7 +1238,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1203,13 +1248,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1219,7 +1264,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_REMAINDER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1235,15 +1280,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1266,9 +1314,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1277,9 +1325,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1289,8 +1337,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1298,7 +1346,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1308,13 +1356,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1324,7 +1372,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_RSHIFT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1340,15 +1388,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1371,9 +1422,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1382,9 +1433,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1394,8 +1445,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1403,7 +1454,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1413,13 +1464,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1429,7 +1480,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_SUBTRACT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1445,15 +1496,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1476,9 +1530,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1487,9 +1541,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1499,8 +1553,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1508,7 +1562,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1518,13 +1572,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1534,7 +1588,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_TRUE_DIVIDE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1550,15 +1604,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1581,9 +1638,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1592,9 +1649,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1604,8 +1661,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1613,7 +1670,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1623,13 +1680,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1639,7 +1696,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_INPLACE_XOR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1655,15 +1712,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1686,9 +1746,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1697,9 +1757,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1709,8 +1769,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1718,7 +1778,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1728,13 +1788,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1744,7 +1804,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_LSHIFT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1760,15 +1820,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1791,9 +1854,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1802,9 +1865,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1814,8 +1877,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1823,7 +1886,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1833,13 +1896,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1849,7 +1912,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_MATRIX_MULTIPLY; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1865,15 +1928,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -1896,9 +1962,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -1907,9 +1973,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -1919,8 +1985,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -1928,7 +1994,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -1938,13 +2004,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -1954,7 +2020,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_MULTIPLY; (void)opcode;
             assert(next_instr == op->instruction);
@@ -1970,15 +2036,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2001,9 +2070,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2012,9 +2081,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2024,8 +2093,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2033,7 +2102,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2043,13 +2112,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2059,7 +2128,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_OR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2075,15 +2144,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2106,9 +2178,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2117,9 +2189,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2129,8 +2201,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2138,7 +2210,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2148,13 +2220,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2164,7 +2236,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_POWER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2180,15 +2252,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2211,9 +2286,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2222,9 +2297,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2234,8 +2309,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2243,7 +2318,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2253,13 +2328,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2269,7 +2344,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_REMAINDER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2285,15 +2360,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2316,9 +2394,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2327,9 +2405,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2339,8 +2417,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2348,7 +2426,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2358,13 +2436,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2374,7 +2452,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_RSHIFT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2390,15 +2468,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2421,9 +2502,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2432,9 +2513,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2444,8 +2525,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2453,7 +2534,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2463,13 +2544,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2479,7 +2560,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_SUBSCR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2495,15 +2576,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2526,9 +2610,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2537,9 +2621,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2549,8 +2633,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2558,7 +2642,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2568,13 +2652,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2584,7 +2668,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_SUBTRACT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2600,15 +2684,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2631,9 +2718,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2642,9 +2729,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2654,8 +2741,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2663,7 +2750,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2673,13 +2760,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2689,7 +2776,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_TRUE_DIVIDE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2705,15 +2792,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2736,9 +2826,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2747,9 +2837,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2759,8 +2849,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2768,7 +2858,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2778,13 +2868,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2794,7 +2884,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BINARY_OP_XOR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2810,15 +2900,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            _PyStackRef lhs;
-            _PyStackRef rhs;
-            _PyStackRef res;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue lhs;
+            PyValue rhs;
+            PyValue res;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_BINARY_OP
             {
                 rhs = IR_SLOT(IR_FIELD_C(this_instr));
@@ -2841,9 +2934,9 @@
             }
             // _BINARY_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(lhs))) {
-                    lhs = PyStackRef_Box(lhs);
-                    if (PyStackRef_IsInline(lhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(lhs))) {
+                    lhs = PyValue_Box(lhs);
+                    if (PyValue_IsInline(lhs)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(BINARY_OP);
@@ -2852,9 +2945,9 @@
                 else {
                     lhs = IR_BORROW_KNOWN(lhs, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(rhs))) {
-                    rhs = PyStackRef_Box(rhs);
-                    if (PyStackRef_IsInline(rhs)) {
+                if (Py_UNLIKELY(PyValue_IsInline(rhs))) {
+                    rhs = PyValue_Box(rhs);
+                    if (PyValue_IsInline(rhs)) {
                         IR_DROP_BORROW(lhs, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -2864,8 +2957,8 @@
                 else {
                     rhs = IR_BORROW_KNOWN(rhs, IR_FIELD_C(this_instr));
                 }
-                PyObject *lhs_o = PyStackRef_AsPyObjectBorrow(lhs);
-                PyObject *rhs_o = PyStackRef_AsPyObjectBorrow(rhs);
+                PyObject *lhs_o = PyValue_AsPyObjectBorrow(lhs);
+                PyObject *rhs_o = PyValue_AsPyObjectBorrow(rhs);
                 assert(_PyEval_BinaryOps[oparg]);
                 PyObject *res_o = _PyEval_BinaryOps[oparg](lhs_o, rhs_o);
                 if (res_o == NULL) {
@@ -2873,7 +2966,7 @@
                     IR_DROP_BORROW(rhs, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
                 l = lhs;
                 r = rhs;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -2883,13 +2976,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -2899,7 +2992,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BUILD_LIST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2915,20 +3008,23 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_LIST);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyStackRef *values;
-            _PyStackRef list;
+            PyValue *values;
+            PyValue list;
             values = &window[0];
-            PyObject *list_o = _PyList_FromStackRefStealOnSuccess(values, oparg);
+            PyObject *list_o = _PyList_FromValueStealOnSuccess(values, oparg);
             if (list_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            list = PyStackRef_FromPyObjectStealMortal(list_o);
+            list = PyValue_FromPyObjectStealMortal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = list;
+            window[0] = _PyValueTemps_Publish(value_temps, &list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -2937,7 +3033,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BUILD_MAP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2953,21 +3049,24 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_MAP);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyStackRef *values;
-            _PyStackRef map;
+            PyValue *values;
+            PyValue map;
             values = &window[0];
-            PyObject *map_o = _Py_BuildMap_StackRefSteal(values, oparg);
+            PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             if (map_o == NULL) {
                 IR_CLEAR_SLOTS(&window[0], oparg*2);
                 JUMP_TO_LABEL(error);
             }
-            map = PyStackRef_FromPyObjectStealMortal(map_o);
+            map = PyValue_FromPyObjectStealMortal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
-            window[0] = map;
+            window[0] = _PyValueTemps_Publish(value_temps, &map);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -2976,7 +3075,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = BUILD_TUPLE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -2992,20 +3091,23 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TUPLE);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyStackRef *values;
-            _PyStackRef tup;
+            PyValue *values;
+            PyValue tup;
             values = &window[0];
-            PyObject *tup_o = _PyTuple_FromStackRefStealOnSuccess(values, oparg);
+            PyObject *tup_o = _PyTuple_FromValueStealOnSuccess(values, oparg);
             if (tup_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            tup = PyStackRef_FromPyObjectStealMortal(tup_o);
+            tup = PyValue_FromPyObjectStealMortal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = tup;
+            window[0] = _PyValueTemps_Publish(value_temps, &tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -3014,7 +3116,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = CALL; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3030,24 +3132,25 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL);
+            PyObject *value_boxes[17];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
+            _PyValue_OwnArray(window, (1) + (1) + (oparg));
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
-                for (int jit_i = 0; jit_i < oparg + 2; jit_i++) {
-                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
-}
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
                 if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
                 if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
             }
             opcode = CALL;
-            _PyStackRef callable;
-            _PyStackRef self_or_null;
-            _PyStackRef *args;
-            _PyStackRef res;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            PyValue res;
             // _SPECIALIZE_CALL
             {
                 self_or_null = window[1];
@@ -3057,7 +3160,7 @@
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                         next_instr = this_instr;
-                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
+                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
                         do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CALL; } while (0);
                     }
                     OPCODE_DEFERRED_INC(CALL);
@@ -3070,33 +3173,33 @@
             }
             // _MAYBE_EXPAND_METHOD
             {
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
-                    callable = PyStackRef_Box(callable);
-                    if (PyStackRef_IsInline(callable)) {
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    callable = PyValue_Box(callable);
+                    if (PyValue_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL);
-                    window[0] = callable;
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
                 }
-                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
-                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                if (PyValue_TYPE(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyStackRef_FromPyObjectNew(self);
+                    self_or_null = PyValue_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    _PyStackRef temp = callable;
-                    callable = PyStackRef_FromPyObjectNew(method);
-                    window[0] = callable;
-                    window[1] = self_or_null;
-                    PyStackRef_CLOSE(temp);
+                    PyValue temp = callable;
+                    callable = PyValue_FromPyObjectNew(method);
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                    window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
+                    PyValue_CLOSE(temp);
                 }
             }
             // _DO_CALL
             {
                 args = &window[2];
-                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
                 int total_args = oparg;
-                _PyStackRef *arguments = args;
-                if (!PyStackRef_IsNull(self_or_null)) {
+                PyValue *arguments = args;
+                if (!PyValue_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -3106,8 +3209,8 @@
                 {
                     int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                    window[0] = callable;
-                    window[1] = self_or_null;
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                    window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, total_args, NULL, frame
@@ -3119,13 +3222,13 @@
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
-                window[0] = callable;
-                window[1] = self_or_null;
-                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
+                window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
+                PyObject* res_o = _Py_VectorCallInstrumentation_ValueSteal(
                     callable,
                     arguments,
                     total_args,
-                    PyStackRef_NULL,
+                    PyValue_NULL,
                     opcode == INSTRUMENTED_CALL,
                     frame,
                     this_instr,
@@ -3134,12 +3237,12 @@
                     IR_CLEAR_SLOTS(&window[0], 2 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
             }
             // _CHECK_PERIODIC_AT_END
             {
                 IR_CLEAR_SLOTS(&window[1], 1 + oparg);
-                window[0] = res;
+                window[0] = _PyValueTemps_Publish(value_temps, &res);
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
                     JUMP_TO_LABEL(error);
@@ -3153,7 +3256,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = CALL_KW; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3169,25 +3272,26 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW);
+            PyObject *value_boxes[22];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
+            _PyValue_OwnArray(window, (1) + (1) + (oparg) + (1));
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
-                for (int jit_i = 0; jit_i < oparg + 3; jit_i++) {
-                window[jit_i] = PyStackRef_MakeHeapSafe(window[jit_i]);
-}
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
                 if (jit_prepare < 0) { JUMP_TO_LABEL(error); }
                 if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }
             }
             opcode = CALL_KW;
-            _PyStackRef callable;
-            _PyStackRef self_or_null;
-            _PyStackRef *args;
-            _PyStackRef kwnames;
-            _PyStackRef res;
+            PyValue callable;
+            PyValue self_or_null;
+            PyValue *args;
+            PyValue kwnames;
+            PyValue res;
             // _SPECIALIZE_CALL_KW
             {
                 self_or_null = window[1];
@@ -3196,7 +3300,7 @@
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
-                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyStackRef_IsNull(self_or_null));
+                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
                     do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CALL_KW; } while (0);
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
@@ -3208,45 +3312,45 @@
             }
             // _MAYBE_EXPAND_METHOD_KW
             {
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
-                    callable = PyStackRef_Box(callable);
-                    if (PyStackRef_IsInline(callable)) {
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    callable = PyValue_Box(callable);
+                    if (PyValue_IsInline(callable)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_KW);
-                    window[0] = callable;
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
                 }
-                if (PyStackRef_TYPE(callable) == &PyMethod_Type && PyStackRef_IsNull(self_or_null)) {
-                    PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
+                if (PyValue_TYPE(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
+                    PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
                     PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                    self_or_null = PyStackRef_FromPyObjectNew(self);
+                    self_or_null = PyValue_FromPyObjectNew(self);
                     PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                    _PyStackRef temp = callable;
-                    callable = PyStackRef_FromPyObjectNew(method);
-                    window[0] = callable;
-                    window[1] = self_or_null;
-                    PyStackRef_CLOSE(temp);
+                    PyValue temp = callable;
+                    callable = PyValue_FromPyObjectNew(method);
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                    window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
+                    PyValue_CLOSE(temp);
                 }
             }
             // _DO_CALL_KW
             {
                 kwnames = window[2 + oparg];
                 args = &window[2];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[2 + oparg]))) {
-                    kwnames = PyStackRef_Box(kwnames);
-                    if (PyStackRef_IsInline(kwnames)) {
-                        window[0] = callable;
-                        window[1] = self_or_null;
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2 + oparg]))) {
+                    kwnames = PyValue_Box(kwnames);
+                    if (PyValue_IsInline(kwnames)) {
+                        window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                        window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_KW);
-                    window[2 + oparg] = kwnames;
+                    window[2 + oparg] = _PyValueTemps_Publish(value_temps, &kwnames);
                 }
-                PyObject *callable_o = PyStackRef_AsPyObjectBorrow(callable);
-                PyObject *kwnames_o = PyStackRef_AsPyObjectBorrow(kwnames);
+                PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
+                PyObject *kwnames_o = PyValue_AsPyObjectBorrow(kwnames);
                 int total_args = oparg;
-                _PyStackRef *arguments = args;
-                if (!PyStackRef_IsNull(self_or_null)) {
+                PyValue *arguments = args;
+                if (!PyValue_IsNull(self_or_null)) {
                     arguments--;
                     total_args++;
                 }
@@ -3257,14 +3361,14 @@
                 {
                     int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
                     PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                    window[0] = callable;
-                    window[1] = self_or_null;
+                    window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                    window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
                     _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
                         tstate, callable, locals,
                         arguments, positional_args, kwnames_o, frame
                     );
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
-                    _PyStackRef_CLOSE_POINTER(kwnames);
+                    _PyValue_CLOSE_POINTER(kwnames);
                     if (new_frame == NULL) {
                         JUMP_TO_LABEL(error);
                     }
@@ -3272,9 +3376,9 @@
                     frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                     DISPATCH_INLINED(new_frame);
                 }
-                window[0] = callable;
-                window[1] = self_or_null;
-                PyObject* res_o = _Py_VectorCallInstrumentation_StackRefSteal(
+                window[0] = _PyValueTemps_Publish(value_temps, &callable);
+                window[1] = _PyValueTemps_Publish(value_temps, &self_or_null);
+                PyObject* res_o = _Py_VectorCallInstrumentation_ValueSteal(
                     callable,
                     arguments,
                     total_args,
@@ -3287,10 +3391,10 @@
                     IR_CLEAR_SLOTS(&window[0], 3 + oparg);
                     JUMP_TO_LABEL(error);
                 }
-                res = PyStackRef_FromPyObjectSteal(res_o);
+                res = PyValue_FromPyObjectSteal(res_o);
             }
             IR_CLEAR_SLOTS(&window[1], 2 + oparg);
-            window[0] = res;
+            window[0] = _PyValueTemps_Publish(value_temps, &res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             DISPATCH();
         }
@@ -3299,7 +3403,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = COMPARE_OP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3315,12 +3419,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP);
+            PyObject *value_boxes[8];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            _PyStackRef left;
-            _PyStackRef right;
-            _PyStackRef res;
+            PyValue left;
+            PyValue right;
+            PyValue res;
             // _SPECIALIZE_COMPARE_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -3341,9 +3448,9 @@
             }
             // _COMPARE_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
-                    left = PyStackRef_Box(left);
-                    if (PyStackRef_IsInline(left)) {
+                if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                    left = PyValue_Box(left);
+                    if (PyValue_IsInline(left)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(COMPARE_OP);
@@ -3352,9 +3459,9 @@
                 else {
                     left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
-                    right = PyStackRef_Box(right);
-                    if (PyStackRef_IsInline(right)) {
+                if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                    right = PyValue_Box(right);
+                    if (PyValue_IsInline(right)) {
                         IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -3364,14 +3471,14 @@
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
                 }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                PyObject *left_o = PyValue_AsPyObjectBorrow(left);
+                PyObject *right_o = PyValue_AsPyObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
                 PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                _PyStackRef_CLOSE_POINTER(right);
+                _PyValue_CLOSE_POINTER(right);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_CLOSE_POINTER(left);
+                _PyValue_CLOSE_POINTER(left);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -3381,10 +3488,10 @@
                     if (res_bool < 0) {
                         JUMP_TO_LABEL(error);
                     }
-                    res = res_bool ? PyStackRef_True : PyStackRef_False;
+                    res = res_bool ? PyValue_True : PyValue_False;
                 }
                 else {
-                    res = PyStackRef_FromPyObjectSteal(res_o);
+                    res = PyValue_FromPyObjectSteal(res_o);
                 }
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -3395,7 +3502,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = CONTAINS_OP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3411,15 +3518,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP);
+            PyObject *value_boxes[12];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            _PyStackRef left;
-            _PyStackRef right;
-            _PyStackRef b;
-            _PyStackRef l;
-            _PyStackRef r;
-            _PyStackRef value;
+            PyValue left;
+            PyValue right;
+            PyValue b;
+            PyValue l;
+            PyValue r;
+            PyValue value;
             // _SPECIALIZE_CONTAINS_OP
             {
                 right = IR_SLOT(IR_FIELD_C(this_instr));
@@ -3440,9 +3550,9 @@
             }
             // _CONTAINS_OP
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(left))) {
-                    left = PyStackRef_Box(left);
-                    if (PyStackRef_IsInline(left)) {
+                if (Py_UNLIKELY(PyValue_IsInline(left))) {
+                    left = PyValue_Box(left);
+                    if (PyValue_IsInline(left)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
@@ -3451,9 +3561,9 @@
                 else {
                     left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(right))) {
-                    right = PyStackRef_Box(right);
-                    if (PyStackRef_IsInline(right)) {
+                if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                    right = PyValue_Box(right);
+                    if (PyValue_IsInline(right)) {
                         IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -3463,15 +3573,15 @@
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
                 }
-                PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);
-                PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);
+                PyObject *left_o = PyValue_AsPyObjectBorrow(left);
+                PyObject *right_o = PyValue_AsPyObjectBorrow(right);
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
                     IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                     IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
-                b = (res ^ oparg) ? PyStackRef_True : PyStackRef_False;
+                b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
@@ -3481,13 +3591,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                _PyStackRef_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             DISPATCH();
@@ -3497,7 +3607,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = COPY; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3513,15 +3623,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            _PyStackRef bottom;
-            _PyStackRef top;
+            PyValue bottom;
+            PyValue top;
             bottom = window[0];
-            top = PyStackRef_DUP(bottom);
-            window[1 + (oparg-1)] = top;
+            top = PyValue_DUP(bottom);
+            window[1 + (oparg-1)] = _PyValueTemps_Publish(value_temps, &top);
             DISPATCH();
         }
 
@@ -3529,7 +3642,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = COPY_FREE_VARS; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3545,17 +3658,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY_FREE_VARS);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             PyCodeObject *co = _PyFrame_GetCode(frame);
-            assert(PyStackRef_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyStackRef_AsPyObjectBorrow(frame->f_funcobj);
+            assert(PyValue_FunctionCheck(frame->f_funcobj));
+            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsPyObjectBorrow(frame->f_funcobj);
             PyObject *closure = func->func_closure;
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                PyObject *o = PyTuple_GET_ITEM(closure, i);
-                frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
+                frame->base[offset + i] = PyValue_NewRef(PyTuple_GET_VALUE(closure, i));
             }
             DISPATCH();
         }
@@ -3564,7 +3679,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = END_FOR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3579,10 +3694,13 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
-            _PyStackRef value;
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            PyStackRef_CLOSE(value);
+            PyValue_CLOSE(value);
             DISPATCH();
         }
 
@@ -3590,7 +3708,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = FOR_ITER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3606,14 +3724,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER);
+            PyObject *value_boxes[10];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyStackRef iter;
-            _PyStackRef null_or_index;
-            _PyStackRef next;
+            PyValue iter;
+            PyValue null_or_index;
+            PyValue next;
             // _SPECIALIZE_FOR_ITER
             {
                 null_or_index = window[1];
@@ -3634,20 +3755,20 @@
             }
             // _FOR_ITER
             {
-                _PyStackRef item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-                if (!PyStackRef_IsValid(item)) {
-                    if (PyStackRef_IsError(item)) {
-                        window[1] = null_or_index;
+                PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
+                if (!PyValue_IsValid(item)) {
+                    if (PyValue_IsError(item)) {
+                        window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
                         JUMP_TO_LABEL(error);
                     }
                     JUMPBY(oparg + 1);
-                    window[1] = null_or_index;
+                    window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
                     DISPATCH();
                 }
                 next = item;
             }
-            window[1] = null_or_index;
-            window[2] = next;
+            window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
+            window[2] = _PyValueTemps_Publish(value_temps, &next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             DISPATCH();
         }
@@ -3656,7 +3777,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = GET_ITER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3672,12 +3793,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            _PyStackRef iterable;
-            _PyStackRef iter;
-            _PyStackRef index_or_null;
+            PyValue iterable;
+            PyValue iter;
+            PyValue index_or_null;
             // _SPECIALIZE_GET_ITER
             {
                 iterable = IR_SLOT(IR_FIELD_B(this_instr));
@@ -3697,9 +3821,9 @@
             }
             // _GET_ITER
             {
-                _PyStackRef result = _PyEval_GetIter(iterable, &index_or_null, oparg);
-                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
-                if (PyStackRef_IsError(result)) {
+                PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+                if (PyValue_IsError(result)) {
                     JUMP_TO_LABEL(error);
                 }
                 iter = result;
@@ -3713,7 +3837,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = IR_JUMP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3728,6 +3852,9 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_JUMP);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             JUMPTO(oparg);
@@ -3738,7 +3865,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = JUMP_BACKWARD; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3754,6 +3881,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             // _CHECK_PERIODIC
@@ -3775,7 +3905,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = JUMP_BACKWARD_NO_INTERRUPT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3791,6 +3921,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             assert(JUMP_TARGET(oparg) < next_instr);
@@ -3802,7 +3935,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = JUMP_FORWARD; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3818,6 +3951,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_FORWARD);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             JUMPTO(oparg);
@@ -3828,7 +3964,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_ATTR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3844,12 +3980,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            _PyStackRef owner;
-            _PyStackRef attr;
-            _PyStackRef *self_or_null;
+            PyValue owner;
+            PyValue attr;
+            PyValue *self_or_null;
             // _SPECIALIZE_LOAD_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
@@ -3871,9 +4010,9 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR);
@@ -3884,18 +4023,18 @@
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    attr = _Py_LoadAttr_ValueSteal(tstate, owner, name, self_or_null);
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    if (PyStackRef_IsNull(attr)) {
+                    if (PyValue_IsNull(attr)) {
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    attr = _PyObject_GetAttrValue(PyValue_AsPyObjectBorrow(owner), name);
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
-                    _PyStackRef_CLOSE_POINTER(owner);
-                    if (PyStackRef_IsNull(attr)) {
+                    _PyValue_CLOSE_POINTER(owner);
+                    if (PyValue_IsNull(attr)) {
                         IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                         JUMP_TO_LABEL(error);
                     }
@@ -3910,7 +4049,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_ATTR_NOFB; (void)opcode;
             assert(next_instr == op->instruction);
@@ -3926,12 +4065,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef owner;
-            _PyStackRef attr;
-            _PyStackRef *self_or_null;
+            PyValue owner;
+            PyValue attr;
+            PyValue *self_or_null;
             // _SPECIALIZE_LOAD_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_B(this_instr));
@@ -3953,9 +4095,9 @@
             // _LOAD_ATTR
             {
                 self_or_null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_ATTR);
@@ -3966,18 +4108,18 @@
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 if (oparg & 1) {
-                    attr = _Py_LoadAttr_StackRefSteal(tstate, owner, name, self_or_null);
+                    attr = _Py_LoadAttr_ValueSteal(tstate, owner, name, self_or_null);
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    if (PyStackRef_IsNull(attr)) {
+                    if (PyValue_IsNull(attr)) {
                         JUMP_TO_LABEL(error);
                     }
                 }
                 else {
-                    attr = _PyObject_GetAttrStackRef(PyStackRef_AsPyObjectBorrow(owner), name);
+                    attr = _PyObject_GetAttrValue(PyValue_AsPyObjectBorrow(owner), name);
                     IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                     IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
-                    _PyStackRef_CLOSE_POINTER(owner);
-                    if (PyStackRef_IsNull(attr)) {
+                    _PyValue_CLOSE_POINTER(owner);
+                    if (PyValue_IsNull(attr)) {
                         IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                         JUMP_TO_LABEL(error);
                     }
@@ -3992,7 +4134,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_COMMON_CONSTANT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4008,11 +4150,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
+            PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = PyStackRef_DupImmortal(tstate->interp->common_consts[oparg]);
+            value = PyValue_DupImmortal(tstate->interp->common_consts[oparg]);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4021,7 +4166,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_CONST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4037,11 +4182,13 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            value = PyStackRef_FromPyObjectBorrow(obj);
+            PyValue value;
+            value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4050,7 +4197,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_CONST_INLINE_FLOAT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4066,12 +4213,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            assert(PyFloat_CheckExact(obj) && !isnan(PyFloat_AS_DOUBLE(obj)));
-            value = PyStackRef_FromDoubleNotNaN(PyFloat_AS_DOUBLE(obj));
+            PyValue value;
+            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4080,7 +4229,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_CONST_INLINE_INT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4096,15 +4245,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            PyObject *obj = GETITEM(FRAME_CO_CONSTS, oparg);
-            assert(_PyLong_CheckExactAndCompact(obj));
-            value = PyStackRef_FromInt32((int32_t)_PyLong_CompactValue((PyLongObject *)obj));
-            if (PyStackRef_IsNull(value)) {
-                JUMP_TO_LABEL(error);
-            }
+            PyValue value;
+            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4113,7 +4261,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_DEREF; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4129,12 +4277,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_DEREF);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
-            value = _PyCell_GetStackRef(cell);
-            if (PyStackRef_IsNull(value)) {
+            PyValue value;
+            PyCellObject *cell = (PyCellObject *)PyValue_AsPyObjectBorrow(GETLOCAL(oparg));
+            value = _PyCell_GetValue(cell);
+            if (PyValue_IsNull(value)) {
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
@@ -4148,7 +4299,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_FAST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4164,11 +4315,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
-            value = PyStackRef_DUP(GETLOCAL(oparg));
+            PyValue value;
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4177,7 +4331,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_FAST_BORROW; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4193,11 +4347,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            assert(!PyStackRef_IsNull(GETLOCAL(oparg)));
-            value = PyStackRef_BorrowAt(&GETLOCAL(oparg));
+            PyValue value;
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            value = PyValue_BorrowAt(&GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4206,7 +4363,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4222,15 +4379,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            _PyStackRef value1;
-            _PyStackRef value2;
+            PyValue value1;
+            PyValue value2;
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
-            value2 = PyStackRef_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
+            value1 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
+            value2 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             DISPATCH();
@@ -4240,7 +4400,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_FAST_CHECK; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4256,18 +4416,21 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef value_s = GETLOCAL(oparg);
-            if (PyStackRef_IsNull(value_s)) {
+            PyValue value;
+            PyValue value_s = GETLOCAL(oparg);
+            if (PyValue_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
-                    PyTuple_GetItem(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
+                    _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
                 );
                 JUMP_TO_LABEL(error);
             }
-            value = PyStackRef_DUP(value_s);
+            value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4276,7 +4439,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_FAST_LOAD_FAST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4292,15 +4455,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            _PyStackRef value1;
-            _PyStackRef value2;
+            PyValue value1;
+            PyValue value2;
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = PyStackRef_DUP(GETLOCAL(oparg1));
-            value2 = PyStackRef_DUP(GETLOCAL(oparg2));
+            value1 = PyValue_DUP(GETLOCAL(oparg1));
+            value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             DISPATCH();
@@ -4310,7 +4476,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_GLOBAL; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4326,11 +4492,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_B(this_instr));
             (void)oparg;
-            _PyStackRef *res;
-            _PyStackRef *null;
+            PyValue *res;
+            PyValue *null;
             // _SPECIALIZE_LOAD_GLOBAL
             {
                 #if ENABLE_SPECIALIZATION
@@ -4352,8 +4521,8 @@
             {
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyEval_LoadGlobalStackRef(GLOBALS(), BUILTINS(), name, res);
-                if (PyStackRef_IsNull(*res)) {
+                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
+                if (PyValue_IsNull(*res)) {
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -4361,7 +4530,7 @@
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyStackRef_NULL;
+                    null[0] = PyValue_NULL;
                 }
             }
             DISPATCH();
@@ -4371,7 +4540,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_GLOBAL_NOFB; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4387,11 +4556,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef *res;
-            _PyStackRef *null;
+            PyValue *res;
+            PyValue *null;
             // _SPECIALIZE_LOAD_GLOBAL
             {
                 #if ENABLE_SPECIALIZATION
@@ -4413,8 +4585,8 @@
             {
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyEval_LoadGlobalStackRef(GLOBALS(), BUILTINS(), name, res);
-                if (PyStackRef_IsNull(*res)) {
+                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
+                if (PyValue_IsNull(*res)) {
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -4422,7 +4594,7 @@
             {
                 null = &IR_SLOT(IR_FIELD_A(this_instr) + 1);
                 if (oparg & 1) {
-                    null[0] = PyStackRef_NULL;
+                    null[0] = PyValue_NULL;
                 }
             }
             DISPATCH();
@@ -4432,7 +4604,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_SMALL_INT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4448,12 +4620,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
+            PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            PyObject *obj = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + oparg];
-            value = PyStackRef_FromPyObjectBorrow(obj);
+            value = PyValue_FromInt32((int32_t)oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             DISPATCH();
         }
@@ -4462,7 +4636,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = LOAD_SMALL_INT_INLINE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4478,12 +4652,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
+            PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyStackRef_FromInt32((int32_t)oparg);
-            if (PyStackRef_IsNull(value)) {
+            value = PyValue_FromInt32((int32_t)oparg);
+            if (PyValue_IsNull(value)) {
                 JUMP_TO_LABEL(error);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
@@ -4494,7 +4671,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = MAKE_CELL; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4510,19 +4687,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
-            if (_PyStackRef_BoxArray(&GETLOCAL(oparg), 1) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            PyObject *initial = PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
-            PyObject *cell = PyCell_New(initial);
+            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
             if (cell == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            _PyStackRef tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyStackRef_FromPyObjectSteal(cell);
-            PyStackRef_XCLOSE(tmp);
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_FromPyObjectSteal(cell);
+            PyValue_XCLOSE(tmp);
             DISPATCH();
         }
 
@@ -4530,7 +4706,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = NOP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4546,6 +4722,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOP);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
 
@@ -4553,7 +4732,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = NOT_TAKEN; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4569,6 +4748,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOT_TAKEN);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
 
@@ -4576,7 +4758,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_ITER; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4592,14 +4774,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
-            _PyStackRef iter;
-            _PyStackRef index_or_null;
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue iter;
+            PyValue index_or_null;
             index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             (void)index_or_null;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            PyStackRef_CLOSE(iter);
+            PyValue_CLOSE(iter);
             DISPATCH();
         }
 
@@ -4607,7 +4792,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_JUMP_IF_FALSE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4623,12 +4808,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef res;
-            _PyStackRef cond;
+            PyValue value;
+            PyValue res;
+            PyValue cond;
             // _SPECIALIZE_POP_JUMP_IF
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
@@ -4649,27 +4837,27 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyStackRef_IsInlineInt(value)) {
-                    err = PyStackRef_InlineInt(value) != 0;
+                if (PyValue_IsInlineInt(value)) {
+                    err = PyValue_InlineInt(value) != 0;
                 }
-                else if (PyStackRef_IsInlineFloat(value)) {
-                    err = PyStackRef_InlineFloat(value) != 0.0;
+                else if (PyValue_IsInlineFloat(value)) {
+                    err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                PyStackRef_CLOSE(value);
+                PyValue_CLOSE(value);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? PyStackRef_True : PyStackRef_False;
+                res = err ? PyValue_True : PyValue_False;
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = res;
-                assert(PyStackRef_BoolCheck(cond));
-                int flag = PyStackRef_IsFalse(cond);
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -4685,7 +4873,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_JUMP_IF_NONE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4701,30 +4889,33 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
+            PyObject *value_boxes[4];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef b;
-            _PyStackRef cond;
+            PyValue value;
+            PyValue b;
+            PyValue cond;
             // _IS_NONE
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                if (PyStackRef_IsNone(value)) {
-                    b = PyStackRef_True;
+                if (PyValue_IsNone(value)) {
+                    b = PyValue_True;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 }
                 else {
-                    b = PyStackRef_False;
+                    b = PyValue_False;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    PyStackRef_CLOSE(value);
+                    PyValue_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = b;
-                assert(PyStackRef_BoolCheck(cond));
-                int flag = PyStackRef_IsTrue(cond);
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -4740,7 +4931,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_JUMP_IF_NOT_NONE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4756,30 +4947,33 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
+            PyObject *value_boxes[4];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef b;
-            _PyStackRef cond;
+            PyValue value;
+            PyValue b;
+            PyValue cond;
             // _IS_NONE
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                if (PyStackRef_IsNone(value)) {
-                    b = PyStackRef_True;
+                if (PyValue_IsNone(value)) {
+                    b = PyValue_True;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 }
                 else {
-                    b = PyStackRef_False;
+                    b = PyValue_False;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    PyStackRef_CLOSE(value);
+                    PyValue_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_FALSE
             {
                 cond = b;
-                assert(PyStackRef_BoolCheck(cond));
-                int flag = PyStackRef_IsFalse(cond);
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -4795,7 +4989,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_JUMP_IF_TRUE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4811,12 +5005,15 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef res;
-            _PyStackRef cond;
+            PyValue value;
+            PyValue res;
+            PyValue cond;
             // _SPECIALIZE_POP_JUMP_IF
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
@@ -4837,27 +5034,27 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyStackRef_IsInlineInt(value)) {
-                    err = PyStackRef_InlineInt(value) != 0;
+                if (PyValue_IsInlineInt(value)) {
+                    err = PyValue_InlineInt(value) != 0;
                 }
-                else if (PyStackRef_IsInlineFloat(value)) {
-                    err = PyStackRef_InlineFloat(value) != 0.0;
+                else if (PyValue_IsInlineFloat(value)) {
+                    err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                PyStackRef_CLOSE(value);
+                PyValue_CLOSE(value);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? PyStackRef_True : PyStackRef_False;
+                res = err ? PyValue_True : PyValue_False;
             }
             // _POP_JUMP_IF_TRUE
             {
                 cond = res;
-                assert(PyStackRef_BoolCheck(cond));
-                int flag = PyStackRef_IsTrue(cond);
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -4873,7 +5070,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = POP_TOP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4889,10 +5086,13 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
-            _PyStackRef value;
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            PyStackRef_XCLOSE(value);
+            PyValue_XCLOSE(value);
             DISPATCH();
         }
 
@@ -4900,7 +5100,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = PUSH_NULL; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4916,8 +5116,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
-            _PyStackRef res;
-            res = PyStackRef_NULL;
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue res;
+            res = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -4926,7 +5129,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = RAISE_VARARGS; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4943,18 +5146,33 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            _PyStackRef *args;
+            PyValue *args;
             args = &window[0];
             assert(oparg < 3);
-            if (_PyStackRef_BoxArray(args, oparg) < 0) {
+            _PyValue_OwnArray(args, oparg);
+            PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
+            if (oparg > 0 && exc == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            PyObject *cause = oparg == 2 ? PyStackRef_AsPyObjectSteal(args[1]) : NULL;
-            PyObject *exc = oparg > 0 ? PyStackRef_AsPyObjectSteal(args[0]) : NULL;
+            PyObject *cause = oparg == 2 ? _PyValueTemps_Object(value_temps, args[1]) : NULL;
+            if (oparg == 2 && cause == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            Py_XINCREF(exc);
+            Py_XINCREF(cause);
+            PyValue tmp;
+            for (int _i = oparg; --_i >= 0;) {
+                tmp = args[_i];
+                args[_i] = PyValue_NULL;
+                PyValue_CLOSE(tmp);
+            }
             IR_CLEAR_SLOTS(&window[0], oparg);
             int err = do_raise(tstate, exc, cause);
             if (err) {
@@ -4969,7 +5187,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = RESUME; (void)opcode;
             assert(next_instr == op->instruction);
@@ -4985,6 +5203,9 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
+            PyObject *value_boxes[1];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
             // _MAYBE_INSTRUMENT
@@ -5024,7 +5245,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = RETURN_VALUE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5040,19 +5261,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
-            _PyStackRef value;
-            _PyStackRef retval;
-            _PyStackRef res;
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue value;
+            PyValue retval;
+            PyValue res;
             // _MAKE_HEAP_SAFE
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                value = PyStackRef_MakeHeapSafe(value);
+                value = PyValue_MakeHeapSafe(value);
             }
             // _RETURN_VALUE
             {
                 retval = value;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-                _PyStackRef temp = retval;
+                PyValue temp = retval;
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 _PyFrame_AssertTemporariesClear(frame);
                 DTRACE_FUNCTION_RETURN();
@@ -5080,7 +5304,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_ATTR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5096,11 +5320,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
+            PyObject *value_boxes[7];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            _PyStackRef v;
-            _PyStackRef owner;
+            PyValue v;
+            PyValue owner;
             // _SPECIALIZE_STORE_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
@@ -5108,7 +5335,7 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyStackRef_IsNull(v)) {
+                    if (!PyValue_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
                         _Py_Specialize_StoreAttr(owner, next_instr, name);
@@ -5124,9 +5351,9 @@
             }
             // _STORE_ATTR
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
-                    v = PyStackRef_Box(v);
-                    if (PyStackRef_IsInline(v)) {
+                if (Py_UNLIKELY(PyValue_IsInline(v))) {
+                    v = PyValue_Box(v);
+                    if (PyValue_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR);
@@ -5135,9 +5362,9 @@
                 else {
                     v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -5148,12 +5375,12 @@
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
-                                       name, PyStackRef_AsPyObjectBorrow(v));
+                int err = PyObject_SetAttr(PyValue_AsPyObjectBorrow(owner),
+                                       name, PyValue_AsPyObjectBorrow(v));
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                _PyStackRef_CLOSE_POINTER(owner);
+                _PyValue_CLOSE_POINTER(owner);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_XCLOSE_POINTER(v);
+                _PyValue_XCLOSE_POINTER(v);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -5165,7 +5392,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_ATTR_NOFB; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5181,11 +5408,14 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
+            PyObject *value_boxes[7];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            _PyStackRef v;
-            _PyStackRef owner;
+            PyValue v;
+            PyValue owner;
             // _SPECIALIZE_STORE_ATTR
             {
                 owner = IR_SLOT(IR_FIELD_A(this_instr));
@@ -5193,7 +5423,7 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyStackRef_IsNull(v)) {
+                    if (!PyValue_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
                         _Py_Specialize_StoreAttr(owner, next_instr, name);
@@ -5209,9 +5439,9 @@
             }
             // _STORE_ATTR
             {
-                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
-                    v = PyStackRef_Box(v);
-                    if (PyStackRef_IsInline(v)) {
+                if (Py_UNLIKELY(PyValue_IsInline(v))) {
+                    v = PyValue_Box(v);
+                    if (PyValue_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_ATTR);
@@ -5220,9 +5450,9 @@
                 else {
                     v = IR_BORROW_KNOWN(v, IR_FIELD_B(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(owner))) {
-                    owner = PyStackRef_Box(owner);
-                    if (PyStackRef_IsInline(owner)) {
+                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
+                    owner = PyValue_Box(owner);
+                    if (PyValue_IsInline(owner)) {
                         IR_DROP_BORROW(v, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -5233,12 +5463,12 @@
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_A(this_instr));
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                int err = PyObject_SetAttr(PyStackRef_AsPyObjectBorrow(owner),
-                                       name, PyStackRef_AsPyObjectBorrow(v));
+                int err = PyObject_SetAttr(PyValue_AsPyObjectBorrow(owner),
+                                       name, PyValue_AsPyObjectBorrow(v));
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                _PyStackRef_CLOSE_POINTER(owner);
+                _PyValue_CLOSE_POINTER(owner);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_XCLOSE_POINTER(v);
+                _PyValue_XCLOSE_POINTER(v);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -5250,7 +5480,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_DEREF; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5266,24 +5496,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_DEREF);
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef v;
-            v = IR_SLOT(IR_FIELD_A(this_instr));
-            if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
-                v = PyStackRef_Box(v);
-                if (PyStackRef_IsInline(v)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(STORE_DEREF);
-                IR_KEEP_BOX(v, IR_FIELD_A(this_instr));
-            }
-            else {
-                v = IR_BORROW_KNOWN(v, IR_FIELD_A(this_instr));
-            }
-            PyCellObject *cell = (PyCellObject *)PyStackRef_AsPyObjectBorrow(GETLOCAL(oparg));
-            PyCell_SetTakeRef(cell, _PyStackRef_AsPyObjectStealPointer(v));
+            PyValue v;
+            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyValue owned = v;
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            _PyCell_SetValue(cell, owned);
             DISPATCH();
         }
 
@@ -5291,7 +5514,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_FAST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5307,14 +5530,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
+            PyObject *value_boxes[4];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef value;
-            _PyStackRef trash;
+            PyValue value;
+            PyValue trash;
             // _SWAP_FAST
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                _PyStackRef tmp = GETLOCAL(oparg);
+                PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 trash = tmp;
@@ -5322,7 +5548,7 @@
             // _POP_TOP
             {
                 value = trash;
-                PyStackRef_XCLOSE(value);
+                PyValue_XCLOSE(value);
             }
             DISPATCH();
         }
@@ -5331,7 +5557,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_FAST_LOAD_FAST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5347,19 +5573,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef value1;
-            _PyStackRef value2;
+            PyValue value1;
+            PyValue value2;
             value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            _PyStackRef tmp = GETLOCAL(oparg1);
+            PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            value2 = PyStackRef_DUP(GETLOCAL(oparg2));
+            value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
-            PyStackRef_XCLOSE(tmp);
+            PyValue_XCLOSE(tmp);
             IR_STORE_DST(IR_FIELD_A(this_instr), value2);
             DISPATCH();
         }
@@ -5368,7 +5597,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_FAST_STORE_FAST; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5384,22 +5613,25 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            _PyStackRef value2;
-            _PyStackRef value1;
+            PyValue value2;
+            PyValue value1;
             value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             value2 = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            _PyStackRef tmp = GETLOCAL(oparg1);
+            PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            PyStackRef_XCLOSE(tmp);
+            PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            PyStackRef_XCLOSE(tmp);
+            PyValue_XCLOSE(tmp);
             DISPATCH();
         }
 
@@ -5407,7 +5639,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = STORE_SUBSCR; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5423,10 +5655,13 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR);
+            PyObject *value_boxes[8];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
-            _PyStackRef container;
-            _PyStackRef sub;
-            _PyStackRef v;
+            PyValue container;
+            PyValue sub;
+            PyValue v;
             // _SPECIALIZE_STORE_SUBSCR
             {
                 sub = IR_SLOT(IR_FIELD_B(this_instr));
@@ -5448,9 +5683,9 @@
             // _STORE_SUBSCR
             {
                 v = IR_SLOT(IR_FIELD_C(this_instr));
-                if (Py_UNLIKELY(PyStackRef_IsInline(v))) {
-                    v = PyStackRef_Box(v);
-                    if (PyStackRef_IsInline(v)) {
+                if (Py_UNLIKELY(PyValue_IsInline(v))) {
+                    v = PyValue_Box(v);
+                    if (PyValue_IsInline(v)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(STORE_SUBSCR);
@@ -5459,9 +5694,9 @@
                 else {
                     v = IR_BORROW_KNOWN(v, IR_FIELD_C(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(container))) {
-                    container = PyStackRef_Box(container);
-                    if (PyStackRef_IsInline(container)) {
+                if (Py_UNLIKELY(PyValue_IsInline(container))) {
+                    container = PyValue_Box(container);
+                    if (PyValue_IsInline(container)) {
                         IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
                         JUMP_TO_LABEL(error);
                     }
@@ -5471,9 +5706,9 @@
                 else {
                     container = IR_BORROW_KNOWN(container, IR_FIELD_A(this_instr));
                 }
-                if (Py_UNLIKELY(PyStackRef_IsInline(sub))) {
-                    sub = PyStackRef_Box(sub);
-                    if (PyStackRef_IsInline(sub)) {
+                if (Py_UNLIKELY(PyValue_IsInline(sub))) {
+                    sub = PyValue_Box(sub);
+                    if (PyValue_IsInline(sub)) {
                         IR_DROP_BORROW(v, IR_FIELD_C(this_instr));
                         IR_DROP_BORROW(container, IR_FIELD_A(this_instr));
                         JUMP_TO_LABEL(error);
@@ -5484,13 +5719,13 @@
                 else {
                     sub = IR_BORROW_KNOWN(sub, IR_FIELD_B(this_instr));
                 }
-                int err = PyObject_SetItem(PyStackRef_AsPyObjectBorrow(container), PyStackRef_AsPyObjectBorrow(sub), PyStackRef_AsPyObjectBorrow(v));
+                int err = PyObject_SetItem(PyValue_AsPyObjectBorrow(container), PyValue_AsPyObjectBorrow(sub), PyValue_AsPyObjectBorrow(v));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyStackRef_CLOSE_POINTER(sub);
+                _PyValue_CLOSE_POINTER(sub);
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                _PyStackRef_CLOSE_POINTER(container);
+                _PyValue_CLOSE_POINTER(container);
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                _PyStackRef_CLOSE_POINTER(v);
+                _PyValue_CLOSE_POINTER(v);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -5502,7 +5737,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = SWAP; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5518,19 +5753,22 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SWAP);
+            PyObject *value_boxes[7];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            _PyStackRef bottom;
-            _PyStackRef top;
+            PyValue bottom;
+            PyValue top;
             top = window[1 + (oparg-2)];
             bottom = window[0];
-            _PyStackRef temp = bottom;
+            PyValue temp = bottom;
             bottom = top;
             top = temp;
-            window[0] = bottom;
-            window[1 + (oparg-2)] = top;
+            window[0] = _PyValueTemps_Publish(value_temps, &bottom);
+            window[1 + (oparg-2)] = _PyValueTemps_Publish(value_temps, &top);
             DISPATCH();
         }
 
@@ -5538,7 +5776,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = TO_BOOL; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5554,9 +5792,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL);
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
-            _PyStackRef value;
-            _PyStackRef res;
+            PyValue value;
+            PyValue res;
             // _SPECIALIZE_TO_BOOL
             {
                 value = IR_SLOT(IR_FIELD_B(this_instr));
@@ -5577,21 +5818,21 @@
             // _TO_BOOL
             {
                 int err;
-                if (PyStackRef_IsInlineInt(value)) {
-                    err = PyStackRef_InlineInt(value) != 0;
+                if (PyValue_IsInlineInt(value)) {
+                    err = PyValue_InlineInt(value) != 0;
                 }
-                else if (PyStackRef_IsInlineFloat(value)) {
-                    err = PyStackRef_InlineFloat(value) != 0.0;
+                else if (PyValue_IsInlineFloat(value)) {
+                    err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
                 }
-                IR_SLOT(IR_FIELD_B(this_instr)) = PyStackRef_NULL;
-                PyStackRef_CLOSE(value);
+                IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+                PyValue_CLOSE(value);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                res = err ? PyStackRef_True : PyStackRef_False;
+                res = err ? PyValue_True : PyValue_False;
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
@@ -5601,7 +5842,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = UNARY_NEGATIVE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5617,34 +5858,36 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
-            _PyStackRef value;
-            _PyStackRef res;
-            _PyStackRef v;
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue value;
+            PyValue res;
+            PyValue v;
             // _UNARY_NEGATIVE
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (PyStackRef_IsInlineInt(value)) {
-                    int32_t i = PyStackRef_InlineInt(value);
+                if (PyValue_IsInlineInt(value)) {
+                    int32_t i = PyValue_InlineInt(value);
                     if (i == INT32_MIN) {
-                        res = _PyStackRef_BoxInt64(-(int64_t)i);
+                        res = _PyValue_BoxInt64(-(int64_t)i);
                     }
                     else {
-                        res = PyStackRef_FromInt32(-i);
+                        res = PyValue_FromInt32(-i);
                     }
                 }
-                else if (PyStackRef_IsInlineFloat(value)) {
-                    res = PyStackRef_FromDoubleNotNaN(-PyStackRef_InlineFloat(value));
+                else if (PyValue_IsInlineFloat(value)) {
+                    res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
                 }
-                else if (PyStackRef_FloatCheckExact(value) &&
-                     tstate->interp->opt_config.tagged_values_enabled)
+                else if (PyValue_FloatCheckExact(value))
                 {
-                    res = PyStackRef_FromDouble(-PyStackRef_FloatValue(value));
+                    res = PyValue_FromDouble(-PyValue_FloatValue(value));
                 }
                 else {
-                    PyObject *res_o = PyNumber_Negative(PyStackRef_AsPyObjectBorrow(value));
-                    res = res_o == NULL ? PyStackRef_NULL : PyStackRef_FromPyObjectSteal(res_o);
+                    PyObject *res_o = PyNumber_Negative(PyValue_AsPyObjectBorrow(value));
+                    res = res_o == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(res_o);
                 }
-                if (PyStackRef_IsNull(res)) {
+                if (PyValue_IsNull(res)) {
                     IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
@@ -5655,7 +5898,7 @@
             {
                 value = v;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                PyStackRef_XCLOSE(value);
+                PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
@@ -5665,7 +5908,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = UNARY_NOT; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5681,16 +5924,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
-            _PyStackRef value;
-            _PyStackRef res;
+            PyObject *value_boxes[3];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
+            PyValue value;
+            PyValue res;
             value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            int truth = _PyStackRef_Truth(value);
+            int truth = _PyValue_Truth(value);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            PyStackRef_CLOSE(value);
+            PyValue_CLOSE(value);
             if (truth < 0) {
                 JUMP_TO_LABEL(error);
             }
-            res = truth ? PyStackRef_False : PyStackRef_True;
+            res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             DISPATCH();
         }
@@ -5699,7 +5945,7 @@
             PyThreadState *tstate = ctx->tstate;
             _PyInterpreterFrame *frame = ctx->frame;
             _PyIRWord *next_instr = ctx->next_instr;
-            _PyStackRef *slots = _PyFrame_Slots(frame);
+            PyValue *slots = _PyFrame_Slots(frame);
             (void)tstate; (void)slots;
             int opcode = UNPACK_SEQUENCE; (void)opcode;
             assert(next_instr == op->instruction);
@@ -5715,13 +5961,16 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            _PyValueTemps *value_temps = &value_owners;
             _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
-            _PyStackRef *window = &IR_SLOT(IR_FIELD_A(this_instr));
+            PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
             (void)window;
-            _PyStackRef seq;
-            _PyStackRef *top;
+            PyValue seq;
+            PyValue *top;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = window[0];
@@ -5743,17 +5992,17 @@
             // _UNPACK_SEQUENCE
             {
                 top = &window[oparg];
-                if (Py_UNLIKELY(PyStackRef_IsInlineAt(&window[0]))) {
-                    seq = PyStackRef_Box(seq);
-                    if (PyStackRef_IsInline(seq)) {
+                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
+                    seq = PyValue_Box(seq);
+                    if (PyValue_IsInline(seq)) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
-                    window[0] = seq;
+                    window[0] = _PyValueTemps_Publish(value_temps, &seq);
                 }
-                PyObject *seq_o = _PyStackRef_AsPyObjectStealPointer(seq);
-                window[0] = PyStackRef_NULL;
-                int res = _PyEval_UnpackIterableStackRef(tstate, seq_o, oparg, -1, top);
+                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+                window[0] = PyValue_NULL;
+                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 Py_DECREF(seq_o);
                 if (res == 0) {
                     JUMP_TO_LABEL(error);

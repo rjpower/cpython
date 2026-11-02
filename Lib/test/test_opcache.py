@@ -17,8 +17,7 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
-# PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
-# ints, which builds without inline values do not have.
+# Canonical numeric values are mandatory in the private runtime.
 int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
 
 # Instances with inline values and no __dict__ get the shape handlers

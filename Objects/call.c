@@ -618,18 +618,18 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
 {
     PyObject *result = NULL;
 
-    _PyCStackRef self, method;
-    _PyThreadState_PushCStackRef(tstate, &self);
-    _PyThreadState_PushCStackRef(tstate, &method);
-    self.ref = PyStackRef_FromPyObjectBorrow(obj);
+    _PyCValue self, method;
+    _PyThreadState_PushCValue(tstate, &self);
+    _PyThreadState_PushCValue(tstate, &method);
+    self.ref = PyValue_FromPyObjectBorrow(obj);
 
-    int res = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
+    int res = _PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref);
     if (res < 0) {
         goto exit;
     }
 
-    PyObject *callable = PyStackRef_AsPyObjectBorrow(method.ref);
-    PyObject *self_obj = PyStackRef_AsPyObjectBorrow(self.ref);
+    PyObject *callable = PyValue_AsPyObjectBorrow(method.ref);
+    PyObject *self_obj = PyValue_AsPyObjectBorrow(self.ref);
 
     if (!PyCallable_Check(callable)) {
         _PyErr_Format(tstate, PyExc_TypeError,
@@ -673,8 +673,8 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     }
 
 exit:
-    _PyThreadState_PopCStackRef(tstate, &method);
-    _PyThreadState_PopCStackRef(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     return result;
 }
 
@@ -925,20 +925,20 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     assert(PyVectorcall_NARGS(nargsf) >= 1);
 
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef self, method;
-    _PyThreadState_PushCStackRef(tstate, &self);
-    _PyThreadState_PushCStackRef(tstate, &method);
+    _PyCValue self, method;
+    _PyThreadState_PushCValue(tstate, &self);
+    _PyThreadState_PushCValue(tstate, &method);
     /* Use args[0] as "self" argument */
-    self.ref = PyStackRef_FromPyObjectBorrow(args[0]);
-    int unbound = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
+    self.ref = PyValue_FromPyObjectBorrow(args[0]);
+    int unbound = _PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref);
     if (unbound < 0) {
-        _PyThreadState_PopCStackRef(tstate, &method);
-        _PyThreadState_PopCStackRef(tstate, &self);
+        _PyThreadState_PopCValue(tstate, &method);
+        _PyThreadState_PopCValue(tstate, &self);
         return NULL;
     }
 
-    PyObject *callable = PyStackRef_AsPyObjectBorrow(method.ref);
-    PyObject *self_obj = PyStackRef_AsPyObjectBorrow(self.ref);
+    PyObject *callable = PyValue_AsPyObjectBorrow(method.ref);
+    PyObject *self_obj = PyValue_AsPyObjectBorrow(self.ref);
     PyObject *result;
 
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD, callable);
@@ -961,8 +961,8 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
         result = _PyObject_VectorcallPrepend(tstate, callable, self_obj,
                                              args + 1, nargsf - 1, kwnames);
     }
-    _PyThreadState_PopCStackRef(tstate, &method);
-    _PyThreadState_PopCStackRef(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     return result;
 }
 
@@ -975,26 +975,26 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
         return null_error(tstate);
     }
 
-    _PyCStackRef self, method;
-    _PyThreadState_PushCStackRef(tstate, &self);
-    _PyThreadState_PushCStackRef(tstate, &method);
-    self.ref = PyStackRef_FromPyObjectBorrow(obj);
-    int res = _PyObject_GetMethodStackRef(tstate, &self.ref, name, &method.ref);
+    _PyCValue self, method;
+    _PyThreadState_PushCValue(tstate, &self);
+    _PyThreadState_PushCValue(tstate, &method);
+    self.ref = PyValue_FromPyObjectBorrow(obj);
+    int res = _PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref);
     if (res < 0) {
-        _PyThreadState_PopCStackRef(tstate, &method);
-        _PyThreadState_PopCStackRef(tstate, &self);
+        _PyThreadState_PopCValue(tstate, &method);
+        _PyThreadState_PopCValue(tstate, &self);
         return NULL;
     }
-    PyObject *callable = PyStackRef_AsPyObjectBorrow(method.ref);
-    PyObject *self_obj = PyStackRef_AsPyObjectBorrow(self.ref);
+    PyObject *callable = PyValue_AsPyObjectBorrow(method.ref);
+    PyObject *self_obj = PyValue_AsPyObjectBorrow(self.ref);
 
     va_list vargs;
     va_start(vargs, name);
     PyObject *result = object_vacall(tstate, self_obj, callable, vargs);
     va_end(vargs);
 
-    _PyThreadState_PopCStackRef(tstate, &method);
-    _PyThreadState_PopCStackRef(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     return result;
 }
 

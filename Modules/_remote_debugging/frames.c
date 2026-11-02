@@ -174,7 +174,7 @@ is_frame_valid(
     if ((void*)code_object_addr == NULL) {
         return 0;  // Frame being cleared
     }
-#ifdef Py_STACKREF_INLINE_VALUES
+#ifdef Py_VALUE_INLINE_VALUES
     // An executable is always an object pointer. Anything else, such as an
     // inline int, means the sample read a frame that had been popped and
     // whose memory now holds another frame's stack values.

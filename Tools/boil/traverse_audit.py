@@ -50,7 +50,7 @@ RELEASE_RE = re.compile(
     r"[A-Za-z_][\w]*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*)*\s*(?:->|\.)\s*([A-Za-z_]\w*)\s*[,)]")
 MEMBER_RE = re.compile(r"(?:->|\.)\s*([A-Za-z_]\w*)")
 VISIT_RE = re.compile(
-    r"\b(?:Py_VISIT|_Py_VISIT_STACKREF|visit)\s*\(\s*(?:\([^()]*\)\s*)?"
+    r"\b(?:Py_VISIT|_Py_VISIT_VALUE|visit)\s*\(\s*(?:\([^()]*\)\s*)?"
     r"[A-Za-z_][\w]*(?:\s*(?:->|\.)\s*[A-Za-z_]\w*)*\s*(?:->|\.)\s*([A-Za-z_]\w*)\s*[,)]")
 
 

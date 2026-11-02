@@ -89,10 +89,10 @@
 #   define TAIL_CALL_NO_OPERANDS 0
 
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
 #   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
@@ -117,7 +117,8 @@
 /* A handler finds the frame in the thread state, which is not one of the
  * registers that the handlers pass on. */
 #   define TAIL_CALL_LOAD_FRAME() \
-        _PyInterpreterFrame *frame = tstate->current_frame
+        _PyInterpreterFrame *frame = tstate->current_frame; \
+        _PyValueTemps *value_temps = NULL
 
 #   define DISPATCH_GOTO() \
         do { \
@@ -125,16 +126,25 @@
         } while (0)
 #   define JUMP_TO_LABEL(name) \
         do { \
+            if (value_temps != NULL && value_temps->count != 0) { \
+                int value_had_error = PyErr_Occurred() != NULL; \
+                if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+                    next_instr = frame->instr_ptr + 1; \
+                    Py_MUSTTAIL return (_TAIL_CALL_error)(TAIL_CALL_ARGS); \
+                } \
+            } \
             Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
         } while (0)
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
+                assert(value_temps == NULL || value_temps->count == 0); \
                 Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
+                assert(value_temps == NULL || value_temps->count == 0); \
                 Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
             } while (0)
 #   endif
@@ -142,15 +152,37 @@
 #elif USE_COMPUTED_GOTOS
 #  define TARGET(op) TARGET_##op:
 #  define DISPATCH_GOTO() goto *opcode_targets[opcode]
-#  define JUMP_TO_LABEL(name) goto name;
-#  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
+#  define JUMP_TO_LABEL(name) do { \
+        if (value_temps != NULL && value_temps->count != 0) { \
+            int value_had_error = PyErr_Occurred() != NULL; \
+            if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+                next_instr = frame->instr_ptr + 1; goto error; \
+            } \
+        } \
+        goto name; \
+    } while (0)
+#  define JUMP_TO_PREDICTED(name) do { \
+        assert(value_temps == NULL || value_temps->count == 0); \
+        goto PREDICTED_##name; \
+    } while (0)
 #  define LABEL(name) name:
 #  define TAIL_CALL_LOAD_FRAME() ((void)0)
 #else
 #  define TARGET(op) case op: TARGET_##op:
 #  define DISPATCH_GOTO() goto dispatch_opcode
-#  define JUMP_TO_LABEL(name) goto name;
-#  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
+#  define JUMP_TO_LABEL(name) do { \
+        if (value_temps != NULL && value_temps->count != 0) { \
+            int value_had_error = PyErr_Occurred() != NULL; \
+            if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+                next_instr = frame->instr_ptr + 1; goto error; \
+            } \
+        } \
+        goto name; \
+    } while (0)
+#  define JUMP_TO_PREDICTED(name) do { \
+        assert(value_temps == NULL || value_temps->count == 0); \
+        goto PREDICTED_##name; \
+    } while (0)
 #  define LABEL(name) name:
 #  define TAIL_CALL_LOAD_FRAME() ((void)0)
 #endif
@@ -239,6 +271,10 @@ do { \
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
     { \
+        if (value_temps != NULL && value_temps->count != 0 && \
+            finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+            next_instr = frame->instr_ptr + 1; JUMP_TO_LABEL(error); \
+        } \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
@@ -246,6 +282,7 @@ do { \
 
 #define DISPATCH_SAME_OPARG() \
     { \
+        assert(value_temps == NULL || value_temps->count == 0); \
         opcode = IR_HANDLER(*next_instr); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
@@ -255,6 +292,13 @@ do { \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
         assert((NEW_FRAME)->previous == frame);                  \
+        if (value_temps != NULL && value_temps->count != 0 &&    \
+            finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+            PyObject *value_error = PyErr_GetRaisedException(); \
+            _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));        \
+            _PyValue_RestoreException(value_error);              \
+            JUMP_TO_LABEL(error);                               \
+        }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
         JUMP_TO_LABEL(start_frame);                              \
@@ -263,14 +307,14 @@ do { \
 /* Tuple access macros */
 
 #ifndef Py_DEBUG
-#define GETITEM(v, i) PyTuple_GET_ITEM((v), (i))
+#define GETITEM(v, i) _PyTuple_GET_OBJECT((v), (i))
 #else
 static inline PyObject *
 GETITEM(PyObject *v, Py_ssize_t i) {
     assert(PyTuple_Check(v));
     assert(i >= 0);
     assert(i < PyTuple_GET_SIZE(v));
-    return PyTuple_GET_ITEM(v, i);
+    return _PyTuple_GET_OBJECT(v, i);
 }
 #endif
 
@@ -332,7 +376,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 //  UNLOCK_OBJECT(op);
 //
 // NOTE: The object must be unlocked on every exit code path and you should
-// avoid any potentially escaping calls (like PyStackRef_CLOSE) while the
+// avoid any potentially escaping calls (like PyValue_CLOSE) while the
 // object is locked.
 #ifdef Py_GIL_DISABLED
 #  define LOCK_OBJECT(op) PyMutex_LockFast(&(_PyObject_CAST(op))->ob_mutex)
@@ -462,21 +506,23 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 /* There's no STORE_IP(), it's inlined by the code generator. */
 
 
-/* Stackref macros */
+/* Value/object bridge macros */
 
-/* How much scratch space to give stackref to PyObject* conversion. */
-#define MAX_STACKREF_SCRATCH 10
+/* How much scratch space to give value to PyObject* conversion. */
+#define MAX_VALUE_SCRATCH 10
 
 #define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
-#define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
+#define VALUES_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
-    PyObject *NAME##_temp[MAX_STACKREF_SCRATCH+1]; \
-    PyObject **NAME = _PyObjectArray_FromStackRefArray(ARGS, ARG_COUNT, NAME##_temp);
+    PyObject *NAME##_temp[MAX_VALUE_SCRATCH+1]; \
+    Py_ssize_t NAME##_count = (ARG_COUNT); \
+    PyObject **NAME = _PyObjectArray_FromValueArray(ARGS, NAME##_count, NAME##_temp);
 
-#define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
+#define VALUES_TO_PYOBJECTS_CLEANUP(NAME, RESULT) \
     /* +1 because we +1 previously */ \
-    _PyObjectArray_Free(NAME - 1, NAME##_temp); \
+    _PyObjectArray_Free(NAME - 1, NAME##_temp, NAME##_count); \
+    (RESULT) = check_value_bridge_result(RESULT); \
     _PyGC_CLEAR_ARRAY(NAME##_temp);
 
 #define CONVERSION_FAILED(NAME) ((NAME) == NULL)
@@ -560,64 +606,50 @@ gen_try_set_executing(PyGenObject *gen)
 /* REF, read through field F and known to be a pointer, borrowed if F names
  * a local. */
 static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
-#ifdef Py_STACKREF_DEBUG
 #  define IR_BORROW_KNOWN(REF, F) \
-    (IR_IS_LOCAL(F) ? PyStackRef_Borrow(REF) : (REF))
-#else
-#  define IR_BORROW_KNOWN(REF, F) \
-    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
-#endif
+    ((PyValue){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
 
-/* The box of an inline value read through field F, which belongs to the
- * slot if F names a temporary.  A local keeps its inline value, and the
- * handler drops the box as it would a temporary's. */
+/* An object bridge belongs to the handler, while both local and temporary
+ * homes retain their canonical value. */
 #define IR_KEEP_BOX(REF, F) \
     do { \
-        if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = (REF); \
-        } \
+        (void)_PyValueTemps_Publish(value_temps, &(REF)); \
     } while (0)
 
 /* Before a deopt, drop REF, an object input read through field F, if F
- * names a local: the family head reads the local again.  REF is a borrow,
- * which only the Py_STACKREF_DEBUG checker counts, or the box of the
- * local's inline value. */
+ * names a local: the family head reads the local again. Private scalar
+ * boxes must have been excluded or released before this restart. */
 #define IR_DROP_BORROW(REF, F) \
     do { \
         if (IR_IS_LOCAL(F)) { \
-            PyStackRef_CLOSE(REF); \
+            PyValue_CLOSE(REF); \
         } \
     } while (0)
 
 /* An input that the handler consumes as it is, through field F: a
  * temporary, or a borrow of the local that F names, which is what
  * LOAD_FAST_BORROW would have pushed. */
-#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
 #  define IR_LOAD_BORROWED(F) \
-    (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
-#else
-#  define IR_LOAD_BORROWED(F) \
-    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
-        | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
-#endif
+    ((PyValue){ .bits = IR_SLOT(F).bits \
+        | ((uintptr_t)IR_IS_LOCAL(F) & _PyValue_BorrowBitAt(&IR_SLOT(F))) })
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
-_PyStackRef_Truth(_PyStackRef ref)
+_PyValue_Truth(PyValue ref)
 {
-    if (PyStackRef_IsTrue(ref)) {
+    if (PyValue_IsTrue(ref)) {
         return 1;
     }
-    if (PyStackRef_IsFalse(ref) || PyStackRef_IsNone(ref)) {
+    if (PyValue_IsFalse(ref) || PyValue_IsNone(ref)) {
         return 0;
     }
-    if (PyStackRef_IsInlineInt(ref)) {
-        return PyStackRef_InlineInt(ref) != 0;
+    if (PyValue_IsInlineInt(ref)) {
+        return PyValue_InlineInt(ref) != 0;
     }
-    if (PyStackRef_IsInlineFloat(ref)) {
-        return PyStackRef_InlineFloat(ref) != 0.0;
+    if (PyValue_IsInlineFloat(ref)) {
+        return PyValue_InlineFloat(ref) != 0.0;
     }
-    return PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(ref));
+    return PyObject_IsTrue(PyValue_AsPyObjectBorrow(ref));
 }
 
 /* The handler takes the input that it read through field F: a temporary's
@@ -625,7 +657,7 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_CONSUME_INPUT(F) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = PyStackRef_NULL; \
+            IR_SLOT(F) = PyValue_NULL; \
         } \
     } while (0)
 
@@ -634,15 +666,15 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_STORE_INPUT(F, V) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = (V); \
+            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
         } \
     } while (0)
 
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
-        assert(PyStackRef_IsNull(SLOT)); \
-        (SLOT) = (V); \
+        assert(PyValue_IsNull(SLOT)); \
+        (SLOT) = _PyValueTemps_Publish(value_temps, &(V)); \
     } while (0)
 
 /* The result V goes to dst field F, which may name a local (a folded
@@ -652,14 +684,14 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_STORE_DST(F, V) \
     do { \
         if (IR_IS_LOCAL(F)) { \
-            _PyStackRef ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = (V); \
-            PyStackRef_XCLOSE(ir_old); \
+            PyValue ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            PyValue_XCLOSE(ir_old); \
         } \
         else { \
-            assert(PyStackRef_IsNull(IR_SLOT(F)) \
-                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
-            IR_SLOT(F) = (V); \
+            assert(PyValue_IsNull(IR_SLOT(F)) \
+                   || PyValue_Is(IR_SLOT(F), (V))); \
+            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
         } \
     } while (0)
 
@@ -668,9 +700,9 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_STORE_TEMP_DST(F, V) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            assert(PyStackRef_IsNull(IR_SLOT(F)) \
-                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
-            IR_SLOT(F) = (V); \
+            assert(PyValue_IsNull(IR_SLOT(F)) \
+                   || PyValue_Is(IR_SLOT(F), (V))); \
+            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
         } \
     } while (0)
 
@@ -679,19 +711,19 @@ _PyStackRef_Truth(_PyStackRef ref)
 #define IR_MOVE_TO_DST(F, SLOT) \
     do { \
         if (IR_IS_LOCAL(F)) { \
-            _PyStackRef ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = (SLOT); \
-            (SLOT) = PyStackRef_NULL; \
-            PyStackRef_XCLOSE(ir_old); \
+            PyValue ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(SLOT)); \
+            (SLOT) = PyValue_NULL; \
+            PyValue_XCLOSE(ir_old); \
         } \
     } while (0)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \
-        _PyStackRef *ir_p = (PTR); \
+        PyValue *ir_p = (PTR); \
         for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyStackRef_NULL; \
+            ir_p[ir_i] = PyValue_NULL; \
         } \
     } while (0)
 
@@ -714,6 +746,7 @@ _PyStackRef_Truth(_PyStackRef ref)
  * that its entry, at index F, records. */
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
+        assert(value_temps == NULL || value_temps->count == 0); \
         opcode = _PyIR_BINARY_OP_FIRST + \
             (int)((_PyFbHeader *)IR_FB(F))->arg; \
         next_instr = this_instr; \
@@ -752,7 +785,8 @@ _PyStackRef_Truth(_PyStackRef ref)
 
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
-#define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
+#define IR_STORE_RETURN(V) \
+    _PyFrame_SetReturnValue(frame, _PyValueTemps_Publish(value_temps, &(V)))
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

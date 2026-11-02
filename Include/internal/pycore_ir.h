@@ -209,7 +209,7 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
 /* The handler that the executing copy of co starts with at index i: the
- * generic handler, or its boxing form under PYTHON_TAGGED_VALUES=0.
+ * generic handler.
  * Deoptimisation and de-instrumentation restore it. */
 PyAPI_FUNC(int) _PyCode_GenericHandler(PyCodeObject *co, int i);
 

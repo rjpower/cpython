@@ -492,26 +492,14 @@ fb_begin_call(_PyInstr *instr, PyTypeObject *callable_type)
 
 /* Inline values
 
-   An operand may be an inline int or float (see pycore_stackref.h). The
-   specializer tests it through its stackref, with PyStackRef_TYPE() and the
+   An operand may be an inline int or float (see pycore_value.h). The
+   specializer tests it through its value, with PyValue_TYPE() and the
    inline-aware int checks, and fails where an int or float cannot be the
    operand, such as the owner of LOAD_ATTR, whose specialized forms guard on
    an object's type. BINARY_OP inspects objects deeply, so it boxes inline
    operands for the duration. */
 
-/* May the specializer choose an instruction that makes inline ints or
-   floats? PYTHON_TAGGED_VALUES=0 says no, so that every value stays boxed.
-   Without inline values, those instructions make boxes and are always
-   allowed. */
-static bool
-inline_producers_allowed(void)
-{
-#ifdef Py_STACKREF_INLINE_VALUES
-    return _PyInterpreterState_GET()->opt_config.tagged_values_enabled;
-#else
-    return true;
-#endif
-}
+
 
 /* Record the new specialisation OPCODE of a site in its poly table. */
 static void
@@ -655,17 +643,17 @@ specialize_module_load_attr(
 /* Attribute specialization */
 
 Py_NO_INLINE void
-_Py_Specialize_LoadSuperAttr(_PyStackRef global_super_st, _PyStackRef cls_st, _PyInstr *instr, int load_method) {
+_Py_Specialize_LoadSuperAttr(PyValue global_super_st, PyValue cls_st, _PyInstr *instr, int load_method) {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
     fb_begin(instr);
-    if (PyStackRef_IsInline(global_super_st) ||
-        PyStackRef_AsPyObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
+    if (PyValue_IsInline(global_super_st) ||
+        PyValue_AsPyObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
     {
         SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
         goto fail;
     }
-    if (!PyType_FastSubclass(PyStackRef_TYPE(cls_st), Py_TPFLAGS_TYPE_SUBCLASS)) {
+    if (!PyType_FastSubclass(PyValue_TYPE(cls_st), Py_TPFLAGS_TYPE_SUBCLASS)) {
         SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_BAD_CLASS);
         goto fail;
     }
@@ -1251,17 +1239,17 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_LoadAttr(_PyStackRef owner_st, _PyInstr *instr, PyObject *name)
+_Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_ATTR] == INLINE_CACHE_ENTRIES_LOAD_ATTR);
     fb_begin(instr);
-    if (PyStackRef_IsInline(owner_st)) {
+    if (PyValue_IsInline(owner_st)) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *owner = PyStackRef_AsPyObjectBorrow(owner_st);
+    PyObject *owner = PyValue_AsPyObjectBorrow(owner_st);
     PyTypeObject *type = Py_TYPE(owner);
     bool fail;
     if (!_PyType_IsReady(type)) {
@@ -1287,18 +1275,18 @@ _Py_Specialize_LoadAttr(_PyStackRef owner_st, _PyInstr *instr, PyObject *name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_StoreAttr(_PyStackRef owner_st, _PyInstr *instr, PyObject *name)
+_Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
     PyObject *descr = NULL;
     _PyFbAttr *fb = (_PyFbAttr *)fb_begin(instr);
-    if (PyStackRef_IsInline(owner_st)) {
+    if (PyValue_IsInline(owner_st)) {
         SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *owner = PyStackRef_AsPyObjectBorrow(owner_st);
+    PyObject *owner = PyValue_AsPyObjectBorrow(owner_st);
     PyTypeObject *type = Py_TYPE(owner);
     if (!_PyType_IsReady(type)) {
         // We *might* not really need this check, but we inherited it from
@@ -1770,11 +1758,11 @@ function_get_version(PyObject *o, int opcode)
 
 #ifdef Py_STATS
 static int
-store_subscr_fail_kind(PyObject *container, _PyStackRef sub)
+store_subscr_fail_kind(PyObject *container, PyValue sub)
 {
     PyTypeObject *container_type = Py_TYPE(container);
-    bool sub_is_int = PyStackRef_LongCheckExact(sub);
-    bool sub_is_slice = PyStackRef_TYPE(sub) == &PySlice_Type;
+    bool sub_is_int = PyValue_LongCheckExact(sub);
+    bool sub_is_slice = PyValue_TYPE(sub) == &PySlice_Type;
     PyMappingMethods *as_mapping = container_type->tp_as_mapping;
     if (as_mapping && (as_mapping->mp_ass_subscript
                        == PyDict_Type.tp_as_mapping->mp_ass_subscript)) {
@@ -1782,7 +1770,7 @@ store_subscr_fail_kind(PyObject *container, _PyStackRef sub)
     }
     if (PyObject_CheckBuffer(container)) {
         if (sub_is_int &&
-            !(PyStackRef_IsCompactInt(sub) && PyStackRef_CompactIntValue(sub) >= 0))
+            !(PyValue_IsCompactInt(sub) && PyValue_CompactIntValue(sub) >= 0))
         {
             return SPEC_FAIL_OUT_OF_RANGE;
         }
@@ -1838,22 +1826,22 @@ store_subscr_fail_kind(PyObject *container, _PyStackRef sub)
 #endif
 
 Py_NO_INLINE void
-_Py_Specialize_StoreSubscr(_PyStackRef container_st, _PyStackRef sub_st, _PyInstr *instr)
+_Py_Specialize_StoreSubscr(PyValue container_st, PyValue sub_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
-    fb_begin_binary(instr, PyStackRef_TYPE(container_st), PyStackRef_TYPE(sub_st));
-    if (PyStackRef_IsInline(container_st)) {
+    fb_begin_binary(instr, PyValue_TYPE(container_st), PyValue_TYPE(sub_st));
+    if (PyValue_IsInline(container_st)) {
         SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *container = PyStackRef_AsPyObjectBorrow(container_st);
+    PyObject *container = PyValue_AsPyObjectBorrow(container_st);
     PyTypeObject *container_type = Py_TYPE(container);
     if (container_type == &PyList_Type) {
-        if (PyStackRef_LongCheckExact(sub_st)) {
-            if (PyStackRef_IsCompactInt(sub_st)
-                && PyStackRef_CompactIntValue(sub_st) >= 0
-                && PyStackRef_CompactIntValue(sub_st) < PyList_GET_SIZE(container))
+        if (PyValue_LongCheckExact(sub_st)) {
+            if (PyValue_IsCompactInt(sub_st)
+                && PyValue_CompactIntValue(sub_st) >= 0
+                && PyValue_CompactIntValue(sub_st) < PyList_GET_SIZE(container))
             {
                 specialize(instr, STORE_SUBSCR_LIST_INT);
                 return;
@@ -1864,7 +1852,7 @@ _Py_Specialize_StoreSubscr(_PyStackRef container_st, _PyStackRef sub_st, _PyInst
                 return;
             }
         }
-        else if (PyStackRef_TYPE(sub_st) == &PySlice_Type) {
+        else if (PyValue_TYPE(sub_st) == &PySlice_Type) {
             SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_SUBSCR_LIST_SLICE);
             unspecialize(instr);
             return;
@@ -2129,18 +2117,18 @@ specialize_c_call(PyObject *callable, _PyInstr *instr, int nargs)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_Call(_PyStackRef callable_st, _PyStackRef self_or_null_st, _PyInstr *instr, int nargs)
+_Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *instr, int nargs)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL] == INLINE_CACHE_ENTRIES_CALL);
     assert(instr_opcode(instr) != INSTRUMENTED_CALL);
-    fb_begin_call(instr, PyStackRef_TYPE(callable_st));
-    if (PyStackRef_IsInline(callable_st)) {
+    fb_begin_call(instr, PyValue_TYPE(callable_st));
+    if (PyValue_IsInline(callable_st)) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *callable = PyStackRef_AsPyObjectBorrow(callable_st);
+    PyObject *callable = PyValue_AsPyObjectBorrow(callable_st);
     int fail;
     if (PyCFunction_CheckExact(callable)) {
         fail = specialize_c_call(callable, instr, nargs);
@@ -2152,7 +2140,7 @@ _Py_Specialize_Call(_PyStackRef callable_st, _PyStackRef self_or_null_st, _PyIns
         fail = specialize_class_call(callable, instr, nargs);
     }
     else if (Py_IS_TYPE(callable, &PyMethodDescr_Type)) {
-        PyObject *self_or_null = PyStackRef_AsPyObjectBorrow(self_or_null_st);
+        PyObject *self_or_null = PyValue_AsPyObjectBorrow(self_or_null_st);
         fail = specialize_method_descriptor((PyMethodDescrObject *)callable,
                                             self_or_null, instr, nargs);
     }
@@ -2190,18 +2178,18 @@ _Py_Specialize_Call(_PyStackRef callable_st, _PyStackRef self_or_null_st, _PyIns
 }
 
 Py_NO_INLINE void
-_Py_Specialize_CallKw(_PyStackRef callable_st, _PyInstr *instr, int nargs)
+_Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_KW] == INLINE_CACHE_ENTRIES_CALL_KW);
     assert(instr_opcode(instr) != INSTRUMENTED_CALL_KW);
-    fb_begin_call(instr, PyStackRef_TYPE(callable_st));
-    if (PyStackRef_IsInline(callable_st)) {
+    fb_begin_call(instr, PyValue_TYPE(callable_st));
+    if (PyValue_IsInline(callable_st)) {
         SPECIALIZATION_FAIL(CALL_KW, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *callable = PyStackRef_AsPyObjectBorrow(callable_st);
+    PyObject *callable = PyValue_AsPyObjectBorrow(callable_st);
     int fail;
     if (PyFunction_Check(callable)) {
         fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs, false);
@@ -2492,20 +2480,20 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
     return 0;
 }
 
-// lhs and rhs are the operands as objects; lhs_st and rhs_st as stackrefs,
+// lhs and rhs are the operands as objects; lhs_st and rhs_st as values,
 // which the int tests read, since an inline int need not be compact boxed.
 static void
 specialize_binary_op(PyObject *lhs, PyObject *rhs,
-                     _PyStackRef lhs_st, _PyStackRef rhs_st,
-                     _PyInstr *instr, int oparg, _PyStackRef *locals)
+                     PyValue lhs_st, PyValue rhs_st,
+                     _PyInstr *instr, int oparg, PyValue *locals)
 {
     _PyFbBinary *fb = fb_begin_binary(instr, Py_TYPE(lhs), Py_TYPE(rhs));
     fb->descr = NULL;
-    bool producers = inline_producers_allowed();
+    bool producers = true;
     bool compact_ints = producers &&
-        PyStackRef_IsCompactInt(lhs_st) && PyStackRef_IsCompactInt(rhs_st);
+        PyValue_IsCompactInt(lhs_st) && PyValue_IsCompactInt(rhs_st);
     // Two floats, or a float and a compact int.
-    bool floats = producers && PyStackRef_FloatOperandsCheck(lhs_st, rhs_st);
+    bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
         case NB_ADD:
@@ -2527,8 +2515,8 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 int local = _PyCode_InstrStoredLocal(
                     _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
                 bool to_store = local >= 0;
-                if (to_store && PyStackRef_IsObject(locals[local]) &&
-                    PyStackRef_AsPyObjectBorrow(locals[local]) == lhs)
+                if (to_store && PyValue_IsObject(locals[local]) &&
+                    PyValue_AsPyObjectBorrow(locals[local]) == lhs)
                 {
                     specialize(instr, BINARY_OP_INPLACE_ADD_UNICODE);
                     return;
@@ -2561,21 +2549,21 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_TRUE_DIVIDE:
         case NB_INPLACE_TRUE_DIVIDE:
-            if (floats && PyStackRef_NumberAsDouble(rhs_st) != 0.0) {
+            if (floats && PyValue_NumberAsDouble(rhs_st) != 0.0) {
                 specialize(instr, BINARY_OP_TRUEDIV_FLOAT);
                 return;
             }
             break;
         case NB_FLOOR_DIVIDE:
         case NB_INPLACE_FLOOR_DIVIDE:
-            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) != 0) {
+            if (compact_ints && PyValue_CompactIntValue(rhs_st) != 0) {
                 specialize(instr, BINARY_OP_FLOOR_DIVIDE_INT);
                 return;
             }
             break;
         case NB_REMAINDER:
         case NB_INPLACE_REMAINDER:
-            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) != 0) {
+            if (compact_ints && PyValue_CompactIntValue(rhs_st) != 0) {
                 specialize(instr, BINARY_OP_REMAINDER_INT);
                 return;
             }
@@ -2603,20 +2591,20 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_LSHIFT:
         case NB_INPLACE_LSHIFT:
-            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) >= 0) {
+            if (compact_ints && PyValue_CompactIntValue(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_LSHIFT_INT);
                 return;
             }
             break;
         case NB_RSHIFT:
         case NB_INPLACE_RSHIFT:
-            if (compact_ints && PyStackRef_CompactIntValue(rhs_st) >= 0) {
+            if (compact_ints && PyValue_CompactIntValue(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_RSHIFT_INT);
                 return;
             }
             break;
         case NB_SUBSCR:
-            if (PyStackRef_IsCompactInt(rhs_st) && PyStackRef_CompactIntValue(rhs_st) >= 0) {
+            if (PyValue_IsCompactInt(rhs_st) && PyValue_CompactIntValue(rhs_st) >= 0) {
                 if (PyList_CheckExact(lhs)) {
                     specialize(instr, BINARY_OP_SUBSCR_LIST_INT);
                     return;
@@ -2681,15 +2669,15 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
 }
 
 Py_NO_INLINE void
-_Py_Specialize_BinaryOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _PyInstr *instr,
-                        int oparg, _PyStackRef *locals)
+_Py_Specialize_BinaryOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
+                        int oparg, PyValue *locals)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
     // The boxes are temporary: BINARY_OP_EXTEND, for one, boxes inline
     // operands each time it runs.
-    PyObject *lhs = PyStackRef_AsPyObjectNewBoxed(lhs_st);
-    PyObject *rhs = PyStackRef_AsPyObjectNewBoxed(rhs_st);
+    PyObject *lhs = PyValue_AsPyObjectNewBoxed(lhs_st);
+    PyObject *rhs = PyValue_AsPyObjectNewBoxed(rhs_st);
     if (lhs == NULL || rhs == NULL) {
         PyErr_Clear();
         unspecialize(instr);
@@ -2738,11 +2726,11 @@ compare_op_fail_kind(PyTypeObject *lhs, PyTypeObject *rhs)
 #endif   // Py_STATS
 
 Py_NO_INLINE void
-_Py_Specialize_CompareOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _PyInstr *instr,
+_Py_Specialize_CompareOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
                          int oparg)
 {
-    PyTypeObject *lhs_type = PyStackRef_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyStackRef_TYPE(rhs_st);
+    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
+    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
     uint8_t specialized_op;
 
     assert(ENABLE_SPECIALIZATION);
@@ -2759,7 +2747,7 @@ _Py_Specialize_CompareOp(_PyStackRef lhs_st, _PyStackRef rhs_st, _PyInstr *instr
         goto success;
     }
     if (lhs_type == &PyLong_Type) {
-        if (PyStackRef_IsCompactInt(lhs_st) && PyStackRef_IsCompactInt(rhs_st)) {
+        if (PyValue_IsCompactInt(lhs_st) && PyValue_IsCompactInt(rhs_st)) {
             specialized_op = COMPARE_OP_INT;
             goto success;
         }
@@ -2802,18 +2790,18 @@ unpack_sequence_fail_kind(PyObject *seq)
 #endif   // Py_STATS
 
 Py_NO_INLINE void
-_Py_Specialize_UnpackSequence(_PyStackRef seq_st, _PyInstr *instr, int oparg)
+_Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[UNPACK_SEQUENCE] ==
            INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE);
-    fb_begin_unary(instr, PyStackRef_TYPE(seq_st));
-    if (PyStackRef_IsInline(seq_st)) {
+    fb_begin_unary(instr, PyValue_TYPE(seq_st));
+    if (PyValue_IsInline(seq_st)) {
         SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *seq = PyStackRef_AsPyObjectBorrow(seq_st);
+    PyObject *seq = PyValue_AsPyObjectBorrow(seq_st);
     if (PyTuple_CheckExact(seq)) {
         if (PyTuple_GET_SIZE(seq) != oparg) {
             SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
@@ -2914,16 +2902,16 @@ int
 #endif   // Py_STATS
 
 Py_NO_INLINE void
-_Py_Specialize_ForIter(_PyStackRef iter, _PyStackRef null_or_index, _PyInstr *instr, int oparg)
+_Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[FOR_ITER] == INLINE_CACHE_ENTRIES_FOR_ITER);
-    PyObject *iter_o = PyStackRef_AsPyObjectBorrow(iter);
+    PyObject *iter_o = PyValue_AsPyObjectBorrow(iter);
     PyTypeObject *tp = Py_TYPE(iter_o);
     fb_begin_unary(instr, tp);
 
-    if (PyStackRef_IsNull(null_or_index)) {
-        if (tp == &PyRangeIter_Type && inline_producers_allowed()) {
+    if (PyValue_IsNull(null_or_index)) {
+        if (tp == &PyRangeIter_Type && true) {
 #ifdef Py_GIL_DISABLED
             // Only specialize for uniquely referenced iterators, so that we know
             // they're only referenced by this one thread. This is more limiting
@@ -2978,9 +2966,9 @@ failure:
 }
 
 Py_NO_INLINE void
-_Py_Specialize_Send(_PyStackRef receiver_st, _PyInstr *instr)
+_Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
 {
-    PyObject *receiver = PyStackRef_AsPyObjectBorrow(receiver_st);
+    PyObject *receiver = PyValue_AsPyObjectBorrow(receiver_st);
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[SEND] == INLINE_CACHE_ENTRIES_SEND);
@@ -3010,17 +2998,17 @@ failure:
 }
 
 Py_NO_INLINE void
-_Py_Specialize_CallFunctionEx(_PyStackRef func_st, _PyInstr *instr)
+_Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_FUNCTION_EX] == INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX);
-    fb_begin_call(instr, PyStackRef_TYPE(func_st));
-    if (PyStackRef_IsInline(func_st)) {
+    fb_begin_call(instr, PyValue_TYPE(func_st));
+    if (PyValue_IsInline(func_st)) {
         SPECIALIZATION_FAIL(CALL_FUNCTION_EX, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *func = PyStackRef_AsPyObjectBorrow(func_st);
+    PyObject *func = PyValue_AsPyObjectBorrow(func_st);
 
     if (Py_TYPE(func) == &PyFunction_Type &&
         ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
@@ -3090,21 +3078,21 @@ enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
 /* TO_BOOL and the conditional jumps, which test the truth of a value the
  * same way, choose a specialisation from their own row of ops. */
 static void
-specialize_truth(_PyStackRef value_o, _PyInstr *instr, const uint8_t *ops)
+specialize_truth(PyValue value_o, _PyInstr *instr, const uint8_t *ops)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
-    fb_begin_unary(instr, PyStackRef_TYPE(value_o));
-    if (PyStackRef_IsInlineInt(value_o)) {
+    fb_begin_unary(instr, PyValue_TYPE(value_o));
+    if (PyValue_IsInlineInt(value_o)) {
         specialize(instr, ops[TRUTH_INT]);
         return;
     }
-    if (PyStackRef_IsInlineFloat(value_o)) {
+    if (PyValue_IsInlineFloat(value_o)) {
         SPECIALIZATION_FAIL(TO_BOOL, SPEC_FAIL_TO_BOOL_FLOAT);
         unspecialize(instr);
         return;
     }
-    PyObject *value = PyStackRef_AsPyObjectBorrow(value_o);
+    PyObject *value = PyValue_AsPyObjectBorrow(value_o);
     uint8_t specialized_op;
     if (PyBool_Check(value)) {
         specialized_op = ops[TRUTH_BOOL];
@@ -3154,7 +3142,7 @@ success:
 }
 
 Py_NO_INLINE void
-_Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
+_Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 {
     static const uint8_t ops[TRUTH_COUNT] = {
         TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
@@ -3164,7 +3152,7 @@ _Py_Specialize_ToBool(_PyStackRef value_o, _PyInstr *instr)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_PopJumpIf(_PyStackRef value_o, _PyInstr *instr)
+_Py_Specialize_PopJumpIf(PyValue value_o, _PyInstr *instr)
 {
     static const uint8_t if_false[TRUTH_COUNT] = {
         POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
@@ -3202,17 +3190,17 @@ containsop_fail_kind(PyObject *value) {
 #endif
 
 Py_NO_INLINE void
-_Py_Specialize_ContainsOp(_PyStackRef item_st, _PyStackRef value_st, _PyInstr *instr)
+_Py_Specialize_ContainsOp(PyValue item_st, PyValue value_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CONTAINS_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);
-    fb_begin_binary(instr, PyStackRef_TYPE(item_st), PyStackRef_TYPE(value_st));
-    if (PyStackRef_IsInline(value_st)) {
+    fb_begin_binary(instr, PyValue_TYPE(item_st), PyValue_TYPE(value_st));
+    if (PyValue_IsInline(value_st)) {
         SPECIALIZATION_FAIL(CONTAINS_OP, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *value = PyStackRef_AsPyObjectBorrow(value_st);
+    PyObject *value = PyValue_AsPyObjectBorrow(value_st);
     if (PyAnyDict_CheckExact(value)) {
         specialize(instr, CONTAINS_OP_DICT);
         return;
@@ -3228,10 +3216,10 @@ _Py_Specialize_ContainsOp(_PyStackRef item_st, _PyStackRef value_st, _PyInstr *i
 }
 
 void
-_Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr)
+_Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
-    PyTypeObject *tp = PyStackRef_TYPE(iterable);
+    PyTypeObject *tp = PyValue_TYPE(iterable);
     fb_begin_unary(instr, tp);
     if (tp->_tp_iteritem != NULL) {
         specialize(instr, GET_ITER_VIRTUAL);
@@ -3249,9 +3237,9 @@ _Py_Specialize_GetIter(_PyStackRef iterable, _PyInstr *instr)
 
 #ifdef Py_STATS
 void
-_Py_GatherStats_GetIter(_PyStackRef iterable)
+_Py_GatherStats_GetIter(PyValue iterable)
 {
-    PyTypeObject *tp = PyStackRef_TYPE(iterable);
+    PyTypeObject *tp = PyValue_TYPE(iterable);
     int kind = SPEC_FAIL_OTHER;
     if (tp == &PyTuple_Type) {
         kind = SPEC_FAIL_ITER_TUPLE;

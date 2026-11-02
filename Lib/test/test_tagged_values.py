@@ -11,9 +11,9 @@ import unittest
 from test.support import import_helper, requires_refcounting, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-roundtrip = getattr(_testinternalcapi, "stackref_box_roundtrip", None)
+roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
 inline_locals = getattr(_testinternalcapi, "inline_locals", None)
-# Absent from builds without inline values, false under PYTHON_TAGGED_VALUES=0.
+# Canonical inline values are mandatory in the supported private runtime.
 TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)
 THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
 
@@ -880,38 +880,6 @@ class InlineCallTest(unittest.TestCase):
             f(make_inline(1), (str, 5))
         self.assertTrue(f(make_inline(1), (int, 5)))
 
-
-
-@unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
-class SwitchTest(unittest.TestCase):
-
-    def test_tagged_values_off(self):
-        code = """if 1:
-            import dis, sys, _testinternalcapi
-            assert not _testinternalcapi.TAGGED_VALUES
-            def f(n):
-                total = 0
-                for i in range(n):
-                    total += i * 3
-                return total
-            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                assert f(10) == 135
-            names = {i.opname for i in dis.get_instructions(f, adaptive=True)}
-            assert "LOAD_SMALL_INT" in names, names
-            assert "LOAD_SMALL_INT_INLINE" not in names, names
-            assert "FOR_ITER_RANGE" not in names, names
-            assert 70000 is int("70000")
-            def g(a, b):
-                return 1.5 * a + b, a // 2, a / b
-            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                assert g(2.0, 1) == (4.0, 1.0, 2.0)
-            names = {i.opname for i in dis.get_instructions(g, adaptive=True)}
-            assert "LOAD_CONST" in names, names
-            assert "LOAD_CONST_INLINE_FLOAT" not in names, names
-            assert not any(n.startswith("BINARY_OP_") for n in names), names
-            assert _testinternalcapi.inline_locals(sys._getframe()) == set()
-        """
-        script_helper.assert_python_ok("-c", code, PYTHON_TAGGED_VALUES="0")
 
 
 if __name__ == "__main__":

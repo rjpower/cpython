@@ -254,7 +254,7 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
     assert(frame->owner == FRAME_OWNED_BY_FRAME_OBJECT ||
            frame->owner == FRAME_OWNED_BY_GENERATOR);
 
-    frame->f_executable = PyStackRef_AsStrongReference(frame->f_executable);
+    frame->f_executable = PyValue_AsStrongReference(frame->f_executable);
 
     if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
         PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -265,11 +265,11 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
         }
     }
 
-    frame->f_funcobj = PyStackRef_AsStrongReference(frame->f_funcobj);
-    _PyStackRef *end = frame->base + _PyFrame_NumSlots(frame);
-    for (_PyStackRef *ref = frame->base; ref < end; ref++) {
-        if (PyStackRef_IsObject(*ref) && !PyStackRef_RefcountOnObject(*ref)) {
-            *ref = PyStackRef_AsStrongReference(*ref);
+    frame->f_funcobj = PyValue_AsStrongReference(frame->f_funcobj);
+    PyValue *end = frame->base + _PyFrame_NumSlots(frame);
+    for (PyValue *ref = frame->base; ref < end; ref++) {
+        if (PyValue_IsObject(*ref) && !PyValue_RefcountOnObject(*ref)) {
+            *ref = PyValue_AsStrongReference(*ref);
         }
     }
 }
@@ -435,10 +435,10 @@ gc_visit_heaps(PyInterpreterState *interp, mi_block_visit_fun *visitor,
 }
 
 static inline void
-gc_visit_stackref(_PyStackRef stackref)
+gc_visit_value(PyValue value)
 {
-    if (PyStackRef_IsObject(stackref) && !PyStackRef_RefcountOnObject(stackref)) {
-        PyObject *obj = PyStackRef_AsPyObjectBorrow(stackref);
+    if (PyValue_IsObject(value) && !PyValue_RefcountOnObject(value)) {
+        PyObject *obj = PyValue_AsPyObjectBorrow(value);
         if (_PyObject_GC_IS_TRACKED(obj) && !gc_is_frozen(obj)) {
             gc_add_refs(obj, 1);
         }
@@ -450,9 +450,9 @@ static void
 gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *state)
 {
     _Py_FOR_EACH_TSTATE_BEGIN(interp, p) {
-        _PyCStackRef *c_ref = ((_PyThreadStateImpl *)p)->c_stack_refs;
+        _PyCValue *c_ref = ((_PyThreadStateImpl *)p)->c_stack_refs;
         while (c_ref != NULL) {
-            gc_visit_stackref(c_ref->ref);
+            gc_visit_value(c_ref->ref);
             c_ref = c_ref->next;
         }
 
@@ -461,11 +461,11 @@ gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *stat
                 continue;
             }
 
-            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
-            gc_visit_stackref(f->f_executable);
+            PyValue *top = f->base + _PyFrame_NumSlots(f);
+            gc_visit_value(f->f_executable);
             while (top != f->base) {
                 --top;
-                gc_visit_stackref(*top);
+                gc_visit_value(*top);
             }
         }
     }
@@ -829,10 +829,10 @@ gc_abort_mark_alive(PyInterpreterState *interp,
 
 #ifdef GC_MARK_ALIVE_STACKS
 static int
-gc_visit_stackref_mark_alive(gc_mark_args_t *args, _PyStackRef stackref)
+gc_visit_value_mark_alive(gc_mark_args_t *args, PyValue value)
 {
-    if (PyStackRef_IsObject(stackref)) {
-        PyObject *op = PyStackRef_AsPyObjectBorrow(stackref);
+    if (PyValue_IsObject(value)) {
+        PyObject *op = PyValue_AsPyObjectBorrow(value);
         if (gc_mark_enqueue(op, args) < 0) {
             return -1;
         }
@@ -850,14 +850,14 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
                 continue;
             }
 
-            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
-            if (gc_visit_stackref_mark_alive(args, f->f_executable) < 0) {
+            PyValue *top = f->base + _PyFrame_NumSlots(f);
+            if (gc_visit_value_mark_alive(args, f->f_executable) < 0) {
                 err = -1;
                 goto exit;
             }
             while (top != f->base) {
                 --top;
-                if (gc_visit_stackref_mark_alive(args, *top) < 0) {
+                if (gc_visit_value_mark_alive(args, *top) < 0) {
                     err = -1;
                     goto exit;
                 }
@@ -1811,16 +1811,16 @@ visit_decref_unreachable(PyObject *op, void *data)
 }
 
 int
-_PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
+_PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
 {
     // This is a bit tricky! We want to ignore deferred references when
     // computing the incoming references, but otherwise treat them like
     // regular references.
-    assert(PyStackRef_IsObject(*ref));
-    if (PyStackRef_RefcountOnObject(*ref) ||
+    assert(PyValue_IsObject(*ref));
+    if (PyValue_RefcountOnObject(*ref) ||
         (visit != visit_decref && visit != visit_decref_unreachable))
     {
-        Py_VISIT(PyStackRef_AsPyObjectBorrow(*ref));
+        Py_VISIT(PyValue_AsPyObjectBorrow(*ref));
     }
     return 0;
 }
@@ -1828,11 +1828,11 @@ _PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
+    PyValue *ref = _PyFrame_GetLocalsArray(frame);
+    PyValue *end = ref + _PyFrame_NumSlots(frame);
     /* all slots, of which NULL ones are dead */
     for (; ref < end; ref++) {
-        _Py_VISIT_STACKREF(*ref);
+        _Py_VISIT_VALUE(*ref);
     }
     return 0;
 }

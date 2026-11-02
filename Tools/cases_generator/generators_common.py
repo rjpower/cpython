@@ -58,9 +58,9 @@ def root_relative_path(filename: str) -> str:
 
 def type_and_null(var: StackItem) -> tuple[str, str]:
     if var.is_array():
-        return "_PyStackRef *", "NULL"
+        return "PyValue *", "NULL"
     else:
-        return "_PyStackRef", "PyStackRef_NULL"
+        return "PyValue", "PyValue_NULL"
 
 
 def write_header(
@@ -105,23 +105,23 @@ NON_ESCAPING_DEALLOCS = {
 }
 
 # Cheaper forms of these calls for a reference known to be in pointer space
-# (see Local.known_object and _PyStackRef_CLOSE_POINTER()).
+# (see Local.known_object and _PyValue_CLOSE_POINTER()).
 POINTER_VARIANTS = {
-    "PyStackRef_CLOSE": "_PyStackRef_CLOSE_POINTER",
-    "PyStackRef_XCLOSE": "_PyStackRef_XCLOSE_POINTER",
-    "PyStackRef_CLOSE_SPECIALIZED": "_PyStackRef_CLOSE_SPECIALIZED_POINTER",
-    "PyStackRef_DUP": "_PyStackRef_DUP_POINTER",
-    "PyStackRef_AsPyObjectSteal": "_PyStackRef_AsPyObjectStealPointer",
+    "PyValue_CLOSE": "_PyValue_CLOSE_POINTER",
+    "PyValue_XCLOSE": "_PyValue_XCLOSE_POINTER",
+    "PyValue_CLOSE_SPECIALIZED": "_PyValue_CLOSE_SPECIALIZED_POINTER",
+    "PyValue_DUP": "_PyValue_DUP_POINTER",
+    "PyValue_AsPyObjectSteal": "_PyValue_AsPyObjectStealPointer",
 }
 
 # Calls that always return a reference in pointer space.
 POINTER_CONSTRUCTORS = {
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_FromPyObjectImmortal",
-    "PyStackRef_FromPyObjectNew",
-    "PyStackRef_FromPyObjectNewMortal",
-    "PyStackRef_FromPyObjectSteal",
-    "PyStackRef_FromPyObjectStealMortal",
+    "PyValue_FromPyObjectBorrow",
+    "PyValue_FromPyObjectImmortal",
+    "PyValue_FromPyObjectNew",
+    "PyValue_FromPyObjectNewMortal",
+    "PyValue_FromPyObjectSteal",
+    "PyValue_FromPyObjectStealMortal",
 }
 
 
@@ -218,11 +218,11 @@ class Emitter:
             "SYNC_SP": self.sync_sp,
             "SAVE_STACK": self.save_stack,
             "RELOAD_STACK": self.reload_stack,
-            "PyStackRef_CLOSE_SPECIALIZED": self.stackref_close_specialized,
-            "PyStackRef_CLOSE": self.stackref_pointer_variant,
-            "PyStackRef_XCLOSE": self.stackref_pointer_variant,
-            "PyStackRef_DUP": self.stackref_pointer_variant,
-            "PyStackRef_AsPyObjectSteal": self.stackref_steal,
+            "PyValue_CLOSE_SPECIALIZED": self.value_close_specialized,
+            "PyValue_CLOSE": self.value_pointer_variant,
+            "PyValue_XCLOSE": self.value_pointer_variant,
+            "PyValue_DUP": self.value_pointer_variant,
+            "PyValue_AsPyObjectSteal": self.value_steal,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
@@ -323,21 +323,21 @@ class Emitter:
                 continue
             self.out.start_line()
             # Test the stack slot rather than the local where the slot holds
-            # the value, which is cheaper (see _PyStackRef_TopBitsAt()).
+            # the value, which is cheaper (see _PyValue_TopBitsAt()).
             ref = var.name
             at = ""
             if var.memory_offset is not None:
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
-                self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace{at}({ref}))) {{\n")
+                self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
                 self.emit_jump_to_predicted(inst)
             else:
-                self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline{at}({ref}))) {{\n")
-                self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
+                self.emit(f"{var.name} = PyValue_Box({var.name});\n")
                 # A failed box leaves the value inline. Every input is still
                 # live, so leave them all to exception_unwind, boxes included.
-                self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
                 for other in unsynced:
                     self.emit_store_input(other, storage)
                 storage.stack.copy().flush(self.out)
@@ -474,7 +474,7 @@ class Emitter:
             )
         return True
 
-    def stackref_kill(
+    def value_kill(
         self,
         name: Token,
         storage: Storage,
@@ -503,7 +503,7 @@ class Emitter:
         else:
             self.out.emit(func)
 
-    def stackref_pointer_variant(
+    def value_pointer_variant(
         self,
         tkn: Token,
         tkn_iter: TokenIterator,
@@ -519,7 +519,7 @@ class Emitter:
         self.out.emit(lparen)
         return True
 
-    def stackref_close_specialized(
+    def value_close_specialized(
         self,
         tkn: Token,
         tkn_iter: TokenIterator,
@@ -544,12 +544,12 @@ class Emitter:
         self.out.emit(dealloc)
         if name.kind == "IDENTIFIER":
             escapes = dealloc.text not in NON_ESCAPING_DEALLOCS
-            return self.stackref_kill(name, storage, escapes)
+            return self.value_kill(name, storage, escapes)
         rparen = emit_to(self.out, tkn_iter, "RPAREN")
         self.emit(rparen)
         return True
 
-    def stackref_steal(
+    def value_steal(
         self,
         tkn: Token,
         tkn_iter: TokenIterator,
@@ -564,7 +564,7 @@ class Emitter:
         self.out.emit(lparen)
         self.out.emit(name)
         if name.kind == "IDENTIFIER":
-            return self.stackref_kill(name, storage, False)
+            return self.value_kill(name, storage, False)
         rparen = emit_to(self.out, tkn_iter, "RPAREN")
         self.emit(rparen)
         return True
@@ -755,7 +755,7 @@ class Emitter:
                     killed = find_local(escape.kills.text, storage)
                     if killed is not None and killed.known_object:
                         self.killed_pointer = killed.name
-                    self.stackref_kill(escape.kills, storage, True)
+                    self.value_kill(escape.kills, storage, True)
                 self.emit_save(storage)
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:

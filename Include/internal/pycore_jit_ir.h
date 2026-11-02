@@ -81,7 +81,7 @@ extern void _PyJit_OptimizeGraph(_PyJitGraph *);
 extern int _PyJit_AllocateGraph(_PyJitGraph *);
 extern void _PyJit_FreeGraph(_PyJitGraph *);
 extern int _PyJit_LowerGraph(_PyJitCodeUnit *);
-extern int _PyJit_ReadInt32(_PyStackRef, int32_t *);
+extern int _PyJit_ReadInt32(PyValue, int32_t *);
 extern _PyJitAction _PyJit_TraceImport(_PyJitContext *, const JitSsaNode *);
 extern _PyJitAction _PyJit_TracePublish(_PyJitContext *, const JitFrameState *);
 extern _PyJitAction _PyJit_TraceCommit(_PyJitContext *, const JitSsaNode *);

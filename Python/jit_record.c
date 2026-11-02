@@ -14,18 +14,18 @@ restore_error(PyObject *saved)
 }
 
 int
-_PyJit_ReadInt32(_PyStackRef ref, int32_t *value)
+_PyJit_ReadInt32(PyValue ref, int32_t *value)
 {
-#if Py_STACKREF_INLINE_VALUES
-    if (PyStackRef_IsInlineInt(ref)) {
-        *value = PyStackRef_InlineInt(ref);
+#if Py_VALUE_INLINE_VALUES
+    if (PyValue_IsInlineInt(ref)) {
+        *value = PyValue_InlineInt(ref);
         return 1;
     }
-    if (PyStackRef_IsNull(ref) || PyStackRef_IsInline(ref)) return 0;
+    if (PyValue_IsNull(ref) || PyValue_IsInline(ref)) return 0;
 #endif
-    if (PyStackRef_IsNull(ref)) return 0;
-    if (!PyStackRef_IsPointerSpace(ref)) return 0;
-    PyObject *object = PyStackRef_AsPyObjectBorrow(ref);
+    if (PyValue_IsNull(ref)) return 0;
+    if (!PyValue_IsPointerSpace(ref)) return 0;
+    PyObject *object = PyValue_AsPyObjectBorrow(ref);
     if (!PyLong_CheckExact(object)) return 0;
     /* Exact PyLong conversion cannot call __index__; overflow is a guard,
      * not an exception or a request to allocate a boxed replacement. */
@@ -39,12 +39,12 @@ _PyJit_ReadInt32(_PyStackRef ref, int32_t *value)
 static void
 observe(_PyInterpreterFrame *frame, JitHome *homes, int count)
 {
-    _PyStackRef *slots = _PyFrame_Slots(frame);
+    PyValue *slots = _PyFrame_Slots(frame);
     for (int i = 0; i < count; i++) {
         homes[i] = (JitHome){0, JIT_HOME_OPAQUE};
-        if (PyStackRef_IsNull(slots[i])) homes[i].kind = JIT_HOME_NULL;
+        if (PyValue_IsNull(slots[i])) homes[i].kind = JIT_HOME_NULL;
         else if (_PyJit_ReadInt32(slots[i], &homes[i].value)) {
-            homes[i].kind = PyStackRef_IsInlineInt(slots[i]) ? JIT_HOME_INLINE : JIT_HOME_BOXED;
+            homes[i].kind = PyValue_IsInlineInt(slots[i]) ? JIT_HOME_INLINE : JIT_HOME_BOXED;
         }
     }
 }
@@ -52,7 +52,7 @@ observe(_PyInterpreterFrame *frame, JitHome *homes, int count)
 PyObject *
 _PyJit_TestRecordIndex(void)
 {
-    _PyStackRef index = PyStackRef_TagIndex(17);
+    PyValue index = PyValue_TagIndex(17);
     _PyInterpreterFrame frame = {.base = &index};
     JitHome observation;
     int32_t scalar = 0;
@@ -316,9 +316,9 @@ _PyJitAction
 _PyJit_TraceImport(_PyJitContext *ctx, const JitSsaNode *node)
 {
     int32_t scalar;
-    _PyStackRef slot = _PyFrame_Slots(ctx->frame)[node->home];
+    PyValue slot = _PyFrame_Slots(ctx->frame)[node->home];
     if (!_PyJit_ReadInt32(slot, &scalar) ||
-        (node->home >= ctx->unit->graph->nlocals && !PyStackRef_IsInlineInt(slot))) {
+        (node->home >= ctx->unit->graph->nlocals && !PyValue_IsInlineInt(slot))) {
         return _PyJit_TraceFallback(ctx, node->word);
     }
     ctx->scratch[ctx->unit->graph->values[node->value].spill] = scalar;
@@ -329,13 +329,13 @@ _PyJitAction
 _PyJit_TracePublish(_PyJitContext *ctx, const JitFrameState *state)
 {
     _PyJitGraph *g = ctx->unit->graph;
-    _PyStackRef *slots = _PyFrame_Slots(ctx->frame);
+    PyValue *slots = _PyFrame_Slots(ctx->frame);
     /* Check the whole plan before any write. Original imported homes keep
      * their exact boxed identity; only virtual inline/NULL homes are installed. */
     for (int h = 0; h < g->nhomes; h++) {
         uint16_t id = state->value[h];
         if (id == JIT_NO_VALUE || (id < g->nvalues && g->values[id].import_home == h)) continue;
-        if (!PyStackRef_IsNull(slots[h]) && !PyStackRef_IsInline(slots[h])) {
+        if (!PyValue_IsNull(slots[h]) && !PyValue_IsInline(slots[h])) {
             PyErr_SetString(PyExc_SystemError, "JIT recovery attempted to discard an owner");
             ctx->raising_instr = ctx->frame->ir_words + state->word;
             ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -345,7 +345,7 @@ _PyJit_TracePublish(_PyJitContext *ctx, const JitFrameState *state)
     for (int h = 0; h < g->nhomes; h++) {
         uint16_t id = state->value[h];
         if (id == JIT_NO_VALUE || (id < g->nvalues && g->values[id].import_home == h)) continue;
-        slots[h] = id == JIT_NULL_VALUE ? PyStackRef_NULL : PyStackRef_FromInt32((int32_t)ctx->scratch[g->values[id].spill]);
+        slots[h] = id == JIT_NULL_VALUE ? PyValue_NULL : PyValue_FromInt32((int32_t)ctx->scratch[g->values[id].spill]);
     }
     ctx->next_instr = ctx->frame->ir_words + state->word;
     ctx->frame->instr_ptr = ctx->next_instr;
@@ -358,14 +358,14 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
     _PyJitGraph *g = ctx->unit->graph;
     _PyJitAction action = _PyJit_TracePublish(ctx, &g->states[node->before]);
     if (action != _PyJIT_CONTINUE) return action;
-    _PyStackRef *slots = _PyFrame_Slots(ctx->frame);
-    for (int k = 0; k < 2; k++) if (node->clears & (1u << k)) slots[node->input_home[k]] = PyStackRef_NULL;
-    _PyStackRef old = slots[node->home];
-    int reentrant = !PyStackRef_IsNull(old) && !PyStackRef_IsInline(old);
-    slots[node->home] = PyStackRef_FromInt32((int32_t)ctx->scratch[g->values[node->value].spill]);
+    PyValue *slots = _PyFrame_Slots(ctx->frame);
+    for (int k = 0; k < 2; k++) if (node->clears & (1u << k)) slots[node->input_home[k]] = PyValue_NULL;
+    PyValue old = slots[node->home];
+    int reentrant = !PyValue_IsNull(old) && !PyValue_IsInline(old);
+    slots[node->home] = PyValue_FromInt32((int32_t)ctx->scratch[g->values[node->value].spill]);
     /* Same order as IR_STORE_DST. Release may reenter or invalidate code;
      * the new local is visible and all other live values are canonical. */
-    PyStackRef_XCLOSE(old);
+    PyValue_XCLOSE(old);
     ctx->next_instr = (_PyIRWord *)((uintptr_t)ctx->frame->ir_words + node->successor * sizeof(_PyIRWord));
     ctx->phase = _PyJIT_AFTER;
     action = _PyJit_AfterHelper(ctx, _PyJIT_CONTINUE, &ctx->unit->ops[node->word]);
@@ -380,9 +380,9 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
             uint16_t id = after->value[h];
             int32_t actual;
             if (id == JIT_NO_VALUE) continue;
-            if ((id == JIT_NULL_VALUE && PyStackRef_IsNull(slots[h])) ||
+            if ((id == JIT_NULL_VALUE && PyValue_IsNull(slots[h])) ||
                 (id < g->nvalues &&
-                 (g->values[id].import_home == h || PyStackRef_IsInlineInt(slots[h])) &&
+                 (g->values[id].import_home == h || PyValue_IsInlineInt(slots[h])) &&
                  _PyJit_ReadInt32(slots[h], &actual) &&
                  actual == (int32_t)ctx->scratch[g->values[id].spill])) continue;
             action = _PyJit_TraceFallback(ctx, node->successor);

@@ -16,6 +16,8 @@ typedef struct PyGetSetDef PyGetSetDef;
 typedef struct PyMemberDef PyMemberDef;
 typedef struct PySlot PySlot;
 
+typedef struct { uintptr_t bits; } PyValue;
+
 typedef struct _object PyObject;
 typedef struct _longobject PyLongObject;
 typedef struct _typeobject PyTypeObject;

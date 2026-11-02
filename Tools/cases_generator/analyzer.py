@@ -544,43 +544,49 @@ NON_ESCAPING_FUNCTIONS = (
     "PyFunction_GET_CODE",
     "PyFunction_GET_GLOBALS",
     "PyList_GET_ITEM",
+    "PyList_GET_VALUE",
     "PyList_GET_SIZE",
     "PyList_SET_ITEM",
     "PyLong_AsLong",
     "PyLong_FromLong",
     "PyLong_FromSsize_t",
     "PySlice_New",
-    "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_FromPyObjectNewMortal",
-    "PyStackRef_AsPyObjectSteal",
-    "PyStackRef_Borrow",
-    "PyStackRef_BorrowAt",
-    "PyStackRef_CLEAR",
-    "PyStackRef_CLOSE_SPECIALIZED",
-    "PyStackRef_DUP",
-    "PyStackRef_DupImmortal",
-    "PyStackRef_False",
-    "PyStackRef_FromPyObjectBorrow",
-    "PyStackRef_FromPyObjectNew",
-    "PyStackRef_FromPyObjectSteal",
-    "PyStackRef_IsExactly",
-    "PyStackRef_FromPyObjectStealMortal",
-    "PyStackRef_IsNone",
-    "PyStackRef_Is",
-    "PyStackRef_IsHeapSafe",
-    "PyStackRef_IsTrue",
-    "PyStackRef_IsFalse",
-    "PyStackRef_IsNull",
-    "PyStackRef_MakeHeapSafe",
-    "PyStackRef_None",
-    "PyStackRef_RefcountOnObject",
-    "PyStackRef_TYPE",
-    "PyStackRef_True",
+    "PyValue_AsPyObjectBorrow",
+    "PyValue_AsPyObjectNew",
+    "PyValue_FromPyObjectNewMortal",
+    "PyValue_AsPyObjectSteal",
+    "PyValue_Borrow",
+    "PyValue_BorrowAt",
+    "PyValue_CLEAR",
+    "PyValue_CLOSE_SPECIALIZED",
+    "PyValue_DUP",
+    "PyValue_NewRef",
+    "PyValue_FromObjectBorrow",
+    "PyValue_DupImmortal",
+    "PyValue_False",
+    "PyValue_FromPyObjectBorrow",
+    "PyValue_FromPyObjectNew",
+    "PyValue_FromPyObjectSteal",
+    "PyValue_IsExactly",
+    "PyValue_FromPyObjectStealMortal",
+    "PyValue_IsNone",
+    "PyValue_Is",
+    "PyValue_IsHeapSafe",
+    "PyValue_IsTrue",
+    "PyValue_IsFalse",
+    "PyValue_IsNull",
+    "PyValue_MakeHeapSafe",
+    "PyValue_None",
+    "PyValue_RefcountOnObject",
+    "PyValue_TYPE",
+    "PyValue_True",
     "PyBytes_GET_SIZE",
     "PyDict_GET_SIZE",
     "PySet_GET_SIZE",
     "PyTuple_GET_ITEM",
+    "PyTuple_GET_VALUE",
+    "_PyTuple_GET_OBJECT",
+    "_PyCell_GetValue",
     "PyTuple_GET_SIZE",
     "PyType_HasFeature",
     "PyUnicode_Concat",
@@ -639,7 +645,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyObject_Shape",
     "_PyObject_ManagedDictPointer",
     "_PyThreadState_HasStackSpace",
-    "_PyTuple_FromStackRefStealOnSuccess",
+    "_PyTuple_FromValueStealOnSuccess",
     "_PyTuple_ITEMS",
     "_PyType_HasFeature",
     "_PyType_NewManagedObject",
@@ -655,7 +661,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_Py_SINGLETON",
     "_Py_STR",
     "_Py_TryIncrefCompare",
-    "_Py_TryIncrefCompareStackRef",
+    "_Py_TryIncrefCompareValue",
     "_Py_atomic_compare_exchange_uint8",
     "_Py_atomic_load_ptr_acquire",
     "_Py_atomic_load_uintptr_relaxed",
@@ -666,46 +672,46 @@ NON_ESCAPING_FUNCTIONS = (
     "JUMP_TO_LABEL",
     "restart_backoff_counter",
     "_Py_ReachedRecursionLimit",
-    "PyStackRef_IsTaggedIndex",
-    "PyStackRef_TagIndex",
-    "PyStackRef_UntagIndex",
-    "PyStackRef_IncrementTaggedIndexNoOverflow",
-    "PyStackRef_IsObject",
-    "PyStackRef_IsPointerSpace",
-    "PyStackRef_IsPointerSpaceAt",
-    "PyStackRef_IsInlineAt",
-    "PyStackRef_IsInline",
-    "PyStackRef_IsInlineInt",
-    "PyStackRef_IsInlineFloat",
-    "PyStackRef_BothInlineInt",
-    "PyStackRef_FromInt32",
-    "PyStackRef_InlineInt",
-    "PyStackRef_IsCompactInt",
-    "PyStackRef_CompactIntValue",
-    "PyStackRef_LongCheckExact",
-    "_PyStackRef_BoxInt64",
-    "_PyStackRef_BoxArray",
-    "PyStackRef_FromDoubleNotNaN",
-    "PyStackRef_InlineFloat",
-    "PyStackRef_FloatCheckExact",
-    "PyStackRef_FloatValue",
-    "PyStackRef_FloatOperandsCheck",
-    "PyStackRef_NumberAsDouble",
-    "PyStackRef_FloatOperandValues",
-    # Allocate an int or float; see PyStackRef_Box below.
-    "PyStackRef_FromDouble",
-    "_PyStackRef_LshiftInt32",
+    "PyValue_IsTaggedIndex",
+    "PyValue_TagIndex",
+    "PyValue_UntagIndex",
+    "PyValue_IncrementTaggedIndexNoOverflow",
+    "PyValue_IsObject",
+    "PyValue_IsPointerSpace",
+    "PyValue_IsPointerSpaceAt",
+    "PyValue_IsInlineAt",
+    "PyValue_IsInline",
+    "PyValue_IsInlineInt",
+    "PyValue_IsInlineFloat",
+    "PyValue_BothInlineInt",
+    "PyValue_FromInt32",
+    "PyValue_InlineInt",
+    "PyValue_IsCompactInt",
+    "PyValue_CompactIntValue",
+    "PyValue_LongCheckExact",
+    "_PyValue_BoxInt64",
+    "_PyValue_BoxArray",
+    "PyValue_FromDoubleNotNaN",
+    "PyValue_InlineFloat",
+    "PyValue_FloatCheckExact",
+    "PyValue_FloatValue",
+    "PyValue_FloatOperandsCheck",
+    "PyValue_NumberAsDouble",
+    "PyValue_FloatOperandValues",
+    # Allocate an int or float; see PyValue_Box below.
+    "PyValue_FromDouble",
+    "_PyValue_LshiftInt32",
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
-    "PyStackRef_Box",
-    "PyStackRef_IsError",
-    "PyStackRef_IsValid",
-    "PyStackRef_Wrap",
-    "PyStackRef_Unwrap",
+    "PyValue_Box",
+    "PyValue_IsError",
+    "PyValue_IsValid",
+    "PyValue_Wrap",
+    "PyValue_Unwrap",
     "_PyLong_CheckExactAndCompact",
     "_Py_unset_eval_breaker_bit",
     "_Py_set_eval_breaker_bit",
-    "_PyThreadState_PopCStackRefSteal",
+    "_PyThreadState_PopCValueSteal",
     "doesnt_escape",
     "_Py_GatherStats_GetIter",
     "_PyStolenTuple_Free",
@@ -775,7 +781,7 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
                 continue
         elif tkn.kind != "RBRACKET":
             continue
-        if tkn.text in ("PyStackRef_CLOSE", "PyStackRef_XCLOSE"):
+        if tkn.text in ("PyValue_CLOSE", "PyValue_XCLOSE"):
             if len(tokens) <= idx+2:
                 raise analysis_error("Unexpected end of file", next_tkn)
             kills = tokens[idx+2]
@@ -935,7 +941,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         or variable_used(op, "PyCell_GetRef")
         or variable_used(op, "PyCell_SetTakeRef")
         or variable_used(op, "PyCell_SwapTakeRef")
-        or variable_used(op, "_PyCell_GetStackRef")
+        or variable_used(op, "_PyCell_GetValue")
     )
     deopts_if = variable_used(op, "DEOPT_IF")
     exits_if = variable_used(op, "EXIT_IF")
@@ -988,10 +994,10 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         returns=returns,
     )
 
-STACKREF_TO_OBJECT = (
-    "PyStackRef_AsPyObjectBorrow",
-    "PyStackRef_AsPyObjectNew",
-    "PyStackRef_AsPyObjectSteal",
+VALUE_TO_OBJECT = (
+    "PyValue_AsPyObjectBorrow",
+    "PyValue_AsPyObjectNew",
+    "PyValue_AsPyObjectSteal",
 )
 
 
@@ -1006,7 +1012,7 @@ def find_object_inputs(
     builds. Arrays are left to the C helpers that convert their elements.
 
     An input that op asserts to be an object, with
-    `assert(PyStackRef_IsObject(name))`, can never hold an inline value by
+    `assert(PyValue_IsObject(name))`, can never hold an inline value by
     construction of the bytecode, so it needs no test.
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
@@ -1029,10 +1035,10 @@ def find_object_inputs(
                         break
                 i += 1
             texts = [t.text for t in tokens[start:i + 1]]
-            if (len(texts) == 7 and texts[2] == "PyStackRef_IsObject"
+            if (len(texts) == 7 and texts[2] == "PyValue_IsObject"
                     and texts[4] in scalars):
                 asserted.append(texts[4])
-        elif tkn.text in STACKREF_TO_OBJECT and i + 3 < len(tokens):
+        elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
             arg, close = tokens[i + 2], tokens[i + 3]
             if arg.text in scalars and close.kind == lexer.RPAREN and arg.text not in found:
                 found.append(arg.text)

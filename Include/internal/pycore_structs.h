@@ -56,32 +56,17 @@ typedef struct {
 
 #include "pycore_context.h"       // _PyContextTokenMissing
 
-// Define this to get precise tracking of stackrefs.
-// #define Py_STACKREF_DEBUG 1
+// Define this to get precise tracking of values.
 
-// Define this to get precise tracking of closed stackrefs.
-// This will use unbounded memory, as it can only grow.
-// Use this to track double closes in short-lived programs
-// #define Py_STACKREF_CLOSE_DEBUG 1
-
-
-typedef union _PyStackRef {
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    uint64_t index;
-#else
-    uintptr_t bits;
-#endif
-} _PyStackRef;
-
-// A stackref that can be stored in a regular C local variable and be visible
+// A value that can be stored in a regular C local variable and be visible
 // to the GC in the free threading build.
-// Used in combination with _PyThreadState_PushCStackRef().
-typedef struct _PyCStackRef {
-    _PyStackRef ref;
+// Used in combination with _PyThreadState_PushCValue().
+typedef struct _PyCValue {
+    PyValue ref;
 #ifdef Py_GIL_DISABLED
-    struct _PyCStackRef *next;
+    struct _PyCValue *next;
 #endif
-} _PyCStackRef;
+} _PyCValue;
 
 
 #ifdef __cplusplus

@@ -163,7 +163,7 @@ struct _PyJitState {
 
 extern void _PyJit_SeedBackedges(PyCodeObject *, _PyCodeExec *);
 extern int _PyJit_AutoEligible(PyObject *);
-extern int _PyJit_PrepareCall(_PyJitContext *, _PyIRWord *, _PyStackRef);
+extern int _PyJit_PrepareCall(_PyJitContext *, _PyIRWord *, PyValue);
 extern int _PyJit_WarmBackedge(PyThreadState *, _PyInterpreterFrame *);
 extern void _PyJit_PushPending(_PyJitContext *);
 extern int _PyJit_PopPending(_PyJitFlow *, _PyInterpreterFrame *, _PyIRWord *);

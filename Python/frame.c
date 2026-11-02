@@ -5,7 +5,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
-#include "pycore_stackref.h"      // _Py_VISIT_STACKREF()
+#include "pycore_value.h"      // _Py_VISIT_VALUE()
 
 
 int
@@ -13,8 +13,8 @@ _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     Py_VISIT(frame->frame_obj);
     Py_VISIT(frame->f_locals);
-    _Py_VISIT_STACKREF(frame->f_funcobj);
-    _Py_VISIT_STACKREF(frame->f_executable);
+    _Py_VISIT_VALUE(frame->f_funcobj);
+    _Py_VISIT_VALUE(frame->f_executable);
     return _PyGC_VisitFrameStack(frame, visit, arg);
 }
 
@@ -62,7 +62,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
     _PyFrame_Copy(frame, new_frame);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
-    frame->f_executable = PyStackRef_DUP(new_frame->f_executable);
+    frame->f_executable = PyValue_DUP(new_frame->f_executable);
     f->f_frame = new_frame;
     new_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     if (_PyFrame_IsIncomplete(new_frame)) {
@@ -99,36 +99,36 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
 #ifdef Py_DEBUG
 // An index is valid only on the evaluation stack, never in a local.
 static bool
-is_well_formed(_PyStackRef ref, bool in_stack)
+is_well_formed(PyValue ref, bool in_stack)
 {
-#ifdef Py_STACKREF_INLINE_VALUES
-    if (PyStackRef_IsInlineInt(ref)) {
-        return (_PyStackRef_BITS(ref) >> 32) == (Py_INT_BASE >> 32);
+#ifdef Py_VALUE_INLINE_VALUES
+    if (PyValue_IsInlineInt(ref)) {
+        return (_PyValue_BITS(ref) >> 32) == (Py_INT_BASE >> 32);
     }
-    if (PyStackRef_IsInlineFloat(ref)) {
-        return !isnan(PyStackRef_InlineFloat(ref));
+    if (PyValue_IsInlineFloat(ref)) {
+        return !isnan(PyValue_InlineFloat(ref));
     }
 #endif
-    if (PyStackRef_IsTaggedIndex(ref)) {
+    if (PyValue_IsTaggedIndex(ref)) {
         return in_stack;
     }
-    if (PyStackRef_IsNull(ref)) {
+    if (PyValue_IsNull(ref)) {
         return true;
     }
-    return !PyStackRef_IsMalformed(ref)
-           && Py_TYPE(PyStackRef_AsPyObjectBorrow(ref)) != NULL;
+    return !PyValue_IsMalformed(ref)
+           && Py_TYPE(PyValue_AsPyObjectBorrow(ref)) != NULL;
 }
 
 void
-_PyStackRef_CheckFrame(_PyInterpreterFrame *frame)
+_PyValue_CheckFrame(_PyInterpreterFrame *frame)
 {
-    _PyStackRef *stack_base = _PyFrame_Stackbase(frame);
-    _PyStackRef *end = frame->base + _PyFrame_NumSlots(frame);
-    for (_PyStackRef *sp = frame->base; sp < end; sp++) {
+    PyValue *stack_base = _PyFrame_Stackbase(frame);
+    PyValue *end = frame->base + _PyFrame_NumSlots(frame);
+    for (PyValue *sp = frame->base; sp < end; sp++) {
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
-                "malformed stackref 0x%" PRIx64 " in slot %d",
-                (uint64_t)_PyStackRef_BITS(*sp), (int)(sp - frame->base));
+                "malformed value 0x%" PRIx64 " in slot %d",
+                (uint64_t)_PyValue_BITS(*sp), (int)(sp - frame->base));
         }
     }
 }
@@ -141,15 +141,15 @@ static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
 #ifdef Py_DEBUG
-    _PyStackRef_CheckFrame(frame);
+    _PyValue_CheckFrame(frame);
 #endif
-    _PyStackRef *locals = frame->base;
-    _PyStackRef *sp = locals + n;
+    PyValue *locals = frame->base;
+    PyValue *sp = locals + n;
     while (sp > locals) {
         sp--;
-        _PyStackRef ref = *sp;
-        *sp = PyStackRef_NULL;
-        PyStackRef_XCLOSE(ref);
+        PyValue ref = *sp;
+        *sp = PyValue_NULL;
+        PyValue_XCLOSE(ref);
     }
     Py_CLEAR(frame->f_locals);
 }
@@ -189,7 +189,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     else {
         _PyFrame_ClearLocals(frame);
     }
-    PyStackRef_CLEAR(frame->f_funcobj);
+    PyValue_CLEAR(frame->f_funcobj);
 }
 
 /* Unstable API functions */
@@ -197,7 +197,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
 PyObject *
 PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 {
-    return PyStackRef_AsPyObjectNew(frame->f_executable);
+    return PyValue_AsPyObjectNew(frame->f_executable);
 }
 
 // NOTE: We allow racy accesses to the instruction pointer from other threads

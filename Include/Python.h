@@ -78,6 +78,7 @@ __pragma(warning(disable: 4201))
 #include "critical_section.h"
 #include "object.h"
 #include "refcount.h"
+#include "pyvalue.h"
 #include "objimpl.h"
 #include "slots.h"
 #include "slots_generated.h"

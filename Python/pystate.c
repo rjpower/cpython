@@ -22,7 +22,7 @@
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_stackref.h"      // PyStackRef_AsPyObjectBorrow()
+#include "pycore_value.h"      // PyValue_AsPyObjectBorrow()
 #include "pycore_stats.h"         // FT_STAT_WORLD_STOP_INC()
 #include "pycore_time.h"          // _PyTime_Init()
 #include "pycore_uniqueid.h"      // _PyObject_FinalizePerThreadRefcounts()
@@ -585,44 +585,10 @@ init_interpreter(PyInterpreterState *interp,
     }
     interp->_code_object_generation = 0;
     interp->opt_config.specialization_enabled = !is_env_enabled("PYTHON_SPECIALIZATION_OFF");
-    const char *tagged_values = Py_GETENV("PYTHON_TAGGED_VALUES");
-    interp->opt_config.tagged_values_enabled = !(tagged_values && *tagged_values == '0');
     if (interp != &runtime->_main_interpreter) {
         /* Fix the self-referential, statically initialized fields. */
         interp->dtoa = (struct _dtoa_state)_dtoa_state_INIT(interp);
     }
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    interp->next_stackref = INITIAL_STACKREF_INDEX;
-    _Py_hashtable_allocator_t alloc = {
-        .malloc = malloc,
-        .free = free,
-    };
-    interp->open_stackrefs_table = _Py_hashtable_new_full(
-        _Py_hashtable_hash_ptr,
-        _Py_hashtable_compare_direct,
-        NULL,
-        NULL,
-        &alloc
-    );
-    if (interp->open_stackrefs_table == NULL) {
-        return _PyStatus_NO_MEMORY();
-    }
-#  ifdef Py_STACKREF_CLOSE_DEBUG
-    interp->closed_stackrefs_table = _Py_hashtable_new_full(
-        _Py_hashtable_hash_ptr,
-        _Py_hashtable_compare_direct,
-        NULL,
-        NULL,
-        &alloc
-    );
-    if (interp->closed_stackrefs_table == NULL) {
-        return _PyStatus_NO_MEMORY();
-    }
-#  endif
-    _Py_stackref_associate(interp, Py_None, PyStackRef_None);
-    _Py_stackref_associate(interp, Py_False, PyStackRef_False);
-    _Py_stackref_associate(interp, Py_True, PyStackRef_True);
-#endif
 
     interp->_initialized = 1;
     return _PyStatus_OK();
@@ -728,19 +694,11 @@ PyInterpreterState_New(void)
     return interp;
 }
 
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-extern void
-_Py_stackref_report_leaks(PyInterpreterState *interp);
-#endif
 
 static int
-common_const_is_initialized(_PyStackRef ref)
+common_const_is_initialized(PyValue ref)
 {
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-    return !PyStackRef_IsNull(ref);
-#else
-    return ref.bits != 0 && !PyStackRef_IsNull(ref);
-#endif
+    return ref.bits != 0 && !PyValue_IsNull(ref);
 }
 
 
@@ -748,13 +706,13 @@ static void
 common_constants_clear(PyInterpreterState *interp)
 {
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
-        _PyStackRef ref = interp->common_consts[i];
+        PyValue ref = interp->common_consts[i];
         if (!common_const_is_initialized(ref)) {
             continue;
         }
-        PyObject *obj = PyStackRef_AsPyObjectBorrow(ref);
-        PyStackRef_XCLOSE(ref);
-        interp->common_consts[i] = PyStackRef_NULL;
+        PyObject *obj = PyValue_AsPyObjectBorrow(ref);
+        PyValue_XCLOSE(ref);
+        interp->common_consts[i] = PyValue_NULL;
         // Refcount reclamation skips heap immortals; release manually.
         if (_Py_IsImmortal(obj) && !_Py_IsStaticImmortal(obj)) {
             _Py_ClearImmortal(obj);
@@ -873,15 +831,6 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     Py_CLEAR(interp->builtins);
     common_constants_clear(interp);
 
-#if !defined(Py_GIL_DISABLED) && defined(Py_STACKREF_DEBUG)
-#  ifdef Py_STACKREF_CLOSE_DEBUG
-    _Py_hashtable_destroy(interp->closed_stackrefs_table);
-    interp->closed_stackrefs_table = NULL;
-#  endif
-    _Py_stackref_report_leaks(interp);
-    _Py_hashtable_destroy(interp->open_stackrefs_table);
-    interp->open_stackrefs_table = NULL;
-#endif
 
     if (tstate->interp == interp) {
         /* We are now safe to fix tstate->_status.cleared. */
@@ -1520,8 +1469,8 @@ init_threadstate(_PyThreadStateImpl *_tstate,
 
     // Initialize the embedded base frame - sentinel at the bottom of the frame stack
     _tstate->base_frame.previous = NULL;
-    _tstate->base_frame.f_executable = PyStackRef_None;
-    _tstate->base_frame.f_funcobj = PyStackRef_NULL;
+    _tstate->base_frame.f_executable = PyValue_None;
+    _tstate->base_frame.f_funcobj = PyValue_NULL;
     _tstate->base_frame.f_globals = NULL;
     _tstate->base_frame.f_builtins = NULL;
     _tstate->base_frame.f_locals = NULL;
@@ -1537,7 +1486,7 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.tlbc_index = 0;
 #endif
     _tstate->base_frame.base = _tstate->base_frame.owned_slots;
-    _tstate->base_frame.owned_slots[0] = PyStackRef_NULL;
+    _tstate->base_frame.owned_slots[0] = PyValue_NULL;
 
     // current_frame starts pointing to the base frame
     tstate->current_frame = &_tstate->base_frame;
@@ -3163,8 +3112,8 @@ push_chunk(PyThreadState *tstate, int nslots)
         }
     }
     // The root chunk's value stack starts empty
-    _PyStackRef *saved_top = new->previous == NULL ?
-        (_PyStackRef *)&new->data[0] : (_PyStackRef *)tstate->datastack_top;
+    PyValue *saved_top = new->previous == NULL ?
+        (PyValue *)&new->data[0] : (PyValue *)tstate->datastack_top;
     if (tstate->datastack_chunk) {
         // What popping the frame restores, with saved_top
         tstate->datastack_chunk->top = tstate->datastack_limit -
@@ -3173,7 +3122,7 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
-    frame->base = (_PyStackRef *)&new->data[0];
+    frame->base = (PyValue *)&new->data[0];
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = (PyObject **)(frame->base + nslots);

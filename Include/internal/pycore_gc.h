@@ -332,8 +332,6 @@ extern PyObject *_PyGC_GetReferrers(PyInterpreterState *interp, PyObject *objs);
 extern void _PyGC_ClearAllFreeLists(PyInterpreterState *interp);
 extern void _Py_RunGC(PyThreadState *tstate);
 
-union _PyStackRef;
-
 // GC visit callback for tracked interpreter frames
 // GH-150766: exported for greenlet
 PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg);
@@ -352,7 +350,7 @@ PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visi
             }                                                       \
         }                                                           \
     } while (0)
-PyAPI_FUNC(int) _PyGC_VisitStackRef(union _PyStackRef *ref, visitproc visit, void *arg);
+PyAPI_FUNC(int) _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg);
 
 #ifdef Py_GIL_DISABLED
 extern void _PyGC_VisitObjectsWorldStopped(PyInterpreterState *interp,

@@ -32,7 +32,7 @@ extern "C" {
 #include "internal/pycore_long.h"           // _PyLong_GetZero
 #include "internal/pycore_pyerrors.h"       // _PyErr_FormatFromCause
 #include "internal/pycore_pyhash.h"        // _Py_HashPointerRaw
-#include "internal/pycore_stackref.h"       // Py_TAG_BITS
+#include "internal/pycore_value.h"       // Py_TAG_BITS
 #include "../../Python/remote_debug.h"
 
 #include <assert.h>

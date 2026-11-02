@@ -8,7 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_stackref.h"
+#include "pycore_value.h"
 
 
 #define _Py_TYPECACHE_MINSIZE (1 << 3)
@@ -30,7 +30,7 @@ struct type_cache {
 };
 
 struct _PyTypeCacheLookupResult {
-    _PyStackRef value;      // value is a stack reference to the cached attribute or method, or NULL if not found
+    PyValue value;      // value is a stack reference to the cached attribute or method, or NULL if not found
     int cache_hit;          // 1 if the cache entry is valid and matches the type's version tag, 0 otherwise
     unsigned int version_tag;   // version tag of the type when the value was cached
 };

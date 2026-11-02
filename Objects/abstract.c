@@ -9,7 +9,7 @@
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long.h"          // _PyLong_IsNegative()
 #include "pycore_object.h"        // _Py_CheckSlotResult()
-#include "pycore_stackref.h"      // _PyStackRef
+#include "pycore_value.h"         // PyValue
 #include "pycore_pybuffer.h"      // _PyBuffer_ReleaseInInterpreterAndRawFree()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -2495,6 +2495,17 @@ PyMapping_Values(PyObject *o)
 
 /* isinstance(), issubclass() */
 
+static int
+abstract_close(PyObject **slot)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    PyObject *owner = *slot;
+    *slot = NULL;
+    Py_XDECREF(owner);
+    _PyValue_RestoreException(saved);
+    return PyErr_Occurred() ? -1 : 0;
+}
+
 /* abstract_get_bases() has logically 4 return states:
  *
  * 1. getattr(cls, '__bases__') could raise an AttributeError
@@ -2522,11 +2533,14 @@ PyMapping_Values(PyObject *o)
 static PyObject *
 abstract_get_bases(PyObject *cls)
 {
-    PyObject *bases;
-
-    (void)PyObject_GetOptionalAttr(cls, &_Py_ID(__bases__), &bases);
+    PyObject *bases = NULL;
+    int found = PyObject_GetOptionalAttr(cls, &_Py_ID(__bases__), &bases);
+    if (found < 0 || PyErr_Occurred()) {
+        abstract_close(&bases);
+        return NULL;
+    }
     if (bases != NULL && !PyTuple_Check(bases)) {
-        Py_DECREF(bases);
+        abstract_close(&bases);
         return NULL;
     }
     return bases;
@@ -2536,51 +2550,80 @@ abstract_get_bases(PyObject *cls)
 static int
 abstract_issubclass(PyObject *derived, PyObject *cls)
 {
+    PyObject *selected = Py_NewRef(derived);
     PyObject *bases = NULL;
     Py_ssize_t i, n;
     int r = 0;
 
     while (1) {
-        if (derived == cls) {
-            Py_XDECREF(bases); /* See below comment */
-            return 1;
+        if (PyErr_Occurred()) {
+            r = -1;
+            break;
         }
-        /* Use XSETREF to drop bases reference *after* finishing with
-           derived; bases might be the only reference to it.
-           XSETREF is used instead of SETREF, because bases is NULL on the
-           first iteration of the loop.
-        */
-        Py_XSETREF(bases, abstract_get_bases(derived));
-        if (bases == NULL) {
-            if (PyErr_Occurred())
-                return -1;
-            return 0;
+        if (selected == cls) {
+            r = 1;
+            break;
+        }
+        PyObject *next_bases = abstract_get_bases(selected);
+        if (next_bases == NULL) {
+            r = PyErr_Occurred() ? -1 : 0;
+            break;
+        }
+        PyObject *old_bases = bases;
+        bases = next_bases;
+        if (abstract_close(&old_bases) < 0) {
+            r = -1;
+            break;
         }
         n = PyTuple_GET_SIZE(bases);
         if (n == 0) {
-            Py_DECREF(bases);
-            return 0;
+            break;
         }
         /* Avoid recursivity in the single inheritance case */
         if (n == 1) {
-            derived = PyTuple_GET_ITEM(bases, 0);
+            PyObject *child = PyTuple_GetItemRef(bases, 0);
+            if (child == NULL || PyErr_Occurred()) {
+                abstract_close(&child);
+                r = -1;
+                break;
+            }
+            /* The selected child survives retirement of both the previous
+             * selected object now and its containing tuple next iteration. */
+            PyObject *old_selected = selected;
+            selected = child;
+            if (abstract_close(&old_selected) < 0) {
+                r = -1;
+                break;
+            }
             continue;
         }
-        break;
-    }
-    assert(n >= 2);
-    if (_Py_EnterRecursiveCall(" in __issubclass__")) {
-        Py_DECREF(bases);
-        return -1;
-    }
-    for (i = 0; i < n; i++) {
-        r = abstract_issubclass(PyTuple_GET_ITEM(bases, i), cls);
-        if (r != 0) {
+        assert(n >= 2);
+        if (_Py_EnterRecursiveCall(" in __issubclass__")) {
+            r = -1;
             break;
         }
+        for (i = 0; i < n; i++) {
+            PyObject *child = PyTuple_GetItemRef(bases, i);
+            if (child == NULL || PyErr_Occurred()) {
+                abstract_close(&child);
+                r = -1;
+                break;
+            }
+            r = abstract_issubclass(child, cls);
+            if (abstract_close(&child) < 0) {
+                r = -1;
+            }
+            if (r != 0) {
+                break;
+            }
+        }
+        _Py_LeaveRecursiveCall();
+        break;
     }
-    _Py_LeaveRecursiveCall();
-    Py_DECREF(bases);
+    abstract_close(&selected);
+    if (abstract_close(&bases) < 0) {
+        r = -1;
+    }
     return r;
 }
 
@@ -2640,30 +2683,53 @@ static int
 call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
                     const char *where, PyObject *arg, PyObject **res)
 {
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    _PyStackRef self = PyStackRef_FromPyObjectBorrow(cls);
-    int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
-    if (found > 0) {
-        *res = NULL;
-        if (!_Py_EnterRecursiveCallTstate(tstate, where)) {
-            PyObject *method = PyStackRef_AsPyObjectBorrow(cref.ref);
-            PyObject *args[2] = {PyStackRef_AsPyObjectBorrow(self), arg};
-            if (args[0] != NULL) {
-                /* Unbound method: prepend self. */
-                *res = PyObject_Vectorcall(method, args, 2, NULL);
-            }
-            else {
-                *res = PyObject_Vectorcall(method, args + 1, 1, NULL);
-            }
-            _Py_LeaveRecursiveCallTstate(tstate);
+    *res = NULL;
+    _PyCValue cref;
+    _PyThreadState_PushCValue(tstate, &cref);
+    PyValue self = PyValue_FromPyObjectNew(cls);
+    PyObject *method = NULL, *self_object = NULL;
+    int found = -1;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
+    if (found <= 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (_Py_EnterRecursiveCallTstate(tstate, where)) {
+        found = -1;
+        goto done;
+    }
+    method = PyValue_AsObject(cref.ref);
+    if (method != NULL && !PyErr_Occurred()) {
+        if (!PyValue_IsNull(self)) {
+            self_object = PyValue_AsObject(self);
         }
-        if (*res == NULL) {
-            found = -1;
+        if ((PyValue_IsNull(self) || self_object != NULL) && !PyErr_Occurred()) {
+            PyObject *args[2] = {self_object, arg};
+            /* A noncallable scalar is diagnosed by the normal call API. */
+            *res = self_object != NULL
+                ? PyObject_Vectorcall(method, args, 2, NULL)
+                : PyObject_Vectorcall(method, args + 1, 1, NULL);
         }
     }
-    PyStackRef_XCLOSE(self);
-    _PyThreadState_PopCStackRef(tstate, &cref);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    if (*res == NULL) {
+        found = -1;
+    }
+done:
+    abstract_close(&self_object);
+    abstract_close(&method);
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(self);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    _PyThreadState_PopCValue(tstate, &cref);
+    _PyValue_RestoreException(saved);
+    if (PyErr_Occurred()) {
+        abstract_close(res);
+        return -1;
+    }
     return found;
 }
 
@@ -2693,8 +2759,16 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
         Py_ssize_t n = PyTuple_GET_SIZE(cls);
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
-            PyObject *item = PyTuple_GET_ITEM(cls, i);
+            PyObject *item = PyTuple_GetItemRef(cls, i);
+            if (item == NULL || PyErr_Occurred()) {
+                abstract_close(&item);
+                r = -1;
+                break;
+            }
             r = object_recursive_isinstance(tstate, inst, item);
+            if (abstract_close(&item) < 0) {
+                r = -1;
+            }
             if (r != 0) {
                 /* either found it, or got an error */
                 break;
@@ -2709,8 +2783,9 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
                                     " in __instancecheck__", inst, &res);
     if (found > 0) {
         int ok = PyObject_IsTrue(res);
-        Py_DECREF(res);
-
+        if (abstract_close(&res) < 0) {
+            return -1;
+        }
         return ok;
     }
     else if (found < 0) {
@@ -2773,8 +2848,16 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
         Py_ssize_t n = PyTuple_GET_SIZE(cls);
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
-            PyObject *item = PyTuple_GET_ITEM(cls, i);
+            PyObject *item = PyTuple_GetItemRef(cls, i);
+            if (item == NULL || PyErr_Occurred()) {
+                abstract_close(&item);
+                r = -1;
+                break;
+            }
             r = object_issubclass(tstate, derived, item);
+            if (abstract_close(&item) < 0) {
+                r = -1;
+            }
             if (r != 0)
                 /* either found it, or got an error */
                 break;
@@ -2788,7 +2871,9 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
                                     " in __subclasscheck__", derived, &res);
     if (found > 0) {
         int ok = PyObject_IsTrue(res);
-        Py_DECREF(res);
+        if (abstract_close(&res) < 0) {
+            return -1;
+        }
         return ok;
     }
     else if (found < 0) {

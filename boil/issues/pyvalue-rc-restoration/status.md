@@ -21,8 +21,9 @@ typeobject composition. They do not yet form an executable candidate.
 The [first bulk AST port](porting/status.md) is committed: one producer covers
 74 sequence reads. The subsequent constructor port is committed and its full
 TU/object pass without diagnostics. The unified Clinic rule covers 48 production
-wrappers and is committed, as are three pure predicates. Fourteen core readers
-need correction after early scope/cleanup/syntax review. The MRO providers plus one immediate wrapper passed independent
+wrappers and is committed, as are three pure predicates and fourteen core
+readers. TypeVar is under review; Template readers are being implemented under
+the next finite rule. The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
 two missing-API first-use messages relocated to unchanged functions.

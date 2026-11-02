@@ -4,8 +4,9 @@ Stage: v4 family analysis complete; AST sequence and constructor batches
 reviewed/committed as e645682dab5 and b1dce616174. The full AST TU/object now pass
 without diagnostics. The unified Clinic48 batch is reviewed and committed as
 180b4b6d9af; list assertions are committed as 4bf934bb4ec. Three pure predicates
-are committed as 69a2750540e. The first core14 draft requires correction after
-early review; Sol is specifying finite examples for Luna's next bulk pass.
+are committed as 69a2750540e; corrected core14 is committed as e789685426a.
+TypeVar's tuple-vararg parser needs finite review corrections; Luna is applying
+the next three-body Template rule.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
@@ -121,9 +122,24 @@ codec syntax, and grouped/unprotected owner closes violate the per-owner
 first-error rule. Six host tests do not execute that C. The original snapshot,
 false scope claim and compiler failure are retained in
 build/pyvalue-core-readers-bulk-20261102-v1/coordinator-early-review.json.
-Sol is preparing explicit correction templates and witness fixes before another
-Luna pass; no runtime acceptance is claimed. A separate Luna analysis is grouping
-the frozen v6 errors for subsequent bounded designs, excluding this active packet.
+The subsequent correction passed after an API-type correction (Copy returns int,
+Append returns PyStatus) and deterministic host witness fixes. It is committed
+as e789685426a, six sources/fourteen bodies plus tests. Configured native TU
+errors go 53→39, with zero selected-function diagnostics; the AST unparser TU
+and object pass. Eight host 3.14 controls pass. Candidate startup/config/path-hook
+and fault tests remain pending. Evidence:
+build/pyvalue-core-readers-bulk-20261102-v2/commit.json.
+
+The frozen v6 inventory is complete: 430 observations/361 locations/67 paths,
+including 253 likely cascades, not independent edits. TypeVar is the last
+fixed-keyword mismatch family residue; its first implementation removes the
+two wrapper/macro errors, but review requires collision-safe cleanup temporaries
+and complete retained controls before acceptance. Template's next three-body
+rule corrects the earlier blanket strings-metadata assumption: compiler-built
+TemplateStr ASTs can contain scalar strings slots. Boundaries need owning views;
+interior copies can stay canonical. Evidence and finite grants live in
+build/pyvalue-v6-error-families-20261102-v1 and
+build/pyvalue-sol-port-rules-20261102-v1.
 
 ## Census and evidence
 

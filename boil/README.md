@@ -25,9 +25,9 @@ passed code/native attribution review; publication, slots and lifecycle still
 need closure. No merged executable exists. Luna grouped v4's compiler errors;
 the reviewed unified Clinic rule now covers 48 production wrappers. The latest
 v6 compiler probe has 430 repeated/cascading errors and no executable. Fourteen
-core reader functions need corrections after early review; the three pure
-function/type predicates are reviewed and committed. Sol is making the cleanup
-corrections explicit before the next bulk pass.
+core reader functions and three pure predicates are now reviewed and committed.
+The TypeVar parser is in review with finite temporary-name/test corrections;
+Luna is porting three Template reader bodies under the next reviewed rule.
 Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

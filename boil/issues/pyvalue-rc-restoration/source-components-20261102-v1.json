@@ -371,6 +371,19 @@
       "selected_context_diagnostics": [],
       "whole_TUs_still_fail": true,
       "runnable": false
+    },
+    "core_sequence_readers": {
+      "commit": "e789685426ab78e754e7521cbb2444de1e47cf27",
+      "changed_paths": 7,
+      "functions": 14,
+      "source_paths": 6,
+      "native_errors_before": 53,
+      "native_errors_after": 39,
+      "selected_function_diagnostics": [],
+      "ast_unparse_object_pass": true,
+      "host_controls": 8,
+      "candidate_executed": false,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

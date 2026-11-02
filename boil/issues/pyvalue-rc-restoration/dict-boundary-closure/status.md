@@ -1,6 +1,6 @@
 # Close retained dictionary boundaries
 
-- Stage: revised API-cut design accepted; implementation active
+- Stage: independent code/result review accepted; committed as `18b6053c75f3dc4e29ee53f4aba89b0680b4c97e`
 - Owner: fresh state_audit; coordinator reviews
 - Scope: remove ten unsupported borrowed entrypoints and three OrderedDict aliases; keep owning/value migration APIs
 
@@ -21,8 +21,17 @@ before qualification; the provider API cut alone is not runtime closure.
 
 [Design workspace](../../../../build/pyvalue-dict-boundary-closure-20261102-v1),
 [coordinator review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/coordinator-review-v1.md).
-Next: implement, close the actual Dict TU with the new configured debug headers,
-independently review code/results, commit and validate merged consumers. Older
-prepared scripts remain historical; they are not an implementation.
+The exact twelve-file cut passed independent review. Full Dict and C fixture TUs
+pass with the new configuration; actual dictobject.o compilation passes. All
+295 other Dict functions and 58 earlier fixture functions are byte-exact.
+Stable-ABI generation is idempotent and removes exactly four exports in each of
+three products. Twelve focused tests parse; ten fork-specific methods remain
+unexecuted, with host controls limited to ordinary supported owning semantics.
 
-[Accepted design review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/coordinator-review-v2.md).
+[Accepted design review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/coordinator-review-v2.md),
+[independent code/result review](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/independent-review.md),
+[results](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/results.json),
+[commit](../../../../build/pyvalue-dict-boundary-closure-20261102-v1/commit.json).
+Next: port the explicit core/bundled/test consumers, define active missing
+canonical readers, then validate the merged runtime. Source commit is not
+runtime or ABI admission. Older prepared scripts remain historical.

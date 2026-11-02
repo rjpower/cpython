@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `015eb226fb3` on
-`boil/pyvalue-rc-universal`: eight reviewed source commits, three held object/type
+register interpreter with JIT disabled. Restoration HEAD is `d1c8041c78c` on
+`boil/pyvalue-rc-universal`: ten reviewed source commits, three held object/type
 files. The first diagnostic build configured and compiled 141 objects but failed
 to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -10,9 +10,11 @@ to link. No restored runtime, qualification or performance pass is claimed.
 
 ## Now and next
 
-1. Fresh state_audit implements the reviewed dictionary API cut, keeping existing
-   owning/value migration APIs. Fresh wiki_audit revises the cohesive end-to-end
-   Clinic/parser lifetime model and first production slice before code.
+1. The reviewed four canonical dictionary read providers are in implementation;
+   GetValue already has active VM/compiler callers but no definition at HEAD.
+   The coordinator owns providers/contracts; state_audit owns public-API fixtures.
+   Fresh wiki_audit revises the cohesive Clinic/parser transaction around early
+   monitoring and expanded-call preparation. Clinic source waits for design review.
 2. The coordinator prioritizes shared blockers from the first actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -26,9 +28,9 @@ to link. No restored runtime, qualification or performance pass is claimed.
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Dictionary boundary closure](pyvalue-rc-restoration/dict-boundary-closure/status.md) | Implementation; design accepted | state_audit; coordinator reviews | Remove unsupported borrowed families; preserve owning/value migration APIs and port callers |
+| [Canonical dictionary readers](pyvalue-rc-restoration/value-readers/status.md) | Implement and focused checks | Coordinator providers; state_audit fixtures | Four read APIs; actual object/symbol checks, independent code/results review |
 | [Native parsers and registration](pyvalue-rc-restoration/native-parsers/status.md) | Revise design | wiki_audit; coordinator reviews | Decide cohesive invocation/parser lifetimes and first production wrapper slice |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Queued scoped ports | Coordinator | Use compile diagnostics; marshal/errors, AST and bundled consumers remain |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Queued scoped ports | Coordinator | Use compile diagnostics; marshal, AST and bundled consumers remain |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Revise design | Coordinator | Mutation/static-lifetime proof plus scalar object/call boundaries; no mechanical field-only port |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Next design | Unassigned | Connect real generic iteration to canonical providers and review observer/reentry behavior |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
@@ -50,6 +52,8 @@ linked restored runtime. Primary-worktree documentation is separate.
 | [Shared VM/compiler/native composition](pyvalue-rc-restoration/shared-composition/status.md) | `c21d0a374ee`, 44 path actions | Three excluded object files; merged native/VM routes |
 | [Codegen](pyvalue-rc-restoration/core-consumers/codegen/status.md) | `ebc9740c4d5`, two files | Candidate semantic tests |
 | [Sys.flags](pyvalue-rc-restoration/core-consumers/sysflags/status.md) | `015eb226fb3`, two files | Candidate snapshot/reentry tests |
+| [Dictionary API cut](pyvalue-rc-restoration/dict-boundary-closure/status.md) | `18b6053c75f`, 12 files | 50 core/startup, 37 bundled and 24 C test/example sites still port |
+| [Exception/unraisable consumers](pyvalue-rc-restoration/core-consumers/errors/status.md) | `d1c8041c78c`, two files | Candidate matching/hook tests |
 | [First diagnostic build](pyvalue-rc-restoration/first-build/status.md) | Configure passed; build failed; 141 objects | 616 repeated/cascading diagnostics across 96 source/header paths to resolve |
 
 Earlier component reviews, including compiler metadata, owned dictionary entries

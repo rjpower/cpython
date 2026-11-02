@@ -9,15 +9,17 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
-has eight independently reviewed source commits on `boil/pyvalue-rc-universal`,
-HEAD `015eb226fb3`. Three object/type files remain held for explicit correctness
+has ten independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `d1c8041c78c`. Three object/type files remain held for explicit correctness
 findings. There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** use the first build's concrete diagnostics to close shared
 dictionary and native parser/Clinic boundaries. Configure passed and compilation
 produced 141 objects, including the new symtable, codegen and sys.flags ports;
-the interpreter did not link. One fresh agent implements the reviewed dictionary
-API cut; another designs the integrated Clinic/parser lifetime model. The
+the interpreter did not link. The dictionary API cut and exception port are
+committed and compile as real objects. The canonical read-provider design passed
+review; the coordinator implements it while state_audit adds public-API fixtures.
+Fresh wiki_audit revises the integrated Clinic/parser model. The
 coordinator reviews designs, integrates commits and validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 

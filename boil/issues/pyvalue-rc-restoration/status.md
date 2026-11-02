@@ -1,8 +1,8 @@
 # Restore universal PyValue under RC
 
-- Stage: eight reviewed source checkpoints; first diagnostic build failed.
-- Owner: coordinator; fresh state_audit implements dictionary boundary closure and
-  wiki_audit designs the first scoped Clinic/parser family. Previous agents stay stopped.
+- Stage: ten reviewed source checkpoints; first diagnostic build failed.
+- Owner: coordinator and fresh state_audit implement canonical readers/fixtures;
+  wiki_audit revises the cohesive Clinic/parser model. Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.
 
@@ -10,8 +10,8 @@
 
 Qualified interim images remain `eba351fee7d`, private `boilrc1`, boxed heap
 fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
-`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `015eb226fb3`.
-The [board](../README.md) lists all eight reviewed commits. The only remaining
+`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `d1c8041c78c`.
+The [board](../README.md) lists all ten reviewed commits. The only remaining
 original uncommitted paths are Objects/abstract.c, object.c and typeobject.c,
 held for named scalar-return/call and type-cache correctness findings.
 

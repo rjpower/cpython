@@ -46,3 +46,12 @@ until a reviewed amendment replaces them.
 [coordinator review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/coordinator-review-v1.md).
 Next: review the revised cohesive model and first production slice, then authorize
 bounded implementation and independent code/result review.
+
+V2 proposes two ownership roles under one invocation transaction: callee-local
+parser owners may retire during coherent IN_CALL; invocation inputs/results
+retire only after result/error publication. Peers support this model but require explicit early
+monitor/EX-conversion preparation and refresh, plus a correctly routed same-kwargs
+witness. The production structural family is nine constructor/init wrappers in
+seven products, including Struct's handwritten entry. V3 must close those route
+gaps before source edits. [V2](../../../../build/pyvalue-clinic-parser-design-20261102-v1/design-v2.md),
+[peer review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/independent-review-v2.md).

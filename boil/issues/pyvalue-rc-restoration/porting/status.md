@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint45 is `5ece1b27fd0`.
-The [latest merged build](../merged-build/status.md) has 317 repeated/cascading
-errors, 168 objects and no executable; all 7,351 inputs stayed unchanged.
+register-interpreter measurement. Source checkpoint47 is `4f2734e77cd`.
+The [latest merged build](../merged-build/status.md) has 314 repeated/cascading
+errors, 169 objects and no executable; all 7,353 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -17,10 +17,11 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | --- | --- | --- |
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
 | Four remaining Clinic wrappers | Corrected v3 committed as checkpoint45 | Candidate runtime/fault qualification after linking |
-| Shared FORMAT engine | Kernel v2 code accepted; fixture v1 requires revision | Correct fixtures, compose and probe; backend/public/caller closure follows |
+| Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
 | Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
-| Pickle arguments/state | Reviewed recipes assigned as one-function Luna packets | Actual code review, finite corrections, composition and native gate |
-| Full type mutation transaction | In revision | Distinguish introduced defects from inherited behavior; use concrete evidence to choose necessary fixes |
+| Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
+| GenericAlias tuple consumers | Luna inventory complete; Sol designs eight-body closure | Peer design review, then bounded mechanical packets |
+| Held type foundations/cache correctness | Sol causal review | Fix introduced scalar/error/guard defects and extract reviewed dependency-ordered bodies |
 
 Exact designs and inventories:
 
@@ -28,6 +29,9 @@ Exact designs and inventories:
 - [FORMAT engine design](../../../../build/pyvalue-format-engine-design-20261102-v2/README.md)
 - [Pickle per-function recipes](../../../../build/pyvalue-type-pickle-readers-design-20261102-v2/README.md)
 - [Six-function itertools inventory](../../../../build/pyvalue-itertools-tail-inventory-20261102-v1/README.md)
+- [GenericAlias inventory](../../../../build/pyvalue-genericalias-inventory-20261102-v1/README.md)
+- [GenericAlias design under peer review](../../../../build/pyvalue-genericalias-readers-design-20261102-v1/README.md)
+- [Type/cache causal matrix under peer review](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
 - [Latest family census](../../../../build/pyvalue-v12-error-families-20261102-v1/README.md)
 
 The v12 census predates the latest type and Clinic packets. Its 332 observations map

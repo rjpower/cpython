@@ -52,8 +52,11 @@ and 23 host controls pass. Candidate tests remain unexecuted.
 The [positional Clinic increment](../native-parsers/positional-owners/status.md),
 [object composition](object-attributes/status.md) and
 [small tokenizer/bytes readers](small-readers/status.md) are reviewed and committed.
-The [startup type constructor](type-new/status.md) is applied/reviewed pending
-typeobject composition, and [object call bridges](../native-parsers/object-call-bridges/status.md)
-are committed. The next actual C3/MRO slice is under review; remaining generated
-AST, format-parser/startup/container and bundled ports still block the baseline.
+The [startup type constructor](type-new/status.md) and subsequent readers are
+committed; three pickle/state readers now make the full type TU/object compile
+without diagnostics. Held scalar/cache correctness remains separate.
+The [object call bridges](../native-parsers/object-call-bridges/status.md)
+are committed. Sol designs GenericAlias tuple consumers and triages concrete
+held type/MRO defects. Remaining format-parser/startup/container and bundled
+ports still block the baseline; generated AST/Clinic ports are checkpointed.
 The coordinator owns merged validation.

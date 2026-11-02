@@ -1,102 +1,65 @@
-# Canonical type cache and mutation admission
+# Type foundations, cache and mutation admission
 
-- Stage: provider/core dependencies checkpointed; graph and MRO provider deltas reviewed
-- Owner: coordinator; further Sol publication design/review is queued
-- Hypothesis: canonical borrowed cache entries can remain fast and safe if
-  version invalidation precedes observable mutation and admission stays closed
-  through callback-capable mutation/retirement.
+Root owns composition and admission. Sol 6.1 is reviewing the remaining held
+source by cause; see the [board](../../README.md) for live assignments.
 
-The pre-port object cache could not store inline class values; resize retains a
-table across allocation. A late version check after duplicating a stale borrow
-is unsafe. Existing installed guards also require invalidation before changed
-state becomes observable.
+## Current state
 
-V3 replaces the cursor walk with restarted owning child selection and gates
-installed guards, cache lookup and version publication with per-interpreter
-admission. Live mutations block admission through rollback/retirement. Static
-teardown permanently closes lookup and Python entry for that interpreter;
-shared static tags remain usable by other interpreters.
+The selected runtime uses canonical PyValues and reference counting with cyclic
+collection. Type-cache entries, mutation, installed guards and interpreter
+teardown must share a coherent invalidation/admission contract. The tracing-GC
+work is closed.
 
-The revised design resolves the two coordinator findings: a dedicated fixed
-raw write/abort path cannot call Python during terminal rejection, and the whole
-general forced-version setter is removed in the later core increment. Internal
-zero-tag sites have explicit descendant/teardown preconditions.
+Restoration checkpoint47 is `4f2734e77cd`. After the three pickle/state readers
+landed in46, the complete current type translation unit and actual object compile
+without errors or warnings. Eight host controls pass. This establishes compilation,
+not semantic admission of the remaining held file or candidate execution.
 
-The first provider increment has a seven-path grant: types_state fields in
-pycore_interp_structs.h; admission declarations in pycore_typeobject.h; canonical
-entries/insertion contract in pycore_typecache.h; Python/typecache.c; the exact
-typeobject lookup/admission/version-producer functions listed in the scope;
-existing Modules/_testinternalcapi/typecache.c bridge; new
-Lib/test/test_pyvalue_typecache.py. No other scalar bridge, object.c/abstract.c,
-index or shared build is owned by this lane. Root reviews the bounded delta;
-it does not stage the whole held typeobject file by default.
+The original typeobject provider/core/graph/MRO changes remain distinguishable
+from committed reader ports. Their old source reviews do not automatically
+cover every foundational body in the current composition. The held typecache
+test also needs to travel with the appropriate admitted component.
 
-This increment does not admit the partial runtime. Static cache admission stays
-unconnected until publication ports; mutation traversal, all four actual guards,
-feedback, terminal lifecycle wiring, unsafe setter retirement and finite bundled
-writers remain required. The actual cache and fixture TUs/objects pass without warnings. Full typeobject
-compilation still fails: 49 errors and 39 warnings mapped to unchanged bodies.
-Two host controls pass; eleven candidate methods remain unexecuted.
+## Required review and fixes
 
-Checkpoint `8d5a3d6af1b` contains the six independent files. The seventh,
-Objects/typeobject.c, remains held; its exact provider delta was independently
-reviewed but cannot yet be committed with unrelated unresolved scalar bridges.
-[Code/results review](../../../../build/pyvalue-typecache-provider-20261102-v1/coordinator-code-review.md),
-[native checks](../../../../build/pyvalue-typecache-provider-20261102-v1/native-v1.json),
-[commit and pending-delta receipt](../../../../build/pyvalue-typecache-provider-20261102-v1/commit.json).
-The [core mutation component](core-mutation/status.md) is independently reviewed,
-with six dependencies committed and its typeobject delta held. Graph repair is
-also independently reviewed as a pending exact delta: eleven functions, 405 other
-bodies and masked text exact, seven host controls passing, 29 candidate methods
-unexecuted. Its full typeobject TU still has 47 errors/39 warnings, all in unchanged
-functions/lines. C3/MRO provider design is accepted with fourteen bodies granted;
-the approved immediate public wrapper is included in its frozen source delta.
-Twelve host controls pass; 41 candidate file methods remain unexecuted. The
-same-header full TU has 61 diagnostics versus 86 before; both compilations fail.
-Two missing-API first-use messages move to unchanged functions. Independent
-code/native attribution review accepts corrected endpoint d0721997; the
-[provider record](mro-providers/status.md) binds the two corrected findings and
-remaining limits. Construction,
-guards/terminal/static/bundled and scalar providers remain required.
-[Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
-[bounded coordinator grant](../../../../build/pyvalue-typecache-core-scope-20261102-v1/coordinator-review.md).
+The current causal review has found concrete scalar-domain problems in held
+method/slot/type-getattr paths: a heap-only decoder cannot materialize an inline
+integer or float. Fallible owning conversion and its cleanup must be explicit.
+The MRO error envelope also needs audit under the changed provider contract.
+Ignored has_custom_mro statuses already occur upstream; that fact must not be
+misreported as an entirely new bug. Concrete changed-provider failures require
+finite fixes and caller-envelope review even though the file compiles.
 
-[V3 design](../../../../build/pyvalue-typecache-design-20261102-v3/design.md),
-[finite ledger](../../../../build/pyvalue-typecache-design-20261102-v3/finite-ledger.md),
-[exact seven-path scope](../../../../build/pyvalue-typecache-design-20261102-v3/first-increment.md),
-[coordinator acceptance](../../../../build/pyvalue-typecache-design-20261102-v3/coordinator-accept.md).
-Earlier proposals/freezes/reviews remain historical evidence.
+Guard, terminal lifecycle and selected namespace-writer wiring remain distinct
+checks. Sol is binding the exact current bodies to earlier reviewed endpoints,
+classifying introduced defects against inherited upstream behavior and defining
+small dependency-ordered fixes or extractions. Its [sealed causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
+is in independent peer review. No whole-file source grant follows
+from a successful compiler run or an old provider review.
 
-The fresh [composition review](../../../../build/pyvalue-source-integration-20261102-v1/shared-composition-review.md)
-also identifies object-only scalar conversions in lookup_method_ex, descriptor/new
-slots, type lookup/getattr, generic object getattr and abstract special-method
-calling. The abstract and full object repairs are now committed; typeobject.c remains held. Their object/call bridges need
-fallible conversion and owned cleanup; that work does not substitute for the
-separate cache lifetime/mutation proof above.
+The earlier full transaction proposal requested stronger rollback, diamond and
+cross-receiver guarantees. Its review constraints describe that proposal. They
+are not automatically requirements to replace upstream's pointer-conditional
+algorithm before the first baseline. Retain necessary lifetime/invalidation fixes;
+choose further changes from concrete introduced failures and qualification.
 
-[Graph design/review](../../../../build/pyvalue-typecache-graph-scope-20261102-v1/independent-design-review.md),
-[graph code/results acceptance](../../../../build/pyvalue-typecache-graph1-20261102-v1/coordinator-code-review.md),
-[graph native attribution](../../../../build/pyvalue-typecache-graph1-20261102-v1/native-classification.md),
-[next finite MRO proposal](../../../../build/pyvalue-typecache-mro-scope-20261102-v1/design.md).
+Next: freeze the causal matrix and exact fix/extraction manifests, obtain peer
+review, fan out bounded implementations, inspect actual code/native results and
+commit each dependency. Once the runtime links, execute cache/mutation/scalar,
+reentry, teardown and fault controls on the candidate before measurement.
 
-The full MRO publication/caller proposal completed independent review with
-REVISE and has no source grant. Existing graph repair can fail partway and
-restoring old subclass edges can allocate, so a field undo log alone cannot
-prove graph rollback. Repeated diamond receivers and cross-receiver dependencies
-also need explicit selection rules. The proposal is retained in
-build/pyvalue-sol-port-rules-20261102-v1/mro-publication-vertical-design.md;
-the peer findings are in build/pyvalue-mro-publication-peer-review-20261102-v1.
+## Evidence and history
 
-The separate recording-only counter foundation is committed as `5a9d4841a67`.
-Old/new C with corresponding public-layout headers adds no native diagnostics;
-typeobject remains at 38 errors/23 warnings and the test helper at one error/two
-warnings. Runtime counter/near-limit observations and transaction authority are
-pending. The thirteen slot wrappers subsequently landed as `ef48e73fb24`, with
-selected errors 15→0/full TU 38→23, warnings unchanged. Current held typeobject
-composition is `80615584`, preserving the prior provider/core/graph work.
-The earlier constructor boundary and ten construction readers are committed
-as checkpoints38/39. Their composed TU has twelve errors/23 warnings left in
-other functions, with eleven selected errors removed. Candidate lifetime and
-fault execution remain pending.
-The separate spec ownership envelope is frozen for a root/peer gate; it has no
-implementation grant. The [board](../../README.md) owns current assignments.
+- [Canonical provider source/native record](../../../../build/pyvalue-typecache-provider-20261102-v1/coordinator-code-review.md)
+- [Core mutation component](core-mutation/status.md)
+- [Graph source/native record](../../../../build/pyvalue-typecache-graph1-20261102-v1/coordinator-code-review.md)
+- [MRO provider endpoint](mro-providers/status.md)
+- [Pickle/state final composition](../../../../build/pyvalue-type-pickle-readers-composed-20261102-v2/independent-composed-review.md)
+- [Latest merged build](../merged-build/status.md)
+
+The recording-only counter foundation (`5a9d4841a67`) is committed; counter
+recording alone is not transaction authority. The separate full publication
+proposal has no implementation grant. Detailed prior proposals, native failures,
+reviews and source endpoints stay with their experiments. The former page is
+preserved byte-for-byte in [prior notes](history/notes-through-checkpoint45-20261102.txt);
+its dated compiler counts and assignments are historical.

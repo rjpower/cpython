@@ -31,11 +31,12 @@ The earlier type_new argument boundary is checkpoint38 and construction readers
 with explicit caller pins checkpoint39. Operator/LRU readers are checkpoint40
 and the flat-format kernel/five callers checkpoint41. The corrected six-reader
 type packet is checkpoint42, corrected four-reader MRO packet43 and seven
-bootstrap readers44 and corrected Clinic4 wrappers45 (`5ece1b27fd0`). The latter
-passed independent v3 code/native review; float/tuple objects build. FORMAT A
-kernel v2 code is accepted; its fixtures require correction before composition.
-Pickle's first three-function assignment produced no C changes; reviewed
-per-function recipes now drive separate Luna packets. The itertools
+bootstrap readers44, corrected Clinic4 wrappers45, pickle/state readers46
+(`defd38874bf`) and shared FORMAT foundation47 (`4f2734e77cd`). Pickle used
+separate Luna function packets after an incomplete first attempt. Final code,
+scope and native/object receipts passed independent review. FORMAT backend,
+export/public API/caller closure remains mandatory. Sol designs GenericAlias
+ports and reviews actual type/MRO admission defects. The itertools
 tuple-result draft is paused.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
@@ -56,16 +57,15 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v14 snapshot at checkpoint45 plus held typeobject has 168 objects
-present and 317 repeated/cascading error diagnostics. All 7,351 source paths
-remained unchanged; no candidate was executed. Iterator, slot-wrapper and
-construction-reader selected contexts are native-clean; the current typeobject
-TU after checkpoint44 has three remaining errors and three warnings, in the
-remaining pickle/state consumers. The bootstrap packet has zero selected
-diagnostics; its one missing-API first-use relocation is explicitly attributed.
-The latest merged probe includes checkpoint45 and still fails before linking. The counter comparison uses corresponding
-old/new public layouts and adds no diagnostics, without admitting a transaction.
-The full MRO transaction remains in revision.
+link. Its latest v15 snapshot at checkpoint47 plus held typeobject has 169 objects
+present and 314 repeated/cascading error diagnostics. All 7,353 source paths
+remained unchanged; no candidate was executed. The checkpoint46 type composition
+passes the full configured translation unit and actual object emission with zero
+diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain
+separate admission work. The recording-only counter is not transaction authority.
+The causal matrix and exact foundation/repair manifests are in peer review;
+stronger guarantees from the earlier transaction proposal are not automatically
+first-baseline requirements.
 
 ## Remaining increments
 

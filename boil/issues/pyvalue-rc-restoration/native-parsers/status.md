@@ -73,15 +73,16 @@ as checkpoint38, followed by ten construction readers and caller pins in39.
 General keyword/nested/resource format-parser ownership and its consumer ports
 remain design/implementation work.
 
-Shared FORMAT foundation A v2 has passed independent design review:
+Shared FORMAT foundation A v2 is committed as checkpoint47 `4f2734e77cd`
+after independent code/native review:
 [finite A/B/C packets](../../../../build/pyvalue-format-engine-design-20261102-v2/README.md).
 A is a shared stable lease/resource foundation; B/C adapt the actual backends.
 Public scope, raw-wrapper retirement and mechanical consumer closure remain
 mandatory before claiming parser closure. No source or host pass follows from
-this design. The accepted revision specifies the same-scope Finish/End contract,
-chunk-only resource records and one typed fixture destructor. Luna implements
-fixtures in isolation; kernel v2 has passed code review and adds no native
-diagnostics. B also needs an actual per-export buffer lifetime contract;
+this checkpoint. The accepted revision specifies the same-scope Finish/End
+contract, chunk-only resources and a typed fixture destructor. Full fixture
+TU/object passes without diagnostics; getargs retains its twelve baseline errors.
+The nine-method matrix is source-reviewed and syntax-checked, not candidate-run. B also needs an actual per-export buffer lifetime contract;
 owning view.obj alone does not retain released export storage. The four final
 Clinic wrappers are committed as checkpoint45 after corrected v3 code/native
 review; they do not widen the flat parser whitelist or depend on the new

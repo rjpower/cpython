@@ -740,6 +740,61 @@
       "candidate_executed": false,
       "runnable": false,
       "evidence": "build/pyvalue-clinic-final-constructors-bulk-20261102-v3/commit.json"
+    },
+    "type_pickle_state_readers": {
+      "base": "5ece1b27fd0a7f0f286ca60e7d69fc66ad80f14d",
+      "commit": "defd38874bfebbeb53cb79c48d865bd1bf0ed7dc",
+      "paths_sha256": {
+        "Objects/typeobject.c": "542923cfbfa7eced7a7df7f634f818c79d97cb432533bb04177693dc1f2deb40",
+        "Lib/test/test_pyvalue_type_pickle_readers.py": "e3b27001ca49f57c89cb130fb024e4e697b44c122af3962d03ada10a35b56dda"
+      },
+      "changed_paths": 2,
+      "functions": 3,
+      "errors_before": 3,
+      "errors_after": 0,
+      "warnings_before": 3,
+      "warnings_after": 0,
+      "full_TU_and_object_pass": true,
+      "host_tests_pass": 8,
+      "host_tests_skip": 0,
+      "independent_review_sha256": "b38be09e7eb3116e67f02c037a530c57b3fa4cee25fbeda58d87d7639f893aa3",
+      "coordinator_review_sha256": "bee08a29cfef65dcf9b48683a925e181f64adb5332434ae9982262de5c7e05b4",
+      "native_receipt_sha256": "8aafa21c6dd3e43338501104a45e51b3628c4319c70c551085a5a5d1e784d74c",
+      "object_receipt_sha256": "2d00cd9730df627c5b603cf692ae1901587f121910bd1cb22d75553024420eb4",
+      "staged_patch_sha256": "b3bb38d89de1b273530177ccbd77552c4a9aac23034f62bbe7f813dc9a34237d",
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-type-pickle-readers-composed-20261102-v2/commit.json"
+    },
+    "format_owner_resource_foundation": {
+      "base": "defd38874bfebbeb53cb79c48d865bd1bf0ed7dc",
+      "commit": "4f2734e77cd9fc576e9642ece11c1331043c9a83",
+      "paths_sha256": {
+        "Python/getargs.c": "1bd988a4db4f0cffe89500f14a1da94c1771b5912329141adcac7f9fbf278fec",
+        "Include/internal/pycore_modsupport.h": "7f48755980430ca92ad65e8fc017296c6fd0d8a9e69f687b03843c4afd86ed84",
+        "Modules/_testinternalcapi/native_scope.c": "2ec02475b680ab68e659b9f1c460849b05e7862413952db4ea181c1325cee0aa",
+        "Lib/test/test_pyvalue_format_engine.py": "1f6a0031267bededa7aacdb124bd52ec67c1166c0c30993e341e17ba49b3ce8b"
+      },
+      "changed_paths": 4,
+      "new_production_helpers": 4,
+      "fixture_methods": 3,
+      "test_methods": 9,
+      "candidate_tests_executed": false,
+      "getargs_errors_before": 12,
+      "getargs_errors_after": 12,
+      "getargs_warnings_before": 0,
+      "getargs_warnings_after": 0,
+      "no_new_diagnostics": true,
+      "fixture_full_TU_and_object_pass": true,
+      "independent_review_sha256": "906997511e112eabb8410ae5d3605d384261c9375b0670433dbd0b29813f884e",
+      "coordinator_review_sha256": "e9a84f9661361d63a5a7e96ee1aee58564a3571aa9672be278631612de6a6e3a",
+      "native_receipt_sha256": "3858707a72d59d0fd03521a739798997e0fae239431ee2cad2d9cc3247de3766",
+      "object_receipt_sha256": "6942016a001dd5db352eee7ec35b670222ca71aa29813835c6aa6cf1fc475057",
+      "staged_patch_sha256": "8a337948f3faca4141ab3a2d02609f3f2a9ec9da0d4e10d9eba5144485a48d19",
+      "parser_closure": false,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-format-engine-A-composed-20261102-v2/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -749,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "5ece1b27fd0a7f0f286ca60e7d69fc66ad80f14d",
-    "objects_present": 168,
-    "error_diagnostics": 317,
+    "head": "4f2734e77cd9fc576e9642ece11c1331043c9a83",
+    "objects_present": 169,
+    "error_diagnostics": 314,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7351,
-    "evidence": "build/pyvalue-merged-build-20261102-v14"
+    "source_manifest_paths": 7353,
+    "evidence": "build/pyvalue-merged-build-20261102-v15"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

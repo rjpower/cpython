@@ -73,6 +73,15 @@ acceptance checks. The coordinator schedules them, integrates reviewed results,
 rebuilds, and repeats until the selected runtime builds and runs. Do not give
 Luna open design work or stop when a worker finishes its current packet.
 
+For callback-heavy C ports, the recipe must spell out owner slots, branch and
+exit flow, typed transfers/resets and retirement order. Assign one function per
+packet unless several functions follow the same mechanical flow. Luna applies
+the recipe; it does not derive the cleanup policy. Verify newly named project
+APIs against actual declarations, and list proposed new helpers separately.
+Run cheap configured syntax checks before final code admission. Test controls
+must be discoverable by the repository's runner; a passing standalone prototype
+is reference evidence, not proof of candidate test discovery or execution.
+
 Update the board at meaningful transitions and keep the user informed. Give
 proactive status reports about two hours apart during active work, covering
 completed changes, actual running assignments, blockers and the next executable

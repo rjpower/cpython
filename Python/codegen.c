@@ -21,6 +21,7 @@
 #include "pycore_c_array.h"       // _Py_c_array_t
 #include "pycore_code.h"          // COMPARISON_LESS_THAN
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_instruction_sequence.h" // _PyInstructionSequence_NewLabel()
 #include "pycore_intrinsics.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -30,6 +31,8 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
 #include "pycore_template.h"      // _PyTemplate_Type
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
+#include "pycore_value.h"         // PyValue_InlineInt()
 
 #define NEED_OPCODE_METADATA
 #include "pycore_opcode_metadata.h" // _PyOpcode_opcode_metadata, _PyOpcode_num_popped/pushed
@@ -753,6 +756,27 @@ codegen_setup_annotations_scope(compiler *c, location loc,
     return SUCCESS;
 }
 
+static void
+codegen_close_value(PyValue value)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLOSE(value);
+    if (saved != NULL) {
+        _PyValue_RestoreException(saved);
+    }
+}
+
+static PyObject *
+codegen_list_name(PyObject *list, Py_ssize_t index)
+{
+    /* These private compiler lists retain only Unicode names. */
+    PyValue value = PyList_GET_VALUE(list, index);
+    assert(PyValue_IsObject(value));
+    PyObject *name = PyValue_AsPyObjectBorrow(value);
+    assert(PyUnicode_CheckExact(name));
+    return name;
+}
+
 static int
 codegen_rename_annotations_format_param(PyCodeObject *co)
 {
@@ -772,13 +796,8 @@ codegen_rename_annotations_format_param(PyCodeObject *co)
     }
     PyTuple_SET_ITEM(new_names, 0, Py_NewRef(&_Py_ID(format)));
     for (int i = 1; i < size; i++) {
-        PyObject *item = PyTuple_GetItem(co->co_localsplusnames, i);
-        if (item == NULL) {
-            Py_DECREF(new_names);
-            return ERROR;
-        }
-        Py_INCREF(item);
-        PyTuple_SET_ITEM(new_names, i, item);
+        PyValue item = PyTuple_GET_VALUE(co->co_localsplusnames, i);
+        PyTuple_SET_VALUE(new_names, i, PyValue_DUP(item));
     }
     Py_SETREF(co->co_localsplusnames, new_names);
     return SUCCESS;
@@ -817,9 +836,18 @@ codegen_deferred_annotations_body(compiler *c, location loc,
     ADDOP_I(c, loc, BUILD_MAP, 0); // stack now contains <annos>
 
     for (Py_ssize_t i = 0; i < annotations_len; i++) {
-        PyObject *ptr = PyList_GET_ITEM(deferred_anno, i);
+        /* PyLong_AsVoidPtr is the native boundary for recorded AST pointers. */
+        PyObject *ptr = PyList_GetItemRef(deferred_anno, i);
+        if (ptr == NULL) {
+            return ERROR;
+        }
         stmt_ty st = (stmt_ty)PyLong_AsVoidPtr(ptr);
-        if (st == NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_DECREF(ptr);
+        if (saved != NULL) {
+            _PyValue_RestoreException(saved);
+        }
+        if (st == NULL || PyErr_Occurred()) {
             return ERROR;
         }
         PyObject *mangled = _PyCompile_Mangle(c, st->v.AnnAssign.target->v.Name.id);
@@ -829,13 +857,27 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         // NOTE: ref of mangled can be leaked on ADDOP* and VISIT macros due to early returns
         // fixing would require an overhaul of these macros
 
-        PyObject *cond_index = PyList_GET_ITEM(conditional_annotation_indices, i);
-        assert(PyLong_CheckExact(cond_index));
-        long idx = PyLong_AS_LONG(cond_index);
+        PyValue cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
+        assert(PyValue_LongCheckExact(cond_index));
+        long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt(cond_index) :
+                   PyLong_AsLong(PyValue_AsPyObjectBorrow(cond_index));
+        if (idx == -1 && PyErr_Occurred()) {
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_DECREF(mangled);
+            _PyValue_RestoreException(saved);
+            return ERROR;
+        }
         NEW_JUMP_TARGET_LABEL(c, not_set);
 
         if (idx != -1) {
-            ADDOP_LOAD_CONST(c, LOC(st), cond_index);
+            int ret = codegen_addop_load_const_new(
+                c, LOC(st), PyValue_AsObject(cond_index));
+            if (ret < 0) {
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_DECREF(mangled);
+                _PyValue_RestoreException(saved);
+                return ERROR;
+            }
             if (scope_type == COMPILE_SCOPE_CLASS) {
                 ADDOP_NAME(
                     c, LOC(st), LOAD_DEREF, &_Py_ID(__conditional_annotations__), freevars);
@@ -1004,7 +1046,7 @@ codegen_make_closure(compiler *c, location loc,
             /* Bypass com_addop_varname because it will generate
                LOAD_DEREF but LOAD_CLOSURE is needed.
             */
-            PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
+            PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
             int arg = _PyCompile_LookupArg(c, co, name);
             RETURN_IF_ERROR(arg);
             ADDOP_I(c, loc, LOAD_CLOSURE, arg);
@@ -3991,13 +4033,19 @@ load_args_for_super(compiler *c, expr_ty e) {
 
     // load self (first argument)
     Py_ssize_t i = 0;
-    PyObject *key, *value;
-    if (!PyDict_Next(METADATA(c)->u_varnames, &i, &key, &value)) {
+    PyValue key = PyValue_NULL;
+    int status = _PyDict_NextValue(METADATA(c)->u_varnames, &i,
+                                   &key, NULL, NULL);
+    if (status <= 0) {
+        if (status == 0) {
+            PyErr_SetString(PyExc_SystemError, "super() has no first argument name");
+        }
         return ERROR;
     }
-    RETURN_IF_ERROR(codegen_nameop(c, loc, key, Load));
-
-    return SUCCESS;
+    assert(PyValue_IsObject(key));
+    int ret = codegen_nameop(c, loc, PyValue_AsPyObjectBorrow(key), Load);
+    codegen_close_value(key);
+    return ret < 0 || PyErr_Occurred() ? ERROR : SUCCESS;
 }
 
 // If an attribute access spans multiple lines, update the current start
@@ -4911,47 +4959,66 @@ codegen_async_comprehension_generator(compiler *c, location loc,
 }
 
 static int
+codegen_push_inlined_comprehension_name(compiler *c, location loc,
+                                       PyObject *name, long symbol,
+                                       _PyCompile_InlinedComprehensionState *state)
+{
+    long scope = SYMBOL_TO_SCOPE(symbol);
+    if (!(symbol & DEF_LOCAL) || (symbol & DEF_NONLOCAL)) {
+        return SUCCESS;
+    }
+    if (state->pushed_locals == NULL) {
+        state->pushed_locals = PyList_New(0);
+        if (state->pushed_locals == NULL) {
+            return ERROR;
+        }
+    }
+    /* Isolate this name, keeping a cell itself for restoration when needed. */
+    ADDOP_NAME(c, loc, LOAD_FAST_AND_CLEAR, name, varnames);
+    if (scope == CELL) {
+        ADDOP_NAME(c, loc, MAKE_CELL, name, cellvars);
+    }
+    RETURN_IF_ERROR(PyList_Append(state->pushed_locals, name));
+    if (METADATA(c)->u_fasthidden != NULL) {
+        /* Module/class comprehension bindings must remain hidden in assembly. */
+        RETURN_IF_ERROR(PySet_Add(METADATA(c)->u_fasthidden, name));
+    }
+    return SUCCESS;
+}
+
+static int
 codegen_push_inlined_comprehension_locals(compiler *c, location loc,
                                           PySTEntryObject *comp,
                                           _PyCompile_InlinedComprehensionState *state)
 {
-    // iterate over names bound in the comprehension and ensure we isolate
-    // them from the outer scope as needed
-    PyObject *k, *v;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(comp->ste_symbols, &pos, &k, &v)) {
-        long symbol = PyLong_AsLong(v);
-        assert(symbol >= 0 || PyErr_Occurred());
-        RETURN_IF_ERROR(symbol);
-        long scope = SYMBOL_TO_SCOPE(symbol);
-
-        if ((symbol & DEF_LOCAL) && !(symbol & DEF_NONLOCAL)) {
-            // local names bound in comprehension must be isolated from
-            // outer scope; push existing value (which may be NULL if
-            // not defined) on stack
-            if (state->pushed_locals == NULL) {
-                state->pushed_locals = PyList_New(0);
-                if (state->pushed_locals == NULL) {
-                    return ERROR;
-                }
-            }
-            // in the case of a cell, this will actually push the cell
-            // itself to the stack, then we'll create a new one for the
-            // comprehension and restore the original one after
-            ADDOP_NAME(c, loc, LOAD_FAST_AND_CLEAR, k, varnames);
-            if (scope == CELL) {
-                ADDOP_NAME(c, loc, MAKE_CELL, k, cellvars);
-            }
-            if (PyList_Append(state->pushed_locals, k) < 0) {
-                return ERROR;
-            }
-            if (METADATA(c)->u_fasthidden != NULL) {
-                /* For Module/Class scopes, assemble needs to set CO_FAST_HIDDEN on these names */
-                if (PySet_Add(METADATA(c)->u_fasthidden, k) < 0) {
-                    return ERROR;
-                }
-            }
+    PyValue key = PyValue_NULL;
+    PyValue value = PyValue_NULL;
+    int status;
+    while ((status = _PyDict_NextValue(comp->ste_symbols, &pos,
+                                       &key, &value, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyValue_LongCheckExact(value));
+        long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                      PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+        codegen_close_value(value);
+        value = PyValue_NULL;
+        if (PyErr_Occurred()) {
+            codegen_close_value(key);
+            return ERROR;
         }
+        assert(symbol >= 0);
+        int ret = codegen_push_inlined_comprehension_name(
+            c, loc, PyValue_AsPyObjectBorrow(key), symbol, state);
+        codegen_close_value(key);
+        key = PyValue_NULL;
+        if (ret < 0 || PyErr_Occurred()) {
+            return ERROR;
+        }
+    }
+    if (status < 0) {
+        return ERROR;
     }
     if (state->pushed_locals) {
         // Outermost iterable expression was already evaluated and is on the
@@ -5003,10 +5070,7 @@ restore_inlined_comprehension_locals(compiler *c, location loc,
     // pushed_locals in simple reverse order
     ADDOP_I(c, loc, SWAP, npops + 1);
     for (Py_ssize_t i = npops - 1; i >= 0; --i) {
-        k = PyList_GetItem(state->pushed_locals, i);
-        if (k == NULL) {
-            return ERROR;
-        }
+        k = codegen_list_name(state->pushed_locals, i);
         ADDOP_NAME(c, loc, STORE_FAST_MAYBE_NULL, k, varnames);
     }
     return SUCCESS;
@@ -6495,7 +6559,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
             // There were captures. Check to see if we differ from control:
             Py_ssize_t icontrol = nstores;
             while (icontrol--) {
-                PyObject *name = PyList_GET_ITEM(control, icontrol);
+                PyObject *name = codegen_list_name(control, icontrol);
                 Py_ssize_t istores = PySequence_Index(pc->stores, name);
                 if (istores < 0) {
                     PyErr_Clear();
@@ -6573,7 +6637,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
         }
         // Update the list of previous stores with this new name, checking for
         // duplicates:
-        PyObject *name = PyList_GET_ITEM(control, i);
+        PyObject *name = codegen_list_name(control, i);
         int dupe = PySequence_Contains(pc->stores, name);
         if (dupe < 0) {
             goto error;
@@ -6760,7 +6824,7 @@ codegen_match_inner(compiler *c, stmt_ty s, pattern_context *pc)
         // It's a match! Store all of the captured names (they're on the stack).
         Py_ssize_t nstores = PyList_GET_SIZE(pc->stores);
         for (Py_ssize_t n = 0; n < nstores; n++) {
-            PyObject *name = PyList_GET_ITEM(pc->stores, n);
+            PyObject *name = codegen_list_name(pc->stores, n);
             if (codegen_nameop(c, LOC(m->pattern), name, Store) < 0) {
                 Py_DECREF(pc->stores);
                 return ERROR;

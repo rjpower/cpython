@@ -2,6 +2,7 @@
 #define PYTESTCAPI_NEED_INTERNAL_API
 
 #include "parts.h"
+#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "clinic/vectorcall.c.h"
 
 
@@ -15,21 +16,44 @@ module _testcapi
 /* Test PEP 590 - Vectorcall */
 
 static int
-fastcall_args(PyObject *args, PyObject ***stack, Py_ssize_t *nargs)
+fastcall_args(PyObject *args, _PyArg_OwnerScope *scope,
+              PyObject *const **stack, Py_ssize_t *nargs)
 {
+    *scope = (_PyArg_OwnerScope){0};
+    *stack = NULL;
+    *nargs = 0;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
     if (args == Py_None) {
-        *stack = NULL;
-        *nargs = 0;
+        return 0;
     }
-    else if (PyTuple_Check(args)) {
-        *stack = ((PyTupleObject *)args)->ob_item;
-        *nargs = PyTuple_GET_SIZE(args);
-    }
-    else {
+    if (!PyTuple_Check(args)) {
         PyErr_SetString(PyExc_TypeError, "args must be None or a tuple");
         return -1;
     }
+    if (_PyArg_OwnerScope_BeginTuple(scope, args, 0) < 0) {
+        return -1;
+    }
+    *stack = _PyArg_UnpackPositionalOwned(scope, "fastcall_args",
+                                         0, PY_SSIZE_T_MAX);
+    if (*stack == NULL || PyErr_Occurred()) {
+        return -1;
+    }
+    *nargs = scope->nargs;
     return 0;
+}
+
+static PyObject *
+fastcall_result(_PyArg_OwnerScope *scope, PyObject *result)
+{
+    if (_PyArg_OwnerScope_End(scope) < 0) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_CLEAR(result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
 }
 
 /*[clinic input]
@@ -45,11 +69,13 @@ _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
                                      PyObject *func_args, PyObject *kwargs)
 /*[clinic end generated code: output=35902ece94de4418 input=b9c0196ca7d5f9e4]*/
 {
-    PyObject **stack;
+    _PyArg_OwnerScope scope = {0};
+    PyObject *result = NULL;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
-    if (fastcall_args(func_args, &stack, &nargs) < 0) {
-        return NULL;
+    if (fastcall_args(func_args, &scope, &stack, &nargs) < 0) {
+        goto done;
     }
 
     if (kwargs == Py_None) {
@@ -57,10 +83,12 @@ _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
     }
     else if (!PyDict_Check(kwargs)) {
         PyErr_SetString(PyExc_TypeError, "kwnames must be None or a dict");
-        return NULL;
+        goto done;
     }
 
-    return PyObject_VectorcallDict(func, stack, nargs, kwargs);
+    result = PyObject_VectorcallDict(func, stack, nargs, kwargs);
+done:
+    return fastcall_result(&scope, result);
 }
 
 /*[clinic input]
@@ -76,11 +104,13 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
                                    PyObject *func_args, PyObject *kwnames)
 /*[clinic end generated code: output=ff77245bc6afe0d8 input=a0668dfef625764c]*/
 {
-    PyObject **stack;
+    _PyArg_OwnerScope scope = {0};
+    PyObject *result = NULL;
+    PyObject *const *stack;
     Py_ssize_t nargs, nkw;
 
-    if (fastcall_args(func_args, &stack, &nargs) < 0) {
-        return NULL;
+    if (fastcall_args(func_args, &scope, &stack, &nargs) < 0) {
+        goto done;
     }
 
     if (kwnames == Py_None) {
@@ -90,15 +120,17 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
         nkw = PyTuple_GET_SIZE(kwnames);
         if (nargs < nkw) {
             PyErr_SetString(PyExc_ValueError, "kwnames longer than args");
-            return NULL;
+            goto done;
         }
         nargs -= nkw;
     }
     else {
         PyErr_SetString(PyExc_TypeError, "kwnames must be None or a tuple");
-        return NULL;
+        goto done;
     }
-    return PyObject_Vectorcall(func, stack, nargs, kwnames);
+    result = PyObject_Vectorcall(func, stack, nargs, kwnames);
+done:
+    return fastcall_result(&scope, result);
 }
 
 static PyObject *
@@ -259,6 +291,70 @@ _testcapi_has_vectorcall_flag_impl(PyObject *module, PyTypeObject *type)
     return PyType_HasFeature(type, Py_TPFLAGS_HAVE_VECTORCALL);
 }
 
+static PyObject *
+callmethod_objargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (PyErr_Occurred() ||
+        !_PyArg_CheckPositional("callmethod_objargs", nargs, 3, 3)) {
+        return NULL;
+    }
+    if (!PyUnicode_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError, "name must be str");
+        return NULL;
+    }
+    return PyObject_CallMethodObjArgs(args[0], args[1], args[2], NULL);
+}
+
+static PyObject *
+method_noargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (PyErr_Occurred() ||
+        !_PyArg_CheckPositional("method_noargs", nargs, 2, 2)) {
+        return NULL;
+    }
+    if (!PyUnicode_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError, "name must be str");
+        return NULL;
+    }
+    return PyObject_CallMethodNoArgs(args[0], args[1]);
+}
+
+static PyObject *
+callmethod_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (PyErr_Occurred() ||
+        !_PyArg_CheckPositional("callmethod_format", nargs, 3, 3)) {
+        return NULL;
+    }
+    if (!PyUnicode_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError, "name must be str");
+        return NULL;
+    }
+    if (!PyTuple_Check(args[2])) {
+        PyErr_SetString(PyExc_TypeError, "args_tuple must be a tuple");
+        return NULL;
+    }
+    const char *name = PyUnicode_AsUTF8(args[1]);
+    if (name == NULL || PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyObject_CallMethod(args[0], name, "O", args[2]);
+}
+
+static PyObject *
+callfunction_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (PyErr_Occurred() ||
+        !_PyArg_CheckPositional("callfunction_format", nargs, 2, 2)) {
+        return NULL;
+    }
+    if (!PyTuple_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError, "args_tuple must be a tuple");
+        return NULL;
+    }
+    return PyObject_CallFunction(args[0], "O", args[1]);
+}
+
 static PyMethodDef TestMethods[] = {
     _TESTCAPI_PYOBJECT_FASTCALLDICT_METHODDEF
     _TESTCAPI_PYOBJECT_VECTORCALL_METHODDEF
@@ -266,6 +362,10 @@ static PyMethodDef TestMethods[] = {
     _TESTCAPI_PYVECTORCALL_CALL_METHODDEF
     _TESTCAPI_MAKE_VECTORCALL_CLASS_METHODDEF
     _TESTCAPI_HAS_VECTORCALL_FLAG_METHODDEF
+    {"callmethod_objargs", _PyCFunction_CAST(callmethod_objargs), METH_FASTCALL},
+    {"method_noargs", _PyCFunction_CAST(method_noargs), METH_FASTCALL},
+    {"callmethod_format", _PyCFunction_CAST(callmethod_format), METH_FASTCALL},
+    {"callfunction_format", _PyCFunction_CAST(callfunction_format), METH_FASTCALL},
     {NULL},
 };
 

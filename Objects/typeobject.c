@@ -2534,8 +2534,9 @@ type_call(PyObject *self, PyObject *args, PyObject *kwds)
         Py_ssize_t nargs = PyTuple_GET_SIZE(args);
 
         if (nargs == 1 && (kwds == NULL || !PyDict_GET_SIZE(kwds))) {
-            obj = (PyObject *) Py_TYPE(PyTuple_GET_ITEM(args, 0));
-            return Py_NewRef(obj);
+            PyValue argument = PyTuple_GET_VALUE(args, 0);
+            assert(!PyValue_IsNull(argument));
+            return Py_NewRef((PyObject *)PyValue_TYPE(argument));
         }
 
         /* SF bug 475327 -- if that didn't trigger, we need 3
@@ -6399,7 +6400,9 @@ get_base_by_token_recursive(PyObject *bases, void *token)
     PyTypeObject *res = NULL;
     Py_ssize_t n = PyTuple_GET_SIZE(bases);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyTypeObject *base = _PyType_CAST(PyTuple_GET_ITEM(bases, i));
+        PyValue value = PyTuple_GET_VALUE(bases, i);
+        assert(PyValue_IsObject(value));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
         if (!_PyType_HasFeature(base, Py_TPFLAGS_HEAPTYPE)) {
             continue;
         }
@@ -6458,10 +6461,14 @@ found:
     assert(PyTuple_GET_SIZE(mro) >= 1);
     // Also, the first item in the MRO is the type itself, which
     // we already checked above. We skip it in the loop.
-    assert(PyTuple_GET_ITEM(mro, 0) == (PyObject *)type);
+    PyValue first = PyTuple_GET_VALUE(mro, 0);
+    assert(PyValue_IsObject(first));
+    assert(PyValue_AsPyObjectBorrow(first) == (PyObject *)type);
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 1; i < n; i++) {
-        PyTypeObject *base = (PyTypeObject *)PyTuple_GET_ITEM(mro, i);
+        PyValue value = PyTuple_GET_VALUE(mro, i);
+        assert(PyValue_IsObject(value));
+        PyTypeObject *base = (PyTypeObject *)PyValue_AsPyObjectBorrow(value);
         if (_PyType_HasFeature(base, Py_TPFLAGS_HEAPTYPE)
             && ((PyHeapTypeObject*)base)->ht_token == token) {
             type = base;
@@ -9718,12 +9725,19 @@ type_ready_mro(PyTypeObject *type, int initial)
         assert(type->tp_flags & Py_TPFLAGS_IMMUTABLETYPE);
         Py_ssize_t n = PyTuple_GET_SIZE(mro);
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyTypeObject *base = _PyType_CAST(PyTuple_GET_ITEM(mro, i));
+            PyValue value = PyTuple_GET_VALUE(mro, i);
+            assert(PyValue_IsObject(value));
+            PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
             if (base->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+                PyObject *base_owner = Py_NewRef((PyObject *)base);
+                PyObject *name_owner = Py_NewRef(((PyHeapTypeObject *)base)->ht_name);
+                const char *base_name = base->tp_name;
                 PyErr_Format(PyExc_TypeError,
                              "type '%.100s' is not dynamically allocated but "
                              "its base type '%.100s' is dynamically allocated",
-                             type->tp_name, base->tp_name);
+                             type->tp_name, base_name);
+                type_mutation_close(&name_owner);
+                type_mutation_close(&base_owner);
                 return -1;
             }
             assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) ||
@@ -10860,7 +10874,9 @@ hackcheck_unlocked(PyObject *self, setattrofunc func, const char *what)
     PyTypeObject *defining_type = type;
     Py_ssize_t i;
     for (i = PyTuple_GET_SIZE(mro) - 1; i >= 0; i--) {
-        PyTypeObject *base = _PyType_CAST(PyTuple_GET_ITEM(mro, i));
+        PyValue value = PyTuple_GET_VALUE(mro, i);
+        assert(PyValue_IsObject(value));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
         if (base->tp_setattro == slot_tp_setattro) {
             /* Ignore Python classes:
                they never define their own C-level setattro. */
@@ -10880,10 +10896,17 @@ hackcheck_unlocked(PyObject *self, setattrofunc func, const char *what)
         else if (base->tp_setattro != slot_tp_setattro) {
             /* 'base' is not a Python class and overrides 'func'.
                Its tp_setattro should be called instead. */
+            PyObject *type_owner = Py_NewRef((PyObject *)type);
+            PyObject *name_owner = NULL;
+            if (_PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
+                name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
+            }
+            const char *type_name = type->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "can't apply this %s to %s object",
-                         what,
-                         type->tp_name);
+                         what, type_name);
+            type_mutation_close(&name_owner);
+            type_mutation_close(&type_owner);
             return 0;
         }
     }
@@ -12989,68 +13012,97 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
     if (!_Py_IsMainInterpreter(interp)) {
         return 0;
     }
-    PyObject *bytearray = NULL;
-    PyObject *cache = PyDict_New();
-    if (!cache) {
+    if (PyErr_Occurred()) {
         return -1;
+    }
+    int result = -1;
+    PyObject *bytearray = NULL;
+    PyObject *cache = NULL;
+    PyValue value = PyValue_NULL;
+    cache = PyDict_New();
+    if (cache == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
     pytype_slotdef *p;
     Py_ssize_t idx = 0;
     for (p = slotdefs; p->name_strobj; p++, idx++) {
         assert(idx < 255);
-
-        if (PyDict_GetItemRef(cache, p->name_strobj, &bytearray) < 0) {
-            goto error;
+        int found = PyDict_GetItemRef(cache, p->name_strobj, &bytearray);
+        if (PyErr_Occurred() || found < 0) {
+            goto done;
         }
-
         if (!bytearray) {
             Py_ssize_t size = sizeof(uint8_t) * (1 + MAX_EQUIV);
             bytearray = PyByteArray_FromStringAndSize(NULL, size);
-            if (!bytearray) {
-                goto error;
+            if (bytearray == NULL || PyErr_Occurred()) {
+                goto done;
             }
-
             uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(bytearray);
             data[0] = 0;
-
-            if (PyDict_SetItem(cache, p->name_strobj, bytearray) < 0) {
-                goto error;
+            int status = PyDict_SetItem(cache, p->name_strobj, bytearray);
+            if (PyErr_Occurred() || status < 0) {
+                goto done;
             }
         }
-
         assert(PyByteArray_CheckExact(bytearray));
         uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(bytearray);
-
         data[0] += 1;
         assert(data[0] < MAX_EQUIV);
-
         data[data[0]] = (uint8_t)idx;
-
-        Py_CLEAR(bytearray);
+        type_mutation_close(&bytearray);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
     }
-
     memset(slotdefs_dups, -1, sizeof(slotdefs_dups));
 
     Py_ssize_t pos = 0;
-    PyObject *key = NULL;
-    PyObject *value = NULL;
-    while (PyDict_Next(cache, &pos, &key, &value)) {
-        uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(value);
+    int found;
+    while ((found = _PyDict_NextValue(cache, &pos, NULL, &value, NULL)) > 0) {
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        assert(PyValue_IsObject(value));
+        PyObject *object = PyValue_AsPyObjectBorrow(value);
+        assert(PyByteArray_CheckExact(object));
+        uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(object);
         uint8_t n = data[0];
         for (uint8_t i = 0; i < n; i++) {
-            uint8_t idx = data[i + 1];
-            memcpy(&slotdefs_dups[idx], data, sizeof(uint8_t) * (n + 1));
+            uint8_t slot = data[i + 1];
+            memcpy(&slotdefs_dups[slot], data, sizeof(uint8_t) * (n + 1));
+        }
+        PyValue saved = value;
+        value = PyValue_NULL;
+        PyObject *error = PyErr_GetRaisedException();
+        PyValue_XCLOSE(saved);
+        _PyValue_RestoreException(error);
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
+    if (found < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    result = 0;
 
-    Py_DECREF(cache);
-    return 0;
-
-error:
-    Py_XDECREF(bytearray);
-    Py_DECREF(cache);
-    return -1;
+done:
+    if (!PyValue_IsNull(value)) {
+        PyValue saved = value;
+        value = PyValue_NULL;
+        PyObject *error = PyErr_GetRaisedException();
+        PyValue_XCLOSE(saved);
+        _PyValue_RestoreException(error);
+    }
+    type_mutation_close(&bytearray);
+    if (PyErr_Occurred()) {
+        result = -1;
+    }
+    type_mutation_close(&cache);
+    if (PyErr_Occurred()) {
+        result = -1;
+    }
+    return result;
 }
 
 
@@ -13077,45 +13129,106 @@ _PyType_GetSlotWrapperNames(void)
 static int
 type_new_set_names(PyTypeObject *type)
 {
-    PyObject *dict = lookup_tp_dict(type);
-    PyObject *names_to_set = PyDict_Copy(dict);
-    if (names_to_set == NULL) {
+    if (PyErr_Occurred()) {
         return -1;
+    }
+    int result = -1;
+    PyObject *type_owner = Py_NewRef((PyObject *)type);
+    PyObject *source = Py_XNewRef(lookup_tp_dict(type));
+    PyObject *names_to_set = NULL;
+    PyObject *key = NULL;
+    PyObject *value = NULL;
+    PyObject *set_name = NULL;
+    PyObject *res = NULL;
+    PyObject *value_type_owner = NULL;
+    PyObject *value_name_owner = NULL;
+    PyObject *type_name_owner = NULL;
+    if (source == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    names_to_set = PyDict_Copy(source);
+    if (names_to_set == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
     Py_ssize_t i = 0;
-    PyObject *key, *value;
-    while (PyDict_Next(names_to_set, &i, &key, &value)) {
-        PyObject *set_name = _PyObject_LookupSpecial(value,
-                                                     &_Py_ID(__set_name__));
+    int found;
+    while ((found = PyDict_NextEntryRef(names_to_set, &i, &key, &value)) > 0) {
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        set_name = _PyObject_LookupSpecial(value, &_Py_ID(__set_name__));
         if (set_name == NULL) {
             if (PyErr_Occurred()) {
-                goto error;
+                goto done;
+            }
+            type_mutation_close(&value);
+            type_mutation_close(&key);
+            if (PyErr_Occurred()) {
+                goto done;
             }
             continue;
         }
-
-        PyObject *res = PyObject_CallFunctionObjArgs(set_name, type, key, NULL);
-        Py_DECREF(set_name);
-
-        if (res == NULL) {
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        res = PyObject_CallFunctionObjArgs(set_name, type, key, NULL);
+        int call_failed = res == NULL || PyErr_Occurred();
+        type_mutation_close(&set_name);
+        if (call_failed) {
+            type_mutation_close(&res);
+            value_type_owner = Py_NewRef((PyObject *)Py_TYPE(value));
+            if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
+                value_name_owner = Py_NewRef(((PyHeapTypeObject *)Py_TYPE(value))->ht_name);
+            }
+            if (_PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
+                type_name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
+            }
+            const char *value_type_name = Py_TYPE(value)->tp_name;
+            const char *receiver_type_name = type->tp_name;
             _PyErr_FormatNote(
                 "Error calling __set_name__ on '%.100s' instance %R "
                 "in '%.100s'",
-                Py_TYPE(value)->tp_name, key, type->tp_name);
-            goto error;
+                value_type_name, key, receiver_type_name);
+            type_mutation_close(&type_name_owner);
+            type_mutation_close(&value_name_owner);
+            type_mutation_close(&value_type_owner);
+            goto done;
         }
-        else {
-            Py_DECREF(res);
+        if (PyErr_Occurred()) {
+            type_mutation_close(&res);
+            goto done;
+        }
+        type_mutation_close(&res);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        type_mutation_close(&value);
+        type_mutation_close(&key);
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
+    if (found < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    result = 0;
 
-    Py_DECREF(names_to_set);
-    return 0;
-
-error:
-    Py_DECREF(names_to_set);
-    return -1;
+done:
+    type_mutation_close(&res);
+    type_mutation_close(&set_name);
+    type_mutation_close(&value);
+    type_mutation_close(&key);
+    type_mutation_close(&value_type_owner);
+    type_mutation_close(&value_name_owner);
+    type_mutation_close(&type_name_owner);
+    type_mutation_close(&names_to_set);
+    type_mutation_close(&source);
+    type_mutation_close(&type_owner);
+    if (PyErr_Occurred()) {
+        result = -1;
+    }
+    return result;
 }
 
 

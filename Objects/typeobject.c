@@ -1279,38 +1279,47 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
        Called from mro_internal, which will subsequently be called on
        each subclass when their mro is recursively updated.
      */
+    PyObject *receiver_owner = Py_NewRef((PyObject *)type);
+    PyObject *bases_owner = Py_NewRef(bases);
+    PyTypeObject *receiver = (PyTypeObject *)receiver_owner;
     Py_ssize_t i, n;
 
     ASSERT_TYPE_LOCK_HELD();
-    if (!Py_IS_TYPE(type, &PyType_Type) && has_custom_mro(type)) {
+    if (!Py_IS_TYPE(receiver, &PyType_Type) && has_custom_mro(receiver)) {
         goto clear;
     }
-    n = PyTuple_GET_SIZE(bases);
+    n = PyTuple_GET_SIZE(bases_owner);
     for (i = 0; i < n; i++) {
-        PyObject *b = PyTuple_GET_ITEM(bases, i);
-        PyTypeObject *cls = _PyType_CAST(b);
+        PyValue base_value = PyTuple_GET_VALUE(bases_owner, i);
+        assert(PyValue_IsObject(base_value));
+        PyObject *base_object = PyValue_AsPyObjectBorrow(base_value);
+        assert(PyType_Check(base_object));
+        PyTypeObject *cls = (PyTypeObject *)base_object;
 
         if (cls->tp_versions_used >= _Py_ATTR_CACHE_UNUSED) {
             goto clear;
         }
 
-        if (!is_subtype_with_mro(lookup_tp_mro(type), type, cls)) {
+        if (!is_subtype_with_mro(lookup_tp_mro(receiver), receiver, cls)) {
             goto clear;
         }
     }
-    return;
+    goto done;
 
  clear:
-    assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
-    set_version_unlocked(type, 0);  /* 0 is not a valid version tag */
-    _PyTypeCache_Invalidate(type);
-    type->tp_versions_used = _Py_ATTR_CACHE_UNUSED;
-    if (PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
+    assert(!(receiver->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
+    set_version_unlocked(receiver, 0);  /* 0 is not a valid version tag */
+    _PyTypeCache_Invalidate(receiver);
+    receiver->tp_versions_used = _Py_ATTR_CACHE_UNUSED;
+    if (PyType_HasFeature(receiver, Py_TPFLAGS_HEAPTYPE)) {
         // This field *must* be invalidated if the type is modified (see the
         // comment on struct _specialization_cache):
         FT_ATOMIC_STORE_PTR_RELAXED(
-            ((PyHeapTypeObject *)type)->_spec_cache.getitem, NULL);
+            ((PyHeapTypeObject *)receiver)->_spec_cache.getitem, NULL);
     }
+ done:
+    type_mutation_close(&bases_owner);
+    type_mutation_close(&receiver_owner);
 }
 
 /*
@@ -1843,13 +1852,44 @@ mro_hierarchy_for_complete_type(PyTypeObject *type, PyObject *temp)
 
         Py_ssize_t n = PyList_GET_SIZE(subclasses);
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyTypeObject *subclass = _PyType_CAST(PyList_GET_ITEM(subclasses, i));
-            res = mro_hierarchy_for_complete_type(subclass, temp);
+            PyValue child = PyList_GetValue(subclasses, i);
+            PyTypeObject *subclass = NULL;
+            if (PyValue_IsNull(child) || PyErr_Occurred()) {
+                res = -1;
+            }
+            else if (!PyValue_IsObject(child)) {
+                PyErr_SetString(PyExc_SystemError,
+                                "subclass list contains a non-object value");
+                res = -1;
+            }
+            else {
+                PyObject *child_object = PyValue_AsPyObjectBorrow(child);
+                if (!PyType_Check(child_object)) {
+                    PyErr_SetString(PyExc_SystemError,
+                                    "subclass list contains a non-type object");
+                    res = -1;
+                }
+                else {
+                    subclass = (PyTypeObject *)child_object;
+                    res = mro_hierarchy_for_complete_type(subclass, temp);
+                }
+            }
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue retired_child = child;
+            child = PyValue_NULL;
+            PyValue_XCLOSE(retired_child);
+            _PyValue_RestoreException(saved);
+            if (PyErr_Occurred()) {
+                res = -1;
+            }
             if (res < 0) {
                 break;
             }
         }
-        Py_DECREF(subclasses);
+        type_mutation_close(&subclasses);
+        if (PyErr_Occurred()) {
+            res = -1;
+        }
     }
 
     return res;
@@ -1878,14 +1918,39 @@ type_check_new_bases(PyTypeObject *type, PyObject *new_bases, PyTypeObject **bes
     }
     Py_ssize_t n = PyTuple_GET_SIZE(new_bases);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *ob = PyTuple_GET_ITEM(new_bases, i);
-        if (!PyType_Check(ob)) {
+        PyValue item = PyTuple_GET_VALUE(new_bases, i);
+        if (!PyValue_IsObject(item) ||
+            !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+            PyObject *receiver_owner = Py_NewRef((PyObject *)type);
+            PyObject *receiver_name_owner = NULL;
+            if (PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
+                receiver_name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
+            }
+            PyTypeObject *actual_type = PyValue_TYPE(item);
+            PyObject *actual_type_owner = Py_NewRef((PyObject *)actual_type);
+            PyObject *actual_name_owner = NULL;
+            if (PyType_HasFeature(actual_type, Py_TPFLAGS_HEAPTYPE)) {
+                actual_name_owner = Py_NewRef(((PyHeapTypeObject *)actual_type)->ht_name);
+            }
+            assert(receiver_owner != NULL);
+            assert(actual_type_owner != NULL);
+            assert(!PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE) ||
+                   receiver_name_owner != NULL);
+            assert(!PyType_HasFeature(actual_type, Py_TPFLAGS_HEAPTYPE) ||
+                   actual_name_owner != NULL);
+            const char *receiver_name = type->tp_name;
+            const char *actual_name = actual_type->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "%s.__bases__ must be tuple of classes, not '%s'",
-                         type->tp_name, Py_TYPE(ob)->tp_name);
+                         receiver_name, actual_name);
+            type_mutation_close(&actual_name_owner);
+            type_mutation_close(&actual_type_owner);
+            type_mutation_close(&receiver_name_owner);
+            type_mutation_close(&receiver_owner);
             return -1;
         }
-        PyTypeObject *base = (PyTypeObject*)ob;
+        PyObject *ob = PyValue_AsPyObjectBorrow(item);
+        PyTypeObject *base = (PyTypeObject *)ob;
 
         if (is_subtype_with_mro(lookup_tp_mro(base), base, type) ||
             /* In case of reentering here again through a custom mro()
@@ -1979,18 +2044,38 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
     return res;
 
   undo:
+    assert(PyList_CheckExact(temp));
     n = PyList_GET_SIZE(temp);
     for (Py_ssize_t i = n - 1; i >= 0; i--) {
-        PyTypeObject *cls;
-        PyObject *new_mro, *old_mro = NULL;
-
-        PyArg_UnpackTuple(PyList_GET_ITEM(temp, i),
-                          "", 2, 3, &cls, &new_mro, &old_mro);
+        PyValue record_value = PyList_GET_VALUE(temp, i);
+        assert(PyValue_IsObject(record_value));
+        PyObject *record_owner = Py_NewRef(
+            PyValue_AsPyObjectBorrow(record_value));
+        assert(PyTuple_CheckExact(record_owner));
+        Py_ssize_t record_size = PyTuple_GET_SIZE(record_owner);
+        assert(record_size == 2 || record_size == 3);
+        PyValue cls_value = PyTuple_GET_VALUE(record_owner, 0);
+        PyValue new_mro_value = PyTuple_GET_VALUE(record_owner, 1);
+        assert(PyValue_IsObject(cls_value));
+        assert(PyValue_IsObject(new_mro_value));
+        PyObject *cls_object = PyValue_AsPyObjectBorrow(cls_value);
+        PyObject *new_mro = PyValue_AsPyObjectBorrow(new_mro_value);
+        assert(PyType_Check(cls_object));
+        assert(PyTuple_CheckExact(new_mro));
+        PyTypeObject *cls = (PyTypeObject *)cls_object;
+        PyObject *old_mro = NULL;
+        if (record_size == 3) {
+            PyValue old_mro_value = PyTuple_GET_VALUE(record_owner, 2);
+            assert(PyValue_IsObject(old_mro_value));
+            old_mro = PyValue_AsPyObjectBorrow(old_mro_value);
+            assert(PyTuple_CheckExact(old_mro));
+        }
         /* Do not rollback if cls has a newer version of MRO.  */
         if (lookup_tp_mro(cls) == new_mro) {
             set_tp_mro(cls, Py_XNewRef(old_mro), 0);
             Py_DECREF(new_mro);
         }
+        type_mutation_close(&record_owner);
     }
     Py_DECREF(temp);
 

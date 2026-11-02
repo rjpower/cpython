@@ -35,3 +35,12 @@ fixture, focused legal lifetime/OOM/body/error tests and exact scoped entry
 contract. Cheap source/AST checks then at most3 meaningful actual syntax
 TUs30seconds each, not synthetic declarations. No objects/link/runtime/timing.
 Recursive parser/context-aware registration remain separately reviewed work.
+
+Actual first source edit02:04:15 UTC. Critical early review adds the current
+vectorcall-target eligibility contract: pure _PyCFunction_CanCallScoped checks
+supported standard dispatch before Begin, and the gateway checks again after
+allocation/reentry. A vector gateway may return +1 strictly NOT_INVOKED with no
+result/error; the paired VM caller drains partial scope under original input
+liveness, refreshes, then uses existing callable semantics. Never replay an
+invoked body. Fixed O retains its existing0/-1 contract. This directly coupled
+dispatch amendment does not extend the03:03 ceiling or authorize parser work.

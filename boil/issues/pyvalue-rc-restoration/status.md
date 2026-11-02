@@ -68,8 +68,10 @@ universal-value worktree. Dependent storage and native cuts continue.
   independently accepted as source only. Compiler constant indexing/compaction
   and checked value-list replacement are independently source-accepted;
   canonical typed constant-key production and managed initialization before
-  CREATE are independently source-accepted. Recursive cache/interning remains
-  in design; the canonical repr guard is independently source-accepted with
+  CREATE are independently source-accepted. Recursive cache/interning and seven
+  proven object metadata reads are now source-accepted; actual full compile.c
+  syntax passes. Code-object interning/validation is the next design. The
+  canonical repr guard is independently source-accepted with
   actual Object/fixture syntax checks passing and four unexecuted methods.
 - The coordinator maintains the log and monitoring loop, prepares qualification
   and the interpreter performance checkpoint, and integrates reviewed changes.

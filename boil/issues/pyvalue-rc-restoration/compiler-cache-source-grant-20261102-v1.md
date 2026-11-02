@@ -28,3 +28,12 @@ Checkpoint actual canonical insertion/index source and actual syntax diagnostics
 then recursive interning/fixture AST/exact independent review. Wider compile.c
 diagnostics remain explicit. At most2 meaningful syntax checks per changed
 revision; no object/link/candidate/runtime/timing in this source grant.
+
+Window closed early. First source edit observed no later than02:05:45 UTC;
+concrete checkpointfa7b288e at02:08:21 meets the15-minute checkpoint. Final
+v2 author709c89c9 and independent review94d257be accept the exact named source.
+Review corrected explicit negative iterator statuses and added actual slice/
+same-NaN hash witnesses. Eighteen methods are AST-only (five new). The exact
+unchanged selected-body projection passes actual syntax with real headers;
+full compiler metadata was a separate seven-read dependency, subsequently
+closed under its own source grant. No runtime qualification.

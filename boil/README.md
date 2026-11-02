@@ -34,6 +34,7 @@ The first JIT increment is an isolated experiment; these images contain no new J
 | Current hypotheses and parallel assignments | [Runtime work after peer review](design/runtime-work-breakdown.md) |
 | Whole-method compilation, tracing and optimization roadmap | [Cohesive JIT system](design/jit-e2e-system.md) |
 | Attribute semantics, feedback and proposed typed SSA | [IR and feedback design](design/jit-ir-feedback/design.md) |
+| Opaque extension API and gradual rebuilt-source migration | [Extension API](design/extension-api.md) |
 | LuaJIT dictionary prediction versus shapes and slots | [Storage comparison](design/jit-ir-feedback/dictionary-storage-comparison.md) |
 | Performance findings and recommendation | [GC and interpreter performance](design/gc-and-interpreter-performance.md) |
 | Measured results | [Performance report](issues/gc-cleanup-scanning/performance.md) |

@@ -111,6 +111,23 @@
     "runtime_ast_methods": 4,
     "whole_object_behavior_accepted": false
   },
+  "compiler_cache_interning": {
+    "author_sha256": "709c89c9fad6f638eea2476280675a7e5c7db7068c678822232400aa1730ff5f",
+    "review_sha256": "94d257be42efbb6b8d4a25bf745c165c9a08a102570805b9637068eb9d073b9e",
+    "source_window_closed_early": true,
+    "runtime_ast_methods": 18,
+    "new_runtime_ast_methods": 5,
+    "exact_source_projection_syntax_pass": true,
+    "whole_compiler_runtime_accepted": false
+  },
+  "compiler_object_metadata_readers": {
+    "author_sha256": "7e2340ae0555081e05aab14998dd49fea975e9dc9a8bd160773442a18aa5631b",
+    "review_sha256": "f3b04a69946131af409a12bbc2ce59a019c69563a92cc112d661681a9c0bdefb",
+    "source_window_closed_early": true,
+    "replaced_reads": 7,
+    "full_compile_translation_unit_syntax_pass": true,
+    "whole_compiler_runtime_accepted": false
+  },
   "candidate_build": false,
   "runtime_tests_executed": false,
   "performance_measured": false,

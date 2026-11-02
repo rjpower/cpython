@@ -1926,3 +1926,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Loom59 exactly,47,284characters/five diagrams. No coherent
   restored candidate execution or timing.
   [Component evidence](issues/pyvalue-rc-restoration/source-components-20261102-v1.json).
+- 2026-11-02 02:19 UTC: Accept compiler cache/interner709c89c9/94d257be
+  and seven metadata reads7e2340ae/f3b04a69; both windows close
+  early. Full actual compile.c syntax passes. Eighteen compiler
+  methods remain AST-only; no whole compiler runtime claim.
+  Native vector-engine concrete checkpointe3adf36f arrives early
+  with actual Clinic products/three syntax TUs; source review
+  remains pending. Attribute review catches stale method-output
+  re-store and corrects LOAD getter-entered failure retirement;
+  no attribute source accepted yet. Source grants unchanged.
+  Publish/read back Loom60 exactly,48,225characters/five diagrams.
+  Add opaque-extension design entry to the starting README.
+  No restored candidate execution or timing.
+  [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).

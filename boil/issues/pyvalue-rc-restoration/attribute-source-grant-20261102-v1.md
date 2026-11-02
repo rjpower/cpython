@@ -45,3 +45,22 @@ and refresh even with Temps0. Folded locals preserve existing visibility.
 Focused legal fixtures, host checks/generation and at most3 meaningful changed
 syntax TUs30seconds each. No object/link/runtime/benchmark/ABI removal or new
 representation mode. General type-cache and remaining native APIs stay required.
+
+Necessary exact interface handoffs discovered during implementation are included
+under the unchanged ceiling: adapt the sole additional GetMethodValue call in
+_PyEval_MatchKeys with explicit owning method/receiver views and balanced caller
+Temps; no whole pattern-matching/refresh acceptance. After generation proves
+zero remaining production callers, remove the superseded private
+_Py_LoadAttr_ValueSteal implementation and internal declaration, whose role is
+replaced by the bounded helper. This internal cleanup does not authorize public
+dictionary/native API removal or execution of the rejected migration script.
+
+Early source review corrects the earlier overly broad LOAD failure restoration:
+only bridge-preparation failure restores the receiver temporary before full
+unwind. Once the getter is invoked, original95 source retires the receiver
+before checking failure; preserve that point on success AND failure, then force
+refresh before error/decoded-state use. Keep a computed folded result separate.
+Add a legal receiver/deeper-temporary finalizer-order witness. No source has
+been accepted under the superseded failure assumption, and no body is replayed.
+The generated method result must also have no stale post-cleanup re-store:
+publish both real homes, invalidate cached pointers, then retire/refresh.

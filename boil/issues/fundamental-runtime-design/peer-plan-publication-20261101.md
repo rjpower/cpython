@@ -491,3 +491,8 @@ candidate runtime or timing has executed.
   47,284characters/five diagrams; snapshot SHA256 `a1c9faea6ca103550b4e50adf9e664569633b48fc42cae1c3ffb14ef1293e35c`.
   Storage/readers/repr source accepted; next finite attribute and
   native engine cuts proceed. Whole runtime/timing still pending.
+
+- 2026-11-02 02:19 UTC: Published/read back revision60 exactly,
+  48,225characters/five diagrams; snapshot SHA256 `dac5518100d7b32cc176aab93bc35746a65c9a678887c03cce90551cce4af0ef`.
+  Compiler cache/metadata source accepted and full compile.c syntax
+  passes; active attribute/native source still awaits review.

@@ -281,3 +281,22 @@ and native vector-engine (60min/20min checkpoint) grants now proceed in
 parallel. Generic native VM caller adoption follows the attribute source
 freeze, preserving one owner for the VM producer/generation lane. Engine source
 alone cannot close its actual Python-to-native route.
+
+## Compiler cache and metadata,2026-11-02 02:16 UTC
+
+Review94d257be accepts canonical cache/interner source709c89c9. Constants,
+typed keys and small indices stay canonical; conditional insertion distinguishes
+inserted/existing/error. Shared tuple replacement preserves typed equality/hash
+and cached hash, without assuming uniqueness or weakening public setters.
+Frozensets and slices rebuild owned representatives; the old object merge entry
+retains its original pointer until fallible conversion succeeds, then publishes
+before retirement. Review corrected negative iterator status handling. Five new
+tests cover shared/hash tuples, NaN identity, typed signed zeros, nested code
+units, slices and marshal determinism; all18 methods remain AST-only.
+
+The exact changed-body projection passes syntax. A separate ten-minute metadata
+cut then replaces seven proven object-only reads (capsules/Unicode/PySTEntry),
+reviewf3b04a69 binding7e2340ae. It leaves accepted cache/interner source exact.
+The full actual Python/compile.c TU now passes syntax under real headers. Both
+windows closed early. Old native dictionary bridges and wider compiler/runtime
+execution remain unqualified; syntax closure is not runtime qualification.

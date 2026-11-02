@@ -39,10 +39,10 @@ the caller nor parser runtime routes are admitted by these source checkpoints.
 Further parser families, varpos/recursive converters, exact-argument preparation,
 the constructor-init shim, broader binder cleanup, other gateways and the opaque
 extension backend remain unfinished. Objects/object.c and typeobject.c remain
-held; the abstract.c consumer repair now has its own reviewed scope. Hard
+held; the abstract.c consumer repair is committed. Hard
 compatibility is not a gate. All native/parser source grants above are closed.
-State_audit now implements the abstract consumer port; wiki_audit revises the
-type-cache design after review.
+State_audit now designs the positional Clinic increment; wiki_audit implements
+the reviewed type-cache provider scope.
 
 ## Design evidence
 

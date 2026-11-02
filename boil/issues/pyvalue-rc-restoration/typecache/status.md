@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: v3 reviewed; revise two finite details before source grant
-- Owner: wiki_audit revises design; coordinator reviews before source
+- Stage: v3 design accepted; first provider increment in implementation
+- Owner: wiki_audit implements; coordinator independently reviews and integrates
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -17,25 +17,35 @@ admission. Live mutations block admission through rollback/retirement. Static
 teardown permanently closes lookup and Python entry for that interpreter;
 shared static tags remain usable by other interpreters.
 
-The coordinator accepted that direction and terminal policy subject to two
-corrections: the rejection must use a dedicated raw write/abort primitive
-(ordinary Py_FatalError may call Python), and the general forced-version setter
-must be removed completely. Internal zero-tag sites must preserve descendant
-invalidation or be terminal/refcount-zero teardown. Wiki_audit revises those
-finite details and proposes the first bounded implementation scope. No source
-grant, completed mutation proof or runtime pass exists.
+The revised design resolves the two coordinator findings: a dedicated fixed
+raw write/abort path cannot call Python during terminal rejection, and the whole
+general forced-version setter is removed in the later core increment. Internal
+zero-tag sites have explicit descendant/teardown preconditions.
+
+The first provider increment has a seven-path grant: types_state fields in
+pycore_interp_structs.h; admission declarations in pycore_typeobject.h; canonical
+entries/insertion contract in pycore_typecache.h; Python/typecache.c; the exact
+typeobject lookup/admission/version-producer functions listed in the scope;
+existing Modules/_testinternalcapi/typecache.c bridge; new
+Lib/test/test_pyvalue_typecache.py. No other scalar bridge, object.c/abstract.c,
+index or shared build is owned by this lane. Root reviews the bounded delta;
+it does not stage the whole held typeobject file by default.
+
+This increment does not admit the partial runtime. Static cache admission stays
+unconnected until publication ports; mutation traversal, all four actual guards,
+feedback, terminal lifecycle wiring, unsafe setter retirement and finite bundled
+writers remain required. Freeze actual inputs for coordinated checks, then
+independently review code/results before any source checkpoint.
 
 [V3 design](../../../../build/pyvalue-typecache-design-20261102-v3/design.md),
 [finite ledger](../../../../build/pyvalue-typecache-design-20261102-v3/finite-ledger.md),
-[coordinator review](../../../../build/pyvalue-typecache-design-20261102-v3/coordinator-review.md).
-V2 and its reviews remain historical evidence in their original directories.
+[exact seven-path scope](../../../../build/pyvalue-typecache-design-20261102-v3/first-increment.md),
+[coordinator acceptance](../../../../build/pyvalue-typecache-design-20261102-v3/coordinator-accept.md).
+Earlier proposals/freezes/reviews remain historical evidence.
 
 The fresh [composition review](../../../../build/pyvalue-source-integration-20261102-v1/shared-composition-review.md)
 also identifies object-only scalar conversions in lookup_method_ex, descriptor/new
 slots, type lookup/getattr, generic object getattr and abstract special-method
-calling. Three full source files remain held. Their object/call bridges need
+calling. The abstract repair is now committed; two full source files remain held. Their object/call bridges need
 fallible conversion and owned cleanup; that work does not substitute for the
 separate cache lifetime/mutation proof above.
-
-Fresh review workspace: ../../../../build/pyvalue-typecache-design-20261102-v3.
-No source edits or new cache implementation have been authorized.

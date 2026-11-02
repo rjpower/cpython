@@ -1,6 +1,6 @@
 # Remaining core and extension consumers
 
-- Stage: symtable, codegen, sys.flags, errors and marshal committed; further ports queued
+- Stage: symtable, codegen, sys.flags, errors, marshal and abstract consumers committed; further ports queued
 - Owner: coordinator assigns scoped ports and independent review
 - Goal: remove accidental boxed/borrowed assumptions while making extension
   ports possible and incremental.
@@ -46,4 +46,9 @@ now supplies concrete grouped diagnostics; use it instead of repeating the inven
 actual full TU/object and nine host controls pass. Candidate tests await linking.
 
 [Instance/subclass consumer port](abstract/status.md): design independently accepted;
-state_audit implements the scoped tuple reads and scalar special-method bridge.
+reviewed two-file source checkpoint committed as `3296af9ba58`; actual TU/object
+and 23 host controls pass. Candidate tests remain unexecuted.
+
+Next design: fixed-arity positional-only Clinic constructor views, including the
+actual code-object raw tuple reads. State_audit prepares a finite producer/provider
+scope in build/pyvalue-clinic-positional-design-20261102-v1 before source grant.

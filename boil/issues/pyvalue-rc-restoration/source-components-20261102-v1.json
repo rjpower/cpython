@@ -294,6 +294,11 @@
       "commit": "6780ba211ac9a242dee156e18572be2c246cfa03",
       "changed_paths": 10,
       "runnable": false
+    },
+    "abstract_consumers": {
+      "commit": "3296af9ba588274a2584b6e4c05e10ad37801ac9",
+      "changed_paths": 2,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

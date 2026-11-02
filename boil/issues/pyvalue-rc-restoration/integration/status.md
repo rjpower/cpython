@@ -1,6 +1,6 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: fifteen source checkpoints; merged diagnostic build failed
+- Stage: sixteen source checkpoints; merged diagnostic build failed
 - Owner: coordinator; independent peer reviews precede each source checkpoint
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
@@ -30,7 +30,7 @@ results cannot supply it. Use results to improve specific mechanisms.
 
 ## Current checkpoint
 
-Fifteen reviewed source commits end at `6780ba211ac`; their exact receipts are
+Sixteen reviewed source commits end at `3296af9ba58`; their exact receipts are
 linked from the [board](../../README.md). The shared composition commit
 `c21d0a374ee` excludes three object/type files with concrete scalar/cache holds.
 Codegen `ebc9740c4d5` and sys.flags `015eb226fb3` passed independent reviews and
@@ -65,8 +65,13 @@ Eight candidate methods remain unexecuted. The subsequent
 with no executable and preserves all 7,332 source inputs. It includes the three
 held object/type files for diagnostics; it does not admit them.
 
-Next: complete the reviewed instance/subclass consumer port, close the type-cache
-design corrections and assign bounded implementation. Remaining parser/Clinic
+The [instance/subclass port](../core-consumers/abstract/status.md) is now
+committed as `3296af9ba58`; full TU/object and 23 host controls pass, while
+twelve candidate methods remain unexecuted. No full build was repeated merely
+for this component; the merged diagnostic record above binds the earlier chain.
+
+Next: implement the reviewed type-cache provider and design the fixed-arity
+positional Clinic port. Remaining parser/Clinic
 and bundled consumers need owning views. Reuse affected checks, then link and
 run focused tests. Broad qualification and quiet timing wait for a coherent
 candidate.

@@ -1,7 +1,7 @@
 # Restore universal PyValue under RC
 
-- Stage: fifteen reviewed source checkpoints; merged diagnostic build failed.
-- Owner: state_audit instance/subclass consumer implementation; wiki_audit type-cache proof; coordinator integrates.
+- Stage: sixteen reviewed source checkpoints; merged diagnostic build failed.
+- Owner: state_audit positional Clinic design; wiki_audit type-cache provider; coordinator integrates.
   Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.
@@ -10,10 +10,11 @@
 
 Qualified interim images remain `eba351fee7d`, private `boilrc1`, boxed heap
 fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
-`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `6780ba211ac`.
-The [board](../README.md) lists all fifteen reviewed commits. The only remaining
-original uncommitted paths are Objects/abstract.c, object.c and typeobject.c,
-held for named scalar-return/call and type-cache correctness findings.
+`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `3296af9ba58`.
+The [board](../README.md) lists all sixteen reviewed commits. The remaining
+original held paths are Objects/object.c and typeobject.c.
+Abstract consumers are committed; type-cache source changes now have a scoped
+reviewed grant alongside the remaining scalar-return/call holds.
 
 The [first build](first-build/status.md) configured with the new `boilvalrc1`
 namespace and produced 141 objects, including symtable, codegen and sysmodule.

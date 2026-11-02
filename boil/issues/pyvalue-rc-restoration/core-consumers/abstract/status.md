@@ -1,25 +1,29 @@
 # Instance and subclass consumer port
 
-- Stage: design independently accepted; implementation active
-- Author/implementer: coordinator design; state_audit implementation
+- Stage: independently reviewed and committed as `3296af9ba588274a2584b6e4c05e10ad37801ac9`
+- Author: coordinator design; state_audit implementation
 - Code/results reviewer and integrator: coordinator
 
-Four remaining tuple reads and the special-method callable bridge in abstract.c
-still assume object-pointer storage. Use checked owning tuple views through
-recursive predicates, retain a selected single-base child through both old-owner
-closes, and materialize canonical special methods only at the C call boundary.
-Preserve ordered short circuit, recursion accounting and primary/cleanup errors.
+Four remaining tuple reads and the scalar special-method callable bridge now use
+checked owning views. The iterative single-base walk keeps a selected child
+through retirement of both old owners. Predicate order, recursion accounting,
+truth conversion and primary/first cleanup errors are preserved.
 
-Exact source grant: Objects/abstract.c's value-header rename, abstract_get_bases,
-abstract_issubclass, call_special_method, object_recursive_isinstance and
-object_issubclass; one local first-error close helper; new
-Lib/test/test_pyvalue_abstract.py. Keep all other functions exact, including
-check_class/object_isinstance, whose adjacent cleanup/fault paths are separate
-holds. No provider/header/index/shared-build grant. Root coordinates native
-checks and commits only after independent code/results review.
+Exactly five existing functions changed plus one local close helper; 106 other
+bodies and all other text remain exact except the admitted include alignment.
+check_class/object_isinstance retain separate cleanup/fault qualification holds.
+
+Actual full abstract.c TU and abstract.o pass with zero warnings on stable
+configured inputs. Twenty-three host reference tests pass without skips:
+twelve new methods and eleven unchanged controls. Twelve candidate methods
+remain unexecuted; host boxed values do not prove canonical lifetime behavior.
+The merged interpreter remains unlinked.
 
 [Design](../../../../../build/pyvalue-abstract-consumers-20261102-v1/design.md),
-[independent review](../../../../../build/pyvalue-abstract-consumers-20261102-v1/independent-design-review.md).
-Next: freeze implementation, check full TU/object under actual configured
-headers, review results and commit the useful dependency. Host controls do not
-execute the restored runtime; candidate witnesses await a linked interpreter.
+[design review](../../../../../build/pyvalue-abstract-consumers-20261102-v1/independent-design-review.md),
+[code/results review](../../../../../build/pyvalue-abstract-consumers-20261102-v1/coordinator-code-review.md),
+[receipt](../../../../../build/pyvalue-abstract-consumers-20261102-v1/receipt.md),
+[actual native checks](../../../../../build/pyvalue-abstract-consumers-20261102-v1/native-v1.json),
+[commit](../../../../../build/pyvalue-abstract-consumers-20261102-v1/commit.json).
+Next: execute candidate predicates/lifetimes and applicable fault checks when
+the merged runtime links. This source acceptance is not runtime admission.

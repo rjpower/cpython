@@ -10,9 +10,9 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Foundation frozen early and independently source-accepted: 39 host tests, seven generators/eight products and six selected syntax checks pass. The separate specialized O-call production successor is independently source-accepted with 40 host tests/four syntax checks passing. Its source window closed early; fixture composition continues separately. Wider providers/native/Clinic consumers remain open. |
-| coordinator | Tuple/member/cell storage, shared value operations and value iteration independently accepted as partial source. Set checkpoint v5 is independently accepted: six files/eight parsed tests and two passing provisional syntax units. Its source window closed early. Python instance-slot migration is design-only. |
-| coroutine_design_review | List/structseq component, fixed native-scope engine and bounded dictionary clear/release increment independently source-accepted. Whole dictionary remains incomplete. Adding a real End-cleanup failure fixture, then designing the next internal dictionary-provider cut. |
+| restart_audit | Foundation, specialized O-call and shared local/slot retirement source accepted: 41 host tests, seven generators/eight products and four selected syntax checks pass for the latter. Common-constant generated closure accepted. Designing exact dictionary VM consumer/publication/retirement closure. |
+| coordinator | Tuple/member/cell/iteration, set storage, canonical Python instance slots and common-constant source components accepted. Slot component has ten AST-only tests; common constants have five. Legal set fixture correction accepted. Coherent source integration and wider consumers remain required. |
+| coroutine_design_review | List/structseq, native-scope engine, bounded dictionary clear/release and two additive owning-read providers accepted as source. Legal native fixture correction accepted. Implementing coherent dictionary mutations, immediate resize and watcher handoffs. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
 Component evidence is retained under `build/pyvalue-root-container-checkpoint-20261101-v1`,
@@ -55,10 +55,11 @@ This source correction is accepted; runtime cleanup-failure coverage is pending.
 
 `_Py_T_VALUE` and `_Py_T_VALUE_EX` distinguish strong value fields from object
 pointer fields. Structseq uses the former; absent fields read as None. The latter
-preserves absent-slot AttributeError behavior. Every value field initializes to
-NULL1 before observation; zero-filled memory is insufficient. General instance
-slots still hold object pointers. Their allocator/traversal/destructor migration
-must accompany the specialized attribute consumer change.
+preserves absent-slot AttributeError behavior. The accepted instance-slot source
+uses VALUE_EX for Python-created slots. NULL1 and variable size initialize before
+reference CREATE callbacks; zero-filled memory is insufficient. Traversal/clear,
+member setters and specialized interpreter loads/stores move with that format.
+Legacy object fields and __class__ keep their generic descriptor semantics.
 
 Dictionary watcher callbacks retain the existing **before-mutation** contract.
 The earlier post-mutation proposal was corrected against the actual C API
@@ -92,12 +93,11 @@ See [extension API direction](extension-api-direction-20261101.md) and the
 Complete dict/set/instance storage, the core semantic and native-call surfaces,
 parser/Clinic and bundled consumers, and `boilvalrc1` import/cache/wheel identity.
 Then build and qualify one coherent runtime. Provisional checks use the old debug
-pyconfig only for diagnostics; they are not candidate builds. The foundation
-froze early; its budget is closed. The separate
-[O-call successor](o-caller-source-grant-20261101-v1.md) runs from 23:29 to
-23:59 UTC. Set's first edit was 22:33:01 UTC, giving a 00:03:01 UTC ceiling.
-The dictionary cut retains its original 00:00:46 ceiling; the native-scope
-fixture delta retains 00:10:49. No original source budget has been extended.
+pyconfig only for diagnostics; they are not candidate builds. Foundation, O-call,
+set storage, instance-slot and additive dictionary-provider windows closed early.
+Shared retirement and canonical common-constant windows also closed early.
+The active dictionary mutation/growth cut has a01:34:24 UTC ceiling on2026-11-02.
+Each has its own source grant; no original source budget was extended.
 
 Measure the unified-value register interpreter with verified JIT-off execution
 and existing basic optimizations before returning to JIT performance work. The
@@ -137,3 +137,40 @@ local retirement/error/reload, other native families, parser/Clinic, bundled
 consumers and private ABI identity. A passing source component does not close
 these dependencies. Full HPy conformance does not gate the internal interpreter
 checkpoint.
+
+## Current correction and source state,2026-11-02 00:20 UTC
+
+The [deallocator contract correction](deallocator-fixture-correction-20261102-v1.md)
+retracts the earlier exceptional-DECREF fixture witness claims. tp_dealloc must
+preserve the entry exception; debug builds enforce it. Keep the contract and
+assertion. Corrected legal unraisable/reentry/primary-preservation fixtures are
+independently accepted at receipt `bcd13b6f`:14 native/local and eight set methods,
+all AST-only. Set production storage is unchanged. No injected destructor error
+is now claimed as a valid scope/operation failure witness.
+
+Owning dictionary provider review `95427515` accepts two new definitions and six
+AST-only real set-consumer tests. Legacy getters and the rejected API-removal
+script remain untouched. C's next mutation/growth cut retains one original event
+classification, sends its one pre-mutation notification after required capacity
+allocation succeeds, and re-probes after callback/release boundaries.
+
+Instance-slot review `a7400902` accepts the corrected ten-file source at
+`d8879689`; its [disposition](instance-slot-source-disposition-20261102-v1.json)
+closes that window. Adapter/member/specializer syntax pass; the full type TU still
+fails old wider container API calls. The slot route is an interpreter executing
+specialization: existing JIT helpers tier down before its effect.
+
+A's shared local/slot kernel final receipt `73e95037` fixes the v1 C-only result
+leak on refresh failure and includes intrinsic error metadata. Independent review
+`d4e78148` accepts the final kernel. D verified153 emitted folded-local publication sites have
+only pure writes/commit through dispatch. Generic input/field retirement remains
+required: actual STORE_ATTR_WITH_HINT still has unchecked releases and can use
+stale executing words after a legal finalizer changes instrumentation. This is
+an explicit counterexample for the next consumer closure, not a whole-VM claim.
+
+Common-constant review `a0f5c131` accepts root source `7dc3c2f6` and generated
+closure `c8a4ae8f`: the14-entry table now holds inline -1, both generated loads
+use DUP, shutdown guards scalar values, and compiler object getters return owned
+references. Two selected syntax checks and41 host generator checks pass; five
+runtime tests are AST-only. [Component dispositions](source-components-20261102-v1.json)
+retain exact acceptance and retraction limits.

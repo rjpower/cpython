@@ -1866,3 +1866,15 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   as historical evidence; corrected fixture binding remains separate.
   Slot/shared-retirement designs under review; no native runtime claim.
   [Disposition](issues/pyvalue-rc-restoration/o-caller-source-disposition-20261101-v1.json).
+- 2026-11-02 00:29 UTC: Independently accept canonical Python instance-slot,
+  shared local/slot retirement and common-constant source components.
+  Constructor NULL1/variable-size initialization precedes reference CREATE;
+  review covers153 folded-local publication sites and slot owner aliasing.
+  Kernel41host/foursyntax and constants41host/twosyntax pass; all runtime
+  tests remain unexecuted. Accept two additive owning dictionary reads;
+  mutation/growth has a timely31-fragment checkpoint, final review ongoing.
+  Retract illegal exceptional-DECREF test witnesses; retain deallocator
+  contract/debug guard and accept legal unraisable/reentry replacements.
+  Generic hinted-store retirement and old Clinic array parsing remain
+  actual closure gaps. Publish/read back Loom54,45,183characters/five diagrams.
+  [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).

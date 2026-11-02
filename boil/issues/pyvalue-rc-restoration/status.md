@@ -48,16 +48,17 @@ The [restoration design](design.md) passed independent review. The
 and passed independent component source review on `95be1d28` in the isolated
 universal-value worktree. Dependent storage and native cuts continue.
 
-- restart_audit has frozen the value/ownership foundation and now closes the
-  separately bounded specialized O-call publication/reload successor.
+- restart_audit has frozen the foundation, specialized O-call and shared
+  local/slot retirement source; now designs dictionary VM consumer closure.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
 - coroutine_design_review implements list/structseq storage and iteration;
   that partial source component is independently accepted. Its native-scope
-  engine and bounded dictionary clear/release component are source-accepted;
-  actual native cleanup fixtures and dictionary closure continue. The coordinator
+  engine, bounded dictionary clear/release and owning-read components are
+  source-accepted; dictionary mutation/growth closure continues. The coordinator
   implements tuple/cell/member/iteration and set storage; partial tuple/member
-  and cell/iteration components are independently accepted as source only.
+  cell/iteration, set, instance-slot and common-constant components are
+  independently accepted as source only.
 - The coordinator maintains the log and monitoring loop, prepares qualification
   and the interpreter performance checkpoint, and integrates reviewed changes.
 

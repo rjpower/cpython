@@ -62,3 +62,10 @@ other calling conventions, the HPy backend and rebuilt-extension conformance
 remain required later work. No candidate native execution is claimed.
 
 The detailed source cut, wrapper-family classification, official-source limitations, and retained dictionary rejection/supersession evidence are in [the design proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md). The existing 660-path consumer census remains the migration inventory; this design does not replace it or authorize broad API removals.
+
+Exception-contract correction,2026-11-02: deallocators preserve the entry
+exception and report failures as unraisable. Earlier unexecuted destructor-error
+injections are retracted as valid witnesses. Corrected tests cover legal reentry,
+unraisable reports and primary preservation. Checked native-body and execution-
+refresh failures remain real error routes; no deallocator contract or debug
+assertion is relaxed. See the [correction record](../issues/pyvalue-rc-restoration/deallocator-fixture-correction-20261102-v1.md).

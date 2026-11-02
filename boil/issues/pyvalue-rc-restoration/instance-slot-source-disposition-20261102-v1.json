@@ -1,0 +1,21 @@
+{
+  "decision": "ACCEPT_DEPENDENT_INSTANCE_SLOT_SOURCE_COMPONENT",
+  "decided_utc": "2026-11-02T00:16:00+00:00",
+  "source_window_closed_early": true,
+  "original_ceiling_utc": "2026-11-02T00:53:24+00:00",
+  "author_checkpoint": "build/pyvalue-instance-slot-source-20261102-checkpoint-v2/receipt.json",
+  "author_checkpoint_sha256": "d88796898d9e39deb0858e76dfc243af9fc7aa0d00e568abb0ce94644b072976",
+  "independent_review_sha256": "a74009028b874693069511fc2eedca28be5a100ab716ae47b3739c0f8dd838fe",
+  "source_context_paths": 10,
+  "ast_only_test_methods": 10,
+  "candidate_runtime_executed": false,
+  "syntax": "Adapter/member/specializer pass; full typeobject still fails older wider container API consumers, retained in diagnostics",
+  "dependencies": [
+    "Final exact acceptance of A's shared local/slot kernel, including post-v1 C-only-result refresh-error cleanup fix",
+    "Whole typeobject and other legacy/native API consumer migration",
+    "Native constructors bypassing declared allocation and managed-inline value initialization",
+    "Real allocation, callback, alias, lifecycle and specialized-path runtime tests"
+  ],
+  "slot_route": "Interpreter executing specialization; existing JIT helper table tiers down before slot effect",
+  "whole_runtime_accepted": false
+}

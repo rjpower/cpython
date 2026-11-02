@@ -1,0 +1,39 @@
+{
+  "status": "ACCEPT_DEPENDENT_SOURCE_COMPONENTS_NOT_RUNTIME",
+  "dictionary_owning_reads": {
+    "author_sha256": "240e189be5fd47425a9fa8f6d38be1e28fcbfe06ca0370644cd4a4577eebe2ce",
+    "review_sha256": "954275157dbafd48041764deeaa278c825eb68ce6f75cf209fba1638f60ed091",
+    "source_window_closed_early": true,
+    "legacy_api_changed": false
+  },
+  "local_slot_retirement": {
+    "author_sha256": "73e9503728ad78e6432f511b86288f4145033e533d9f994d0d40892a8d3ce5cc",
+    "review_sha256": "d4e7814884aedc871517db9884d46832762cc5e53f74e0cd89d824fa438c70f0",
+    "source_window_closed_early": true,
+    "host_tests_pass": 41,
+    "syntax_units_pass": 4,
+    "closed": "Final folded-local publication plus interpreter slot field and receiver retirement",
+    "still_required": "Generic input/field retirement, including actual hinted-store stale-dispatch counterexample"
+  },
+  "legal_fixture_correction": {
+    "review_sha256": "bcd13b6f5dec683ed4127bbf77f95c0baed35664d6815c54a0ff4af44a1b2873",
+    "native_ast_methods": 14,
+    "set_ast_methods": 8,
+    "correction_window_closed_early": true,
+    "historical_exceptional_decref_witness_claims_retracted": true,
+    "deallocator_contract_and_debug_guard_unchanged": true
+  },
+  "common_constants": {
+    "author_sha256": "7dc3c2f6614781b9384cfeaa5f144329ab8fc32fc93c9442359671a2a77f856b",
+    "generated_sha256": "c8a4ae8f4eb8964a0fd3f3a20c90ff938d8742141b59fc3ae508e57588b9793a",
+    "review_sha256": "a0f5c1314c8d381b961942ce2baaf69fd4d34ba1cc080e8942078c47b78293f2",
+    "source_window_closed_early": true,
+    "host_tests_pass": 41,
+    "syntax_units_pass": 2,
+    "runtime_ast_methods": 5
+  },
+  "candidate_build": false,
+  "runtime_tests_executed": false,
+  "performance_measured": false,
+  "integration_complete": false
+}

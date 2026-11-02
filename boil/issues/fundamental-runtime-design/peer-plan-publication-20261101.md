@@ -460,3 +460,9 @@ candidate runtime or timing has executed.
   42,457characters/five Mermaid blocks. Source-only foundation/native-scope/
   bounded dict-clear/final set accepted; corrected O-call review pending.
   Exact local snapshot SHA256 `2ed7a516b78554764fb67e0d95e36f750e384413bb46c85eee8c31a8aa9eee2d`. No restored runtime/timing.
+
+- 2026-11-02 00:29 UTC: Published/read back runtime-work-breakdown revision54,
+  45,183characters/five Mermaid blocks; exact local snapshot SHA256
+  `9afaa5c9a92fc51ef92d048132a3b6793b4504d5adc5813541754544dc48f0d1`. Instance-slot/kernel source accepted; constants pending
+  at publication and accepted subsequently. Explicit deallocator-witness
+  retraction/legal correction; no restored candidate/runtime/timing.

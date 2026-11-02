@@ -49,6 +49,8 @@ actual full TU/object and nine host controls pass. Candidate tests await linking
 reviewed two-file source checkpoint committed as `3296af9ba58`; actual TU/object
 and 23 host controls pass. Candidate tests remain unexecuted.
 
-Next design: fixed-arity positional-only Clinic constructor views, including the
-actual code-object raw tuple reads. State_audit prepares a finite producer/provider
-scope in build/pyvalue-clinic-positional-design-20261102-v1 before source grant.
+Active [positional Clinic increment](../native-parsers/positional-owners/status.md):
+20 generated wrappers frozen, producer checks pass, native diagnostics recorded;
+coordinator reviews code/results. The coordinator’s
+[object attribute bridge](object-attributes/status.md) passes native checks and
+awaits independent code/composition review by state_audit.

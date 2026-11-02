@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: v3 design accepted; first provider increment in implementation
-- Owner: wiki_audit implements; coordinator independently reviews and integrates
+- Stage: first provider reviewed; six independent files committed, typeobject delta held
+- Owner: wiki_audit designs core mutation/guards; coordinator reviews and integrates
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -34,8 +34,18 @@ it does not stage the whole held typeobject file by default.
 This increment does not admit the partial runtime. Static cache admission stays
 unconnected until publication ports; mutation traversal, all four actual guards,
 feedback, terminal lifecycle wiring, unsafe setter retirement and finite bundled
-writers remain required. Freeze actual inputs for coordinated checks, then
-independently review code/results before any source checkpoint.
+writers remain required. The actual cache and fixture TUs/objects pass without warnings. Full typeobject
+compilation still fails: 49 errors and 39 warnings mapped to unchanged bodies.
+Two host controls pass; eleven candidate methods remain unexecuted.
+
+Checkpoint `8d5a3d6af1b` contains the six independent files. The seventh,
+Objects/typeobject.c, remains held; its exact provider delta was independently
+reviewed but cannot yet be committed with unrelated unresolved scalar bridges.
+[Code/results review](../../../../build/pyvalue-typecache-provider-20261102-v1/coordinator-code-review.md),
+[native checks](../../../../build/pyvalue-typecache-provider-20261102-v1/native-v1.json),
+[commit and pending-delta receipt](../../../../build/pyvalue-typecache-provider-20261102-v1/commit.json).
+Wiki_audit now defines the finite core mutation/guard/lifecycle increment; no
+source grant exists for that next design yet.
 
 [V3 design](../../../../build/pyvalue-typecache-design-20261102-v3/design.md),
 [finite ledger](../../../../build/pyvalue-typecache-design-20261102-v3/finite-ledger.md),

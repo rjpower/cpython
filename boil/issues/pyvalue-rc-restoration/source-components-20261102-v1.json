@@ -299,6 +299,12 @@
       "commit": "3296af9ba588274a2584b6e4c05e10ad37801ac9",
       "changed_paths": 2,
       "runnable": false
+    },
+    "canonical_typecache_provider": {
+      "commit": "8d5a3d6af1ba08a7fd486e7b1751b955be27a9f6",
+      "changed_paths": 6,
+      "reviewed_typeobject_delta_pending": true,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

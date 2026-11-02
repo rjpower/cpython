@@ -41,8 +41,9 @@ the constructor-init shim, broader binder cleanup, other gateways and the opaque
 extension backend remain unfinished. Objects/object.c and typeobject.c remain
 held; the abstract.c consumer repair is committed. Hard
 compatibility is not a gate. All native/parser source grants above are closed.
-State_audit now designs the positional Clinic increment; wiki_audit implements
-the reviewed type-cache provider scope.
+State_audit has implemented and frozen the
+[positional Clinic increment](positional-owners/status.md) for coordinator
+review and checks. Wiki_audit designs the next type-cache core increment.
 
 ## Design evidence
 

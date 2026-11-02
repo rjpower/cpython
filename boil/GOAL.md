@@ -22,6 +22,9 @@ direction; Loom's `goal` artifact mirrors it.
   Python JIT, interpreter and object patterns may be replaced when they are poor.
 - First complete and measure the unified-value register interpreter, with JIT
   explicitly disabled, against matched interim RC and upstream controls.
+- Mechanize repetitive ports and use cheaper agents for bounded batches under
+  reviewed ownership rules. Prioritize a safe runnable baseline; converting
+  correct owning object bridges into direct-value operations is later tuning.
 
 ## How to work
 

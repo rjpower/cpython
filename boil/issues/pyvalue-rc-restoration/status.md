@@ -1,7 +1,8 @@
 # Restore universal PyValue under RC
 
 - Stage: reviewed source checkpoints; merged diagnostic build still has no executable.
-- Owner: state_audit startup/parser design; wiki_audit type-cache core; coordinator integrates.
+- Owner: state_audit reviews wiki_audit's MRO providers; Luna AST constructor design;
+  coordinator rules, source review and integration.
   Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.
@@ -17,6 +18,11 @@ from unfinished scalar/slot work. Positional Clinic, object/attribute/repr and
 small tokenizer/bytes and object call consumers have passed their finite source
 gates and are committed. Type_new and graph repairs are applied/reviewed pending
 typeobject composition. They do not yet form an executable candidate.
+The [first bulk AST port](porting/status.md) is committed: one producer covers
+74 sequence reads. Its full TU still fails at seven unchanged constructor
+diagnostics. The MRO providers plus one immediate wrapper are frozen for code
+review; their syntax comparison has 61 diagnostics, versus 86 before, including
+two missing-API first-use messages relocated to unchanged functions.
 
 The [first build](first-build/status.md) configured with the new `boilvalrc1`
 namespace and produced 141 objects, including symtable, codegen and sysmodule.
@@ -37,10 +43,12 @@ link. Its latest v3 snapshot at 21 checkpoints has 152 objects present and
 ## Remaining increments
 
 [Core/extension consumers](core-consumers/status.md),
-[actual VM iteration](iterator-vm/status.md),
 [type-cache correctness](typecache/status.md), and
 [native parsers/registration](native-parsers/status.md) precede
 [coordinator integration and measurement](integration/status.md).
+Use [reviewed porting batches](porting/status.md) for repetitive work.
+Correct owning object bridges are allowed in the first measurement;
+[value-native VM iteration](iterator-vm/status.md) is subsequent tuning.
 The coordinator first checkpoints reviewed source in coherent dependent commits,
 then builds/tests the merged result as soon as the dependency chain permits.
 

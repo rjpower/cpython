@@ -54,6 +54,16 @@ Give agents concrete work and completion conditions. Check their actual state;
 a queued message is not a running assignment. Stop obsolete agents and close
 assignments before replacing them. A restart or old plan does not renew work.
 
+For bulk ports, review a reusable ownership rule and representative examples
+once, then assign bounded file groups to cheaper agents or a mechanical rewriter.
+Each group records its rule, source identity, file ownership, exceptions and
+results. Regenerate products from their producers. Workers must report cases
+outside the rule rather than inventing lifetime policies. Review the actual
+batch diff and focused checks before checkpointing; the coordinator validates
+composition with shared builds. Full qualification belongs to coherent merged
+candidates, not every repeated call-site edit. See the
+[porting rules and census](issues/pyvalue-rc-restoration/porting/status.md).
+
 Update the board at meaningful transitions and keep the user informed. Keep
 about one line per concluded experiment in [WORKLOG](WORKLOG.md); designs,
 review iterations, commands and raw results belong to that experiment. Follow

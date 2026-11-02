@@ -34,7 +34,10 @@ The [board](../../README.md) owns the current restoration HEAD and checkpoint
 list. Object composition and small tokenizer/bytes consumers are committed;
 typeobject.c is the remaining original held file. Clinic covers 20 further
 positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/type_new
-deltas remain held. C3/MRO design is next. Remaining actual parser, container/
+deltas remain held. C3/MRO providers plus one wrapper are frozen for independent
+code review. The first generated AST sequence batch is committed and removes
+74 compiler diagnostics from its TU; seven unchanged constructor errors remain.
+Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the earlier

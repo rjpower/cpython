@@ -10,17 +10,21 @@ ported; hard source or binary compatibility with upstream is not required.
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
 is on `boil/pyvalue-rc-universal`. Reviewed ports
-now include the object/attribute bridge, positional constructors and small
-tokenizer/bytes readers and object C call bridges. The remaining original held file is typeobject.c.
+now include the object/attribute bridge, positional constructors, small
+tokenizer/bytes readers, object C call bridges and an AST sequence producer batch.
+The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close the concrete blockers from the merged diagnostic build.
 The latest merged build still failed before linking. The C API call bridges now
 compile, and their focused checks and independent reviews pass. Typeobject has
 reviewed provider, mutation, constructor and graph deltas; its remaining C3/MRO,
-slot and publication consumers still need closure. Wiki_audit prepares the next
-finite MRO slice; state_audit reviews it. The coordinator integrates reviewed
-changes and validates the merged result.
+slot and publication consumers still need closure. The MRO provider repair is
+frozen for independent code review. A cheaper Luna agent completed the first AST
+batch and designs the remaining AST constructor port. The coordinator reviews
+and integrates their results.
+See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)
+for mandatory ownership ports versus later performance tuning.
 See the [work board](issues/README.md) for assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT

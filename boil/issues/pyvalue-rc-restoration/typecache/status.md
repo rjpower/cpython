@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: provider/core dependencies checkpointed; graph delta reviewed; C3/MRO design under review
-- Owner: wiki_audit designs/implements finite typeobject slices; state_audit and coordinator review
+- Stage: provider/core dependencies checkpointed; graph delta reviewed; MRO14 plus wrapper frozen for code review
+- Owner: state_audit reviews wiki_audit's finite source delta; coordinator integrates
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -49,7 +49,12 @@ with six dependencies committed and its typeobject delta held. Graph repair is
 also independently reviewed as a pending exact delta: eleven functions, 405 other
 bodies and masked text exact, seven host controls passing, 29 candidate methods
 unexecuted. Its full typeobject TU still has 47 errors/39 warnings, all in unchanged
-functions/lines. C3/MRO provider design is now under independent review; construction,
+functions/lines. C3/MRO provider design is accepted with fourteen bodies granted;
+the approved immediate public wrapper is included in its frozen source delta.
+Twelve host controls pass; 41 candidate file methods remain unexecuted. The
+same-header full TU has 61 diagnostics versus 86 before; both compilations fail.
+Two missing-API first-use messages move to unchanged functions; independent code
+review remains pending. Construction,
 guards/terminal/static/bundled and scalar providers remain required.
 [Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
 [bounded coordinator grant](../../../../build/pyvalue-typecache-core-scope-20261102-v1/coordinator-review.md).

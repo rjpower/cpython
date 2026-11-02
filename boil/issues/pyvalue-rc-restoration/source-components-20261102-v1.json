@@ -331,6 +331,13 @@
       "commit": "a5563d833a73a8384c50c54dd8e1108974b401e2",
       "changed_paths": 3,
       "runnable": false
+    },
+    "ast_sequence_owners": {
+      "commit": "e645682dab527c3ba552e49de673d6c65ceebd2f",
+      "changed_paths": 3,
+      "producer_rules": 1,
+      "generated_expansions": 74,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

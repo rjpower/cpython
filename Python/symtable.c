@@ -1,10 +1,13 @@
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_symtable.h"      // PySTEntryObject
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
+#include "pycore_value.h"         // PyValue_InlineInt()
 #include "setobject.h"
 
 #include <stddef.h>               // offsetof()
@@ -13,6 +16,82 @@
 
 // Set this to 1 to dump all symtables to stdout for debugging
 #define _PY_DUMP_SYMTABLE 0
+
+static long
+symtable_long(PyValue value)
+{
+    assert(PyValue_LongCheckExact(value));
+    return PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+           PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+}
+
+static int
+symtable_get_flags(PyObject *dict, PyObject *name, long *flags)
+{
+    PyValue value = PyValue_NULL;
+    *flags = 0;
+    Py_hash_t hash = PyObject_Hash(name);
+    if (hash == -1) {
+        return -1;
+    }
+    int found = _PyDict_GetValue_KnownHash(dict, PyValue_FromObjectBorrow(name),
+                                          hash, &value);
+    if (found <= 0) {
+        return found;
+    }
+    *flags = symtable_long(value);
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLOSE(value);
+    if (saved != NULL) {
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    return PyErr_Occurred() ? -1 : 1;
+}
+
+static int
+symtable_set_flags(PyObject *dict, PyObject *name, long flags)
+{
+    /* DEF_* and USE occupy the low bits; the largest scope is CELL << 12. */
+    assert(0 <= flags && flags <= INT32_MAX);
+    return PyDict_SetValue(dict, PyValue_FromObjectBorrow(name),
+                           PyValue_FromInt32((int32_t)flags));
+}
+
+static int
+symtable_next_symbol(PyObject *dict, Py_ssize_t *pos, PyValue *key, long *flags)
+{
+    assert(PyValue_IsNull(*key));
+    PyValue value = PyValue_NULL;
+    int status = _PyDict_NextValue(dict, pos, key, &value, NULL);
+    if (status <= 0) {
+        return status;
+    }
+    assert(PyValue_IsObject(*key));
+    assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(*key)));
+    *flags = symtable_long(value);
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLOSE(value);
+    if (saved != NULL || PyErr_Occurred()) {
+        if (saved == NULL) {
+            saved = PyErr_GetRaisedException();
+        }
+        PyValue_CLEAR(*key);
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    return 1;
+}
+
+static PyObject *
+symtable_list_item(PyObject *list, Py_ssize_t index)
+{
+    /* The only producers store entry objects or directive tuples, never scalars.
+     * The enclosing symbol table retains these lists throughout analysis. */
+    PyValue value = PyList_GET_VALUE(list, index);
+    assert(PyValue_IsObject(value));
+    return PyValue_AsPyObjectBorrow(value);
+}
 
 /* error strings used for warnings */
 #define GLOBAL_PARAM \
@@ -363,11 +442,14 @@ static void _dump_symtable(PySTEntryObject* ste, PyObject* prefix)
     assert(msg != NULL);
     printf("%s", PyUnicode_AsUTF8(msg));
     Py_DECREF(msg);
-    PyObject *name, *value;
+    PyValue key = PyValue_NULL;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &value)) {
-        int scope = _PyST_GetScope(ste, name);
-        long flags = _PyST_GetSymbol(ste, name);
+    long flags;
+    int status;
+    while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
+                                          &key, &flags)) > 0) {
+        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        int scope = SYMBOL_TO_SCOPE(flags);
         printf("%s  %s: ", PyUnicode_AsUTF8(prefix), PyUnicode_AsUTF8(name));
         if (flags & DEF_GLOBAL) printf(" DEF_GLOBAL");
         if (flags & DEF_LOCAL) printf(" DEF_LOCAL");
@@ -387,12 +469,16 @@ static void _dump_symtable(PySTEntryObject* ste, PyObject* prefix)
             case CELL: printf(" CELL"); break;
         }
         printf("\n");
+        PyValue_CLEAR(key);
+    }
+    if (status < 0) {
+        return;
     }
     printf("%s--- Children ---\n", PyUnicode_AsUTF8(prefix));
     PyObject *new_prefix = PyUnicode_FromFormat("  %U", prefix);
     assert(new_prefix != NULL);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(ste->ste_children); i++) {
-        PyObject *child = PyList_GetItem(ste->ste_children, i);
+        PyObject *child = symtable_list_item(ste->ste_children, i);
         assert(child != NULL && PySTEntry_Check(child));
         _dump_symtable((PySTEntryObject *)child, new_prefix);
     }
@@ -562,19 +648,12 @@ _PySymtable_LookupOptional(struct symtable *st, void *key,
 long
 _PyST_GetSymbol(PySTEntryObject *ste, PyObject *name)
 {
-    PyObject *v;
-    if (PyDict_GetItemRef(ste->ste_symbols, name, &v) < 0) {
+    long symbol;
+    if (symtable_get_flags(ste->ste_symbols, name, &symbol) < 0) {
         return -1;
     }
-    if (v == NULL) {
-        return 0;
-    }
-    long symbol = PyLong_AsLong(v);
-    Py_DECREF(v);
     if (symbol < 0) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_SystemError, "invalid symbol");
-        }
+        PyErr_SetString(PyExc_SystemError, "invalid symbol");
         return -1;
     }
     return symbol;
@@ -611,20 +690,26 @@ _PyST_IsClassClosureName(PyObject *name)
 static int
 error_at_directive(PySTEntryObject *ste, PyObject *name)
 {
-    Py_ssize_t i;
-    PyObject *data;
     assert(ste->ste_directives);
-    for (i = 0; i < PyList_GET_SIZE(ste->ste_directives); i++) {
-        data = PyList_GET_ITEM(ste->ste_directives, i);
+    for (Py_ssize_t i = 0; i < PyList_GET_SIZE(ste->ste_directives); i++) {
+        PyObject *data = symtable_list_item(ste->ste_directives, i);
         assert(PyTuple_CheckExact(data));
-        assert(PyUnicode_CheckExact(PyTuple_GET_ITEM(data, 0)));
-        if (PyUnicode_Compare(PyTuple_GET_ITEM(data, 0), name) == 0) {
+        PyObject *directive_name = _PyTuple_GET_OBJECT(data, 0);
+        assert(PyUnicode_CheckExact(directive_name));
+        if (PyUnicode_Compare(directive_name, name) == 0) {
+            /* record_directive stores four C int coordinates, including -1
+             * sentinels. These reads must retain the pending SyntaxError. */
+            int coordinates[4];
+            for (int j = 0; j < 4; j++) {
+                PyValue value = PyTuple_GET_VALUE(data, j + 1);
+                assert(PyValue_IsInlineInt(value));
+                coordinates[j] = PyValue_InlineInt(value);
+            }
             PyErr_RangedSyntaxLocationObject(ste->ste_table->st_filename,
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 1)),
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 2)) + 1,
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 3)),
-                                             PyLong_AsLong(PyTuple_GET_ITEM(data, 4)) + 1);
-
+                                             coordinates[0],
+                                             (long)coordinates[1] + 1,
+                                             coordinates[2],
+                                             (long)coordinates[3] + 1);
             return 0;
         }
     }
@@ -681,14 +766,9 @@ error_at_directive(PySTEntryObject *ste, PyObject *name)
 
 #define SET_SCOPE(DICT, NAME, I) \
     do { \
-        PyObject *o = PyLong_FromLong(I); \
-        if (!o) \
-            return 0; \
-        if (PyDict_SetItem((DICT), (NAME), o) < 0) { \
-            Py_DECREF(o); \
+        if (symtable_set_flags((DICT), (NAME), (I)) < 0) { \
             return 0; \
         } \
-        Py_DECREF(o); \
     } while(0)
 
 /* Decide on scope of name, given flags.
@@ -823,8 +903,7 @@ static int
 is_free_in_any_child(PySTEntryObject *entry, PyObject *key)
 {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(entry->ste_children); i++) {
-        PySTEntryObject *child_ste = (PySTEntryObject *)PyList_GET_ITEM(
-            entry->ste_children, i);
+        PySTEntryObject *child_ste = (PySTEntryObject *)symtable_list_item(entry->ste_children, i);
         if (child_ste->ste_type == InlinedComprehensionBlock) {
             /* this is the same scope, so we check its children */
             int nested = is_free_in_any_child(child_ste, key);
@@ -847,28 +926,11 @@ is_free_in_any_child(PySTEntryObject *entry, PyObject *key)
 static int
 symtable_add_flag(PyObject *dict, PyObject *name, int flag)
 {
-    PyObject *o = PyDict_GetItemWithError(dict, name);
     long val;
-    if (o != NULL) {
-        val = PyLong_AsLong(o);
-        if (val == -1 && PyErr_Occurred()) {
-            return 0;
-        }
-        val |= flag;
-    }
-    else if (PyErr_Occurred()) {
+    if (symtable_get_flags(dict, name, &val) < 0) {
         return 0;
     }
-    else {
-        val = flag;
-    }
-    o = PyLong_FromLong(val);
-    if (o == NULL) {
-        return 0;
-    }
-    int rc = PyDict_SetItem(dict, name, o);
-    Py_DECREF(o);
-    return rc >= 0;
+    return symtable_set_flags(dict, name, val | flag) >= 0;
 }
 
 static int
@@ -876,25 +938,26 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                                 PyObject *comp_free, PyObject *outer_newfree,
                                 PyObject *inlined_cells)
 {
-    PyObject *k, *v;
+    PyValue key = PyValue_NULL;
+    int status;
     Py_ssize_t pos = 0;
 
     assert(comp->ste_type == InlinedComprehensionBlock);
     assert(comp->ste_parent != NULL);
 
-    while (PyDict_Next(comp->ste_symbols, &pos, &k, &v)) {
-        long comp_flags = PyLong_AsLong(v);
-        if (comp_flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    long comp_flags;
+    while ((status = symtable_next_symbol(comp->ste_symbols, &pos,
+                                          &key, &comp_flags)) > 0) {
+        PyObject *k = PyValue_AsPyObjectBorrow(key);
         int scope = SYMBOL_TO_SCOPE(comp_flags);
         if (scope == CELL) {
             if (PySet_Add(inlined_cells, k) < 0) {
                 goto error;
             }
         }
-        PyObject *existing = PyDict_GetItemWithError(ste->ste_symbols, k);
-        if (existing == NULL && PyErr_Occurred()) {
+        long flags;
+        int existing = symtable_get_flags(ste->ste_symbols, k, &flags);
+        if (existing < 0) {
             goto error;
         }
         // These names are not allowed to be free through a class (see
@@ -911,14 +974,11 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
                     goto error;
                 }
             }
+            PyValue_CLEAR(key);
             continue;
         }
         int is_def_bound = 0;
         if (existing) {
-            long flags = PyLong_AsLong(existing);
-            if (flags == -1 && PyErr_Occurred()) {
-                goto error;
-            }
             is_def_bound = flags & DEF_BOUND;
         }
         // Loads here are in the enclosing compilation unit.
@@ -950,9 +1010,13 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
         else if (!existing) {
             assert(scope != FREE || PySet_Contains(comp_free, k) == 1);
         }
+        PyValue_CLEAR(key);
     }
-    return 1;
-error:
+    return status >= 0;
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLEAR(key);
+    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -969,20 +1033,17 @@ error:
 static int
 analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
 {
-    PyObject *name, *v, *v_cell;
-    int success = 0;
+    PyValue key = PyValue_NULL;
     Py_ssize_t pos = 0;
+    int status;
+    long scope;
 
-    v_cell = PyLong_FromLong(CELL);
-    if (!v_cell)
-        return 0;
-    while (PyDict_Next(scopes, &pos, &name, &v)) {
-        long scope = PyLong_AsLong(v);
-        if (scope == -1 && PyErr_Occurred()) {
-            goto error;
-        }
-        if (scope != LOCAL)
+    while ((status = symtable_next_symbol(scopes, &pos, &key, &scope)) > 0) {
+        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        if (scope != LOCAL) {
+            PyValue_CLEAR(key);
             continue;
+        }
         int contains = PySet_Contains(free, name);
         if (contains < 0) {
             goto error;
@@ -993,22 +1054,25 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
                 goto error;
             }
             if (!contains) {
+                PyValue_CLEAR(key);
                 continue;
             }
         }
-        /* Replace LOCAL with CELL for this name, and remove
-           from free. It is safe to replace the value of name
-           in the dict, because it will not cause a resize.
-         */
-        if (PyDict_SetItem(scopes, name, v_cell) < 0)
+        /* Replacing only the value preserves the iteration's key set. */
+        if (symtable_set_flags(scopes, name, CELL) < 0) {
             goto error;
-        if (PySet_Discard(free, name) < 0)
+        }
+        if (PySet_Discard(free, name) < 0) {
             goto error;
+        }
+        PyValue_CLEAR(key);
     }
-    success = 1;
- error:
-    Py_DECREF(v_cell);
-    return success;
+    return status >= 0;
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLEAR(key);
+    _PyValue_RestoreException(saved);
+    return 0;
 }
 
 static int
@@ -1044,111 +1108,79 @@ update_symbols(PyObject *symbols, PyObject *scopes,
                int classflag)
 {
     PyObject *name = NULL, *itr = NULL;
-    PyObject *v = NULL, *v_scope = NULL, *v_new = NULL, *v_free = NULL;
+    PyValue key = PyValue_NULL;
     Py_ssize_t pos = 0;
+    int status;
+    long flags;
 
-    /* Update scope information for all symbols in this scope */
-    while (PyDict_Next(symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            return 0;
-        }
-        if (PyDict_GetItemRef(scopes, name, &v_scope) < 0) {
-            return 0;
-        }
-        if (!v_scope) {
-            PyErr_SetObject(PyExc_KeyError, name);
-            return 0;
-        }
-        long scope = PyLong_AsLong(v_scope);
-        Py_DECREF(v_scope);
-        if (scope == -1 && PyErr_Occurred()) {
-            return 0;
-        }
-        flags |= (scope << SCOPE_OFFSET);
-        v_new = PyLong_FromLong(flags);
-        if (!v_new)
-            return 0;
-        if (PyDict_SetItem(symbols, name, v_new) < 0) {
-            Py_DECREF(v_new);
-            return 0;
-        }
-        Py_DECREF(v_new);
-    }
-
-    /* Record not yet resolved free variables from children (if any) */
-    v_free = PyLong_FromLong(FREE << SCOPE_OFFSET);
-    if (!v_free)
-        return 0;
-
-    itr = PyObject_GetIter(free);
-    if (itr == NULL) {
-        Py_DECREF(v_free);
-        return 0;
-    }
-
-    while ((name = PyIter_Next(itr))) {
-        v = PyDict_GetItemWithError(symbols, name);
-
-        /* Handle symbol that already exists in this scope */
-        if (v) {
-            /* Handle a free variable in a method of
-               the class that has the same name as a local
-               or global in the class scope.
-            */
-            if  (classflag) {
-                long flags = PyLong_AsLong(v);
-                if (flags == -1 && PyErr_Occurred()) {
-                    goto error;
-                }
-                flags |= DEF_FREE_CLASS;
-                v_new = PyLong_FromLong(flags);
-                if (!v_new) {
-                    goto error;
-                }
-                if (PyDict_SetItem(symbols, name, v_new) < 0) {
-                    Py_DECREF(v_new);
-                    goto error;
-                }
-                Py_DECREF(v_new);
-            }
-            /* It's a cell, or already free in this scope */
-            Py_DECREF(name);
-            continue;
-        }
-        else if (PyErr_Occurred()) {
+    /* Update scope information for all symbols in this scope. */
+    while ((status = symtable_next_symbol(symbols, &pos, &key, &flags)) > 0) {
+        PyObject *symbol = PyValue_AsPyObjectBorrow(key);
+        long scope;
+        int found = symtable_get_flags(scopes, symbol, &scope);
+        if (found < 0) {
             goto error;
         }
-        /* Handle global symbol */
+        if (!found) {
+            PyErr_SetObject(PyExc_KeyError, symbol);
+            goto error;
+        }
+        flags |= (scope << SCOPE_OFFSET);
+        if (symtable_set_flags(symbols, symbol, flags) < 0) {
+            goto error;
+        }
+        PyValue_CLEAR(key);
+    }
+    if (status < 0) {
+        goto error;
+    }
+
+    /* Record not yet resolved free variables from children (if any). */
+    itr = PyObject_GetIter(free);
+    if (itr == NULL) {
+        goto error;
+    }
+    while ((name = PyIter_Next(itr))) {
+        int found = symtable_get_flags(symbols, name, &flags);
+        if (found < 0) {
+            goto error;
+        }
+        if (found) {
+            /* A method may use a free variable with the same name as a
+             * local or global in its class scope. */
+            if (classflag &&
+                symtable_set_flags(symbols, name, flags | DEF_FREE_CLASS) < 0) {
+                goto error;
+            }
+            Py_CLEAR(name);
+            continue;
+        }
         if (bound) {
             int contains = PySet_Contains(bound, name);
             if (contains < 0) {
                 goto error;
             }
             if (!contains) {
-                Py_DECREF(name);
-                continue;       /* it's a global */
+                Py_CLEAR(name);
+                continue;
             }
         }
-        /* Propagate new free symbol up the lexical stack */
-        if (PyDict_SetItem(symbols, name, v_free) < 0) {
+        if (symtable_set_flags(symbols, name, FREE << SCOPE_OFFSET) < 0) {
             goto error;
         }
-        Py_DECREF(name);
+        Py_CLEAR(name);
     }
-
-    /* Check if loop ended because of exception in PyIter_Next */
     if (PyErr_Occurred()) {
         goto error;
     }
-
     Py_DECREF(itr);
-    Py_DECREF(v_free);
-    return 1;
-error:
-    Py_XDECREF(v_free);
+    return !PyErr_Occurred();
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLEAR(key);
     Py_XDECREF(itr);
     Py_XDECREF(name);
+    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -1182,7 +1214,10 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
               PyObject *global, PyObject *type_params,
               PySTEntryObject *class_entry)
 {
-    PyObject *name, *v, *local = NULL, *scopes = NULL, *newbound = NULL;
+    PyObject *local = NULL, *scopes = NULL, *newbound = NULL;
+    PyValue key = PyValue_NULL;
+    long flags;
+    int status;
     PyObject *newglobal = NULL, *newfree = NULL, *inlined_cells = NULL;
     PyObject *temp;
     int success = 0;
@@ -1241,17 +1276,20 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     /* Record bindings and global/nonlocal declarations first so child
        blocks see this scope's locals. Uses are classified after children
        so inlined comprehensions can add USE flags to this table. */
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
+                                          &key, &flags)) > 0) {
+        PyObject *name = PyValue_AsPyObjectBorrow(key);
         if (!(flags & (DEF_GLOBAL | DEF_NONLOCAL | DEF_BOUND))) {
+            PyValue_CLEAR(key);
             continue;
         }
         if (!analyze_name(ste, scopes, name, flags,
                           bound, local, free, global, type_params, class_entry))
             goto error;
+        PyValue_CLEAR(key);
+    }
+    if (status < 0) {
+        goto error;
     }
 
     /* Populate global and bound sets to be passed to children. */
@@ -1294,7 +1332,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     */
     for (i = 0; i < PyList_GET_SIZE(ste->ste_children); ++i) {
         PyObject *child_free = NULL;
-        PyObject *c = PyList_GET_ITEM(ste->ste_children, i);
+        PyObject *c = symtable_list_item(ste->ste_children, i);
         PySTEntryObject* entry;
         assert(c && PySTEntry_Check(c));
         entry = (PySTEntryObject*)c;
@@ -1333,21 +1371,24 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
 
     /* Complete the classification. */
     pos = 0;
-    while (PyDict_Next(ste->ste_symbols, &pos, &name, &v)) {
-        long flags = PyLong_AsLong(v);
-        if (flags == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
+                                          &key, &flags)) > 0) {
+        PyObject *name = PyValue_AsPyObjectBorrow(key);
         int contains = PyDict_Contains(scopes, name);
         if (contains < 0) {
             goto error;
         }
         if (contains) {
+            PyValue_CLEAR(key);
             continue;
         }
         if (!analyze_name(ste, scopes, name, flags,
                           bound, local, free, global, type_params, class_entry))
             goto error;
+        PyValue_CLEAR(key);
+    }
+    if (status < 0) {
+        goto error;
     }
 
     /* Check if any local variables must be converted to cell variables */
@@ -1366,16 +1407,20 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
         goto error;
     Py_DECREF(temp);
     success = 1;
- error:
+ error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLEAR(key);
     Py_XDECREF(scopes);
     Py_XDECREF(local);
     Py_XDECREF(newbound);
     Py_XDECREF(newglobal);
     Py_XDECREF(newfree);
     Py_XDECREF(inlined_cells);
-    if (!success)
+    _PyValue_RestoreException(saved);
+    if (!success) {
         assert(PyErr_Occurred());
-    return success;
+    }
+    return success && !PyErr_Occurred();
 }
 
 static int
@@ -1465,7 +1510,7 @@ symtable_exit_block(struct symtable *st)
         if (PyList_SetSlice(st->st_stack, size - 1, size, NULL) < 0)
             return 0;
         if (--size)
-            st->st_cur = (PySTEntryObject *)PyList_GET_ITEM(st->st_stack, size - 1);
+            st->st_cur = (PySTEntryObject *)symtable_list_item(st->st_stack, size - 1);
     }
     return 1;
 }
@@ -1563,17 +1608,16 @@ static int
 symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _symtable_entry *ste,
                         _Py_SourceLocation loc)
 {
-    PyObject *o;
     long val = 0;
     PyObject *mangled = _Py_MaybeMangle(st->st_private, st->st_cur, name);
 
     if (!mangled)
         return 0;
-    if ((o = PyDict_GetItemWithError(ste->ste_symbols, mangled))) {
-        val = PyLong_AsLong(o);
-        if (val == -1 && PyErr_Occurred()) {
-            goto error;
-        }
+    int found = symtable_get_flags(ste->ste_symbols, mangled, &val);
+    if (found < 0) {
+        goto error;
+    }
+    if (found) {
         if ((flag & DEF_PARAM) && (val & DEF_PARAM)) {
             /* Is it better to use 'mangled' or 'name' here? */
             PyErr_Format(PyExc_SyntaxError, DUPLICATE_PARAMETER, name);
@@ -1585,9 +1629,6 @@ symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _s
             SET_ERROR_LOCATION(st->st_filename, loc);
             goto error;
         }
-    }
-    else if (PyErr_Occurred()) {
-        goto error;
     }
 
     int to_add = flag;
@@ -1623,8 +1664,10 @@ symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _s
     Py_DECREF(mangled);
     return 1;
 
-error:
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(mangled);
+    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -2414,7 +2457,7 @@ symtable_extend_namedexpr_scope(struct symtable *st, expr_ty e)
 
     /* Iterate over the stack in reverse and add to the nearest adequate scope */
     for (i = size - 1; i >= 0; i--) {
-        ste = (struct _symtable_entry *) PyList_GET_ITEM(st->st_stack, i);
+        ste = (struct _symtable_entry *) symtable_list_item(st->st_stack, i);
 
         /* If we find a comprehension scope, check for a target
          * binding conflict with iteration variables, otherwise skip it

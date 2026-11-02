@@ -4236,12 +4236,40 @@ typedef struct {
 static int
 type_new_visit_slots(type_new_ctx *ctx)
 {
-    PyObject *slots = ctx->slots;
-    Py_ssize_t nslot = ctx->nslot;
-    for (Py_ssize_t i = 0; i < nslot; i++) {
-        PyObject *name = PyTuple_GET_ITEM(slots, i);
-        if (!valid_identifier(name)) {
-            return -1;
+    PyObject *slots_owner = NULL;
+    PyObject *error_type_owner = NULL;
+    PyValue selected = PyValue_NULL;
+    int result = -1;
+
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    slots_owner = Py_NewRef(ctx->slots);
+    if (slots_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    for (Py_ssize_t i = 0; i < ctx->nslot; i++) {
+        selected = PyTuple_GET_VALUE(slots_owner, i);
+        if (!PyValue_IsObject(selected) ||
+                !PyUnicode_Check(PyValue_AsPyObjectBorrow(selected))) {
+            error_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(selected));
+            if (error_type_owner == NULL || PyErr_Occurred()) {
+                goto done;
+            }
+            char message[256];
+            PyOS_snprintf(message, sizeof(message),
+                          "__slots__ items must be strings, not '%.200s'",
+                          ((PyTypeObject *)error_type_owner)->tp_name);
+            PyErr_SetString(PyExc_TypeError, message);
+            goto done;
+        }
+        PyObject *name = PyValue_AsPyObjectBorrow(selected);
+        int valid = valid_identifier(name);
+        if (valid < 0 || PyErr_Occurred()) {
+            goto done;
+        }
+        if (!valid) {
+            goto done;
         }
         assert(PyUnicode_Check(name));
         if (_PyUnicode_Equal(name, &_Py_ID(__dict__))) {
@@ -4249,7 +4277,7 @@ type_new_visit_slots(type_new_ctx *ctx)
                 PyErr_SetString(PyExc_TypeError,
                     "__dict__ slot disallowed: "
                     "we already got one");
-                return -1;
+                goto done;
             }
             ctx->add_dict++;
         }
@@ -4258,12 +4286,20 @@ type_new_visit_slots(type_new_ctx *ctx)
                 PyErr_SetString(PyExc_TypeError,
                     "__weakref__ slot disallowed: "
                     "we already got one");
-                return -1;
+                goto done;
             }
             ctx->add_weak++;
         }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
     }
-    return 0;
+    result = 0;
+
+done:
+    type_mutation_close(&error_type_owner);
+    type_mutation_close(&slots_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 
@@ -4274,69 +4310,94 @@ type_new_visit_slots(type_new_ctx *ctx)
 static PyObject*
 type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
 {
-    PyObject *slots = ctx->slots;
+    PyObject *slots_owner = NULL;
+    PyObject *name_owner = NULL;
+    PyObject *dict_owner = NULL;
+    PyObject *new_slots = NULL;
+    PyObject *mangled = NULL;
+    PyObject *tuple = NULL;
+    PyObject *result = NULL;
+    int ok = 0;
     Py_ssize_t nslot = ctx->nslot;
-
     Py_ssize_t new_nslot = nslot - ctx->add_dict - ctx->add_weak;
-    PyObject *new_slots = PyList_New(new_nslot);
-    if (new_slots == NULL) {
-        return NULL;
+
+    if (PyErr_Occurred()) {
+        goto done;
     }
+    slots_owner = Py_NewRef(ctx->slots);
+    if (slots_owner == NULL || PyErr_Occurred()) goto done;
+    name_owner = Py_NewRef(ctx->name);
+    if (name_owner == NULL || PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    new_slots = PyList_New(new_nslot);
+    if (new_slots == NULL || PyErr_Occurred()) goto done;
 
     Py_ssize_t j = 0;
     for (Py_ssize_t i = 0; i < nslot; i++) {
-        PyObject *slot = PyTuple_GET_ITEM(slots, i);
+        PyValue value = PyTuple_GET_VALUE(slots_owner, i);
+        assert(PyValue_IsObject(value));
+        PyObject *slot = PyValue_AsPyObjectBorrow(value);
         if ((ctx->add_dict && _PyUnicode_Equal(slot, &_Py_ID(__dict__))) ||
-            (ctx->add_weak && _PyUnicode_Equal(slot, &_Py_ID(__weakref__))))
-        {
+            (ctx->add_weak && _PyUnicode_Equal(slot, &_Py_ID(__weakref__)))) {
+            if (PyErr_Occurred()) goto done;
             continue;
         }
-
-        slot =_Py_Mangle(ctx->name, slot);
-        if (!slot) {
-            goto error;
-        }
-        PyList_SET_ITEM(new_slots, j, slot);
-
-        int r = PyDict_Contains(dict, slot);
-        if (r < 0) {
-            goto error;
-        }
-        if (r > 0) {
-            /* CPython inserts these names (when needed)
-               into the namespace when creating a class.  They will be deleted
-               below so won't act as class variables. */
-            if (!_PyUnicode_Equal(slot, &_Py_ID(__qualname__)) &&
-                !_PyUnicode_Equal(slot, &_Py_ID(__classcell__)) &&
-                !_PyUnicode_Equal(slot, &_Py_ID(__classdictcell__)))
-            {
+        if (PyErr_Occurred()) goto done;
+        mangled = _Py_Mangle(name_owner, slot);
+        if (mangled == NULL || PyErr_Occurred()) goto done;
+        int set_status = PyList_SetItem(new_slots, j, Py_NewRef(mangled));
+        if (set_status < 0 || PyErr_Occurred()) goto done;
+        int contains = PyDict_Contains(dict_owner, mangled);
+        if (contains < 0 || PyErr_Occurred()) goto done;
+        if (contains > 0) {
+            if (!_PyUnicode_Equal(mangled, &_Py_ID(__qualname__)) &&
+                !_PyUnicode_Equal(mangled, &_Py_ID(__classcell__)) &&
+                !_PyUnicode_Equal(mangled, &_Py_ID(__classdictcell__))) {
                 PyErr_Format(PyExc_ValueError,
                              "%R in __slots__ conflicts with class variable",
-                             slot);
-                goto error;
+                             mangled);
+                goto done;
             }
+            if (PyErr_Occurred()) goto done;
         }
-
+        type_mutation_close(&mangled);
+        if (PyErr_Occurred()) goto done;
         j++;
     }
     assert(j == new_nslot);
-
-    if (PyList_Sort(new_slots) == -1) {
-        goto error;
+    int sort_status = PyList_Sort(new_slots);
+    if (sort_status < 0 || PyErr_Occurred()) goto done;
+    tuple = PyList_AsTuple(new_slots);
+    if (tuple == NULL || PyErr_Occurred()) goto done;
+    if (PyTuple_GET_SIZE(tuple) != new_nslot) {
+        PyErr_SetString(PyExc_RuntimeError, "stale __slots__ construction");
+        goto done;
     }
-
-    PyObject *tuple = PyList_AsTuple(new_slots);
-    Py_DECREF(new_slots);
-    if (tuple == NULL) {
-        return NULL;
+    for (Py_ssize_t i = 0; i < new_nslot; i++) {
+        PyValue value = PyTuple_GET_VALUE(tuple, i);
+        if (!PyValue_IsObject(value) ||
+                !PyUnicode_Check(PyValue_AsPyObjectBorrow(value))) {
+            PyErr_SetString(PyExc_RuntimeError, "stale __slots__ construction");
+            goto done;
+        }
     }
+    if (PyErr_Occurred()) goto done;
+    ok = 1;
 
-    assert(PyTuple_GET_SIZE(tuple) == new_nslot);
-    return tuple;
-
-error:
-    Py_DECREF(new_slots);
-    return NULL;
+done:
+    type_mutation_close(&mangled);
+    type_mutation_close(&new_slots);
+    type_mutation_close(&dict_owner);
+    type_mutation_close(&name_owner);
+    type_mutation_close(&slots_owner);
+    if (PyErr_Occurred()) ok = 0;
+    if (ok) {
+        result = tuple;
+        tuple = NULL;
+    }
+    type_mutation_close(&tuple);
+    return result;
 }
 
 
@@ -4346,33 +4407,24 @@ type_new_slots_bases(type_new_ctx *ctx)
     Py_ssize_t nbases = PyTuple_GET_SIZE(ctx->bases);
     if (nbases > 1 &&
         ((ctx->may_add_dict && ctx->add_dict == 0) ||
-         (ctx->may_add_weak && ctx->add_weak == 0)))
-    {
+         (ctx->may_add_weak && ctx->add_weak == 0))) {
         for (Py_ssize_t i = 0; i < nbases; i++) {
-            PyObject *obj = PyTuple_GET_ITEM(ctx->bases, i);
-            if (obj == (PyObject *)ctx->base) {
-                /* Skip primary base */
-                continue;
-            }
+            PyValue value = PyTuple_GET_VALUE(ctx->bases, i);
+            assert(PyValue_IsObject(value));
+            PyObject *obj = PyValue_AsPyObjectBorrow(value);
+            assert(PyType_Check(obj));
+            if (obj == (PyObject *)ctx->base) continue;
             PyTypeObject *base = _PyType_CAST(obj);
-
             if (ctx->may_add_dict && ctx->add_dict == 0 &&
-                base->tp_dictoffset != 0)
-            {
+                    base->tp_dictoffset != 0) {
                 ctx->add_dict++;
             }
             if (ctx->may_add_weak && ctx->add_weak == 0 &&
-                base->tp_weaklistoffset != 0)
-            {
+                    base->tp_weaklistoffset != 0) {
                 ctx->add_weak++;
             }
-            if (ctx->may_add_dict && ctx->add_dict == 0) {
-                continue;
-            }
-            if (ctx->may_add_weak && ctx->add_weak == 0) {
-                continue;
-            }
-            /* Nothing more to check */
+            if (ctx->may_add_dict && ctx->add_dict == 0) continue;
+            if (ctx->may_add_weak && ctx->add_weak == 0) continue;
             break;
         }
     }
@@ -4562,90 +4614,131 @@ type_new_set_ht_name(PyTypeObject *type, PyObject *dict)
 static int
 type_new_set_doc(PyTypeObject *type, PyObject* dict)
 {
-    PyObject *doc = PyDict_GetItemWithError(dict, &_Py_ID(__doc__));
-    if (doc == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        // no __doc__ key
-        return 0;
+    PyObject *type_owner = NULL;
+    PyObject *dict_owner = NULL;
+    PyValue doc = PyValue_NULL;
+    char *tp_doc = NULL;
+    int result = -1;
+    if (PyErr_Occurred()) goto done;
+    type_owner = Py_NewRef((PyObject *)type);
+    if (type_owner == NULL || PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__doc__)), &doc);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0 || !PyValue_IsObject(doc) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(doc))) {
+        result = 0;
+        goto done;
     }
-    if (!PyUnicode_Check(doc)) {
-        // ignore non-string __doc__
-        return 0;
-    }
-
-    const char *doc_str = PyUnicode_AsUTF8(doc);
-    if (doc_str == NULL) {
-        return -1;
-    }
-
-    // Silently truncate the docstring if it contains a null byte
+    const char *doc_str = PyUnicode_AsUTF8(PyValue_AsPyObjectBorrow(doc));
+    if (doc_str == NULL || PyErr_Occurred()) goto done;
     Py_ssize_t size = strlen(doc_str) + 1;
-    char *tp_doc = (char *)PyMem_Malloc(size);
-    if (tp_doc == NULL) {
-        PyErr_NoMemory();
-        return -1;
+    tp_doc = PyMem_Malloc(size);
+    if (tp_doc == NULL || PyErr_Occurred()) {
+        if (tp_doc == NULL && !PyErr_Occurred()) PyErr_NoMemory();
+        goto done;
     }
-
     memcpy(tp_doc, doc_str, size);
     type->tp_doc = tp_doc;
-    return 0;
+    tp_doc = NULL;
+    result = 0;
+done:
+    if (tp_doc != NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        char *retired = tp_doc;
+        tp_doc = NULL;
+        PyMem_Free(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = doc;
+        doc = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&dict_owner);
+    type_mutation_close(&type_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 
 static int
 type_new_staticmethod(PyObject *dict, PyObject *attr)
 {
-    PyObject *func = PyDict_GetItemWithError(dict, attr);
-    if (func == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
+    PyObject *dict_owner = NULL;
+    PyObject *key_owner = NULL;
+    PyObject *wrapper = NULL;
+    PyValue selected = PyValue_NULL;
+    int result = -1;
+    if (PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    key_owner = Py_NewRef(attr);
+    if (key_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0 || !PyValue_IsObject(selected) ||
+            !PyFunction_Check(PyValue_AsPyObjectBorrow(selected))) {
+        result = 0;
+        goto done;
     }
-    if (!PyFunction_Check(func)) {
-        return 0;
+    if (PyErr_Occurred()) goto done;
+    wrapper = PyStaticMethod_New(PyValue_AsPyObjectBorrow(selected));
+    if (wrapper == NULL || PyErr_Occurred()) goto done;
+    result = PyDict_SetItem(dict_owner, key_owner, wrapper);
+done:
+    type_mutation_close(&wrapper);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = selected;
+        selected = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
     }
-
-    PyObject *static_func = PyStaticMethod_New(func);
-    if (static_func == NULL) {
-        return -1;
-    }
-    if (PyDict_SetItem(dict, attr, static_func) < 0) {
-        Py_DECREF(static_func);
-        return -1;
-    }
-    Py_DECREF(static_func);
-    return 0;
+    type_mutation_close(&key_owner);
+    type_mutation_close(&dict_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 
 static int
 type_new_classmethod(PyObject *dict, PyObject *attr)
 {
-    PyObject *func = PyDict_GetItemWithError(dict, attr);
-    if (func == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
+    PyObject *dict_owner = NULL;
+    PyObject *key_owner = NULL;
+    PyObject *wrapper = NULL;
+    PyValue selected = PyValue_NULL;
+    int result = -1;
+    if (PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    key_owner = Py_NewRef(attr);
+    if (key_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0 || !PyValue_IsObject(selected) ||
+            !PyFunction_Check(PyValue_AsPyObjectBorrow(selected))) {
+        result = 0;
+        goto done;
     }
-    if (!PyFunction_Check(func)) {
-        return 0;
+    if (PyErr_Occurred()) goto done;
+    wrapper = PyClassMethod_New(PyValue_AsPyObjectBorrow(selected));
+    if (wrapper == NULL || PyErr_Occurred()) goto done;
+    result = PyDict_SetItem(dict_owner, key_owner, wrapper);
+done:
+    type_mutation_close(&wrapper);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = selected;
+        selected = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
     }
-
-    PyObject *method = PyClassMethod_New(func);
-    if (method == NULL) {
-        return -1;
-    }
-
-    if (PyDict_SetItem(dict, attr, method) < 0) {
-        Py_DECREF(method);
-        return -1;
-    }
-    Py_DECREF(method);
-    return 0;
+    type_mutation_close(&key_owner);
+    type_mutation_close(&dict_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 /* Add __dict__ or __weakref__ descriptor */
@@ -4778,53 +4871,85 @@ type_new_set_slots(const type_new_ctx *ctx, PyTypeObject *type)
 static int
 type_new_set_classcell(PyTypeObject *type, PyObject *dict)
 {
-    PyObject *cell = PyDict_GetItemWithError(dict, &_Py_ID(__classcell__));
-    if (cell == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
-    }
-
-    /* At least one method requires a reference to its defining class */
-    if (!PyCell_Check(cell)) {
+    PyObject *type_owner = NULL;
+    PyObject *dict_owner = NULL;
+    PyObject *selected_type_owner = NULL;
+    PyValue cell = PyValue_NULL;
+    int result = -1;
+    if (PyErr_Occurred()) goto done;
+    type_owner = Py_NewRef((PyObject *)type);
+    if (type_owner == NULL || PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(
+        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classcell__)), &cell);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0) { result = 0; goto done; }
+    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsPyObjectBorrow(cell))) {
+        selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
+        if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
                      "__classcell__ must be a nonlocal cell, not %.200R",
-                     Py_TYPE(cell));
-        return -1;
+                     selected_type_owner);
+        goto done;
     }
-
-    (void)PyCell_Set(cell, (PyObject *) type);
-    if (PyDict_DelItem(dict, &_Py_ID(__classcell__)) < 0) {
-        return -1;
+    int cell_status = PyCell_Set(PyValue_AsPyObjectBorrow(cell), type_owner);
+    if (cell_status < 0 || PyErr_Occurred()) goto done;
+    int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classcell__));
+    if (del_status < 0 || PyErr_Occurred()) goto done;
+    result = 0;
+done:
+    type_mutation_close(&selected_type_owner);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = cell;
+        cell = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
     }
-    return 0;
+    type_mutation_close(&dict_owner);
+    type_mutation_close(&type_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 static int
 type_new_set_classdictcell(PyObject *dict)
 {
-    PyObject *cell = PyDict_GetItemWithError(dict, &_Py_ID(__classdictcell__));
-    if (cell == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
-    }
-
-    /* At least one method requires a reference to the dict of its defining class */
-    if (!PyCell_Check(cell)) {
+    PyObject *dict_owner = NULL;
+    PyObject *selected_type_owner = NULL;
+    PyValue cell = PyValue_NULL;
+    int result = -1;
+    if (PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(
+        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classdictcell__)), &cell);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0) { result = 0; goto done; }
+    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsPyObjectBorrow(cell))) {
+        selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
+        if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
                      "__classdictcell__ must be a nonlocal cell, not %.200R",
-                     Py_TYPE(cell));
-        return -1;
+                     selected_type_owner);
+        goto done;
     }
-
-    (void)PyCell_Set(cell, (PyObject *)dict);
-    if (PyDict_DelItem(dict, &_Py_ID(__classdictcell__)) < 0) {
-        return -1;
+    int cell_status = PyCell_Set(PyValue_AsPyObjectBorrow(cell), dict_owner);
+    if (cell_status < 0 || PyErr_Occurred()) goto done;
+    int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classdictcell__));
+    if (del_status < 0 || PyErr_Occurred()) goto done;
+    result = 0;
+done:
+    type_mutation_close(&selected_type_owner);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = cell;
+        cell = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
     }
-    return 0;
+    type_mutation_close(&dict_owner);
+    return PyErr_Occurred() ? -1 : result;
 }
 
 static int
@@ -4895,31 +5020,65 @@ type_new_set_attrs(const type_new_ctx *ctx, PyTypeObject *type)
 static int
 type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
 {
-    PyObject *slots = PyDict_GetItemWithError(dict, &_Py_ID(__slots__));
-    if (slots == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        ctx->slots = NULL;
-        ctx->nslot = 0;
-        return 0;
+    PyObject *dict_owner = NULL;
+    PyObject *iterable_owner = NULL;
+    PyObject *new_slots = NULL;
+    PyValue selected = PyValue_NULL;
+    int result = -1;
+    int missing = 0;
+    if (PyErr_Occurred()) goto done;
+    dict_owner = Py_NewRef(dict);
+    if (dict_owner == NULL || PyErr_Occurred()) goto done;
+    int found = PyDict_GetValue(
+        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__slots__)), &selected);
+    if (found < 0 || PyErr_Occurred()) goto done;
+    if (found == 0) {
+        missing = 1;
+        result = 0;
+        goto done;
     }
-
-    // Make it into a tuple
-    PyObject *new_slots;
-    if (PyUnicode_Check(slots)) {
-        new_slots = PyTuple_Pack(1, slots);
+    iterable_owner = PyValue_AsObject(selected);
+    if (iterable_owner == NULL || PyErr_Occurred()) goto done;
+    if (PyUnicode_Check(iterable_owner)) {
+        new_slots = PyTuple_Pack(1, iterable_owner);
     }
     else {
-        new_slots = PySequence_Tuple(slots);
+        new_slots = PySequence_Tuple(iterable_owner);
     }
-    if (new_slots == NULL) {
-        return -1;
+    if (new_slots == NULL || PyErr_Occurred()) goto done;
+    if (!PyTuple_CheckExact(new_slots)) {
+        PyErr_SetString(PyExc_SystemError,
+                        "type.__new__ slots conversion did not return an exact tuple");
+        goto done;
     }
-    assert(PyTuple_CheckExact(new_slots));
-    ctx->slots = new_slots;
-    ctx->nslot = PyTuple_GET_SIZE(new_slots);
-    return 0;
+    if (PyErr_Occurred()) goto done;
+    result = 0;
+done:
+    type_mutation_close(&iterable_owner);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = selected;
+        selected = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&dict_owner);
+    if (PyErr_Occurred()) {
+        result = -1;
+    }
+    if (result == 0) {
+        if (missing) {
+            ctx->slots = NULL;
+            ctx->nslot = 0;
+        }
+        else {
+            ctx->slots = new_slots;
+            ctx->nslot = PyTuple_GET_SIZE(new_slots);
+            new_slots = NULL;
+        }
+    }
+    type_mutation_close(&new_slots);
+    return result;
 }
 
 
@@ -5013,73 +5172,135 @@ error:
 
 
 static int
-type_new_get_bases(type_new_ctx *ctx, PyObject **type)
+type_new_get_bases(type_new_ctx *ctx, PyObject **type,
+                   PyObject **selected_metatype_owner,
+                   PyObject **selected_base_owner)
 {
-    Py_ssize_t nbases = PyTuple_GET_SIZE(ctx->bases);
+    PyObject *bases_owner = NULL;
+    PyObject *initial_metatype_owner = NULL;
+    PyObject *args_owner = NULL;
+    PyObject *kwds_owner = NULL;
+    PyObject *base_view = NULL;
+    PyObject *winner_owner = NULL;
+    PyObject *chosen_bases_owner = NULL;
+    PyObject *chosen_metatype_owner = NULL;
+    PyObject *chosen_base_owner = NULL;
+    PyObject *delegated = NULL;
+    int result = -1;
+
+    *selected_metatype_owner = NULL;
+    *selected_base_owner = NULL;
+    *type = NULL;
+    if (PyErr_Occurred()) goto done;
+    bases_owner = Py_NewRef(ctx->bases);
+    if (bases_owner == NULL || PyErr_Occurred()) goto done;
+    initial_metatype_owner = Py_NewRef((PyObject *)ctx->metatype);
+    if (initial_metatype_owner == NULL || PyErr_Occurred()) goto done;
+    args_owner = Py_NewRef(ctx->args);
+    if (args_owner == NULL || PyErr_Occurred()) goto done;
+    kwds_owner = Py_XNewRef(ctx->kwds);
+    if (ctx->kwds != NULL && kwds_owner == NULL) goto done;
+    if (PyErr_Occurred()) goto done;
+
+    Py_ssize_t nbases = PyTuple_GET_SIZE(bases_owner);
     if (nbases == 0) {
-        // Adjust for empty tuple bases
-        ctx->base = &PyBaseObject_Type;
-        PyObject *new_bases = PyTuple_Pack(1, ctx->base);
-        if (new_bases == NULL) {
-            return -1;
-        }
-        ctx->bases = new_bases;
-        return 0;
+        chosen_base_owner = (PyObject *)Py_NewRef(&PyBaseObject_Type);
+        if (chosen_base_owner == NULL || PyErr_Occurred()) goto done;
+        chosen_bases_owner = PyTuple_Pack(1, chosen_base_owner);
+        if (chosen_bases_owner == NULL || PyErr_Occurred()) goto done;
+        chosen_metatype_owner = Py_NewRef(initial_metatype_owner);
+        if (chosen_metatype_owner == NULL || PyErr_Occurred()) goto done;
+        result = 0;
+        goto done;
     }
 
     for (Py_ssize_t i = 0; i < nbases; i++) {
-        PyObject *base = PyTuple_GET_ITEM(ctx->bases, i);
-        if (PyType_Check(base)) {
+        PyValue value = PyTuple_GET_VALUE(bases_owner, i);
+        if (PyValue_IsObject(value) && PyType_Check(PyValue_AsPyObjectBorrow(value))) {
             continue;
         }
-        int rc = PyObject_HasAttrWithError(base, &_Py_ID(__mro_entries__));
-        if (rc < 0) {
-            return -1;
-        }
-        if (rc) {
+        base_view = PyValue_AsObject(value);
+        if (base_view == NULL || PyErr_Occurred()) goto done;
+        int has_mro_entries = PyObject_HasAttrWithError(base_view, &_Py_ID(__mro_entries__));
+        type_mutation_close(&base_view);
+        if (has_mro_entries < 0 || PyErr_Occurred()) goto done;
+        if (has_mro_entries) {
             PyErr_SetString(PyExc_TypeError,
                             "type() doesn't support MRO entry resolution; "
                             "use types.new_class()");
-            return -1;
+            goto done;
         }
+        if (PyErr_Occurred()) goto done;
     }
 
-    // Search the bases for the proper metatype to deal with this
-    PyTypeObject *winner;
-    winner = _PyType_CalculateMetaclass(ctx->metatype, ctx->bases);
-    if (winner == NULL) {
+    PyTypeObject *winner = _PyType_CalculateMetaclass(ctx->metatype, bases_owner);
+    if (winner == NULL || PyErr_Occurred()) goto done;
+    winner_owner = Py_NewRef((PyObject *)winner);
+    if (winner_owner == NULL || PyErr_Occurred()) goto done;
+
+    if (winner != ctx->metatype && winner->tp_new != type_new) {
+        if (winner->tp_new == NULL) {
+            char message[512];
+            PyOS_snprintf(message, sizeof(message),
+                          "cannot create '%.400s' instances", winner->tp_name);
+            PyErr_SetString(PyExc_TypeError, message);
+            goto done;
+        }
+        delegated = winner->tp_new(winner, args_owner, kwds_owner);
+        if (delegated == NULL || PyErr_Occurred()) goto done;
+        result = 1;
+        goto done;
+    }
+
+    PyTypeObject *base = find_best_base(bases_owner);
+    if (base == NULL || PyErr_Occurred()) goto done;
+    chosen_base_owner = Py_NewRef((PyObject *)base);
+    if (chosen_base_owner == NULL || PyErr_Occurred()) goto done;
+    chosen_metatype_owner = Py_NewRef(winner_owner);
+    if (chosen_metatype_owner == NULL || PyErr_Occurred()) goto done;
+    chosen_bases_owner = Py_NewRef(bases_owner);
+    if (chosen_bases_owner == NULL || PyErr_Occurred()) goto done;
+    result = 0;
+
+done:
+    type_mutation_close(&base_view);
+    type_mutation_close(&winner_owner);
+    type_mutation_close(&initial_metatype_owner);
+    type_mutation_close(&args_owner);
+    type_mutation_close(&kwds_owner);
+    type_mutation_close(&bases_owner);
+    if (PyErr_Occurred()) result = -1;
+    if (result == 0) {
+        ctx->base = _PyType_CAST(chosen_base_owner);
+        ctx->metatype = _PyType_CAST(chosen_metatype_owner);
+        ctx->bases = chosen_bases_owner;
+        chosen_base_owner = NULL;
+        chosen_metatype_owner = NULL;
+        chosen_bases_owner = NULL;
+        *selected_metatype_owner = (PyObject *)ctx->metatype;
+        *selected_base_owner = (PyObject *)ctx->base;
+    }
+    else if (result == 1) {
+        *type = delegated;
+        delegated = NULL;
+    }
+    type_mutation_close(&chosen_bases_owner);
+    type_mutation_close(&chosen_base_owner);
+    type_mutation_close(&chosen_metatype_owner);
+    type_mutation_close(&delegated);
+    if (PyErr_Occurred()) {
+        if (*selected_base_owner != NULL) {
+            type_mutation_close(selected_base_owner);
+            ctx->base = NULL;
+        }
+        if (*selected_metatype_owner != NULL) {
+            type_mutation_close(selected_metatype_owner);
+            ctx->metatype = NULL;
+        }
+        type_mutation_close(type);
         return -1;
     }
-
-    if (winner != ctx->metatype) {
-        if (winner->tp_new != type_new) {
-            /* Check if tp_new is NULL (cannot instantiate this type) */
-            if (winner->tp_new == NULL) {
-                PyErr_Format(PyExc_TypeError,
-                             "cannot create '%.400s' instances",
-                             winner->tp_name);
-                return -1;
-            }
-            /* Pass it to the winner */
-            *type = winner->tp_new(winner, ctx->args, ctx->kwds);
-            if (*type == NULL) {
-                return -1;
-            }
-            return 1;
-        }
-
-        ctx->metatype = winner;
-    }
-
-    /* Calculate best base, and check that all bases are type objects */
-    PyTypeObject *base = find_best_base(ctx->bases);
-    if (base == NULL) {
-        return -1;
-    }
-
-    ctx->base = base;
-    ctx->bases = Py_NewRef(ctx->bases);
-    return 0;
+    return result;
 }
 
 
@@ -5092,6 +5313,8 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     _PyArg_OwnerScope scope = {0};
     PyObject *keywords = NULL;
     PyObject *owned_bases = NULL;
+    PyObject *selected_metatype_owner = NULL;
+    PyObject *selected_base_owner = NULL;
     PyObject *type = NULL;
     PyTypeObject *error_type = NULL;
     if (PyErr_Occurred() ||
@@ -5170,7 +5393,9 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         .add_weak = 0,
         .may_add_dict = 0,
         .may_add_weak = 0};
-    int res = type_new_get_bases(&ctx, &type);
+    int res = type_new_get_bases(&ctx, &type,
+                                 &selected_metatype_owner,
+                                 &selected_base_owner);
     /* Only status 0 transfers a bases owner; failure and delegation leave
      * the initial borrowed tuple in ctx.bases. */
     if (res == 0) {
@@ -5192,6 +5417,8 @@ done:
     PyObject *saved = PyErr_GetRaisedException();
     Py_CLEAR(error_type);
     _PyValue_RestoreException(saved);
+    type_mutation_close(&selected_base_owner);
+    type_mutation_close(&selected_metatype_owner);
     saved = PyErr_GetRaisedException();
     Py_CLEAR(owned_bases);
     _PyValue_RestoreException(saved);

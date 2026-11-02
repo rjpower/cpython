@@ -6258,12 +6258,18 @@ PyType_GetModuleByToken_DuringGC(PyTypeObject *type, const void *token)
     assert(PyTuple_GET_SIZE(mro) >= 1);
     // Also, the first item in the MRO is the type itself, which
     // we already checked above. We skip it in the loop.
-    assert(PyTuple_GET_ITEM(mro, 0) == (PyObject *)type);
+    PyValue first = PyTuple_GET_VALUE(mro, 0);
+    assert(PyValue_IsObject(first));
+    assert(PyValue_AsPyObjectBorrow(first) == (PyObject *)type);
 
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 1; i < n; i++) {
-        PyObject *super = PyTuple_GET_ITEM(mro, i);
-        if (!_PyType_HasFeature((PyTypeObject *)super, Py_TPFLAGS_HEAPTYPE)) {
+        PyValue super_value = PyTuple_GET_VALUE(mro, i);
+        assert(PyValue_IsObject(super_value));
+        PyObject *super_obj = PyValue_AsPyObjectBorrow(super_value);
+        assert(PyType_Check(super_obj));
+        PyTypeObject *super = (PyTypeObject *)super_obj;
+        if (!_PyType_HasFeature(super, Py_TPFLAGS_HEAPTYPE)) {
             // Static types in the MRO need to be skipped
             continue;
         }
@@ -6721,10 +6727,44 @@ set_flags_recursive(PyTypeObject *self, unsigned long mask, unsigned long flags)
     }
 
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(children); i++) {
-        PyObject *child = PyList_GET_ITEM(children, i);
-        set_flags_recursive((PyTypeObject *)child, mask, flags);
+        if (PyErr_Occurred()) {
+            break;
+        }
+        PyValue child_value = PyList_GetValue(children, i);
+        if (PyValue_IsNull(child_value)) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError,
+                                "subclass list contains a NULL value");
+            }
+            break;
+        }
+        if (!PyErr_Occurred()) {
+            if (!PyValue_IsObject(child_value)) {
+                PyErr_SetString(PyExc_SystemError,
+                                "subclass list contains a non-object value");
+            }
+            else {
+                PyObject *child = PyValue_AsPyObjectBorrow(child_value);
+                if (!PyType_Check(child)) {
+                    PyErr_SetString(PyExc_SystemError,
+                                    "subclass list contains a non-type");
+                }
+                else {
+                    set_flags_recursive((PyTypeObject *)child, mask, flags);
+                }
+            }
+        }
+
+        PyValue child_owner = child_value;
+        child_value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_CLOSE(child_owner);
+        _PyValue_RestoreException(saved);
+        if (PyErr_Occurred()) {
+            break;
+        }
     }
-    Py_DECREF(children);
+    type_mutation_close(&children);
 }
 
 void
@@ -7094,7 +7134,7 @@ type_dealloc_common(PyTypeObject *type)
 static void
 clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
 {
-    PyObject *subclasses = lookup_tp_subclasses(type);
+    PyObject *subclasses = Py_XNewRef(lookup_tp_subclasses(type));
     if (subclasses == NULL) {
         return;
     }
@@ -7121,22 +7161,74 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
 
 #ifndef NDEBUG
     // For now we just do a sanity check and then clear tp_subclasses.
-    Py_ssize_t i = 0;
-    PyObject *key, *ref;  // borrowed ref
-    while (PyDict_Next(subclasses, &i, &key, &ref)) {
-        PyTypeObject *subclass = type_from_ref(ref);
-        if (subclass == NULL) {
-            continue;
+    PyObject *primary = PyErr_GetRaisedException();
+    Py_ssize_t pos = 0;
+    int found;
+    while (!PyErr_Occurred()) {
+        PyValue ref = PyValue_NULL;
+        found = _PyDict_NextValue(subclasses, &pos, NULL, &ref, NULL);
+        if (found <= 0) {
+            break;
         }
-        // All static builtin subtypes should have been finalized already.
-        assert(!isbuiltin || !(subclass->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
-        Py_DECREF(subclass);
+        assert(PyValue_IsObject(ref));
+        PyObject *weakref = PyValue_AsPyObjectBorrow(ref);
+        assert(PyWeakref_Check(weakref));
+        PyTypeObject *subclass = type_from_ref(weakref);
+        PyValue_CLOSE(ref);
+        if (PyErr_Occurred()) {
+            PyObject *error = PyErr_GetRaisedException();
+            if (subclass != NULL) {
+                PyErr_SetRaisedException(error);
+                PyObject *owner = (PyObject *)subclass;
+                type_mutation_close(&owner);
+                error = NULL;
+            }
+            if (primary == NULL) {
+                primary = error;
+            }
+            else if (error != NULL) {
+                PyErr_SetRaisedException(primary);
+                primary = NULL;
+                type_mutation_close(&error);
+                primary = PyErr_GetRaisedException();
+            }
+            break;
+        }
+        if (subclass != NULL) {
+            // All static builtin subtypes should have been finalized already.
+            assert(!isbuiltin || !(subclass->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
+            PyObject *owner = (PyObject *)subclass;
+            type_mutation_close(&owner);
+        }
+    }
+    PyObject *diagnostic_error = PyErr_GetRaisedException();
+    if (primary == NULL) {
+        primary = diagnostic_error;
+    }
+    else if (diagnostic_error != NULL) {
+        PyErr_SetRaisedException(primary);
+        primary = NULL;
+        type_mutation_close(&diagnostic_error);
+        primary = PyErr_GetRaisedException();
     }
 #else
     (void)isbuiltin;
+    PyObject *primary = PyErr_GetRaisedException();
 #endif
 
     clear_tp_subclasses(type);
+    PyObject *clear_error = PyErr_GetRaisedException();
+    if (primary == NULL) {
+        primary = clear_error;
+    }
+    else if (clear_error != NULL) {
+        PyErr_SetRaisedException(primary);
+        primary = NULL;
+        type_mutation_close(&clear_error);
+        primary = PyErr_GetRaisedException();
+    }
+    PyErr_SetRaisedException(primary);
+    type_mutation_close(&subclasses);
 }
 
 static void
@@ -11991,7 +12083,11 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
 
     /* No need to check the last one: it's gonna be skipped anyway.  */
     for (i = 0;  i < n -1; i++) {
-        if ((PyObject *)(self_type) == PyTuple_GET_ITEM(mro, i))
+        PyValue value = PyTuple_GET_VALUE(mro, i);
+        assert(PyValue_IsObject(value));
+        assert(PyValue_AsPyObjectBorrow(value) == (PyObject *)self_type ||
+               PyType_Check(PyValue_AsPyObjectBorrow(value)));
+        if ((PyObject *)(self_type) == PyValue_AsPyObjectBorrow(value))
             break;
     }
     i++;  /* skip self_type */
@@ -11999,10 +12095,10 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
         return NULL;
 
     for (; i < n; i++) {
-        PyObject *obj = PyTuple_GET_ITEM(mro, i);
-        if (!PyType_Check(obj)) {
-            continue;
-        }
+        PyValue value = PyTuple_GET_VALUE(mro, i);
+        assert(PyValue_IsObject(value));
+        PyObject *obj = PyValue_AsPyObjectBorrow(value);
+        assert(PyType_Check(obj));
         PyTypeObject *base_type = (PyTypeObject *)obj;
         if (base_type->tp_as_buffer != NULL
             && base_type->tp_as_buffer->bf_releasebuffer != NULL
@@ -13208,48 +13304,65 @@ May return NULL with or without an exception set, like PyDict_GetItemWithError. 
 PyObject *
 _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject *name)
 {
-    PyObject *mro, *res;
-    Py_ssize_t i, n;
-
-    mro = lookup_tp_mro(su_obj_type);
-    if (mro == NULL)
-        return NULL;
-
-    /* Keep a strong reference to mro because su_obj_type->tp_mro can be
-       replaced during PyDict_GetItemRef(dict, name, &res). */
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef mro_ref;
-    _PyThreadState_PushCStackRefNew(tstate, &mro_ref, mro);
-
-    assert(PyTuple_Check(mro));
-    n = PyTuple_GET_SIZE(mro);
-
-    /* No need to check the last one: it's gonna be skipped anyway.  */
-    for (i = 0; i+1 < n; i++) {
-        if ((PyObject *)(su_type) == PyTuple_GET_ITEM(mro, i))
-            break;
-    }
-    i++;  /* skip su->type (if any)  */
-    if (i >= n) {
-        _PyThreadState_PopCStackRef(tstate, &mro_ref);
+    if (PyErr_Occurred()) {
         return NULL;
     }
+    PyObject *su_type_owner = Py_NewRef((PyObject *)su_type);
+    PyObject *su_obj_type_owner = Py_NewRef((PyObject *)su_obj_type);
+    PyObject *name_owner = Py_NewRef(name);
+    PyObject *mro = lookup_tp_mro(su_obj_type);
+    PyObject *mro_owner = Py_XNewRef(mro);
+    PyObject *res = NULL;
+    int result = 0;
 
-    do {
-        PyObject *obj = PyTuple_GET_ITEM(mro, i);
-        PyObject *dict = lookup_tp_dict(_PyType_CAST(obj));
-        assert(dict != NULL && PyDict_Check(dict));
-
-        if (PyDict_GetItemRef(dict, name, &res) != 0) {
-            // found or error
-            _PyThreadState_PopCStackRef(tstate, &mro_ref);
-            return res;
+    if (mro_owner != NULL) {
+        assert(PyTuple_Check(mro_owner));
+        Py_ssize_t n = PyTuple_GET_SIZE(mro_owner);
+        Py_ssize_t i;
+        for (i = 0; i + 1 < n; i++) {
+            PyValue value = PyTuple_GET_VALUE(mro_owner, i);
+            assert(PyValue_IsObject(value));
+            PyObject *obj = PyValue_AsPyObjectBorrow(value);
+            assert(PyType_Check(obj));
+            if (obj == su_type_owner) {
+                break;
+            }
         }
+        i++;  /* skip su->type (if any) */
+        if (i < n) {
+            for (; i < n; i++) {
+                PyValue value = PyTuple_GET_VALUE(mro_owner, i);
+                assert(PyValue_IsObject(value));
+                PyObject *obj = PyValue_AsPyObjectBorrow(value);
+                assert(PyType_Check(obj));
+                PyObject *dict_owner = Py_XNewRef(lookup_tp_dict((PyTypeObject *)obj));
+                assert(dict_owner != NULL && PyDict_Check(dict_owner));
+                if (PyErr_Occurred()) {
+                    type_mutation_close(&dict_owner);
+                    break;
+                }
+                result = PyDict_GetItemRef(dict_owner, name_owner, &res);
+                int failed = PyErr_Occurred() || result < 0;
+                type_mutation_close(&dict_owner);
+                if (failed || PyErr_Occurred()) {
+                    break;
+                }
+                if (result > 0) {
+                    break;
+                }
+            }
+        }
+    }
 
-        i++;
-    } while (i < n);
-    _PyThreadState_PopCStackRef(tstate, &mro_ref);
-    return NULL;
+    type_mutation_close(&name_owner);
+    type_mutation_close(&su_obj_type_owner);
+    type_mutation_close(&su_type_owner);
+    type_mutation_close(&mro_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&res);
+        return NULL;
+    }
+    return result > 0 ? res : NULL;
 }
 
 // if `method` is non-NULL, we are looking for a method descriptor,
@@ -13435,20 +13548,30 @@ static int
 super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
                         PyObject **obj_p)
 {
-    PyCodeObject *co = _PyFrame_GetCode(cframe);
-    if (co->co_argcount == 0) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "super(): no arguments");
+    *type_p = NULL;
+    *obj_p = NULL;
+    if (PyErr_Occurred()) {
         return -1;
+    }
+    PyCodeObject *co = _PyFrame_GetCode(cframe);
+    PyObject *co_owner = Py_NewRef((PyObject *)co);
+    PyObject *firstarg = NULL;
+    PyObject *type_owner = NULL;
+    PyObject *error_type_owner = NULL;
+    PyObject *error_name_owner = NULL;
+    int result = -1;
+
+    if (co->co_argcount == 0) {
+        PyErr_SetString(PyExc_RuntimeError, "super(): no arguments");
+        goto cleanup;
     }
 
     assert(_PyFrame_GetCode(cframe)->co_nlocalsplus > 0);
-    _PyStackRef firstref = _PyFrame_GetLocalsArray(cframe)[0];
-    if (PyStackRef_IsNull(firstref)) {
+    PyValue firstref = _PyFrame_GetLocalsArray(cframe)[0];
+    if (PyValue_IsNull(firstref)) {
         PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
-        return -1;
+        goto cleanup;
     }
-    PyObject *firstarg;
     // The first argument might be a cell.
     // "firstarg" is a cell here unless (very unlikely) super()
     // was called from the C-API before the first MAKE_CELL op.
@@ -13458,64 +13581,85 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         // to use _PyOpcode_Deopt here:
         assert(_PyCode_InstrHandler(co, 0) == MAKE_CELL ||
                _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS);
-        PyObject *cell = PyStackRef_AsPyObjectBorrow(firstref);
+        assert(PyValue_IsObject(firstref));
+        PyObject *cell = PyValue_AsPyObjectBorrow(firstref);
         assert(PyCell_Check(cell));
-        firstarg = PyCell_GetRef((PyCellObject *)cell);
-        if (firstarg == NULL) {
-            PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
-            return -1;
+        firstarg = PyCell_Get(cell);
+        if (firstarg == NULL || PyErr_Occurred()) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
+            }
+            goto cleanup;
         }
     }
     else {
         // The argument may be an inline value, which this boxes.
-        firstarg = PyStackRef_AsPyObjectNewBoxed(firstref);
-        if (firstarg == NULL) {
-            return -1;
+        firstarg = PyValue_AsPyObjectNewBoxed(firstref);
+        if (firstarg == NULL || PyErr_Occurred()) {
+            goto cleanup;
         }
     }
 
     // Look for __class__ in the free vars.
-    PyTypeObject *type = NULL;
     int i = PyUnstable_Code_GetFirstFree(co);
     for (; i < co->co_nlocalsplus; i++) {
         assert((_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_FREE) != 0);
-        PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
-        assert(PyUnicode_Check(name));
+        PyValue name_value = PyTuple_GET_VALUE(co->co_localsplusnames, i);
+        assert(PyValue_IsObject(name_value));
+        PyObject *name = PyValue_AsPyObjectBorrow(name_value);
+        assert(PyUnicode_CheckExact(name));
         if (_PyUnicode_Equal(name, &_Py_ID(__class__))) {
-            PyObject *cell = PyStackRef_AsPyObjectBorrow(_PyFrame_GetLocalsArray(cframe)[i]);
-            if (cell == NULL || !PyCell_Check(cell)) {
+            PyValue cell_value = _PyFrame_GetLocalsArray(cframe)[i];
+            if (!PyValue_IsObject(cell_value) || PyValue_IsNull(cell_value) ||
+                    !PyCell_Check(PyValue_AsPyObjectBorrow(cell_value))) {
                 PyErr_SetString(PyExc_RuntimeError,
-                  "super(): bad __class__ cell");
-                Py_DECREF(firstarg);
-                return -1;
+                                "super(): bad __class__ cell");
+                goto cleanup;
             }
-            type = (PyTypeObject *) PyCell_GetRef((PyCellObject *)cell);
-            if (type == NULL) {
-                PyErr_SetString(PyExc_RuntimeError,
-                  "super(): empty __class__ cell");
-                Py_DECREF(firstarg);
-                return -1;
+            PyObject *cell = PyValue_AsPyObjectBorrow(cell_value);
+            type_owner = PyCell_Get(cell);
+            if (type_owner == NULL || PyErr_Occurred()) {
+                if (!PyErr_Occurred()) {
+                    PyErr_SetString(PyExc_RuntimeError,
+                                    "super(): empty __class__ cell");
+                }
+                goto cleanup;
             }
-            if (!PyType_Check(type)) {
+            if (!PyType_Check(type_owner)) {
+                PyTypeObject *actual_type = Py_TYPE(type_owner);
+                error_type_owner = Py_NewRef((PyObject *)actual_type);
+                if (_PyType_HasFeature(actual_type, Py_TPFLAGS_HEAPTYPE)) {
+                    error_name_owner = Py_NewRef(((PyHeapTypeObject *)actual_type)->ht_name);
+                }
+                const char *type_name = actual_type->tp_name;
                 PyErr_Format(PyExc_RuntimeError,
-                  "super(): __class__ is not a type (%s)",
-                  Py_TYPE(type)->tp_name);
-                Py_DECREF(type);
-                Py_DECREF(firstarg);
-                return -1;
+                             "super(): __class__ is not a type (%s)", type_name);
+                goto cleanup;
             }
             break;
         }
     }
-    if (type == NULL) {
+    if (type_owner == NULL) {
         PyErr_SetString(PyExc_RuntimeError,
                         "super(): __class__ cell not found");
-        Py_DECREF(firstarg);
-        return -1;
+        goto cleanup;
     }
 
-    *type_p = type;
+    result = 0;
+
+cleanup:
+    type_mutation_close(&error_name_owner);
+    type_mutation_close(&error_type_owner);
+    type_mutation_close(&co_owner);
+    if (result < 0 || PyErr_Occurred()) {
+        type_mutation_close(&type_owner);
+        type_mutation_close(&firstarg);
+        return -1;
+    }
+    *type_p = (PyTypeObject *)type_owner;
     *obj_p = firstarg;
+    type_owner = NULL;
+    firstarg = NULL;
     return 0;
 }
 
